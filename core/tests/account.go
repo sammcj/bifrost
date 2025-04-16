@@ -41,7 +41,7 @@ func (baseAccount *BaseAccount) GetConfiguredProviders() ([]schemas.ModelProvide
 //   - error: An error if the provider is not supported
 //
 // Environment Variables Used:
-//   - OPEN_AI_API_KEY: API key for OpenAI
+//   - OPENAI_API_KEY: API key for OpenAI
 //   - ANTHROPIC_API_KEY: API key for Anthropic
 //   - BEDROCK_API_KEY: API key for AWS Bedrock
 //   - COHERE_API_KEY: API key for Cohere
@@ -51,7 +51,7 @@ func (baseAccount *BaseAccount) GetKeysForProvider(providerKey schemas.ModelProv
 	case schemas.OpenAI:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("OPEN_AI_API_KEY"),
+				Value:  os.Getenv("OPENAI_API_KEY"),
 				Models: []string{"gpt-4o-mini", "gpt-4-turbo"},
 				Weight: 1.0,
 			},

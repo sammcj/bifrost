@@ -38,10 +38,11 @@ import (
 
 // Command line flags
 var (
-	initialPoolSize int    // Initial size of the connection pool
-	port            string // Port to run the server on
-	configPath      string // Path to the config file
-	envPath         string // Path to the .env file
+	initialPoolSize    int    // Initial size of the connection pool
+	dropExcessRequests bool   // Drop excess requests
+	port               string // Port to run the server on
+	configPath         string // Path to the config file
+	envPath            string // Path to the .env file
 )
 
 // init initializes command line flags with default values.
@@ -51,6 +52,7 @@ func init() {
 	flag.StringVar(&port, "port", "8080", "Port to run the server on")
 	flag.StringVar(&configPath, "config", "", "Path to the config file")
 	flag.StringVar(&envPath, "env", "", "Path to the .env file")
+	flag.BoolVar(&dropExcessRequests, "drop-excess-requests", false, "Drop excess requests")
 	flag.Parse()
 
 	if configPath == "" {
@@ -79,18 +81,18 @@ type ConfigMap map[schemas.ModelProvider]ProviderConfig
 // Returns a ConfigMap containing all provider configurations.
 // Panics if the config file cannot be read or parsed.
 //
-// In the config file, use placeholder keys (e.g., env.OPEN_AI_API_KEY) instead of hardcoding actual values.
+// In the config file, use placeholder keys (e.g., env.OPENAI_API_KEY) instead of hardcoding actual values.
 // These placeholders will be replaced with the corresponding values from the .env file.
 // Location of the .env file is specified by the -env flag. It
 // Example:
 //
 //	"keys":[{
-//		 "value": "env.OPEN_AI_API_KEY"
+//		 "value": "env.OPENAI_API_KEY"
 //	     "models": ["gpt-4o-mini", "gpt-4-turbo"],
 //	     "weight": 1.0
 //	}]
 //
-// In this example, OPEN_AI_API_KEY refers to a key in the .env file. At runtime, its value will be used to replace the placeholder.
+// In this example, OPENAI_API_KEY refers to a key in the .env file. At runtime, its value will be used to replace the placeholder.
 // Same setup applies to keys in meta configs of all the providers.
 // Example:
 //
@@ -410,8 +412,9 @@ func main() {
 	}
 
 	client, err := bifrost.Init(schemas.BifrostConfig{
-		Account:         account,
-		InitialPoolSize: initialPoolSize,
+		Account:            account,
+		InitialPoolSize:    initialPoolSize,
+		DropExcessRequests: dropExcessRequests,
 	})
 	if err != nil {
 		log.Fatalf("failed to initialize bifrost: %v", err)
