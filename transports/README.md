@@ -22,6 +22,7 @@ This package contains clients for various transports that can be used to spin up
 ## 🚀 Setting Up Transports
 
 ### Prerequisites
+
 - Go 1.23 or higher (if not using Docker)
 - Access to at least one AI model provider (OpenAI, Anthropic, etc.)
 - API keys for the providers you wish to use
@@ -31,16 +32,17 @@ This package contains clients for various transports that can be used to spin up
 Bifrost uses a combination of a JSON configuration file and environment variables:
 
 1. **JSON Configuration File**: Bifrost requires a configuration file to set up the gateway. This includes all your provider-level settings, keys, and meta configs for each of your providers.
-   
-2. **Environment Variables**: If you don't want to include your keys in your config file, you can provide a `.env` file and add a prefix of `env.` followed by its key in your `.env` file. 
+2. **Environment Variables**: If you don't want to include your keys in your config file, you can provide a `.env` file and add a prefix of `env.` followed by its key in your `.env` file.
 
 ```json
 {
-  "keys": [{
-    "value": "env.OPENAI_API_KEY",
-    "models": ["gpt-4o-mini", "gpt-4-turbo"],
-    "weight": 1.0
-  }]
+  "keys": [
+    {
+      "value": "env.OPENAI_API_KEY",
+      "models": ["gpt-4o-mini", "gpt-4-turbo"],
+      "weight": 1.0
+    }
+  ]
 }
 ```
 
@@ -63,7 +65,13 @@ Please refer to `config.example.json` and `.env.sample` for examples.
 
 ### Docker Setup
 
-You can run Bifrost using our **independent Dockerfile**. Just copy our Dockerfile and run these commands to get your Bifrost instance up and running:
+1. Download the Dockerfile:
+
+```bash
+curl -L -o Dockerfile https://raw.githubusercontent.com/maximhq/bifrost/main/transports/Dockerfile
+```
+
+2. Build the Docker image:
 
 ```bash
 docker build \
@@ -72,7 +80,11 @@ docker build \
   --build-arg PORT=8080 \
   --build-arg POOL_SIZE=300 \
   -t bifrost-transports .
+```
 
+3. Run the Docker container:
+
+```bash
 docker run -p 8080:8080 bifrost-transports
 ```
 
@@ -87,19 +99,21 @@ If you wish to run Bifrost in your Go environment, follow these steps:
 1. Install your binary:
 
 ```bash
-go install github.com/maximhq/bifrost/transports/http@latest
+go install github.com/maximhq/bifrost/transports/bifrost-http@latest
 ```
 
 2. Run your binary:
 
 - If it's in your PATH:
+
 ```bash
-http -config config.json -env .env -port 8080 -pool-size 300
+bifrost-http -config config.json -env .env -port 8080 -pool-size 300
 ```
 
 - Otherwise:
+
 ```bash
-./http -config config.json -env .env -port 8080 -pool-size 300
+./bifrost-http -config config.json -env .env -port 8080 -pool-size 300
 ```
 
 You can also add a flag for `-drop-excess-requests=false` in your command to drop excess requests when the buffer is full. Read more about `DROP_EXCESS_REQUESTS` and `POOL_SIZE` [here](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
@@ -107,17 +121,19 @@ You can also add a flag for `-drop-excess-requests=false` in your command to dro
 ## 🧰 Usage
 
 Ensure that:
+
 - Bifrost's HTTP server is running
 - The providers/models you use are configured in your JSON config file
 
 ### Text Completions
 
 ```bash
+# Make sure to setup anthropic and claude-2.1 in your config.json
 curl -X POST http://localhost:8080/v1/text/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "provider": "anthropic",
+    "model": "claude-2.1",
     "text": "Once upon a time in the land of AI,",
     "params": {
       "temperature": 0.7,
