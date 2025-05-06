@@ -82,7 +82,7 @@ var WeatherToolParams = schemas.ModelParameters{
 //   - bifrost: The Bifrost instance to use for the request
 //   - config: Test configuration containing model and parameters
 //   - ctx: Context for the request
-func setupTextCompletionRequest(bifrost *bifrost.Bifrost, config TestConfig, ctx context.Context) {
+func setupTextCompletionRequest(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context) {
 	text := "Hello world!"
 	if config.CustomTextCompletion != nil {
 		text = *config.CustomTextCompletion
@@ -94,7 +94,7 @@ func setupTextCompletionRequest(bifrost *bifrost.Bifrost, config TestConfig, ctx
 	}
 
 	go func() {
-		result, err := bifrost.TextCompletionRequest(config.Provider, &schemas.BifrostRequest{
+		result, err := bifrostClient.TextCompletionRequest(config.Provider, &schemas.BifrostRequest{
 			Model: config.TextModel,
 			Input: schemas.RequestInput{
 				TextCompletionInput: &text,
@@ -117,7 +117,7 @@ func setupTextCompletionRequest(bifrost *bifrost.Bifrost, config TestConfig, ctx
 //   - bifrost: The Bifrost instance to use for the requests
 //   - config: Test configuration containing model and parameters
 //   - ctx: Context for the requests
-func setupChatCompletionRequests(bifrost *bifrost.Bifrost, config TestConfig, ctx context.Context) {
+func setupChatCompletionRequests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context) {
 	messages := config.Messages
 	if len(messages) == 0 {
 		messages = CommonTestMessages
@@ -138,7 +138,7 @@ func setupChatCompletionRequests(bifrost *bifrost.Bifrost, config TestConfig, ct
 					Content: &msg,
 				},
 			}
-			result, err := bifrost.ChatCompletionRequest(config.Provider, &schemas.BifrostRequest{
+			result, err := bifrostClient.ChatCompletionRequest(config.Provider, &schemas.BifrostRequest{
 				Model: config.ChatModel,
 				Input: schemas.RequestInput{
 					ChatCompletionInput: &messages,
@@ -162,7 +162,7 @@ func setupChatCompletionRequests(bifrost *bifrost.Bifrost, config TestConfig, ct
 //   - bifrost: The Bifrost instance to use for the requests
 //   - config: Test configuration containing model and parameters
 //   - ctx: Context for the requests
-func setupImageTests(bifrost *bifrost.Bifrost, config TestConfig, ctx context.Context) {
+func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context) {
 	params := schemas.ModelParameters{}
 	if config.CustomParams != nil {
 		params = *config.CustomParams
@@ -172,20 +172,20 @@ func setupImageTests(bifrost *bifrost.Bifrost, config TestConfig, ctx context.Co
 	urlImageMessages := []schemas.Message{
 		{
 			Role:    schemas.RoleUser,
-			Content: StrPtr("What is Happening in this picture?"),
+			Content: bifrost.Ptr("What is Happening in this picture?"),
 			ImageContent: &schemas.ImageContent{
-				Type: StrPtr("url"),
+				Type: bifrost.Ptr("url"),
 				URL:  "https://upload.wikimedia.org/wikipedia/commons/a/a7/Camponotus_flavomarginatus_ant.jpg",
 			},
 		},
 	}
 
 	if config.Provider == schemas.Anthropic {
-		urlImageMessages[0].ImageContent.Type = StrPtr("url")
+		urlImageMessages[0].ImageContent.Type = bifrost.Ptr("url")
 	}
 
 	go func() {
-		result, err := bifrost.ChatCompletionRequest(config.Provider, &schemas.BifrostRequest{
+		result, err := bifrostClient.ChatCompletionRequest(config.Provider, &schemas.BifrostRequest{
 			Model: config.ChatModel,
 			Input: schemas.RequestInput{
 				ChatCompletionInput: &urlImageMessages,
@@ -205,17 +205,17 @@ func setupImageTests(bifrost *bifrost.Bifrost, config TestConfig, ctx context.Co
 		base64ImageMessages := []schemas.Message{
 			{
 				Role:    schemas.RoleUser,
-				Content: StrPtr("What is this image about?"),
+				Content: bifrost.Ptr("What is this image about?"),
 				ImageContent: &schemas.ImageContent{
-					Type:      StrPtr("base64"),
+					Type:      bifrost.Ptr("base64"),
 					URL:       "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=",
-					MediaType: StrPtr("image/jpeg"),
+					MediaType: bifrost.Ptr("image/jpeg"),
 				},
 			},
 		}
 
 		go func() {
-			result, err := bifrost.ChatCompletionRequest(config.Provider, &schemas.BifrostRequest{
+			result, err := bifrostClient.ChatCompletionRequest(config.Provider, &schemas.BifrostRequest{
 				Model: config.ChatModel,
 				Input: schemas.RequestInput{
 					ChatCompletionInput: &base64ImageMessages,
@@ -239,7 +239,7 @@ func setupImageTests(bifrost *bifrost.Bifrost, config TestConfig, ctx context.Co
 //   - bifrost: The Bifrost instance to use for the requests
 //   - config: Test configuration containing model and parameters
 //   - ctx: Context for the requests
-func setupToolCalls(bifrost *bifrost.Bifrost, config TestConfig, ctx context.Context) {
+func setupToolCalls(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context) {
 	messages := []string{"What's the weather like in Mumbai?"}
 
 	params := WeatherToolParams
@@ -263,7 +263,7 @@ func setupToolCalls(bifrost *bifrost.Bifrost, config TestConfig, ctx context.Con
 					Content: &msg,
 				},
 			}
-			result, err := bifrost.ChatCompletionRequest(config.Provider, &schemas.BifrostRequest{
+			result, err := bifrostClient.ChatCompletionRequest(config.Provider, &schemas.BifrostRequest{
 				Model: config.ChatModel,
 				Input: schemas.RequestInput{
 					ChatCompletionInput: &messages,

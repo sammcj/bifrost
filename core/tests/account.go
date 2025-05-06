@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	bifrost "github.com/maximhq/bifrost/core"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/core/schemas/meta"
 )
@@ -156,7 +157,7 @@ func (baseAccount *BaseAccount) GetConfigForProvider(providerKey schemas.ModelPr
 			},
 			MetaConfig: &meta.BedrockMetaConfig{
 				SecretAccessKey: os.Getenv("BEDROCK_ACCESS_KEY"),
-				Region:          StrPtr("us-east-1"),
+				Region:          bifrost.Ptr("us-east-1"),
 			},
 			ConcurrencyAndBufferSize: schemas.ConcurrencyAndBufferSize{
 				Concurrency: 3,
@@ -189,7 +190,7 @@ func (baseAccount *BaseAccount) GetConfigForProvider(providerKey schemas.ModelPr
 				Deployments: map[string]string{
 					"gpt-4o": "gpt-4o-aug",
 				},
-				APIVersion: StrPtr("2024-08-01-preview"),
+				APIVersion: bifrost.Ptr("2024-08-01-preview"),
 			},
 			ConcurrencyAndBufferSize: schemas.ConcurrencyAndBufferSize{
 				Concurrency: 3,
