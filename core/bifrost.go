@@ -263,13 +263,19 @@ func (bifrost *Bifrost) SelectKeyFromProviderForModel(providerKey schemas.ModelP
 	return supportedKeys[0].Value, nil
 }
 
+// Define a set of retryable status codes
+var retryableStatusCodes = map[int]bool{
+	500: true, // Internal Server Error
+	502: true, // Bad Gateway
+	503: true, // Service Unavailable
+	504: true, // Gateway Timeout
+	429: true, // Too Many Requests
+}
+
 // calculateBackoff implements exponential backoff with jitter for retry attempts.
 func (bifrost *Bifrost) calculateBackoff(attempt int, config *schemas.ProviderConfig) time.Duration {
 	// Calculate an exponential backoff: initial * 2^attempt
-	backoff := config.NetworkConfig.RetryBackoffInitial * time.Duration(1<<uint(attempt))
-	if backoff > config.NetworkConfig.RetryBackoffMax {
-		backoff = config.NetworkConfig.RetryBackoffMax
-	}
+	backoff := min(config.NetworkConfig.RetryBackoffInitial*time.Duration(1<<uint(attempt)), config.NetworkConfig.RetryBackoffMax)
 
 	// Add jitter (±20%)
 	jitter := float64(backoff) * (0.8 + 0.4*rand.Float64())
@@ -362,8 +368,7 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, queue chan Chan
 			bifrost.logger.Debug(fmt.Sprintf("Request for provider %s completed", provider.GetProviderKey()))
 
 			// Check if successful or if we should retry
-			//TODO should have a better way to check for only network errors
-			if bifrostError == nil || bifrostError.IsBifrostError { // Only retry non-bifrost errors
+			if bifrostError == nil || bifrostError.IsBifrostError || (bifrostError.StatusCode != nil && !retryableStatusCodes[*bifrostError.StatusCode]) {
 				break
 			}
 		}
