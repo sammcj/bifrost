@@ -101,7 +101,7 @@ type CohereProvider struct {
 // It initializes the HTTP client with the provided configuration and sets up response pools.
 // The client is configured with timeouts and connection limits.
 func NewCohereProvider(config *schemas.ProviderConfig, logger schemas.Logger) *CohereProvider {
-	setConfigDefaults(config)
+	config.CheckAndSetDefaults()
 
 	client := &fasthttp.Client{
 		ReadTimeout:     time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
@@ -234,6 +234,8 @@ func (provider *CohereProvider) ChatCompletion(model, key string, messages []sch
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
+		provider.logger.Debug(fmt.Sprintf("error from cohere provider: %s", string(resp.Body())))
+
 		var errorResp CohereError
 
 		bifrostErr := handleProviderAPIError(resp, &errorResp)
