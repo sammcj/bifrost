@@ -100,7 +100,3 @@ func getBifrost() (*bifrost.Bifrost, error) {
 
 	return b, nil
 }
-
-func StrPtr(s string) *string {
-	return &s
-}
