@@ -33,6 +33,8 @@ import (
 	bifrost "github.com/maximhq/bifrost/core"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/core/schemas/meta"
+	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
+	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/genai"
 	"github.com/valyala/fasthttp"
 )
 
@@ -149,6 +151,19 @@ func readConfig(configLocation string) ConfigMap {
 				log.Printf("warning: failed to unmarshal Bedrock meta config: %v", err)
 			}
 			var metaConfig schemas.MetaConfig = &bedrockMetaConfig
+			cfg.MetaConfig = &metaConfig
+		case schemas.Vertex:
+			var vertexMetaConfig meta.VertexMetaConfig
+			if err := json.Unmarshal(data, &struct {
+				Vertex struct {
+					MetaConfig *meta.VertexMetaConfig `json:"meta_config"`
+				} `json:"Vertex"`
+			}{Vertex: struct {
+				MetaConfig *meta.VertexMetaConfig `json:"meta_config"`
+			}{&vertexMetaConfig}}); err != nil {
+				log.Printf("warning: failed to unmarshal Vertex meta config: %v", err)
+			}
+			var metaConfig schemas.MetaConfig = &vertexMetaConfig
 			cfg.MetaConfig = &metaConfig
 		}
 
@@ -422,6 +437,8 @@ func main() {
 
 	r := router.New()
 
+	extensions := []integrations.ExtensionRouter{genai.NewGenAIRouter(client)}
+
 	r.POST("/v1/text/completions", func(ctx *fasthttp.RequestCtx) {
 		handleCompletion(ctx, client, false)
 	})
@@ -430,11 +447,21 @@ func main() {
 		handleCompletion(ctx, client, true)
 	})
 
+	for _, extension := range extensions {
+		extension.RegisterRoutes(r)
+	}
+
+	r.NotFound = func(ctx *fasthttp.RequestCtx) {
+		ctx.SetStatusCode(fasthttp.StatusNotFound)
+		ctx.SetContentType("text/plain")
+		ctx.SetBodyString("Route not found")
+	}
+
 	server := &fasthttp.Server{
 		Handler: r.Handler,
 	}
 
-	log.Println("Starting HTTP server on port", port)
+	log.Println("Started Bifrost HTTP server on port", port)
 	if err := server.ListenAndServe(fmt.Sprintf(":%s", port)); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
