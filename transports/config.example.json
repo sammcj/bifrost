@@ -113,5 +113,16 @@
       "concurrency": 3,
       "buffer_size": 10
     }
+  },
+  "Vertex": {
+    "keys": [],
+    "meta_config": {
+      "project_id": "env.VERTEX_PROJECT_ID",
+      "auth_credential_path": "env.VERTEX_CREDENTIALS_PATH"
+    },
+    "concurrency_and_buffer_size": {
+      "concurrency": 3,
+      "buffer_size": 10
+    }
   }
 }
