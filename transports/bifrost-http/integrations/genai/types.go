@@ -26,15 +26,33 @@ func (r *GeminiChatRequest) ConvertToBifrostRequest(modelStr string) *schemas.Bi
 
 	// Convert messages (contents)
 	for _, content := range r.Contents {
-		// Assuming each content has one part for simplicity,
-		// and that part is text. You might need to adjust this based on actual use case.
+		var bifrostMsg schemas.Message
+		bifrostMsg.Role = schemas.ModelChatMessageRole(content.Role)
+
 		if len(content.Parts) > 0 {
-			bifrostMsg := schemas.Message{
-				Role:    schemas.ModelChatMessageRole(content.Role),
-				Content: &content.Parts[0].Text,
+			part := content.Parts[0]
+			switch {
+			case part.Text != "":
+				bifrostMsg.Content = &part.Text
+
+			case part.FunctionCall != nil:
+				toolCalls := []schemas.Tool{
+					{
+						Type: "function",
+						Function: schemas.Function{
+							Name: part.FunctionCall.Name,
+							Parameters: schemas.FunctionParameters{
+								Type:       "object",
+								Properties: part.FunctionCall.Args,
+							},
+						},
+					},
+				}
+				bifrostMsg.ToolCalls = &toolCalls
 			}
-			*bifrostReq.Input.ChatCompletionInput = append(*bifrostReq.Input.ChatCompletionInput, bifrostMsg)
 		}
+
+		*bifrostReq.Input.ChatCompletionInput = append(*bifrostReq.Input.ChatCompletionInput, bifrostMsg)
 	}
 
 	return bifrostReq
@@ -66,7 +84,7 @@ func DeriveGenAIFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *genai
 		}
 
 		if bifrostResp.Usage != (schemas.LLMUsage{}) {
-			candidate.TokenCount = int32(bifrostResp.Usage.CompletionTokens) // Assuming total completion tokens apply here
+			candidate.TokenCount = int32(bifrostResp.Usage.CompletionTokens)
 		}
 
 		parts := []*genai_sdk.Part{}
