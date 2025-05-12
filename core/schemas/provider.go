@@ -49,6 +49,10 @@ type MetaConfig interface {
 	GetDeployments() map[string]string
 	// GetAPIVersion returns the API version
 	GetAPIVersion() *string
+	// GetProjectID returns the project ID
+	GetProjectID() *string
+	// GetAuthCredentialPath returns the path to the authentication credentials for the provider
+	GetAuthCredentialPath() *string
 }
 
 // ConcurrencyAndBufferSize represents configuration for concurrent operations and buffer sizes.
@@ -89,6 +93,32 @@ type ProviderConfig struct {
 	// Logger instance, can be provided by the user or bifrost default logger is used if not provided
 	Logger      Logger       `json:"logger"`
 	ProxyConfig *ProxyConfig `json:"proxy_config,omitempty"` // Proxy configuration
+}
+
+func (config *ProviderConfig) CheckAndSetDefaults() {
+	if config.ConcurrencyAndBufferSize.Concurrency == 0 {
+		config.ConcurrencyAndBufferSize.Concurrency = DefaultConcurrency
+	}
+
+	if config.ConcurrencyAndBufferSize.BufferSize == 0 {
+		config.ConcurrencyAndBufferSize.BufferSize = DefaultBufferSize
+	}
+
+	if config.NetworkConfig.DefaultRequestTimeoutInSeconds == 0 {
+		config.NetworkConfig.DefaultRequestTimeoutInSeconds = DefaultRequestTimeoutInSeconds
+	}
+
+	if config.NetworkConfig.MaxRetries == 0 {
+		config.NetworkConfig.MaxRetries = DefaultMaxRetries
+	}
+
+	if config.NetworkConfig.RetryBackoffInitial == 0 {
+		config.NetworkConfig.RetryBackoffInitial = DefaultRetryBackoffInitial
+	}
+
+	if config.NetworkConfig.RetryBackoffMax == 0 {
+		config.NetworkConfig.RetryBackoffMax = DefaultRetryBackoffMax
+	}
 }
 
 // Provider defines the interface for AI model providers.
