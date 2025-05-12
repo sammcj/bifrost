@@ -159,8 +159,12 @@ func releaseBedrockChatResponse(resp *BedrockChatResponse) {
 // NewBedrockProvider creates a new Bedrock provider instance.
 // It initializes the HTTP client with the provided configuration and sets up response pools.
 // The client is configured with timeouts and AWS-specific settings.
-func NewBedrockProvider(config *schemas.ProviderConfig, logger schemas.Logger) *BedrockProvider {
-	setConfigDefaults(config)
+func NewBedrockProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*BedrockProvider, error) {
+	config.CheckAndSetDefaults()
+
+	if config.MetaConfig == nil {
+		return nil, fmt.Errorf("meta config is not set")
+	}
 
 	client := &http.Client{Timeout: time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds)}
 
@@ -174,7 +178,7 @@ func NewBedrockProvider(config *schemas.ProviderConfig, logger schemas.Logger) *
 		logger: logger,
 		client: client,
 		meta:   config.MetaConfig,
-	}
+	}, nil
 }
 
 // GetProviderKey returns the provider identifier for Bedrock.
@@ -258,6 +262,7 @@ func (provider *BedrockProvider) completeRequest(requestBody map[string]interfac
 		if err := json.Unmarshal(body, &errorResp); err != nil {
 			return nil, &schemas.BifrostError{
 				IsBifrostError: true,
+				StatusCode:     &resp.StatusCode,
 				Error: schemas.ErrorField{
 					Message: schemas.ErrProviderResponseUnmarshal,
 					Error:   err,

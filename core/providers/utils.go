@@ -161,17 +161,18 @@ func configureProxy(client *fasthttp.Client, proxyConfig *schemas.ProxyConfig, l
 // It attempts to unmarshal the error response and returns a BifrostError
 // with the appropriate status code and error information.
 func handleProviderAPIError(resp *fasthttp.Response, errorResp any) *schemas.BifrostError {
+	statusCode := resp.StatusCode()
+
 	if err := json.Unmarshal(resp.Body(), &errorResp); err != nil {
 		return &schemas.BifrostError{
 			IsBifrostError: true,
+			StatusCode:     &statusCode,
 			Error: schemas.ErrorField{
 				Message: schemas.ErrProviderResponseUnmarshal,
 				Error:   err,
 			},
 		}
 	}
-
-	statusCode := resp.StatusCode()
 
 	return &schemas.BifrostError{
 		IsBifrostError: false,
@@ -227,32 +228,6 @@ func handleProviderResponse[T any](responseBody []byte, response *T) (interface{
 // This is a helper function for creating pointers to float64 values.
 func float64Ptr(f float64) *float64 {
 	return &f
-}
-
-func setConfigDefaults(config *schemas.ProviderConfig) {
-	if config.ConcurrencyAndBufferSize.Concurrency == 0 {
-		config.ConcurrencyAndBufferSize.Concurrency = schemas.DefaultConcurrency
-	}
-
-	if config.ConcurrencyAndBufferSize.BufferSize == 0 {
-		config.ConcurrencyAndBufferSize.BufferSize = schemas.DefaultBufferSize
-	}
-
-	if config.NetworkConfig.DefaultRequestTimeoutInSeconds == 0 {
-		config.NetworkConfig.DefaultRequestTimeoutInSeconds = schemas.DefaultRequestTimeoutInSeconds
-	}
-
-	if config.NetworkConfig.MaxRetries == 0 {
-		config.NetworkConfig.MaxRetries = schemas.DefaultMaxRetries
-	}
-
-	if config.NetworkConfig.RetryBackoffInitial == 0 {
-		config.NetworkConfig.RetryBackoffInitial = schemas.DefaultRetryBackoffInitial
-	}
-
-	if config.NetworkConfig.RetryBackoffMax == 0 {
-		config.NetworkConfig.RetryBackoffMax = schemas.DefaultRetryBackoffMax
-	}
 }
 
 func StrPtr(s string) *string {

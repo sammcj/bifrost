@@ -103,8 +103,12 @@ type AzureProvider struct {
 // NewAzureProvider creates a new Azure provider instance.
 // It initializes the HTTP client with the provided configuration and sets up response pools.
 // The client is configured with timeouts, concurrency limits, and optional proxy settings.
-func NewAzureProvider(config *schemas.ProviderConfig, logger schemas.Logger) *AzureProvider {
-	setConfigDefaults(config)
+func NewAzureProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*AzureProvider, error) {
+	config.CheckAndSetDefaults()
+
+	if config.MetaConfig == nil {
+		return nil, fmt.Errorf("meta config is not set")
+	}
 
 	client := &fasthttp.Client{
 		ReadTimeout:     time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
@@ -126,7 +130,7 @@ func NewAzureProvider(config *schemas.ProviderConfig, logger schemas.Logger) *Az
 		logger: logger,
 		client: client,
 		meta:   config.MetaConfig,
-	}
+	}, nil
 }
 
 // GetProviderKey returns the provider identifier for Azure.
@@ -212,6 +216,8 @@ func (provider *AzureProvider) completeRequest(requestBody map[string]interface{
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
+		provider.logger.Debug(fmt.Sprintf("error from azure provider: %s", string(resp.Body())))
+
 		var errorResp AzureError
 
 		bifrostErr := handleProviderAPIError(resp, &errorResp)
