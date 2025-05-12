@@ -85,7 +85,7 @@ docker build \
 3. Run the Docker container:
 
 ```bash
-docker run -p 8080:8080 bifrost-transports
+docker run --name bifrost-api -p 8080:8080 bifrost-transports
 ```
 
 You can also add a flag for `DROP_EXCESS_REQUESTS=false` in your Docker build command to drop excess requests when the buffer is full. Read more about `DROP_EXCESS_REQUESTS` and `POOL_SIZE` [here](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).

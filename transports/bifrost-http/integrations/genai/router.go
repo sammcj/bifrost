@@ -6,6 +6,7 @@ import (
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/transports/bifrost-http/tracking"
 	"github.com/valyala/fasthttp"
 )
 
@@ -46,7 +47,10 @@ func (g *GenAIRouter) handleChatCompletion(ctx *fasthttp.RequestCtx) {
 	}
 
 	bifrostReq := req.ConvertToBifrostRequest("google/" + modelStr)
-	result, err := g.client.ChatCompletionRequest(schemas.Vertex, bifrostReq, ctx)
+
+	bifrostCtx := tracking.ConvertToBifrostContext(ctx)
+
+	result, err := g.client.ChatCompletionRequest(schemas.Vertex, bifrostReq, *bifrostCtx)
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 		json.NewEncoder(ctx).Encode(err)
