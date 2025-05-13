@@ -205,7 +205,6 @@ func (provider *VertexProvider) ChatCompletion(model, key string, messages []sch
 		if err := json.Unmarshal(body, &openAIErr); err != nil {
 			// Try Vertex error format if OpenAI format fails
 			if err := json.Unmarshal(body, &vertexErr); err != nil {
-				fmt.Printf("error unmarshalling vertex error: %s, body: %s", err, string(body))
 				return nil, &schemas.BifrostError{
 					IsBifrostError: true,
 					StatusCode:     &resp.StatusCode,
