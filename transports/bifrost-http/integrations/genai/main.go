@@ -3,7 +3,6 @@ package genai
 import (
 	"encoding/json"
 
-	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	genai_sdk "google.golang.org/genai"
 )
@@ -22,9 +21,6 @@ func (r *GeminiChatRequest) ConvertToBifrostRequest(modelStr string) *schemas.Bi
 		Model: modelStr,
 		Input: schemas.RequestInput{
 			ChatCompletionInput: &[]schemas.Message{},
-		},
-		Params: &schemas.ModelParameters{
-			Region: bifrost.Ptr("us-east5"),
 		},
 	}
 

@@ -207,6 +207,7 @@ func (baseAccount *BaseAccount) GetConfigForProvider(providerKey schemas.ModelPr
 			},
 			MetaConfig: &meta.VertexMetaConfig{
 				ProjectID:          os.Getenv("VERTEX_PROJECT_ID"),
+				Region:             "us-central1",
 				AuthCredentialPath: os.Getenv("VERTEX_CREDENTIALS_PATH"),
 			},
 			ConcurrencyAndBufferSize: schemas.ConcurrencyAndBufferSize{
