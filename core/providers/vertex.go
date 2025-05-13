@@ -141,12 +141,12 @@ func (provider *VertexProvider) ChatCompletion(model, key string, messages []sch
 		}
 	}
 
-	region := params.Region
+	region := provider.meta.GetRegion()
 	if region == nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
 			Error: schemas.ErrorField{
-				Message: "region is not set in model params",
+				Message: "region is not set in meta config",
 			},
 		}
 	}
