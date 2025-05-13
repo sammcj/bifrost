@@ -7,6 +7,7 @@ package meta
 // It contains Vertex-specific settings required for authentication and service access.
 type VertexMetaConfig struct {
 	ProjectID          string `json:"project_id,omitempty"`
+	Region             string `json:"region,omitempty"`
 	AuthCredentialPath string `json:"auth_credential_path,omitempty"`
 }
 
@@ -15,9 +16,10 @@ func (c *VertexMetaConfig) GetSecretAccessKey() *string {
 	return nil
 }
 
-// This is not used for Vertex.
+// GetRegion returns the Vertex region.
+// This is the region for the Vertex project.
 func (c *VertexMetaConfig) GetRegion() *string {
-	return nil
+	return &c.Region
 }
 
 // This is not used for Vertex.

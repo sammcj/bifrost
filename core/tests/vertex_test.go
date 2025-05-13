@@ -6,7 +6,6 @@ package tests
 import (
 	"testing"
 
-	bifrost "github.com/maximhq/bifrost/core"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 )
 
@@ -24,9 +23,6 @@ func TestVertex(t *testing.T) {
 		SetupToolCalls: false,
 		SetupImage:     false,
 		SetupBaseImage: false,
-		CustomParams: &schemas.ModelParameters{
-			Region: bifrost.Ptr("us-central1"),
-		},
 	}
 
 	SetupAllRequests(bifrostClient, config)
