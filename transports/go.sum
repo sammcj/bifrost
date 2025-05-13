@@ -71,6 +71,10 @@ github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/maximhq/bifrost/core v1.0.5 h1:JopRRuV2zylwisj+cBonIpB/Dw4p8gEQoW3hrKsPyI8=
 github.com/maximhq/bifrost/core v1.0.5/go.mod h1:nL2tc1SVJ7EAKxUb1G1yS4nO46ZsCdm1qC3Oc78oYIU=
+github.com/maximhq/bifrost/plugins v1.0.1 h1:wu+kEwdEFvnhEiNLsrFHpxVdd/dJ2Uvkk3el3DkFoWc=
+github.com/maximhq/bifrost/plugins v1.0.1/go.mod h1:c5L95RCOHGAKGAl9up03/00DHqjdxVG+3MdIUlAnzYM=
+github.com/maximhq/maxim-go v0.1.1 h1:69uUQjjDPmUGcKg/M4/3AO0fbD+70Agt66pH/UCsI5M=
+github.com/maximhq/maxim-go v0.1.1/go.mod h1:0+UTWM7UZwNNE5VnljLtr/vpRGtYP8r/2q9WDwlLWFw=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=

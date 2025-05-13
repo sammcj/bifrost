@@ -22,11 +22,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
 	schemas "github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/plugins"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/genai"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
@@ -45,6 +47,8 @@ var (
 	port               string   // Port to run the server on
 	configPath         string   // Path to the config file
 	envPath            string   // Path to the .env file
+	pluginsToLoad      []string // Path to the plugins
+	maximLogRepoId     string   // ID of the Maxim log repo
 	prometheusLabels   []string // Labels to add to Prometheus metrics (optional)
 )
 
@@ -56,6 +60,7 @@ var (
 //   - env: Path to .env file (required)
 //   - drop-excess-requests: Whether to drop excess requests
 func init() {
+	pluginString := ""
 	var prometheusLabelsString string
 
 	flag.IntVar(&initialPoolSize, "pool-size", 300, "Initial pool size for Bifrost")
@@ -63,8 +68,12 @@ func init() {
 	flag.StringVar(&configPath, "config", "", "Path to the config file")
 	flag.StringVar(&envPath, "env", "", "Path to the .env file")
 	flag.BoolVar(&dropExcessRequests, "drop-excess-requests", false, "Drop excess requests")
+	flag.StringVar(&pluginString, "plugins", "", "Comma separated list of plugins to load")
+	flag.StringVar(&maximLogRepoId, "maxim-log-repo-id", "", "ID of the Maxim log repo")
 	flag.StringVar(&prometheusLabelsString, "prometheus-labels", "", "Labels to add to Prometheus metrics")
 	flag.Parse()
+
+	pluginsToLoad = strings.Split(pluginString, ",")
 
 	if configPath == "" {
 		log.Fatalf("config path is required")
@@ -136,14 +145,38 @@ func main() {
 		log.Printf("warning: failed to read environment variables: %v", err)
 	}
 
-	// Instantiate the Prometheus plugin
+	loadedPlugins := []schemas.Plugin{}
+
+	for _, plugin := range pluginsToLoad {
+		switch strings.ToLower(plugin) {
+		case "maxim":
+			if maximLogRepoId == "" {
+				log.Println("warning: maxim log repo id is required to initialize maxim plugin")
+				continue
+			}
+			if os.Getenv("MAXIM_API_KEY") == "" {
+				log.Println("warning: maxim api key is required in environment variable MAXIM_API_KEY to initialize maxim plugin")
+				continue
+			}
+
+			maximPlugin, err := plugins.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), maximLogRepoId)
+			if err != nil {
+				log.Printf("warning: failed to initialize maxim plugin: %v", err)
+				continue
+			}
+
+			loadedPlugins = append(loadedPlugins, maximPlugin)
+		}
+	}
+
 	promPlugin := tracking.NewPrometheusPlugin()
+	loadedPlugins = append(loadedPlugins, promPlugin)
 
 	client, err := bifrost.Init(schemas.BifrostConfig{
 		Account:            account,
 		InitialPoolSize:    initialPoolSize,
 		DropExcessRequests: dropExcessRequests,
-		Plugins:            []schemas.Plugin{promPlugin},
+		Plugins:            loadedPlugins,
 	})
 	if err != nil {
 		log.Fatalf("failed to initialize bifrost: %v", err)

@@ -6,6 +6,7 @@ require (
 	github.com/fasthttp/router v1.5.4
 	github.com/joho/godotenv v1.5.1
 	github.com/maximhq/bifrost/core v1.0.5
+	github.com/maximhq/bifrost/plugins v1.0.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/valyala/fasthttp v1.60.0
 	google.golang.org/genai v1.4.0
@@ -41,6 +42,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/maximhq/maxim-go v0.1.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
