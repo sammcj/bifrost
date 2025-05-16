@@ -218,12 +218,15 @@ bifrost/
 │   ├── tests/            # Tests to make sure everything is in place
 │   ├── bifrost.go        # Main Bifrost implementation
 │
+├── docs/                 # Documentations for Bifrost's configurations and contribution guides
+│   └── ...
+│
 ├── transports/           # Interface layers (HTTP, gRPC, etc.)
 │   ├── bifrost-http/             # HTTP transport implementation
 │   └── ...
 │
 └── plugins/              # Plugin Implementations
-    ├── maxim-logger.go
+    ├── maxim/
     └── ...
 ```
 
@@ -240,7 +243,7 @@ If you want to **set up the Bifrost API quickly**, [check the transports documen
 Bifrost is divided into three Go packages: core, plugins, and transports.
 
 1. **core**: This package contains the core implementation of Bifrost as a Go package.
-2. **plugins**: This package serves as an extension to core. You can download this package using `go get github.com/maximhq/bifrost/plugins` and pass the plugins while initializing Bifrost.
+2. **plugins**: This package serves as an extension to core. You can download individual packages using `go get github.com/maximhq/bifrost/plugins/{plugin-name}` and pass the plugins while initializing Bifrost.
 
 ```golang
 plugin, err := plugins.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), os.Getenv("MAXIM_LOGGER_ID"))
@@ -259,116 +262,11 @@ client, err := bifrost.Init(schemas.BifrostConfig{
 
 ### Additional Configurations
 
-1. InitalPoolSize and DropExcessRequests: You can customise the initial pool size of the structs and channels bifrost creates on `bifrost.Init()`. A higher value would mean lesser run time allocations and lower latency but at the cost of more memory usage. Takes the defined default value if not provided.
-
-```golang
-    client, err := bifrost.Init(schemas.BifrostConfig{
-      Account:            &yourAccount,
-      InitialPoolSize:    500,
-      DropExcessRequests: true,
-    })
-```
-
-When `DropExcessRequests` is set to true, in cases where the queue is full, requests will not wait for the queue to be empty and will be dropped instead. By default it is set to false.
-
-2. Logger: Like account interface, bifrost also allows you to pass your custom logger if it follows [bifrost's logger interface](https://github.com/maximhq/bifrost/blob/main/core/schemas/logger.go). Takes in the [default logger](https://github.com/maximhq/bifrost/blob/main/core/logger.go) if not provided.
-
-```golang
-    client, err := bifrost.Init(schemas.BifrostConfig{
-      Account: &yourAccount,
-      Logger:  &yourLogger,
-    })
-```
-
-The default logger is set to level info by default. If you wish to use it but with a different log level, you can do it like this -
-
-```golang
-    client, err := bifrost.Init(schemas.BifrostConfig{
-      Account: &yourAccount,
-      Logger:  bifrost.NewDefaultLogger(schemas.LogLevelDebug),
-    })
-```
-
-3. Plugins: You can create and pass your custom pre-hook and post-hook plugins to bifrost as long as they follow [bifrost's plugin interface](https://github.com/maximhq/bifrost/blob/main/core/schemas/plugin.go).
-
-```golang
-    client, err := bifrost.Init(schemas.BifrostConfig{
-      Account: &yourAccount,
-      Plugins: []schemas.Plugin{yourPlugin1, yourPlugin2, ...},
-    })
-```
-
-4. Customise your provider settings: You can customise proxy config, timeouts, retry settings, concurrency buffer sizes for each of your provider in your account interface's GetConfigForProvider() method.
-
-exmaple:
-
-```golang
-  schemas.ProviderConfig{
-    NetworkConfig: schemas.NetworkConfig{
-      DefaultRequestTimeoutInSeconds: 30,
-      MaxRetries:                     2,
-      RetryBackoffInitial:            100 * time.Millisecond,
-      RetryBackoffMax:                2 * time.Second,
-    },
-    MetaConfig: &meta.BedrockMetaConfig{
-      SecretAccessKey: os.Getenv("BEDROCK_ACCESS_KEY"),
-      Region:          StrPtr("us-east-1"),
-		},
-    ConcurrencyAndBufferSize: schemas.ConcurrencyAndBufferSize{
-      Concurrency: 3,
-      BufferSize:  10,
-    },
-    ProxyConfig: &schemas.ProxyConfig{
-      Type: schemas.HttpProxy,
-      URL:  yourProxyURL,
-    },
-  }
-```
-
-You can manage buffer size (maximum number of requests you want to hold in the system) concurrency (maximum number of requests you want to be made concurrently) for each provider. You can manage user usage and provider limits by providing these custom provider settings Default values are taken for network config, concurrecy and buffer sizes if not provided.
-
-Bifrost also supports multiple API keys per provider, enabling both load balancing and redundancy. You can assign weights to each key to control how frequently they are selected for requests. By default, all keys are treated with equal weight unless specified otherwise.
-
-```golang
-  []schemas.Key{
-    {
-      Value:  os.Getenv("OPEN_AI_API_KEY1"),
-      Models: []string{"gpt-4o-mini", "gpt-4-turbo"},
-      Weight: 0.6,
-      },
-    {
-      Value:  os.Getenv("OPEN_AI_API_KEY2"),
-      Models: []string{"gpt-4-turbo"},
-      Weight: 0.3,
-      },
-    {
-      Value:  os.Getenv("OPEN_AI_API_KEY3"),
-      Models: []string{"gpt-4o-mini"},
-      Weight: 0.1,
-      },
-  }
-```
-
-You can check [this](https://github.com/maximhq/bifrost/blob/main/core/tests/account.go) file to refer all the customisation settings.
-
-5. Fallbacks: You can define fallback providers for each request, which will be used if all retry attempts with your primary provider fail. These fallback providers are attempted in the order you specify, provided they are configured in your account at runtime. Once a fallback is triggered, its own retry settings will apply, rather than those of the original provider.
-
-```golang
-  result, err := bifrost.ChatCompletionRequest(
-    schemas.OpenAI, &schemas.BifrostRequest{
-      Model: "gpt-4o-mini",
-      Input: schemas.RequestInput{
-        ChatCompletionInput: &messages,
-      },
-      Fallbacks: []schemas.Fallback{
-        {
-          Provider: schemas.Anthropic,
-          Model:    "claude-3-5-sonnet-20240620", // make sure you have configured this
-          },
-      },
-    }, context.Background()
-  )
-```
+- [Memory Management](https://github.com/maximhq/bifrost/blob/main/docs/memory-management.md)
+- [Logger](https://github.com/maximhq/bifrost/blob/main/docs/logger.md))
+- [Plugins](https://github.com/maximhq/bifrost/blob/main/docs/plugins.md)
+- [Provider Configurations](https://github.com/maximhq/bifrost/blob/main/docs/providers.md)
+- [Fallbacks](https://github.com/maximhq/bifrost/blob/main/docs/fallbacks.md)
 
 ---
 
@@ -457,7 +355,9 @@ This flexibility allows you to optimize Bifrost for your specific use case, whet
 
 ## 🤝 Contributing
 
-Contributions are welcome! We welcome all kinds of contributions — bug fixes, features, docs, and ideas. Please feel free to submit a Pull Request.
+We welcome contributions of all kinds—whether it's bug fixes, features, documentation improvements, or new ideas. Feel free to open an issue, and once its’ assigned, submit a Pull Request.
+
+Here's how to get started (after picking up an issue):
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
