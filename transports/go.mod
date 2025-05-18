@@ -4,16 +4,12 @@ go 1.24.1
 
 require (
 	github.com/fasthttp/router v1.5.4
-	github.com/maximhq/bifrost/core v1.0.5
-	github.com/maximhq/bifrost/plugins/maxim v0.0.0-00010101000000-000000000000
+	github.com/maximhq/bifrost/core v1.0.6
+	github.com/maximhq/bifrost/plugins/maxim v1.0.2
 	github.com/prometheus/client_golang v1.22.0
 	github.com/valyala/fasthttp v1.60.0
 	google.golang.org/genai v1.4.0
 )
-
-replace github.com/maximhq/bifrost/core => ../core
-
-replace github.com/maximhq/bifrost/plugins/maxim => ../plugins/maxim
 
 require (
 	cloud.google.com/go v0.121.0 // indirect
