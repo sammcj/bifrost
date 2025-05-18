@@ -10,7 +10,7 @@ import (
 
 	bifrost "github.com/maximhq/bifrost/core"
 	schemas "github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/plugins"
+	"github.com/maximhq/bifrost/plugins/maxim"
 
 	"github.com/joho/godotenv"
 )
@@ -52,7 +52,7 @@ func getPlugin() (schemas.Plugin, error) {
 		return nil, fmt.Errorf("MAXIM_LOGGER_ID is not set, please set it in your .env file or pass nil in the Plugins field when initializing Bifrost")
 	}
 
-	plugin, err := plugins.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), os.Getenv("MAXIM_LOGGER_ID"))
+	plugin, err := maxim.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), os.Getenv("MAXIM_LOGGER_ID"))
 	if err != nil {
 		return nil, err
 	}
