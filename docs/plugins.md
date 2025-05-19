@@ -206,8 +206,9 @@ client, err := bifrost.Init(schemas.BifrostConfig{
    plugins/
    └── your-plugin-name/
        ├── main.go           # Plugin implementation
+       ├── plugin_test.go    # Plugin tests
        ├── README.md         # Documentation
-       └── go.mod           # Module definition
+       └── go.mod            # Module definition
    ```
 
    Example `main.go`:
