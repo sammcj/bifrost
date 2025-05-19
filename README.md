@@ -80,7 +80,7 @@ Bifrost is an open-source middleware that serves as a unified gateway to various
    - Run the Docker container:
 
      ```bash
-     docker run -p 8080:8080 bifrost-transports -e OPENAI_API_KEY -e ANTHROPIC_API_KEY
+     docker run -p 8080:8080 -e OPENAI_API_KEY -e ANTHROPIC_API_KEY bifrost-transports
      ```
 
      Note: Make sure to add all the variables stated in your config.json file.
