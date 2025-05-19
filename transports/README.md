@@ -86,7 +86,7 @@ docker build \
 3. Run the Docker container:
 
 ```bash
-docker run -p 8080:8080 bifrost-transports -e OPENAI_API_KEY -e ANTHROPIC_API_KEY
+docker run -p 8080:8080 -e OPENAI_API_KEY -e ANTHROPIC_API_KEY bifrost-transports
 ```
 
 Note: In the command above, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are just example environment variables.
@@ -99,7 +99,7 @@ export COHERE_API_KEY=your_cohere_api_key
 
 docker build --build-arg CONFIG_PATH=./config.example.json -t bifrost-transports .
 
-docker run -p 8080:8080 bifrost-transports -e COHERE_API_KEY
+docker run -p 8080:8080 -e COHERE_API_KEY bifrost-transports
 ```
 
 You can also add a flag for `DROP_EXCESS_REQUESTS=false` in your Docker build command to drop excess requests when the buffer is full. Read more about `DROP_EXCESS_REQUESTS` and `POOL_SIZE` [here](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
