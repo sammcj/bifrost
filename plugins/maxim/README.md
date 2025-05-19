@@ -83,3 +83,30 @@ eg.
 ```
 
 HTTP transport offers out of the box support for this feature(when maxim plugin is used), just pass `x-bf-maxim-trace-id` of `x-bf-maxim-generation-id` header with your request to use this feature.
+
+## Testing Maxim Logger
+
+To test the Maxim Logger plugin, you'll need to set up the following environment variables:
+
+```bash
+# Required environment variables
+export MAXIM_API_KEY=your_maxim_api_key
+export MAXIM_LOGGER_ID=your_maxim_log_repo_id
+export OPENAI_API_KEY=your_openai_api_key
+```
+
+Then you can run the tests using:
+
+```bash
+go test -run TestMaximLoggerPlugin
+```
+
+The test suite includes:
+
+- Plugin initialization tests
+- Integration tests with Bifrost
+- Error handling for missing environment variables
+
+Note: The tests make actual API calls to both Maxim and OpenAI, so ensure you have valid API keys and sufficient quota before running the tests.
+
+After the test is complete, you can check your traces on [Maxim's Dashboard](https://www.getmaxim.ai)

@@ -4,13 +4,10 @@
 package tests
 
 import (
-	"fmt"
 	"log"
-	"os"
 
 	bifrost "github.com/maximhq/bifrost/core"
 	schemas "github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/plugins/maxim"
 
 	"github.com/joho/godotenv"
 )
@@ -28,36 +25,6 @@ func loadEnv() {
 	if err != nil {
 		log.Fatal("Error loading .env file:", err)
 	}
-}
-
-// getPlugin initializes and returns a Plugin instance for testing purposes.
-// It sets up the Maxim logger with configuration from environment variables.
-//
-// Environment Variables:
-//   - MAXIM_API_KEY: API key for Maxim SDK authentication
-//   - MAXIM_LOGGER_ID: ID for the Maxim logger instance
-//
-// Returns:
-//   - schemas.Plugin: A configured plugin instance for request/response tracing
-//   - error: Any error that occurred during plugin initialization
-func getPlugin() (schemas.Plugin, error) {
-	loadEnv()
-
-	// check if Maxim Logger variables are set
-	if os.Getenv("MAXIM_API_KEY") == "" {
-		return nil, fmt.Errorf("MAXIM_API_KEY is not set, please set it in your .env file or pass nil in the Plugins field when initializing Bifrost")
-	}
-
-	if os.Getenv("MAXIM_LOGGER_ID") == "" {
-		return nil, fmt.Errorf("MAXIM_LOGGER_ID is not set, please set it in your .env file or pass nil in the Plugins field when initializing Bifrost")
-	}
-
-	plugin, err := maxim.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), os.Getenv("MAXIM_LOGGER_ID"))
-	if err != nil {
-		return nil, err
-	}
-
-	return plugin, nil
 }
 
 // getBifrost initializes and returns a Bifrost instance for testing.
@@ -80,18 +47,10 @@ func getBifrost() (*bifrost.Bifrost, error) {
 
 	account := BaseAccount{}
 
-	// You can pass nil in the Plugins field if you don't want to use the implemented example plugin.
-	plugin, err := getPlugin()
-	if err != nil {
-		fmt.Println("Error setting up the plugin:", err)
-		return nil, err
-	}
-
 	// Initialize Bifrost
 	b, err := bifrost.Init(schemas.BifrostConfig{
 		Account: &account,
-		// Plugins: nil,
-		Plugins: []schemas.Plugin{plugin},
+		Plugins: nil,
 		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelDebug),
 	})
 	if err != nil {
