@@ -195,7 +195,7 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	plugin.logger.AddGenerationToTrace(traceID, &logging.GenerationConfig{
 		Id:              generationID,
 		Model:           req.Model,
-		Provider:        req.Provider,
+		Provider:        string(req.Provider),
 		Tags:            &tags,
 		Messages:        messages,
 		ModelParameters: modelParams,
