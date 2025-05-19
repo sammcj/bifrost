@@ -1,5 +1,5 @@
-// Package plugins provides plugins for the Bifrost system.
-// This file contains the Plugin implementation using maxim's logger plugin for bifrost.
+// Package maxim provides integration for Maxim's SDK as a Bifrost plugin.
+// This file contains the main plugin implementation.
 package maxim
 
 import (
