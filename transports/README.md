@@ -38,17 +38,19 @@ Bifrost uses a combination of a JSON configuration file and environment variable
 
 ```json
 {
-  "keys": [
-    {
-      "value": "env.OPENAI_API_KEY",
-      "models": ["gpt-4o-mini", "gpt-4-turbo"],
-      "weight": 1.0
-    }
-  ]
+  "openai": {
+    "keys": [
+      {
+        "value": "env.OPENAI_API_KEY",
+        "models": ["gpt-4o-mini"],
+        "weight": 1.0
+      }
+    ]
+  }
 }
 ```
 
-In this example, `OPENAI_API_KEY` refers to a key set in your environment. At runtime, its value will be used to replace the placeholder.
+In this example config file, `OPENAI_API_KEY` refers to a key set in your environment. At runtime, its value will be used to replace the placeholder.
 
 The same setup applies to keys in meta configs of all providers:
 
@@ -63,7 +65,7 @@ The same setup applies to keys in meta configs of all providers:
 
 In this example, `BEDROCK_ACCESS_KEY` and `BEDROCK_REGION` refer to keys in the environment.
 
-Please refer to `config.example.json` for examples.
+**Please refer to `config.example.json` for examples.**
 
 ### Docker Setup
 
@@ -77,7 +79,7 @@ curl -L -o Dockerfile https://raw.githubusercontent.com/maximhq/bifrost/main/tra
 
 ```bash
 docker build \
-  --build-arg CONFIG_PATH=./config.example.json \
+  --build-arg CONFIG_PATH=./config.json \
   --build-arg PORT=8080 \
   --build-arg POOL_SIZE=300 \
   -t bifrost-transports .
@@ -116,18 +118,10 @@ If you wish to run Bifrost in your Go environment, follow these steps:
 go install github.com/maximhq/bifrost/transports/bifrost-http@latest
 ```
 
-2. Run your binary:
-
-- If it's in your PATH:
+2. Run your binary (make sure Go is set in your PATH):
 
 ```bash
 bifrost-http -config config.json -port 8080 -pool-size 300
-```
-
-- Otherwise:
-
-```bash
-./bifrost-http -config config.json -port 8080 -pool-size 300
 ```
 
 You can also add a flag for `-drop-excess-requests=false` in your command to drop excess requests when the buffer is full. Read more about `DROP_EXCESS_REQUESTS` and `POOL_SIZE` [here](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
@@ -193,7 +187,7 @@ You can explore the available plugins [here](https://github.com/maximhq/bifrost/
 
 For eg. `-plugins maxim`
 
-Note: Please check plugin specific documentations (github.com/maximhq/bifrost/tree/main/plugins/{plugin_name}) for more nuanced control.
+Note: Please check plugin specific documentations (github.com/maximhq/bifrost/tree/main/plugins/{plugin_name}) for more nuanced control and any additional setup.
 
 ### Fallbacks
 
@@ -218,7 +212,5 @@ Configure fallback options in your requests:
 ```
 
 Read more about fallbacks and other additional configurations [here](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
-
----
 
 Built with ❤️ by [Maxim](https://github.com/maximhq)
