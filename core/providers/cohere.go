@@ -3,6 +3,7 @@
 package providers
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"sync"
@@ -128,7 +129,7 @@ func (provider *CohereProvider) GetProviderKey() schemas.ModelProvider {
 
 // TextCompletion is not supported by the Cohere provider.
 // Returns an error indicating that text completion is not supported.
-func (provider *CohereProvider) TextCompletion(model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *CohereProvider) TextCompletion(ctx context.Context, model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, &schemas.BifrostError{
 		IsBifrostError: false,
 		Error: schemas.ErrorField{
@@ -140,7 +141,7 @@ func (provider *CohereProvider) TextCompletion(model, key, text string, params *
 // ChatCompletion performs a chat completion request to the Cohere API.
 // It formats the request, sends it to Cohere, and processes the response.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
-func (provider *CohereProvider) ChatCompletion(model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *CohereProvider) ChatCompletion(ctx context.Context, model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Get the last message and chat history
 	lastMessage := messages[len(messages)-1]
 	chatHistory := messages[:len(messages)-1]
@@ -222,14 +223,9 @@ func (provider *CohereProvider) ChatCompletion(model, key string, messages []sch
 	req.SetBody(jsonBody)
 
 	// Make request
-	if err := provider.client.Do(req, resp); err != nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: schemas.ErrProviderRequest,
-				Error:   err,
-			},
-		}
+	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, bifrostErr
 	}
 
 	// Handle error response

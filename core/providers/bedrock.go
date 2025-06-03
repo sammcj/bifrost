@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -189,7 +190,7 @@ func (provider *BedrockProvider) GetProviderKey() schemas.ModelProvider {
 // CompleteRequest sends a request to Bedrock's API and handles the response.
 // It constructs the API URL, sets up AWS authentication, and processes the response.
 // Returns the response body or an error if the request fails.
-func (provider *BedrockProvider) completeRequest(requestBody map[string]interface{}, path string, accessKey string) ([]byte, *schemas.BifrostError) {
+func (provider *BedrockProvider) completeRequest(ctx context.Context, requestBody map[string]interface{}, path string, accessKey string) ([]byte, *schemas.BifrostError) {
 	if provider.meta == nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -206,6 +207,16 @@ func (provider *BedrockProvider) completeRequest(requestBody map[string]interfac
 
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: schemas.ErrorField{
+					Type:    StrPtr(schemas.RequestCancelled),
+					Message: fmt.Sprintf("Request cancelled or timed out by context: %v", ctx.Err()),
+					Error:   err,
+				},
+			}
+		}
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: schemas.ErrorField{
@@ -216,7 +227,7 @@ func (provider *BedrockProvider) completeRequest(requestBody map[string]interfac
 	}
 
 	// Create the request with the JSON body
-	req, err := http.NewRequest("POST", fmt.Sprintf("https://bedrock-runtime.%s.amazonaws.com/model/%s", region, path), bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("https://bedrock-runtime.%s.amazonaws.com/model/%s", region, path), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
@@ -558,14 +569,14 @@ func (provider *BedrockProvider) prepareTextCompletionParams(params map[string]i
 // TextCompletion performs a text completion request to Bedrock's API.
 // It formats the request, sends it to Bedrock, and processes the response.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
-func (provider *BedrockProvider) TextCompletion(model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *BedrockProvider) TextCompletion(ctx context.Context, model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	preparedParams := provider.prepareTextCompletionParams(prepareParams(params), model)
 
 	requestBody := mergeConfig(map[string]interface{}{
 		"prompt": text,
 	}, preparedParams)
 
-	body, err := provider.completeRequest(requestBody, fmt.Sprintf("%s/invoke", model), key)
+	body, err := provider.completeRequest(ctx, requestBody, fmt.Sprintf("%s/invoke", model), key)
 	if err != nil {
 		return nil, err
 	}
@@ -595,7 +606,7 @@ func (provider *BedrockProvider) TextCompletion(model, key, text string, params 
 // ChatCompletion performs a chat completion request to Bedrock's API.
 // It formats the request, sends it to Bedrock, and processes the response.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
-func (provider *BedrockProvider) ChatCompletion(model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *BedrockProvider) ChatCompletion(ctx context.Context, model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	messageBody, err := provider.prepareChatCompletionMessages(messages, model)
 	if err != nil {
 		return nil, err
@@ -623,7 +634,7 @@ func (provider *BedrockProvider) ChatCompletion(model, key string, messages []sc
 	}
 
 	// Create the signed request
-	responseBody, err := provider.completeRequest(requestBody, path, key)
+	responseBody, err := provider.completeRequest(ctx, requestBody, path, key)
 	if err != nil {
 		return nil, err
 	}

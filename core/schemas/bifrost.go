@@ -143,6 +143,7 @@ type ToolChoice struct {
 type Message struct {
 	Role         ModelChatMessageRole `json:"role"`
 	Content      *string              `json:"content,omitempty"`
+	ToolCallID   *string              `json:"tool_call_id,omitempty"`
 	ImageContent *ImageContent        `json:"image_content,omitempty"`
 	ToolCalls    *[]Tool              `json:"tool_calls,omitempty"`
 }
@@ -289,6 +290,10 @@ type BifrostResponseExtraFields struct {
 	BilledUsage *BilledLLMUsage                 `json:"billed_usage,omitempty"`
 	RawResponse interface{}                     `json:"raw_response"`
 }
+
+const (
+	RequestCancelled = "request_cancelled"
+)
 
 // BifrostError represents an error from the Bifrost system.
 type BifrostError struct {

@@ -3,6 +3,7 @@
 package providers
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -168,7 +169,7 @@ func (provider *AnthropicProvider) prepareTextCompletionParams(params map[string
 // completeRequest sends a request to Anthropic's API and handles the response.
 // It constructs the API URL, sets up authentication, and processes the response.
 // Returns the response body or an error if the request fails.
-func (provider *AnthropicProvider) completeRequest(requestBody map[string]interface{}, url string, key string) ([]byte, *schemas.BifrostError) {
+func (provider *AnthropicProvider) completeRequest(ctx context.Context, requestBody map[string]interface{}, url string, key string) ([]byte, *schemas.BifrostError) {
 	// Marshal the request body
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
@@ -195,14 +196,9 @@ func (provider *AnthropicProvider) completeRequest(requestBody map[string]interf
 	req.SetBody(jsonData)
 
 	// Send the request
-	if err := provider.client.Do(req, resp); err != nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: schemas.ErrProviderRequest,
-				Error:   err,
-			},
-		}
+	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, bifrostErr
 	}
 
 	// Handle error response
@@ -227,7 +223,7 @@ func (provider *AnthropicProvider) completeRequest(requestBody map[string]interf
 // TextCompletion performs a text completion request to Anthropic's API.
 // It formats the request, sends it to Anthropic, and processes the response.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
-func (provider *AnthropicProvider) TextCompletion(model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *AnthropicProvider) TextCompletion(ctx context.Context, model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	preparedParams := provider.prepareTextCompletionParams(prepareParams(params))
 
 	// Merge additional parameters
@@ -236,7 +232,7 @@ func (provider *AnthropicProvider) TextCompletion(model, key, text string, param
 		"prompt": fmt.Sprintf("\n\nHuman: %s\n\nAssistant:", text),
 	}, preparedParams)
 
-	responseBody, err := provider.completeRequest(requestBody, "https://api.anthropic.com/v1/complete", key)
+	responseBody, err := provider.completeRequest(ctx, requestBody, "https://api.anthropic.com/v1/complete", key)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +277,7 @@ func (provider *AnthropicProvider) TextCompletion(model, key, text string, param
 // ChatCompletion performs a chat completion request to Anthropic's API.
 // It formats the request, sends it to Anthropic, and processes the response.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
-func (provider *AnthropicProvider) ChatCompletion(model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *AnthropicProvider) ChatCompletion(ctx context.Context, model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	formattedMessages, preparedParams := prepareAnthropicChatRequest(model, messages, params)
 
 	// Merge additional parameters
@@ -290,7 +286,7 @@ func (provider *AnthropicProvider) ChatCompletion(model, key string, messages []
 		"messages": formattedMessages,
 	}, preparedParams)
 
-	responseBody, err := provider.completeRequest(requestBody, "https://api.anthropic.com/v1/messages", key)
+	responseBody, err := provider.completeRequest(ctx, requestBody, "https://api.anthropic.com/v1/messages", key)
 	if err != nil {
 		return nil, err
 	}

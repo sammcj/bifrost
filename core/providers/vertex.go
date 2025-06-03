@@ -5,6 +5,7 @@ package providers
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -76,7 +77,7 @@ func (provider *VertexProvider) GetProviderKey() schemas.ModelProvider {
 
 // TextCompletion is not supported by the Vertex provider.
 // Returns an error indicating that text completion is not available.
-func (provider *VertexProvider) TextCompletion(model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *VertexProvider) TextCompletion(ctx context.Context, model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, &schemas.BifrostError{
 		IsBifrostError: false,
 		Error: schemas.ErrorField{
@@ -88,7 +89,7 @@ func (provider *VertexProvider) TextCompletion(model, key, text string, params *
 // ChatCompletion performs a chat completion request to the Vertex API.
 // It supports both text and image content in messages.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
-func (provider *VertexProvider) ChatCompletion(model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *VertexProvider) ChatCompletion(ctx context.Context, model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Format messages for Vertex API
 	var formattedMessages []map[string]interface{}
 	var preparedParams map[string]interface{}
@@ -152,7 +153,7 @@ func (provider *VertexProvider) ChatCompletion(model, key string, messages []sch
 	}
 
 	// Create request
-	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -167,6 +168,16 @@ func (provider *VertexProvider) ChatCompletion(model, key string, messages []sch
 	// Make request
 	resp, err := provider.client.Do(req)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: schemas.ErrorField{
+					Type:    StrPtr(schemas.RequestCancelled),
+					Message: fmt.Sprintf("Request cancelled or timed out by context: %v", ctx.Err()),
+					Error:   err,
+				},
+			}
+		}
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
 			Error: schemas.ErrorField{

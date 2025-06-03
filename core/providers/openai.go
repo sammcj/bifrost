@@ -3,6 +3,7 @@
 package providers
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -101,7 +102,7 @@ func (provider *OpenAIProvider) GetProviderKey() schemas.ModelProvider {
 
 // TextCompletion is not supported by the OpenAI provider.
 // Returns an error indicating that text completion is not available.
-func (provider *OpenAIProvider) TextCompletion(model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *OpenAIProvider) TextCompletion(ctx context.Context, model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, &schemas.BifrostError{
 		IsBifrostError: false,
 		Error: schemas.ErrorField{
@@ -113,7 +114,7 @@ func (provider *OpenAIProvider) TextCompletion(model, key, text string, params *
 // ChatCompletion performs a chat completion request to the OpenAI API.
 // It supports both text and image content in messages.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
-func (provider *OpenAIProvider) ChatCompletion(model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *OpenAIProvider) ChatCompletion(ctx context.Context, model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	formattedMessages, preparedParams := prepareOpenAIChatRequest(model, messages, params)
 
 	requestBody := mergeConfig(map[string]interface{}{
@@ -145,14 +146,9 @@ func (provider *OpenAIProvider) ChatCompletion(model, key string, messages []sch
 	req.SetBody(jsonBody)
 
 	// Make request
-	if err := provider.client.Do(req, resp); err != nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: schemas.ErrProviderRequest,
-				Error:   err,
-			},
-		}
+	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, bifrostErr
 	}
 
 	// Handle error response
@@ -242,10 +238,16 @@ func prepareOpenAIChatRequest(model string, messages []schemas.Message, params *
 				"content": content,
 			})
 		} else {
-			formattedMessages = append(formattedMessages, map[string]interface{}{
+			message := map[string]interface{}{
 				"role":    msg.Role,
 				"content": msg.Content,
-			})
+			}
+
+			if msg.ToolCallID != nil {
+				message["tool_call_id"] = msg.ToolCallID
+			}
+
+			formattedMessages = append(formattedMessages, message)
 		}
 	}
 
