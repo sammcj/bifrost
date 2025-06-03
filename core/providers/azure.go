@@ -3,6 +3,7 @@
 package providers
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -141,7 +142,7 @@ func (provider *AzureProvider) GetProviderKey() schemas.ModelProvider {
 // completeRequest sends a request to Azure's API and handles the response.
 // It constructs the API URL, sets up authentication, and processes the response.
 // Returns the response body or an error if the request fails.
-func (provider *AzureProvider) completeRequest(requestBody map[string]interface{}, path string, key string, model string) ([]byte, *schemas.BifrostError) {
+func (provider *AzureProvider) completeRequest(ctx context.Context, requestBody map[string]interface{}, path string, key string, model string) ([]byte, *schemas.BifrostError) {
 	// Marshal the request body
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
@@ -204,14 +205,9 @@ func (provider *AzureProvider) completeRequest(requestBody map[string]interface{
 	req.SetBody(jsonData)
 
 	// Send the request
-	if err := provider.client.Do(req, resp); err != nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: schemas.ErrProviderRequest,
-				Error:   err,
-			},
-		}
+	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, bifrostErr
 	}
 
 	// Handle error response
@@ -236,7 +232,7 @@ func (provider *AzureProvider) completeRequest(requestBody map[string]interface{
 // TextCompletion performs a text completion request to Azure's API.
 // It formats the request, sends it to Azure, and processes the response.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
-func (provider *AzureProvider) TextCompletion(model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *AzureProvider) TextCompletion(ctx context.Context, model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	preparedParams := prepareParams(params)
 
 	// Merge additional parameters
@@ -245,7 +241,7 @@ func (provider *AzureProvider) TextCompletion(model, key, text string, params *s
 		"prompt": text,
 	}, preparedParams)
 
-	responseBody, err := provider.completeRequest(requestBody, "completions", key, model)
+	responseBody, err := provider.completeRequest(ctx, requestBody, "completions", key, model)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +293,7 @@ func (provider *AzureProvider) TextCompletion(model, key, text string, params *s
 // ChatCompletion performs a chat completion request to Azure's API.
 // It formats the request, sends it to Azure, and processes the response.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
-func (provider *AzureProvider) ChatCompletion(model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *AzureProvider) ChatCompletion(ctx context.Context, model, key string, messages []schemas.Message, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	preparedParams := prepareParams(params)
 
 	// Format messages for Azure API
@@ -315,7 +311,7 @@ func (provider *AzureProvider) ChatCompletion(model, key string, messages []sche
 		"messages": formattedMessages,
 	}, preparedParams)
 
-	responseBody, err := provider.completeRequest(requestBody, "chat/completions", key, model)
+	responseBody, err := provider.completeRequest(ctx, requestBody, "chat/completions", key, model)
 	if err != nil {
 		return nil, err
 	}

@@ -1,7 +1,10 @@
 // Package schemas defines the core schemas and types used by the Bifrost system.
 package schemas
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 const (
 	DefaultMaxRetries              = 0
@@ -140,7 +143,7 @@ type Provider interface {
 	// GetProviderKey returns the provider's identifier
 	GetProviderKey() ModelProvider
 	// TextCompletion performs a text completion request
-	TextCompletion(model, key, text string, params *ModelParameters) (*BifrostResponse, *BifrostError)
+	TextCompletion(ctx context.Context, model, key, text string, params *ModelParameters) (*BifrostResponse, *BifrostError)
 	// ChatCompletion performs a chat completion request
-	ChatCompletion(model, key string, messages []Message, params *ModelParameters) (*BifrostResponse, *BifrostError)
+	ChatCompletion(ctx context.Context, model, key string, messages []Message, params *ModelParameters) (*BifrostResponse, *BifrostError)
 }

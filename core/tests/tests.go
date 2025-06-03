@@ -6,6 +6,10 @@ package tests
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	bifrost "github.com/maximhq/bifrost/core"
@@ -82,7 +86,8 @@ var WeatherToolParams = schemas.ModelParameters{
 //   - bifrost: The Bifrost instance to use for the request
 //   - config: Test configuration containing model and parameters
 //   - ctx: Context for the request
-func setupTextCompletionRequest(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context) {
+//   - wg: WaitGroup for synchronization
+func setupTextCompletionRequest(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context, wg *sync.WaitGroup) {
 	text := "Hello world!"
 	if config.CustomTextCompletion != nil {
 		text = *config.CustomTextCompletion
@@ -93,7 +98,9 @@ func setupTextCompletionRequest(bifrostClient *bifrost.Bifrost, config TestConfi
 		params = *config.CustomParams
 	}
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		result, err := bifrostClient.TextCompletionRequest(ctx, &schemas.BifrostRequest{
 			Provider: config.Provider,
 			Model:    config.TextModel,
@@ -118,7 +125,8 @@ func setupTextCompletionRequest(bifrostClient *bifrost.Bifrost, config TestConfi
 //   - bifrost: The Bifrost instance to use for the requests
 //   - config: Test configuration containing model and parameters
 //   - ctx: Context for the requests
-func setupChatCompletionRequests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context) {
+//   - wg: WaitGroup for synchronization
+func setupChatCompletionRequests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context, wg *sync.WaitGroup) {
 	messages := config.Messages
 	if len(messages) == 0 {
 		messages = CommonTestMessages
@@ -131,7 +139,9 @@ func setupChatCompletionRequests(bifrostClient *bifrost.Bifrost, config TestConf
 
 	for i, message := range messages {
 		delay := time.Duration(100*(i+1)) * time.Millisecond
+		wg.Add(1)
 		go func(msg string, delay time.Duration, index int) {
+			defer wg.Done()
 			time.Sleep(delay)
 			messages := []schemas.Message{
 				{
@@ -164,7 +174,8 @@ func setupChatCompletionRequests(bifrostClient *bifrost.Bifrost, config TestConf
 //   - bifrost: The Bifrost instance to use for the requests
 //   - config: Test configuration containing model and parameters
 //   - ctx: Context for the requests
-func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context) {
+//   - wg: WaitGroup for synchronization
+func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context, wg *sync.WaitGroup) {
 	params := schemas.ModelParameters{}
 	if config.CustomParams != nil {
 		params = *config.CustomParams
@@ -186,7 +197,9 @@ func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx cont
 		urlImageMessages[0].ImageContent.Type = bifrost.Ptr("url")
 	}
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		result, err := bifrostClient.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
 			Provider: config.Provider,
 			Model:    config.ChatModel,
@@ -217,7 +230,9 @@ func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx cont
 			},
 		}
 
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			result, err := bifrostClient.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
 				Provider: config.Provider,
 				Model:    config.ChatModel,
@@ -243,7 +258,8 @@ func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx cont
 //   - bifrost: The Bifrost instance to use for the requests
 //   - config: Test configuration containing model and parameters
 //   - ctx: Context for the requests
-func setupToolCalls(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context) {
+//   - wg: WaitGroup for synchronization
+func setupToolCalls(bifrostClient *bifrost.Bifrost, config TestConfig, ctx context.Context, wg *sync.WaitGroup) {
 	messages := []string{"What's the weather like in Mumbai?"}
 
 	params := WeatherToolParams
@@ -259,7 +275,9 @@ func setupToolCalls(bifrostClient *bifrost.Bifrost, config TestConfig, ctx conte
 
 	for i, message := range messages {
 		delay := time.Duration(100*(i+1)) * time.Millisecond
+		wg.Add(1)
 		go func(msg string, delay time.Duration, index int) {
+			defer wg.Done()
 			time.Sleep(delay)
 			messages := []schemas.Message{
 				{
@@ -306,20 +324,48 @@ func setupToolCalls(bifrostClient *bifrost.Bifrost, config TestConfig, ctx conte
 // Parameters:
 //   - bifrost: The Bifrost instance to use for the requests
 //   - config: Test configuration specifying which tests to run
-func SetupAllRequests(bifrost *bifrost.Bifrost, config TestConfig) {
-	ctx := context.Background()
+func SetupAllRequests(bifrostClient *bifrost.Bifrost, config TestConfig) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	var wg sync.WaitGroup
+
+	go func() {
+		<-sigChan
+		log.Println("\n🛑 Interrupt signal received, cancelling requests...")
+		cancel()
+	}()
 
 	if config.SetupText {
-		setupTextCompletionRequest(bifrost, config, ctx)
+		setupTextCompletionRequest(bifrostClient, config, ctx, &wg)
 	}
 
-	setupChatCompletionRequests(bifrost, config, ctx)
+	setupChatCompletionRequests(bifrostClient, config, ctx, &wg)
 
 	if config.SetupImage {
-		setupImageTests(bifrost, config, ctx)
+		setupImageTests(bifrostClient, config, ctx, &wg)
 	}
 
 	if config.SetupToolCalls {
-		setupToolCalls(bifrost, config, ctx)
+		setupToolCalls(bifrostClient, config, ctx, &wg)
 	}
+
+	allDoneChan := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(allDoneChan)
+	}()
+
+	select {
+	case <-ctx.Done():
+		log.Println("Context cancelled, test setup winding down.")
+		time.Sleep(1 * time.Second)
+	case <-allDoneChan:
+		log.Println("All test goroutines completed.")
+	}
+	log.Println("Test setup finished.")
+	bifrostClient.Cleanup()
 }
