@@ -26,5 +26,4 @@ func TestVertex(t *testing.T) {
 	}
 
 	SetupAllRequests(bifrostClient, config)
-	bifrostClient.Cleanup()
 }
