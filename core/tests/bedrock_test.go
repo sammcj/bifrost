@@ -34,5 +34,4 @@ func TestBedrock(t *testing.T) {
 	}
 
 	SetupAllRequests(bifrost, config)
-	bifrost.Cleanup()
 }

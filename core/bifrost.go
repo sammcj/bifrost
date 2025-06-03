@@ -7,11 +7,8 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
-	"os/signal"
 	"slices"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/maximhq/bifrost/core/providers"
@@ -30,6 +27,7 @@ const (
 // It contains the request, response and error channels, and the request type.
 type ChannelMessage struct {
 	schemas.BifrostRequest
+	Context  context.Context
 	Response chan *schemas.BifrostResponse
 	Err      chan schemas.BifrostError
 	Type     RequestType
@@ -357,7 +355,7 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, queue chan Chan
 					}
 					break // Don't retry client errors
 				} else {
-					result, bifrostError = provider.TextCompletion(req.Model, key, *req.Input.TextCompletionInput, req.Params)
+					result, bifrostError = provider.TextCompletion(req.Context, req.Model, key, *req.Input.TextCompletionInput, req.Params)
 				}
 			} else if req.Type == ChatCompletionRequest {
 				if req.Input.ChatCompletionInput == nil {
@@ -369,14 +367,17 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, queue chan Chan
 					}
 					break // Don't retry client errors
 				} else {
-					result, bifrostError = provider.ChatCompletion(req.Model, key, *req.Input.ChatCompletionInput, req.Params)
+					result, bifrostError = provider.ChatCompletion(req.Context, req.Model, key, *req.Input.ChatCompletionInput, req.Params)
 				}
 			}
 
 			bifrost.logger.Debug(fmt.Sprintf("Request for provider %s completed", provider.GetProviderKey()))
 
 			// Check if successful or if we should retry
-			if bifrostError == nil || bifrostError.IsBifrostError || (bifrostError.StatusCode != nil && !retryableStatusCodes[*bifrostError.StatusCode]) {
+			if bifrostError == nil ||
+				bifrostError.IsBifrostError ||
+				(bifrostError.StatusCode != nil && !retryableStatusCodes[*bifrostError.StatusCode]) ||
+				(bifrostError.Error.Type != nil && *bifrostError.Error.Type == schemas.RequestCancelled) {
 				break
 			}
 		}
@@ -466,9 +467,13 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 	}
 
 	// Try the primary provider first
-	primaryResult, primaryErr := bifrost.tryTextCompletion(req.Provider, req, ctx)
+	primaryResult, primaryErr := bifrost.tryTextCompletion(req, ctx)
 	if primaryErr == nil {
 		return primaryResult, nil
+	}
+
+	if primaryErr.Error.Type != nil && *primaryErr.Error.Type == schemas.RequestCancelled {
+		return nil, primaryErr
 	}
 
 	// If primary provider failed and we have fallbacks, try them in order
@@ -486,11 +491,15 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 			fallbackReq.Model = fallback.Model
 
 			// Try the fallback provider
-			result, fallbackErr := bifrost.tryTextCompletion(fallback.Provider, &fallbackReq, ctx)
+			result, fallbackErr := bifrost.tryTextCompletion(&fallbackReq, ctx)
 			if fallbackErr == nil {
 				bifrost.logger.Info(fmt.Sprintf("Successfully used fallback provider %s with model %s", fallback.Provider, fallback.Model))
 				return result, nil
 			}
+			if fallbackErr.Error.Type != nil && *fallbackErr.Error.Type == schemas.RequestCancelled {
+				return nil, fallbackErr
+			}
+
 			bifrost.logger.Warn(fmt.Sprintf("Fallback provider %s failed: %s", fallback.Provider, fallbackErr.Error.Message))
 		}
 	}
@@ -501,8 +510,8 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 
 // tryTextCompletion attempts a text completion request with a single provider.
 // This is a helper function used by TextCompletionRequest to handle individual provider attempts.
-func (bifrost *Bifrost) tryTextCompletion(providerKey schemas.ModelProvider, req *schemas.BifrostRequest, ctx context.Context) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	queue, err := bifrost.GetProviderQueue(providerKey)
+func (bifrost *Bifrost) tryTextCompletion(req *schemas.BifrostRequest, ctx context.Context) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	queue, err := bifrost.GetProviderQueue(req.Provider)
 	if err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -535,6 +544,7 @@ func (bifrost *Bifrost) tryTextCompletion(providerKey schemas.ModelProvider, req
 
 	// Get a ChannelMessage from the pool
 	msg := bifrost.getChannelMessage(*req, TextCompletionRequest)
+	msg.Context = ctx
 
 	// Handle queue send with context and proper cleanup
 	select {
@@ -561,6 +571,7 @@ func (bifrost *Bifrost) tryTextCompletion(providerKey schemas.ModelProvider, req
 				},
 			}
 		}
+
 		// If not dropping excess requests, wait with context
 		if ctx == nil {
 			ctx = bifrost.backgroundCtx
@@ -638,7 +649,7 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.
 	}
 
 	// Try the primary provider first
-	primaryResult, primaryErr := bifrost.tryChatCompletion(req.Provider, req, ctx)
+	primaryResult, primaryErr := bifrost.tryChatCompletion(req, ctx)
 	if primaryErr == nil {
 		return primaryResult, nil
 	}
@@ -658,7 +669,7 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.
 			fallbackReq.Model = fallback.Model
 
 			// Try the fallback provider
-			result, fallbackErr := bifrost.tryChatCompletion(fallback.Provider, &fallbackReq, ctx)
+			result, fallbackErr := bifrost.tryChatCompletion(&fallbackReq, ctx)
 			if fallbackErr == nil {
 				bifrost.logger.Info(fmt.Sprintf("Successfully used fallback provider %s with model %s", fallback.Provider, fallback.Model))
 				return result, nil
@@ -673,8 +684,8 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.
 
 // tryChatCompletion attempts a chat completion request with a single provider.
 // This is a helper function used by ChatCompletionRequest to handle individual provider attempts.
-func (bifrost *Bifrost) tryChatCompletion(providerKey schemas.ModelProvider, req *schemas.BifrostRequest, ctx context.Context) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	queue, err := bifrost.GetProviderQueue(providerKey)
+func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx context.Context) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	queue, err := bifrost.GetProviderQueue(req.Provider)
 	if err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -707,6 +718,7 @@ func (bifrost *Bifrost) tryChatCompletion(providerKey schemas.ModelProvider, req
 
 	// Get a ChannelMessage from the pool
 	msg := bifrost.getChannelMessage(*req, ChatCompletionRequest)
+	msg.Context = ctx
 
 	// Handle queue send with context and proper cleanup
 	select {
@@ -778,10 +790,10 @@ func (bifrost *Bifrost) tryChatCompletion(providerKey schemas.ModelProvider, req
 	return result, nil
 }
 
-// Shutdown gracefully stops all workers when triggered.
+// Cleanup gracefully stops all workers when triggered.
 // It closes all request channels and waits for workers to exit.
-func (bifrost *Bifrost) Shutdown() {
-	bifrost.logger.Info("[BIFROST] Graceful Shutdown Initiated - Closing all request channels...")
+func (bifrost *Bifrost) Cleanup() {
+	bifrost.logger.Info("[BIFROST] Graceful Cleanup Initiated - Closing all request channels...")
 
 	// Close all provider queues to signal workers to stop
 	for _, queue := range bifrost.requestQueues {
@@ -792,14 +804,4 @@ func (bifrost *Bifrost) Shutdown() {
 	for _, waitGroup := range bifrost.waitGroups {
 		waitGroup.Wait()
 	}
-}
-
-// Cleanup handles SIGINT (Ctrl+C) to exit cleanly.
-// It sets up signal handling and calls Shutdown when interrupted.
-func (bifrost *Bifrost) Cleanup() {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
-
-	<-signalChan       // Wait for interrupt signal
-	bifrost.Shutdown() // Gracefully shut down
 }

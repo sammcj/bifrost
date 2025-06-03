@@ -3,6 +3,7 @@
 package providers
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"reflect"
@@ -102,6 +103,49 @@ func prepareParams(params *schemas.ModelParameters) map[string]interface{} {
 	maps.Copy(flatParams, params.ExtraParams)
 
 	return flatParams
+}
+
+// IMPORTANT: This function does NOT truly cancel the underlying fasthttp network request if the
+// context is done. The fasthttp client call will continue in its goroutine until it completes
+// or times out based on its own settings. This function merely stops *waiting* for the
+// fasthttp call and returns an error related to the context.
+func makeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *fasthttp.Request, resp *fasthttp.Response) *schemas.BifrostError {
+	errChan := make(chan error, 1)
+
+	go func() {
+		// client.Do is a blocking call.
+		// It will send an error (or nil for success) to errChan when it completes.
+		errChan <- client.Do(req, resp)
+	}()
+
+	select {
+	case <-ctx.Done():
+		// Context was cancelled (e.g., deadline exceeded or manual cancellation).
+		// Return a BifrostError indicating this.
+		return &schemas.BifrostError{
+			IsBifrostError: true,
+			Error: schemas.ErrorField{
+				Type:    StrPtr(schemas.RequestCancelled),
+				Message: fmt.Sprintf("Request cancelled or timed out by context: %v", ctx.Err()),
+				Error:   ctx.Err(),
+			},
+		}
+	case err := <-errChan:
+		// The fasthttp.Do call completed.
+		if err != nil {
+			// The HTTP request itself failed (e.g., connection error, fasthttp timeout).
+			return &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: schemas.ErrorField{
+					Message: schemas.ErrProviderRequest,
+					Error:   err,
+				},
+			}
+		}
+		// HTTP request was successful from fasthttp's perspective (err is nil).
+		// The caller should check resp.StatusCode() for HTTP-level errors (4xx, 5xx).
+		return nil
+	}
 }
 
 // configureProxy sets up a proxy for the fasthttp client based on the provided configuration.
