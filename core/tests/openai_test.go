@@ -22,8 +22,8 @@ func TestOpenAI(t *testing.T) {
 		ChatModel:      "gpt-4o-mini",
 		SetupText:      false, // OpenAI does not support text completion
 		SetupToolCalls: true,
-		SetupImage:     false,
-		SetupBaseImage: false,
+		SetupImage:     true,
+		SetupBaseImage: true,
 		Fallbacks: []schemas.Fallback{
 			{
 				Provider: schemas.Anthropic,
