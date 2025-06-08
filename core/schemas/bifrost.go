@@ -170,12 +170,19 @@ type AssistantMessage struct {
 	Thought     *string      `json:"thought,omitempty"`
 }
 
+type ImageContentType string
+
+const (
+	ImageContentTypeBase64 ImageContentType = "base64"
+	ImageContentTypeURL    ImageContentType = "url"
+)
+
 // ImageContent represents image data in a message.
 type ImageContent struct {
-	Type      *string `json:"type"`
-	URL       string  `json:"url"`
-	MediaType *string `json:"media_type"`
-	Detail    *string `json:"detail"`
+	Type      ImageContentType `json:"type"`
+	URL       string           `json:"url"`
+	MediaType *string          `json:"media_type,omitempty"`
+	Detail    *string          `json:"detail,omitempty"`
 }
 
 //* Response Structs

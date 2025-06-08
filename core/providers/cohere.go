@@ -235,9 +235,31 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model, key s
 			historyMsg["tool_results"] = toolResults
 		}
 
-		// Only add message content if it's not nil
-		if msg.Content != nil {
-			historyMsg["message"] = *msg.Content
+		// Handle message content based on whether it supports vision
+		if msg.UserMessage != nil && msg.UserMessage.ImageContent != nil {
+			// Create content array with text and image
+			contentArray := []map[string]interface{}{}
+
+			// Add text content if present
+			if msg.Content != nil {
+				contentArray = append(contentArray, map[string]interface{}{
+					"type": "text",
+					"text": *msg.Content,
+				})
+			}
+
+			// Add image content using our helper function
+			// NOTE: Cohere v1 does not support image content
+			// if processedImageContent := processImageContent(msg.UserMessage.ImageContent); processedImageContent != nil {
+			// 	contentArray = append(contentArray, processedImageContent)
+			// }
+
+			historyMsg["content"] = contentArray
+		} else {
+			// For non-vision models or text-only messages, use simple message field
+			if msg.Content != nil {
+				historyMsg["message"] = *msg.Content
+			}
 		}
 
 		cohereHistory = append(cohereHistory, historyMsg)
@@ -251,9 +273,31 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model, key s
 		"model":        model,
 	}, preparedParams)
 
-	// Only add last message content if it's not nil
-	if lastMessage.Content != nil {
-		requestBody["message"] = *lastMessage.Content
+	// Handle the last message content based on whether it supports vision
+	if lastMessage.UserMessage != nil && lastMessage.UserMessage.ImageContent != nil {
+		// Create content array with text and image
+		contentArray := []map[string]interface{}{}
+
+		// Add text content if present
+		if lastMessage.Content != nil {
+			contentArray = append(contentArray, map[string]interface{}{
+				"type": "text",
+				"text": *lastMessage.Content,
+			})
+		}
+
+		// Add image content using our helper function
+		// NOTE: Cohere v1 does not support image content
+		// if processedImageContent := processImageContent(lastMessage.UserMessage.ImageContent); processedImageContent != nil {
+		// 	contentArray = append(contentArray, processedImageContent)
+		// }
+
+		requestBody["content"] = contentArray
+	} else {
+		// For non-vision models or text-only messages, use simple message field
+		if lastMessage.Content != nil {
+			requestBody["message"] = *lastMessage.Content
+		}
 	}
 
 	// Add tools if present
@@ -416,6 +460,24 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model, key s
 	}
 
 	return bifrostResponse, nil
+}
+
+// processImageContent processes image content for Cohere API format.
+// It creates a copy of the image content, normalizes and formats it, then returns the properly formatted map.
+// This prevents unintended mutations to the original image content.
+func processImageContent(imageContent *schemas.ImageContent) map[string]interface{} {
+	if imageContent == nil {
+		return nil
+	}
+
+	formattedImgContent := *FormatImageContent(imageContent, true)
+
+	return map[string]interface{}{
+		"type": "image_url",
+		"image_url": map[string]interface{}{
+			"url": formattedImgContent.URL,
+		},
+	}
 }
 
 // convertChatHistory converts Cohere's chat history format to Bifrost's format for standardization.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -24,6 +25,10 @@ var bifrostResponsePool = sync.Pool{
 		return &schemas.BifrostResponse{}
 	},
 }
+
+// dataURIRegex is a precompiled regex for matching data URI format patterns.
+// It matches patterns like: data:image/png;base64,iVBORw0KGgo...
+var dataURIRegex = regexp.MustCompile(`^data:([^;]+);base64,(.*)$`)
 
 // acquireBifrostResponse gets a Bifrost response from the pool and resets it.
 func acquireBifrostResponse() *schemas.BifrostResponse {
@@ -309,4 +314,132 @@ func coalesceString(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// normalizeMediaType converts short media types to full media types
+// e.g., "jpeg" -> "image/jpeg", "png" -> "image/png"
+func normalizeMediaType(mediaType string) string {
+	if mediaType == "" {
+		return "image/jpeg" // default
+	}
+
+	// If it already has the image/ prefix, return as is
+	if strings.HasPrefix(mediaType, "image/") {
+		return mediaType
+	}
+
+	// Add image/ prefix for common formats
+	switch strings.ToLower(mediaType) {
+	case "jpeg", "jpg":
+		return "image/jpeg"
+	case "png":
+		return "image/png"
+	case "gif":
+		return "image/gif"
+	case "webp":
+		return "image/webp"
+	case "bmp":
+		return "image/bmp"
+	case "svg":
+		return "image/svg+xml"
+	default:
+		return "image/" + mediaType
+	}
+}
+
+// Normalize handles type inference and media type normalization for image content.
+// It automatically detects content type from URL patterns and normalizes media types.
+//
+// NOTE: This function is called internally by the Bifrost system - you do not need to call it yourself.
+// It is automatically invoked when processing image content in requests.
+func normalizeImageContent(ic *schemas.ImageContent) {
+	if ic == nil {
+		return
+	}
+
+	// Handle unknown/empty type - try to infer from URL
+	if ic.Type == "" && ic.URL != "" {
+		if dataURIRegex.MatchString(ic.URL) {
+			// Looks like base64 data URI
+			ic.Type = schemas.ImageContentTypeBase64
+		} else if strings.HasPrefix(ic.URL, "http://") || strings.HasPrefix(ic.URL, "https://") {
+			// Looks like a regular URL
+			ic.Type = schemas.ImageContentTypeURL
+		} else {
+			// Assume it's raw base64 data
+			ic.Type = schemas.ImageContentTypeBase64
+		}
+	}
+
+	// Normalize MediaType if provided
+	if ic.MediaType != nil && *ic.MediaType != "" {
+		normalizedMediaType := normalizeMediaType(*ic.MediaType)
+		ic.MediaType = &normalizedMediaType
+	}
+
+}
+
+// FormatDataURL modifies the image content struct in place to format data URL for base64 image content.
+//
+// NOTE: This function is called internally by the Bifrost system - you do not need to call it yourself.
+// It is automatically invoked when processing image content for different providers.
+//
+// Parameters:
+//   - includePrefix: Whether to include the "data:mediatype;base64," prefix
+//   - true: URL will be in full data URI format (data:image/png;base64,iVBORw0KGgo...)
+//   - false: URL will contain only the base64 data (iVBORw0KGgo...)
+func FormatImageContent(imageContent *schemas.ImageContent, includePrefix bool) *schemas.ImageContent {
+	if imageContent == nil {
+		return nil
+	}
+
+	newImageContent := *imageContent
+
+	normalizeImageContent(&newImageContent)
+
+	if newImageContent.Type != schemas.ImageContentTypeBase64 {
+		return &newImageContent
+	}
+
+	var finalMediaType string
+	var base64Data string
+
+	// Extract base64 data and media type from URL using precompiled regex
+	if matches := dataURIRegex.FindStringSubmatch(newImageContent.URL); matches != nil {
+		// URL already has data URI format
+		existingMediaType := matches[1]
+		base64Data = matches[2]
+
+		// Determine final media type (prefer explicit MediaType field)
+		if newImageContent.MediaType != nil && *newImageContent.MediaType != "" {
+			finalMediaType = normalizeMediaType(*newImageContent.MediaType)
+		} else {
+			finalMediaType = normalizeMediaType(existingMediaType)
+		}
+	} else {
+		// URL contains raw base64 data (no data URI prefix)
+		base64Data = newImageContent.URL
+
+		// Determine media type
+		if newImageContent.MediaType != nil && *newImageContent.MediaType != "" {
+			finalMediaType = normalizeMediaType(*newImageContent.MediaType)
+		} else {
+			finalMediaType = "image/jpeg" // default when no media type provided
+		}
+	}
+
+	// Ensure MediaType field is always set with normalized value
+	normalizedMediaType := finalMediaType
+	newImageContent.MediaType = &normalizedMediaType
+
+	// Set URL based on includePrefix preference
+	if includePrefix {
+		// Full data URI format
+		newImageContent.URL = fmt.Sprintf("data:%s;base64,%s", finalMediaType, base64Data)
+	} else {
+		// Raw base64 data only
+		newImageContent.URL = base64Data
+	}
+
+	return &newImageContent
 }

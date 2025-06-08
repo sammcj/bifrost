@@ -21,8 +21,8 @@ func TestVertex(t *testing.T) {
 		ChatModel:      "google/gemini-2.0-flash-001",
 		SetupText:      false, // Vertex does not support text completion
 		SetupToolCalls: true,
-		SetupImage:     false,
-		SetupBaseImage: false,
+		SetupImage:     true,
+		SetupBaseImage: true,
 	}
 
 	SetupAllRequests(bifrostClient, config)

@@ -319,21 +319,23 @@ func (provider *AnthropicProvider) ChatCompletion(ctx context.Context, model, ke
 
 // buildAnthropicImageSourceMap creates the "source" map for an Anthropic image content part.
 func buildAnthropicImageSourceMap(imgContent *schemas.ImageContent) map[string]interface{} {
-	if imgContent == nil || imgContent.Type == nil {
+	if imgContent == nil {
 		return nil
 	}
 
+	formattedImgContent := *FormatImageContent(imgContent, false)
+
 	sourceMap := map[string]interface{}{
-		"type": *imgContent.Type, // "base64" or "url"
+		"type": string(formattedImgContent.Type), // "base64" or "url"
 	}
 
-	if *imgContent.Type == "url" {
-		sourceMap["url"] = imgContent.URL
+	if formattedImgContent.Type == schemas.ImageContentTypeURL {
+		sourceMap["url"] = formattedImgContent.URL
 	} else {
-		if imgContent.MediaType != nil {
-			sourceMap["media_type"] = *imgContent.MediaType
+		if formattedImgContent.MediaType != nil {
+			sourceMap["media_type"] = *formattedImgContent.MediaType
 		}
-		sourceMap["data"] = imgContent.URL // URL field is used for base64 data string
+		sourceMap["data"] = formattedImgContent.URL // URL field contains base64 data string
 	}
 	return sourceMap
 }
@@ -375,8 +377,10 @@ func prepareAnthropicChatRequest(messages []schemas.BifrostMessage, params *sche
 				if (msg.UserMessage != nil && msg.UserMessage.ImageContent != nil) || (msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil) {
 					var messageImageContent schemas.ImageContent
 					if msg.UserMessage != nil && msg.UserMessage.ImageContent != nil {
+						// Create a copy to avoid modifying the original
 						messageImageContent = *msg.UserMessage.ImageContent
 					} else if msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil {
+						// Create a copy to avoid modifying the original
 						messageImageContent = *msg.ToolMessage.ImageContent
 					}
 
@@ -396,8 +400,10 @@ func prepareAnthropicChatRequest(messages []schemas.BifrostMessage, params *sche
 				if (msg.UserMessage != nil && msg.UserMessage.ImageContent != nil) || (msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil) {
 					var messageImageContent schemas.ImageContent
 					if msg.UserMessage != nil && msg.UserMessage.ImageContent != nil {
+						// Create a copy to avoid modifying the original
 						messageImageContent = *msg.UserMessage.ImageContent
 					} else if msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil {
+						// Create a copy to avoid modifying the original
 						messageImageContent = *msg.ToolMessage.ImageContent
 					}
 
