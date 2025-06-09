@@ -1,4 +1,4 @@
-package openai
+package anthropic
 
 import (
 	bifrost "github.com/maximhq/bifrost/core"
@@ -6,34 +6,34 @@ import (
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
 )
 
-// OpenAIRouter holds route registrations for OpenAI endpoints.
+// AnthropicRouter holds route registrations for Anthropic endpoints.
 // It supports standard chat completions and image-enabled vision capabilities.
-type OpenAIRouter struct {
+type AnthropicRouter struct {
 	*integrations.GenericRouter
 }
 
-// NewOpenAIRouter creates a new OpenAIRouter with the given bifrost client.
-func NewOpenAIRouter(client *bifrost.Bifrost) *OpenAIRouter {
+// NewAnthropicRouter creates a new AnthropicRouter with the given bifrost client.
+func NewAnthropicRouter(client *bifrost.Bifrost) *AnthropicRouter {
 	routes := []integrations.RouteConfig{
 		{
-			Path:   "/openai/v1/chat/completions",
+			Path:   "/anthropic/v1/messages",
 			Method: "POST",
 			GetRequestTypeInstance: func() interface{} {
-				return &OpenAIChatRequest{}
+				return &AnthropicMessageRequest{}
 			},
 			RequestConverter: func(req interface{}) *schemas.BifrostRequest {
-				if openaiReq, ok := req.(*OpenAIChatRequest); ok {
-					return openaiReq.ConvertToBifrostRequest()
+				if anthropicReq, ok := req.(*AnthropicMessageRequest); ok {
+					return anthropicReq.ConvertToBifrostRequest()
 				}
 				return nil
 			},
 			ResponseFunc: func(resp *schemas.BifrostResponse) interface{} {
-				return DeriveOpenAIFromBifrostResponse(resp)
+				return DeriveAnthropicFromBifrostResponse(resp)
 			},
 		},
 	}
 
-	return &OpenAIRouter{
+	return &AnthropicRouter{
 		GenericRouter: integrations.NewGenericRouter(client, routes),
 	}
 }

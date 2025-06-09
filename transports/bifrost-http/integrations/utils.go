@@ -2,6 +2,7 @@ package integrations
 
 import (
 	"encoding/json"
+	"log"
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
@@ -37,13 +38,13 @@ type PostRequestCallback func(ctx *fasthttp.RequestCtx, req interface{}, resp *s
 // RouteConfig defines configuration for a single HTTP route in an integration.
 // Each route specifies how to handle requests for a specific endpoint.
 type RouteConfig struct {
-	Path             string              // HTTP path pattern (e.g., "/openai/v1/chat/completions")
-	Method           string              // HTTP method (POST, GET, PUT, DELETE)
-	RequestType      interface{}         // Factory function to create request instance
-	RequestConverter RequestConverter    // Function to convert request to BifrostRequest
-	ResponseFunc     ResponseConverter   // Function to convert BifrostResponse to integration format
-	PreCallback      PreRequestCallback  // Optional: called before request processing
-	PostCallback     PostRequestCallback // Optional: called after request processing
+	Path                   string              // HTTP path pattern (e.g., "/openai/v1/chat/completions")
+	Method                 string              // HTTP method (POST, GET, PUT, DELETE)
+	GetRequestTypeInstance func() interface{}  // Factory function to create request instance (SHOULD NOT BE NIL)
+	RequestConverter       RequestConverter    // Function to convert request to BifrostRequest (SHOULD NOT BE NIL)
+	ResponseFunc           ResponseConverter   // Function to convert BifrostResponse to integration format (SHOULD NOT BE NIL)
+	PreCallback            PreRequestCallback  // Optional: called before request processing
+	PostCallback           PostRequestCallback // Optional: called after request processing
 }
 
 // GenericRouter provides a reusable router implementation for all integrations.
@@ -67,6 +68,26 @@ func NewGenericRouter(client *bifrost.Bifrost, routes []RouteConfig) *GenericRou
 // This method implements the ExtensionRouter interface.
 func (g *GenericRouter) RegisterRoutes(r *router.Router) {
 	for _, route := range g.routes {
+		// Validate route configuration at startup to fail fast
+		if route.GetRequestTypeInstance == nil {
+			log.Println("[WARN] route configuration is invalid: GetRequestTypeInstance cannot be nil for route " + route.Path)
+			continue
+		}
+		if route.RequestConverter == nil {
+			log.Println("[WARN] route configuration is invalid: RequestConverter cannot be nil for route " + route.Path)
+			continue
+		}
+		if route.ResponseFunc == nil {
+			log.Println("[WARN] route configuration is invalid: ResponseFunc cannot be nil for route " + route.Path)
+			continue
+		}
+
+		// Test that GetRequestTypeInstance returns a valid instance
+		if testInstance := route.GetRequestTypeInstance(); testInstance == nil {
+			log.Println("[WARN] route configuration is invalid: GetRequestTypeInstance returned nil for route " + route.Path)
+			continue
+		}
+
 		handler := g.createHandler(route)
 		switch route.Method {
 		case "POST":
@@ -94,8 +115,9 @@ func (g *GenericRouter) RegisterRoutes(r *router.Router) {
 func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		// Parse request body into the integration-specific request type
-		// Skip JSON unmarshalling for methods that typically don't have request bodies
-		req := config.RequestType
+		// Note: config validation is performed at startup in RegisterRoutes
+		req := config.GetRequestTypeInstance()
+
 		method := string(ctx.Method())
 
 		if method != "GET" && method != "DELETE" {
@@ -149,6 +171,11 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 				g.sendError(ctx, fasthttp.StatusInternalServerError, err.Error())
 				return
 			}
+		}
+
+		if result == nil {
+			g.sendError(ctx, fasthttp.StatusInternalServerError, "Bifrost response is nil after post-request callback")
+			return
 		}
 
 		// Convert Bifrost response to integration-specific format and send
