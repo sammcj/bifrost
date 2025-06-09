@@ -489,6 +489,8 @@ func prepareAnthropicChatRequest(messages []schemas.BifrostMessage, params *sche
 	if params != nil && params.ToolChoice != nil {
 		switch toolChoice := params.ToolChoice.Type; toolChoice {
 		case schemas.ToolChoiceTypeFunction:
+			fallthrough
+		case "tool":
 			preparedParams["tool_choice"] = map[string]interface{}{
 				"type": "tool",
 				"name": params.ToolChoice.Function.Name,
