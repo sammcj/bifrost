@@ -138,11 +138,7 @@ func (r *AnthropicMessageRequest) ConvertToBifrostRequest() *schemas.BifrostRequ
 			case "image":
 				if content.Source != nil {
 					bifrostMsg.UserMessage = &schemas.UserMessage{
-						ImageContent: &schemas.ImageContent{
-							Type:      bifrost.Ptr(content.Source.Type),
-							URL:       content.Source.Data,
-							MediaType: &content.Source.MediaType,
-						},
+						ImageContent: convertAnthropicImageSource(content.Source),
 					}
 				}
 			case "tool_use":
@@ -171,11 +167,7 @@ func (r *AnthropicMessageRequest) ConvertToBifrostRequest() *schemas.BifrostRequ
 						}
 					}
 					if content.Source != nil {
-						bifrostMsg.ToolMessage.ImageContent = &schemas.ImageContent{
-							Type:      bifrost.Ptr(content.Source.Type),
-							URL:       content.Source.Data,
-							MediaType: &content.Source.MediaType,
-						}
+						bifrostMsg.ToolMessage.ImageContent = convertAnthropicImageSource(content.Source)
 					}
 					bifrostMsg.Role = schemas.ModelChatMessageRoleTool
 				}
@@ -415,4 +407,29 @@ func DeriveAnthropicFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *A
 
 	anthropicResp.Content = content
 	return anthropicResp
+}
+
+// convertAnthropicImageSource converts an Anthropic image source to Bifrost ImageContent format
+func convertAnthropicImageSource(source *AnthropicImageSource) *schemas.ImageContent {
+	if source == nil {
+		return nil
+	}
+
+	// Convert Anthropic source type to Bifrost ImageContentType
+	var contentType schemas.ImageContentType
+	switch source.Type {
+	case "base64":
+		contentType = schemas.ImageContentTypeBase64
+	case "url":
+		contentType = schemas.ImageContentTypeURL
+	default:
+		// Default to base64 if unknown type, as this is more common in Anthropic
+		contentType = schemas.ImageContentTypeBase64
+	}
+
+	return &schemas.ImageContent{
+		Type:      contentType,
+		URL:       source.Data,
+		MediaType: &source.MediaType,
+	}
 }

@@ -3,6 +3,7 @@ package integrations
 import (
 	"encoding/json"
 	"log"
+	"strings"
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
@@ -19,11 +20,11 @@ type ExtensionRouter interface {
 
 // RequestConverter is a function that converts integration-specific requests to Bifrost format.
 // It takes the parsed request object and returns a BifrostRequest ready for processing.
-type RequestConverter func(req interface{}) *schemas.BifrostRequest
+type RequestConverter func(req interface{}) (*schemas.BifrostRequest, error)
 
 // ResponseConverter is a function that converts Bifrost responses to integration-specific format.
 // It takes a BifrostResponse and returns the format expected by the specific integration.
-type ResponseConverter func(*schemas.BifrostResponse) interface{}
+type ResponseConverter func(*schemas.BifrostResponse) (interface{}, error)
 
 // PreRequestCallback is called before processing the request.
 // It can be used to modify the request object (e.g., extract model from URL parameters)
@@ -42,7 +43,7 @@ type RouteConfig struct {
 	Method                 string              // HTTP method (POST, GET, PUT, DELETE)
 	GetRequestTypeInstance func() interface{}  // Factory function to create request instance (SHOULD NOT BE NIL)
 	RequestConverter       RequestConverter    // Function to convert request to BifrostRequest (SHOULD NOT BE NIL)
-	ResponseFunc           ResponseConverter   // Function to convert BifrostResponse to integration format (SHOULD NOT BE NIL)
+	ResponseConverter      ResponseConverter   // Function to convert BifrostResponse to integration format (SHOULD NOT BE NIL)
 	PreCallback            PreRequestCallback  // Optional: called before request processing
 	PostCallback           PostRequestCallback // Optional: called after request processing
 }
@@ -77,8 +78,8 @@ func (g *GenericRouter) RegisterRoutes(r *router.Router) {
 			log.Println("[WARN] route configuration is invalid: RequestConverter cannot be nil for route " + route.Path)
 			continue
 		}
-		if route.ResponseFunc == nil {
-			log.Println("[WARN] route configuration is invalid: ResponseFunc cannot be nil for route " + route.Path)
+		if route.ResponseConverter == nil {
+			log.Println("[WARN] route configuration is invalid: ResponseConverter cannot be nil for route " + route.Path)
 			continue
 		}
 
@@ -89,14 +90,14 @@ func (g *GenericRouter) RegisterRoutes(r *router.Router) {
 		}
 
 		handler := g.createHandler(route)
-		switch route.Method {
-		case "POST":
+		switch strings.ToUpper(route.Method) {
+		case fasthttp.MethodPost:
 			r.POST(route.Path, handler)
-		case "GET":
+		case fasthttp.MethodGet:
 			r.GET(route.Path, handler)
-		case "PUT":
+		case fasthttp.MethodPut:
 			r.PUT(route.Path, handler)
-		case "DELETE":
+		case fasthttp.MethodDelete:
 			r.DELETE(route.Path, handler)
 		default:
 			r.POST(route.Path, handler) // Default to POST
@@ -120,7 +121,7 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 
 		method := string(ctx.Method())
 
-		if method != "GET" && method != "DELETE" {
+		if method != fasthttp.MethodGet && method != fasthttp.MethodDelete {
 			// Use ctx.Request.Body() instead of ctx.PostBody() to support all HTTP methods
 			body := ctx.Request.Body()
 			if len(body) > 0 {
@@ -142,7 +143,11 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		}
 
 		// Convert the integration-specific request to Bifrost format
-		bifrostReq := config.RequestConverter(req)
+		bifrostReq, err := config.RequestConverter(req)
+		if err != nil {
+			g.sendError(ctx, fasthttp.StatusBadRequest, err.Error())
+			return
+		}
 		if bifrostReq == nil {
 			g.sendError(ctx, fasthttp.StatusBadRequest, "Invalid request")
 			return
@@ -154,13 +159,13 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 
 		// Execute the request through Bifrost
 		bifrostCtx := lib.ConvertToBifrostContext(ctx)
-		result, err := g.client.ChatCompletionRequest(*bifrostCtx, bifrostReq)
-		if err != nil {
+		result, bifrostErr := g.client.ChatCompletionRequest(*bifrostCtx, bifrostReq)
+		if bifrostErr != nil {
 			g.sendError(ctx, func() int {
-				if err.StatusCode != nil {
-					return *err.StatusCode
+				if bifrostErr.IsBifrostError {
+					return fasthttp.StatusInternalServerError
 				}
-				return fasthttp.StatusInternalServerError
+				return fasthttp.StatusBadRequest
 			}(), err)
 			return
 		}
@@ -179,7 +184,11 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		}
 
 		// Convert Bifrost response to integration-specific format and send
-		response := config.ResponseFunc(result)
+		response, err := config.ResponseConverter(result)
+		if err != nil {
+			g.sendError(ctx, fasthttp.StatusInternalServerError, err.Error())
+			return
+		}
 		g.sendSuccess(ctx, response)
 	}
 }
@@ -214,4 +223,126 @@ func (g *GenericRouter) sendSuccess(ctx *fasthttp.RequestCtx, response interface
 	}
 
 	ctx.SetBody(responseBody)
+}
+
+// GetProviderFromModel determines the appropriate provider based on model name patterns
+// This function uses comprehensive pattern matching to identify the correct provider
+// for various model naming conventions used across different AI providers.
+func GetProviderFromModel(model string) schemas.ModelProvider {
+	// Normalize model name for case-insensitive matching
+	modelLower := strings.ToLower(strings.TrimSpace(model))
+
+	// Azure OpenAI Models - check first to prevent false positives from OpenAI "gpt" patterns
+	if isAzureModel(modelLower) {
+		return schemas.Azure
+	}
+
+	// OpenAI Models - comprehensive pattern matching
+	if isOpenAIModel(modelLower) {
+		return schemas.OpenAI
+	}
+
+	// Anthropic Models - Claude family
+	if isAnthropicModel(modelLower) {
+		return schemas.Anthropic
+	}
+
+	// Google Vertex AI Models - Gemini and Palm family
+	if isVertexModel(modelLower) {
+		return schemas.Vertex
+	}
+
+	// AWS Bedrock Models - various model providers through Bedrock
+	if isBedrockModel(modelLower) {
+		return schemas.Bedrock
+	}
+
+	// Cohere Models - Command and Embed family
+	if isCohereModel(modelLower) {
+		return schemas.Cohere
+	}
+
+	// Default to OpenAI for unknown models (most LiteLLM compatible)
+	return schemas.OpenAI
+}
+
+// isOpenAIModel checks for OpenAI model patterns
+func isOpenAIModel(model string) bool {
+	// Exclude Azure models to prevent overlap
+	if strings.Contains(model, "azure/") {
+		return false
+	}
+
+	openaiPatterns := []string{
+		"gpt", "davinci", "curie", "babbage", "ada", "o1", "o3", "o4",
+		"text-embedding", "dall-e", "whisper", "tts", "chatgpt",
+	}
+
+	return matchesAnyPattern(model, openaiPatterns)
+}
+
+// isAzureModel checks for Azure OpenAI specific patterns
+func isAzureModel(model string) bool {
+	azurePatterns := []string{
+		"azure", "model-router", "computer-use-preview",
+	}
+
+	return matchesAnyPattern(model, azurePatterns)
+}
+
+// isAnthropicModel checks for Anthropic Claude model patterns
+func isAnthropicModel(model string) bool {
+	anthropicPatterns := []string{
+		"claude", "anthropic/",
+	}
+
+	return matchesAnyPattern(model, anthropicPatterns)
+}
+
+// isVertexModel checks for Google Vertex AI model patterns
+func isVertexModel(model string) bool {
+	vertexPatterns := []string{
+		"gemini", "palm", "bison", "gecko", "vertex/", "google/",
+	}
+
+	return matchesAnyPattern(model, vertexPatterns)
+}
+
+// isBedrockModel checks for AWS Bedrock model patterns
+func isBedrockModel(model string) bool {
+	bedrockPatterns := []string{
+		"bedrock", "bedrock.amazonaws.com/", "bedrock/",
+		"amazon.titan", "amazon.nova", "aws/amazon.",
+		"ai21.jamba", "ai21.j2", "aws/ai21.",
+		"meta.llama", "aws/meta.",
+		"stability.stable-diffusion", "stability.sd3", "aws/stability.",
+		"anthropic.claude", "aws/anthropic.",
+		"cohere.command", "cohere.embed", "aws/cohere.",
+		"mistral.mistral", "mistral.mixtral", "aws/mistral.",
+		"titan-text", "titan-embed", "nova-micro", "nova-lite", "nova-pro",
+		"jamba-instruct", "j2-ultra", "j2-mid",
+		"llama-2", "llama-3", "llama-3.1", "llama-3.2",
+		"stable-diffusion-xl", "sd3-large",
+	}
+
+	return matchesAnyPattern(model, bedrockPatterns)
+}
+
+// isCohereModel checks for Cohere model patterns
+func isCohereModel(model string) bool {
+	coherePatterns := []string{
+		"command-", "embed-", "cohere",
+	}
+
+	return matchesAnyPattern(model, coherePatterns)
+}
+
+// matchesAnyPattern checks if the model matches any of the given patterns
+func matchesAnyPattern(model string, patterns []string) bool {
+	for _, pattern := range patterns {
+		if strings.Contains(model, pattern) {
+			return true
+		}
+	}
+	return false
 }
