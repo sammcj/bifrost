@@ -48,8 +48,15 @@ func extractAndSetModelFromURL(ctx *fasthttp.RequestCtx, req interface{}) error 
 	}
 
 	modelStr := model.(string)
-	// Remove :generateContent suffix if present
-	modelStr = strings.TrimSuffix(modelStr, ":generateContent")
+	// Remove Google GenAI API endpoint suffixes if present
+	for _, sfx := range []string{
+		":streamGenerateContent",
+		":generateContent",
+		":countTokens",
+	} {
+		modelStr = strings.TrimSuffix(modelStr, sfx)
+	}
+
 	// Remove trailing colon if present
 	if len(modelStr) > 0 && modelStr[len(modelStr)-1] == ':' {
 		modelStr = modelStr[:len(modelStr)-1]
