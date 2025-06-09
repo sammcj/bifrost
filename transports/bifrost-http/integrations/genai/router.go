@@ -1,63 +1,71 @@
 package genai
 
 import (
-	"encoding/json"
+	"fmt"
+	"strings"
 
-	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
-	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
+	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
 	"github.com/valyala/fasthttp"
 )
 
 // GenAIRouter holds route registrations for genai endpoints.
 type GenAIRouter struct {
-	client *bifrost.Bifrost
+	*integrations.GenericRouter
 }
 
 // NewGenAIRouter creates a new GenAIRouter with the given bifrost client.
 func NewGenAIRouter(client *bifrost.Bifrost) *GenAIRouter {
-	return &GenAIRouter{client: client}
+	routes := []integrations.RouteConfig{
+		{
+			Path:        "/genai/v1beta/models/{model}",
+			Method:      "POST",
+			RequestType: &GeminiChatRequest{},
+			RequestConverter: func(req interface{}) *schemas.BifrostRequest {
+				if geminiReq, ok := req.(*GeminiChatRequest); ok {
+					return geminiReq.ConvertToBifrostRequest()
+				}
+				return nil
+			},
+			ResponseFunc: func(resp *schemas.BifrostResponse) interface{} {
+				return DeriveGenAIFromBifrostResponse(resp)
+			},
+			PreCallback: extractAndSetModelFromURL,
+		},
+	}
+
+	return &GenAIRouter{
+		GenericRouter: integrations.NewGenericRouter(client, routes),
+	}
 }
 
-// RegisterRoutes registers all genai routes on the given router.
-func (g *GenAIRouter) RegisterRoutes(r *router.Router) {
-	r.POST("/genai/v1beta/models/{model}", g.handleChatCompletion)
-}
-
-// handleChatCompletion handles POST /genai/v1beta/models/{model}
-func (g *GenAIRouter) handleChatCompletion(ctx *fasthttp.RequestCtx) {
+// extractAndSetModelFromURL extracts model from URL and sets it in the request
+func extractAndSetModelFromURL(ctx *fasthttp.RequestCtx, req interface{}) error {
 	model := ctx.UserValue("model")
 	if model == nil {
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		ctx.SetBodyString("Model parameter is required")
-		return
+		return fmt.Errorf("model parameter is required")
 	}
+
 	modelStr := model.(string)
-	modelStr = modelStr[:len(modelStr)-len(":generateContent")]
+	// Remove :generateContent suffix if present
+	modelStr = strings.TrimSuffix(modelStr, ":generateContent")
+	// Remove trailing colon if present
 	if len(modelStr) > 0 && modelStr[len(modelStr)-1] == ':' {
 		modelStr = modelStr[:len(modelStr)-1]
 	}
 
-	var req GeminiChatRequest
-	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		json.NewEncoder(ctx).Encode(err)
-		return
+	// Add google/ prefix for Bifrost if not already present
+	processedModel := modelStr
+	if !strings.HasPrefix(modelStr, "google/") {
+		processedModel = "google/" + modelStr
 	}
 
-	bifrostReq := req.ConvertToBifrostRequest("google/" + modelStr)
-
-	bifrostCtx := lib.ConvertToBifrostContext(ctx)
-
-	result, err := g.client.ChatCompletionRequest(*bifrostCtx, bifrostReq)
-	if err != nil {
-		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-		json.NewEncoder(ctx).Encode(err)
-		return
+	// Set the model in the request
+	if geminiReq, ok := req.(*GeminiChatRequest); ok {
+		geminiReq.Model = processedModel
+		return nil
 	}
 
-	genAIResponse := DeriveGenAIFromBifrostResponse(result)
-	ctx.SetStatusCode(fasthttp.StatusOK)
-	ctx.SetContentType("application/json")
-	json.NewEncoder(ctx).Encode(genAIResponse)
+	return fmt.Errorf("invalid request type for GenAI")
 }
