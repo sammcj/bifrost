@@ -215,9 +215,9 @@ func (bifrost *Bifrost) releaseChannelMessage(msg *ChannelMessage) {
 	bifrost.channelMessagePool.Put(msg)
 }
 
-// SelectKeyFromProviderForModel selects an appropriate API key for a given provider and model.
+// selectKeyFromProviderForModel selects an appropriate API key for a given provider and model.
 // It uses weighted random selection if multiple keys are available.
-func (bifrost *Bifrost) SelectKeyFromProviderForModel(providerKey schemas.ModelProvider, model string) (string, error) {
+func (bifrost *Bifrost) selectKeyFromProviderForModel(providerKey schemas.ModelProvider, model string) (string, error) {
 	keys, err := bifrost.account.GetKeysForProvider(providerKey)
 	if err != nil {
 		return "", err
@@ -298,7 +298,7 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, queue chan Chan
 
 		key := ""
 		if provider.GetProviderKey() != schemas.Vertex {
-			key, err = bifrost.SelectKeyFromProviderForModel(provider.GetProviderKey(), req.Model)
+			key, err = bifrost.selectKeyFromProviderForModel(provider.GetProviderKey(), req.Model)
 			if err != nil {
 				bifrost.logger.Warn(fmt.Sprintf("Error selecting key for model %s: %v", req.Model, err))
 				req.Err <- schemas.BifrostError{
@@ -411,10 +411,10 @@ func (bifrost *Bifrost) GetConfiguredProviderFromProviderKey(key schemas.ModelPr
 	return nil, fmt.Errorf("no provider found for key: %s", key)
 }
 
-// GetProviderQueue returns the request queue for a given provider key.
+// getProviderQueue returns the request queue for a given provider key.
 // If the queue doesn't exist, it creates one at runtime and initializes the provider,
 // given the provider config is provided in the account interface implementation.
-func (bifrost *Bifrost) GetProviderQueue(providerKey schemas.ModelProvider) (chan ChannelMessage, error) {
+func (bifrost *Bifrost) getProviderQueue(providerKey schemas.ModelProvider) (chan ChannelMessage, error) {
 	var queue chan ChannelMessage
 	var exists bool
 
@@ -512,7 +512,7 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 // tryTextCompletion attempts a text completion request with a single provider.
 // This is a helper function used by TextCompletionRequest to handle individual provider attempts.
 func (bifrost *Bifrost) tryTextCompletion(req *schemas.BifrostRequest, ctx context.Context) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	queue, err := bifrost.GetProviderQueue(req.Provider)
+	queue, err := bifrost.getProviderQueue(req.Provider)
 	if err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -686,7 +686,7 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.
 // tryChatCompletion attempts a chat completion request with a single provider.
 // This is a helper function used by ChatCompletionRequest to handle individual provider attempts.
 func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx context.Context) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	queue, err := bifrost.GetProviderQueue(req.Provider)
+	queue, err := bifrost.getProviderQueue(req.Provider)
 	if err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
