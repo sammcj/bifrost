@@ -77,7 +77,7 @@ func (baseAccount *BaseAccount) GetKeysForProvider(providerKey schemas.ModelProv
 		return []schemas.Key{
 			{
 				Value:  os.Getenv("COHERE_API_KEY"),
-				Models: []string{"command-a-03-2025"},
+				Models: []string{"command-a-03-2025", "c4ai-aya-vision-8b"},
 				Weight: 1.0,
 			},
 		}, nil

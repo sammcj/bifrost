@@ -226,6 +226,8 @@ func prepareOpenAIChatRequest(messages []schemas.BifrostMessage, params *schemas
 				messageImageContent = *msg.ToolMessage.ImageContent
 			}
 
+			formattedImgContent := *FormatImageContent(&messageImageContent, true)
+
 			var content []map[string]interface{}
 
 			// Add text content if present
@@ -239,12 +241,12 @@ func prepareOpenAIChatRequest(messages []schemas.BifrostMessage, params *schemas
 			imageContent := map[string]interface{}{
 				"type": "image_url",
 				"image_url": map[string]interface{}{
-					"url": messageImageContent.URL,
+					"url": formattedImgContent.URL,
 				},
 			}
 
-			if messageImageContent.Detail != nil {
-				imageContent["image_url"].(map[string]interface{})["detail"] = messageImageContent.Detail
+			if formattedImgContent.Detail != nil {
+				imageContent["image_url"].(map[string]interface{})["detail"] = formattedImgContent.Detail
 			}
 
 			content = append(content, imageContent)

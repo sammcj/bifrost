@@ -494,19 +494,22 @@ func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schema
 							messageImageContent = *msg.ToolMessage.ImageContent
 						}
 
+						formattedImgContent := *FormatImageContent(&messageImageContent, false)
+
 						content = append(content, BedrockAnthropicImageMessage{
 							Type: "image",
 							Image: BedrockAnthropicImage{
 								Format: func() string {
-									if messageImageContent.MediaType != nil {
-										mediaType := *messageImageContent.MediaType
+									if formattedImgContent.MediaType != nil {
+										mediaType := *formattedImgContent.MediaType
+										// Remove "image/" prefix if present, since normalizeMediaType ensures full format
 										mediaType = strings.TrimPrefix(mediaType, "image/")
 										return mediaType
 									}
 									return ""
 								}(),
 								Source: BedrockAnthropicImageSource{
-									Bytes: messageImageContent.URL,
+									Bytes: formattedImgContent.URL,
 								},
 							},
 						})

@@ -22,7 +22,7 @@ func TestAzure(t *testing.T) {
 		SetupText:      false, // gpt-4o does not support text completion
 		SetupToolCalls: true,
 		SetupImage:     true,
-		SetupBaseImage: false,
+		SetupBaseImage: true,
 	}
 
 	SetupAllRequests(bifrost, config)

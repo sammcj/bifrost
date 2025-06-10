@@ -189,7 +189,7 @@ func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx cont
 			Content: bifrost.Ptr("What is Happening in this picture?"),
 			UserMessage: &schemas.UserMessage{
 				ImageContent: &schemas.ImageContent{
-					Type: bifrost.Ptr("url"),
+					Type: schemas.ImageContentTypeURL,
 					URL:  "https://upload.wikimedia.org/wikipedia/commons/a/a7/Camponotus_flavomarginatus_ant.jpg",
 				},
 			},
@@ -225,7 +225,7 @@ func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx cont
 				Content: bifrost.Ptr("What is this image about?"),
 				UserMessage: &schemas.UserMessage{
 					ImageContent: &schemas.ImageContent{
-						Type:      bifrost.Ptr("base64"),
+						Type:      schemas.ImageContentTypeBase64,
 						URL:       "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=",
 						MediaType: bifrost.Ptr("image/jpeg"),
 					},
