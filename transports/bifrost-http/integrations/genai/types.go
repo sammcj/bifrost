@@ -171,9 +171,8 @@ func (r *GeminiChatRequest) convertContentToBifrostMessages(content genai_sdk.Co
 
 		case part.InlineData != nil:
 			// Handle inline images/media
-			imageType := "base64"
 			imageContent := schemas.ImageContent{
-				Type:      &imageType,
+				Type:      schemas.ImageContentTypeBase64,
 				URL:       fmt.Sprintf("data:%s;base64,%s", part.InlineData.MIMEType, base64.StdEncoding.EncodeToString(part.InlineData.Data)),
 				MediaType: &part.InlineData.MIMEType,
 			}
@@ -181,9 +180,8 @@ func (r *GeminiChatRequest) convertContentToBifrostMessages(content genai_sdk.Co
 
 		case part.FileData != nil:
 			// Handle file references
-			imageType := "url"
 			imageContent := schemas.ImageContent{
-				Type:      &imageType,
+				Type:      schemas.ImageContentTypeURL,
 				URL:       part.FileData.FileURI,
 				MediaType: &part.FileData.MIMEType,
 			}
