@@ -45,6 +45,7 @@ import (
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/plugins/maxim"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
+	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/anthropic"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/genai"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/openai"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
@@ -196,6 +197,7 @@ func main() {
 	extensions := []integrations.ExtensionRouter{
 		genai.NewGenAIRouter(client),
 		openai.NewOpenAIRouter(client),
+		anthropic.NewAnthropicRouter(client),
 	}
 
 	r.POST("/v1/text/completions", func(ctx *fasthttp.RequestCtx) {
