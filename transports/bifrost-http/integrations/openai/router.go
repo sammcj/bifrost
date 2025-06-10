@@ -1,6 +1,8 @@
 package openai
 
 import (
+	"errors"
+
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
@@ -21,14 +23,14 @@ func NewOpenAIRouter(client *bifrost.Bifrost) *OpenAIRouter {
 			GetRequestTypeInstance: func() interface{} {
 				return &OpenAIChatRequest{}
 			},
-			RequestConverter: func(req interface{}) *schemas.BifrostRequest {
+			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if openaiReq, ok := req.(*OpenAIChatRequest); ok {
-					return openaiReq.ConvertToBifrostRequest()
+					return openaiReq.ConvertToBifrostRequest(), nil
 				}
-				return nil
+				return nil, errors.New("invalid request type")
 			},
-			ResponseFunc: func(resp *schemas.BifrostResponse) interface{} {
-				return DeriveOpenAIFromBifrostResponse(resp)
+			ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
+				return DeriveOpenAIFromBifrostResponse(resp), nil
 			},
 		},
 	}

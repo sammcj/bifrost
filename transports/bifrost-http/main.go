@@ -47,6 +47,7 @@ import (
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/anthropic"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/genai"
+	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/litellm"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/openai"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/maximhq/bifrost/transports/bifrost-http/tracking"
@@ -198,6 +199,7 @@ func main() {
 		genai.NewGenAIRouter(client),
 		openai.NewOpenAIRouter(client),
 		anthropic.NewAnthropicRouter(client),
+		litellm.NewLiteLLMRouter(client),
 	}
 
 	r.POST("/v1/text/completions", func(ctx *fasthttp.RequestCtx) {
@@ -218,7 +220,7 @@ func main() {
 	r.NotFound = func(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(fasthttp.StatusNotFound)
 		ctx.SetContentType("text/plain")
-		ctx.SetBodyString("Route not found")
+		ctx.SetBodyString("Route not found: " + string(ctx.Path()))
 	}
 
 	server := &fasthttp.Server{

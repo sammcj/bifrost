@@ -1,6 +1,7 @@
 package genai
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -24,14 +25,14 @@ func NewGenAIRouter(client *bifrost.Bifrost) *GenAIRouter {
 			GetRequestTypeInstance: func() interface{} {
 				return &GeminiChatRequest{}
 			},
-			RequestConverter: func(req interface{}) *schemas.BifrostRequest {
+			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if geminiReq, ok := req.(*GeminiChatRequest); ok {
-					return geminiReq.ConvertToBifrostRequest()
+					return geminiReq.ConvertToBifrostRequest(), nil
 				}
-				return nil
+				return nil, errors.New("invalid request type")
 			},
-			ResponseFunc: func(resp *schemas.BifrostResponse) interface{} {
-				return DeriveGenAIFromBifrostResponse(resp)
+			ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
+				return DeriveGenAIFromBifrostResponse(resp), nil
 			},
 			PreCallback: extractAndSetModelFromURL,
 		},
