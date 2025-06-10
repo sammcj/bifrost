@@ -12,6 +12,7 @@ import (
 var fnTypePtr = bifrost.Ptr(string(schemas.ToolChoiceTypeFunction))
 
 type GeminiChatRequest struct {
+	Model            string                     `json:"model,omitempty"` // Model field for explicit model specification
 	Contents         []genai_sdk.Content        `json:"contents"`
 	GenerationConfig genai_sdk.GenerationConfig `json:"generationConfig,omitempty"`
 	SafetySettings   []genai_sdk.SafetySetting  `json:"safetySettings,omitempty"`
@@ -20,10 +21,10 @@ type GeminiChatRequest struct {
 	Labels           map[string]string          `json:"labels,omitempty"`
 }
 
-func (r *GeminiChatRequest) ConvertToBifrostRequest(modelStr string) *schemas.BifrostRequest {
+func (r *GeminiChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
 	bifrostReq := &schemas.BifrostRequest{
 		Provider: schemas.Vertex,
-		Model:    modelStr,
+		Model:    r.Model,
 		Input: schemas.RequestInput{
 			ChatCompletionInput: &[]schemas.BifrostMessage{},
 		},
