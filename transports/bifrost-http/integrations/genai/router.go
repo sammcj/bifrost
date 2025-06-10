@@ -19,9 +19,11 @@ type GenAIRouter struct {
 func NewGenAIRouter(client *bifrost.Bifrost) *GenAIRouter {
 	routes := []integrations.RouteConfig{
 		{
-			Path:        "/genai/v1beta/models/{model}",
-			Method:      "POST",
-			RequestType: &GeminiChatRequest{},
+			Path:   "/genai/v1beta/models/{model}",
+			Method: "POST",
+			GetRequestTypeInstance: func() interface{} {
+				return &GeminiChatRequest{}
+			},
 			RequestConverter: func(req interface{}) *schemas.BifrostRequest {
 				if geminiReq, ok := req.(*GeminiChatRequest); ok {
 					return geminiReq.ConvertToBifrostRequest()
