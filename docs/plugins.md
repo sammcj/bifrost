@@ -19,15 +19,28 @@ Plugins in Bifrost follow a simple but powerful interface that allows them to in
    - Can add monitoring or logging
    - Executed in reverse order of PreHooks
 
+> **Note**: PostHooks maintain symmetry with PreHooks. If a plugin returns a response in its PreHook (short-circuiting the provider call), only the PostHook methods of plugins that had their PreHook executed are called, in reverse order. This ensures proper request/response pairing for each plugin.
+
 ## 2. Plugin Interface
 
 ```golang
 type Plugin interface {
-    // PreHook is called before a request is processed by a provider
-    PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, error)
+    // PreHook is called before a request is processed by a provider.
+    // It allows plugins to modify the request before it is sent to the provider.
+    // The context parameter can be used to maintain state across plugin calls.
+    // Returns the modified request, an optional response (if the plugin wants to short-circuit the provider call), and any error that occurred during processing.
+    // If a response is returned, the provider call is skipped and only the PostHook methods of plugins that had their PreHook executed are called in reverse order.
+    PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, *BifrostResponse, error)
 
-    // PostHook is called after a response is received from a provider
+    // PostHook is called after a response is received from a provider.
+    // It allows plugins to modify the response before it is returned to the caller.
+    // Returns the modified response and any error that occurred during processing.
     PostHook(ctx *context.Context, result *BifrostResponse) (*BifrostResponse, error)
+
+    // Cleanup is called on bifrost shutdown.
+    // It allows plugins to clean up any resources they have allocated.
+    // Returns any error that occurred during cleanup, which will be logged as a warning by the Bifrost instance.
+    Cleanup() error
 }
 ```
 
@@ -40,14 +53,20 @@ type CustomPlugin struct {
     // Your plugin fields
 }
 
-func (p *CustomPlugin) PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, error) {
+func (p *CustomPlugin) PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, *BifrostResponse, error) {
     // Modify request or add custom logic
-    return req, nil
+    // Return nil for response to continue with provider call
+    return req, nil, nil
 }
 
 func (p *CustomPlugin) PostHook(ctx *context.Context, result *BifrostResponse) (*BifrostResponse, error) {
     // Modify response or add custom logic
     return result, nil
+}
+
+func (p *CustomPlugin) Cleanup() error {
+    // Clean up any resources
+    return nil
 }
 ```
 
@@ -64,15 +83,20 @@ func NewRateLimitPlugin(rps float64) *RateLimitPlugin {
     }
 }
 
-func (p *RateLimitPlugin) PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, error) {
+func (p *RateLimitPlugin) PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, *BifrostResponse, error) {
     if err := p.limiter.Wait(*ctx); err != nil {
-        return nil, err
+        return nil, nil, err
     }
-    return req, nil
+    return req, nil, nil
 }
 
 func (p *RateLimitPlugin) PostHook(ctx *context.Context, result *BifrostResponse) (*BifrostResponse, error) {
     return result, nil
+}
+
+func (p *RateLimitPlugin) Cleanup() error {
+    // Rate limiter doesn't need cleanup
+    return nil
 }
 ```
 
@@ -87,14 +111,19 @@ func NewLoggingPlugin(logger schemas.Logger) *LoggingPlugin {
     return &LoggingPlugin{logger: logger}
 }
 
-func (p *LoggingPlugin) PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, error) {
+func (p *LoggingPlugin) PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, *BifrostResponse, error) {
     p.logger.Info(fmt.Sprintf("Request to %s with model %s", req.Provider, req.Model))
-    return req, nil
+    return req, nil, nil
 }
 
 func (p *LoggingPlugin) PostHook(ctx *context.Context, result *BifrostResponse) (*BifrostResponse, error) {
     p.logger.Info(fmt.Sprintf("Response from %s with %d tokens", result.Model, result.Usage.TotalTokens))
     return result, nil
+}
+
+func (p *LoggingPlugin) Cleanup() error {
+    // Logger doesn't need cleanup
+    return nil
 }
 ```
 
@@ -231,14 +260,19 @@ client, err := bifrost.Init(schemas.BifrostConfig{
        }
    }
 
-   func (p *YourPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, error) {
+   func (p *YourPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.BifrostResponse, error) {
        // Implementation
-       return req, nil
+       return req, nil, nil
    }
 
    func (p *YourPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse) (*schemas.BifrostResponse, error) {
        // Implementation
        return result, nil
+   }
+
+   func (p *YourPlugin) Cleanup() error {
+       // Clean up any resources
+       return nil
    }
    ```
 
