@@ -11,8 +11,9 @@
 //   - Use -pool-size flag to specify the initial connection pool size (default: 300)
 //
 // Example usage:
-//   go run http.go -config config.example.json -port 8080 -pool-size 300
-//   after setting the environment variables present in config.example.json in the environment.
+//
+//	go run main.go -config config.example.json -port 8080 -pool-size 300
+//	after setting the environment variables present in config.example.json in the environment.
 //
 // Integration Support:
 // Bifrost supports multiple AI provider integrations through dedicated HTTP endpoints.
@@ -27,7 +28,8 @@
 //
 // This allows clients to use their existing integration code without modification while benefiting
 // from Bifrost's unified model routing, fallbacks, and monitoring capabilities.
-
+//
+// NOTE: Streaming is not supported yet so all the flags related to streaming are ignored. (in both bifrost and its integrations)
 package main
 
 import (
