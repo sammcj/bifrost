@@ -13,6 +13,20 @@
 // Example usage:
 //   go run http.go -config config.example.json -port 8080 -pool-size 300
 //   after setting the environment variables present in config.example.json in the environment.
+//
+// Integration Support:
+// Bifrost supports multiple AI provider integrations through dedicated HTTP endpoints.
+// Each integration exposes API-compatible endpoints that accept the provider's native request format,
+// automatically convert it to Bifrost's unified format, process it, and return the expected response format.
+//
+// Integration endpoints follow the pattern: /{provider}/{provider_api_path}
+// Examples:
+//   - OpenAI: POST /openai/v1/chat/completions (accepts OpenAI ChatCompletion requests)
+//   - GenAI:  POST /genai/v1beta/models/{model} (accepts Google GenAI requests)
+//   - Anthropic: POST /anthropic/v1/messages (accepts Anthropic Messages requests)
+//
+// This allows clients to use their existing integration code without modification while benefiting
+// from Bifrost's unified model routing, fallbacks, and monitoring capabilities.
 
 package main
 
@@ -30,6 +44,7 @@ import (
 	"github.com/maximhq/bifrost/plugins/maxim"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/genai"
+	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/openai"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/maximhq/bifrost/transports/bifrost-http/tracking"
 	"github.com/prometheus/client_golang/prometheus"
@@ -176,7 +191,10 @@ func main() {
 
 	r := router.New()
 
-	extensions := []integrations.ExtensionRouter{genai.NewGenAIRouter(client)}
+	extensions := []integrations.ExtensionRouter{
+		genai.NewGenAIRouter(client),
+		openai.NewOpenAIRouter(client),
+	}
 
 	r.POST("/v1/text/completions", func(ctx *fasthttp.RequestCtx) {
 		handleCompletion(ctx, client, false)
