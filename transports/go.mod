@@ -4,8 +4,8 @@ go 1.24.1
 
 require (
 	github.com/fasthttp/router v1.5.4
-	github.com/maximhq/bifrost/core v1.0.10
-	github.com/maximhq/bifrost/plugins/maxim v1.0.3
+	github.com/maximhq/bifrost/core v1.1.2
+	github.com/maximhq/bifrost/plugins/maxim v1.0.5
 	github.com/prometheus/client_golang v1.22.0
 	github.com/valyala/fasthttp v1.62.0
 	google.golang.org/genai v1.4.0
