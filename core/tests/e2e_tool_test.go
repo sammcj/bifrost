@@ -33,8 +33,10 @@ func TestToolCallingEndToEnd(t *testing.T) {
 
 	// Step 1: User asks for weather, LLM should request tool usage
 	userMessage := schemas.BifrostMessage{
-		Role:    schemas.ModelChatMessageRoleUser,
-		Content: bifrost.Ptr("What's the weather in London?"),
+		Role: schemas.ModelChatMessageRoleUser,
+		Content: schemas.MessageContent{
+			ContentStr: bifrost.Ptr("What's the weather in London?"),
+		},
 	}
 
 	toolParams := WeatherToolParams
@@ -89,8 +91,10 @@ func TestToolCallingEndToEnd(t *testing.T) {
 		userMessage,
 		message,
 		{
-			Role:    schemas.ModelChatMessageRoleTool,
-			Content: &toolResult,
+			Role: schemas.ModelChatMessageRoleTool,
+			Content: schemas.MessageContent{
+				ContentStr: bifrost.Ptr(toolResult),
+			},
 			ToolMessage: &schemas.ToolMessage{
 				ToolCallID: toolCall.ID,
 			},
@@ -114,11 +118,11 @@ func TestToolCallingEndToEnd(t *testing.T) {
 	require.NotNil(t, finalResponse)
 	require.NotEmpty(t, finalResponse.Choices)
 
-	// Verify final response
-	finalMessage := finalResponse.Choices[0].Message
-	require.NotNil(t, finalMessage.Content)
+	// Verify final response using getResultContent which handles pointer dereferencing
+	content := getResultContent(finalResponse)
+	require.NotEmpty(t, content, "Response content should not be empty")
 
-	content := *finalMessage.Content
+	// Verify response contains expected information
 	assert.Contains(t, content, "London", "Response should mention London")
 	assert.Contains(t, content, "15", "Response should mention temperature")
 	assert.Contains(t, content, "cloudy", "Response should mention weather description")

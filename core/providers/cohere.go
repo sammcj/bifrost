@@ -228,38 +228,35 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model, key s
 						"name":       *msg.ToolMessage.ToolCallID,
 						"parameters": toolCallParameters,
 					},
-					"outputs": *msg.Content,
+					"outputs": *msg.Content.ContentStr,
 				},
 			}
 
 			historyMsg["tool_results"] = toolResults
 		}
 
-		// Handle message content based on whether it supports vision
-		if msg.UserMessage != nil && msg.UserMessage.ImageContent != nil {
+		if msg.Content.ContentStr != nil {
+			historyMsg["message"] = *msg.Content.ContentStr
+		} else if msg.Content.ContentBlocks != nil {
 			// Create content array with text and image
 			contentArray := []map[string]interface{}{}
 
-			// Add text content if present
-			if msg.Content != nil {
-				contentArray = append(contentArray, map[string]interface{}{
-					"type": "text",
-					"text": *msg.Content,
-				})
+			// Iterate over ContentBlocks to build the content array
+			for _, block := range *msg.Content.ContentBlocks {
+				if block.Text != nil {
+					contentArray = append(contentArray, map[string]interface{}{
+						"type": "text",
+						"text": *block.Text,
+					})
+				}
+				// Add image content using our helper function
+				// NOTE: Cohere v1 does not support image content
+				// if processedImageContent := processImageContent(block.ImageContent); processedImageContent != nil {
+				// 	contentArray = append(contentArray, processedImageContent)
+				// }
 			}
-
-			// Add image content using our helper function
-			// NOTE: Cohere v1 does not support image content
-			// if processedImageContent := processImageContent(msg.UserMessage.ImageContent); processedImageContent != nil {
-			// 	contentArray = append(contentArray, processedImageContent)
-			// }
 
 			historyMsg["content"] = contentArray
-		} else {
-			// For non-vision models or text-only messages, use simple message field
-			if msg.Content != nil {
-				historyMsg["message"] = *msg.Content
-			}
 		}
 
 		cohereHistory = append(cohereHistory, historyMsg)
@@ -274,30 +271,16 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model, key s
 	}, preparedParams)
 
 	// Handle the last message content based on whether it supports vision
-	if lastMessage.UserMessage != nil && lastMessage.UserMessage.ImageContent != nil {
-		// Create content array with text and image
-		contentArray := []map[string]interface{}{}
-
-		// Add text content if present
-		if lastMessage.Content != nil {
-			contentArray = append(contentArray, map[string]interface{}{
-				"type": "text",
-				"text": *lastMessage.Content,
-			})
+	if lastMessage.Content.ContentStr != nil {
+		requestBody["message"] = *lastMessage.Content.ContentStr
+	} else if lastMessage.Content.ContentBlocks != nil {
+		message := ""
+		for _, block := range *lastMessage.Content.ContentBlocks {
+			if block.Text != nil {
+				message += *block.Text + "\n"
+			}
 		}
-
-		// Add image content using our helper function
-		// NOTE: Cohere v1 does not support image content
-		// if processedImageContent := processImageContent(lastMessage.UserMessage.ImageContent); processedImageContent != nil {
-		// 	contentArray = append(contentArray, processedImageContent)
-		// }
-
-		requestBody["content"] = contentArray
-	} else {
-		// For non-vision models or text-only messages, use simple message field
-		if lastMessage.Content != nil {
-			requestBody["message"] = *lastMessage.Content
-		}
+		requestBody["message"] = strings.TrimSuffix(message, "\n")
 	}
 
 	// Add tools if present
@@ -434,8 +417,10 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model, key s
 		{
 			Index: 0,
 			Message: schemas.BifrostMessage{
-				Role:    role,
-				Content: &content,
+				Role: role,
+				Content: schemas.MessageContent{
+					ContentStr: &content,
+				},
 				AssistantMessage: &schemas.AssistantMessage{
 					ToolCalls: &toolCalls,
 				},
@@ -465,12 +450,19 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model, key s
 // processImageContent processes image content for Cohere API format.
 // It creates a copy of the image content, normalizes and formats it, then returns the properly formatted map.
 // This prevents unintended mutations to the original image content.
-func processImageContent(imageContent *schemas.ImageContent) map[string]interface{} {
+func processImageContent(imageContent *schemas.ImageURLStruct) map[string]interface{} {
 	if imageContent == nil {
 		return nil
 	}
 
-	formattedImgContent := *FormatImageContent(imageContent, true)
+	sanitizedURL, _ := SanitizeImageURL(imageContent.URL)
+	urlTypeInfo := ExtractURLTypeInfo(sanitizedURL)
+
+	formattedImgContent := AnthropicImageContent{
+		Type:      urlTypeInfo.Type,
+		URL:       sanitizedURL,
+		MediaType: *urlTypeInfo.MediaType,
+	}
 
 	return map[string]interface{}{
 		"type": "image_url",
@@ -509,8 +501,10 @@ func convertChatHistory(history []struct {
 			}
 		}
 		converted[i] = schemas.BifrostMessage{
-			Role:    msg.Role,
-			Content: &msg.Message,
+			Role: msg.Role,
+			Content: schemas.MessageContent{
+				ContentStr: &msg.Message,
+			},
 			AssistantMessage: &schemas.AssistantMessage{
 				ToolCalls: &toolCalls,
 			},

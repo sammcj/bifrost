@@ -212,53 +212,29 @@ func prepareOpenAIChatRequest(messages []schemas.BifrostMessage, params *schemas
 		if msg.Role == schemas.ModelChatMessageRoleAssistant {
 			assistantMessage := map[string]interface{}{
 				"role":    msg.Role,
-				"content": coalesceString(msg.Content),
+				"content": coalesceString(msg.Content.ContentStr),
 			}
 			if msg.AssistantMessage != nil && msg.AssistantMessage.ToolCalls != nil {
 				assistantMessage["tool_calls"] = *msg.AssistantMessage.ToolCalls
 			}
 			formattedMessages = append(formattedMessages, assistantMessage)
-		} else if (msg.UserMessage != nil && msg.UserMessage.ImageContent != nil) || (msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil) {
-			var messageImageContent schemas.ImageContent
-			if msg.UserMessage != nil && msg.UserMessage.ImageContent != nil {
-				messageImageContent = *msg.UserMessage.ImageContent
-			} else if msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil {
-				messageImageContent = *msg.ToolMessage.ImageContent
-			}
-
-			formattedImgContent := *FormatImageContent(&messageImageContent, true)
-
-			var content []map[string]interface{}
-
-			// Add text content if present
-			if msg.Content != nil {
-				content = append(content, map[string]interface{}{
-					"type": "text",
-					"text": *msg.Content,
-				})
-			}
-
-			imageContent := map[string]interface{}{
-				"type": "image_url",
-				"image_url": map[string]interface{}{
-					"url": formattedImgContent.URL,
-				},
-			}
-
-			if formattedImgContent.Detail != nil {
-				imageContent["image_url"].(map[string]interface{})["detail"] = formattedImgContent.Detail
-			}
-
-			content = append(content, imageContent)
-
-			formattedMessages = append(formattedMessages, map[string]interface{}{
-				"role":    msg.Role,
-				"content": content,
-			})
 		} else {
 			message := map[string]interface{}{
-				"role":    msg.Role,
-				"content": coalesceString(msg.Content),
+				"role": msg.Role,
+			}
+
+			if msg.Content.ContentStr != nil {
+				message["content"] = *msg.Content.ContentStr
+			} else if msg.Content.ContentBlocks != nil {
+				contentBlocks := *msg.Content.ContentBlocks
+				for i := range contentBlocks {
+					if contentBlocks[i].Type == schemas.ContentBlockTypeImage && contentBlocks[i].ImageURL != nil {
+						sanitizedURL, _ := SanitizeImageURL(contentBlocks[i].ImageURL.URL)
+						contentBlocks[i].ImageURL.URL = sanitizedURL
+					}
+				}
+
+				message["content"] = contentBlocks
 			}
 
 			if msg.ToolMessage != nil && msg.ToolMessage.ToolCallID != nil {

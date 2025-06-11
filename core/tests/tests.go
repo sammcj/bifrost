@@ -111,9 +111,9 @@ func setupTextCompletionRequest(bifrostClient *bifrost.Bifrost, config TestConfi
 			Fallbacks: config.Fallbacks,
 		})
 		if err != nil {
-			log.Println("Error in", config.Provider, "text completion:", err.Error.Message)
+			log.Println("❌ Error in", config.Provider, "text completion:", err.Error.Message)
 		} else {
-			log.Println("🐒", config.Provider, "Text Completion Result:", *result.Choices[0].Message.Content)
+			log.Println("🐒", config.Provider, "Text Completion Result:", getResultContent(result))
 		}
 	}()
 }
@@ -145,8 +145,10 @@ func setupChatCompletionRequests(bifrostClient *bifrost.Bifrost, config TestConf
 			time.Sleep(delay)
 			messages := []schemas.BifrostMessage{
 				{
-					Role:    schemas.ModelChatMessageRoleUser,
-					Content: &msg,
+					Role: schemas.ModelChatMessageRoleUser,
+					Content: schemas.MessageContent{
+						ContentStr: bifrost.Ptr(msg),
+					},
 				},
 			}
 
@@ -160,9 +162,9 @@ func setupChatCompletionRequests(bifrostClient *bifrost.Bifrost, config TestConf
 				Fallbacks: config.Fallbacks,
 			})
 			if err != nil {
-				log.Println("Error in", config.Provider, "request", index+1, ":", err.Error.Message)
+				log.Println("❌ Error in", config.Provider, "request", index+1, ":", err.Error.Message)
 			} else {
-				log.Println("🐒", config.Provider, "Chat Completion Result", index+1, ":", *result.Choices[0].Message.Content)
+				log.Println("🐒", config.Provider, "Chat Completion Result", index+1, ":", getResultContent(result))
 			}
 		}(message, delay, i)
 	}
@@ -185,12 +187,19 @@ func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx cont
 	// URL image test
 	urlImageMessages := []schemas.BifrostMessage{
 		{
-			Role:    schemas.ModelChatMessageRoleUser,
-			Content: bifrost.Ptr("What is Happening in this picture?"),
-			UserMessage: &schemas.UserMessage{
-				ImageContent: &schemas.ImageContent{
-					Type: schemas.ImageContentTypeURL,
-					URL:  "https://upload.wikimedia.org/wikipedia/commons/a/a7/Camponotus_flavomarginatus_ant.jpg",
+			Role: schemas.ModelChatMessageRoleUser,
+			Content: schemas.MessageContent{
+				ContentBlocks: &[]schemas.ContentBlock{
+					{
+						Type: schemas.ContentBlockTypeText,
+						Text: bifrost.Ptr("What is Happening in this picture?"),
+					},
+					{
+						Type: schemas.ContentBlockTypeImage,
+						ImageURL: &schemas.ImageURLStruct{
+							URL: "https://upload.wikimedia.org/wikipedia/commons/a/a7/Camponotus_flavomarginatus_ant.jpg",
+						},
+					},
 				},
 			},
 		},
@@ -210,9 +219,9 @@ func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx cont
 				Fallbacks: config.Fallbacks,
 			})
 			if err != nil {
-				log.Println("Error in", config.Provider, "URL image request:", err.Error.Message)
+				log.Println("❌ Error in", config.Provider, "URL image request:", err.Error.Message)
 			} else {
-				log.Println("🐒", config.Provider, "URL Image Result:", *result.Choices[0].Message.Content)
+				log.Println("🐒", config.Provider, "URL Image Result:", getResultContent(result))
 			}
 		}()
 	}
@@ -221,13 +230,19 @@ func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx cont
 	if config.SetupBaseImage {
 		base64ImageMessages := []schemas.BifrostMessage{
 			{
-				Role:    schemas.ModelChatMessageRoleUser,
-				Content: bifrost.Ptr("What is this image about?"),
-				UserMessage: &schemas.UserMessage{
-					ImageContent: &schemas.ImageContent{
-						Type:      schemas.ImageContentTypeBase64,
-						URL:       "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=",
-						MediaType: bifrost.Ptr("image/jpeg"),
+				Role: schemas.ModelChatMessageRoleUser,
+				Content: schemas.MessageContent{
+					ContentBlocks: &[]schemas.ContentBlock{
+						{
+							Type: schemas.ContentBlockTypeText,
+							Text: bifrost.Ptr("What is Happening in this picture?"),
+						},
+						{
+							Type: schemas.ContentBlockTypeImage,
+							ImageURL: &schemas.ImageURLStruct{
+								URL: "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=",
+							},
+						},
 					},
 				},
 			},
@@ -246,9 +261,9 @@ func setupImageTests(bifrostClient *bifrost.Bifrost, config TestConfig, ctx cont
 				Fallbacks: config.Fallbacks,
 			})
 			if err != nil {
-				log.Println("Error in", config.Provider, "base64 image request:", err.Error.Message)
+				log.Println("❌ Error in", config.Provider, "base64 image request:", err.Error.Message)
 			} else {
-				log.Println("🐒", config.Provider, "Base64 Image Result:", *result.Choices[0].Message.Content)
+				log.Println("🐒", config.Provider, "Base64 Image Result:", getResultContent(result))
 			}
 		}()
 	}
@@ -284,8 +299,10 @@ func setupToolCalls(bifrostClient *bifrost.Bifrost, config TestConfig, ctx conte
 			time.Sleep(delay)
 			messages := []schemas.BifrostMessage{
 				{
-					Role:    schemas.ModelChatMessageRoleUser,
-					Content: &msg,
+					Role: schemas.ModelChatMessageRoleUser,
+					Content: schemas.MessageContent{
+						ContentStr: bifrost.Ptr(msg),
+					},
 				},
 			}
 			result, err := bifrostClient.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
@@ -298,7 +315,7 @@ func setupToolCalls(bifrostClient *bifrost.Bifrost, config TestConfig, ctx conte
 				Fallbacks: config.Fallbacks,
 			})
 			if err != nil {
-				log.Println("Error in", config.Provider, "tool call request", index+1, ":", err.Error.Message)
+				log.Println("❌ Error in", config.Provider, "tool call request", index+1, ":", err.Error.Message)
 			} else {
 				if result.Choices[0].Message.AssistantMessage != nil && result.Choices[0].Message.ToolCalls != nil && len(*result.Choices[0].Message.ToolCalls) > 0 {
 					for i, choice := range result.Choices {
@@ -371,4 +388,22 @@ func SetupAllRequests(bifrostClient *bifrost.Bifrost, config TestConfig) {
 	}
 	log.Println("Test setup finished.")
 	bifrostClient.Cleanup()
+}
+
+func getResultContent(result *schemas.BifrostResponse) string {
+	if result == nil || len(result.Choices) == 0 {
+		return ""
+	}
+
+	resultContent := ""
+	if result.Choices[0].Message.Content.ContentStr != nil {
+		resultContent = *result.Choices[0].Message.Content.ContentStr
+	} else if result.Choices[0].Message.Content.ContentBlocks != nil {
+		for _, block := range *result.Choices[0].Message.Content.ContentBlocks {
+			if block.Text != nil {
+				resultContent += *block.Text
+			}
+		}
+	}
+	return resultContent
 }
