@@ -6,6 +6,7 @@ package tracking
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	schemas "github.com/maximhq/bifrost/core/schemas"
@@ -40,9 +41,14 @@ func NewPrometheusPlugin() *PrometheusPlugin {
 	}
 }
 
+// GetName returns the name of the plugin.
+func (p *PrometheusPlugin) GetName() string {
+	return "bifrost-http-prometheus"
+}
+
 // PreHook records the start time of the request in the context.
 // This time is used later in PostHook to calculate request duration.
-func (p *PrometheusPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, error) {
+func (p *PrometheusPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.BifrostResponse, error) {
 	*ctx = context.WithValue(*ctx, startTimeKey, time.Now())
 
 	if req.Input.ChatCompletionInput != nil {
@@ -51,24 +57,28 @@ func (p *PrometheusPlugin) PreHook(ctx *context.Context, req *schemas.BifrostReq
 		*ctx = context.WithValue(*ctx, methodKey, "text")
 	}
 
-	return req, nil
+	return req, nil, nil
 }
 
 // PostHook calculates duration and records upstream metrics for successful requests.
 // It records:
 //   - Request latency
 //   - Total request count
-func (p *PrometheusPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse) (*schemas.BifrostResponse, error) {
+func (p *PrometheusPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+	if result == nil {
+		return result, bifrostErr, nil
+	}
+
 	startTime, ok := (*ctx).Value(startTimeKey).(time.Time)
 	if !ok {
-		fmt.Println("Warning: startTime not found in context for Prometheus PostHook")
-		return result, nil
+		log.Println("Warning: startTime not found in context for Prometheus PostHook")
+		return result, bifrostErr, nil
 	}
 
 	method, ok := (*ctx).Value(methodKey).(string)
 	if !ok {
-		fmt.Println("Warning: method not found in context for Prometheus PostHook")
-		return result, nil
+		log.Println("Warning: method not found in context for Prometheus PostHook")
+		return result, bifrostErr, nil
 	}
 
 	// Collect prometheus labels from context
@@ -93,5 +103,9 @@ func (p *PrometheusPlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 	p.UpstreamLatency.WithLabelValues(promLabelValues...).Observe(duration)
 	p.UpstreamRequestsTotal.WithLabelValues(promLabelValues...).Inc()
 
-	return result, nil
+	return result, bifrostErr, nil
+}
+
+func (p *PrometheusPlugin) Cleanup() error {
+	return nil
 }
