@@ -149,10 +149,12 @@ For additional configurations in HTTP server setup, please read [this](https://g
          Provider: schemas.OpenAI,
          Model: "gpt-4o-mini", // make sure you have configured gpt-4o-mini in your account interface
          Input: schemas.RequestInput{
-           ChatCompletionInput: bifrost.Ptr([]schemas.Message{{
-            Role:    schemas.RoleUser,
-            Content: bifrost.Ptr("What is a LLM gateway?"),
-            }}),
+           ChatCompletionInput: bifrost.Ptr([]schemas.BifrostMessage{{
+            Role: schemas.ModelChatMessageRoleUser,
+            Content: schemas.MessageContent{
+              ContentStr: bifrost.Ptr("What is a LLM gateway?"),
+            },
+           }}),
          },
        },
      )
