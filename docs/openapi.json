@@ -109,6 +109,35 @@
                       }
                     ]
                   }
+                },
+                "structured_content": {
+                  "summary": "Chat with structured content (text and image)",
+                  "value": {
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "What's happening in this image? What's the weather like?"
+                          },
+                          {
+                            "type": "image_url",
+                            "image_url": {
+                              "url": "https://example.com/weather-photo.jpg",
+                              "detail": "high"
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "params": {
+                      "max_tokens": 1000,
+                      "temperature": 0.7
+                    }
+                  }
                 }
               }
             }
@@ -415,9 +444,21 @@
             "$ref": "#/components/schemas/MessageRole"
           },
           "content": {
-            "type": "string",
-            "description": "Text content of the message",
-            "example": "Hello, how are you?"
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Simple text content",
+                "example": "Hello, how are you?"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ContentBlock"
+                },
+                "description": "Structured content with text and images"
+              }
+            ],
+            "description": "Message content - can be simple text or structured content with text and images"
           },
           "tool_call_id": {
             "type": "string",
@@ -429,9 +470,6 @@
               "$ref": "#/components/schemas/ToolCall"
             },
             "description": "Tool calls made by assistant"
-          },
-          "image_content": {
-            "$ref": "#/components/schemas/ImageContent"
           },
           "refusal": {
             "type": "string",
@@ -455,6 +493,67 @@
         "enum": ["user", "assistant", "system", "tool"],
         "description": "Role of the message sender",
         "example": "user"
+      },
+      "ContentBlock": {
+        "type": "object",
+        "required": ["type"],
+        "discriminator": {
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["type", "text"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["text"],
+                "description": "Content type for text blocks",
+                "example": "text"
+              },
+              "text": {
+                "type": "string",
+                "description": "Text content",
+                "example": "What do you see in this image?"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["type", "image_url"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["image_url"],
+                "description": "Content type for image blocks",
+                "example": "image_url"
+              },
+              "image_url": {
+                "$ref": "#/components/schemas/ImageURLStruct",
+                "description": "Image data"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "ImageURLStruct": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Image URL or data URI",
+            "example": "https://example.com/image.jpg"
+          },
+          "detail": {
+            "type": "string",
+            "enum": ["low", "high", "auto"],
+            "description": "Image detail level",
+            "example": "auto"
+          }
+        }
       },
       "ModelParameters": {
         "type": "object",
@@ -654,31 +753,6 @@
             "type": "string",
             "description": "JSON string of function arguments",
             "example": "{\"location\": \"San Francisco, CA\"}"
-          }
-        }
-      },
-      "ImageContent": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "description": "Content type"
-          },
-          "url": {
-            "type": "string",
-            "description": "Image URL or data URI",
-            "example": "https://example.com/image.jpg"
-          },
-          "media_type": {
-            "type": "string",
-            "description": "MIME type of the image",
-            "example": "image/jpeg"
-          },
-          "detail": {
-            "type": "string",
-            "enum": ["low", "high", "auto"],
-            "description": "Image detail level",
-            "example": "auto"
           }
         }
       },

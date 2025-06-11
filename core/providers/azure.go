@@ -269,8 +269,10 @@ func (provider *AzureProvider) TextCompletion(ctx context.Context, model, key, t
 		choices = append(choices, schemas.BifrostResponseChoice{
 			Index: 0,
 			Message: schemas.BifrostMessage{
-				Role:    schemas.ModelChatMessageRoleAssistant,
-				Content: &textCopy,
+				Role: schemas.ModelChatMessageRoleAssistant,
+				Content: schemas.MessageContent{
+					ContentStr: &textCopy,
+				},
 			},
 			FinishReason: response.Choices[0].FinishReason,
 			LogProbs: &schemas.LogProbs{
