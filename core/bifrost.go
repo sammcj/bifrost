@@ -514,33 +514,31 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 func (bifrost *Bifrost) tryTextCompletion(req *schemas.BifrostRequest, ctx context.Context) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	queue, err := bifrost.getProviderQueue(req.Provider)
 	if err != nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: err.Error(),
-			},
-		}
+		return nil, newBifrostError(err)
 	}
 
-	for _, plugin := range bifrost.plugins {
-		req, err = plugin.PreHook(&ctx, req)
+	var resp *schemas.BifrostResponse
+	var processedPluginCount int
+	for i, plugin := range bifrost.plugins {
+		req, resp, err = plugin.PreHook(&ctx, req)
 		if err != nil {
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: schemas.ErrorField{
-					Message: err.Error(),
-				},
+			return nil, newBifrostError(err)
+		}
+		processedPluginCount = i + 1
+		if resp != nil {
+			// Run post-hooks in reverse order for plugins that had PreHook executed
+			for j := processedPluginCount - 1; j >= 0; j-- {
+				resp, err = bifrost.plugins[j].PostHook(&ctx, resp)
+				if err != nil {
+					return nil, newBifrostError(err)
+				}
 			}
+			return resp, nil
 		}
 	}
 
 	if req == nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: "bifrost request after plugin hooks cannot be nil",
-			},
-		}
+		return nil, newBifrostErrorFromMsg("bifrost request after plugin hooks cannot be nil")
 	}
 
 	// Get a ChannelMessage from the pool
@@ -554,23 +552,13 @@ func (bifrost *Bifrost) tryTextCompletion(req *schemas.BifrostRequest, ctx conte
 	case <-ctx.Done():
 		// Request was cancelled by caller
 		bifrost.releaseChannelMessage(msg)
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: "request cancelled while waiting for queue space",
-			},
-		}
+		return nil, newBifrostErrorFromMsg("request cancelled while waiting for queue space")
 	default:
 		if bifrost.dropExcessRequests {
 			// Drop request immediately if configured to do so
 			bifrost.releaseChannelMessage(msg)
 			bifrost.logger.Warn("Request dropped: queue is full, please increase the queue size or set dropExcessRequests to false")
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: schemas.ErrorField{
-					Message: "request dropped: queue is full",
-				},
-			}
+			return nil, newBifrostErrorFromMsg("request dropped: queue is full")
 		}
 
 		// If not dropping excess requests, wait with context
@@ -582,12 +570,7 @@ func (bifrost *Bifrost) tryTextCompletion(req *schemas.BifrostRequest, ctx conte
 			// Message was sent successfully
 		case <-ctx.Done():
 			bifrost.releaseChannelMessage(msg)
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: schemas.ErrorField{
-					Message: "request cancelled while waiting for queue space",
-				},
-			}
+			return nil, newBifrostErrorFromMsg("request cancelled while waiting for queue space")
 		}
 	}
 
@@ -600,12 +583,7 @@ func (bifrost *Bifrost) tryTextCompletion(req *schemas.BifrostRequest, ctx conte
 			result, err = bifrost.plugins[i].PostHook(&ctx, result)
 			if err != nil {
 				bifrost.releaseChannelMessage(msg)
-				return nil, &schemas.BifrostError{
-					IsBifrostError: false,
-					Error: schemas.ErrorField{
-						Message: err.Error(),
-					},
-				}
+				return nil, newBifrostError(err)
 			}
 		}
 	case err := <-msg.Err:
@@ -623,30 +601,15 @@ func (bifrost *Bifrost) tryTextCompletion(req *schemas.BifrostRequest, ctx conte
 // If the primary provider fails, it will try each fallback provider in order until one succeeds.
 func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.BifrostRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	if req == nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: "bifrost request cannot be nil",
-			},
-		}
+		return nil, newBifrostErrorFromMsg("bifrost request cannot be nil")
 	}
 
 	if req.Provider == "" {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: "provider is required",
-			},
-		}
+		return nil, newBifrostErrorFromMsg("provider is required")
 	}
 
 	if req.Model == "" {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: "model is required",
-			},
-		}
+		return nil, newBifrostErrorFromMsg("model is required")
 	}
 
 	// Try the primary provider first
@@ -688,33 +651,31 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.
 func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx context.Context) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	queue, err := bifrost.getProviderQueue(req.Provider)
 	if err != nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: err.Error(),
-			},
-		}
+		return nil, newBifrostError(err)
 	}
 
-	for _, plugin := range bifrost.plugins {
-		req, err = plugin.PreHook(&ctx, req)
+	var resp *schemas.BifrostResponse
+	var processedPluginCount int
+	for i, plugin := range bifrost.plugins {
+		req, resp, err = plugin.PreHook(&ctx, req)
 		if err != nil {
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: schemas.ErrorField{
-					Message: err.Error(),
-				},
+			return nil, newBifrostError(err)
+		}
+		processedPluginCount = i + 1
+		if resp != nil {
+			// Run post-hooks in reverse order for plugins that had PreHook executed
+			for j := processedPluginCount - 1; j >= 0; j-- {
+				resp, err = bifrost.plugins[j].PostHook(&ctx, resp)
+				if err != nil {
+					return nil, newBifrostError(err)
+				}
 			}
+			return resp, nil
 		}
 	}
 
 	if req == nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: "bifrost request after plugin hooks cannot be nil",
-			},
-		}
+		return nil, newBifrostErrorFromMsg("bifrost request after plugin hooks cannot be nil")
 	}
 
 	// Get a ChannelMessage from the pool
@@ -728,23 +689,13 @@ func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx conte
 	case <-ctx.Done():
 		// Request was cancelled by caller
 		bifrost.releaseChannelMessage(msg)
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: "request cancelled while waiting for queue space",
-			},
-		}
+		return nil, newBifrostErrorFromMsg("request cancelled while waiting for queue space")
 	default:
 		if bifrost.dropExcessRequests {
 			// Drop request immediately if configured to do so
 			bifrost.releaseChannelMessage(msg)
 			bifrost.logger.Warn("Request dropped: queue is full, please increase the queue size or set dropExcessRequests to false")
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: schemas.ErrorField{
-					Message: "request dropped: queue is full",
-				},
-			}
+			return nil, newBifrostErrorFromMsg("request dropped: queue is full")
 		}
 		// If not dropping excess requests, wait with context
 		if ctx == nil {
@@ -755,12 +706,7 @@ func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx conte
 			// Message was sent successfully
 		case <-ctx.Done():
 			bifrost.releaseChannelMessage(msg)
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: schemas.ErrorField{
-					Message: "request cancelled while waiting for queue space",
-				},
-			}
+			return nil, newBifrostErrorFromMsg("request cancelled while waiting for queue space")
 		}
 	}
 
@@ -773,12 +719,7 @@ func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx conte
 			result, err = bifrost.plugins[i].PostHook(&ctx, result)
 			if err != nil {
 				bifrost.releaseChannelMessage(msg)
-				return nil, &schemas.BifrostError{
-					IsBifrostError: false,
-					Error: schemas.ErrorField{
-						Message: err.Error(),
-					},
-				}
+				return nil, newBifrostError(err)
 			}
 		}
 	case err := <-msg.Err:
@@ -794,7 +735,7 @@ func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx conte
 // Cleanup gracefully stops all workers when triggered.
 // It closes all request channels and waits for workers to exit.
 func (bifrost *Bifrost) Cleanup() {
-	bifrost.logger.Info("[BIFROST] Graceful Cleanup Initiated - Closing all request channels...")
+	bifrost.logger.Info("Graceful Cleanup Initiated - Closing all request channels...")
 
 	// Close all provider queues to signal workers to stop
 	for _, queue := range bifrost.requestQueues {
@@ -805,4 +746,14 @@ func (bifrost *Bifrost) Cleanup() {
 	for _, waitGroup := range bifrost.waitGroups {
 		waitGroup.Wait()
 	}
+
+	// Cleanup plugins
+	for _, plugin := range bifrost.plugins {
+		err := plugin.Cleanup()
+		if err != nil {
+			bifrost.logger.Warn(fmt.Sprintf("Error cleaning up plugin: %s", err.Error()))
+		}
+	}
+
+	bifrost.logger.Info("Graceful Cleanup Completed")
 }
