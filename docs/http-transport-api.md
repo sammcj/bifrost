@@ -78,6 +78,36 @@ Creates a chat completion using conversational messages.
 }
 ```
 
+#### Request Body with Structured Content (Text and Image)
+
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4o",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "What's happening in this image? What's the weather like?"
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "https://example.com/weather-photo.jpg"
+          }
+        }
+      ]
+    }
+  ],
+  "params": {
+    "max_tokens": 1000,
+    "temperature": 0.7
+  }
+}
+```
+
 #### Response
 
 ```json
@@ -212,16 +242,34 @@ The main request object for both chat and text completions.
 
 Represents a message in a chat conversation.
 
-| Field           | Type                            | Required | Description                                          |
-| --------------- | ------------------------------- | -------- | ---------------------------------------------------- |
-| `role`          | `string`                        | ✅       | Message role (`user`, `assistant`, `system`, `tool`) |
-| `content`       | `string`                        | ❌       | Text content of the message                          |
-| `tool_call_id`  | `string`                        | ❌       | ID of the tool call (for tool messages)              |
-| `tool_calls`    | [`ToolCall[]`](#toolcall)       | ❌       | Tool calls made by assistant                         |
-| `image_content` | [`ImageContent`](#imagecontent) | ❌       | Image data in the message                            |
-| `refusal`       | `string`                        | ❌       | Refusal message from assistant                       |
-| `annotations`   | `Annotation[]`                  | ❌       | Message annotations                                  |
-| `thought`       | `string`                        | ❌       | Assistant's internal thought process                 |
+| Field          | Type                                          | Required | Description                                                                     |
+| -------------- | --------------------------------------------- | -------- | ------------------------------------------------------------------------------- |
+| `role`         | `string`                                      | ✅       | Message role (`user`, `assistant`, `system`, `tool`)                            |
+| `content`      | `string` or [`ContentBlock[]`](#contentblock) | ✅       | Message content - can be simple text or structured content with text and images |
+| `tool_call_id` | `string`                                      | ❌       | ID of the tool call (for tool messages)                                         |
+| `tool_calls`   | [`ToolCall[]`](#toolcall)                     | ❌       | Tool calls made by assistant                                                    |
+| `refusal`      | `string`                                      | ❌       | Refusal message from assistant                                                  |
+| `annotations`  | `Annotation[]`                                | ❌       | Message annotations                                                             |
+| `thought`      | `string`                                      | ❌       | Assistant's internal thought process                                            |
+
+### ContentBlock
+
+Represents a structured content block in a message (for text and image content).
+
+| Field       | Type                                | Required | Description                                    |
+| ----------- | ----------------------------------- | -------- | ---------------------------------------------- |
+| `type`      | `string`                            | ✅       | Content type (`text` or `image_url`)           |
+| `text`      | `string`                            | ❌       | Text content (required when type is `text`)    |
+| `image_url` | [`ImageURLStruct`](#imageurlstruct) | ❌       | Image data (required when type is `image_url`) |
+
+### ImageURLStruct
+
+Represents image data in a message.
+
+| Field    | Type     | Required | Description                                |
+| -------- | -------- | -------- | ------------------------------------------ |
+| `url`    | `string` | ✅       | Image URL or data URI                      |
+| `detail` | `string` | ❌       | Image detail level (`low`, `high`, `auto`) |
 
 ### ModelParameters
 
@@ -369,17 +417,6 @@ Details of a function call.
 | `name`      | `string` | Function name                     |
 | `arguments` | `string` | JSON string of function arguments |
 
-### ImageContent
-
-Image data in a message.
-
-| Field        | Type     | Description                                |
-| ------------ | -------- | ------------------------------------------ |
-| `type`       | `string` | Content type                               |
-| `url`        | `string` | Image URL or data URI                      |
-| `media_type` | `string` | MIME type of the image                     |
-| `detail`     | `string` | Image detail level (`low`, `high`, `auto`) |
-
 ### BifrostError
 
 Error response format.
@@ -442,6 +479,26 @@ curl -X POST http://localhost:8080/v1/chat/completions \
     "model": "gpt-4o",
     "messages": [
       {"role": "user", "content": "Hello, world!"}
+    ]
+  }'
+```
+
+### Chat with Images
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai",
+    "model": "gpt-4o",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {"type": "text", "text": "What do you see in this image?"},
+          {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
+        ]
+      }
     ]
   }'
 ```
@@ -532,9 +589,21 @@ def chat_completion(messages, provider="openai", model="gpt-4o"):
     )
     return response.json()
 
-# Usage
+# Simple text message
 result = chat_completion([
     {"role": "user", "content": "Hello, how are you?"}
+])
+print(result["choices"][0]["message"]["content"])
+
+# Structured content with image
+result = chat_completion([
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "What's in this image?"},
+            {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
+        ]
+    }
 ])
 print(result["choices"][0]["message"]["content"])
 ```
@@ -562,12 +631,21 @@ async function chatCompletion(messages, provider = "openai", model = "gpt-4o") {
   }
 }
 
-// Usage
-chatCompletion([{ role: "user", content: "Hello, how are you?" }]).then(
-  (result) => {
-    console.log(result.choices[0].message.content);
-  }
-);
+// Usage with structured content
+chatCompletion([
+  {
+    role: "user",
+    content: [
+      { type: "text", text: "Describe this image" },
+      {
+        type: "image_url",
+        image_url: { url: "https://example.com/image.jpg" },
+      },
+    ],
+  },
+]).then((result) => {
+  console.log(result.choices[0].message.content);
+});
 ```
 
 ### Go
@@ -590,8 +668,19 @@ type ChatRequest struct {
 }
 
 type BifrostMessage struct {
-    Role    string `json:"role"`
-    Content string `json:"content"`
+    Role    string      `json:"role"`
+    Content interface{} `json:"content"` // Can be string or []ContentBlock
+}
+
+type ContentBlock struct {
+    Type     string        `json:"type"`
+    Text     *string       `json:"text,omitempty"`
+    ImageURL *ImageURLStruct `json:"image_url,omitempty"`
+}
+
+type ImageURLStruct struct {
+    URL    string  `json:"url"`
+    Detail *string `json:"detail,omitempty"`
 }
 
 type ModelParameters struct {

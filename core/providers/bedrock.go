@@ -339,8 +339,10 @@ func (provider *BedrockProvider) getTextCompletionResult(result []byte, model st
 				{
 					Index: 0,
 					Message: schemas.BifrostMessage{
-						Role:    schemas.ModelChatMessageRoleAssistant,
-						Content: &response.Completion,
+						Role: schemas.ModelChatMessageRoleAssistant,
+						Content: schemas.MessageContent{
+							ContentStr: &response.Completion,
+						},
 					},
 					FinishReason: &response.StopReason,
 					StopString:   &response.Stop,
@@ -377,8 +379,10 @@ func (provider *BedrockProvider) getTextCompletionResult(result []byte, model st
 			choices = append(choices, schemas.BifrostResponseChoice{
 				Index: i,
 				Message: schemas.BifrostMessage{
-					Role:    schemas.ModelChatMessageRoleAssistant,
-					Content: &output.Text,
+					Role: schemas.ModelChatMessageRoleAssistant,
+					Content: schemas.MessageContent{
+						ContentStr: &output.Text,
+					},
 				},
 				FinishReason: &output.StopReason,
 			})
@@ -399,6 +403,26 @@ func (provider *BedrockProvider) getTextCompletionResult(result []byte, model st
 			Message: fmt.Sprintf("invalid model choice: %s", model),
 		},
 	}
+}
+
+// parseBedrockAnthropicMessageToolCallContent parses the content of a tool call message.
+// It handles both text and JSON content.
+// Returns a map containing the parsed content.
+func parseBedrockAnthropicMessageToolCallContent(content string) map[string]interface{} {
+	toolResultContentBlock := map[string]interface{}{}
+	var parsedJSON interface{}
+	err := json.Unmarshal([]byte(content), &parsedJSON)
+	if err == nil {
+		if arr, ok := parsedJSON.([]interface{}); ok {
+			toolResultContentBlock["json"] = map[string]interface{}{"content": arr}
+		} else {
+			toolResultContentBlock["json"] = parsedJSON
+		}
+	} else {
+		toolResultContentBlock["text"] = content
+	}
+
+	return toolResultContentBlock
 }
 
 // PrepareChatCompletionMessages formats chat messages for Bedrock's API.
@@ -427,10 +451,18 @@ func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schema
 		var systemMessages []BedrockAnthropicSystemMessage
 		for _, msg := range messages {
 			if msg.Role == schemas.ModelChatMessageRoleSystem {
-				if msg.Content != nil {
+				if msg.Content.ContentStr != nil {
 					systemMessages = append(systemMessages, BedrockAnthropicSystemMessage{
-						Text: *msg.Content,
+						Text: *msg.Content.ContentStr,
 					})
+				} else if msg.Content.ContentBlocks != nil {
+					for _, block := range *msg.Content.ContentBlocks {
+						if block.Text != nil {
+							systemMessages = append(systemMessages, BedrockAnthropicSystemMessage{
+								Text: *block.Text,
+							})
+						}
+					}
 				}
 			}
 		}
@@ -444,28 +476,20 @@ func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schema
 					toolCallResult := map[string]interface{}{
 						"toolUseId": *msg.ToolCallID,
 					}
-
-					var toolResultContentBlock map[string]interface{}
-					if msg.Content != nil {
-						toolResultContentBlock = map[string]interface{}{}
-						var parsedJSON interface{}
-						err := json.Unmarshal([]byte(*msg.Content), &parsedJSON)
-						if err == nil {
-							if arr, ok := parsedJSON.([]interface{}); ok {
-								toolResultContentBlock["json"] = map[string]interface{}{"content": arr}
-							} else {
-								toolResultContentBlock["json"] = parsedJSON
+					var toolResultContentBlocks []map[string]interface{}
+					if msg.Content.ContentStr != nil {
+						toolResultContentBlocks = append(toolResultContentBlocks, parseBedrockAnthropicMessageToolCallContent(*msg.Content.ContentStr))
+					} else if msg.Content.ContentBlocks != nil {
+						for _, block := range *msg.Content.ContentBlocks {
+							if block.Text != nil {
+								toolResultContentBlocks = append(toolResultContentBlocks, parseBedrockAnthropicMessageToolCallContent(*block.Text))
 							}
-						} else {
-							toolResultContentBlock["text"] = *msg.Content
 						}
-
-						toolCallResult["content"] = []interface{}{toolResultContentBlock}
-
-						content = append(content, map[string]interface{}{
-							"toolResult": toolCallResult,
-						})
 					}
+					toolCallResult["content"] = toolResultContentBlocks
+					content = append(content, map[string]interface{}{
+						"toolResult": toolCallResult,
+					})
 				} else {
 					if msg.AssistantMessage != nil && msg.AssistantMessage.ToolCalls != nil {
 						for _, toolCall := range *msg.AssistantMessage.ToolCalls {
@@ -486,40 +510,47 @@ func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schema
 						}
 					}
 
-					if (msg.UserMessage != nil && msg.UserMessage.ImageContent != nil) || (msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil) {
-						var messageImageContent schemas.ImageContent
-						if msg.UserMessage != nil && msg.UserMessage.ImageContent != nil {
-							messageImageContent = *msg.UserMessage.ImageContent
-						} else if msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil {
-							messageImageContent = *msg.ToolMessage.ImageContent
-						}
-
-						formattedImgContent := *FormatImageContent(&messageImageContent, false)
-
-						content = append(content, BedrockAnthropicImageMessage{
-							Type: "image",
-							Image: BedrockAnthropicImage{
-								Format: func() string {
-									if formattedImgContent.MediaType != nil {
-										mediaType := *formattedImgContent.MediaType
-										// Remove "image/" prefix if present, since normalizeMediaType ensures full format
-										mediaType = strings.TrimPrefix(mediaType, "image/")
-										return mediaType
-									}
-									return ""
-								}(),
-								Source: BedrockAnthropicImageSource{
-									Bytes: formattedImgContent.URL,
-								},
-							},
-						})
-					}
-
-					if msg.Content != nil {
+					if msg.Content.ContentStr != nil {
 						content = append(content, BedrockAnthropicTextMessage{
 							Type: "text",
-							Text: *msg.Content,
+							Text: *msg.Content.ContentStr,
 						})
+					} else if msg.Content.ContentBlocks != nil {
+						for _, block := range *msg.Content.ContentBlocks {
+							if block.ImageURL != nil {
+								sanitizedURL, _ := SanitizeImageURL(block.ImageURL.URL)
+								urlTypeInfo := ExtractURLTypeInfo(sanitizedURL)
+
+								formattedImgContent := AnthropicImageContent{
+									Type:      urlTypeInfo.Type,
+									MediaType: *urlTypeInfo.MediaType,
+								}
+
+								if urlTypeInfo.DataURLWithoutPrefix != nil {
+									formattedImgContent.URL = *urlTypeInfo.DataURLWithoutPrefix
+								} else {
+									formattedImgContent.URL = sanitizedURL
+								}
+
+								content = append(content, BedrockAnthropicImageMessage{
+									Type: "image",
+									Image: BedrockAnthropicImage{
+										Format: func() string {
+											if formattedImgContent.MediaType != "" {
+												mediaType := formattedImgContent.MediaType
+												// Remove "image/" prefix if present, since normalizeMediaType ensures full format
+												mediaType = strings.TrimPrefix(mediaType, "image/")
+												return mediaType
+											}
+											return ""
+										}(),
+										Source: BedrockAnthropicImageSource{
+											Bytes: formattedImgContent.URL,
+										},
+									},
+								})
+							}
+						}
 					}
 				}
 
@@ -603,7 +634,7 @@ func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schema
 				messages = append(messages, message.Text)
 			}
 
-			body["system"] = strings.Join(messages, " ")
+			body["system"] = strings.Join(messages, " \n")
 		}
 
 		return body, nil
@@ -629,9 +660,14 @@ func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schema
 				Role: msg.Role,
 			}
 
-			if msg.Content != nil {
-				message.Content = []BedrockMistralContent{
-					{Text: *msg.Content},
+			switch {
+			case msg.Content.ContentStr != nil:
+				message.Content = []BedrockMistralContent{{Text: *msg.Content.ContentStr}}
+			case msg.Content.ContentBlocks != nil:
+				for _, b := range *msg.Content.ContentBlocks {
+					if b.Text != nil {
+						message.Content = append(message.Content, BedrockMistralContent{Text: *b.Text})
+					}
 				}
 			}
 
@@ -873,16 +909,16 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, model, key 
 	}
 
 	// Collect all content and tool calls into a single message (similar to Anthropic aggregation)
-	var content strings.Builder
 	var toolCalls []schemas.ToolCall
 
+	var contentBlocks []schemas.ContentBlock
 	// Process content and tool calls
 	for _, choice := range response.Output.Message.Content {
 		if choice.Text != nil && *choice.Text != "" {
-			if content.Len() > 0 {
-				content.WriteString("\n")
-			}
-			content.WriteString(*choice.Text)
+			contentBlocks = append(contentBlocks, schemas.ContentBlock{
+				Type: "text",
+				Text: choice.Text,
+			})
 		}
 
 		if choice.ToolUse != nil {
@@ -909,12 +945,6 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, model, key 
 	}
 
 	// Create the assistant message
-	messageContent := content.String()
-	var contentPtr *string
-	if messageContent != "" {
-		contentPtr = &messageContent
-	}
-
 	var assistantMessage *schemas.AssistantMessage
 
 	// Create AssistantMessage if we have tool calls
@@ -929,8 +959,10 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, model, key 
 		{
 			Index: 0,
 			Message: schemas.BifrostMessage{
-				Role:             schemas.ModelChatMessageRoleAssistant,
-				Content:          contentPtr,
+				Role: schemas.ModelChatMessageRoleAssistant,
+				Content: schemas.MessageContent{
+					ContentBlocks: &contentBlocks,
+				},
 				AssistantMessage: assistantMessage,
 			},
 			FinishReason: &response.StopReason,

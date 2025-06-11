@@ -28,7 +28,38 @@ var bifrostResponsePool = sync.Pool{
 
 // dataURIRegex is a precompiled regex for matching data URI format patterns.
 // It matches patterns like: data:image/png;base64,iVBORw0KGgo...
-var dataURIRegex = regexp.MustCompile(`^data:([^;]+);base64,(.*)$`)
+var dataURIRegex = regexp.MustCompile(`^data:([^;]+)(;base64)?,(.+)$`)
+
+// base64Regex is a precompiled regex for matching base64 strings.
+// It matches strings containing only valid base64 characters with optional padding.
+var base64Regex = regexp.MustCompile(`^[A-Za-z0-9+/]*={0,2}$`)
+
+// fileExtensionToMediaType maps common image file extensions to their corresponding media types.
+// This map is used to infer media types from file extensions in URLs.
+var fileExtensionToMediaType = map[string]string{
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".png":  "image/png",
+	".gif":  "image/gif",
+	".webp": "image/webp",
+	".svg":  "image/svg+xml",
+	".bmp":  "image/bmp",
+}
+
+// ImageContentType represents the type of image content
+type ImageContentType string
+
+const (
+	ImageContentTypeBase64 ImageContentType = "base64"
+	ImageContentTypeURL    ImageContentType = "url"
+)
+
+// URLTypeInfo contains extracted information about a URL
+type URLTypeInfo struct {
+	Type                 ImageContentType
+	MediaType            *string
+	DataURLWithoutPrefix *string // URL without the prefix (eg data:image/png;base64,iVBORw0KGgo...)
+}
 
 // acquireBifrostResponse gets a Bifrost response from the pool and resets it.
 func acquireBifrostResponse() *schemas.BifrostResponse {
@@ -316,130 +347,162 @@ func coalesceString(s *string) string {
 	return *s
 }
 
-// normalizeMediaType converts short media types to full media types
-// e.g., "jpeg" -> "image/jpeg", "png" -> "image/png"
-func normalizeMediaType(mediaType string) string {
-	if mediaType == "" {
-		return "image/jpeg" // default
+//* IMAGE UTILS *//
+
+// SanitizeImageURL sanitizes and validates an image URL.
+// It handles both data URLs and regular HTTP/HTTPS URLs.
+// It also detects raw base64 image data and adds proper data URL headers.
+func SanitizeImageURL(rawURL string) (string, error) {
+	if rawURL == "" {
+		return rawURL, fmt.Errorf("URL cannot be empty")
 	}
 
-	// If it already has the image/ prefix, return as is
-	if strings.HasPrefix(mediaType, "image/") {
-		return mediaType
+	// Trim whitespace
+	rawURL = strings.TrimSpace(rawURL)
+
+	// Check if it's already a proper data URL
+	if strings.HasPrefix(rawURL, "data:") {
+		// Validate data URL format
+		if !dataURIRegex.MatchString(rawURL) {
+			return rawURL, fmt.Errorf("invalid data URL format")
+		}
+		return rawURL, nil
 	}
 
-	// Add image/ prefix for common formats
-	switch strings.ToLower(mediaType) {
-	case "jpeg", "jpg":
+	// Check if it looks like raw base64 image data
+	if isLikelyBase64(rawURL) {
+		// Detect the image type from the base64 data
+		mediaType := detectImageTypeFromBase64(rawURL)
+
+		// Remove any whitespace/newlines from base64 data
+		cleanBase64 := strings.ReplaceAll(strings.ReplaceAll(rawURL, "\n", ""), " ", "")
+
+		// Create proper data URL
+		return fmt.Sprintf("data:%s;base64,%s", mediaType, cleanBase64), nil
+	}
+
+	// Parse as regular URL
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL, fmt.Errorf("invalid URL format: %w", err)
+	}
+
+	// Validate scheme
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return rawURL, fmt.Errorf("URL must use http or https scheme")
+	}
+
+	// Validate host
+	if parsedURL.Host == "" {
+		return rawURL, fmt.Errorf("URL must have a valid host")
+	}
+
+	return parsedURL.String(), nil
+}
+
+// ExtractURLTypeInfo extracts type and media type information from a sanitized URL.
+// For data URLs, it parses the media type and encoding.
+// For regular URLs, it attempts to infer the media type from the file extension.
+func ExtractURLTypeInfo(sanitizedURL string) URLTypeInfo {
+	if strings.HasPrefix(sanitizedURL, "data:") {
+		return extractDataURLInfo(sanitizedURL)
+	}
+	return extractRegularURLInfo(sanitizedURL)
+}
+
+// extractDataURLInfo extracts information from a data URL
+func extractDataURLInfo(dataURL string) URLTypeInfo {
+	// Parse data URL: data:[<mediatype>][;base64],<data>
+	matches := dataURIRegex.FindStringSubmatch(dataURL)
+
+	if len(matches) != 4 {
+		return URLTypeInfo{Type: ImageContentTypeBase64}
+	}
+
+	mediaType := matches[1]
+	isBase64 := matches[2] == ";base64"
+
+	dataURLWithoutPrefix := dataURL
+	if isBase64 {
+		dataURLWithoutPrefix = dataURL[len("data:")+len(mediaType)+len(";base64,"):]
+	}
+
+	info := URLTypeInfo{
+		MediaType:            &mediaType,
+		DataURLWithoutPrefix: &dataURLWithoutPrefix,
+	}
+
+	if isBase64 {
+		info.Type = ImageContentTypeBase64
+	} else {
+		info.Type = ImageContentTypeURL // Non-base64 data URL
+	}
+
+	return info
+}
+
+// extractRegularURLInfo extracts information from a regular HTTP/HTTPS URL
+func extractRegularURLInfo(regularURL string) URLTypeInfo {
+	info := URLTypeInfo{
+		Type: ImageContentTypeURL,
+	}
+
+	// Try to infer media type from file extension
+	parsedURL, err := url.Parse(regularURL)
+	if err != nil {
+		return info
+	}
+
+	path := strings.ToLower(parsedURL.Path)
+
+	// Check for known file extensions using the map
+	for ext, mediaType := range fileExtensionToMediaType {
+		if strings.HasSuffix(path, ext) {
+			info.MediaType = &mediaType
+			break
+		}
+	}
+	// For URLs without recognizable extensions, MediaType remains nil
+
+	return info
+}
+
+// detectImageTypeFromBase64 detects the image type from base64 data by examining the header bytes
+func detectImageTypeFromBase64(base64Data string) string {
+	// Remove any whitespace or newlines
+	cleanData := strings.ReplaceAll(strings.ReplaceAll(base64Data, "\n", ""), " ", "")
+
+	// Check common image format signatures in base64
+	switch {
+	case strings.HasPrefix(cleanData, "/9j/") || strings.HasPrefix(cleanData, "/9k/"):
+		// JPEG images typically start with /9j/ or /9k/ in base64 (FFD8 in hex)
 		return "image/jpeg"
-	case "png":
+	case strings.HasPrefix(cleanData, "iVBORw0KGgo"):
+		// PNG images start with iVBORw0KGgo in base64 (89504E470D0A1A0A in hex)
 		return "image/png"
-	case "gif":
+	case strings.HasPrefix(cleanData, "R0lGOD"):
+		// GIF images start with R0lGOD in base64 (474946 in hex)
 		return "image/gif"
-	case "webp":
-		return "image/webp"
-	case "bmp":
+	case strings.HasPrefix(cleanData, "Qk"):
+		// BMP images start with Qk in base64 (424D in hex)
 		return "image/bmp"
-	case "svg":
+	case strings.HasPrefix(cleanData, "UklGR") && len(cleanData) >= 16 && cleanData[12:16] == "V0VC":
+		// WebP images start with RIFF header (UklGR in base64) and have WEBP signature at offset 8-11 (V0VC in base64)
+		return "image/webp"
+	case strings.HasPrefix(cleanData, "PHN2Zy") || strings.HasPrefix(cleanData, "PD94bW"):
+		// SVG images often start with <svg or <?xml in base64
 		return "image/svg+xml"
 	default:
-		return "image/" + mediaType
+		// Default to JPEG for unknown formats
+		return "image/jpeg"
 	}
 }
 
-// Normalize handles type inference and media type normalization for image content.
-// It automatically detects content type from URL patterns and normalizes media types.
-//
-// NOTE: This function is called internally by the Bifrost system - you do not need to call it yourself.
-// It is automatically invoked when processing image content in requests.
-func normalizeImageContent(ic *schemas.ImageContent) {
-	if ic == nil {
-		return
-	}
+// isLikelyBase64 checks if a string looks like base64 data
+func isLikelyBase64(s string) bool {
+	// Remove whitespace for checking
+	cleanData := strings.ReplaceAll(strings.ReplaceAll(s, "\n", ""), " ", "")
 
-	// Handle unknown/empty type - try to infer from URL
-	if ic.Type == "" && ic.URL != "" {
-		if dataURIRegex.MatchString(ic.URL) {
-			// Looks like base64 data URI
-			ic.Type = schemas.ImageContentTypeBase64
-		} else if strings.HasPrefix(ic.URL, "http://") || strings.HasPrefix(ic.URL, "https://") {
-			// Looks like a regular URL
-			ic.Type = schemas.ImageContentTypeURL
-		} else {
-			// Assume it's raw base64 data
-			ic.Type = schemas.ImageContentTypeBase64
-		}
-	}
-
-	// Normalize MediaType if provided
-	if ic.MediaType != nil && *ic.MediaType != "" {
-		normalizedMediaType := normalizeMediaType(*ic.MediaType)
-		ic.MediaType = &normalizedMediaType
-	}
-
-}
-
-// FormatDataURL modifies the image content struct in place to format data URL for base64 image content.
-//
-// NOTE: This function is called internally by the Bifrost system - you do not need to call it yourself.
-// It is automatically invoked when processing image content for different providers.
-//
-// Parameters:
-//   - includePrefix: Whether to include the "data:mediatype;base64," prefix
-//   - true: URL will be in full data URI format (data:image/png;base64,iVBORw0KGgo...)
-//   - false: URL will contain only the base64 data (iVBORw0KGgo...)
-func FormatImageContent(imageContent *schemas.ImageContent, includePrefix bool) *schemas.ImageContent {
-	if imageContent == nil {
-		return nil
-	}
-
-	newImageContent := *imageContent
-
-	normalizeImageContent(&newImageContent)
-
-	if newImageContent.Type != schemas.ImageContentTypeBase64 {
-		return &newImageContent
-	}
-
-	var finalMediaType string
-	var base64Data string
-
-	// Extract base64 data and media type from URL using precompiled regex
-	if matches := dataURIRegex.FindStringSubmatch(newImageContent.URL); matches != nil {
-		// URL already has data URI format
-		existingMediaType := matches[1]
-		base64Data = matches[2]
-
-		// Determine final media type (prefer explicit MediaType field)
-		if newImageContent.MediaType != nil && *newImageContent.MediaType != "" {
-			finalMediaType = normalizeMediaType(*newImageContent.MediaType)
-		} else {
-			finalMediaType = normalizeMediaType(existingMediaType)
-		}
-	} else {
-		// URL contains raw base64 data (no data URI prefix)
-		base64Data = newImageContent.URL
-
-		// Determine media type
-		if newImageContent.MediaType != nil && *newImageContent.MediaType != "" {
-			finalMediaType = normalizeMediaType(*newImageContent.MediaType)
-		} else {
-			finalMediaType = "image/jpeg" // default when no media type provided
-		}
-	}
-
-	// Ensure MediaType field is always set with normalized value
-	normalizedMediaType := finalMediaType
-	newImageContent.MediaType = &normalizedMediaType
-
-	// Set URL based on includePrefix preference
-	if includePrefix {
-		// Full data URI format
-		newImageContent.URL = fmt.Sprintf("data:%s;base64,%s", finalMediaType, base64Data)
-	} else {
-		// Raw base64 data only
-		newImageContent.URL = base64Data
-	}
-
-	return &newImageContent
+	// Check if it contains only base64 characters using pre-compiled regex
+	return base64Regex.MatchString(cleanData)
 }

@@ -69,6 +69,12 @@ type AnthropicError struct {
 	} `json:"error"` // Error details
 }
 
+type AnthropicImageContent struct {
+	Type      ImageContentType `json:"type"`
+	URL       string           `json:"url"`
+	MediaType string           `json:"media_type,omitempty"`
+}
+
 // AnthropicProvider implements the Provider interface for Anthropic's Claude API.
 type AnthropicProvider struct {
 	logger schemas.Logger   // Logger for provider operations
@@ -255,8 +261,10 @@ func (provider *AnthropicProvider) TextCompletion(ctx context.Context, model, ke
 		{
 			Index: 0,
 			Message: schemas.BifrostMessage{
-				Role:    schemas.ModelChatMessageRoleAssistant,
-				Content: &response.Completion,
+				Role: schemas.ModelChatMessageRoleAssistant,
+				Content: schemas.MessageContent{
+					ContentStr: &response.Completion,
+				},
 			},
 		},
 	}
@@ -318,22 +326,34 @@ func (provider *AnthropicProvider) ChatCompletion(ctx context.Context, model, ke
 }
 
 // buildAnthropicImageSourceMap creates the "source" map for an Anthropic image content part.
-func buildAnthropicImageSourceMap(imgContent *schemas.ImageContent) map[string]interface{} {
+func buildAnthropicImageSourceMap(imgContent *schemas.ImageURLStruct) map[string]interface{} {
 	if imgContent == nil {
 		return nil
 	}
 
-	formattedImgContent := *FormatImageContent(imgContent, false)
+	sanitizedURL, _ := SanitizeImageURL(imgContent.URL)
+	urlTypeInfo := ExtractURLTypeInfo(sanitizedURL)
+
+	formattedImgContent := AnthropicImageContent{
+		Type:      urlTypeInfo.Type,
+		MediaType: *urlTypeInfo.MediaType,
+	}
+
+	if urlTypeInfo.DataURLWithoutPrefix != nil {
+		formattedImgContent.URL = *urlTypeInfo.DataURLWithoutPrefix
+	} else {
+		formattedImgContent.URL = sanitizedURL
+	}
 
 	sourceMap := map[string]interface{}{
 		"type": string(formattedImgContent.Type), // "base64" or "url"
 	}
 
-	if formattedImgContent.Type == schemas.ImageContentTypeURL {
+	if formattedImgContent.Type == ImageContentTypeURL {
 		sourceMap["url"] = formattedImgContent.URL
 	} else {
-		if formattedImgContent.MediaType != nil {
-			sourceMap["media_type"] = *formattedImgContent.MediaType
+		if formattedImgContent.MediaType != "" {
+			sourceMap["media_type"] = formattedImgContent.MediaType
 		}
 		sourceMap["data"] = formattedImgContent.URL // URL field contains base64 data string
 	}
@@ -345,10 +365,18 @@ func prepareAnthropicChatRequest(messages []schemas.BifrostMessage, params *sche
 	var systemMessages []BedrockAnthropicSystemMessage
 	for _, msg := range messages {
 		if msg.Role == schemas.ModelChatMessageRoleSystem {
-			if msg.Content != nil {
+			if msg.Content.ContentStr != nil {
 				systemMessages = append(systemMessages, BedrockAnthropicSystemMessage{
-					Text: *msg.Content,
+					Text: *msg.Content.ContentStr,
 				})
+			} else if msg.Content.ContentBlocks != nil {
+				for _, block := range *msg.Content.ContentBlocks {
+					if block.Text != nil {
+						systemMessages = append(systemMessages, BedrockAnthropicSystemMessage{
+							Text: *block.Text,
+						})
+					}
+				}
 			}
 		}
 	}
@@ -367,61 +395,49 @@ func prepareAnthropicChatRequest(messages []schemas.BifrostMessage, params *sche
 
 				var toolCallResultContent []map[string]interface{}
 
-				if msg.Content != nil {
+				if msg.Content.ContentStr != nil {
 					toolCallResultContent = append(toolCallResultContent, map[string]interface{}{
 						"type": "text",
-						"text": *msg.Content,
+						"text": *msg.Content.ContentStr,
 					})
-				}
-
-				if (msg.UserMessage != nil && msg.UserMessage.ImageContent != nil) || (msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil) {
-					var messageImageContent schemas.ImageContent
-					if msg.UserMessage != nil && msg.UserMessage.ImageContent != nil {
-						// Create a copy to avoid modifying the original
-						messageImageContent = *msg.UserMessage.ImageContent
-					} else if msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil {
-						// Create a copy to avoid modifying the original
-						messageImageContent = *msg.ToolMessage.ImageContent
-					}
-
-					imageSource := buildAnthropicImageSourceMap(&messageImageContent)
-					if imageSource != nil {
-						toolCallResultContent = append(toolCallResultContent, map[string]interface{}{
-							"type":   "image",
-							"source": imageSource,
-						})
+				} else if msg.Content.ContentBlocks != nil {
+					for _, block := range *msg.Content.ContentBlocks {
+						if block.Text != nil {
+							toolCallResultContent = append(toolCallResultContent, map[string]interface{}{
+								"type": "text",
+								"text": *block.Text,
+							})
+						}
 					}
 				}
 
 				toolCallResult["content"] = toolCallResultContent
-
 				content = append(content, toolCallResult)
 			} else {
-				if (msg.UserMessage != nil && msg.UserMessage.ImageContent != nil) || (msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil) {
-					var messageImageContent schemas.ImageContent
-					if msg.UserMessage != nil && msg.UserMessage.ImageContent != nil {
-						// Create a copy to avoid modifying the original
-						messageImageContent = *msg.UserMessage.ImageContent
-					} else if msg.ToolMessage != nil && msg.ToolMessage.ImageContent != nil {
-						// Create a copy to avoid modifying the original
-						messageImageContent = *msg.ToolMessage.ImageContent
-					}
-
-					imageSource := buildAnthropicImageSourceMap(&messageImageContent)
-					if imageSource != nil {
-						content = append(content, map[string]interface{}{
-							"type":   "image",
-							"source": imageSource,
-						})
-					}
-				}
-
 				// Add text content if present
-				if msg.Content != nil && *msg.Content != "" {
+				if msg.Content.ContentStr != nil && *msg.Content.ContentStr != "" {
 					content = append(content, map[string]interface{}{
 						"type": "text",
-						"text": *msg.Content,
+						"text": *msg.Content.ContentStr,
 					})
+				} else if msg.Content.ContentBlocks != nil {
+					for _, block := range *msg.Content.ContentBlocks {
+						if block.Text != nil && *block.Text != "" {
+							content = append(content, map[string]interface{}{
+								"type": "text",
+								"text": *block.Text,
+							})
+						}
+						if block.ImageURL != nil {
+							imageSource := buildAnthropicImageSourceMap(block.ImageURL)
+							if imageSource != nil {
+								content = append(content, map[string]interface{}{
+									"type":   "image",
+									"source": imageSource,
+								})
+							}
+						}
+					}
 				}
 
 				// Add thinking content if present in AssistantMessage
@@ -577,20 +593,20 @@ func prepareAnthropicChatRequest(messages []schemas.BifrostMessage, params *sche
 
 func parseAnthropicResponse(response *AnthropicChatResponse, bifrostResponse *schemas.BifrostResponse) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Collect all content and tool calls into a single message
-	var content strings.Builder
 	var toolCalls []schemas.ToolCall
 	var thinking string
 
+	var contentBlocks []schemas.ContentBlock
 	// Process content and tool calls
 	for _, c := range response.Content {
 		switch c.Type {
 		case "thinking":
 			thinking = c.Thinking
 		case "text":
-			if content.Len() > 0 {
-				content.WriteString("\n")
-			}
-			content.WriteString(c.Text)
+			contentBlocks = append(contentBlocks, schemas.ContentBlock{
+				Type: "text",
+				Text: &c.Text,
+			})
 		case "tool_use":
 			function := schemas.FunctionCall{
 				Name: &c.Name,
@@ -612,7 +628,6 @@ func parseAnthropicResponse(response *AnthropicChatResponse, bifrostResponse *sc
 	}
 
 	// Create the assistant message
-	messageContent := content.String()
 	var assistantMessage *schemas.AssistantMessage
 
 	// Create AssistantMessage if we have tool calls or thinking
@@ -632,8 +647,10 @@ func parseAnthropicResponse(response *AnthropicChatResponse, bifrostResponse *sc
 		{
 			Index: 0,
 			Message: schemas.BifrostMessage{
-				Role:             schemas.ModelChatMessageRoleAssistant,
-				Content:          &messageContent,
+				Role: schemas.ModelChatMessageRoleAssistant,
+				Content: schemas.MessageContent{
+					ContentBlocks: &contentBlocks,
+				},
 				AssistantMessage: assistantMessage,
 			},
 			FinishReason: &response.StopReason,

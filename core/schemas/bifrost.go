@@ -1,6 +1,11 @@
 // Package schemas defines the core schemas and types used by the Bifrost system.
 package schemas
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 const (
 	DefaultInitialPoolSize = 100
 )
@@ -142,24 +147,74 @@ type ToolChoice struct {
 // BifrostMessage represents a message in a chat conversation.
 type BifrostMessage struct {
 	Role    ModelChatMessageRole `json:"role"`
-	Content *string              `json:"content,omitempty"`
+	Content MessageContent       `json:"content"`
 
 	// Embedded pointer structs - when non-nil, their exported fields are flattened into the top-level JSON object
 	// IMPORTANT: Only one of the following can be non-nil at a time, otherwise the JSON marshalling will override the common fields
-	*UserMessage
 	*ToolMessage
 	*AssistantMessage
 }
 
-// UserMessage represents a message from a user
-type UserMessage struct {
-	ImageContent *ImageContent `json:"image_content,omitempty"`
+type MessageContent struct {
+	ContentStr    *string
+	ContentBlocks *[]ContentBlock
+}
+
+// MarshalJSON implements custom JSON marshalling for MessageContent.
+// It marshals either ContentStr or ContentBlocks directly without wrapping.
+func (mc MessageContent) MarshalJSON() ([]byte, error) {
+	// Validation: ensure only one field is set at a time
+	if mc.ContentStr != nil && mc.ContentBlocks != nil {
+		return nil, fmt.Errorf("both ContentStr and ContentBlocks are set; only one should be non-nil")
+	}
+
+	if mc.ContentStr != nil {
+		return json.Marshal(*mc.ContentStr)
+	}
+	if mc.ContentBlocks != nil {
+		return json.Marshal(*mc.ContentBlocks)
+	}
+	// If both are nil, return null
+	return json.Marshal(nil)
+}
+
+// UnmarshalJSON implements custom JSON unmarshalling for MessageContent.
+// It determines whether "content" is a string or array and assigns to the appropriate field.
+// It also handles direct string/array content without a wrapper object.
+func (mc *MessageContent) UnmarshalJSON(data []byte) error {
+	// First, try to unmarshal as a direct string
+	var stringContent string
+	if err := json.Unmarshal(data, &stringContent); err == nil {
+		mc.ContentStr = &stringContent
+		return nil
+	}
+
+	// Try to unmarshal as a direct array of ContentBlock
+	var arrayContent []ContentBlock
+	if err := json.Unmarshal(data, &arrayContent); err == nil {
+		mc.ContentBlocks = &arrayContent
+		return nil
+	}
+
+	return fmt.Errorf("content field is neither a string nor an array of ContentBlock")
+}
+
+type ContentBlockType string
+
+const (
+	ContentBlockTypeText  ContentBlockType = "text"
+	ContentBlockTypeImage ContentBlockType = "image_url"
+)
+
+type ContentBlock struct {
+	Type     ContentBlockType `json:"type"`
+	Text     *string          `json:"text,omitempty"`
+	ImageURL *ImageURLStruct  `json:"image_url,omitempty"`
 }
 
 // ToolMessage represents a message from a tool
 type ToolMessage struct {
-	ImageContent *ImageContent `json:"image_content,omitempty"`
-	ToolCallID   *string       `json:"tool_call_id,omitempty"`
+	ToolCallID *string `json:"tool_call_id,omitempty"`
 }
 
 // AssistantMessage represents a message from an assistant
@@ -170,19 +225,10 @@ type AssistantMessage struct {
 	Thought     *string      `json:"thought,omitempty"`
 }
 
-type ImageContentType string
-
-const (
-	ImageContentTypeBase64 ImageContentType = "base64"
-	ImageContentTypeURL    ImageContentType = "url"
-)
-
 // ImageContent represents image data in a message.
-type ImageContent struct {
-	Type      ImageContentType `json:"type"`
-	URL       string           `json:"url"`
-	MediaType *string          `json:"media_type,omitempty"`
-	Detail    *string          `json:"detail,omitempty"`
+type ImageURLStruct struct {
+	URL    string  `json:"url"`
+	Detail *string `json:"detail,omitempty"`
 }
 
 //* Response Structs
