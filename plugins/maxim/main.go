@@ -103,7 +103,7 @@ type Plugin struct {
 // Returns:
 //   - *schemas.BifrostRequest: The original request, unmodified
 //   - error: Any error that occurred during trace/generation creation
-func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, error) {
+func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.BifrostResponse, error) {
 	var traceID string
 	var sessionID string
 
@@ -111,7 +111,7 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	if ctx != nil {
 		if existingGenerationID, ok := (*ctx).Value(GenerationIDKey).(string); ok && existingGenerationID != "" {
 			// If generationID exists, return early
-			return req, nil
+			return req, nil, nil
 		}
 
 		if existingTraceID, ok := (*ctx).Value(TraceIDKey).(string); ok && existingTraceID != "" {
@@ -137,32 +137,28 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 			"model":  req.Model,
 		}
 		for _, message := range *req.Input.ChatCompletionInput {
-			if message.Content != nil {
-				messages = append(messages, logging.CompletionRequest{
-					Role:    string(message.Role),
-					Content: message.Content,
-				})
-			} else if message.UserMessage != nil && message.UserMessage.ImageContent != nil {
-				messages = append(messages, logging.CompletionRequest{
-					Role:    string(message.Role),
-					Content: message.UserMessage.ImageContent,
-				})
-			} else if message.ToolCalls != nil {
-				messages = append(messages, logging.CompletionRequest{
-					Role:    string(message.Role),
-					Content: message.ToolCalls,
-				})
-			} else if message.ToolMessage != nil && message.ToolMessage.ToolCallID != nil {
-				messages = append(messages, logging.CompletionRequest{
-					Role:    string(message.Role),
-					Content: message.ToolMessage,
-				})
-			}
+			messages = append(messages, logging.CompletionRequest{
+				Role:    string(message.Role),
+				Content: message.Content,
+			})
 		}
 		if len(*req.Input.ChatCompletionInput) > 0 {
 			lastMsg := (*req.Input.ChatCompletionInput)[len(*req.Input.ChatCompletionInput)-1]
-			if lastMsg.Content != nil {
-				latestMessage = *lastMsg.Content
+			if lastMsg.Content.ContentStr != nil {
+				latestMessage = *lastMsg.Content.ContentStr
+			} else if lastMsg.Content.ContentBlocks != nil {
+				// Find the last text content block
+				for i := len(*lastMsg.Content.ContentBlocks) - 1; i >= 0; i-- {
+					block := (*lastMsg.Content.ContentBlocks)[i]
+					if block.Type == "text" && block.Text != nil {
+						latestMessage = *block.Text
+						break
+					}
+				}
+				// If no text block found, use placeholder
+				if latestMessage == "" {
+					latestMessage = "-"
+				}
 			}
 		}
 	} else if req.Input.TextCompletionInput != nil {
@@ -172,7 +168,7 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 			"model":  req.Model,
 		}
 		messages = append(messages, logging.CompletionRequest{
-			Role:    "user",
+			Role:    string(schemas.ModelChatMessageRoleUser),
 			Content: req.Input.TextCompletionInput,
 		})
 		latestMessage = *req.Input.TextCompletionInput
@@ -225,7 +221,7 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 		*ctx = context.WithValue(*ctx, GenerationIDKey, generationID)
 	}
 
-	return req, nil
+	return req, nil, nil
 }
 
 // PostHook is called after a request has been processed by Bifrost.
@@ -264,4 +260,10 @@ func (plugin *Plugin) PostHook(ctxRef *context.Context, res *schemas.BifrostResp
 	}
 
 	return res, nil
+}
+
+func (plugin *Plugin) Cleanup() error {
+	plugin.logger.Flush()
+
+	return nil
 }
