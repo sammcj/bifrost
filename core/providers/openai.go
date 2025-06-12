@@ -212,7 +212,7 @@ func prepareOpenAIChatRequest(messages []schemas.BifrostMessage, params *schemas
 		if msg.Role == schemas.ModelChatMessageRoleAssistant {
 			assistantMessage := map[string]interface{}{
 				"role":    msg.Role,
-				"content": coalesceString(msg.Content.ContentStr),
+				"content": msg.Content,
 			}
 			if msg.AssistantMessage != nil && msg.AssistantMessage.ToolCalls != nil {
 				assistantMessage["tool_calls"] = *msg.AssistantMessage.ToolCalls
