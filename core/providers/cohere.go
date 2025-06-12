@@ -459,9 +459,12 @@ func processImageContent(imageContent *schemas.ImageURLStruct) map[string]interf
 	urlTypeInfo := ExtractURLTypeInfo(sanitizedURL)
 
 	formattedImgContent := AnthropicImageContent{
-		Type:      urlTypeInfo.Type,
-		URL:       sanitizedURL,
-		MediaType: *urlTypeInfo.MediaType,
+		Type: urlTypeInfo.Type,
+		URL:  sanitizedURL,
+	}
+
+	if urlTypeInfo.MediaType != nil {
+		formattedImgContent.MediaType = *urlTypeInfo.MediaType
 	}
 
 	return map[string]interface{}{
