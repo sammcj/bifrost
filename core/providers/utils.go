@@ -338,15 +338,6 @@ func StrPtr(s string) *string {
 	return &s
 }
 
-// coalesceString returns the string value of a pointer to a string, or an empty string if the pointer is nil.
-// This is a helper function for safely handling pointer-to-string values.
-func coalesceString(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
 //* IMAGE UTILS *//
 
 // SanitizeImageURL sanitizes and validates an image URL.

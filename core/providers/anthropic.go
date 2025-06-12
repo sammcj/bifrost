@@ -335,8 +335,11 @@ func buildAnthropicImageSourceMap(imgContent *schemas.ImageURLStruct) map[string
 	urlTypeInfo := ExtractURLTypeInfo(sanitizedURL)
 
 	formattedImgContent := AnthropicImageContent{
-		Type:      urlTypeInfo.Type,
-		MediaType: *urlTypeInfo.MediaType,
+		Type: urlTypeInfo.Type,
+	}
+
+	if urlTypeInfo.MediaType != nil {
+		formattedImgContent.MediaType = *urlTypeInfo.MediaType
 	}
 
 	if urlTypeInfo.DataURLWithoutPrefix != nil {
