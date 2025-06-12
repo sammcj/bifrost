@@ -109,8 +109,10 @@ func TestMaximLoggerPlugin(t *testing.T) {
 		Input: schemas.RequestInput{
 			ChatCompletionInput: &[]schemas.BifrostMessage{
 				{
-					Role:    "user",
-					Content: bifrost.Ptr("Hello, how are you?"),
+					Role: "user",
+					Content: schemas.MessageContent{
+						ContentStr: bifrost.Ptr("Hello, how are you?"),
+					},
 				},
 			},
 		},
@@ -122,6 +124,5 @@ func TestMaximLoggerPlugin(t *testing.T) {
 
 	log.Println("Bifrost request completed, check your Maxim Dashboard for the trace")
 
-	// Clean up resources
 	client.Cleanup()
 }
