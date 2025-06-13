@@ -77,8 +77,10 @@ type AnthropicImageContent struct {
 
 // AnthropicProvider implements the Provider interface for Anthropic's Claude API.
 type AnthropicProvider struct {
-	logger schemas.Logger   // Logger for provider operations
-	client *fasthttp.Client // HTTP client for API requests
+	logger     schemas.Logger   // Logger for provider operations
+	client     *fasthttp.Client // HTTP client for API requests
+	baseURL    string           // Base URL for the provider
+	apiVersion string           // API version for the provider
 }
 
 // anthropicChatResponsePool provides a pool for Anthropic chat response objects.
@@ -145,9 +147,16 @@ func NewAnthropicProvider(config *schemas.ProviderConfig, logger schemas.Logger)
 	// Configure proxy if provided
 	client = configureProxy(client, config.ProxyConfig, logger)
 
+	baseURL := strings.TrimRight(config.NetworkConfig.BaseURL, "/")
+	if baseURL == "" {
+		baseURL = "https://api.anthropic.com"
+	}
+
 	return &AnthropicProvider{
-		logger: logger,
-		client: client,
+		logger:     logger,
+		client:     client,
+		baseURL:    baseURL,
+		apiVersion: "2023-06-01",
 	}
 }
 
@@ -198,7 +207,7 @@ func (provider *AnthropicProvider) completeRequest(ctx context.Context, requestB
 	req.Header.SetMethod("POST")
 	req.Header.SetContentType("application/json")
 	req.Header.Set("x-api-key", key)
-	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("anthropic-version", provider.apiVersion)
 	req.SetBody(jsonData)
 
 	// Send the request
@@ -238,7 +247,7 @@ func (provider *AnthropicProvider) TextCompletion(ctx context.Context, model, ke
 		"prompt": fmt.Sprintf("\n\nHuman: %s\n\nAssistant:", text),
 	}, preparedParams)
 
-	responseBody, err := provider.completeRequest(ctx, requestBody, "https://api.anthropic.com/v1/complete", key)
+	responseBody, err := provider.completeRequest(ctx, requestBody, provider.baseURL+"/v1/complete", key)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +303,7 @@ func (provider *AnthropicProvider) ChatCompletion(ctx context.Context, model, ke
 		"messages": formattedMessages,
 	}, preparedParams)
 
-	responseBody, err := provider.completeRequest(ctx, requestBody, "https://api.anthropic.com/v1/messages", key)
+	responseBody, err := provider.completeRequest(ctx, requestBody, provider.baseURL+"/v1/messages", key)
 	if err != nil {
 		return nil, err
 	}

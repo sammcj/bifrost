@@ -4,7 +4,7 @@ Bifrost provides a powerful plugin system that allows you to extend and customiz
 
 ## 1. How Plugins Work
 
-Plugins in Bifrost follow a simple but powerful interface that allows them to intercept and modify requests and responses at different stages of processing:
+Plugins in Bifrost follow a flexible interface that allows them to intercept and modify requests and responses at different stages of processing:
 
 1. **PreHook**: Executed before a request is sent to a provider
 
@@ -12,45 +12,43 @@ Plugins in Bifrost follow a simple but powerful interface that allows them to in
    - Can add custom headers or parameters
    - Can implement rate limiting or validation
    - Executed in the order they are registered
+   - If a PreHook returns a response, the provider call is skipped and only the PostHook methods of plugins that had their PreHook executed are called in reverse order.
 
-2. **PostHook**: Executed after receiving a response from a provider
-   - Can modify the response
-   - Can implement caching
-   - Can add monitoring or logging
+2. **PostHook**: Executed after receiving a response from a provider or a PreHook short-circuit
+   - Can modify the response and/or error
+   - Can recover from errors (set error to nil and provide a response)
+   - Can invalidate a response (set response to nil and provide an error)
+   - Both response and error may be nil; plugins must handle both cases
    - Executed in reverse order of PreHooks
+   - Only truly empty errors (no message, no error, no status code, no type) are treated as recoveries by the pipeline
 
-> **Note**: PostHooks maintain symmetry with PreHooks. If a plugin returns a response in its PreHook (short-circuiting the provider call), only the PostHook methods of plugins that had their PreHook executed are called, in reverse order. This ensures proper request/response pairing for each plugin.
+> **Note**: The plugin pipeline ensures symmetry: for every PreHook executed, the corresponding PostHook will be called in reverse order. Plugin authors should ensure their hooks are robust to both response and error being nil, and should not assume either is always present.
 
 ## 2. Plugin Interface
 
-```golang
-type Plugin interface {
-    // PreHook is called before a request is processed by a provider.
-    // It allows plugins to modify the request before it is sent to the provider.
-    // The context parameter can be used to maintain state across plugin calls.
-    // Returns the modified request, an optional response (if the plugin wants to short-circuit the provider call), and any error that occurred during processing.
-    // If a response is returned, the provider call is skipped and only the PostHook methods of plugins that had their PreHook executed are called in reverse order.
-    PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, *BifrostResponse, error)
+```go
+// Plugin interface for Bifrost plugins
+// See core/schemas/plugin.go for the authoritative definition
 
-    // PostHook is called after a response is received from a provider.
-    // It allows plugins to modify the response before it is returned to the caller.
-    // Returns the modified response and any error that occurred during processing.
-    PostHook(ctx *context.Context, result *BifrostResponse) (*BifrostResponse, error)
-
-    // Cleanup is called on bifrost shutdown.
-    // It allows plugins to clean up any resources they have allocated.
-    // Returns any error that occurred during cleanup, which will be logged as a warning by the Bifrost instance.
-    Cleanup() error
-}
+GetName() string
+PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, *BifrostResponse, error)
+PostHook(ctx *context.Context, result *BifrostResponse, err *BifrostError) (*BifrostResponse, *BifrostError, error)
+Cleanup() error
 ```
 
 ## 3. Building Custom Plugins
 
 ### Basic Plugin Structure
 
-```golang
+```go
+// Example plugin skeleton
+
 type CustomPlugin struct {
     // Your plugin fields
+}
+
+func (p *CustomPlugin) GetName() string {
+    return "CustomPlugin"
 }
 
 func (p *CustomPlugin) PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, *BifrostResponse, error) {
@@ -59,9 +57,12 @@ func (p *CustomPlugin) PreHook(ctx *context.Context, req *BifrostRequest) (*Bifr
     return req, nil, nil
 }
 
-func (p *CustomPlugin) PostHook(ctx *context.Context, result *BifrostResponse) (*BifrostResponse, error) {
-    // Modify response or add custom logic
-    return result, nil
+func (p *CustomPlugin) PostHook(ctx *context.Context, result *BifrostResponse, err *BifrostError) (*BifrostResponse, *BifrostError, error) {
+    // Modify response or error, or recover from error
+    // Either result or err may be nil
+    // To recover from an error, set err to nil and return a valid result
+    // To invalidate a response, set the result to nil and return a non-nil err.
+    return result, err, nil
 }
 
 func (p *CustomPlugin) Cleanup() error {
@@ -72,9 +73,13 @@ func (p *CustomPlugin) Cleanup() error {
 
 ### Example: Rate Limiting Plugin
 
-```golang
+```go
 type RateLimitPlugin struct {
     limiter *rate.Limiter
+}
+
+func (p *RateLimitPlugin) GetName() string {
+    return "RateLimitPlugin"
 }
 
 func NewRateLimitPlugin(rps float64) *RateLimitPlugin {
@@ -90,8 +95,9 @@ func (p *RateLimitPlugin) PreHook(ctx *context.Context, req *BifrostRequest) (*B
     return req, nil, nil
 }
 
-func (p *RateLimitPlugin) PostHook(ctx *context.Context, result *BifrostResponse) (*BifrostResponse, error) {
-    return result, nil
+func (p *RateLimitPlugin) PostHook(ctx *context.Context, result *BifrostResponse, err *BifrostError) (*BifrostResponse, *BifrostError, error) {
+    // No-op for rate limiting
+    return result, err, nil
 }
 
 func (p *RateLimitPlugin) Cleanup() error {
@@ -102,9 +108,13 @@ func (p *RateLimitPlugin) Cleanup() error {
 
 ### Example: Logging Plugin
 
-```golang
+```go
 type LoggingPlugin struct {
     logger schemas.Logger
+}
+
+func (p *LoggingPlugin) GetName() string {
+    return "LoggingPlugin"
 }
 
 func NewLoggingPlugin(logger schemas.Logger) *LoggingPlugin {
@@ -116,9 +126,14 @@ func (p *LoggingPlugin) PreHook(ctx *context.Context, req *BifrostRequest) (*Bif
     return req, nil, nil
 }
 
-func (p *LoggingPlugin) PostHook(ctx *context.Context, result *BifrostResponse) (*BifrostResponse, error) {
-    p.logger.Info(fmt.Sprintf("Response from %s with %d tokens", result.Model, result.Usage.TotalTokens))
-    return result, nil
+func (p *LoggingPlugin) PostHook(ctx *context.Context, result *BifrostResponse, err *BifrostError) (*BifrostResponse, *BifrostError, error) {
+    if result != nil {
+        p.logger.Info(fmt.Sprintf("Response from %s with %d tokens", result.Model, result.Usage.TotalTokens))
+    }
+    if err != nil {
+        p.logger.Warn(fmt.Sprintf("Error: %v", err.Error.Message))
+    }
+    return result, err, nil
 }
 
 func (p *LoggingPlugin) Cleanup() error {
@@ -131,7 +146,7 @@ func (p *LoggingPlugin) Cleanup() error {
 
 ### Initializing Bifrost with Plugins
 
-```golang
+```go
 client, err := bifrost.Init(schemas.BifrostConfig{
     Account: &yourAccount,
     Plugins: []schemas.Plugin{
@@ -142,67 +157,30 @@ client, err := bifrost.Init(schemas.BifrostConfig{
 })
 ```
 
-## 5. Available Plugins
+## 5. Plugin Pipeline Symmetry and Order
 
-Bifrost comes with several built-in plugins that you can use out of the box. Each plugin has its own documentation in its respective folder:
+- PreHooks are executed in the order they are registered.
+- PostHooks are executed in the reverse order of PreHooks.
+- If a PreHook returns a response, the provider call is skipped and only the PostHook methods of plugins that had their PreHook executed are called in reverse order.
+- The plugin pipeline ensures that for every PreHook executed, the corresponding PostHook will be called.
 
-- **Rate Limiting**: `plugins/rate-limiting/`
-- **Caching**: `plugins/caching/`
-- **Monitoring**: `plugins/monitoring/`
-- **Logging**: `plugins/logging/`
+## 6. Best Practices for Plugin Authors
 
-To use these plugins, you can import them from their respective packages:
+- Always check for both response and error being nil in PostHook.
+- Do not assume either is always present.
+- To recover from an error, set err to nil and return a valid result. Only truly empty errors (no message, no error, no status code, no type) are treated as recoveries by the pipeline.
+- To invalidate a response, set the result to nil and return a non-nil err.
+- Keep plugin logic lightweight and avoid blocking operations in hooks.
+- Use context for cancellation and state passing.
+- Write unit tests for your plugins, including error recovery and response invalidation scenarios.
 
-```golang
-import (
-    "github.com/maximhq/bifrost/plugins/rate-limiting"
-    "github.com/maximhq/bifrost/plugins/caching"
-    // ... other plugin imports
-)
+## 7. Available Plugins
 
-// Initialize with built-in plugins
-client, err := bifrost.Init(schemas.BifrostConfig{
-    Account: &yourAccount,
-    Plugins: []schemas.Plugin{
-        rate_limiting.New(10.0),
-        caching.New(cacheConfig),
-        // ... other plugins
-    },
-})
-```
+Bifrost provides a **[Plugin Store](https://github.com/maximhq/bifrost/tree/main/plugins)** with one-line integrations. For each plugin, refer to its specific documentation for configuration and usage details:
 
-## 6. Best Practices
+`https://github.com/maximhq/bifrost/tree/main/plugins/{plugin_name}`
 
-1. **Plugin Order**
-
-   - Consider the order of plugins carefully
-   - Rate limiting plugins should typically be first
-   - Logging plugins should be last to capture all modifications
-
-2. **Error Handling**
-
-   - Always handle errors in both PreHook and PostHook
-   - Return meaningful error messages
-   - Consider the impact of errors on the request pipeline
-
-3. **Performance**
-
-   - Keep plugin logic lightweight
-   - Avoid blocking operations in hooks
-   - Use context for cancellation
-
-4. **State Management**
-
-   - Be careful with shared state between hooks
-   - Use context for passing data between hooks
-   - Consider thread safety for concurrent requests
-
-5. **Testing**
-   - Write unit tests for your plugins
-   - Test error scenarios
-   - Verify plugin order and execution
-
-## 7. Plugin Development Guidelines
+## 8. Plugin Development Guidelines
 
 1. **Documentation**
 
@@ -242,7 +220,7 @@ client, err := bifrost.Init(schemas.BifrostConfig{
 
    Example `main.go`:
 
-   ```golang
+   ```go
    package your_plugin_name
 
    import (
@@ -254,10 +232,8 @@ client, err := bifrost.Init(schemas.BifrostConfig{
        // Plugin fields
    }
 
-   func New(config YourPluginConfig) *YourPlugin {
-       return &YourPlugin{
-           // Initialize plugin
-       }
+   func (p *YourPlugin) GetName() string {
+       return "YourPlugin"
    }
 
    func (p *YourPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.BifrostResponse, error) {
@@ -265,9 +241,9 @@ client, err := bifrost.Init(schemas.BifrostConfig{
        return req, nil, nil
    }
 
-   func (p *YourPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse) (*schemas.BifrostResponse, error) {
+   func (p *YourPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
        // Implementation
-       return result, nil
+       return result, err, nil
    }
 
    func (p *YourPlugin) Cleanup() error {
