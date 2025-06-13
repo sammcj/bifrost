@@ -9,14 +9,22 @@ import "context"
 // User can provide multiple plugins in the BifrostConfig.
 // PreHooks are executed in the order they are registered.
 // PostHooks are executed in the reverse order of PreHooks.
-
+//
 // PreHooks and PostHooks can be used to implement custom logic, such as:
 // - Rate limiting
 // - Caching
 // - Logging
 // - Monitoring
-
-// No Plugin errors are returned to the caller, they are logged as warnings by the Bifrost instance.
+//
+// Plugin error handling:
+// - No Plugin errors are returned to the caller; they are logged as warnings by the Bifrost instance.
+// - PreHook and PostHook can both modify the request/response and the error. Plugins can recover from errors (set error to nil and provide a response), or invalidate a response (set response to nil and provide an error).
+// - PostHook is always called with both the current response and error, and should handle either being nil.
+// - Only truly empty errors (no message, no error, no status code, no type) are treated as recoveries by the pipeline.
+// - If a PreHook returns a response, the provider call is skipped and only the PostHook methods of plugins that had their PreHook executed are called in reverse order.
+// - The plugin pipeline ensures symmetry: for every PreHook executed, the corresponding PostHook will be called in reverse order.
+//
+// Plugin authors should ensure their hooks are robust to both response and error being nil, and should not assume either is always present.
 
 type Plugin interface {
 	// GetName returns the name of the plugin.
@@ -29,9 +37,10 @@ type Plugin interface {
 	// If a response is returned, the provider call is skipped and only the PostHook methods of plugins that had their PreHook executed are called in reverse order.
 	PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, *BifrostResponse, error)
 
-	// PostHook is called after a response is received from a provider.
-	// It allows plugins to modify the response/error before it is returned to the caller.
-	// Returns the modified response, bifrost error and any error that occurred during processing.
+	// PostHook is called after a response is received from a provider or a PreHook short-circuit.
+	// It allows plugins to modify the response and/or error before it is returned to the caller.
+	// Plugins can recover from errors (set error to nil and provide a response), or invalidate a response (set response to nil and provide an error).
+	// Returns the modified response, bifrost error, and any error that occurred during processing.
 	PostHook(ctx *context.Context, result *BifrostResponse, err *BifrostError) (*BifrostResponse, *BifrostError, error)
 
 	// Cleanup is called on bifrost shutdown.
