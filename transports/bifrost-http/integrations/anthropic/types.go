@@ -10,74 +10,47 @@ import (
 
 var fnTypePtr = bifrost.Ptr(string(schemas.ToolChoiceTypeFunction))
 
-// AnthropicContent represents content in Anthropic message format
-type AnthropicContent struct {
+// AnthropicContentBlock represents content in Anthropic message format
+type AnthropicContentBlock struct {
 	Type      string                `json:"type"`                  // "text", "image", "tool_use", "tool_result"
 	Text      *string               `json:"text,omitempty"`        // For text content
 	ToolUseID *string               `json:"tool_use_id,omitempty"` // For tool_result content
 	ID        *string               `json:"id,omitempty"`          // For tool_use content
 	Name      *string               `json:"name,omitempty"`        // For tool_use content
 	Input     interface{}           `json:"input,omitempty"`       // For tool_use content
-	Content   interface{}           `json:"content,omitempty"`     // For tool_result content
+	Content   AnthropicContent      `json:"content,omitempty"`     // For tool_result content
 	Source    *AnthropicImageSource `json:"source,omitempty"`      // For image content
 }
 
 // AnthropicImageSource represents image source in Anthropic format
 type AnthropicImageSource struct {
-	Type      string `json:"type"`       // "base64" or "url"
-	MediaType string `json:"media_type"` // "image/jpeg", "image/png", etc.
-	Data      string `json:"data"`       // Base64-encoded image data
+	Type      string  `json:"type"`                 // "base64" or "url"
+	MediaType *string `json:"media_type,omitempty"` // "image/jpeg", "image/png", etc.
+	Data      *string `json:"data,omitempty"`       // Base64-encoded image data
+	URL       *string `json:"url,omitempty"`        // URL of the image
 }
 
 // AnthropicMessage represents a message in Anthropic format
 type AnthropicMessage struct {
-	Role    string             `json:"role"`    // "user", "assistant"
-	Content []AnthropicContent `json:"content"` // Array of content blocks
+	Role    string           `json:"role"`    // "user", "assistant"
+	Content AnthropicContent `json:"content"` // Array of content blocks
 }
 
-// UnmarshalJSON implements custom JSON unmarshaling for AnthropicMessage
-// to handle both string and array content formats
-func (m *AnthropicMessage) UnmarshalJSON(data []byte) error {
-	// First, try to unmarshal into a struct with Content as json.RawMessage
-	var temp struct {
-		Role    string          `json:"role"`
-		Content json.RawMessage `json:"content"`
-	}
-
-	if err := json.Unmarshal(data, &temp); err != nil {
-		return err
-	}
-
-	m.Role = temp.Role
-
-	// Try to unmarshal content as string first
-	var contentStr string
-	if err := json.Unmarshal(temp.Content, &contentStr); err == nil {
-		// It's a string, convert to AnthropicContent array
-		m.Content = []AnthropicContent{
-			{
-				Type: "text",
-				Text: &contentStr,
-			},
-		}
-		return nil
-	}
-
-	// Try to unmarshal as array of AnthropicContent
-	var contentArray []AnthropicContent
-	if err := json.Unmarshal(temp.Content, &contentArray); err == nil {
-		m.Content = contentArray
-		return nil
-	}
-
-	return fmt.Errorf("content must be either a string or an array of content objects")
+type AnthropicContent struct {
+	ContentStr    *string
+	ContentBlocks *[]AnthropicContentBlock
 }
 
 // AnthropicTool represents a tool in Anthropic format
 type AnthropicTool struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	InputSchema interface{} `json:"input_schema"`
+	Name        string  `json:"name"`
+	Type        *string `json:"type,omitempty"`
+	Description string  `json:"description"`
+	InputSchema *struct {
+		Type       string                 `json:"type"` // "object"
+		Properties map[string]interface{} `json:"properties"`
+		Required   []string               `json:"required"`
+	} `json:"input_schema,omitempty"`
 }
 
 // AnthropicToolChoice represents tool choice in Anthropic format
@@ -91,7 +64,7 @@ type AnthropicMessageRequest struct {
 	Model         string               `json:"model"`
 	MaxTokens     int                  `json:"max_tokens"`
 	Messages      []AnthropicMessage   `json:"messages"`
-	System        *string              `json:"system,omitempty"`
+	System        *AnthropicContent    `json:"system,omitempty"`
 	Temperature   *float64             `json:"temperature,omitempty"`
 	TopP          *float64             `json:"top_p,omitempty"`
 	TopK          *int                 `json:"top_k,omitempty"`
@@ -101,23 +74,96 @@ type AnthropicMessageRequest struct {
 	ToolChoice    *AnthropicToolChoice `json:"tool_choice,omitempty"`
 }
 
+// AnthropicMessageResponse represents an Anthropic messages API response
+type AnthropicMessageResponse struct {
+	ID           string                  `json:"id"`
+	Type         string                  `json:"type"`
+	Role         string                  `json:"role"`
+	Content      []AnthropicContentBlock `json:"content"`
+	Model        string                  `json:"model"`
+	StopReason   *string                 `json:"stop_reason,omitempty"`
+	StopSequence *string                 `json:"stop_sequence,omitempty"`
+	Usage        *AnthropicUsage         `json:"usage,omitempty"`
+}
+
+// AnthropicUsage represents usage information in Anthropic format
+type AnthropicUsage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+}
+
+// MarshalJSON implements custom JSON marshalling for MessageContent.
+// It marshals either ContentStr or ContentBlocks directly without wrapping.
+func (mc AnthropicContent) MarshalJSON() ([]byte, error) {
+	// Validation: ensure only one field is set at a time
+	if mc.ContentStr != nil && mc.ContentBlocks != nil {
+		return nil, fmt.Errorf("both ContentStr and ContentBlocks are set; only one should be non-nil")
+	}
+
+	if mc.ContentStr != nil {
+		return json.Marshal(*mc.ContentStr)
+	}
+	if mc.ContentBlocks != nil {
+		return json.Marshal(*mc.ContentBlocks)
+	}
+	// If both are nil, return null
+	return json.Marshal(nil)
+}
+
+// UnmarshalJSON implements custom JSON unmarshalling for MessageContent.
+// It determines whether "content" is a string or array and assigns to the appropriate field.
+// It also handles direct string/array content without a wrapper object.
+func (mc *AnthropicContent) UnmarshalJSON(data []byte) error {
+	// First, try to unmarshal as a direct string
+	var stringContent string
+	if err := json.Unmarshal(data, &stringContent); err == nil {
+		mc.ContentStr = &stringContent
+		return nil
+	}
+
+	// Try to unmarshal as a direct array of ContentBlock
+	var arrayContent []AnthropicContentBlock
+	if err := json.Unmarshal(data, &arrayContent); err == nil {
+		mc.ContentBlocks = &arrayContent
+		return nil
+	}
+
+	return fmt.Errorf("content field is neither a string nor an array of ContentBlock")
+}
+
 // ConvertToBifrostRequest converts an Anthropic messages request to Bifrost format
 func (r *AnthropicMessageRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
 	bifrostReq := &schemas.BifrostRequest{
 		Provider: schemas.Anthropic,
 		Model:    r.Model,
-		Input: schemas.RequestInput{
-			ChatCompletionInput: &[]schemas.BifrostMessage{},
-		},
 	}
 
+	messages := []schemas.BifrostMessage{}
+
 	// Add system message if present
-	if r.System != nil && *r.System != "" {
-		systemMsg := schemas.BifrostMessage{
-			Role:    schemas.ModelChatMessageRoleSystem,
-			Content: r.System,
+	if r.System != nil {
+		if r.System.ContentStr != nil && *r.System.ContentStr != "" {
+			messages = append(messages, schemas.BifrostMessage{
+				Role: schemas.ModelChatMessageRoleSystem,
+				Content: schemas.MessageContent{
+					ContentStr: r.System.ContentStr,
+				},
+			})
+		} else if r.System.ContentBlocks != nil {
+			contentBlocks := []schemas.ContentBlock{}
+			for _, block := range *r.System.ContentBlocks {
+				contentBlocks = append(contentBlocks, schemas.ContentBlock{
+					Type: schemas.ContentBlockTypeText,
+					Text: block.Text,
+				})
+			}
+			messages = append(messages, schemas.BifrostMessage{
+				Role: schemas.ModelChatMessageRoleSystem,
+				Content: schemas.MessageContent{
+					ContentBlocks: &contentBlocks,
+				},
+			})
 		}
-		*bifrostReq.Input.ChatCompletionInput = append(*bifrostReq.Input.ChatCompletionInput, systemMsg)
 	}
 
 	// Convert messages
@@ -125,75 +171,117 @@ func (r *AnthropicMessageRequest) ConvertToBifrostRequest() *schemas.BifrostRequ
 		var bifrostMsg schemas.BifrostMessage
 		bifrostMsg.Role = schemas.ModelChatMessageRole(msg.Role)
 
-		// Handle different content types
-		var toolCalls []schemas.ToolCall
-		var textContents []string
+		if msg.Content.ContentStr != nil {
+			bifrostMsg.Content = schemas.MessageContent{
+				ContentStr: msg.Content.ContentStr,
+			}
+		} else if msg.Content.ContentBlocks != nil {
+			// Handle different content types
+			var toolCalls []schemas.ToolCall
+			var contentBlocks []schemas.ContentBlock
 
-		for _, content := range msg.Content {
-			switch content.Type {
-			case "text":
-				if content.Text != nil {
-					textContents = append(textContents, *content.Text)
-				}
-			case "image":
-				if content.Source != nil {
-					bifrostMsg.UserMessage = &schemas.UserMessage{
-						ImageContent: convertAnthropicImageSource(content.Source),
+			for _, content := range *msg.Content.ContentBlocks {
+				switch content.Type {
+				case "text":
+					if content.Text != nil {
+						contentBlocks = append(contentBlocks, schemas.ContentBlock{
+							Type: schemas.ContentBlockTypeText,
+							Text: content.Text,
+						})
 					}
-				}
-			case "tool_use":
-				if content.ID != nil && content.Name != nil {
-					tc := schemas.ToolCall{
-						Type: fnTypePtr,
-						ID:   content.ID,
-						Function: schemas.FunctionCall{
-							Name:      content.Name,
-							Arguments: jsonifyInput(content.Input),
-						},
-					}
-					toolCalls = append(toolCalls, tc)
-				}
-			case "tool_result":
-				if content.ToolUseID != nil {
-					bifrostMsg.ToolMessage = &schemas.ToolMessage{
-						ToolCallID: content.ToolUseID,
-					}
-					if content.Content != nil {
-						if str, ok := content.Content.(string); ok {
-							bifrostMsg.Content = &str
-						} else {
-							jsonStr := jsonifyInput(content.Content)
-							bifrostMsg.Content = &jsonStr
-						}
-					}
+				case "image":
 					if content.Source != nil {
-						bifrostMsg.ToolMessage.ImageContent = convertAnthropicImageSource(content.Source)
+						contentBlocks = append(contentBlocks, schemas.ContentBlock{
+							Type: schemas.ContentBlockTypeImage,
+							ImageURL: &schemas.ImageURLStruct{
+								URL: func() string {
+									if content.Source.Data != nil {
+										mime := "image/png"
+										if content.Source.MediaType != nil && *content.Source.MediaType != "" {
+											mime = *content.Source.MediaType
+										}
+										return "data:" + mime + ";base64," + *content.Source.Data
+									}
+									if content.Source.URL != nil {
+										return *content.Source.URL
+									}
+									return ""
+								}(),
+							},
+						})
 					}
-					bifrostMsg.Role = schemas.ModelChatMessageRoleTool
+				case "tool_use":
+					if content.ID != nil && content.Name != nil {
+						tc := schemas.ToolCall{
+							Type: fnTypePtr,
+							ID:   content.ID,
+							Function: schemas.FunctionCall{
+								Name:      content.Name,
+								Arguments: jsonifyInput(content.Input),
+							},
+						}
+						toolCalls = append(toolCalls, tc)
+					}
+				case "tool_result":
+					if content.ToolUseID != nil {
+						bifrostMsg.ToolMessage = &schemas.ToolMessage{
+							ToolCallID: content.ToolUseID,
+						}
+						if content.Content.ContentStr != nil {
+							contentBlocks = append(contentBlocks, schemas.ContentBlock{
+								Type: schemas.ContentBlockTypeText,
+								Text: content.Content.ContentStr,
+							})
+						} else if content.Content.ContentBlocks != nil {
+							for _, block := range *content.Content.ContentBlocks {
+								if block.Text != nil {
+									contentBlocks = append(contentBlocks, schemas.ContentBlock{
+										Type: schemas.ContentBlockTypeText,
+										Text: block.Text,
+									})
+								} else if block.Source != nil {
+									contentBlocks = append(contentBlocks, schemas.ContentBlock{
+										Type: schemas.ContentBlockTypeImage,
+										ImageURL: &schemas.ImageURLStruct{
+											URL: func() string {
+												if block.Source.Data != nil {
+													mime := "image/png"
+													if block.Source.MediaType != nil && *block.Source.MediaType != "" {
+														mime = *block.Source.MediaType
+													}
+													return "data:" + mime + ";base64," + *block.Source.Data
+												}
+												if block.Source.URL != nil {
+													return *block.Source.URL
+												}
+												return ""
+											}()},
+									})
+								}
+							}
+						}
+						bifrostMsg.Role = schemas.ModelChatMessageRoleTool
+					}
+				}
+			}
+
+			// Concatenate all text contents
+			if len(contentBlocks) > 0 {
+				bifrostMsg.Content = schemas.MessageContent{
+					ContentBlocks: &contentBlocks,
+				}
+			}
+
+			if len(toolCalls) > 0 && msg.Role == string(schemas.ModelChatMessageRoleAssistant) {
+				bifrostMsg.AssistantMessage = &schemas.AssistantMessage{
+					ToolCalls: &toolCalls,
 				}
 			}
 		}
-
-		// Concatenate all text contents
-		if len(textContents) > 0 {
-			concatenatedText := ""
-			for i, text := range textContents {
-				if i > 0 {
-					concatenatedText += "\n" // Add newline separator between text blocks
-				}
-				concatenatedText += text
-			}
-			bifrostMsg.Content = &concatenatedText
-		}
-
-		if len(toolCalls) > 0 {
-			bifrostMsg.AssistantMessage = &schemas.AssistantMessage{
-				ToolCalls: &toolCalls,
-			}
-		}
-
-		*bifrostReq.Input.ChatCompletionInput = append(*bifrostReq.Input.ChatCompletionInput, bifrostMsg)
+		messages = append(messages, bifrostMsg)
 	}
+
+	bifrostReq.Input.ChatCompletionInput = &messages
 
 	// Convert parameters
 	if r.MaxTokens > 0 || r.Temperature != nil || r.TopP != nil || r.TopK != nil || r.StopSequences != nil {
@@ -227,46 +315,19 @@ func (r *AnthropicMessageRequest) ConvertToBifrostRequest() *schemas.BifrostRequ
 				Type: "object",
 			}
 			if tool.InputSchema != nil {
-				if schemaMap, ok := tool.InputSchema.(map[string]interface{}); ok {
-					if typeVal, ok := schemaMap["type"].(string); ok {
-						params.Type = typeVal
-					}
-					if desc, ok := schemaMap["description"].(string); ok {
-						params.Description = &desc
-					}
-					if required, ok := schemaMap["required"].([]interface{}); ok {
-						reqStrings := make([]string, len(required))
-						for i, req := range required {
-							if reqStr, ok := req.(string); ok {
-								reqStrings[i] = reqStr
-							}
-						}
-						params.Required = reqStrings
-					}
-					if properties, ok := schemaMap["properties"].(map[string]interface{}); ok {
-						params.Properties = properties
-					}
-					if enum, ok := schemaMap["enum"].([]interface{}); ok {
-						enumStrings := make([]string, len(enum))
-						for i, e := range enum {
-							if eStr, ok := e.(string); ok {
-								enumStrings[i] = eStr
-							}
-						}
-						params.Enum = &enumStrings
-					}
-				}
+				params.Type = tool.InputSchema.Type
+				params.Required = tool.InputSchema.Required
+				params.Properties = tool.InputSchema.Properties
 			}
 
-			t := schemas.Tool{
+			tools = append(tools, schemas.Tool{
 				Type: "function",
 				Function: schemas.Function{
 					Name:        tool.Name,
 					Description: tool.Description,
 					Parameters:  params,
 				},
-			}
-			tools = append(tools, t)
+			})
 		}
 		if bifrostReq.Params == nil {
 			bifrostReq.Params = &schemas.ModelParameters{}
@@ -310,24 +371,6 @@ func jsonifyInput(input interface{}) string {
 	return string(jsonBytes)
 }
 
-// AnthropicMessageResponse represents an Anthropic messages API response
-type AnthropicMessageResponse struct {
-	ID           string             `json:"id"`
-	Type         string             `json:"type"`
-	Role         string             `json:"role"`
-	Content      []AnthropicContent `json:"content"`
-	Model        string             `json:"model"`
-	StopReason   *string            `json:"stop_reason,omitempty"`
-	StopSequence *string            `json:"stop_sequence,omitempty"`
-	Usage        *AnthropicUsage    `json:"usage,omitempty"`
-}
-
-// AnthropicUsage represents usage information in Anthropic format
-type AnthropicUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
-}
-
 // DeriveAnthropicFromBifrostResponse converts a Bifrost response to Anthropic format
 func DeriveAnthropicFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *AnthropicMessageResponse {
 	if bifrostResp == nil {
@@ -337,7 +380,7 @@ func DeriveAnthropicFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *A
 	anthropicResp := &AnthropicMessageResponse{
 		ID:    bifrostResp.ID,
 		Type:  "message",
-		Role:  "assistant",
+		Role:  string(schemas.ModelChatMessageRoleAssistant),
 		Model: bifrostResp.Model,
 	}
 
@@ -350,7 +393,7 @@ func DeriveAnthropicFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *A
 	}
 
 	// Convert choices to content
-	var content []AnthropicContent
+	var content []AnthropicContentBlock
 	if len(bifrostResp.Choices) > 0 {
 		choice := bifrostResp.Choices[0] // Anthropic typically returns one choice
 
@@ -363,18 +406,27 @@ func DeriveAnthropicFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *A
 
 		// Add thinking content if present
 		if choice.Message.AssistantMessage != nil && choice.Message.AssistantMessage.Thought != nil && *choice.Message.AssistantMessage.Thought != "" {
-			content = append(content, AnthropicContent{
+			content = append(content, AnthropicContentBlock{
 				Type: "thinking",
 				Text: choice.Message.AssistantMessage.Thought,
 			})
 		}
 
 		// Add text content
-		if choice.Message.Content != nil && *choice.Message.Content != "" {
-			content = append(content, AnthropicContent{
+		if choice.Message.Content.ContentStr != nil && *choice.Message.Content.ContentStr != "" {
+			content = append(content, AnthropicContentBlock{
 				Type: "text",
-				Text: choice.Message.Content,
+				Text: choice.Message.Content.ContentStr,
 			})
+		} else if choice.Message.Content.ContentBlocks != nil {
+			for _, block := range *choice.Message.Content.ContentBlocks {
+				if block.Text != nil {
+					content = append(content, AnthropicContentBlock{
+						Type: "text",
+						Text: block.Text,
+					})
+				}
+			}
 		}
 
 		// Add tool calls as tool_use content
@@ -390,46 +442,20 @@ func DeriveAnthropicFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *A
 					input = map[string]interface{}{}
 				}
 
-				tc := AnthropicContent{
+				content = append(content, AnthropicContentBlock{
 					Type:  "tool_use",
 					ID:    toolCall.ID,
 					Name:  toolCall.Function.Name,
 					Input: input,
-				}
-				content = append(content, tc)
+				})
 			}
 		}
 	}
 
 	if content == nil {
-		content = []AnthropicContent{}
+		content = []AnthropicContentBlock{}
 	}
 
 	anthropicResp.Content = content
 	return anthropicResp
-}
-
-// convertAnthropicImageSource converts an Anthropic image source to Bifrost ImageContent format
-func convertAnthropicImageSource(source *AnthropicImageSource) *schemas.ImageContent {
-	if source == nil {
-		return nil
-	}
-
-	// Convert Anthropic source type to Bifrost ImageContentType
-	var contentType schemas.ImageContentType
-	switch source.Type {
-	case "base64":
-		contentType = schemas.ImageContentTypeBase64
-	case "url":
-		contentType = schemas.ImageContentTypeURL
-	default:
-		// Default to base64 if unknown type, as this is more common in Anthropic
-		contentType = schemas.ImageContentTypeBase64
-	}
-
-	return &schemas.ImageContent{
-		Type:      contentType,
-		URL:       source.Data,
-		MediaType: &source.MediaType,
-	}
 }

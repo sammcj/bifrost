@@ -47,17 +47,154 @@ func (r *GeminiChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
 		},
 	}
 
-	// Convert system instruction if present
+	messages := []schemas.BifrostMessage{}
+
+	allGenAiMessages := []genai_sdk.Content{}
 	if r.SystemInstruction != nil {
-		systemMsgs := r.convertContentToBifrostMessages(*r.SystemInstruction, schemas.ModelChatMessageRoleSystem)
-		*bifrostReq.Input.ChatCompletionInput = append(*bifrostReq.Input.ChatCompletionInput, systemMsgs...)
+		allGenAiMessages = append(allGenAiMessages, *r.SystemInstruction)
+	}
+	allGenAiMessages = append(allGenAiMessages, r.Contents...)
+
+	for _, content := range allGenAiMessages {
+		if len(content.Parts) == 0 {
+			continue
+		}
+
+		// Handle multiple parts - collect all content and tool calls
+		var toolCalls []schemas.ToolCall
+		var contentBlocks []schemas.ContentBlock
+		var thoughtStr string // Track thought content for assistant/model
+
+		for _, part := range content.Parts {
+			switch {
+			case part.Text != "":
+				// Handle thought content specially for assistant messages
+				if part.Thought &&
+					(content.Role == string(schemas.ModelChatMessageRoleAssistant) || content.Role == string(genai_sdk.RoleModel)) {
+					thoughtStr = thoughtStr + part.Text + "\n"
+				} else {
+					contentBlocks = append(contentBlocks, schemas.ContentBlock{
+						Type: schemas.ContentBlockTypeText,
+						Text: &part.Text,
+					})
+				}
+
+			case part.FunctionCall != nil:
+				// Only add function calls for assistant messages
+				if content.Role == string(schemas.ModelChatMessageRoleAssistant) || content.Role == string(genai_sdk.RoleModel) {
+					jsonArgs, err := json.Marshal(part.FunctionCall.Args)
+					if err != nil {
+						jsonArgs = []byte(fmt.Sprintf("%v", part.FunctionCall.Args))
+					}
+					id := part.FunctionCall.ID     // create local copy
+					name := part.FunctionCall.Name // create local copy
+					toolCall := schemas.ToolCall{
+						ID:   bifrost.Ptr(id),
+						Type: fnTypePtr,
+						Function: schemas.FunctionCall{
+							Name:      &name,
+							Arguments: string(jsonArgs),
+						},
+					}
+					toolCalls = append(toolCalls, toolCall)
+				}
+
+			case part.FunctionResponse != nil:
+				// Create a separate tool response message
+				responseContent, err := json.Marshal(part.FunctionResponse.Response)
+				if err != nil {
+					responseContent = []byte(fmt.Sprintf("%v", part.FunctionResponse.Response))
+				}
+
+				toolResponseMsg := schemas.BifrostMessage{
+					Role: schemas.ModelChatMessageRoleTool,
+					Content: schemas.MessageContent{
+						ContentStr: bifrost.Ptr(string(responseContent)),
+					},
+					ToolMessage: &schemas.ToolMessage{
+						ToolCallID: &part.FunctionResponse.Name,
+					},
+				}
+
+				messages = append(messages, toolResponseMsg)
+
+			case part.InlineData != nil:
+				// Handle inline images/media - only append if it's actually an image
+				if isImageMimeType(part.InlineData.MIMEType) {
+					contentBlocks = append(contentBlocks, schemas.ContentBlock{
+						Type: schemas.ContentBlockTypeImage,
+						ImageURL: &schemas.ImageURLStruct{
+							URL: fmt.Sprintf("data:%s;base64,%s", part.InlineData.MIMEType, base64.StdEncoding.EncodeToString(part.InlineData.Data)),
+						},
+					})
+				}
+
+			case part.FileData != nil:
+				// Handle file data - only append if it's actually an image
+				if isImageMimeType(part.FileData.MIMEType) {
+					contentBlocks = append(contentBlocks, schemas.ContentBlock{
+						Type: schemas.ContentBlockTypeImage,
+						ImageURL: &schemas.ImageURLStruct{
+							URL: part.FileData.FileURI,
+						},
+					})
+				}
+
+			case part.ExecutableCode != nil:
+				// Handle executable code as text content
+				codeText := fmt.Sprintf("```%s\n%s\n```", part.ExecutableCode.Language, part.ExecutableCode.Code)
+				contentBlocks = append(contentBlocks, schemas.ContentBlock{
+					Type: schemas.ContentBlockTypeText,
+					Text: &codeText,
+				})
+
+			case part.CodeExecutionResult != nil:
+				// Handle code execution results as text content
+				resultText := fmt.Sprintf("Code execution result (%s):\n%s", part.CodeExecutionResult.Outcome, part.CodeExecutionResult.Output)
+				contentBlocks = append(contentBlocks, schemas.ContentBlock{
+					Type: schemas.ContentBlockTypeText,
+					Text: &resultText,
+				})
+			}
+		}
+
+		// Only create message if there's actual content, tool calls, or thought content
+		if len(contentBlocks) > 0 || len(toolCalls) > 0 || thoughtStr != "" {
+			// Create main message with content blocks
+			bifrostMsg := schemas.BifrostMessage{
+				Role: func(r string) schemas.ModelChatMessageRole {
+					if r == string(genai_sdk.RoleModel) { // GenAI's internal alias
+						return schemas.ModelChatMessageRoleAssistant
+					}
+					return schemas.ModelChatMessageRole(r)
+				}(content.Role),
+			}
+
+			// Set content only if there are content blocks
+			if len(contentBlocks) > 0 {
+				bifrostMsg.Content = schemas.MessageContent{
+					ContentBlocks: &contentBlocks,
+				}
+			}
+
+			// Set assistant-specific fields for assistant/model messages
+			if content.Role == string(schemas.ModelChatMessageRoleAssistant) || content.Role == string(genai_sdk.RoleModel) {
+				if len(toolCalls) > 0 || thoughtStr != "" {
+					bifrostMsg.AssistantMessage = &schemas.AssistantMessage{}
+					if len(toolCalls) > 0 {
+						bifrostMsg.AssistantMessage.ToolCalls = &toolCalls
+					}
+					if thoughtStr != "" {
+						bifrostMsg.AssistantMessage.Thought = &thoughtStr
+					}
+				}
+			}
+
+			messages = append(messages, bifrostMsg)
+		}
 	}
 
-	// Convert messages (contents)
-	for _, content := range r.Contents {
-		messages := r.convertContentToBifrostMessages(content, schemas.ModelChatMessageRole(content.Role))
-		*bifrostReq.Input.ChatCompletionInput = append(*bifrostReq.Input.ChatCompletionInput, messages...)
-	}
+	bifrostReq.Input.ChatCompletionInput = &messages
 
 	// Convert generation config to parameters
 	if params := r.convertGenerationConfigToParams(); params != nil {
@@ -134,125 +271,6 @@ func (r *GeminiChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
 	}
 
 	return bifrostReq
-}
-
-// convertContentToBifrostMessage converts a Gemini Content to BifrostMessage(s)
-// Returns multiple messages when there are multiple images to ensure each image gets its own message
-func (r *GeminiChatRequest) convertContentToBifrostMessages(content genai_sdk.Content, role schemas.ModelChatMessageRole) []schemas.BifrostMessage {
-	if len(content.Parts) == 0 {
-		return nil
-	}
-
-	// Handle multiple parts - concatenate text parts and handle other types
-	var textParts []string
-	var toolCalls []schemas.ToolCall
-	var imageContents []schemas.ImageContent
-
-	for _, part := range content.Parts {
-		switch {
-		case part.Text != "":
-			textParts = append(textParts, part.Text)
-
-		case part.FunctionCall != nil:
-			jsonArgs, err := json.Marshal(part.FunctionCall.Args)
-			if err != nil {
-				jsonArgs = []byte(fmt.Sprintf("%v", part.FunctionCall.Args))
-			}
-			toolCall := schemas.ToolCall{
-				ID:   bifrost.Ptr(part.FunctionCall.ID),
-				Type: fnTypePtr,
-				Function: schemas.FunctionCall{
-					Name:      &part.FunctionCall.Name,
-					Arguments: string(jsonArgs),
-				},
-			}
-
-			toolCalls = append(toolCalls, toolCall)
-
-		case part.InlineData != nil:
-			// Handle inline images/media
-			imageContent := schemas.ImageContent{
-				Type:      schemas.ImageContentTypeBase64,
-				URL:       fmt.Sprintf("data:%s;base64,%s", part.InlineData.MIMEType, base64.StdEncoding.EncodeToString(part.InlineData.Data)),
-				MediaType: &part.InlineData.MIMEType,
-			}
-			imageContents = append(imageContents, imageContent)
-
-		case part.FileData != nil:
-			// Handle file references
-			imageContent := schemas.ImageContent{
-				Type:      schemas.ImageContentTypeURL,
-				URL:       part.FileData.FileURI,
-				MediaType: &part.FileData.MIMEType,
-			}
-			imageContents = append(imageContents, imageContent)
-
-		case part.FunctionResponse != nil:
-			responseContent, err := json.Marshal(part.FunctionResponse.Response)
-			if err != nil {
-				responseContent = []byte(fmt.Sprintf("%v", part.FunctionResponse.Response))
-			}
-
-			toolResponseMsg := schemas.BifrostMessage{
-				Role:    schemas.ModelChatMessageRoleTool,
-				Content: bifrost.Ptr(string(responseContent)),
-				ToolMessage: &schemas.ToolMessage{
-					ToolCallID: &part.FunctionResponse.Name,
-				},
-			}
-
-			return []schemas.BifrostMessage{toolResponseMsg}
-		}
-	}
-
-	var messages []schemas.BifrostMessage
-
-	// Create main message with text content and tool calls
-	mainMsg := schemas.BifrostMessage{
-		Role: role,
-	}
-
-	// Set text content if we have any
-	if len(textParts) > 0 {
-		combinedText := strings.Join(textParts, "\n\n")
-		mainMsg.Content = &combinedText
-	}
-
-	// Set tool calls if we have any
-	if len(toolCalls) > 0 && role == schemas.ModelChatMessageRoleAssistant {
-		mainMsg.AssistantMessage = &schemas.AssistantMessage{
-			ToolCalls: &toolCalls,
-		}
-	}
-
-	// Add main message if it has content or tool calls
-	if mainMsg.Content != nil || (mainMsg.AssistantMessage != nil && mainMsg.AssistantMessage.ToolCalls != nil) {
-		messages = append(messages, mainMsg)
-	}
-
-	// Create separate messages for each image
-	for _, imageContent := range imageContents {
-		imageMsg := schemas.BifrostMessage{
-			Role: role,
-		}
-
-		// Set image content based on role
-		switch role {
-		case schemas.ModelChatMessageRoleUser:
-			imageMsg.UserMessage = &schemas.UserMessage{
-				ImageContent: &imageContent,
-			}
-			messages = append(messages, imageMsg)
-
-		case schemas.ModelChatMessageRoleTool:
-			imageMsg.ToolMessage = &schemas.ToolMessage{
-				ImageContent: &imageContent,
-			}
-			messages = append(messages, imageMsg)
-		}
-	}
-
-	return messages
 }
 
 // convertGenerationConfigToParams converts Gemini GenerationConfig to ModelParameters
@@ -364,8 +382,14 @@ func DeriveGenAIFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *genai
 		}
 
 		parts := []*genai_sdk.Part{}
-		if choice.Message.Content != nil && *choice.Message.Content != "" {
-			parts = append(parts, &genai_sdk.Part{Text: *choice.Message.Content})
+		if choice.Message.Content.ContentStr != nil && *choice.Message.Content.ContentStr != "" {
+			parts = append(parts, &genai_sdk.Part{Text: *choice.Message.Content.ContentStr})
+		} else if choice.Message.Content.ContentBlocks != nil {
+			for _, block := range *choice.Message.Content.ContentBlocks {
+				if block.Text != nil {
+					parts = append(parts, &genai_sdk.Part{Text: *block.Text})
+				}
+			}
 		}
 
 		// Handle tool calls
@@ -439,4 +463,47 @@ func DeriveGenAIFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *genai
 	}
 
 	return genaiResp
+}
+
+// isImageMimeType checks if a MIME type represents an image format
+func isImageMimeType(mimeType string) bool {
+	if mimeType == "" {
+		return false
+	}
+
+	// Convert to lowercase for case-insensitive comparison
+	mimeType = strings.ToLower(mimeType)
+
+	// Remove any parameters (e.g., "image/jpeg; charset=utf-8" -> "image/jpeg")
+	if idx := strings.Index(mimeType, ";"); idx != -1 {
+		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
+
+	// If it starts with "image/", it's an image
+	if strings.HasPrefix(mimeType, "image/") {
+		return true
+	}
+
+	// Check for common image formats that might not have the "image/" prefix
+	commonImageTypes := []string{
+		"jpeg",
+		"jpg",
+		"png",
+		"gif",
+		"webp",
+		"bmp",
+		"svg",
+		"tiff",
+		"ico",
+		"avif",
+	}
+
+	// Check if the mimeType contains any of the common image type strings
+	for _, imageType := range commonImageTypes {
+		if strings.Contains(mimeType, imageType) {
+			return true
+		}
+	}
+
+	return false
 }
