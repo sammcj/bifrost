@@ -27,6 +27,8 @@ const (
 
 // NetworkConfig represents the network configuration for provider connections.
 type NetworkConfig struct {
+	// BaseURL is only supported for OpenAI, Anthropic and Cohere providers
+	BaseURL                        string        `json:"base_url,omitempty"`                 // Base URL for the provider (optional)
 	DefaultRequestTimeoutInSeconds int           `json:"default_request_timeout_in_seconds"` // Default timeout for requests
 	MaxRetries                     int           `json:"max_retries"`                        // Maximum number of retries
 	RetryBackoffInitial            time.Duration `json:"retry_backoff_initial"`              // Initial backoff duration

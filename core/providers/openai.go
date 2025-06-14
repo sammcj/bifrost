@@ -5,6 +5,7 @@ package providers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -64,8 +65,9 @@ func releaseOpenAIResponse(resp *OpenAIResponse) {
 
 // OpenAIProvider implements the Provider interface for OpenAI's API.
 type OpenAIProvider struct {
-	logger schemas.Logger   // Logger for provider operations
-	client *fasthttp.Client // HTTP client for API requests
+	logger  schemas.Logger   // Logger for provider operations
+	client  *fasthttp.Client // HTTP client for API requests
+	baseURL string           // Base URL for the provider
 }
 
 // NewOpenAIProvider creates a new OpenAI provider instance.
@@ -89,9 +91,15 @@ func NewOpenAIProvider(config *schemas.ProviderConfig, logger schemas.Logger) *O
 	// Configure proxy if provided
 	client = configureProxy(client, config.ProxyConfig, logger)
 
+	baseURL := strings.TrimRight(config.NetworkConfig.BaseURL, "/")
+	if baseURL == "" {
+		baseURL = "https://api.openai.com"
+	}
+
 	return &OpenAIProvider{
-		logger: logger,
-		client: client,
+		logger:  logger,
+		client:  client,
+		baseURL: baseURL,
 	}
 }
 
@@ -139,7 +147,7 @@ func (provider *OpenAIProvider) ChatCompletion(ctx context.Context, model, key s
 	defer fasthttp.ReleaseRequest(req)
 	defer fasthttp.ReleaseResponse(resp)
 
-	req.SetRequestURI("https://api.openai.com/v1/chat/completions")
+	req.SetRequestURI(provider.baseURL + "/v1/chat/completions")
 	req.Header.SetMethod("POST")
 	req.Header.SetContentType("application/json")
 	req.Header.Set("Authorization", "Bearer "+key)

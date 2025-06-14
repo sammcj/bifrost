@@ -50,13 +50,13 @@ type Bifrost struct {
 	backgroundCtx       context.Context                               // Shared background context for nil context handling
 }
 
-// PluginPipeline encapsulates the execution of plugin PreHooks and PostHooks, tracks which plugins ran, and manages short-circuiting and error aggregation.
+// PluginPipeline encapsulates the execution of plugin PreHooks and PostHooks, tracks how many plugins ran, and manages short-circuiting and error aggregation.
 type PluginPipeline struct {
 	plugins []schemas.Plugin
 	logger  schemas.Logger
 
-	// Indices of plugins whose PreHook ran (for reverse PostHook)
-	preHookRan []int
+	// Number of PreHooks that were executed (used to determine which PostHooks to run in reverse order)
+	executedPreHooks int
 	// Errors from PreHooks and PostHooks
 	preHookErrors  []error
 	postHookErrors []error
@@ -70,7 +70,7 @@ func NewPluginPipeline(plugins []schemas.Plugin, logger schemas.Logger) *PluginP
 	}
 }
 
-// RunPreHooks executes PreHooks in order, tracks which ran, and returns the final request, any short-circuit response, and error.
+// RunPreHooks executes PreHooks in order, tracks how many ran, and returns the final request, any short-circuit response, and the count.
 func (p *PluginPipeline) RunPreHooks(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.BifrostResponse, int) {
 	var resp *schemas.BifrostResponse
 	var err error
@@ -80,18 +80,25 @@ func (p *PluginPipeline) RunPreHooks(ctx *context.Context, req *schemas.BifrostR
 			p.preHookErrors = append(p.preHookErrors, err)
 			p.logger.Warn(fmt.Sprintf("Error in PreHook for plugin %s: %v", plugin.GetName(), err))
 		}
-		p.preHookRan = append(p.preHookRan, i)
+		p.executedPreHooks = i + 1
 		if resp != nil {
-			return req, resp, i + 1 // short-circuit: only plugins up to and including i ran
+			return req, resp, p.executedPreHooks // short-circuit: only plugins up to and including i ran
 		}
 	}
-	return req, nil, len(p.plugins)
+	return req, nil, p.executedPreHooks
 }
 
 // RunPostHooks executes PostHooks in reverse order for the plugins whose PreHook ran.
 // Accepts the response and error, and allows plugins to transform either (e.g., recover from error, or invalidate a response).
-// Returns the final response and error after all hooks. If both are set, error takes precedence unless a plugin clears it.
+// Returns the final response and error after all hooks. If both are set, error takes precedence unless error is nil.
 func (p *PluginPipeline) RunPostHooks(ctx *context.Context, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError, count int) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	// Defensive: ensure count is within valid bounds
+	if count < 0 {
+		count = 0
+	}
+	if count > len(p.plugins) {
+		count = len(p.plugins)
+	}
 	var err error
 	for i := count - 1; i >= 0; i-- {
 		plugin := p.plugins[i]
@@ -105,7 +112,8 @@ func (p *PluginPipeline) RunPostHooks(ctx *context.Context, resp *schemas.Bifros
 	}
 	// Final logic: if both are set, error takes precedence, unless error is nil
 	if bifrostErr != nil {
-		if resp != nil && bifrostErr.Error.Message == "" && bifrostErr.Error.Error == nil {
+		if resp != nil && bifrostErr.StatusCode == nil && bifrostErr.Error.Type == nil &&
+			bifrostErr.Error.Message == "" && bifrostErr.Error.Error == nil {
 			// Defensive: treat as recovery if error is empty
 			return resp, nil
 		}
@@ -623,6 +631,7 @@ func (bifrost *Bifrost) tryTextCompletion(req *schemas.BifrostRequest, ctx conte
 	}
 
 	var result *schemas.BifrostResponse
+	var resp *schemas.BifrostResponse
 	select {
 	case result = <-msg.Response:
 		resp, bifrostErr := pipeline.RunPostHooks(&ctx, result, nil, len(bifrost.plugins))
@@ -634,7 +643,7 @@ func (bifrost *Bifrost) tryTextCompletion(req *schemas.BifrostRequest, ctx conte
 		return resp, nil
 	case bifrostErrVal := <-msg.Err:
 		bifrostErrPtr := &bifrostErrVal
-		resp, bifrostErrPtr := pipeline.RunPostHooks(&ctx, nil, bifrostErrPtr, len(bifrost.plugins))
+		resp, bifrostErrPtr = pipeline.RunPostHooks(&ctx, nil, bifrostErrPtr, len(bifrost.plugins))
 		bifrost.releaseChannelMessage(msg)
 		if bifrostErrPtr != nil {
 			return nil, bifrostErrPtr
@@ -742,6 +751,7 @@ func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx conte
 	}
 
 	var result *schemas.BifrostResponse
+	var resp *schemas.BifrostResponse
 	select {
 	case result = <-msg.Response:
 		resp, bifrostErr := pipeline.RunPostHooks(&ctx, result, nil, len(bifrost.plugins))
@@ -753,7 +763,7 @@ func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx conte
 		return resp, nil
 	case bifrostErrVal := <-msg.Err:
 		bifrostErrPtr := &bifrostErrVal
-		resp, bifrostErrPtr := pipeline.RunPostHooks(&ctx, nil, bifrostErrPtr, len(bifrost.plugins))
+		resp, bifrostErrPtr = pipeline.RunPostHooks(&ctx, nil, bifrostErrPtr, len(bifrost.plugins))
 		bifrost.releaseChannelMessage(msg)
 		if bifrostErrPtr != nil {
 			return nil, bifrostErrPtr

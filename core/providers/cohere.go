@@ -95,8 +95,9 @@ type CohereError struct {
 
 // CohereProvider implements the Provider interface for Cohere.
 type CohereProvider struct {
-	logger schemas.Logger   // Logger for provider operations
-	client *fasthttp.Client // HTTP client for API requests
+	logger  schemas.Logger   // Logger for provider operations
+	client  *fasthttp.Client // HTTP client for API requests
+	baseURL string           // Base URL for the provider
 }
 
 // NewCohereProvider creates a new Cohere provider instance.
@@ -117,9 +118,15 @@ func NewCohereProvider(config *schemas.ProviderConfig, logger schemas.Logger) *C
 		bifrostResponsePool.Put(&schemas.BifrostResponse{})
 	}
 
+	baseURL := strings.TrimRight(config.NetworkConfig.BaseURL, "/")
+	if baseURL == "" {
+		baseURL = "https://api.cohere.ai"
+	}
+
 	return &CohereProvider{
-		logger: logger,
-		client: client,
+		logger:  logger,
+		client:  client,
+		baseURL: baseURL,
 	}
 }
 
@@ -339,7 +346,7 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model, key s
 	defer fasthttp.ReleaseRequest(req)
 	defer fasthttp.ReleaseResponse(resp)
 
-	req.SetRequestURI("https://api.cohere.ai/v1/chat")
+	req.SetRequestURI(provider.baseURL + "/v1/chat")
 	req.Header.SetMethod("POST")
 	req.Header.SetContentType("application/json")
 	req.Header.Set("Authorization", "Bearer "+key)
