@@ -44,11 +44,11 @@ type ConfigMap map[schemas.ModelProvider]ProviderConfig
 // Example:
 //
 //	"meta_config": {
-//		"secret_access_key": "env.BEDROCK_ACCESS_KEY"
-//		"region": "env.BEDROCK_REGION"
+//		"secret_access_key": "env.AWS_SECRET_ACCESS_KEY"
+//		"region": "env.AWS_REGION"
 //	}
 //
-// In this example, BEDROCK_ACCESS_KEY and BEDROCK_REGION refer to keys in environment variables.
+// In this example, AWS_SECRET_ACCESS_KEY and AWS_REGION refer to keys in environment variables.
 func ReadConfig(configLocation string) ConfigMap {
 	data, err := os.ReadFile(configLocation)
 	if err != nil {
