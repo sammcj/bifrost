@@ -122,9 +122,6 @@ You can run specific scenarios across all providers:
 # Test only chat completion
 go test -v ./tests/core-providers/ -run "Chat"
 
-# Test only streaming
-go test -v ./tests/core-providers/ -run "Streaming"
-
 # Test only function calling
 go test -v ./tests/core-providers/ -run "Function"
 ```
@@ -184,8 +181,6 @@ Each provider is tested against these scenarios when supported:
 - Simple Chat Completion
 - Multi-turn Chat Conversation
 - Chat with System Message
-- Streaming Chat Completion
-- Streaming Text Completion
 - Text Completion with Parameters
 - Chat Completion with Parameters
 - Error Handling (Invalid Model)
@@ -197,7 +192,6 @@ Each provider is tested against these scenarios when supported:
 - **Automatic Function Calling**: OpenAI, Anthropic, Bedrock, Azure, Vertex, Mistral, Ollama
 - **Vision/Image Analysis**: OpenAI, Anthropic, Bedrock, Azure, Vertex, Mistral (limited support for Cohere and Ollama)
 - **Text Completion**: Legacy models only (most providers now focus on chat completion)
-- **Advanced streaming features**: Provider-dependent implementation
 
 ## 📊 Understanding Test Output
 
@@ -266,7 +260,6 @@ func getProviderCapabilities(providerName string) ProviderCapabilities {
         return ProviderCapabilities{
             SupportsTextCompletion:       true,
             SupportsChatCompletion:       true,
-            SupportsStreaming:           true,
             SupportsFunctionCalling:     false, // Update based on provider
             SupportsAutomaticFunctions:  false,
             SupportsVision:              false,
