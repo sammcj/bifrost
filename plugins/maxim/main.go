@@ -14,6 +14,9 @@ import (
 	"github.com/maximhq/maxim-go/logging"
 )
 
+// PluginName is the canonical name for the bifrost-maxim plugin.
+const PluginName = "bifrost-maxim"
+
 // NewMaximLogger initializes and returns a Plugin instance for Maxim's logger.
 //
 // Parameters:
@@ -80,6 +83,11 @@ const (
 //   - logger: A Maxim logger instance used for tracing requests and responses
 type Plugin struct {
 	logger *logging.Logger
+}
+
+// GetName returns the name of the plugin.
+func (plugin *Plugin) GetName() string {
+	return PluginName
 }
 
 // PreHook is called before a request is processed by Bifrost.
@@ -227,6 +235,7 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 // PostHook is called after a request has been processed by Bifrost.
 // It completes the request trace by:
 // - Adding response data to the generation if a generation ID exists
+// - Logging error details if bifrostErr is provided
 // - Ending the generation if it exists
 // - Ending the trace if a trace ID exists
 // - Flushing all pending log data
@@ -237,17 +246,29 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 // Parameters:
 //   - ctxRef: Pointer to the context.Context containing trace/generation IDs
 //   - res: The Bifrost response to be traced
+//   - bifrostErr: The BifrostError returned by the request, if any
 //
 // Returns:
 //   - *schemas.BifrostResponse: The original response, unmodified
+//   - *schemas.BifrostError: The original error, unmodified
 //   - error: Never returns an error as it handles missing IDs gracefully
-func (plugin *Plugin) PostHook(ctxRef *context.Context, res *schemas.BifrostResponse) (*schemas.BifrostResponse, error) {
+func (plugin *Plugin) PostHook(ctxRef *context.Context, res *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	if ctxRef != nil {
 		ctx := *ctxRef
 
 		generationID, ok := ctx.Value(GenerationIDKey).(string)
 		if ok {
-			plugin.logger.AddResultToGeneration(generationID, res)
+			if bifrostErr != nil {
+				genErr := logging.GenerationError{
+					Message: bifrostErr.Error.Message,
+					Code:    bifrostErr.Error.Code,
+					Type:    bifrostErr.Error.Type,
+				}
+				plugin.logger.SetGenerationError(generationID, &genErr)
+			} else if res != nil {
+				plugin.logger.AddResultToGeneration(generationID, res)
+			}
+
 			plugin.logger.EndGeneration(generationID)
 		}
 
@@ -255,11 +276,10 @@ func (plugin *Plugin) PostHook(ctxRef *context.Context, res *schemas.BifrostResp
 		if ok {
 			plugin.logger.EndTrace(traceID)
 		}
-
-		plugin.logger.Flush()
 	}
+	plugin.logger.Flush()
 
-	return res, nil
+	return res, bifrostErr, nil
 }
 
 func (plugin *Plugin) Cleanup() error {
