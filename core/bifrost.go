@@ -569,8 +569,9 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 				continue
 			}
 
-			// Create a new request with the fallback model
+			// Create a new request with the fallback provider and model
 			fallbackReq := *req
+			fallbackReq.Provider = fallback.Provider
 			fallbackReq.Model = fallback.Model
 
 			// Try the fallback provider
@@ -690,12 +691,13 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.
 			// Check if we have config for this fallback provider
 			_, err := bifrost.account.GetConfigForProvider(fallback.Provider)
 			if err != nil {
-				bifrost.logger.Warn(fmt.Sprintf("Skipping fallback provider %s: %v", fallback.Provider, err))
+				bifrost.logger.Warn(fmt.Sprintf("Config not found for provider %s, skipping fallback: %v", fallback.Provider, err))
 				continue
 			}
 
-			// Create a new request with the fallback model
+			// Create a new request with the fallback provider and model
 			fallbackReq := *req
+			fallbackReq.Provider = fallback.Provider
 			fallbackReq.Model = fallback.Model
 
 			// Try the fallback provider
@@ -704,7 +706,11 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.
 				bifrost.logger.Info(fmt.Sprintf("Successfully used fallback provider %s with model %s", fallback.Provider, fallback.Model))
 				return result, nil
 			}
-			bifrost.logger.Warn(fmt.Sprintf("Fallback provider %s failed: %v", fallback.Provider, fallbackErr.Error.Message))
+			if fallbackErr.Error.Type != nil && *fallbackErr.Error.Type == schemas.RequestCancelled {
+				return nil, fallbackErr
+			}
+
+			bifrost.logger.Warn(fmt.Sprintf("Fallback provider %s failed: %s", fallback.Provider, fallbackErr.Error.Message))
 		}
 	}
 
