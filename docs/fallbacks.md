@@ -93,7 +93,7 @@ result, err := bifrost.ChatCompletionRequest(
 2. **Model Selection**
 
    - Use models with similar capabilities
-   - Consider model-specific features (e.g., function calling, streaming)
+   - Consider model-specific features (e.g., function calling)
    - Account for different token limits and pricing
 
 3. **Error Handling**
