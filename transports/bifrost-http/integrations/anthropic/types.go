@@ -341,15 +341,17 @@ func (r *AnthropicMessageRequest) ConvertToBifrostRequest() *schemas.BifrostRequ
 			bifrostReq.Params = &schemas.ModelParameters{}
 		}
 		toolChoice := &schemas.ToolChoice{
-			Type: func() schemas.ToolChoiceType {
-				if r.ToolChoice.Type == "tool" {
-					return schemas.ToolChoiceTypeFunction
-				}
-				return schemas.ToolChoiceType(r.ToolChoice.Type)
-			}(),
+			ToolChoiceStruct: &schemas.ToolChoiceStruct{
+				Type: func() schemas.ToolChoiceType {
+					if r.ToolChoice.Type == "tool" {
+						return schemas.ToolChoiceTypeFunction
+					}
+					return schemas.ToolChoiceType(r.ToolChoice.Type)
+				}(),
+			},
 		}
 		if r.ToolChoice.Type == "tool" && r.ToolChoice.Name != "" {
-			toolChoice.Function = schemas.ToolChoiceFunction{
+			toolChoice.ToolChoiceStruct.Function = schemas.ToolChoiceFunction{
 				Name: r.ToolChoice.Name,
 			}
 		}
