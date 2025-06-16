@@ -13,6 +13,103 @@ import (
 
 var fnTypePtr = bifrost.Ptr(string(schemas.ToolChoiceTypeFunction))
 
+// CustomBlob handles URL-safe base64 decoding for Google GenAI requests
+type CustomBlob struct {
+	Data     []byte `json:"data,omitempty"`
+	MIMEType string `json:"mimeType,omitempty"`
+}
+
+// UnmarshalJSON custom unmarshalling to handle URL-safe base64 encoding
+func (b *CustomBlob) UnmarshalJSON(data []byte) error {
+	// First unmarshal into a temporary struct with string data
+	var temp struct {
+		Data     string `json:"data,omitempty"`
+		MIMEType string `json:"mimeType,omitempty"`
+	}
+
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	b.MIMEType = temp.MIMEType
+
+	if temp.Data != "" {
+		// Convert URL-safe base64 to standard base64
+		standardBase64 := strings.ReplaceAll(strings.ReplaceAll(temp.Data, "_", "/"), "-", "+")
+
+		// Add padding if necessary
+		switch len(standardBase64) % 4 {
+		case 2:
+			standardBase64 += "=="
+		case 3:
+			standardBase64 += "="
+		}
+
+		decoded, err := base64.StdEncoding.DecodeString(standardBase64)
+		if err != nil {
+			return fmt.Errorf("failed to decode base64 data: %v", err)
+		}
+		b.Data = decoded
+	}
+
+	return nil
+}
+
+// CustomPart handles Google GenAI Part with custom Blob unmarshalling
+type CustomPart struct {
+	VideoMetadata       *genai_sdk.VideoMetadata       `json:"videoMetadata,omitempty"`
+	Thought             bool                           `json:"thought,omitempty"`
+	CodeExecutionResult *genai_sdk.CodeExecutionResult `json:"codeExecutionResult,omitempty"`
+	ExecutableCode      *genai_sdk.ExecutableCode      `json:"executableCode,omitempty"`
+	FileData            *genai_sdk.FileData            `json:"fileData,omitempty"`
+	FunctionCall        *genai_sdk.FunctionCall        `json:"functionCall,omitempty"`
+	FunctionResponse    *genai_sdk.FunctionResponse    `json:"functionResponse,omitempty"`
+	InlineData          *CustomBlob                    `json:"inlineData,omitempty"`
+	Text                string                         `json:"text,omitempty"`
+}
+
+// ToGenAIPart converts CustomPart to genai_sdk.Part
+func (p *CustomPart) ToGenAIPart() *genai_sdk.Part {
+	part := &genai_sdk.Part{
+		VideoMetadata:       p.VideoMetadata,
+		Thought:             p.Thought,
+		CodeExecutionResult: p.CodeExecutionResult,
+		ExecutableCode:      p.ExecutableCode,
+		FileData:            p.FileData,
+		FunctionCall:        p.FunctionCall,
+		FunctionResponse:    p.FunctionResponse,
+		Text:                p.Text,
+	}
+
+	if p.InlineData != nil {
+		part.InlineData = &genai_sdk.Blob{
+			Data:     p.InlineData.Data,
+			MIMEType: p.InlineData.MIMEType,
+		}
+	}
+
+	return part
+}
+
+// CustomContent handles Google GenAI Content with custom Part unmarshalling
+type CustomContent struct {
+	Parts []*CustomPart `json:"parts,omitempty"`
+	Role  string        `json:"role,omitempty"`
+}
+
+// ToGenAIContent converts CustomContent to genai_sdk.Content
+func (c *CustomContent) ToGenAIContent() genai_sdk.Content {
+	parts := make([]*genai_sdk.Part, len(c.Parts))
+	for i, part := range c.Parts {
+		parts[i] = part.ToGenAIPart()
+	}
+
+	return genai_sdk.Content{
+		Parts: parts,
+		Role:  c.Role,
+	}
+}
+
 // ensureExtraParams ensures that bifrostReq.Params and bifrostReq.Params.ExtraParams are initialized
 func ensureExtraParams(bifrostReq *schemas.BifrostRequest) {
 	if bifrostReq.Params == nil {
@@ -27,8 +124,8 @@ func ensureExtraParams(bifrostReq *schemas.BifrostRequest) {
 
 type GeminiChatRequest struct {
 	Model              string                     `json:"model,omitempty"` // Model field for explicit model specification
-	Contents           []genai_sdk.Content        `json:"contents"`
-	SystemInstruction  *genai_sdk.Content         `json:"systemInstruction,omitempty"`
+	Contents           []CustomContent            `json:"contents"`
+	SystemInstruction  *CustomContent             `json:"systemInstruction,omitempty"`
 	GenerationConfig   genai_sdk.GenerationConfig `json:"generationConfig,omitempty"`
 	SafetySettings     []genai_sdk.SafetySetting  `json:"safetySettings,omitempty"`
 	Tools              []genai_sdk.Tool           `json:"tools,omitempty"`
@@ -51,9 +148,11 @@ func (r *GeminiChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
 
 	allGenAiMessages := []genai_sdk.Content{}
 	if r.SystemInstruction != nil {
-		allGenAiMessages = append(allGenAiMessages, *r.SystemInstruction)
+		allGenAiMessages = append(allGenAiMessages, r.SystemInstruction.ToGenAIContent())
 	}
-	allGenAiMessages = append(allGenAiMessages, r.Contents...)
+	for _, content := range r.Contents {
+		allGenAiMessages = append(allGenAiMessages, content.ToGenAIContent())
+	}
 
 	for _, content := range allGenAiMessages {
 		if len(content.Parts) == 0 {
