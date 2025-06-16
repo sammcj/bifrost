@@ -224,7 +224,6 @@ bifrost/
 ├── core/                 # Core functionality and shared components
 │   ├── providers/        # Provider-specific implementations
 │   ├── schemas/          # Interfaces and structs used in bifrost
-│   ├── tests/            # Tests to make sure everything is in place
 │   ├── bifrost.go        # Main Bifrost implementation
 │
 ├── docs/                 # Documentations for Bifrost's configurations and contribution guides
