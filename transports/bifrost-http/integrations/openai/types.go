@@ -66,19 +66,19 @@ func (r *OpenAIChatRequest) convertParameters() *schemas.ModelParameters {
 
 	// Direct field mapping
 	if r.MaxTokens != nil {
-		params.ExtraParams["max_tokens"] = *r.MaxTokens
+		params.MaxTokens = r.MaxTokens
 	}
 	if r.Temperature != nil {
-		params.ExtraParams["temperature"] = *r.Temperature
+		params.Temperature = r.Temperature
 	}
 	if r.TopP != nil {
-		params.ExtraParams["top_p"] = *r.TopP
+		params.TopP = r.TopP
 	}
 	if r.PresencePenalty != nil {
-		params.ExtraParams["presence_penalty"] = *r.PresencePenalty
+		params.PresencePenalty = r.PresencePenalty
 	}
 	if r.FrequencyPenalty != nil {
-		params.ExtraParams["frequency_penalty"] = *r.FrequencyPenalty
+		params.FrequencyPenalty = r.FrequencyPenalty
 	}
 	if r.N != nil {
 		params.ExtraParams["n"] = *r.N
@@ -101,16 +101,8 @@ func (r *OpenAIChatRequest) convertParameters() *schemas.ModelParameters {
 	if r.Stream != nil {
 		params.ExtraParams["stream"] = *r.Stream
 	}
-	if r.ResponseFormat != nil {
-		params.ExtraParams["response_format"] = r.ResponseFormat
-	}
 	if r.Seed != nil {
 		params.ExtraParams["seed"] = *r.Seed
-	}
-
-	// Return nil if no parameters were set
-	if len(params.ExtraParams) == 0 {
-		return nil
 	}
 
 	return params
