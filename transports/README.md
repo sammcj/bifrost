@@ -59,13 +59,13 @@ The same setup applies to keys in meta configs of all providers:
 ```json
 {
   "meta_config": {
-    "secret_access_key": "env.BEDROCK_ACCESS_KEY",
-    "region": "env.BEDROCK_REGION"
+    "secret_access_key": "env.AWS_SECRET_ACCESS_KEY",
+    "region": "env.AWS_REGION"
   }
 }
 ```
 
-In this example, `BEDROCK_ACCESS_KEY` and `BEDROCK_REGION` refer to keys in the environment.
+In this example, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION` refer to keys in the environment.
 
 **Please refer to `config.example.json` for examples.**
 
