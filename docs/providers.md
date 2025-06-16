@@ -78,7 +78,7 @@ meta.AzureMetaConfig{
 
 ```golang
 meta.BedrockMetaConfig{
-    SecretAccessKey:    os.Getenv("BEDROCK_ACCESS_KEY"),
+    SecretAccessKey:    os.Getenv("AWS_SECRET_ACCESS_KEY"),
     Region:             "us-east-1",
     SessionToken:       os.Getenv("BEDROCK_SESSION_TOKEN"), // Optional
     ARN:                os.Getenv("BEDROCK_ARN"),           // Optional

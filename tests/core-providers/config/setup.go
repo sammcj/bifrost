@@ -1,0 +1,59 @@
+// Package config provides comprehensive test utilities and configurations for the Bifrost system.
+// It includes comprehensive test implementations covering all major AI provider scenarios,
+// including text completion, chat, tool calling, image processing, and end-to-end workflows.
+package config
+
+import (
+	"context"
+	"time"
+
+	bifrost "github.com/maximhq/bifrost/core"
+	"github.com/maximhq/bifrost/core/schemas"
+)
+
+// Constants for test configuration
+const (
+	// TestTimeout defines the maximum duration for comprehensive tests
+	// Set to 5 minutes to allow for complex multi-step operations
+	TestTimeout = 5 * time.Minute
+)
+
+// getBifrost initializes and returns a Bifrost instance for comprehensive testing.
+// It sets up the comprehensive test account, plugin, and logger configuration.
+//
+// Environment variables are expected to be set by the system or test runner before calling this function.
+// The account configuration will read API keys and settings from these environment variables.
+//
+// Returns:
+//   - *bifrost.Bifrost: A configured Bifrost instance ready for comprehensive testing
+//   - error: Any error that occurred during Bifrost initialization
+//
+// The function:
+//  1. Creates a comprehensive test account instance
+//  2. Configures Bifrost with the account and default logger
+func getBifrost() (*bifrost.Bifrost, error) {
+	account := ComprehensiveTestAccount{}
+
+	// Initialize Bifrost
+	b, err := bifrost.Init(schemas.BifrostConfig{
+		Account: &account,
+		Plugins: nil,
+		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelDebug),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
+}
+
+// SetupTest initializes a test environment with timeout context
+func SetupTest() (*bifrost.Bifrost, context.Context, context.CancelFunc, error) {
+	client, err := getBifrost()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	return client, ctx, cancel, nil
+}
