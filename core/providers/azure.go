@@ -211,6 +211,8 @@ func (provider *AzureProvider) completeRequest(ctx context.Context, requestBody 
 	req.Header.SetContentType("application/json")
 	if authToken, ok := ctx.Value(AzureAuthorizationTokenKey).(string); ok {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", authToken))
+		// Ensure api-key is not accidentally present (from extra headers, etc.)
+		req.Header.Del("api-key")
 	} else {
 		req.Header.Set("api-key", key)
 	}
