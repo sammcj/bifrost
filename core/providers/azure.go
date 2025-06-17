@@ -52,6 +52,9 @@ type AzureError struct {
 	} `json:"error"`
 }
 
+// AzureAuthorizationTokenKey is the context key for the Azure authentication token.
+const AzureAuthorizationTokenKey ContextKey = "azure-authorization-token"
+
 // azureTextCompletionResponsePool provides a pool for Azure text completion response objects.
 var azureTextCompletionResponsePool = sync.Pool{
 	New: func() interface{} {
@@ -206,7 +209,11 @@ func (provider *AzureProvider) completeRequest(ctx context.Context, requestBody 
 	req.SetRequestURI(url)
 	req.Header.SetMethod("POST")
 	req.Header.SetContentType("application/json")
-	req.Header.Set("api-key", key)
+	if authToken, ok := ctx.Value(AzureAuthorizationTokenKey).(string); ok {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", authToken))
+	} else {
+		req.Header.Set("api-key", key)
+	}
 
 	req.SetBody(jsonData)
 
