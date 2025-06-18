@@ -48,6 +48,7 @@ type Bifrost struct {
 	logger              schemas.Logger                                // logger instance, default logger is used if not provided
 	dropExcessRequests  bool                                          // If true, in cases where the queue is full, requests will not wait for the queue to be empty and will be dropped instead.
 	backgroundCtx       context.Context                               // Shared background context for nil context handling
+	mcpManager          *MCPManager                                   // MCP integration manager (nil if MCP not configured)
 }
 
 // PluginPipeline encapsulates the execution of plugin PreHooks and PostHooks, tracks how many plugins ran, and manages short-circuiting and error aggregation.
@@ -235,6 +236,17 @@ func Init(config schemas.BifrostConfig) (*Bifrost, error) {
 		config.Logger = NewDefaultLogger(schemas.LogLevelInfo)
 	}
 	bifrost.logger = config.Logger
+
+	// Initialize MCP manager if configured
+	if config.MCPConfig != nil {
+		mcpManager, err := newMCPManager(*config.MCPConfig, bifrost.logger)
+		if err != nil {
+			bifrost.logger.Warn(fmt.Sprintf("failed to initialize MCP manager: %v", err))
+		} else {
+			bifrost.mcpManager = mcpManager
+			bifrost.logger.Info("MCP integration initialized successfully")
+		}
+	}
 
 	// Create buffered channels for each provider and start workers
 	for _, providerKey := range providerKeys {
@@ -600,6 +612,11 @@ func (bifrost *Bifrost) tryTextCompletion(req *schemas.BifrostRequest, ctx conte
 		return nil, newBifrostError(err)
 	}
 
+	// Add MCP tools to request if MCP is configured
+	if bifrost.mcpManager != nil {
+		req = bifrost.mcpManager.addMCPToolsToBifrostRequest(ctx, req)
+	}
+
 	pipeline := NewPluginPipeline(bifrost.plugins, bifrost.logger)
 	preReq, preResp, preCount := pipeline.RunPreHooks(&ctx, req)
 	if preResp != nil {
@@ -726,6 +743,11 @@ func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx conte
 		return nil, newBifrostError(err)
 	}
 
+	// Add MCP tools to request if MCP is configured
+	if bifrost.mcpManager != nil {
+		req = bifrost.mcpManager.addMCPToolsToBifrostRequest(ctx, req)
+	}
+
 	pipeline := NewPluginPipeline(bifrost.plugins, bifrost.logger)
 	preReq, preResp, preCount := pipeline.RunPreHooks(&ctx, req)
 	if preResp != nil {
@@ -788,6 +810,71 @@ func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx conte
 	}
 }
 
+// ExecuteMCPTool executes an MCP tool call and returns the result as a tool message.
+// This is the main public API for manual MCP tool execution.
+//
+// Parameters:
+//   - ctx: Execution context
+//   - toolCall: The tool call to execute (from assistant message)
+//
+// Returns:
+//   - schemas.BifrostMessage: Tool message with execution result
+//   - schemas.BifrostError: Any execution error
+func (bifrost *Bifrost) ExecuteMCPTool(ctx context.Context, toolCall schemas.ToolCall) (*schemas.BifrostMessage, *schemas.BifrostError) {
+	if bifrost.mcpManager == nil {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: schemas.ErrorField{
+				Message: "MCP is not configured in this Bifrost instance",
+			},
+		}
+	}
+
+	result, err := bifrost.mcpManager.executeTool(ctx, toolCall)
+	if err != nil {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: schemas.ErrorField{
+				Message: err.Error(),
+				Error:   err,
+			},
+		}
+	}
+
+	return result, nil
+}
+
+// RegisterMCPTool registers a typed tool handler with the MCP integration.
+// This allows developers to easily add custom tools that will be available
+// to all LLM requests processed by this Bifrost instance.
+//
+// Parameters:
+//   - name: Unique tool name
+//   - description: Human-readable tool description
+//   - handler: Function that handles tool execution
+//   - toolSchema: Bifrost tool schema for function calling
+//
+// Returns:
+//   - error: Any registration error
+//
+// Example:
+//
+//	type EchoArgs struct {
+//	    Message string `json:"message"`
+//	}
+//
+//	err := bifrost.RegisterMCPTool("echo", "Echo a message",
+//	    func(args EchoArgs) (string, error) {
+//	        return args.Message, nil
+//	    }, toolSchema)
+func (bifrost *Bifrost) RegisterMCPTool(name, description string, handler func(args any) (string, error), toolSchema schemas.Tool) error {
+	if bifrost.mcpManager == nil {
+		return fmt.Errorf("MCP is not configured in this Bifrost instance")
+	}
+
+	return bifrost.mcpManager.registerTool(name, description, handler, toolSchema)
+}
+
 // Cleanup gracefully stops all workers when triggered.
 // It closes all request channels and waits for workers to exit.
 func (bifrost *Bifrost) Cleanup() {
@@ -801,6 +888,14 @@ func (bifrost *Bifrost) Cleanup() {
 	// Wait for all workers to exit
 	for _, waitGroup := range bifrost.waitGroups {
 		waitGroup.Wait()
+	}
+
+	// Cleanup MCP manager
+	if bifrost.mcpManager != nil {
+		err := bifrost.mcpManager.cleanup()
+		if err != nil {
+			bifrost.logger.Warn(fmt.Sprintf("Error cleaning up MCP manager: %s", err.Error()))
+		}
 	}
 
 	// Cleanup plugins
