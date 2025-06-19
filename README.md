@@ -68,20 +68,20 @@ Bifrost is an open-source middleware that serves as a unified gateway to various
    - Build the Docker image:
 
      ```bash
-     docker build \
-     --build-arg CONFIG_PATH=./config.json \
-     --build-arg PORT=8080 \
-     --build-arg POOL_SIZE=300 \
-     -t bifrost-transports .
+     docker build -t bifrost-transports .
      ```
 
    - Run the Docker container:
 
      ```bash
-     docker run -p 8080:8080 -e OPENAI_API_KEY -e ANTHROPIC_API_KEY bifrost-transports
+     docker run -p 8080:8080 \
+       -v $(pwd)/config.json:/app/config/config.json \
+       -e OPENAI_API_KEY \
+       -e ANTHROPIC_API_KEY \
+       bifrost-transports
      ```
 
-     Note: Make sure to add all the variables stated in your `config.json` file.
+     Note: Ensure you mount your config file and add all environment variables referenced in your `config.json` file.
 
 4. **Using the API**: Once the server is running, you can send requests to the HTTP endpoints.
 
@@ -180,6 +180,8 @@ For additional configurations in HTTP server setup, please read [this](https://g
     - [Additional Configurations](#additional-configurations)
   - [📊 Benchmarks](#-benchmarks)
     - [Test Environment](#test-environment)
+      - [1. t3.medium(2 vCPUs, 4GB RAM)](#1-t3medium2-vcpus-4gb-ram)
+      - [2. t3.xlarge(4 vCPUs, 16GB RAM)](#2-t3xlarge4-vcpus-16gb-ram)
     - [Performance Metrics](#performance-metrics)
     - [Key Performance Highlights](#key-performance-highlights)
   - [🤝 Contributing](#-contributing)
@@ -271,7 +273,7 @@ client, err := bifrost.Init(schemas.BifrostConfig{
 })
 ```
 
-1. **transports**: This package contains transport clients like HTTP to expose your Bifrost client. You can either `go get` this package or directly use the independent Dockerfile to quickly spin up your Bifrost API ([Click here](https://github.com/maximhq/bifrost/tree/main/transports/README.md) to read more on this).
+3. **transports**: This package contains transport clients like HTTP to expose your Bifrost client. You can either `go get` this package or directly use the independent Dockerfile to quickly spin up your [Bifrost API](https://github.com/maximhq/bifrost/tree/main/transports/README.md) (read more on this).
 
 ### Additional Configurations
 
@@ -289,12 +291,12 @@ Bifrost has been tested under high load conditions to ensure optimal performance
 
 ### Test Environment
 
-**1. t3.medium(2 vCPUs, 4GB RAM)**
+#### 1. t3.medium(2 vCPUs, 4GB RAM)
 
 - Buffer Size: 15,000
 - Initial Pool Size: 10,000
 
-**2. t3.xlarge(4 vCPUs, 16GB RAM)**
+#### 2. t3.xlarge(4 vCPUs, 16GB RAM)
 
 - Buffer Size: 20,000
 - Initial Pool Size: 15,000
