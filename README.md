@@ -206,6 +206,7 @@ With Bifrost, you can focus on building your AI-powered applications without wor
 - **Concurrency Control**: Manage rate limits and parallel requests effectively
 - **Flexible Transports**: Multiple transports for easy integration into your infra
 - **Plugin First Architecture**: No callback hell, simple addition/creation of custom plugins
+- **MCP Integration**: Built-in Model Context Protocol (MCP) support for external tool integration
 - **Custom Configuration**: Offers granular control over pool sizes, network retry settings, fallback providers, and network proxy configurations
 - **Built-in Observability**: Native Prometheus metrics out of the box, no wrappers, no sidecars, just drop it in and scrape
 
@@ -276,6 +277,7 @@ client, err := bifrost.Init(schemas.BifrostConfig{
 - [Plugins](https://github.com/maximhq/bifrost/blob/main/docs/plugins.md)
 - [Provider Configurations](https://github.com/maximhq/bifrost/blob/main/docs/providers.md)
 - [Fallbacks](https://github.com/maximhq/bifrost/blob/main/docs/fallbacks.md)
+- [MCP Integration](https://github.com/maximhq/bifrost/blob/main/docs/mcp.md)
 
 ---
 
