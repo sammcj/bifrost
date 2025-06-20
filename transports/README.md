@@ -73,40 +73,50 @@ In this example, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION` refer to keys in the e
 
 1. Download the Dockerfile:
 
-```bash
-curl -L -o Dockerfile https://raw.githubusercontent.com/maximhq/bifrost/main/transports/Dockerfile
-```
+   ```bash
+   curl -L -o Dockerfile https://raw.githubusercontent.com/maximhq/bifrost/main/transports/Dockerfile
+   ```
 
 2. Build the Docker image:
 
-```bash
-docker build \
-  --build-arg CONFIG_PATH=./config.json \
-  --build-arg PORT=8080 \
-  --build-arg POOL_SIZE=300 \
-  -t bifrost-transports .
-```
+   ```bash
+   docker build -t bifrost-transports .
+   ```
 
 3. Run the Docker container:
 
 ```bash
-docker run -p 8080:8080 -e OPENAI_API_KEY -e ANTHROPIC_API_KEY bifrost-transports
+docker run -p 8080:8080 \
+  -v $(pwd)/config.json:/app/config/config.json \
+  -e OPENAI_API_KEY \
+  -e ANTHROPIC_API_KEY \
+  bifrost-transports
 ```
 
 Note: In the command above, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are just example environment variables.
-You need to pass all environment variables referenced in your `config.json` file that start with the prefix `env.` to the docker run command using the -e flag. This ensures Docker sets them correctly inside the container.
+Ensure you mount your config file and use the `-e` flag to pass all environment variables referenced in your `config.json` that are prefixed with `env.` to the container. This ensures Docker sets them correctly inside the container.
 
-example usage: Suppose your config.json only contains one environment variable placeholder, `env.COHERE_API_KEY`. Here's how you would run it:
+Example usage: Suppose your config.json only contains one environment variable placeholder, `env.COHERE_API_KEY`. Here's how you would run it:
 
 ```bash
 export COHERE_API_KEY=your_cohere_api_key
 
-docker build --build-arg CONFIG_PATH=./config.example.json -t bifrost-transports .
+docker build -t bifrost-transports .
 
-docker run -p 8080:8080 -e COHERE_API_KEY bifrost-transports
+docker run -p 8080:8080 \
+  -v $(pwd)/config.example.json:/app/config/config.json \
+  -e COHERE_API_KEY \
+  bifrost-transports
 ```
 
-You can also add a flag for `DROP_EXCESS_REQUESTS=false` in your Docker build command to drop excess requests when the buffer is full. Read more about `DROP_EXCESS_REQUESTS` and `POOL_SIZE` [here](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
+You can also set runtime environment variables for configuration:
+
+- `APP_PORT`: Server port (default: 8080)
+- `APP_POOL_SIZE`: Connection pool size (default: 300)
+- `APP_DROP_EXCESS_REQUESTS`: Drop excess requests when buffer is full (default: false)
+- `APP_PLUGINS`: Comma-separated list of plugins
+
+Read more about these [configurations](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
 
 ---
 
@@ -116,9 +126,9 @@ If you wish to run Bifrost in your Go environment, follow these steps:
 
 1. Install your binary:
 
-```bash
-go install github.com/maximhq/bifrost/transports/bifrost-http@latest
-```
+   ```bash
+   go install github.com/maximhq/bifrost/transports/bifrost-http@latest
+   ```
 
 2. Run your binary (make sure Go is set in your PATH):
 
@@ -126,7 +136,7 @@ go install github.com/maximhq/bifrost/transports/bifrost-http@latest
 bifrost-http -config config.json -port 8080 -pool-size 300
 ```
 
-You can also add a flag for `-drop-excess-requests=false` in your command to drop excess requests when the buffer is full. Read more about `DROP_EXCESS_REQUESTS` and `POOL_SIZE` [here](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
+You can also add a flag for `-drop-excess-requests=false` in your command to drop excess requests when the buffer is full. Read more about `DROP_EXCESS_REQUESTS` and `POOL_SIZE` in [additional configurations](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
 
 ## 🧰 Usage
 
@@ -179,15 +189,15 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 HTTP transport supports Prometheus out of the box. By default all the metrics are available at `/metrics` endpoint. It providers metrics for httpRequestsTotal, httpRequestDuration, httpRequestSizeBytes, httpResponseSizeBytes, bifrostUpstreamRequestsTotal, and bifrostUpstreamLatencySeconds. To add custom labels to these metrics using can pass a flag of `-prometheus-labels` while running the http transport.
 
-For eg. `-prometheus-labels team-id,task-id,location`
+e.g., `-prometheus-labels team-id,task-id,location`
 
 Values for labels are then picked up from the HTTP request headers with the prefix `x-bf-prom-`.
 
 ### Plugin Support
 
-You can explore the available plugins [here](https://github.com/maximhq/bifrost/tree/main/plugins). And to attached these plugins to your HTTP transport, just pass the flag `-plugins`.
+You can explore the [available plugins](https://github.com/maximhq/bifrost/tree/main/plugins). To attach these plugins to your HTTP transport, pass the `-plugins` flag.
 
-For eg. `-plugins maxim`
+e.g., `-plugins maxim`
 
 Note: Please check plugin specific documentations (github.com/maximhq/bifrost/tree/main/plugins/{plugin_name}) for more nuanced control and any additional setup.
 
@@ -213,6 +223,6 @@ Configure fallback options in your requests:
 }
 ```
 
-Read more about fallbacks and other additional configurations [here](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
+Read more about fallbacks and other [additional configurations](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
 
 Built with ❤️ by [Maxim](https://github.com/maximhq)

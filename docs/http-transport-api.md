@@ -4,9 +4,9 @@ This document provides comprehensive API documentation for the Bifrost HTTP tran
 
 ## Base URL
 
-```
-http://localhost:8080
-```
+    ```
+    http://localhost:8080
+    ```
 
 ## OpenAPI Specification
 
@@ -36,122 +36,122 @@ Creates a chat completion using conversational messages.
 
 #### Request Body
 
-```json
-{
-  "provider": "openai",
-  "model": "gpt-4o",
-  "messages": [
+    ```json
     {
-      "role": "user",
-      "content": "What's the weather like today?"
-    }
-  ],
-  "params": {
-    "max_tokens": 1000,
-    "temperature": 0.7,
-    "tools": [
-      {
-        "type": "function",
-        "function": {
-          "name": "get_weather",
-          "description": "Get current weather for a location",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "location": {
-                "type": "string",
-                "description": "The city and state, e.g. San Francisco, CA"
-              }
-            },
-            "required": ["location"]
-          }
-        }
-      }
-    ]
-  },
-  "fallbacks": [
-    {
-      "provider": "anthropic",
-      "model": "claude-3-sonnet-20240229"
-    }
-  ]
-}
-```
-
-#### Request Body with Structured Content (Text and Image)
-
-```json
-{
-  "provider": "openai",
-  "model": "gpt-4o",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
+      "provider": "openai",
+      "model": "gpt-4o",
+      "messages": [
         {
-          "type": "text",
-          "text": "What's happening in this image? What's the weather like?"
-        },
-        {
-          "type": "image_url",
-          "image_url": {
-            "url": "https://example.com/weather-photo.jpg"
-          }
+          "role": "user",
+          "content": "What's the weather like today?"
         }
-      ]
-    }
-  ],
-  "params": {
-    "max_tokens": 1000,
-    "temperature": 0.7
-  }
-}
-```
-
-#### Response
-
-```json
-{
-  "id": "chatcmpl-123",
-  "object": "chat.completion",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "I'd be happy to help you check the weather! However, I'll need to know your location first.",
-        "tool_calls": [
+      ],
+      "params": {
+        "max_tokens": 1000,
+        "temperature": 0.7,
+        "tools": [
           {
-            "id": "call_123",
             "type": "function",
             "function": {
               "name": "get_weather",
-              "arguments": "{\"location\": \"user_location\"}"
+              "description": "Get current weather for a location",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "description": "The city and state, e.g. San Francisco, CA"
+                  }
+                },
+                "required": ["location"]
+              }
             }
           }
         ]
       },
-      "finish_reason": "tool_calls"
+      "fallbacks": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-sonnet-20240229"
+        }
+      ]
     }
-  ],
-  "model": "gpt-4o",
-  "created": 1677652288,
-  "usage": {
-    "prompt_tokens": 56,
-    "completion_tokens": 31,
-    "total_tokens": 87
-  },
-  "extra_fields": {
-    "provider": "openai",
-    "model_params": {
-      "max_tokens": 1000,
-      "temperature": 0.7
-    },
-    "latency": 1.234,
-    "raw_response": {}
-  }
-}
-```
+    ```
+
+#### Request Body with Structured Content (Text and Image)
+
+    ```json
+    {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "What's happening in this image? What's the weather like?"
+            },
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "https://example.com/weather-photo.jpg"
+              }
+            }
+          ]
+        }
+      ],
+      "params": {
+        "max_tokens": 1000,
+        "temperature": 0.7
+      }
+    }
+    ```
+
+#### Response
+
+    ```json
+    {
+      "id": "chatcmpl-123",
+      "object": "chat.completion",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "I'd be happy to help you check the weather! However, I'll need to know your location first.",
+            "tool_calls": [
+              {
+                "id": "call_123",
+                "type": "function",
+                "function": {
+                  "name": "get_weather",
+                  "arguments": "{\"location\": \"user_location\"}"
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ],
+      "model": "gpt-4o",
+      "created": 1677652288,
+      "usage": {
+        "prompt_tokens": 56,
+        "completion_tokens": 31,
+        "total_tokens": 87
+      },
+      "extra_fields": {
+        "provider": "openai",
+        "model_params": {
+          "max_tokens": 1000,
+          "temperature": 0.7
+        },
+        "latency": 1.234,
+        "raw_response": {}
+      }
+    }
+    ```
 
 ### 2. Text Completions
 
@@ -161,59 +161,59 @@ Creates a text completion from a prompt.
 
 #### Request Body
 
-```json
-{
-  "provider": "openai",
-  "model": "gpt-3.5-turbo-instruct",
-  "text": "The future of AI is",
-  "params": {
-    "max_tokens": 100,
-    "temperature": 0.7,
-    "stop_sequences": ["\n\n"]
-  },
-  "fallbacks": [
+    ```json
     {
-      "provider": "cohere",
-      "model": "command"
+      "provider": "openai",
+      "model": "gpt-3.5-turbo-instruct",
+      "text": "The future of AI is",
+      "params": {
+        "max_tokens": 100,
+        "temperature": 0.7,
+        "stop_sequences": ["\n\n"]
+      },
+      "fallbacks": [
+        {
+          "provider": "cohere",
+          "model": "command"
+        }
+      ]
     }
-  ]
-}
-```
+    ```
 
 #### Response
 
-```json
-{
-  "id": "cmpl-123",
-  "object": "text.completion",
-  "choices": [
+    ```json
     {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "The future of AI is incredibly promising, with advances in machine learning..."
+      "id": "cmpl-123",
+      "object": "text.completion",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "The future of AI is incredibly promising, with advances in machine learning..."
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "model": "gpt-3.5-turbo-instruct",
+      "created": 1677652288,
+      "usage": {
+        "prompt_tokens": 5,
+        "completion_tokens": 95,
+        "total_tokens": 100
       },
-      "finish_reason": "stop"
+      "extra_fields": {
+        "provider": "openai",
+        "model_params": {
+          "max_tokens": 100,
+          "temperature": 0.7
+        },
+        "latency": 0.856,
+        "raw_response": {}
+      }
     }
-  ],
-  "model": "gpt-3.5-turbo-instruct",
-  "created": 1677652288,
-  "usage": {
-    "prompt_tokens": 5,
-    "completion_tokens": 95,
-    "total_tokens": 100
-  },
-  "extra_fields": {
-    "provider": "openai",
-    "model_params": {
-      "max_tokens": 100,
-      "temperature": 0.7
-    },
-    "latency": 0.856,
-    "raw_response": {}
-  }
-}
-```
+    ```
 
 ### 3. Metrics
 
@@ -473,264 +473,266 @@ Rate limiting is handled by the individual providers. Bifrost respects provider 
 
 ### Simple Chat
 
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "provider": "openai",
-    "model": "gpt-4o",
-    "messages": [
-      {"role": "user", "content": "Hello, world!"}
-    ]
-  }'
-```
+    ```bash
+    curl -X POST http://localhost:8080/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+        "provider": "openai",
+        "model": "gpt-4o",
+        "messages": [
+          {"role": "user", "content": "Hello, world!"}
+        ]
+      }'
+    ```
 
 ### Chat with Images
 
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "provider": "openai",
-    "model": "gpt-4o",
-    "messages": [
-      {
-        "role": "user",
-        "content": [
-          {"type": "text", "text": "What do you see in this image?"},
-          {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
+    ```bash
+    curl -X POST http://localhost:8080/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+        "provider": "openai",
+        "model": "gpt-4o",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {"type": "text", "text": "What do you see in this image?"},
+              {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
+            ]
+          }
         ]
-      }
-    ]
-  }'
-```
+      }'
+    ```
 
 ### Chat with Tools
 
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "provider": "openai",
-    "model": "gpt-4o",
-    "messages": [
-      {"role": "user", "content": "What'\''s the weather in San Francisco?"}
-    ],
-    "params": {
-      "tools": [
-        {
-          "type": "function",
-          "function": {
-            "name": "get_weather",
-            "description": "Get current weather",
-            "parameters": {
-              "type": "object",
-              "properties": {
-                "location": {"type": "string"}
-              },
-              "required": ["location"]
+    ```bash
+    curl -X POST http://localhost:8080/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+        "provider": "openai",
+        "model": "gpt-4o",
+        "messages": [
+          {"role": "user", "content": "What'\''s the weather in San Francisco?"}
+        ],
+        "params": {
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "description": "Get current weather",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {"type": "string"}
+                  },
+                  "required": ["location"]
+                }
+              }
             }
-          }
+          ],
+          "tool_choice": {"type": "function", "function": {"name": "get_weather"}}
         }
-      ],
-      "tool_choice": {"type": "function", "function": {"name": "get_weather"}}
-    }
-  }'
-```
+      }'
+    ```
 
 ### Text Completion
 
-```bash
-curl -X POST http://localhost:8080/v1/text/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "provider": "openai",
-    "model": "gpt-3.5-turbo-instruct",
-    "text": "The benefits of artificial intelligence include",
-    "params": {
-      "max_tokens": 150,
-      "temperature": 0.7
-    }
-  }'
-```
+    ```bash
+    curl -X POST http://localhost:8080/v1/text/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+        "provider": "openai",
+        "model": "gpt-3.5-turbo-instruct",
+        "text": "The benefits of artificial intelligence include",
+        "params": {
+          "max_tokens": 150,
+          "temperature": 0.7
+        }
+      }'
+    ```
 
 ### Using Fallbacks
 
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "provider": "openai",
-    "model": "gpt-4o",
-    "messages": [
-      {"role": "user", "content": "Explain quantum computing"}
-    ],
-    "fallbacks": [
-      {"provider": "anthropic", "model": "claude-3-sonnet-20240229"},
-      {"provider": "cohere", "model": "command"}
-    ]
-  }'
-```
+    ```bash
+    curl -X POST http://localhost:8080/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{
+        "provider": "openai",
+        "model": "gpt-4o",
+        "messages": [
+          {"role": "user", "content": "Explain quantum computing"}
+        ],
+        "fallbacks": [
+          {"provider": "anthropic", "model": "claude-3-sonnet-20240229"},
+          {"provider": "cohere", "model": "command"}
+        ]
+      }'
+    ```
 
 ## Integration Examples
 
 ### Python
 
-```python
-import requests
+    ```python
+    import requests
 
-def chat_completion(messages, provider="openai", model="gpt-4o"):
-    response = requests.post(
-        "http://localhost:8080/v1/chat/completions",
-        json={
-            "provider": provider,
-            "model": model,
-            "messages": messages,
-            "params": {"max_tokens": 1000}
+    def chat_completion(messages, provider="openai", model="gpt-4o"):
+        response = requests.post(
+            "http://localhost:8080/v1/chat/completions",
+            json={
+                "provider": provider,
+                "model": model,
+                "messages": messages,
+                "params": {"max_tokens": 1000}
+            }
+        )
+        return response.json()
+
+    # Simple text message
+    result = chat_completion([
+        {"role": "user", "content": "Hello, how are you?"}
+    ])
+    print(result["choices"][0]["message"]["content"])
+
+    # Structured content with image
+    result = chat_completion([
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "What's in this image?"},
+                {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
+            ]
         }
-    )
-    return response.json()
-
-# Simple text message
-result = chat_completion([
-    {"role": "user", "content": "Hello, how are you?"}
-])
-print(result["choices"][0]["message"]["content"])
-
-# Structured content with image
-result = chat_completion([
-    {
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "What's in this image?"},
-            {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
-        ]
-    }
-])
-print(result["choices"][0]["message"]["content"])
-```
+    ])
+    print(result["choices"][0]["message"]["content"])
+    ```
 
 ### Node.js
 
-```javascript
-const axios = require("axios");
+    ```javascript
+    const axios = require("axios");
 
-async function chatCompletion(messages, provider = "openai", model = "gpt-4o") {
-  try {
-    const response = await axios.post(
-      "http://localhost:8080/v1/chat/completions",
-      {
-        provider,
-        model,
-        messages,
-        params: { max_tokens: 1000 },
+    async function chatCompletion(messages, provider = "openai", model = "gpt-4o") {
+      try {
+        const response = await axios.post(
+          "http://localhost:8080/v1/chat/completions",
+          {
+            provider,
+            model,
+            messages,
+            params: { max_tokens: 1000 },
+          }
+        );
+        return response.data;
+      } catch (error) {
+        console.error("Error:", error.response?.data || error.message);
+        throw error;
       }
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Error:", error.response?.data || error.message);
-    throw error;
-  }
-}
+    }
 
-// Usage with structured content
-chatCompletion([
-  {
-    role: "user",
-    content: [
-      { type: "text", text: "Describe this image" },
+    // Usage with structured content
+    chatCompletion([
       {
-        type: "image_url",
-        image_url: { url: "https://example.com/image.jpg" },
+        role: "user",
+        content: [
+          { type: "text", text: "Describe this image" },
+          {
+            type: "image_url",
+            image_url: { url: "https://example.com/image.jpg" },
+          },
+        ],
       },
-    ],
-  },
-]).then((result) => {
-  console.log(result.choices[0].message.content);
-});
-```
+    ]).then((result) => {
+      console.log(result.choices[0].message.content);
+    });
+    ```
 
 ### Go
 
-```go
-package main
+    ```go
+    package main
 
-import (
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "net/http"
-)
-
-type ChatRequest struct {
-    Provider string            `json:"provider"`
-    Model    string            `json:"model"`
-    Messages []BifrostMessage  `json:"messages"`
-    Params   *ModelParameters  `json:"params,omitempty"`
-}
-
-type BifrostMessage struct {
-    Role    string      `json:"role"`
-    Content interface{} `json:"content"` // Can be string or []ContentBlock
-}
-
-type ContentBlock struct {
-    Type     string        `json:"type"`
-    Text     *string       `json:"text,omitempty"`
-    ImageURL *ImageURLStruct `json:"image_url,omitempty"`
-}
-
-type ImageURLStruct struct {
-    URL    string  `json:"url"`
-    Detail *string `json:"detail,omitempty"`
-}
-
-type ModelParameters struct {
-    MaxTokens *int `json:"max_tokens,omitempty"`
-}
-
-func chatCompletion(messages []BifrostMessage) error {
-    reqBody := ChatRequest{
-        Provider: "openai",
-        Model:    "gpt-4o",
-        Messages: messages,
-        Params:   &ModelParameters{MaxTokens: intPtr(1000)},
-    }
-
-    jsonData, _ := json.Marshal(reqBody)
-    resp, err := http.Post(
-        "http://localhost:8080/v1/chat/completions",
-        "application/json",
-        bytes.NewBuffer(jsonData),
+    import (
+        "bytes"
+        "encoding/json"
+        "fmt"
+        "net/http"
     )
-    if err != nil {
-        return err
+
+    type ChatRequest struct {
+        Provider string            `json:"provider"`
+        Model    string            `json:"model"`
+        Messages []BifrostMessage  `json:"messages"`
+        Params   *ModelParameters  `json:"params,omitempty"`
     }
-    defer resp.Body.Close()
 
-    var result map[string]interface{}
-    json.NewDecoder(resp.Body).Decode(&result)
-    fmt.Println(result)
-    return nil
-}
+    type BifrostMessage struct {
+        Role    string      `json:"role"`
+        Content interface{} `json:"content"` // Can be string or []ContentBlock
+    }
 
-func intPtr(i int) *int { return &i }
-```
+    type ContentBlock struct {
+        Type     string        `json:"type"`
+        Text     *string       `json:"text,omitempty"`
+        ImageURL *ImageURLStruct `json:"image_url,omitempty"`
+    }
+
+    type ImageURLStruct struct {
+        URL    string  `json:"url"`
+        Detail *string `json:"detail,omitempty"`
+    }
+
+    type ModelParameters struct {
+        MaxTokens *int `json:"max_tokens,omitempty"`
+    }
+
+    func chatCompletion(messages []BifrostMessage) error {
+        reqBody := ChatRequest{
+            Provider: "openai",
+            Model:    "gpt-4o",
+            Messages: messages,
+            Params:   &ModelParameters{MaxTokens: intPtr(1000)},
+        }
+
+        jsonData, _ := json.Marshal(reqBody)
+        resp, err := http.Post(
+            "http://localhost:8080/v1/chat/completions",
+            "application/json",
+            bytes.NewBuffer(jsonData),
+        )
+        if err != nil {
+            return err
+        }
+        defer resp.Body.Close()
+
+        var result map[string]interface{}
+        json.NewDecoder(resp.Body).Decode(&result)
+        fmt.Println(result)
+        return nil
+    }
+
+    func intPtr(i int) *int { return &i }
+    ```
 
 ## Configuration
 
-The HTTP transport can be configured via command-line flags:
+The HTTP transport can be configured via command-line flags and environment variables:
 
-```bash
-./bifrost-http \
-  -config config.json \
-  -port 8080 \
-  -pool-size 300 \
-  -drop-excess-requests \
-  -plugins maxim \
-  -maxim-log-repo-id your-repo-id \
-  -prometheus-labels env,service
-```
+    ```bash
+    # Using environment variables for plugin configuration (optional)
+    export MAXIM_LOG_REPO_ID=your-repo-id
+
+    ./bifrost-http \
+      -config config.json \
+      -port 8080 \
+      -pool-size 300 \
+      -drop-excess-requests \
+      -plugins maxim \
+      -prometheus-labels env,service
+    ```
 
 ### Configuration Flags
 
@@ -741,8 +743,15 @@ The HTTP transport can be configured via command-line flags:
 | `-pool-size`            | Initial connection pool size     | `300`    |
 | `-drop-excess-requests` | Drop requests when queue is full | `false`  |
 | `-plugins`              | Comma-separated list of plugins  | None     |
-| `-maxim-log-repo-id`    | Maxim logging repository ID      | None     |
 | `-prometheus-labels`    | Additional Prometheus labels     | None     |
+
+### Environment Variables for Plugins (Optional)
+
+Plugin-specific configuration should be provided via environment variables:
+
+| Environment Variable | Description                 | Default |
+| -------------------- | --------------------------- | ------- |
+| `MAXIM_LOG_REPO_ID`  | Maxim logging repository ID | None    |
 
 ## Monitoring
 
