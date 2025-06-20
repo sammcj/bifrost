@@ -71,27 +71,21 @@ In this example, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION` refer to keys in the e
 
 ### Docker Setup
 
-1. Download the Dockerfile:
+1. Pull the Docker image:
 
    ```bash
-   curl -L -o Dockerfile https://raw.githubusercontent.com/maximhq/bifrost/main/transports/Dockerfile
+   docker pull maximhq/bifrost
    ```
 
-2. Build the Docker image:
+2. Run the Docker container:
 
    ```bash
-   docker build -t bifrost-transports .
+   docker run -p 8080:8080 \
+     -v $(pwd)/config.json:/app/config/config.json \
+     -e OPENAI_API_KEY \
+     -e ANTHROPIC_API_KEY \
+     maximhq/bifrost
    ```
-
-3. Run the Docker container:
-
-```bash
-docker run -p 8080:8080 \
-  -v $(pwd)/config.json:/app/config/config.json \
-  -e OPENAI_API_KEY \
-  -e ANTHROPIC_API_KEY \
-  bifrost-transports
-```
 
 Note: In the command above, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are just example environment variables.
 Ensure you mount your config file and use the `-e` flag to pass all environment variables referenced in your `config.json` that are prefixed with `env.` to the container. This ensures Docker sets them correctly inside the container.
@@ -101,12 +95,10 @@ Example usage: Suppose your config.json only contains one environment variable p
 ```bash
 export COHERE_API_KEY=your_cohere_api_key
 
-docker build -t bifrost-transports .
-
 docker run -p 8080:8080 \
   -v $(pwd)/config.example.json:/app/config/config.json \
   -e COHERE_API_KEY \
-  bifrost-transports
+  maximhq/bifrost
 ```
 
 You can also set runtime environment variables for configuration:

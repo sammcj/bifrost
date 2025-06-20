@@ -59,16 +59,10 @@ Bifrost is an open-source middleware that serves as a unified gateway to various
 
    #### ii) OR Using Docker
 
-   - Download the Dockerfile:
+   - Pull the Docker image:
 
      ```bash
-     curl -L -o Dockerfile https://raw.githubusercontent.com/maximhq/bifrost/main/transports/Dockerfile
-     ```
-
-   - Build the Docker image:
-
-     ```bash
-     docker build -t bifrost-transports .
+     docker pull maximhq/bifrost
      ```
 
    - Run the Docker container:
@@ -78,7 +72,7 @@ Bifrost is an open-source middleware that serves as a unified gateway to various
        -v $(pwd)/config.json:/app/config/config.json \
        -e OPENAI_API_KEY \
        -e ANTHROPIC_API_KEY \
-       bifrost-transports
+       maximhq/bifrost
      ```
 
      Note: Ensure you mount your config file and add all environment variables referenced in your `config.json` file.
