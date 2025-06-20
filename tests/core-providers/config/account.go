@@ -215,7 +215,13 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		}, nil
 	case schemas.Ollama:
 		return &schemas.ProviderConfig{
-			NetworkConfig:            schemas.DefaultNetworkConfig,
+			NetworkConfig: schemas.NetworkConfig{
+				DefaultRequestTimeoutInSeconds: 30,
+				MaxRetries:                     1,
+				RetryBackoffInitial:            100 * time.Millisecond,
+				RetryBackoffMax:                2 * time.Second,
+				BaseURL:                        getEnvWithDefault("OLLAMA_BASE_URL", "http://localhost:11434"),
+			},
 			ConcurrencyAndBufferSize: schemas.DefaultConcurrencyAndBufferSize,
 		}, nil
 	case schemas.Mistral:
