@@ -65,7 +65,6 @@ var (
 	port               string   // Port to run the server on
 	configPath         string   // Path to the config file
 	pluginsToLoad      []string // Path to the plugins
-	maximLogRepoId     string   // ID of the Maxim log repo
 	prometheusLabels   []string // Labels to add to Prometheus metrics (optional)
 )
 
@@ -84,7 +83,6 @@ func init() {
 	flag.StringVar(&configPath, "config", "", "Path to the config file")
 	flag.BoolVar(&dropExcessRequests, "drop-excess-requests", false, "Drop excess requests")
 	flag.StringVar(&pluginString, "plugins", "", "Comma separated list of plugins to load")
-	flag.StringVar(&maximLogRepoId, "maxim-log-repo-id", "", "ID of the Maxim log repo")
 	flag.StringVar(&prometheusLabelsString, "prometheus-labels", "", "Labels to add to Prometheus metrics")
 	flag.Parse()
 
@@ -161,7 +159,7 @@ func main() {
 	for _, plugin := range pluginsToLoad {
 		switch strings.ToLower(plugin) {
 		case "maxim":
-			if maximLogRepoId == "" {
+			if os.Getenv("MAXIM_LOG_REPO_ID") == "" {
 				log.Println("warning: maxim log repo id is required to initialize maxim plugin")
 				continue
 			}
@@ -170,7 +168,7 @@ func main() {
 				continue
 			}
 
-			maximPlugin, err := maxim.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), maximLogRepoId)
+			maximPlugin, err := maxim.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), os.Getenv("MAXIM_LOG_REPO_ID"))
 			if err != nil {
 				log.Printf("warning: failed to initialize maxim plugin: %v", err)
 				continue
