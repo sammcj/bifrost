@@ -72,7 +72,7 @@ This plugin integrates the Maxim SDK into Bifrost, enabling seamless observabili
 
 ## Additional Features
 
-The plugin also supports custom `session-id`, `trace-id` and `generation-id` if the user wish to log the generations to their custom logging implementation. To use it, just pass your trace id to the passed request context with the key `trace-id`, and similarly to `generation-id` for generation id. In these cases no new trace/generation is created and the output is just logged to your provided generation. Likewise, `session-id` can be used to add the traces to your generated session.
+The plugin also supports custom `session-id`, `trace-id` and `generation-id` if the user wishes to log the generations to their custom logging implementation. To use it, pass your trace ID to the request context with the key `trace-id`, and similarly `generation-id` for generation ID. In these cases, no new trace/generation is created and the output is logged to your provided generation. Likewise, `session-id` can be used to add the traces to your generated session.
 
 e.g.
 
@@ -88,7 +88,7 @@ e.g.
             }, ctx)
 ```
 
-HTTP transport offers out of the box support for this feature(when maxim plugin is used), just pass `x-bf-maxim-session-id`, `x-bf-maxim-trace-id`, or `x-bf-maxim-generation-id` header with your request to use this feature.
+HTTP transport offers out-of-the-box support for this feature (when the Maxim plugin is used). Pass `x-bf-maxim-session-id`, `x-bf-maxim-trace-id`, or `x-bf-maxim-generation-id` headers with your request to use this feature.
 
 ## Testing Maxim Logger
 

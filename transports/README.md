@@ -122,7 +122,7 @@ If you wish to run Bifrost in your Go environment, follow these steps:
    go install github.com/maximhq/bifrost/transports/bifrost-http@latest
    ```
 
-2. Run your binary (make sure Go is set in your PATH):
+2. Run your binary (ensure Go is in your PATH):
 
 ```bash
 bifrost-http -config config.json -port 8080 -pool-size 300
@@ -140,7 +140,7 @@ Ensure that:
 ### Text Completions
 
 ```bash
-# Make sure to setup anthropic and claude-2.1 in your config.json
+# Make sure to set up Anthropic and claude-2.1 in your config.json
 curl -X POST http://localhost:8080/v1/text/completions \
   -H "Content-Type: application/json" \
   -d '{
@@ -179,7 +179,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ### Prometheus Support
 
-HTTP transport supports Prometheus out of the box. By default all the metrics are available at `/metrics` endpoint. It providers metrics for httpRequestsTotal, httpRequestDuration, httpRequestSizeBytes, httpResponseSizeBytes, bifrostUpstreamRequestsTotal, and bifrostUpstreamLatencySeconds. To add custom labels to these metrics using can pass a flag of `-prometheus-labels` while running the http transport.
+HTTP transport supports Prometheus out of the box. By default, all metrics are available at the `/metrics` endpoint. It provides metrics for httpRequestsTotal, httpRequestDuration, httpRequestSizeBytes, httpResponseSizeBytes, bifrostUpstreamRequestsTotal, and bifrostUpstreamLatencySeconds. To add custom labels to these metrics, pass the `-prometheus-labels` flag while running the HTTP transport.
 
 e.g., `-prometheus-labels team-id,task-id,location`
 
@@ -191,7 +191,7 @@ You can explore the [available plugins](https://github.com/maximhq/bifrost/tree/
 
 e.g., `-plugins maxim`
 
-Note: Please check plugin specific documentations (github.com/maximhq/bifrost/tree/main/plugins/{plugin_name}) for more nuanced control and any additional setup.
+Note: Check plugin-specific documentation (github.com/maximhq/bifrost/tree/main/plugins/{plugin_name}) for more granular control and additional setup requirements.
 
 ### Fallbacks
 

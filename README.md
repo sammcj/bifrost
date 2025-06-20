@@ -30,18 +30,18 @@ Bifrost is an open-source middleware that serves as a unified gateway to various
    }
    ```
 
-2. **Setup your Environment**: Add your environment variable to the session.
+2. **Set Up Your Environment**: Add your environment variable to the session.
 
    ```bash
    export OPENAI_API_KEY=your_openai_api_key
    export ANTHROPIC_API_KEY=your_anthropic_api_key
    ```
 
-   Note: Make sure to add all the variables stated in your `config.json` file.
+   Note: Ensure you add all variables stated in your `config.json` file.
 
 3. **Start the Bifrost HTTP Server**:
 
-   You have two options to run the server, either using Go Binary or a Docker setup if go is not installed.
+   You can run the server using either a Go Binary or Docker (if Go is not installed).
 
    #### i) Using Go Binary
 
@@ -51,7 +51,7 @@ Bifrost is an open-source middleware that serves as a unified gateway to various
      go install github.com/maximhq/bifrost/transports/bifrost-http@latest
      ```
 
-   - Run the server (make sure Go is set in your PATH):
+   - Run the server (ensure Go is in your PATH):
 
      ```bash
      bifrost-http -config config.json -port 8080 -pool-size 300
@@ -92,11 +92,11 @@ Bifrost is an open-source middleware that serves as a unified gateway to various
    }'
    ```
 
-For additional configurations in HTTP server setup, please read [this](https://github.com/maximhq/bifrost/blob/main/transports/README.md).
+For additional HTTP server configuration options, read [this](https://github.com/maximhq/bifrost/blob/main/transports/README.md).
 
 ### B. Using Bifrost as a Go Package
 
-1. **Implement Your Account Interface**: You first need to create your account which follows [Bifrost's account interface](https://github.com/maximhq/bifrost/blob/main/core/schemas/account.go).
+1. **Implement Your Account Interface**: First, create an account that follows [Bifrost's account interface](https://github.com/maximhq/bifrost/blob/main/core/schemas/account.go).
 
    ```golang
    type BaseAccount struct{}
@@ -122,7 +122,7 @@ For additional configurations in HTTP server setup, please read [this](https://g
    }
    ```
 
-   Bifrost uses these methods to get all the keys and configurations it needs to call the providers. You can check the [Additional Configurations](#additional-configurations) section for further customizations.
+   Bifrost uses these methods to get all the keys and configurations it needs to call the providers. See the [Additional Configurations](#additional-configurations) section for additional customization options.
 
 2. **Initialize Bifrost**: Set up the Bifrost instance by providing your account implementation.
 
@@ -154,7 +154,7 @@ For additional configurations in HTTP server setup, please read [this](https://g
      )
    ```
 
-   you can add model parameters by passing them in `Params: &schemas.ModelParameters{...yourParams}` in ChatCompletionRequest.
+   You can add model parameters by including `Params: &schemas.ModelParameters{...yourParams}` in ChatCompletionRequest.
 
 ## 📑 Table of Contents
 
