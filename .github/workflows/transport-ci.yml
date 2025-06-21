@@ -2,11 +2,9 @@ name: Transport CI - Dependency Update and Docker Build
 
 on:
   push:
-    branches:
-      - test/gh-actions
-    # tags:
-    #   - "core/v*" # Triggers dependency update
-    #   - "transports/v*" # Triggers docker build (for manual tags)
+    tags:
+      - "core/v*" # Triggers dependency update
+      - "transports/v*" # Triggers docker build (for manual tags)
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
