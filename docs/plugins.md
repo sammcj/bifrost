@@ -476,7 +476,7 @@ func (p *CachePlugin) PostHook(ctx *context.Context, result *BifrostResponse, er
 
 Each plugin should be organized as follows:
 
-```
+```text
 plugins/
 └── your-plugin-name/
     ├── main.go           # Plugin implementation
