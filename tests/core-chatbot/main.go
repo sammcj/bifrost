@@ -247,7 +247,13 @@ func NewChatSession(config ChatbotConfig) (*ChatSession, error) {
 			Envs:    []string{"SERPER_API_KEY"},
 		},
 		ToolsToSkip: []string{}, // No tools to skip for this client
-	})
+	},
+		schemas.MCPClientConfig{
+			Name:             "gmail-mcp",
+			ConnectionType:   schemas.MCPConnectionTypeSSE,
+			ConnectionString: bifrost.Ptr("https://mcp.composio.dev/composio/server/654c1e3f-ea7d-47b6-9e31-398d00449654/sse"),
+		},
+	)
 
 	fmt.Println("🔌 Configuring Context7 MCP server...")
 	mcpConfig.ClientConfigs = append(mcpConfig.ClientConfigs, schemas.MCPClientConfig{
