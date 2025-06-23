@@ -4,17 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
-	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/maximhq/bifrost/core/schemas"
-	mcp_golang "github.com/metoro-io/mcp-golang"
-	httpTransport "github.com/metoro-io/mcp-golang/transport/http"
-	"github.com/metoro-io/mcp-golang/transport/stdio"
+
+	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 // ============================================================================
@@ -23,7 +24,6 @@ import (
 
 const (
 	// MCP defaults and identifiers
-	DefaultMCPServerPort                = 8181               // Default port for local MCP server
 	BifrostMCPVersion                   = "1.0.0"            // Version identifier for Bifrost
 	BifrostMCPClientName                = "BifrostClient"    // Name for internal Bifrost MCP client
 	BifrostMCPClientKey                 = "bifrost-internal" // Key for internal Bifrost client in clientMap
@@ -43,9 +43,8 @@ const (
 // It provides a bridge between Bifrost and various MCP servers, supporting
 // both local tool hosting and external MCP server connections.
 type MCPManager struct {
-	server        *mcp_golang.Server    // Local MCP server instance for hosting tools
+	server        *server.MCPServer     // Local MCP server instance for hosting tools (STDIO-based)
 	clientMap     map[string]*MCPClient // Map of MCP client names to their configurations
-	serverPort    *int                  // Port for local MCP server (only required for local server)
 	mu            sync.RWMutex          // Read-write mutex for thread-safe operations
 	serverRunning bool                  // Track whether local MCP server is running
 	logger        schemas.Logger        // Logger instance for structured logging
@@ -54,19 +53,18 @@ type MCPManager struct {
 // MCPClient represents a connected MCP client with its configuration and tools.
 type MCPClient struct {
 	Name            string                  // Unique name for this client
-	Conn            *mcp_golang.Client      // Active MCP client connection
+	Conn            *client.Client          // Active MCP client connection
 	ExecutionConfig schemas.MCPClientConfig // Tool filtering settings
 	ToolMap         map[string]schemas.Tool // Available tools mapped by name
-	StdioCommand    *exec.Cmd               `json:"-"`               // STDIO process command (not serialized)
 	ConnectionInfo  MCPClientConnectionInfo `json:"connection_info"` // Connection metadata for management
+	cancelFunc      context.CancelFunc      `json:"-"`               // Cancel function for SSE connections (not serialized)
 }
 
 // MCPClientConnectionInfo stores metadata about how a client is connected.
 type MCPClientConnectionInfo struct {
-	Type               schemas.MCPConnectionType `json:"type"`                           // Connection type (HTTP or STDIO)
-	HTTPConnectionURL  *string                   `json:"http_connection_url,omitempty"`  // HTTP endpoint URL (for HTTP connections)
+	Type               schemas.MCPConnectionType `json:"type"`                           // Connection type (HTTP, STDIO, or SSE)
+	ConnectionURL      *string                   `json:"connection_url,omitempty"`       // HTTP/SSE endpoint URL (for HTTP/SSE connections)
 	StdioCommandString *string                   `json:"stdio_command_string,omitempty"` // Command string for display (for STDIO connections)
-	ProcessID          *int                      `json:"process_id,omitempty"`           // Process ID of STDIO command
 }
 
 // MCPToolHandler is a generic function type for handling tool calls with typed arguments.
@@ -93,9 +91,8 @@ func newMCPManager(config schemas.MCPConfig, logger schemas.Logger) (*MCPManager
 	}
 
 	manager := &MCPManager{
-		serverPort: config.ServerPort,
-		clientMap:  make(map[string]*MCPClient),
-		logger:     logger,
+		clientMap: make(map[string]*MCPClient),
+		logger:    logger,
 	}
 
 	// Process client configs: create client map entries and establish connections
@@ -209,18 +206,20 @@ func (m *MCPManager) registerTool(name, description string, handler MCPToolHandl
 	m.logger.Info(fmt.Sprintf("%s Registering typed tool: %s", MCPLogPrefix, name))
 
 	// Create MCP handler wrapper that converts between typed and MCP interfaces
-	mcpHandler := func(args any) (*mcp_golang.ToolResponse, error) {
+	mcpHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Extract arguments from the request using the request's methods
+		args := request.GetArguments()
 		result, err := handler(args)
 		if err != nil {
-			return mcp_golang.NewToolResponse(mcp_golang.NewTextContent(fmt.Sprintf("Error: %s", err.Error()))), nil
+			return mcp.NewToolResultError(fmt.Sprintf("Error: %s", err.Error())), nil
 		}
-		return mcp_golang.NewToolResponse(mcp_golang.NewTextContent(result)), nil
+		return mcp.NewToolResultText(result), nil
 	}
 
-	// Register with the underlying mcp-golang server
-	err := m.server.RegisterTool(name, description, mcpHandler)
-	if err != nil {
-		return fmt.Errorf("failed to register tool with MCP server: %w", err)
+	// Register the tool with the local MCP server using AddTool
+	if m.server != nil {
+		tool := mcp.NewTool(name, mcp.WithDescription(description))
+		m.server.AddTool(tool, mcpHandler)
 	}
 
 	// Store tool definition for Bifrost integration
@@ -230,6 +229,7 @@ func (m *MCPManager) registerTool(name, description string, handler MCPToolHandl
 }
 
 // setupLocalHost initializes the local MCP server and client if not already running.
+// This creates a STDIO-based server for local tool hosting and a corresponding client.
 // This is called automatically when tools are registered or when the server is needed.
 //
 // Returns:
@@ -240,14 +240,14 @@ func (m *MCPManager) setupLocalHost() error {
 		return nil
 	}
 
-	// Create and configure local MCP server
+	// Create and configure local MCP server (STDIO-based)
 	server, err := m.createLocalMCPServer()
 	if err != nil {
 		return fmt.Errorf("failed to create local MCP server: %w", err)
 	}
 	m.server = server
 
-	// Create and configure local MCP client
+	// Create and configure local MCP client (STDIO-based)
 	client, err := m.createLocalMCPClient()
 	if err != nil {
 		return fmt.Errorf("failed to create local MCP client: %w", err)
@@ -258,60 +258,55 @@ func (m *MCPManager) setupLocalHost() error {
 	return m.startLocalMCPServer()
 }
 
-// createLocalMCPServer creates a new local MCP server instance with HTTP transport.
+// createLocalMCPServer creates a new local MCP server instance with STDIO transport.
 // This server will host tools registered via RegisterTool function.
 //
 // Returns:
-//   - *mcp_golang.Server: Configured MCP server instance
+//   - *server.MCPServer: Configured MCP server instance
 //   - error: Any creation error
-func (m *MCPManager) createLocalMCPServer() (*mcp_golang.Server, error) {
-	// Use configured port or default
-	serverPort := m.serverPort
-	if serverPort == nil {
-		serverPort = Ptr(DefaultMCPServerPort)
-	}
+func (m *MCPManager) createLocalMCPServer() (*server.MCPServer, error) {
+	// Create MCP server
+	mcpServer := server.NewMCPServer(
+		"Bifrost-MCP-Server",
+		"1.0.0",
+		server.WithToolCapabilities(true),
+	)
 
-	// Create HTTP transport for the MCP server
-	serverTransport := httpTransport.NewHTTPTransport("/mcp")
-	serverTransport.WithAddr(fmt.Sprintf(":%d", *serverPort))
-	server := mcp_golang.NewServer(serverTransport)
-
-	return server, nil
+	return mcpServer, nil
 }
 
-// createLocalMCPClient creates a client that connects to the local MCP server.
+// createLocalMCPClient creates a client that connects to the local MCP server via STDIO.
 // This client is used internally by Bifrost to access locally hosted tools.
 //
 // Returns:
 //   - *MCPClient: Configured client for local server
 //   - error: Any creation error
 func (m *MCPManager) createLocalMCPClient() (*MCPClient, error) {
-	// Use configured port or default
-	serverPort := m.serverPort
-	if serverPort == nil {
-		serverPort = Ptr(DefaultMCPServerPort)
-	}
+	// For local STDIO communication, we'll use the same process
+	// Create a STDIO transport that communicates with our local server
+	// This creates an in-process communication channel
+	stdioTransport := transport.NewStdio(
+		"",  // Empty command means in-process
+		nil, // No environment variables needed
+	)
 
-	// Create HTTP client transport pointing to local server
-	clientTransport := httpTransport.NewHTTPClientTransport("/mcp")
-	clientTransport.WithBaseURL(fmt.Sprintf("http://localhost:%d", *serverPort))
-	client := mcp_golang.NewClientWithInfo(clientTransport, mcp_golang.ClientInfo{
-		Name:    BifrostMCPClientName,
-		Version: BifrostMCPVersion,
-	})
+	// Create the MCP client
+	mcpClient := client.NewClient(stdioTransport)
 
 	return &MCPClient{
 		Name: BifrostMCPClientName,
-		Conn: client,
+		Conn: mcpClient,
 		ExecutionConfig: schemas.MCPClientConfig{
 			Name: BifrostMCPClientName,
 		},
 		ToolMap: make(map[string]schemas.Tool),
+		ConnectionInfo: MCPClientConnectionInfo{
+			Type: schemas.MCPConnectionTypeSTDIO,
+		},
 	}, nil
 }
 
-// startLocalMCPServer starts the HTTP server and initializes the client connection.
-// The server runs in a separate goroutine to avoid blocking.
+// startLocalMCPServer starts the STDIO server in a background goroutine.
 //
 // Returns:
 //   - error: Any startup error
@@ -328,10 +323,10 @@ func (m *MCPManager) startLocalMCPServer() error {
 		return fmt.Errorf("server not initialized")
 	}
 
-	// Start the HTTP server in background goroutine
+	// Start the STDIO server in background goroutine
 	go func() {
-		if err := m.server.Serve(); err != nil && err != http.ErrServerClosed {
-			m.logger.Error(fmt.Errorf("%s MCP server error: %w", MCPLogPrefix, err))
+		if err := server.ServeStdio(m.server); err != nil {
+			m.logger.Error(fmt.Errorf("MCP STDIO server error: %w", err))
 			m.mu.Lock()
 			m.serverRunning = false
 			m.mu.Unlock()
@@ -349,7 +344,28 @@ func (m *MCPManager) startLocalMCPServer() error {
 		return fmt.Errorf("bifrost client not found")
 	}
 
-	_, err := m.clientMap[BifrostMCPClientKey].Conn.Initialize(ctx)
+	// Start the local client transport first
+	if err := m.clientMap[BifrostMCPClientKey].Conn.Start(ctx); err != nil {
+		m.serverRunning = false
+		return fmt.Errorf("failed to start local MCP client transport: %v", err)
+	}
+
+	// Create proper initialize request
+	initRequest := mcp.InitializeRequest{
+		Request: mcp.Request{
+			Method: string(mcp.MethodInitialize),
+		},
+		Params: mcp.InitializeParams{
+			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+			Capabilities:    mcp.ClientCapabilities{},
+			ClientInfo: mcp.Implementation{
+				Name:    BifrostMCPClientName,
+				Version: BifrostMCPVersion,
+			},
+		},
+	}
+
+	_, err := m.clientMap[BifrostMCPClientKey].Conn.Initialize(ctx, initRequest)
 	if err != nil {
 		m.serverRunning = false
 		return fmt.Errorf("failed to initialize MCP client: %v", err)
@@ -390,10 +406,25 @@ func (m *MCPManager) executeTool(ctx context.Context, toolCall schemas.ToolCall)
 	}
 
 	// Call the tool via MCP client -> MCP server
-	toolResponse, callErr := client.Conn.CallTool(ctx, toolName, arguments)
+	callRequest := mcp.CallToolRequest{
+		Request: mcp.Request{
+			Method: string(mcp.MethodToolsCall),
+		},
+		Params: mcp.CallToolParams{
+			Name:      toolName,
+			Arguments: arguments,
+		},
+	}
+
+	m.logger.Info(fmt.Sprintf("%s Starting tool execution: %s via client: %s", MCPLogPrefix, toolName, client.Name))
+
+	toolResponse, callErr := client.Conn.CallTool(ctx, callRequest)
 	if callErr != nil {
+		m.logger.Error(fmt.Errorf("%s Tool execution failed for %s via client %s: %v", MCPLogPrefix, toolName, client.Name, callErr))
 		return nil, fmt.Errorf("MCP tool call failed: %v", callErr)
 	}
+
+	m.logger.Info(fmt.Sprintf("%s Tool execution completed: %s", MCPLogPrefix, toolName))
 
 	// Extract text from MCP response
 	responseText := m.extractTextFromMCPResponse(toolResponse, toolName)
@@ -435,9 +466,8 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 	m.mu.Unlock()
 
 	// Heavy operations performed outside lock
-	var externalClient *mcp_golang.Client
+	var externalClient *client.Client
 	var connectionInfo MCPClientConnectionInfo
-	var stdioCommand *exec.Cmd
 	var err error
 
 	// Create appropriate transport based on connection type
@@ -445,7 +475,9 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 	case schemas.MCPConnectionTypeHTTP:
 		externalClient, connectionInfo, err = m.createHTTPConnection(config)
 	case schemas.MCPConnectionTypeSTDIO:
-		externalClient, connectionInfo, stdioCommand, err = m.createSTDIOConnection(config)
+		externalClient, connectionInfo, err = m.createSTDIOConnection(config)
+	case schemas.MCPConnectionTypeSSE:
+		externalClient, connectionInfo, err = m.createSSEConnection(config)
 	default:
 		return fmt.Errorf("unknown connection type: %s", config.ConnectionType)
 	}
@@ -455,11 +487,48 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 	}
 
 	// Initialize the external client with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), MCPClientConnectionEstablishTimeout)
-	defer cancel()
+	// For SSE connections, we need a long-lived context, for others we can use timeout
+	var ctx context.Context
+	var cancel context.CancelFunc
 
-	_, err = externalClient.Initialize(ctx)
+	if config.ConnectionType == schemas.MCPConnectionTypeSSE {
+		// SSE connections need a long-lived context for the persistent stream
+		ctx, cancel = context.WithCancel(context.Background())
+		// Don't defer cancel here - SSE needs the context to remain active
+	} else {
+		// Other connection types can use timeout context
+		ctx, cancel = context.WithTimeout(context.Background(), MCPClientConnectionEstablishTimeout)
+		defer cancel()
+	}
+
+	// Start the transport first (required for STDIO and SSE clients)
+	if err := externalClient.Start(ctx); err != nil {
+		if config.ConnectionType == schemas.MCPConnectionTypeSSE {
+			cancel() // Cancel SSE context only on error
+		}
+		return fmt.Errorf("failed to start MCP client transport %s: %v", config.Name, err)
+	}
+
+	// Create proper initialize request for external client
+	extInitRequest := mcp.InitializeRequest{
+		Request: mcp.Request{
+			Method: string(mcp.MethodInitialize),
+		},
+		Params: mcp.InitializeParams{
+			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+			Capabilities:    mcp.ClientCapabilities{},
+			ClientInfo: mcp.Implementation{
+				Name:    fmt.Sprintf("Bifrost-%s", config.Name),
+				Version: "1.0.0",
+			},
+		},
+	}
+
+	_, err = externalClient.Initialize(ctx, extInitRequest)
 	if err != nil {
+		if config.ConnectionType == schemas.MCPConnectionTypeSSE {
+			cancel() // Cancel SSE context only on error
+		}
 		return fmt.Errorf("failed to initialize MCP client %s: %v", config.Name, err)
 	}
 
@@ -480,7 +549,11 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 		// Store the external client connection and details
 		client.Conn = externalClient
 		client.ConnectionInfo = connectionInfo
-		client.StdioCommand = stdioCommand
+
+		// Store cancel function for SSE connections to enable proper cleanup
+		if config.ConnectionType == schemas.MCPConnectionTypeSSE {
+			client.cancelFunc = cancel
+		}
 
 		// Store discovered tools
 		for toolName, tool := range tools {
@@ -495,207 +568,18 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 	return nil
 }
 
-// ============================================================================
-// CLEANUP
-// ============================================================================
-
-// cleanup performs cleanup of all MCP resources.
-func (m *MCPManager) cleanup() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Clean up STDIO processes
-	for _, client := range m.clientMap {
-		if client.StdioCommand != nil && client.StdioCommand.Process != nil {
-			m.logger.Info(fmt.Sprintf("%s Terminating STDIO process: %d", MCPLogPrefix, client.StdioCommand.Process.Pid))
-
-			// Attempt to kill the process and log any errors
-			if err := client.StdioCommand.Process.Kill(); err != nil {
-				m.logger.Error(fmt.Errorf("%s Failed to kill STDIO process %d: %w", MCPLogPrefix, client.StdioCommand.Process.Pid, err))
-			}
-
-			// Wait for the process to exit with a timeout to prevent blocking cleanup
-			done := make(chan error, 1)
-			go func() {
-				done <- client.StdioCommand.Wait()
-			}()
-
-			select {
-			case err := <-done:
-				// Process exited within timeout
-				if err != nil && !isExpectedKillError(err) {
-					m.logger.Warn(fmt.Sprintf("%s STDIO process %d exited with unexpected error: %v", MCPLogPrefix, client.StdioCommand.Process.Pid, err))
-				}
-				m.logger.Info(fmt.Sprintf("%s STDIO process %d terminated successfully", MCPLogPrefix, client.StdioCommand.Process.Pid))
-			case <-time.After(10 * time.Second):
-				// Process didn't exit within timeout - this is concerning but we can't wait forever
-				m.logger.Warn(fmt.Sprintf("%s STDIO process %d did not terminate within 10 seconds after kill signal", MCPLogPrefix, client.StdioCommand.Process.Pid))
-			}
-		}
-	}
-
-	// Disconnect all clients
-	for name := range m.clientMap {
-		m.logger.Info(fmt.Sprintf("%s Disconnecting MCP client: %s", MCPLogPrefix, name))
-	}
-	m.clientMap = make(map[string]*MCPClient)
-
-	// Clear server reference
-	if m.server != nil {
-		m.logger.Info(MCPLogPrefix + " Clearing MCP server reference")
-		m.server = nil
-		m.serverRunning = false
-	}
-
-	return nil
-}
-
-// ============================================================================
-// HELPER METHODS
-// ============================================================================
-
-// isExpectedKillError checks if an error from Wait() is expected after killing a process.
-func isExpectedKillError(err error) bool {
-	if err == nil {
-		return true
-	}
-	// Check if this is a typical "killed by signal" error which is expected after Process.Kill()
-	errStr := err.Error()
-	return strings.Contains(errStr, "signal:") || strings.Contains(errStr, "killed")
-}
-
-// findMCPClientForTool safely finds a client that has the specified tool.
-func (m *MCPManager) findMCPClientForTool(toolName string) *MCPClient {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	for _, client := range m.clientMap {
-		if _, exists := client.ToolMap[toolName]; exists {
-			return client
-		}
-	}
-	return nil
-}
-
-// shouldIncludeClient determines if a client should be included based on filtering rules.
-func (m *MCPManager) shouldIncludeClient(clientName string, includeClients, excludeClients []string) bool {
-	// If includeClients is specified, only include those clients (whitelist mode)
-	if len(includeClients) > 0 {
-		for _, includeName := range includeClients {
-			if clientName == includeName {
-				return true
-			}
-		}
-		return false // Not in include list
-	}
-
-	// If excludeClients is specified, exclude those clients (blacklist mode)
-	if len(excludeClients) > 0 {
-		for _, excludeName := range excludeClients {
-			if clientName == excludeName {
-				return false
-			}
-		}
-	}
-
-	// Default: include all clients
-	return true
-}
-
-// createHTTPConnection creates an HTTP-based MCP client connection without holding locks.
-func (m *MCPManager) createHTTPConnection(config schemas.MCPClientConfig) (*mcp_golang.Client, MCPClientConnectionInfo, error) {
-	if config.HTTPConnectionString == nil {
-		return nil, MCPClientConnectionInfo{}, fmt.Errorf("HTTP connection string is required")
-	}
-
-	// Prepare connection info
-	connectionInfo := MCPClientConnectionInfo{
-		Type:              config.ConnectionType,
-		HTTPConnectionURL: config.HTTPConnectionString,
-	}
-
-	// Create HTTP transport
-	clientTransport := httpTransport.NewHTTPClientTransport("/mcp")
-	clientTransport.WithBaseURL(*config.HTTPConnectionString)
-
-	client := mcp_golang.NewClientWithInfo(clientTransport, mcp_golang.ClientInfo{
-		Name:    fmt.Sprintf("Bifrost-%s", config.Name),
-		Version: "1.0.0",
-	})
-
-	return client, connectionInfo, nil
-}
-
-// createSTDIOConnection creates a STDIO-based MCP client connection without holding locks.
-func (m *MCPManager) createSTDIOConnection(config schemas.MCPClientConfig) (*mcp_golang.Client, MCPClientConnectionInfo, *exec.Cmd, error) {
-	if config.StdioConfig == nil {
-		return nil, MCPClientConnectionInfo{}, nil, fmt.Errorf("stdio config is required")
-	}
-
-	// Prepare STDIO command info for display
-	cmdString := fmt.Sprintf("%s %s", config.StdioConfig.Command, strings.Join(config.StdioConfig.Args, " "))
-
-	// Create and start the STDIO command
-	cmd := exec.Command(config.StdioConfig.Command, config.StdioConfig.Args...)
-
-	// Get stdin/stdout pipes before starting
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, MCPClientConnectionInfo{}, nil, fmt.Errorf("failed to get stdin pipe: %v", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		stdin.Close() // Clean up stdin if stdout fails
-		return nil, MCPClientConnectionInfo{}, nil, fmt.Errorf("failed to get stdout pipe: %v", err)
-	}
-
-	// Check if environment variables are set
-	for _, env := range config.StdioConfig.Envs {
-		if os.Getenv(env) == "" {
-			return nil, MCPClientConnectionInfo{}, nil, fmt.Errorf("environment variable %s is not set for MCP client %s", env, config.Name)
-		}
-	}
-
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		stdin.Close()
-		stdout.Close()
-		wd, _ := os.Getwd()
-		formattedError := fmt.Errorf("failed to start MCP client '%s': command '%s %s' in directory '%s': %v",
-			config.Name,
-			config.StdioConfig.Command,
-			strings.Join(config.StdioConfig.Args, " "),
-			wd,
-			err)
-
-		return nil, MCPClientConnectionInfo{}, nil, formattedError
-	}
-
-	// Prepare connection info
-	connectionInfo := MCPClientConnectionInfo{
-		Type:               config.ConnectionType,
-		StdioCommandString: &cmdString,
-	}
-	if cmd.Process != nil {
-		pid := cmd.Process.Pid
-		connectionInfo.ProcessID = &pid
-	}
-
-	// Create stdio transport with the command's stdout as our stdin, and stdin as our stdout
-	stdioTransport := stdio.NewStdioServerTransportWithIO(stdout, stdin)
-
-	client := mcp_golang.NewClientWithInfo(stdioTransport, mcp_golang.ClientInfo{
-		Name:    fmt.Sprintf("Bifrost-%s", config.Name),
-		Version: "1.0.0",
-	})
-
-	return client, connectionInfo, cmd, nil
-}
-
 // retrieveExternalTools retrieves and filters tools from an external MCP server without holding locks.
-func (m *MCPManager) retrieveExternalTools(ctx context.Context, client *mcp_golang.Client, config schemas.MCPClientConfig) (map[string]schemas.Tool, error) {
+func (m *MCPManager) retrieveExternalTools(ctx context.Context, client *client.Client, config schemas.MCPClientConfig) (map[string]schemas.Tool, error) {
 	// Get available tools from external server
-	toolsResponse, err := client.ListTools(ctx, Ptr(""))
+	listRequest := mcp.ListToolsRequest{
+		PaginatedRequest: mcp.PaginatedRequest{
+			Request: mcp.Request{
+				Method: string(mcp.MethodToolsList),
+			},
+		},
+	}
+
+	toolsResponse, err := client.ListTools(ctx, listRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tools: %v", err)
 	}
@@ -706,7 +590,7 @@ func (m *MCPManager) retrieveExternalTools(ctx context.Context, client *mcp_gola
 
 	tools := make(map[string]schemas.Tool)
 
-	// Convert and filter each tool
+	// toolsResponse is already a ListToolsResult
 	for _, mcpTool := range toolsResponse.Tools {
 		// Check if tool should be skipped based on configuration
 		if m.shouldSkipToolForConfig(mcpTool.Name, config) {
@@ -744,13 +628,17 @@ func (m *MCPManager) shouldSkipToolForConfig(toolName string, config schemas.MCP
 }
 
 // convertMCPToolToBifrostSchema converts an MCP tool definition to Bifrost format.
-func (m *MCPManager) convertMCPToolToBifrostSchema(mcpTool *mcp_golang.ToolRetType) schemas.Tool {
+func (m *MCPManager) convertMCPToolToBifrostSchema(mcpTool *mcp.Tool) schemas.Tool {
 	// Convert MCP tool schema to Bifrost tool schema
 	properties := make(map[string]interface{})
 	required := []string{}
 
-	if mcpTool.InputSchema != nil {
-		if schemaMap, ok := mcpTool.InputSchema.(map[string]interface{}); ok {
+	// Handle the InputSchema - it's a struct, not a pointer
+	inputSchema := mcpTool.InputSchema
+	// Convert to map for processing (this may need adjustment based on actual structure)
+	if schemaBytes, err := json.Marshal(inputSchema); err == nil {
+		var schemaMap map[string]interface{}
+		if json.Unmarshal(schemaBytes, &schemaMap) == nil {
 			if props, ok := schemaMap["properties"].(map[string]interface{}); ok {
 				properties = props
 			}
@@ -770,10 +658,8 @@ func (m *MCPManager) convertMCPToolToBifrostSchema(mcpTool *mcp_golang.ToolRetTy
 		properties = make(map[string]interface{})
 	}
 
-	description := ""
-	if mcpTool.Description != nil {
-		description = *mcpTool.Description
-	}
+	// Description is a string, not a pointer
+	description := mcpTool.Description
 
 	return schemas.Tool{
 		Type: "function",
@@ -790,7 +676,7 @@ func (m *MCPManager) convertMCPToolToBifrostSchema(mcpTool *mcp_golang.ToolRetTy
 }
 
 // extractTextFromMCPResponse extracts text content from an MCP tool response.
-func (m *MCPManager) extractTextFromMCPResponse(toolResponse *mcp_golang.ToolResponse, toolName string) string {
+func (m *MCPManager) extractTextFromMCPResponse(toolResponse *mcp.CallToolResult, toolName string) string {
 	if toolResponse == nil {
 		return fmt.Sprintf("MCP tool '%s' executed successfully", toolName)
 	}
@@ -798,8 +684,8 @@ func (m *MCPManager) extractTextFromMCPResponse(toolResponse *mcp_golang.ToolRes
 	var responseTextBuilder strings.Builder
 	if len(toolResponse.Content) > 0 {
 		for _, contentBlock := range toolResponse.Content {
-			if contentBlock.TextContent != nil && contentBlock.TextContent.Text != "" {
-				responseTextBuilder.WriteString(contentBlock.TextContent.Text)
+			if textContent, ok := contentBlock.(*mcp.TextContent); ok && textContent.Text != "" {
+				responseTextBuilder.WriteString(textContent.Text)
 				responseTextBuilder.WriteString("\n")
 			}
 		}
@@ -867,8 +753,12 @@ func validateMCPClientConfig(config *schemas.MCPClientConfig) error {
 
 	switch config.ConnectionType {
 	case schemas.MCPConnectionTypeHTTP:
-		if config.HTTPConnectionString == nil {
-			return fmt.Errorf("HTTPConnectionString is required for HTTP connection type in client '%s'", config.Name)
+		if config.ConnectionString == nil {
+			return fmt.Errorf("ConnectionString is required for HTTP connection type in client '%s'", config.Name)
+		}
+	case schemas.MCPConnectionTypeSSE:
+		if config.ConnectionString == nil {
+			return fmt.Errorf("ConnectionString is required for SSE connection type in client '%s'", config.Name)
 		}
 	case schemas.MCPConnectionTypeSTDIO:
 		if config.StdioConfig == nil {
@@ -897,5 +787,168 @@ func validateMCPClientConfig(config *schemas.MCPClientConfig) error {
 		}
 	}
 
+	return nil
+}
+
+// ============================================================================
+// HELPER METHODS
+// ============================================================================
+
+// findMCPClientForTool safely finds a client that has the specified tool.
+func (m *MCPManager) findMCPClientForTool(toolName string) *MCPClient {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, client := range m.clientMap {
+		if _, exists := client.ToolMap[toolName]; exists {
+			return client
+		}
+	}
+	return nil
+}
+
+// shouldIncludeClient determines if a client should be included based on filtering rules.
+func (m *MCPManager) shouldIncludeClient(clientName string, includeClients, excludeClients []string) bool {
+	// If includeClients is specified, only include those clients (whitelist mode)
+	if len(includeClients) > 0 {
+		return slices.Contains(includeClients, clientName)
+	}
+
+	// If excludeClients is specified, exclude those clients (blacklist mode)
+	if len(excludeClients) > 0 {
+		return !slices.Contains(excludeClients, clientName)
+	}
+
+	// Default: include all clients
+	return true
+}
+
+// createHTTPConnection creates an HTTP-based MCP client connection without holding locks.
+func (m *MCPManager) createHTTPConnection(config schemas.MCPClientConfig) (*client.Client, MCPClientConnectionInfo, error) {
+	if config.ConnectionString == nil {
+		return nil, MCPClientConnectionInfo{}, fmt.Errorf("HTTP connection string is required")
+	}
+
+	// Prepare connection info
+	connectionInfo := MCPClientConnectionInfo{
+		Type:          config.ConnectionType,
+		ConnectionURL: config.ConnectionString,
+	}
+
+	// Create StreamableHTTP transport
+	httpTransport, err := transport.NewStreamableHTTP(*config.ConnectionString)
+	if err != nil {
+		return nil, MCPClientConnectionInfo{}, fmt.Errorf("failed to create HTTP transport: %w", err)
+	}
+
+	client := client.NewClient(httpTransport)
+
+	return client, connectionInfo, nil
+}
+
+// createSTDIOConnection creates a STDIO-based MCP client connection without holding locks.
+func (m *MCPManager) createSTDIOConnection(config schemas.MCPClientConfig) (*client.Client, MCPClientConnectionInfo, error) {
+	if config.StdioConfig == nil {
+		return nil, MCPClientConnectionInfo{}, fmt.Errorf("stdio config is required")
+	}
+
+	// Prepare STDIO command info for display
+	cmdString := fmt.Sprintf("%s %s", config.StdioConfig.Command, strings.Join(config.StdioConfig.Args, " "))
+
+	// Check if environment variables are set
+	for _, env := range config.StdioConfig.Envs {
+		if os.Getenv(env) == "" {
+			return nil, MCPClientConnectionInfo{}, fmt.Errorf("environment variable %s is not set for MCP client %s", env, config.Name)
+		}
+	}
+
+	// Create STDIO transport
+	stdioTransport := transport.NewStdio(
+		config.StdioConfig.Command,
+		config.StdioConfig.Envs,
+		config.StdioConfig.Args...,
+	)
+
+	// Prepare connection info
+	connectionInfo := MCPClientConnectionInfo{
+		Type:               config.ConnectionType,
+		StdioCommandString: &cmdString,
+	}
+
+	client := client.NewClient(stdioTransport)
+
+	// Return nil for cmd since mark3labs/mcp-go manages the process internally
+	return client, connectionInfo, nil
+}
+
+// createSSEConnection creates a SSE-based MCP client connection without holding locks.
+func (m *MCPManager) createSSEConnection(config schemas.MCPClientConfig) (*client.Client, MCPClientConnectionInfo, error) {
+	if config.ConnectionString == nil {
+		return nil, MCPClientConnectionInfo{}, fmt.Errorf("SSE connection string is required")
+	}
+
+	// Prepare connection info
+	connectionInfo := MCPClientConnectionInfo{
+		Type:          config.ConnectionType,
+		ConnectionURL: config.ConnectionString, // Reuse HTTPConnectionURL field for SSE URL display
+	}
+
+	// Create SSE transport
+	sseTransport, err := transport.NewSSE(*config.ConnectionString)
+	if err != nil {
+		return nil, MCPClientConnectionInfo{}, fmt.Errorf("failed to create SSE transport: %w", err)
+	}
+
+	client := client.NewClient(sseTransport)
+
+	return client, connectionInfo, nil
+}
+
+// cleanup performs cleanup of all MCP resources including clients and local server.
+// This function safely disconnects all MCP clients (HTTP, STDIO, and SSE) and
+// cleans up the local MCP server. It handles proper cancellation of SSE contexts
+// and closes all transport connections.
+//
+// Returns:
+//   - error: Always returns nil, but maintains error interface for consistency
+func (m *MCPManager) cleanup() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Disconnect all external MCP clients
+	for name, client := range m.clientMap {
+		m.logger.Info(fmt.Sprintf("%s Disconnecting MCP client: %s", MCPLogPrefix, name))
+
+		// Cancel SSE context if present (required for proper SSE cleanup)
+		if client.cancelFunc != nil {
+			client.cancelFunc()
+			client.cancelFunc = nil
+		}
+
+		// Close the client transport connection
+		// This handles cleanup for all transport types (HTTP, STDIO, SSE)
+		if client.Conn != nil {
+			if err := client.Conn.Close(); err != nil {
+				m.logger.Error(fmt.Errorf("%s Failed to close MCP client %s: %w", MCPLogPrefix, name, err))
+			}
+			client.Conn = nil
+		}
+
+		// Clear client tool map
+		client.ToolMap = make(map[string]schemas.Tool)
+	}
+
+	// Clear the client map
+	m.clientMap = make(map[string]*MCPClient)
+
+	// Clear local server reference
+	// Note: mark3labs/mcp-go STDIO server cleanup is handled automatically
+	if m.server != nil {
+		m.logger.Info(MCPLogPrefix + " Clearing local MCP server reference")
+		m.server = nil
+		m.serverRunning = false
+	}
+
+	m.logger.Info(MCPLogPrefix + " MCP cleanup completed")
 	return nil
 }

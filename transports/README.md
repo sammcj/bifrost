@@ -118,7 +118,14 @@ Bifrost supports MCP integration for tool usage with AI models. You can configur
       {
         "name": "web-search",
         "connection_type": "http",
-        "http_connection_string": "http://localhost:3001/mcp",
+        "connection_string": "http://localhost:3001/mcp",
+        "tools_to_skip": [],
+        "tools_to_execute": []
+      },
+      {
+        "name": "real-time-data",
+        "connection_type": "sse",
+        "connection_string": "http://localhost:3002/sse",
         "tools_to_skip": [],
         "tools_to_execute": []
       }
