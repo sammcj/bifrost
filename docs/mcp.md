@@ -43,9 +43,10 @@ The MCP Integration acts as a bridge between Bifrost and the Model Context Proto
 
 ### 🔌 **Connection Types**
 
-- **HTTP**: Connect to web-based MCP servers
+- **HTTP**: Connect to web-based MCP servers with streaming support
 - **STDIO**: Launch and communicate with command-line MCP tools
-- **Process Management**: Automatic cleanup of STDIO processes
+- **SSE**: Connect to Server-Sent Events based MCP services
+- **Process Management**: Automatic cleanup of STDIO processes and SSE connections
 
 ## Quick Start
 
@@ -62,7 +63,6 @@ import (
 func main() {
     // Create MCP configuration
     mcpConfig := &schemas.MCPConfig{
-        ServerPort: bifrost.Ptr(8181), // (only required for local tool setup)
         ClientConfigs: []schemas.MCPClientConfig{
             {
                 Name:        "weather-service",
@@ -131,10 +131,10 @@ mcpConfig := &schemas.MCPConfig{
     ClientConfigs: []schemas.MCPClientConfig{
         // HTTP-based MCP server
         {
-            Name:                 "weather-service",
-            ConnectionType:       schemas.MCPConnectionTypeHTTP,
-            HTTPConnectionString: &[]string{"http://localhost:3000"}[0],
-            ToolsToSkip:          []string{}, // No tools to skip
+            Name:             "weather-service",
+            ConnectionType:   schemas.MCPConnectionTypeHTTP,
+            ConnectionString: &[]string{"http://localhost:3000"}[0],
+            ToolsToSkip:      []string{}, // No tools to skip
         },
         // STDIO-based MCP tool
         {
@@ -189,7 +189,14 @@ Configure MCP in your JSON configuration file when using Bifrost HTTP Transport:
       {
         "name": "web-search",
         "connection_type": "http",
-        "http_connection_string": "http://localhost:3001/mcp",
+        "connection_string": "http://localhost:3001/mcp",
+        "tools_to_skip": [],
+        "tools_to_execute": []
+      },
+      {
+        "name": "real-time-data",
+        "connection_type": "sse",
+        "connection_string": "http://localhost:3002/sse",
         "tools_to_skip": [],
         "tools_to_execute": []
       }
@@ -401,7 +408,6 @@ type BifrostConfig struct {
 
 ```go
 type MCPConfig struct {
-    ServerPort    *int              `json:"server_port,omitempty"`    // Port for local MCP server (only required for local tool setup, defaults to 8181)
     ClientConfigs []MCPClientConfig `json:"client_configs,omitempty"` // MCP client configurations (connection + filtering)
 }
 ```
@@ -410,12 +416,12 @@ type MCPConfig struct {
 
 ```go
 type MCPClientConfig struct {
-    Name                 string            `json:"name"`                             // Client name
-    ConnectionType       MCPConnectionType `json:"connection_type"`                  // How to connect (HTTP or STDIO)
-    HTTPConnectionString *string           `json:"http_connection_string,omitempty"` // HTTP URL (required for HTTP connections)
-    StdioConfig          *MCPStdioConfig   `json:"stdio_config,omitempty"`           // STDIO configuration (required for STDIO connections)
-    ToolsToSkip          []string          `json:"tools_to_skip,omitempty"`          // Tools to exclude from this client
-    ToolsToExecute       []string          `json:"tools_to_execute,omitempty"`       // Tools to include from this client (if specified, only these are used)
+    Name             string            `json:"name"`                        // Client name
+    ConnectionType   MCPConnectionType `json:"connection_type"`             // How to connect (HTTP, STDIO, or SSE)
+    ConnectionString *string           `json:"connection_string,omitempty"` // HTTP or SSE URL (required for HTTP or SSE connections)
+    StdioConfig      *MCPStdioConfig   `json:"stdio_config,omitempty"`      // STDIO configuration (required for STDIO connections)
+    ToolsToSkip      []string          `json:"tools_to_skip,omitempty"`     // Tools to exclude from this client
+    ToolsToExecute   []string          `json:"tools_to_execute,omitempty"`  // Tools to include from this client (if specified, only these are used)
 }
 ```
 
@@ -425,8 +431,9 @@ type MCPClientConfig struct {
 type MCPConnectionType string
 
 const (
-    MCPConnectionTypeHTTP  MCPConnectionType = "http"  // HTTP-based MCP connection
+    MCPConnectionTypeHTTP  MCPConnectionType = "http"  // HTTP-based MCP connection (streamable)
     MCPConnectionTypeSTDIO MCPConnectionType = "stdio" // STDIO-based MCP connection
+    MCPConnectionTypeSSE   MCPConnectionType = "sse"   // Server-Sent Events MCP connection
 )
 ```
 
@@ -436,6 +443,7 @@ const (
 type MCPStdioConfig struct {
     Command string   `json:"command"` // Executable command to run
     Args    []string `json:"args"`    // Command line arguments
+    Envs    []string `json:"envs"`    // Environment variables required
 }
 ```
 
@@ -445,10 +453,10 @@ type MCPStdioConfig struct {
 mcpConfig := &schemas.MCPConfig{
     ClientConfigs: []schemas.MCPClientConfig{
         {
-            Name:                 "weather-service",
-            ConnectionType:       schemas.MCPConnectionTypeHTTP,
-            HTTPConnectionString: &[]string{"http://localhost:3000"}[0],
-            ToolsToExecute:       []string{"get_weather", "get_forecast"}, // Only these tools
+            Name:             "weather-service",
+            ConnectionType:   schemas.MCPConnectionTypeHTTP,
+            ConnectionString: &[]string{"http://localhost:3000"}[0],
+            ToolsToExecute:   []string{"get_weather", "get_forecast"}, // Only these tools
         },
         {
             Name:           "filesystem-tools",
@@ -879,6 +887,7 @@ For a complete working example, see `tests/core-chatbot/main.go` in the reposito
 │  │  │                 │  │                  │              │ │
 │  │  │  - Host Tools   │  │  - HTTP Clients  │              │ │
 │  │  │  - HTTP Server  │  │  - STDIO Procs   │              │ │
+│  │  │                 │  │  - SSE Clients   │              │ │
 │  │  │  - Tool Reg.    │  │  - Tool Discovery│              │ │
 │  │  └─────────────────┘  └──────────────────┘              │ │
 │  │                                                         │ │
@@ -938,6 +947,13 @@ User Request
 - Automatic process lifecycle management
 - Process cleanup on Bifrost shutdown
 
+#### SSE Connections
+
+- Connect to Server-Sent Events streams
+- Persistent, long-lived connections for real-time data
+- Automatic connection management and reconnection
+- Proper context cleanup on shutdown
+
 ## API Reference
 
 ### Core Integration Methods
@@ -962,7 +978,6 @@ Main configuration for MCP integration.
 
 ```go
 type MCPConfig struct {
-    ServerPort    *int              `json:"server_port,omitempty"`    // Port for local MCP server (only required for local tool setup, defaults to 8181)
     ClientConfigs []MCPClientConfig `json:"client_configs,omitempty"` // MCP client configurations (connection + filtering)
 }
 ```
@@ -973,12 +988,12 @@ Configuration for individual MCP clients, including both connection details and 
 
 ```go
 type MCPClientConfig struct {
-    Name                 string            `json:"name"`                             // Client name
-    ConnectionType       MCPConnectionType `json:"connection_type"`                  // How to connect (HTTP or STDIO)
-    HTTPConnectionString *string           `json:"http_connection_string,omitempty"` // HTTP URL (required for HTTP connections)
-    StdioConfig          *MCPStdioConfig   `json:"stdio_config,omitempty"`           // STDIO configuration (required for STDIO connections)
-    ToolsToSkip          []string          `json:"tools_to_skip,omitempty"`          // Tools to exclude from this client
-    ToolsToExecute       []string          `json:"tools_to_execute,omitempty"`       // Tools to include from this client (if specified, only these are used)
+    Name             string            `json:"name"`                        // Client name
+    ConnectionType   MCPConnectionType `json:"connection_type"`             // How to connect (HTTP, STDIO, or SSE)
+    ConnectionString *string           `json:"connection_string,omitempty"` // HTTP or SSE URL (required for HTTP or SSE connections)
+    StdioConfig      *MCPStdioConfig   `json:"stdio_config,omitempty"`      // STDIO configuration (required for STDIO connections)
+    ToolsToSkip      []string          `json:"tools_to_skip,omitempty"`     // Tools to exclude from this client
+    ToolsToExecute   []string          `json:"tools_to_execute,omitempty"`  // Tools to include from this client (if specified, only these are used)
 }
 ```
 
@@ -990,6 +1005,7 @@ STDIO-specific configuration for launching external MCP tools.
 type MCPStdioConfig struct {
     Command string   `json:"command"` // Executable command to run
     Args    []string `json:"args"`    // Command line arguments
+    Envs    []string `json:"envs"`    // Environment variables required
 }
 ```
 
@@ -1001,8 +1017,9 @@ Enumeration of supported connection types.
 type MCPConnectionType string
 
 const (
-    MCPConnectionTypeHTTP  MCPConnectionType = "http"  // HTTP-based MCP connection
+    MCPConnectionTypeHTTP  MCPConnectionType = "http"  // HTTP-based MCP connection (streamable)
     MCPConnectionTypeSTDIO MCPConnectionType = "stdio" // STDIO-based MCP connection
+    MCPConnectionTypeSSE   MCPConnectionType = "sse"   // Server-Sent Events MCP connection
 )
 ```
 
@@ -1038,10 +1055,10 @@ mcpConfig := &schemas.MCPConfig{
             // ToolsToExecute: []string{"read_file", "list_files", "write_file"},
         },
         {
-            Name:           "safe-tools",
-            ConnectionType: schemas.MCPConnectionTypeHTTP,
-            HTTPConnectionString: &[]string{"http://localhost:3000"}[0],
-            ToolsToExecute: []string{"search", "weather"}, // Only safe operations
+            Name:             "safe-tools",
+            ConnectionType:   schemas.MCPConnectionTypeHTTP,
+            ConnectionString: &[]string{"http://localhost:3000"}[0],
+            ToolsToExecute:   []string{"search", "weather"}, // Only safe operations
         },
     },
 }
@@ -1090,9 +1107,9 @@ mcpConfig := &schemas.MCPConfig{
             ToolsToExecute: []string{"read_file", "list_files"}, // Only safe read operations
         },
         {
-            Name:           "weather",
-            ConnectionType: schemas.MCPConnectionTypeHTTP,
-            HTTPConnectionString: &[]string{"http://localhost:3000"}[0],
+            Name:             "weather",
+            ConnectionType:   schemas.MCPConnectionTypeHTTP,
+            ConnectionString: &[]string{"http://localhost:3000"}[0],
             // All tools available (no filtering)
         },
         {
@@ -1208,10 +1225,27 @@ For web-based MCP services:
 mcpConfig := &schemas.MCPConfig{
     ClientConfigs: []schemas.MCPClientConfig{
         {
-            Name:                 "cloud-service",
-            ConnectionType:       schemas.MCPConnectionTypeHTTP,
-            HTTPConnectionString: &[]string{"https://api.example.com/mcp"}[0],
-            ToolsToSkip:          []string{}, // No tools to skip
+            Name:             "cloud-service",
+            ConnectionType:   schemas.MCPConnectionTypeHTTP,
+            ConnectionString: &[]string{"https://api.example.com/mcp"}[0],
+            ToolsToSkip:      []string{}, // No tools to skip
+        },
+    },
+}
+```
+
+#### Connecting to SSE-based MCP Servers
+
+For Server-Sent Events based MCP services:
+
+```go
+mcpConfig := &schemas.MCPConfig{
+    ClientConfigs: []schemas.MCPClientConfig{
+        {
+            Name:             "real-time-service",
+            ConnectionType:   schemas.MCPConnectionTypeSSE,
+            ConnectionString: &[]string{"https://api.example.com/sse"}[0],
+            ToolsToSkip:      []string{}, // No tools to skip
         },
     },
 }
@@ -1238,17 +1272,17 @@ clientConfig := schemas.MCPClientConfig{
 
 ```go
 func getSecureMCPConfig(environment string) *schemas.MCPConfig {
-    config := &schemas.MCPConfig{ServerPort: ":8181"}
+    config := &schemas.MCPConfig{}
 
     switch environment {
     case "production":
         // Minimal tools in production
         config.ClientConfigs = []schemas.MCPClientConfig{
             {
-                Name:           "search",
-                ConnectionType: schemas.MCPConnectionTypeHTTP,
-                HTTPConnectionString: &[]string{"http://search-service:3000"}[0],
-                ToolsToExecute: []string{"web_search"},
+                Name:             "search",
+                ConnectionType:   schemas.MCPConnectionTypeHTTP,
+                ConnectionString: &[]string{"http://search-service:3000"}[0],
+                ToolsToExecute:   []string{"web_search"},
             },
         }
     case "development":
@@ -1264,9 +1298,9 @@ func getSecureMCPConfig(environment string) *schemas.MCPConfig {
                 ToolsToSkip: []string{"rm", "delete"},
             },
             {
-                Name:           "search",
-                ConnectionType: schemas.MCPConnectionTypeHTTP,
-                HTTPConnectionString: &[]string{"http://localhost:3000"}[0],
+                Name:             "search",
+                ConnectionType:   schemas.MCPConnectionTypeHTTP,
+                ConnectionString: &[]string{"http://localhost:3000"}[0],
             },
         }
     }
@@ -1330,6 +1364,20 @@ Error: failed to initialize external MCP client: connection refused
 - Check the URL is correct and accessible
 - Verify network connectivity
 - Check firewall settings
+
+**SSE Connection Issues:**
+
+```
+Error: SSE stream error: context canceled
+```
+
+**Solutions:**
+
+- Verify the SSE server is running and accessible
+- Check the SSE endpoint URL is correct
+- Ensure the server supports Server-Sent Events protocol
+- Check for network connectivity issues
+- Verify the SSE stream is properly formatted
 
 #### 2. Tool Registration Failures
 
