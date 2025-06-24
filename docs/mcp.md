@@ -1341,7 +1341,7 @@ func getContextForUserRole(role string) context.Context {
 
 **STDIO Connection Issues:**
 
-```
+```text
 Error: failed to start command 'npx @modelcontextprotocol/server-filesystem'
 ```
 
@@ -1354,7 +1354,7 @@ Error: failed to start command 'npx @modelcontextprotocol/server-filesystem'
 
 **HTTP Connection Issues:**
 
-```
+```text
 Error: failed to initialize external MCP client: connection refused
 ```
 
@@ -1367,7 +1367,7 @@ Error: failed to initialize external MCP client: connection refused
 
 **SSE Connection Issues:**
 
-```
+```text
 Error: SSE stream error: context canceled
 ```
 
@@ -1383,7 +1383,7 @@ Error: SSE stream error: context canceled
 
 **Tool Already Exists:**
 
-```
+```text
 Error: tool 'echo' already registered
 ```
 
@@ -1397,7 +1397,7 @@ Error: tool 'echo' already registered
 
 **No Tools Available:**
 
-```
+```text
 Warning: No MCP tools found in response
 ```
 
@@ -1410,7 +1410,7 @@ Warning: No MCP tools found in response
 
 **Unexpected Tool Availability:**
 
-```
+```text
 Warning: Restricted tool 'delete_all_files' is available when it shouldn't be
 ```
 
@@ -1424,7 +1424,7 @@ Warning: Restricted tool 'delete_all_files' is available when it shouldn't be
 
 **Tool Not Found:**
 
-```
+```text
 Error: MCP tool 'unknown_tool' not found
 ```
 
