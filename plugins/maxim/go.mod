@@ -3,7 +3,7 @@ module github.com/maximhq/bifrost/plugins/maxim
 go 1.24.1
 
 require (
-	github.com/maximhq/bifrost/core v1.1.2
+	github.com/maximhq/bifrost/core v1.1.5
 	github.com/maximhq/maxim-go v0.1.3
 )
 
@@ -27,8 +27,11 @@ require (
 	github.com/aws/smithy-go v1.22.3 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/mark3labs/mcp-go v0.32.0 // indirect
+	github.com/spf13/cast v1.7.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.62.0 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect

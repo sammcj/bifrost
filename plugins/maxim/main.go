@@ -111,7 +111,7 @@ func (plugin *Plugin) GetName() string {
 // Returns:
 //   - *schemas.BifrostRequest: The original request, unmodified
 //   - error: Any error that occurred during trace/generation creation
-func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.BifrostResponse, error) {
+func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	var traceID string
 	var sessionID string
 
