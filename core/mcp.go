@@ -416,7 +416,7 @@ func (m *MCPManager) executeTool(ctx context.Context, toolCall schemas.ToolCall)
 		},
 	}
 
-	m.logger.Info(fmt.Sprintf("%s Starting tool execution: %s via client: %s", MCPLogPrefix, toolName, client.Name))
+	m.logger.Debug(fmt.Sprintf("%s Starting tool execution: %s via client: %s", MCPLogPrefix, toolName, client.Name))
 
 	toolResponse, callErr := client.Conn.CallTool(ctx, callRequest)
 	if callErr != nil {
@@ -424,7 +424,7 @@ func (m *MCPManager) executeTool(ctx context.Context, toolCall schemas.ToolCall)
 		return nil, fmt.Errorf("MCP tool call failed: %v", callErr)
 	}
 
-	m.logger.Info(fmt.Sprintf("%s Tool execution completed: %s", MCPLogPrefix, toolName))
+	m.logger.Debug(fmt.Sprintf("%s Tool execution completed: %s", MCPLogPrefix, toolName))
 
 	// Extract text from MCP response
 	responseText := m.extractTextFromMCPResponse(toolResponse, toolName)
@@ -629,47 +629,15 @@ func (m *MCPManager) shouldSkipToolForConfig(toolName string, config schemas.MCP
 
 // convertMCPToolToBifrostSchema converts an MCP tool definition to Bifrost format.
 func (m *MCPManager) convertMCPToolToBifrostSchema(mcpTool *mcp.Tool) schemas.Tool {
-	// Convert MCP tool schema to Bifrost tool schema
-	properties := make(map[string]interface{})
-	required := []string{}
-
-	// Handle the InputSchema - it's a struct, not a pointer
-	inputSchema := mcpTool.InputSchema
-	// Convert to map for processing (this may need adjustment based on actual structure)
-	if schemaBytes, err := json.Marshal(inputSchema); err == nil {
-		var schemaMap map[string]interface{}
-		if json.Unmarshal(schemaBytes, &schemaMap) == nil {
-			if props, ok := schemaMap["properties"].(map[string]interface{}); ok {
-				properties = props
-			}
-			if req, ok := schemaMap["required"].([]interface{}); ok {
-				for _, r := range req {
-					if reqStr, ok := r.(string); ok {
-						required = append(required, reqStr)
-					}
-				}
-			}
-		}
-	}
-
-	// If no properties are defined, create an empty properties object
-	// This is required by OpenAI's function calling schema
-	if properties == nil {
-		properties = make(map[string]interface{})
-	}
-
-	// Description is a string, not a pointer
-	description := mcpTool.Description
-
 	return schemas.Tool{
 		Type: "function",
 		Function: schemas.Function{
 			Name:        mcpTool.Name,
-			Description: description,
+			Description: mcpTool.Description,
 			Parameters: schemas.FunctionParameters{
-				Type:       "object",
-				Properties: properties,
-				Required:   required,
+				Type:       mcpTool.InputSchema.Type,
+				Properties: mcpTool.InputSchema.Properties,
+				Required:   mcpTool.InputSchema.Required,
 			},
 		},
 	}
@@ -681,18 +649,36 @@ func (m *MCPManager) extractTextFromMCPResponse(toolResponse *mcp.CallToolResult
 		return fmt.Sprintf("MCP tool '%s' executed successfully", toolName)
 	}
 
-	var responseTextBuilder strings.Builder
-	if len(toolResponse.Content) > 0 {
-		for _, contentBlock := range toolResponse.Content {
-			if textContent, ok := contentBlock.(*mcp.TextContent); ok && textContent.Text != "" {
-				responseTextBuilder.WriteString(textContent.Text)
-				responseTextBuilder.WriteString("\n")
+	var result strings.Builder
+	for _, contentBlock := range toolResponse.Content {
+		// Handle typed content
+		switch content := contentBlock.(type) {
+		case mcp.TextContent:
+			result.WriteString(fmt.Sprintf("[Text Response: %s]\n", content.Text))
+		case mcp.ImageContent:
+			result.WriteString(fmt.Sprintf("[Image Response: %s, MIME: %s]\n", content.Data, content.MIMEType))
+		case mcp.AudioContent:
+			result.WriteString(fmt.Sprintf("[Audio Response: %s, MIME: %s]\n", content.Data, content.MIMEType))
+		case mcp.EmbeddedResource:
+			result.WriteString(fmt.Sprintf("[Embedded Resource Response: %s]\n", content.Type))
+		default:
+			// Fallback: try to extract from map structure
+			if jsonBytes, err := json.Marshal(contentBlock); err == nil {
+				var contentMap map[string]interface{}
+				if json.Unmarshal(jsonBytes, &contentMap) == nil {
+					if text, ok := contentMap["text"].(string); ok {
+						result.WriteString(fmt.Sprintf("[Text Response: %s]\n", text))
+						continue
+					}
+				}
+				// Final fallback: serialize as JSON
+				result.WriteString(string(jsonBytes))
 			}
 		}
 	}
 
-	if responseTextBuilder.Len() > 0 {
-		return strings.TrimSpace(responseTextBuilder.String())
+	if result.Len() > 0 {
+		return strings.TrimSpace(result.String())
 	}
 	return fmt.Sprintf("MCP tool '%s' executed successfully", toolName)
 }
