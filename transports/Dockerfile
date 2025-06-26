@@ -8,12 +8,13 @@ RUN apk add --no-cache upx
 # Set environment for static build
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 
-# Define build-time variable for transport type
+# Define build-time variables
 ARG TRANSPORT_TYPE=http
+ARG TAG_VERSION=latest
 
-# Initialize go module and get bifrost-http
+# Initialize go module and get bifrost with specified tag
 RUN go mod init bifrost-build && \
-    go get github.com/maximhq/bifrost/transports/bifrost-${TRANSPORT_TYPE}@latest
+    go get github.com/maximhq/bifrost/transports/bifrost-${TRANSPORT_TYPE}@${TAG_VERSION}
 
 # Build the binary locally
 RUN go build \
