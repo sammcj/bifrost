@@ -145,18 +145,22 @@ jobs:
 
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-          # Extract version from tag
-          VERSION=${TAG#transports/v}
+          # Extract version from tag (remove transports/ prefix)
+          VERSION=${TAG#transports/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+          # Extract numeric version for validation
+          NUMERIC_VERSION=${VERSION#v}
 
           # Validate version format
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+          if ! echo "$NUMERIC_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "Error: Invalid tag format '$TAG'. Expected format: transports/vMAJOR.MINOR.PATCH"
             exit 1
           fi
 
           # Create image tags (Docker tags cannot contain slashes, so use version only)
           echo "tags<<EOF" >> $GITHUB_OUTPUT
-          echo "${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:v${VERSION}" >> $GITHUB_OUTPUT
+          echo "${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:${VERSION}" >> $GITHUB_OUTPUT
           echo "${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
@@ -192,6 +196,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           build-args: |
             TRANSPORT_TYPE=http
+            TAG_VERSION=${{ steps.meta.outputs.version }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
