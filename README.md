@@ -4,7 +4,9 @@
 
 Bifrost is an open-source middleware that serves as a unified gateway to various AI model providers, enabling seamless integration and fallback mechanisms for your AI-powered applications.
 
-## ⚡ Quickstart
+![Bifrost](./docs/media/cover.png)
+
+## ⚡ Quickstart (30 seconds)
 
 ### Prerequisites
 
@@ -12,7 +14,7 @@ Bifrost is an open-source middleware that serves as a unified gateway to various
 - Access to at least one AI model provider (OpenAI, Anthropic, etc.)
 - API keys for the providers you wish to use
 
-### A. Using Bifrost as an HTTP Server
+### Using Bifrost HTTP Transport
 
 1. **Create `config.json`**: This file should contain your provider settings and API keys.
 
@@ -36,7 +38,6 @@ Bifrost is an open-source middleware that serves as a unified gateway to various
 
    ```bash
    export OPENAI_API_KEY=your_openai_api_key
-   export ANTHROPIC_API_KEY=your_anthropic_api_key
    ```
 
    Note: Ensure you add all variables stated in your `config.json` file.
@@ -73,7 +74,6 @@ Bifrost is an open-source middleware that serves as a unified gateway to various
      docker run -p 8080:8080 \
        -v $(pwd)/config.json:/app/config/config.json \
        -e OPENAI_API_KEY \
-       -e ANTHROPIC_API_KEY \
        maximhq/bifrost
      ```
 
@@ -88,93 +88,29 @@ Bifrost is an open-source middleware that serves as a unified gateway to various
      "provider": "openai",
      "model": "gpt-4o-mini",
      "messages": [
-       {"role": "system", "content": "You are a helpful assistant."},
        {"role": "user", "content": "Tell me about Bifrost in Norse mythology."}
      ]
    }'
    ```
 
-For additional HTTP server configuration options, read [this](https://github.com/maximhq/bifrost/blob/main/transports/README.md).
+   **That's it!**, just _4 lines of code_ and you can now use Bifrost to make requests to any provider you have configured.
 
-### B. Using Bifrost as a Go Package
-
-1. **Implement Your Account Interface**: First, create an account that follows [Bifrost's account interface](https://github.com/maximhq/bifrost/blob/main/core/schemas/account.go).
-
-   ```golang
-   type BaseAccount struct{}
-
-   func (baseAccount *BaseAccount) GetConfiguredProviders() ([]schemas.ModelProvider, error) {
-     return []schemas.ModelProvider{schemas.OpenAI}, nil
-   }
-
-   func (baseAccount *BaseAccount) GetKeysForProvider(providerKey schemas.ModelProvider) ([]schemas.Key, error) {
-       return []schemas.Key{
-         {
-           Value:  os.Getenv("OPENAI_API_KEY"),
-           Models: []string{"gpt-4o-mini"},
-           Weight: 1.0,
-         },
-       }, nil
-   }
-
-   func (baseAccount *BaseAccount) GetConfigForProvider(providerKey schemas.ModelProvider) (*schemas.ProviderConfig, error) {
-       return &schemas.ProviderConfig{
-          NetworkConfig:            schemas.DefaultNetworkConfig,
-          ConcurrencyAndBufferSize: schemas.DefaultConcurrencyAndBufferSize,
-       }, nil
-   }
-   ```
-
-   Bifrost uses these methods to get all the keys and configurations it needs to call the providers. See the [Additional Configurations](#additional-configurations) section for additional customization options.
-
-2. **Initialize Bifrost**: Set up the Bifrost instance by providing your account implementation.
-
-   ```golang
-   account := BaseAccount{}
-
-   client, err := bifrost.Init(schemas.BifrostConfig{
-     Account: &account,
-   })
-   ```
-
-3. **Use Bifrost**: Make your First LLM Call!
-
-   ```golang
-     bifrostResult, bifrostErr := bifrost.ChatCompletionRequest(
-      context.Background(),
-      &schemas.BifrostRequest{
-         Provider: schemas.OpenAI,
-         Model: "gpt-4o-mini", // make sure you have configured gpt-4o-mini in your account interface
-         Input: schemas.RequestInput{
-           ChatCompletionInput: bifrost.Ptr([]schemas.BifrostMessage{{
-            Role: schemas.ModelChatMessageRoleUser,
-            Content: schemas.MessageContent{
-              ContentStr: bifrost.Ptr("What is a LLM gateway?"),
-            },
-           }}),
-         },
-       },
-     )
-   ```
-
-   You can add model parameters by including `Params: &schemas.ModelParameters{...yourParams}` in ChatCompletionRequest.
+   > For additional HTTP server configuration options, read [this](https://github.com/maximhq/bifrost/blob/main/transports/README.md).
 
 ## 📑 Table of Contents
 
 - [Bifrost](#bifrost)
-  - [⚡ Quickstart](#-quickstart)
+  - [⚡ Quickstart (30 seconds)](#-quickstart-30-seconds)
     - [Prerequisites](#prerequisites)
-    - [A. Using Bifrost as an HTTP Server](#a-using-bifrost-as-an-http-server)
+    - [Using Bifrost HTTP Transport](#using-bifrost-http-transport)
       - [i) Using Go Binary](#i-using-go-binary)
       - [ii) OR Using Docker](#ii-or-using-docker)
-    - [B. Using Bifrost as a Go Package](#b-using-bifrost-as-a-go-package)
   - [📑 Table of Contents](#-table-of-contents)
-  - [🔍 Overview](#-overview)
   - [✨ Features](#-features)
   - [🏗️ Repository Structure](#️-repository-structure)
   - [🚀 Getting Started](#-getting-started)
-    - [Package Structure](#package-structure)
-    - [Additional Configurations](#additional-configurations)
+    - [1. As a Go Package (Core Integration)](#1-as-a-go-package-core-integration)
+    - [2. As an HTTP API (Transport Layer)](#2-as-an-http-api-transport-layer)
   - [📊 Benchmarks](#-benchmarks)
     - [Test Environment](#test-environment)
       - [1. t3.medium(2 vCPUs, 4GB RAM)](#1-t3medium2-vcpus-4gb-ram)
@@ -183,20 +119,6 @@ For additional HTTP server configuration options, read [this](https://github.com
     - [Key Performance Highlights](#key-performance-highlights)
   - [🤝 Contributing](#-contributing)
   - [📄 License](#-license)
-
----
-
-## 🔍 Overview
-
-Bifrost acts as a bridge between your applications and multiple AI providers (OpenAI, Anthropic, Amazon Bedrock, Mistral, Ollama, etc.). It provides a consistent API while handling:
-
-- Authentication and key management
-- Request routing and load balancing
-- Fallback mechanisms for reliability
-- Unified request and response formatting
-- Connection pooling and concurrency control
-
-With Bifrost, you can focus on building your AI-powered applications without worrying about the underlying provider-specific implementations. It handles all the complexities of key and provider management, providing a fixed input and output format so you don't need to modify your codebase for different providers.
 
 ---
 
@@ -212,6 +134,8 @@ With Bifrost, you can focus on building your AI-powered applications without wor
 - **MCP Integration**: Built-in Model Context Protocol (MCP) support for external tool integration and execution
 - **Custom Configuration**: Offers granular control over pool sizes, network retry settings, fallback providers, and network proxy configurations
 - **Built-in Observability**: Native Prometheus metrics out of the box, no wrappers, no sidecars, just drop it in and scrape
+- **SDK Support**: Bifrost is available as a Go package, so you can use it directly in your own applications.
+- **Seamless Integration with Generative AI SDKs**: Effortlessly transition to Bifrost by simply updating the `base_url` in your existing SDKs, such as OpenAI, Anthropic, GenAI, and more. Just one line of code is all it takes to make the switch.
 
 ---
 
@@ -233,7 +157,7 @@ bifrost/
 │   └── ...
 │
 ├── transports/           # Interface layers (HTTP, gRPC, etc.)
-│   ├── bifrost-http/             # HTTP transport implementation
+│   ├── bifrost-http/     # HTTP transport implementation
 │   └── ...
 │
 └── plugins/              # Plugin Implementations
@@ -247,40 +171,34 @@ The system uses a provider-agnostic approach with well-defined interfaces to eas
 
 ## 🚀 Getting Started
 
-If you want to **set up the Bifrost API quickly**, [check the transports documentation](https://github.com/maximhq/bifrost/tree/main/transports/README.md).
+There are two main ways to use Bifrost:
 
-### Package Structure
+### 1. As a Go Package (Core Integration)
 
-Bifrost is divided into three Go packages: core, plugins, and transports.
+For direct integration into your Go applications, use Bifrost as a package. This provides the most flexibility and control over your AI model interactions.
 
-1. **core**: This package contains the core implementation of Bifrost as a Go package.
-2. **plugins**: This package serves as an extension to core. You can download individual packages using `go get github.com/maximhq/bifrost/plugins/{plugin-name}` and pass the plugins while initializing Bifrost.
+> **📖 [Complete Core Package Documentation](./docs/core-package.md)**
 
-```golang
-// go get github.com/maximhq/bifrost/plugins/maxim
+Quick example:
 
-maximPlugin, err := maxim.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), os.Getenv("MAXIM_LOGGER_ID"))
-if err != nil {
-  return nil, err
-}
-
-// Initialize Bifrost
-client, err := bifrost.Init(schemas.BifrostConfig{
-  Account: &account,
-  Plugins: []schemas.Plugin{maximPlugin},
-})
+```bash
+go get github.com/maximhq/bifrost/core
 ```
 
-3. **transports**: This package contains transport clients like HTTP to expose your Bifrost client. You can either `go get` this package or directly use the independent Dockerfile to quickly spin up your [Bifrost API](https://github.com/maximhq/bifrost/tree/main/transports/README.md) (read more on this).
+### 2. As an HTTP API (Transport Layer)
 
-### Additional Configurations
+For quick setup and language-agnostic integration, use the HTTP transport layer.
 
-- [Memory Management](https://github.com/maximhq/bifrost/blob/main/docs/memory-management.md)
-- [Logger](https://github.com/maximhq/bifrost/blob/main/docs/logger.md)
-- [Plugins](https://github.com/maximhq/bifrost/blob/main/docs/plugins.md)
-- [Provider Configurations](https://github.com/maximhq/bifrost/blob/main/docs/providers.md)
-- [Fallbacks](https://github.com/maximhq/bifrost/blob/main/docs/fallbacks.md)
-- [MCP Integration](https://github.com/maximhq/bifrost/blob/main/docs/mcp.md)
+> **📖 [Complete HTTP Transport Documentation](./transports/README.md)**
+
+Quick example:
+
+```bash
+docker run -p 8080:8080 \
+  -v $(pwd)/config.json:/app/config/config.json \
+  -e OPENAI_API_KEY \
+  maximhq/bifrost
+```
 
 ---
 
