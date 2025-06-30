@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Bifrost HTTP Transport API",
-    "description": "A unified HTTP API for accessing multiple AI model providers:\n\n• openai\n• anthropic\n• azure\n• bedrock\n• cohere\n• vertex\n• mistral\n• ollama\n\nBifrost provides standardized endpoints for text and chat completions with built-in fallback support and comprehensive monitoring.\n\n**MCP Integration**: Includes Model Context Protocol (MCP) support for external tool integration. Configure MCP servers to automatically add tools to model requests and execute them via dedicated endpoints.",
+    "description": "A unified HTTP API for accessing multiple AI model providers:\n\n• openai\n• anthropic\n• azure\n• bedrock\n• cohere\n• vertex\n• mistral\n• ollama\n\nBifrost provides standardized **OpenAI Compatible** endpoints for text and chat completions with built-in fallback support and comprehensive monitoring.\n\n**MCP Integration**: Includes Model Context Protocol (MCP) support for external tool integration. Configure MCP servers to automatically add tools to model requests and execute them via dedicated endpoints.",
     "version": "1.1.2",
     "contact": {
       "name": "Bifrost API Support",
