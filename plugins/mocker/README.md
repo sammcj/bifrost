@@ -1294,7 +1294,7 @@ if err := validateMockerConfig(yourConfig); err != nil {
 
 ---
 
-**Need help?** Check the [Bifrost documentation](../../docs/plugins.md) or open an issue on GitHub.
+**Need help?** Check the [Bifrost documentation](../../docs/usage/http-transport/configuration/plugins.md) or open an issue on GitHub.
 
 ```
 

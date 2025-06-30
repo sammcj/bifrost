@@ -2,7 +2,7 @@
 
 This package contains clients for various transports that can be used to spin up your Bifrost client with just a single line of code.
 
-📖 **Comprehensive HTTP API documentation is available in** _[`docs/http-transport-api.md`](../docs/http-transport-api.md)_.
+📖 **Comprehensive HTTP API documentation is available in** _[`docs/usage/http-transport/`](../docs/usage/http-transport/)_.
 
 ## 📑 Table of Contents
 
@@ -19,6 +19,7 @@ This package contains clients for various transports that can be used to spin up
     - [Text Completions](#text-completions)
     - [Chat Completions](#chat-completions)
     - [Multi-Turn Conversations with MCP Tools](#multi-turn-conversations-with-mcp-tools)
+    - [Quick Examples](#quick-examples)
   - [🔧 Advanced Features](#-advanced-features)
     - [Prometheus Support](#prometheus-support)
     - [Plugin Support](#plugin-support)
@@ -164,7 +165,10 @@ In this case, Bifrost will verify that `WEATHER_API_KEY` and `DEFAULT_LOCATION` 
 - Connects to a filesystem MCP tool via STDIO (requires `NODE_ENV` and `FILESYSTEM_ROOT` environment variables)
 - Connects to a web-search MCP service via HTTP
 
-**For comprehensive MCP documentation including Go package usage, local tool registration, and advanced configurations, see [MCP Integration Guide](../docs/mcp.md).** This section focuses on HTTP transport specific MCP usage.
+**For comprehensive MCP documentation including Go package usage, local tool registration, and advanced configurations, see [MCP Integration Guide](../docs/usage/http-transport/configuration/mcp.md).** This section focuses on HTTP transport specific MCP usage.
+
+> **Full MCP configuration samples are maintained in**  
+> [docs/usage/http-transport/configuration/mcp.md](../docs/usage/http-transport/configuration/mcp.md).
 
 ### Docker Setup
 
@@ -399,9 +403,13 @@ Response includes tool calls:
 - `POST /v1/chat/completions` - Chat with automatic tool discovery
 - `POST /v1/mcp/tool/execute` - Execute tool calls returned by the AI
 
-> 🔧 **For Go package integration and advanced tool execution patterns, see [Implementing Chat Conversations with MCP Tools](../docs/mcp.md#implementing-chat-conversations-with-mcp-tools).**
+> 🔧 **For Go package integration and advanced tool execution patterns, see [Implementing Chat Conversations with MCP Tools](../docs/usage/go-package/mcp.md).**
 
----
+### Quick Examples
+
+> All curl examples (text, chat, and multi-turn tool conversations) are centralized in  
+> [docs/usage/http-transport/endpoints.md](../docs/usage/http-transport/endpoints.md).  
+> The rest of this section only documents transport-specific nuances (e.g., custom headers for Prometheus).
 
 ## 🔧 Advanced Features
 
