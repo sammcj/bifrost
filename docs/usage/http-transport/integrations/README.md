@@ -64,7 +64,7 @@ client = openai.OpenAI(
 
 Your existing code gets these features automatically:
 
-- **Multi-provider fallbacks** - Automatic failover between providers
+- **Multi-provider fallbacks** - Automatic failover between multiple providers, regardless of the SDK you use
 - **Load balancing** - Distribute requests across multiple API keys
 - **Rate limiting** - Built-in request throttling and queuing
 - **Tool integration** - MCP tools available in all requests
@@ -157,6 +157,99 @@ export ANTHROPIC_BASE_URL="https://api.anthropic.com"
 # Production - via Bifrost
 export OPENAI_BASE_URL="http://bifrost:8080/openai"
 export ANTHROPIC_BASE_URL="http://bifrost:8080/anthropic"
+```
+
+---
+
+## 🌐 Multi-Provider Usage
+
+### **Provider-Prefixed Models**
+
+Use multiple providers seamlessly by prefixing model names with the provider:
+
+```python
+import openai
+
+# Single client, multiple providers
+client = openai.OpenAI(
+    base_url="http://localhost:8080/openai",
+    api_key="dummy"  # API keys configured in Bifrost
+)
+
+# OpenAI models
+response1 = client.chat.completions.create(
+    model="gpt-4o-mini", # (default OpenAI since it's OpenAI's SDK)
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# Anthropic models using OpenAI SDK format
+response2 = client.chat.completions.create(
+    model="anthropic/claude-3-sonnet-20240229",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# Google Vertex models
+response3 = client.chat.completions.create(
+    model="vertex/gemini-pro",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# Azure OpenAI models
+response4 = client.chat.completions.create(
+    model="azure/gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# Local Ollama models
+response5 = client.chat.completions.create(
+    model="ollama/llama3.1:8b",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+### **Provider-Specific Optimization**
+
+```python
+import openai
+
+client = openai.OpenAI(
+    base_url="http://localhost:8080/openai",
+    api_key="dummy"
+)
+
+def choose_optimal_model(task_type: str, content: str):
+    """Choose the best model based on task requirements"""
+
+    if task_type == "code":
+        # OpenAI excels at code generation
+        return "openai/gpt-4o-mini"
+
+    elif task_type == "creative":
+        # Anthropic is great for creative writing
+        return "anthropic/claude-3-sonnet-20240229"
+
+    elif task_type == "analysis" and len(content) > 10000:
+        # Anthropic has larger context windows
+        return "anthropic/claude-3-sonnet-20240229"
+
+    elif task_type == "multilingual":
+        # Google models excel at multilingual tasks
+        return "vertex/gemini-pro"
+
+    else:
+        # Default to fastest/cheapest
+        return "openai/gpt-4o-mini"
+
+# Usage examples
+code_response = client.chat.completions.create(
+    model=choose_optimal_model("code", ""),
+    messages=[{"role": "user", "content": "Write a Python web scraper"}]
+)
+
+creative_response = client.chat.completions.create(
+    model=choose_optimal_model("creative", ""),
+    messages=[{"role": "user", "content": "Write a short story about AI"}]
+)
 ```
 
 ---

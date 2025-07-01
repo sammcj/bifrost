@@ -36,6 +36,8 @@ tests/transports-integrations/tests/integrations/
 
 HTTP integrations provide API-compatible endpoints that translate between external service formats (OpenAI, Anthropic, etc.) and Bifrost's unified request/response format. Each integration follows a standardized pattern using Bifrost's `GenericRouter` architecture.
 
+**Key Feature**: All integrations should support **multi-provider model syntax** using `ParseModelString`, allowing users to access any provider through any SDK (e.g., `"anthropic/claude-3-sonnet"` via OpenAI SDK).
+
 ### **Integration Architecture Flow**
 
 ```mermaid
@@ -150,6 +152,7 @@ package your_integration
 
 import (
     "github.com/maximhq/bifrost/core/schemas"
+    "github.com/maximhq/bifrost/transports/bifrost-http/integrations"
 )
 
 // YourChatRequest represents the incoming request format
@@ -179,6 +182,11 @@ type YourChatResponse struct {
 
 // ConvertToBifrostRequest converts your service format to Bifrost format
 func (r *YourChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
+    // Enable multi-provider support with ParseModelString
+    // This allows users to specify "provider/model" (e.g., "anthropic/claude-3-sonnet")
+    // or just "model" (uses your integration's default provider)
+    provider, modelName := integrations.ParseModelString(r.Model, schemas.YourDefaultProvider)
+
     // Convert messages
     bifrostMessages := make([]schemas.ModelChatMessage, len(r.Messages))
     for i, msg := range r.Messages {
@@ -195,7 +203,8 @@ func (r *YourChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
     }
 
     return &schemas.BifrostRequest{
-        Model:       r.Model,
+        Model:       modelName,    // Clean model name without provider prefix
+        Provider:    provider,     // Extracted or default provider
         MaxTokens:   &r.MaxTokens,
         Temperature: r.Temperature,
         Input: schemas.BifrostInput{
@@ -532,6 +541,7 @@ import (
 - [ ] **Type Definitions** - Implemented `types.go` with request/response types
 - [ ] **Request Conversion** - Properly converts service format to Bifrost format
 - [ ] **Response Conversion** - Properly converts Bifrost format to service format
+- [ ] **Multi-Provider Support** - Uses `ParseModelString` to enable "provider/model" syntax
 - [ ] **Error Handling** - Handles all error cases gracefully
 - [ ] **Tool Support** - Supports function/tool calling if applicable
 - [ ] **Multi-Modal Support** - Supports images/vision if applicable
@@ -566,20 +576,47 @@ import (
 
 ## 🔧 **Common Patterns**
 
-### **Model Provider Detection**
+### **Multi-Provider Model Support** (same as shown above in the types.go file example)
 
-Use Bifrost's built-in provider detection:
+Enable users to access multiple providers through your integration using `ParseModelString`:
 
 ```go
 import "github.com/maximhq/bifrost/transports/bifrost-http/integrations"
 
-// In request converter
+// In request converter - enables "provider/model" syntax
+func (r *YourChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
+    // ParseModelString handles both "provider/model" and "model" formats
+    // - "anthropic/claude-3-sonnet" → (schemas.Anthropic, "claude-3-sonnet")
+    // - "claude-3-sonnet" → (schemas.YourDefaultProvider, "claude-3-sonnet")
+    provider, modelName := integrations.ParseModelString(r.Model, schemas.YourDefaultProvider)
+
+    return &schemas.BifrostRequest{
+        Model:    modelName,  // Clean model name without provider prefix
+        Provider: provider,   // Extracted or default provider
+        // ... rest of conversion
+    }
+}
+```
+
+**Benefits for Users:**
+
+- **OpenAI SDK**: `model: "anthropic/claude-3-sonnet"` routes to Anthropic
+- **Anthropic SDK**: `model: "openai/gpt-4o"` routes to OpenAI
+- **Your SDK**: `model: "vertex/gemini-pro"` routes to Google Vertex
+- **Backward Compatible**: `model: "claude-3-sonnet"` uses your default provider
+
+### **Alternative: Pattern-Based Detection**
+
+For automatic provider detection without prefixes:
+
+```go
+// Legacy approach - still supported but less flexible
 func (r *YourChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
     provider := integrations.GetProviderFromModel(r.Model)
 
     return &schemas.BifrostRequest{
         Model:    r.Model,
-        Provider: &provider,
+        Provider: provider,
         // ... rest of conversion
     }
 }
