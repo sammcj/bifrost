@@ -371,7 +371,7 @@ Filter tools at runtime for specific requests using context keys:
 import "context"
 
 // Whitelist specific clients (only these clients' tools will be available)
-ctx := context.WithValue(context.Background(), "mcp_include_clients", []string{"filesystem-tools", "database-client"})
+ctx := context.WithValue(context.Background(), "mcp-include-clients", []string{"filesystem-tools", "database-client"})
 
 response, err := client.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
     Provider: schemas.OpenAI,
@@ -380,7 +380,7 @@ response, err := client.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
 })
 
 // Blacklist specific clients (all tools except these clients' tools will be available)
-ctx = context.WithValue(context.Background(), "mcp_exclude_clients", []string{"web-tools", "admin-tools"})
+ctx = context.WithValue(context.Background(), "mcp-exclude-clients", []string{"web-tools", "admin-tools"})
 
 response, err = client.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
     Provider: schemas.Anthropic,
@@ -393,7 +393,7 @@ func createRestrictedContext() context.Context {
     ctx := context.Background()
 
     // Only allow safe tools for user-facing operations
-    ctx = context.WithValue(ctx, "mcp_include_clients", []string{"search-tools", "calculator"})
+    ctx = context.WithValue(ctx, "mcp-include-clients", []string{"search-tools", "calculator"})
 
     return ctx
 }
@@ -405,10 +405,10 @@ response, err := client.ChatCompletionRequest(userCtx, userRequest)
 
 > **💡 Context Filtering Rules:**
 >
-> - `mcp_include_clients`: Whitelist - only tools from these named MCP clients are available
-> - `mcp_exclude_clients`: Blacklist - tools from these named MCP clients are excluded
-> - If both are specified, `mcp_include_clients` takes precedence
->   Similarly you can pass values for `mcp_include_tools` and `mcp_exclude_tools` to filter tools at runtime.
+> - `mcp-include-clients`: Whitelist - only tools from these named MCP clients are available
+> - `mcp-exclude-clients`: Blacklist - tools from these named MCP clients are excluded
+> - If both are specified, `mcp-include-clients` takes precedence
+>   Similarly you can pass values for `mcp-include-tools` and `mcp-exclude-tools` to filter tools at runtime.
 > - These filters work at runtime and can be different for each request
 > - Useful for user-based permissions, request-specific security, or A/B testing different tool sets
 

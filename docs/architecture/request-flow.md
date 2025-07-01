@@ -251,10 +251,10 @@ func (mcpm *MCPManager) EnhanceRequest(
     req *BifrostRequest,
 ) (*BifrostRequest, error) {
     // Extract tool filtering from context
-    includeClients := ctx.GetStringSlice("mcp_include_clients")
-    excludeClients := ctx.GetStringSlice("mcp_exclude_clients")
-    includeTools := ctx.GetStringSlice("mcp_include_tools")
-    excludeTools := ctx.GetStringSlice("mcp_exclude_tools")
+    includeClients := ctx.GetStringSlice("mcp-include-clients")
+    excludeClients := ctx.GetStringSlice("mcp-exclude-clients")
+    includeTools := ctx.GetStringSlice("mcp-include-tools")
+    excludeTools := ctx.GetStringSlice("mcp-exclude-tools")
 
     // Get available tools
     availableTools := mcpm.getAvailableTools(includeClients, excludeClients)

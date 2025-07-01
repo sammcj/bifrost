@@ -259,52 +259,131 @@ curl -X POST http://localhost:8080/v1/mcp/tool/execute \
 # }
 ```
 
-### **Multi-turn Conversation with Tools**
+### **Multi-Turn Conversations with MCP Tools**
 
-Continuing a conversation after tool execution:
+When MCP is configured, Bifrost automatically adds available tools to requests. Here's an example of a multi-turn conversation where the AI uses tools:
+
+**Initial Request (AI decides to use a tool):**
 
 ```bash
-# First request - triggers tool call
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "provider": "openai",
     "model": "gpt-4o-mini",
     "messages": [
-      {"role": "user", "content": "What files are in the current directory?"}
+      {"role": "user", "content": "Can you list the files in the /tmp directory?"}
     ]
   }'
+```
 
-# Response includes tool call (extract tool_call_id)
+**Response includes tool calls:**
 
-# Continue conversation with tool result
+```json
+{
+  "data": {
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call_abc123",
+              "type": "function",
+              "function": {
+                "name": "list_directory",
+                "arguments": "{\"path\": \"/tmp\"}"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+**Execute Tool (Use Bifrost's MCP tool execution endpoint):**
+
+**💡 Note:** The request body of this endpoint is a tool call block you received from `/v1/chat/completions` route - **you can directly copy and paste the tool call block as the request body**.
+
+```bash
+curl -X POST http://localhost:8080/v1/mcp/tool/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+      "id": "call_abc123",
+      "type": "function",
+      "function": {
+        "name": "list_directory",
+        "arguments": "{\"path\": \"/tmp\"}"
+      }
+  }'
+```
+
+**Response with tool result:**
+
+```json
+{
+  "role": "tool",
+  "content": "config.json\nreadme.txt\ndata.csv",
+  "tool_call_id": "call_abc123"
+}
+```
+
+**Continue Conversation (Add tool result and get final response):**
+
+```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "provider": "openai",
     "model": "gpt-4o-mini",
     "messages": [
-      {"role": "user", "content": "What files are in the current directory?"},
+      {"role": "user", "content": "Can you list the files in the /tmp directory?"},
       {
         "role": "assistant",
+        "content": null,
         "tool_calls": [{
-          "id": "call_123",
+          "id": "call_abc123",
           "type": "function",
           "function": {
             "name": "list_directory",
-            "arguments": "{\"path\": \".\"}"
+            "arguments": "{\"path\": \"/tmp\"}"
           }
         }]
       },
       {
         "role": "tool",
-        "content": "README.md\nconfig.json\nsrc/",
-        "tool_call_id": "call_123"
-      },
-      {"role": "user", "content": "Now read the README.md file"}
+        "content": "config.json\nreadme.txt\ndata.csv",
+        "tool_call_id": "call_abc123"
+      }
     ]
   }'
 ```
+
+**Final response:**
+
+```json
+{
+  "data": {
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "content": "I found 3 files in the /tmp directory:\n1. config.json\n2. readme.txt\n3. data.csv\n\nWould you like me to read the contents of any of these files?"
+        }
+      }
+    ]
+  }
+}
+```
+
+**Tool Execution Flow Summary:**
+
+1. Send chat completion request → AI responds with tool_calls
+2. Send tool_calls to `/v1/mcp/tool/execute` → Get tool_result message
+3. Append tool_result to conversation → Send back for final response
 
 ### **Request-Level Tool Filtering**
 
@@ -320,8 +399,8 @@ curl -X POST http://localhost:8080/v1/chat/completions \
     "messages": [
       {"role": "user", "content": "List files and search web"}
     ],
-    "mcp_include_clients": ["filesystem"],
-    "mcp_exclude_clients": ["web-search", "database"]
+    "mcp-include-clients": ["filesystem"],
+    "mcp-exclude-clients": ["web-search", "database"]
   }'
 
 # Include specific tools only
@@ -333,8 +412,8 @@ curl -X POST http://localhost:8080/v1/chat/completions \
     "messages": [
       {"role": "user", "content": "Help me with file operations"}
     ],
-    "mcp_include_tools": ["read_file", "list_directory"],
-    "mcp_exclude_tools": ["delete_file", "write_file"]
+    "mcp-include-tools": ["read_file", "list_directory"],
+    "mcp-exclude-tools": ["delete_file", "write_file"]
   }'
 ```
 
