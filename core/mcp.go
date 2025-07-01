@@ -639,16 +639,20 @@ func (m *MCPManager) shouldSkipToolForRequest(toolName string, ctx context.Conte
 	excludeTools := ctx.Value(MCPContextKeyExcludeTools)
 
 	if includeTools != nil {
-		includeToolsList := strings.Split(includeTools.(string), ",")
-		if slices.Contains(includeToolsList, toolName) {
-			return false // Tool is allowed
+		if includeStr, ok := includeTools.(string); ok && includeStr != "" {
+			includeToolsList := strings.Split(includeStr, ",")
+			if slices.Contains(includeToolsList, toolName) {
+				return false // Tool is allowed
+			}
 		}
 	}
 
 	if excludeTools != nil {
-		excludeToolsList := strings.Split(excludeTools.(string), ",")
-		if slices.Contains(excludeToolsList, toolName) {
-			return true // Tool should be skipped
+		if excludeStr, ok := excludeTools.(string); ok && excludeStr != "" {
+			excludeToolsList := strings.Split(excludeStr, ",")
+			if slices.Contains(excludeToolsList, toolName) {
+				return true // Tool should be skipped
+			}
 		}
 	}
 
