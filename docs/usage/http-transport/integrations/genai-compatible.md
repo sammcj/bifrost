@@ -493,6 +493,33 @@ test_function_calling()
 
 ---
 
+## 🌐 Multi-Provider Support
+
+Use multiple providers with Google GenAI SDK format by prefixing model names:
+
+```python
+import google.generativeai as genai
+
+genai.configure(
+    api_key="dummy",  # API keys configured in Bifrost
+    client_options={"api_endpoint": "http://localhost:8080/genai"}
+)
+
+# Google models (default)
+model1 = genai.GenerativeModel('gemini-pro')
+response1 = model1.generate_content("Hello!")
+
+# OpenAI models via GenAI SDK
+model2 = genai.GenerativeModel('openai/gpt-4o-mini')
+response2 = model2.generate_content("Hello!")
+
+# Anthropic models via GenAI SDK
+model3 = genai.GenerativeModel('anthropic/claude-3-sonnet-20240229')
+response3 = model3.generate_content("Hello!")
+```
+
+---
+
 ## 🔧 Configuration
 
 ### **Bifrost Config for Google GenAI**

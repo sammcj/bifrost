@@ -542,6 +542,42 @@ test_tool_use()
 
 ---
 
+## 🌐 Multi-Provider Support
+
+Use multiple providers with Anthropic SDK format by prefixing model names:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic(
+    base_url="http://localhost:8080/anthropic",
+    api_key="dummy"  # API keys configured in Bifrost
+)
+
+# Anthropic models (default)
+response1 = client.messages.create(
+    model="claude-3-sonnet-20240229",
+    max_tokens=100,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# OpenAI models via Anthropic SDK
+response2 = client.messages.create(
+    model="openai/gpt-4o-mini",
+    max_tokens=100,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# Vertex models via Anthropic SDK
+response3 = client.messages.create(
+    model="vertex/gemini-pro",
+    max_tokens=100,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+---
+
 ## 🔧 Configuration
 
 ### **Bifrost Config for Anthropic**

@@ -219,6 +219,42 @@ func (g *GenericRouter) sendSuccess(ctx *fasthttp.RequestCtx, response interface
 	ctx.SetBody(responseBody)
 }
 
+// validProviders is a pre-computed map for efficient O(1) provider validation.
+var validProviders = map[schemas.ModelProvider]bool{
+	schemas.OpenAI:    true,
+	schemas.Azure:     true,
+	schemas.Anthropic: true,
+	schemas.Bedrock:   true,
+	schemas.Cohere:    true,
+	schemas.Vertex:    true,
+	schemas.Mistral:   true,
+	schemas.Ollama:    true,
+}
+
+// ParseModelString extracts provider and model from a model string.
+// For model strings like "anthropic/claude", it returns ("anthropic", "claude").
+// For model strings like "claude", it returns ("", "claude").
+// If the extracted provider is not valid, it treats the whole string as a model name.
+func ParseModelString(model string, defaultProvider schemas.ModelProvider) (schemas.ModelProvider, string) {
+	// Check if model contains a provider prefix (only split on first "/" to preserve model names with "/")
+	if strings.Contains(model, "/") {
+		parts := strings.SplitN(model, "/", 2)
+		if len(parts) == 2 {
+			extractedProvider := parts[0]
+			extractedModel := parts[1]
+
+			// Validate that the extracted provider is actually a valid provider
+			if validProviders[schemas.ModelProvider(extractedProvider)] {
+				return schemas.ModelProvider(extractedProvider), extractedModel
+			}
+			// If extracted provider is not valid, treat the whole string as model name
+			// This prevents corrupting model names that happen to contain "/"
+		}
+	}
+	// No provider prefix found or invalid provider, return empty provider and the original model
+	return defaultProvider, model
+}
+
 // GetProviderFromModel determines the appropriate provider based on model name patterns
 // This function uses comprehensive pattern matching to identify the correct provider
 // for various model naming conventions used across different AI providers.
