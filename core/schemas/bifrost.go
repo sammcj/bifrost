@@ -306,7 +306,7 @@ type BifrostResponse struct {
 	SystemFingerprint *string                    `json:"system_fingerprint,omitempty"`
 	Usage             LLMUsage                   `json:"usage,omitempty"`
 	ExtraFields       BifrostResponseExtraFields `json:"extra_fields"`
-	Embedding         [][]float32                `json:"data,omitempty"`
+	Embedding         [][]float32                `json:"data,omitempty"` // Maps to "data" field in provider responses (e.g., OpenAI embedding format)
 }
 
 // LLMUsage represents token usage information

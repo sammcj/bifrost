@@ -437,7 +437,15 @@ func (provider *AzureProvider) Embedding(ctx context.Context, model string, key 
 			switch v := data.Embedding.(type) {
 			case []float32:
 				embeddings[i] = v
+			case []float64:
+				// Direct conversion from []float64 to []float32
+				floatArray := make([]float32, len(v))
+				for j := range v {
+					floatArray[j] = float32(v[j])
+				}
+				embeddings[i] = floatArray
 			case []interface{}:
+				// Fallback: element-by-element conversion for []interface{}
 				floatArray := make([]float32, len(v))
 				for j := range v {
 					if num, ok := v[j].(float64); ok {

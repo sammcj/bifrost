@@ -653,11 +653,7 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 	}
 
 	// Calculate token usage approximation (since Cohere doesn't provide this for embeddings)
-	totalInputTokens := 0
-	for _, text := range input.Texts {
-		// Rough approximation: 1 token per 4 characters
-		totalInputTokens += len(text) / 4
-	}
+	totalInputTokens := approximateTokenCount(input.Texts)
 
 	// Create BifrostResponse
 	bifrostResponse := &schemas.BifrostResponse{

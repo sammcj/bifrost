@@ -874,6 +874,10 @@ func (bifrost *Bifrost) EmbeddingRequest(ctx context.Context, req *schemas.Bifro
 		return nil, newBifrostErrorFromMsg("model is required")
 	}
 
+	if req.Input.EmbeddingInput == nil {
+		return nil, newBifrostErrorFromMsg("embedding_input is required")
+	}
+
 	// Try the primary provider first
 	primaryResult, primaryErr := bifrost.tryEmbedding(req, ctx)
 	if primaryErr == nil {
