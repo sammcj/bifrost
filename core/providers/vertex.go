@@ -80,12 +80,7 @@ func (provider *VertexProvider) GetProviderKey() schemas.ModelProvider {
 // TextCompletion is not supported by the Vertex provider.
 // Returns an error indicating that text completion is not available.
 func (provider *VertexProvider) TextCompletion(ctx context.Context, model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	return nil, &schemas.BifrostError{
-		IsBifrostError: false,
-		Error: schemas.ErrorField{
-			Message: "text completion is not supported by vertex provider",
-		},
-	}
+	return nil, newUnsupportedOperationError("text completion", "vertex")
 }
 
 // ChatCompletion performs a chat completion request to the Vertex API.
@@ -310,10 +305,5 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, model, key s
 
 // Embedding is not supported by the Vertex provider.
 func (provider *VertexProvider) Embedding(ctx context.Context, model string, key string, input schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	return nil, &schemas.BifrostError{
-		IsBifrostError: false,
-		Error: schemas.ErrorField{
-			Message: "embedding is not supported by vertex provider",
-		},
-	}
+	return nil, newUnsupportedOperationError("embedding", "vertex")
 }
