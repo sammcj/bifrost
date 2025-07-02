@@ -1205,7 +1205,7 @@ func (provider *BedrockProvider) handleCohereEmbedding(ctx context.Context, mode
 
 	// Properly escape model name for URL path to ensure AWS SIGv4 signing works correctly
 	path := url.PathEscape(model) + "/invoke"
-	responseBody, err := provider.completeRequest(ctx, requestBody, path, key)
+	rawResponse, err := provider.completeRequest(ctx, requestBody, path, key)
 	if err != nil {
 		return nil, err
 	}
@@ -1216,23 +1216,11 @@ func (provider *BedrockProvider) handleCohereEmbedding(ctx context.Context, mode
 		ID         string      `json:"id"`
 		Texts      []string    `json:"texts"`
 	}
-	if err := json.Unmarshal(responseBody, &cohereResp); err != nil {
+	if err := json.Unmarshal(rawResponse, &cohereResp); err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: schemas.ErrorField{
 				Message: "error parsing Cohere embedding response",
-				Error:   err,
-			},
-		}
-	}
-
-	// Parse raw response for consistent format
-	var rawResponse interface{}
-	if err := json.Unmarshal(responseBody, &rawResponse); err != nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: true,
-			Error: schemas.ErrorField{
-				Message: "error parsing raw response for Cohere embedding",
 				Error:   err,
 			},
 		}
