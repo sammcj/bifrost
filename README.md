@@ -2,202 +2,111 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/maximhq/bifrost/core)](https://goreportcard.com/report/github.com/maximhq/bifrost/core)
 
-Bifrost is an open-source middleware that serves as a unified gateway to various AI model providers, enabling seamless integration and fallback mechanisms for your AI-powered applications.
+**The fastest way to build AI applications that never go down.**
 
-## ⚡ Quickstart
+Bifrost is a high-performance AI gateway that connects you to 8+ providers (OpenAI, Anthropic, Bedrock, and more) through a single API. Get automatic failover, load balancing, and zero-downtime deployments in under 30 seconds.
 
-### Prerequisites
+![Bifrost](./docs/media/cover.png)
 
-- Go 1.23 or higher (not needed if using Docker)
-- Access to at least one AI model provider (OpenAI, Anthropic, etc.)
-- API keys for the providers you wish to use
+🚀 **Just launched:** Native MCP (Model Context Protocol) support for seamless tool integration  
+⚡ **Performance:** Adds only 11µs latency while handling 5,000+ RPS  
+🛡️ **Reliability:** 100% uptime with automatic provider failover
 
-### A. Using Bifrost as an HTTP Server
+## ⚡ Quickstart (30 seconds)
 
-1. **Create `config.json`**: This file should contain your provider settings and API keys.
+**Go from zero to production-ready AI gateway in under a minute.** Here's how:
 
-   ```json
-   {
-     "openai": {
-       "keys": [
-         {
-           "value": "env.OPENAI_API_KEY",
-           "models": ["gpt-4o-mini"],
-           "weight": 1.0
-         }
-       ]
-     }
-   }
-   ```
+**What You Need**
 
-2. **Setup your Environment**: Add your environment variable to the session.
+- Any AI provider API key (OpenAI, Anthropic, Bedrock, etc.)
+- Docker **OR** Go 1.23+ installed
+- 30 seconds of your time ⏰
 
-   ```bash
-   export OPENAI_API_KEY=your_openai_api_key
-   export ANTHROPIC_API_KEY=your_anthropic_api_key
-   ```
+### Using Bifrost HTTP Transport
 
-   Note: Make sure to add all the variables stated in your `config.json` file.
+📖 For detailed setup guides with multiple providers, advanced configuration, and language examples, see [Quick Start Documentation](./docs/quickstart/README.md)
 
-3. **Start the Bifrost HTTP Server**:
+**Step 1:** Create your config (copy & paste this)
 
-   You have two options to run the server, either using Go Binary or a Docker setup if go is not installed.
+```json
+{
+  "providers": {
+    "openai": {
+      "keys": [
+        {
+          "value": "env.OPENAI_API_KEY",
+          "models": ["gpt-4o-mini"],
+          "weight": 1.0
+        }
+      ]
+    }
+  }
+}
+```
 
-   #### i) Using Go Binary
+**Step 2:** Add your API key
 
-   - Install the transport package:
+```bash
+export OPENAI_API_KEY=your_openai_api_key
+```
 
-     ```bash
-     go install github.com/maximhq/bifrost/transports/bifrost-http@latest
-     ```
+**Step 3:** Start Bifrost (choose one)
 
-   - Run the server (make sure Go is set in your PATH):
+```bash
+# 🐳 Docker
+docker pull maximhq/bifrost
+docker run -p 8080:8080 \
+  -v $(pwd)/config.json:/app/config/config.json \
+  -e OPENAI_API_KEY \
+  maximhq/bifrost
 
-     ```bash
-     bifrost-http -config config.json -port 8080 -pool-size 300
-     ```
+# 🔧 Or install Go binary (Make sure Go is in your PATH)
+go install github.com/maximhq/bifrost/transports/bifrost-http@latest
+bifrost-http -config config.json -port 8080
+```
 
-   #### ii) OR Using Docker
+**Step 4:** Test it works
 
-   - Download the Dockerfile:
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "messages": [
+      {"role": "user", "content": "Hello from Bifrost! 🌈"}
+    ]
+  }'
+```
 
-     ```bash
-     curl -L -o Dockerfile https://raw.githubusercontent.com/maximhq/bifrost/main/transports/Dockerfile
-     ```
+**🎉 Boom! You're done!**
 
-   - Build the Docker image:
+Your AI gateway is now running and ready for production. You can:
 
-     ```bash
-     docker build \
-     --build-arg CONFIG_PATH=./config.json \
-     --build-arg PORT=8080 \
-     --build-arg POOL_SIZE=300 \
-     -t bifrost-transports .
-     ```
+- Add more providers for automatic failover
+- Scale to thousands of requests per second
+- Drop this into existing OpenAI/Anthropic code with zero changes
 
-   - Run the Docker container:
-
-     ```bash
-     docker run -p 8080:8080 -e OPENAI_API_KEY -e ANTHROPIC_API_KEY bifrost-transports
-     ```
-
-     Note: Make sure to add all the variables stated in your `config.json` file.
-
-4. **Using the API**: Once the server is running, you can send requests to the HTTP endpoints.
-
-   ```bash
-   curl -X POST http://localhost:8080/v1/chat/completions \
-   -H "Content-Type: application/json" \
-   -d '{
-     "provider": "openai",
-     "model": "gpt-4o-mini",
-     "messages": [
-       {"role": "system", "content": "You are a helpful assistant."},
-       {"role": "user", "content": "Tell me about Bifrost in Norse mythology."}
-     ]
-   }'
-   ```
-
-For additional configurations in HTTP server setup, please read [this](https://github.com/maximhq/bifrost/blob/main/transports/README.md).
-
-### B. Using Bifrost as a Go Package
-
-1. **Implement Your Account Interface**: You first need to create your account which follows [Bifrost's account interface](https://github.com/maximhq/bifrost/blob/main/core/schemas/account.go).
-
-   ```golang
-   type BaseAccount struct{}
-
-   func (baseAccount *BaseAccount) GetConfiguredProviders() ([]schemas.ModelProvider, error) {
-     return []schemas.ModelProvider{schemas.OpenAI}, nil
-   }
-
-   func (baseAccount *BaseAccount) GetKeysForProvider(providerKey schemas.ModelProvider) ([]schemas.Key, error) {
-       return []schemas.Key{
-         {
-           Value:  os.Getenv("OPENAI_API_KEY"),
-           Models: []string{"gpt-4o-mini"},
-         },
-       }, nil
-   }
-
-   func (baseAccount *BaseAccount) GetConfigForProvider(providerKey schemas.ModelProvider) (*schemas.ProviderConfig, error) {
-       return &schemas.ProviderConfig{
-          NetworkConfig:            schemas.DefaultNetworkConfig,
-          ConcurrencyAndBufferSize: schemas.DefaultConcurrencyAndBufferSize,
-       }, nil
-   }
-   ```
-
-   Bifrost uses these methods to get all the keys and configurations it needs to call the providers. You can check the [Additional Configurations](#additional-configurations) section for further customizations.
-
-2. **Initialize Bifrost**: Set up the Bifrost instance by providing your account implementation.
-
-   ```golang
-   account := BaseAccount{}
-
-   client, err := bifrost.Init(schemas.BifrostConfig{
-     Account: &account,
-   })
-   ```
-
-3. **Use Bifrost**: Make your First LLM Call!
-
-   ```golang
-     bifrostResult, bifrostErr := bifrost.ChatCompletionRequest(
-      context.Background(),
-      &schemas.BifrostRequest{
-         Provider: schemas.OpenAI,
-         Model: "gpt-4o-mini", // make sure you have configured gpt-4o-mini in your account interface
-         Input: schemas.RequestInput{
-           ChatCompletionInput: bifrost.Ptr([]schemas.BifrostMessage{{
-            Role: schemas.ModelChatMessageRoleUser,
-            Content: schemas.MessageContent{
-              ContentStr: bifrost.Ptr("What is a LLM gateway?"),
-            },
-           }}),
-         },
-       },
-     )
-   ```
-
-   you can add model parameters by passing them in `Params: &schemas.ModelParameters{...yourParams}` in ChatCompletionRequest.
+> **Want more?** See our [Complete Setup Guide](./docs/quickstart/http-transport.md) for multi-provider configuration, failover strategies, and production deployment.
 
 ## 📑 Table of Contents
 
 - [Bifrost](#bifrost)
-  - [⚡ Quickstart](#-quickstart)
-    - [Prerequisites](#prerequisites)
-    - [A. Using Bifrost as an HTTP Server](#a-using-bifrost-as-an-http-server)
-      - [i) Using Go Binary](#i-using-go-binary)
-      - [ii) OR Using Docker](#ii-or-using-docker)
-    - [B. Using Bifrost as a Go Package](#b-using-bifrost-as-a-go-package)
+  - [⚡ Quickstart (30 seconds)](#-quickstart-30-seconds)
+    - [Using Bifrost HTTP Transport](#using-bifrost-http-transport)
   - [📑 Table of Contents](#-table-of-contents)
-  - [🔍 Overview](#-overview)
   - [✨ Features](#-features)
   - [🏗️ Repository Structure](#️-repository-structure)
   - [🚀 Getting Started](#-getting-started)
-    - [Package Structure](#package-structure)
-    - [Additional Configurations](#additional-configurations)
-  - [📊 Benchmarks](#-benchmarks)
-    - [Test Environment](#test-environment)
-    - [Performance Metrics](#performance-metrics)
-    - [Key Performance Highlights](#key-performance-highlights)
+    - [1. As a Go Package (Core Integration)](#1-as-a-go-package-core-integration)
+    - [2. As an HTTP API (Transport Layer)](#2-as-an-http-api-transport-layer)
+    - [3. As a Drop-in Replacement (Zero Code Changes)](#3-as-a-drop-in-replacement-zero-code-changes)
+  - [📊 Performance](#-performance)
+    - [🔑 Key Performance Highlights](#-key-performance-highlights)
+  - [📚 Documentation](#-documentation)
+  - [💬 Need Help?](#-need-help)
   - [🤝 Contributing](#-contributing)
   - [📄 License](#-license)
-
----
-
-## 🔍 Overview
-
-Bifrost acts as a bridge between your applications and multiple AI providers (OpenAI, Anthropic, Amazon Bedrock, Mistral, Ollama, etc.). It provides a consistent API while handling:
-
-- Authentication and key management
-- Request routing and load balancing
-- Fallback mechanisms for reliability
-- Unified request and response formatting
-- Connection pooling and concurrency control
-
-With Bifrost, you can focus on building your AI-powered applications without worrying about the underlying provider-specific implementations. It handles all the complexities of key and provider management, providing a fixed input and output format so you don't need to modify your codebase for different providers.
 
 ---
 
@@ -205,13 +114,16 @@ With Bifrost, you can focus on building your AI-powered applications without wor
 
 - **Multi-Provider Support**: Integrate with OpenAI, Anthropic, Amazon Bedrock, Mistral, Ollama, and more through a single API
 - **Fallback Mechanisms**: Automatically retry failed requests with alternative models or providers
-- **Dynamic Key Management**: Rotate and manage API keys efficiently
+- **Dynamic Key Management**: Rotate and manage API keys efficiently with weighted distribution
 - **Connection Pooling**: Optimize network resources for better performance
 - **Concurrency Control**: Manage rate limits and parallel requests effectively
 - **Flexible Transports**: Multiple transports for easy integration into your infra
 - **Plugin First Architecture**: No callback hell, simple addition/creation of custom plugins
+- **MCP Integration**: Built-in Model Context Protocol (MCP) support for external tool integration and execution
 - **Custom Configuration**: Offers granular control over pool sizes, network retry settings, fallback providers, and network proxy configurations
 - **Built-in Observability**: Native Prometheus metrics out of the box, no wrappers, no sidecars, just drop it in and scrape
+- **SDK Support**: Bifrost is available as a Go package, so you can use it directly in your own applications.
+- **Seamless Integration with Generative AI SDKs**: Effortlessly transition to Bifrost by simply updating the `base_url` in your existing SDKs, such as OpenAI, Anthropic, GenAI, and more. Just one line of code is all it takes to make the switch.
 
 ---
 
@@ -233,7 +145,7 @@ bifrost/
 │   └── ...
 │
 ├── transports/           # Interface layers (HTTP, gRPC, etc.)
-│   ├── bifrost-http/             # HTTP transport implementation
+│   ├── bifrost-http/     # HTTP transport implementation
 │   └── ...
 │
 └── plugins/              # Plugin Implementations
@@ -247,125 +159,152 @@ The system uses a provider-agnostic approach with well-defined interfaces to eas
 
 ## 🚀 Getting Started
 
-If you want to **set up the Bifrost API quickly**, [check the transports documentation](https://github.com/maximhq/bifrost/tree/main/transports/README.md).
+There are three ways to use Bifrost - choose the one that fits your needs:
 
-### Package Structure
+### 1. As a Go Package (Core Integration)
 
-Bifrost is divided into three Go packages: core, plugins, and transports.
+For direct integration into your Go applications. Provides maximum performance and control.
 
-1. **core**: This package contains the core implementation of Bifrost as a Go package.
-2. **plugins**: This package serves as an extension to core. You can download individual packages using `go get github.com/maximhq/bifrost/plugins/{plugin-name}` and pass the plugins while initializing Bifrost.
+> **📖 [2-Minute Go Package Setup](./docs/quickstart/go-package.md)**
 
-```golang
-// go get github.com/maximhq/bifrost/plugins/maxim
+Quick example:
 
-maximPlugin, err := maxim.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), os.Getenv("MAXIM_LOGGER_ID"))
-if err != nil {
-  return nil, err
-}
-
-// Initialize Bifrost
-client, err := bifrost.Init(schemas.BifrostConfig{
-  Account: &account,
-  Plugins: []schemas.Plugin{maximPlugin},
-})
+```bash
+go get github.com/maximhq/bifrost/core
 ```
 
-1. **transports**: This package contains transport clients like HTTP to expose your Bifrost client. You can either `go get` this package or directly use the independent Dockerfile to quickly spin up your Bifrost API ([Click here](https://github.com/maximhq/bifrost/tree/main/transports/README.md) to read more on this).
+### 2. As an HTTP API (Transport Layer)
 
-### Additional Configurations
+For language-agnostic integration and microservices architecture.
 
-- [Memory Management](https://github.com/maximhq/bifrost/blob/main/docs/memory-management.md)
-- [Logger](https://github.com/maximhq/bifrost/blob/main/docs/logger.md)
-- [Plugins](https://github.com/maximhq/bifrost/blob/main/docs/plugins.md)
-- [Provider Configurations](https://github.com/maximhq/bifrost/blob/main/docs/providers.md)
-- [Fallbacks](https://github.com/maximhq/bifrost/blob/main/docs/fallbacks.md)
+> **📖 [30-Second HTTP Transport Setup](./docs/quickstart/http-transport.md)**
+
+Quick example:
+
+```bash
+docker pull maximhq/bifrost
+docker run -p 8080:8080 \
+  -v $(pwd)/config.json:/app/config/config.json \
+  -e OPENAI_API_KEY \
+  maximhq/bifrost
+```
+
+### 3. As a Drop-in Replacement (Zero Code Changes)
+
+Replace existing OpenAI/Anthropic APIs without changing your application code.
+
+> **📖 [1-Minute Drop-in Integration](./docs/usage/http-transport/integrations/README.md)**
+
+Quick example:
+
+```diff
+- base_url = "https://api.openai.com"
++ base_url = "http://localhost:8080/openai"
+```
 
 ---
 
-## 📊 Benchmarks
+## 📊 Performance
 
-Bifrost has been tested under high load conditions to ensure optimal performance. The following results were obtained from benchmark tests running at 5000 requests per second (RPS) on different AWS EC2 instances.
+**Bifrost adds virtually zero overhead to your AI requests.** In our sustained 5,000 RPS benchmark (see full methodology in [docs/benchmarks.md](./docs/benchmarks.md)), the gateway added only **11 µs** of overhead per request – that's **less than 0.001%** of a typical GPT-4o response time.
 
-### Test Environment
+**Translation:** Your users won't notice Bifrost is there, but you'll sleep better knowing your AI never goes down.
 
-**1. t3.medium(2 vCPUs, 4GB RAM)**
+| Metric                                | t3.medium | t3.xlarge   | Δ                  |
+| ------------------------------------- | --------- | ----------- | ------------------ |
+| Added latency (Bifrost overhead)      | 59 µs     | **11 µs**   | **-81 %**          |
+| Success rate @ 5 k RPS                | 100 %     | 100 %       | No failed requests |
+| Avg. queue wait time                  | 47 µs     | **1.67 µs** | **-96 %**          |
+| Avg. request latency (incl. provider) | 2.12 s    | **1.61 s**  | **-24 %**          |
 
-- Buffer Size: 15,000
-- Initial Pool Size: 10,000
+### 🔑 Key Performance Highlights
 
-**2. t3.xlarge(4 vCPUs, 16GB RAM)**
+- **Perfect Success Rate** – 100 % request success rate on both instance types even at 5 k RPS.
+- **Tiny Total Overhead** – < 15 µs additional latency per request on average.
+- **Efficient Queue Management** – just **1.67 µs** average wait time on the t3.xlarge test.
+- **Fast Key Selection** – ~**10 ns** to pick the right weighted API key.
 
-- Buffer Size: 20,000
-- Initial Pool Size: 15,000
+Bifrost is deliberately configurable so you can dial the **speed ↔ memory** trade-off:
 
-### Performance Metrics
+| Config Knob                   | Effect                                                           |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `initial_pool_size`           | How many objects are pre-allocated. Higher = faster, more memory |
+| `buffer_size` & `concurrency` | Queue depth and max parallel workers (can be set per provider)   |
+| Retry / Timeout               | Tune aggressiveness for each provider to meet your SLOs          |
 
-| Metric                    | t3.medium     | t3.xlarge      |
-| ------------------------- | ------------- | -------------- |
-| Success Rate              | 100.00%       | 100.00%        |
-| Average Request Size      | 0.13 KB       | 0.13 KB        |
-| **Average Response Size** | **`1.37 KB`** | **`10.32 KB`** |
-| Average Latency           | 2.12s         | 1.61s          |
-| Peak Memory Usage         | 1312.79 MB    | 3340.44 MB     |
-| Queue Wait Time           | 47.13 µs      | 1.67 µs        |
-| Key Selection Time        | 16 ns         | 10 ns          |
-| Message Formatting        | 2.19 µs       | 2.11 µs        |
-| Params Preparation        | 436 ns        | 417 ns         |
-| Request Body Preparation  | 2.65 µs       | 2.36 µs        |
-| JSON Marshaling           | 63.47 µs      | 26.80 µs       |
-| Request Setup             | 6.59 µs       | 7.17 µs        |
-| HTTP Request              | 1.56s         | 1.50s          |
-| Error Handling            | 189 ns        | 162 ns         |
-| Response Parsing          | 11.30 ms      | 2.11 ms        |
-| **Bifrost's Overhead**    | **`59 µs\*`** | **`11 µs\*`**  |
+Choose higher settings (like the t3.xlarge profile above) for raw speed, or lower ones (t3.medium) for reduced memory footprint – or find the sweet spot for your workload.
 
-_\*Bifrost's overhead is measured at 59 µs on t3.medium and 11 µs on t3.xlarge, excluding the time taken for JSON marshalling and the HTTP call to the LLM, both of which are required in any custom implementation._
+> **Need more numbers?** Dive into the [full benchmark report](./docs/benchmarks.md) for breakdowns of every internal stage (JSON marshalling, HTTP call, parsing, etc.), hardware sizing guides and tuning tips.
 
-**Note**: On the t3.xlarge, we tested with significantly larger response payloads (~10 KB average vs ~1 KB on t3.medium). Even so, response parsing time dropped dramatically thanks to better CPU throughput and Bifrost's optimized memory reuse.
+---
 
-### Key Performance Highlights
+## 📚 Documentation
 
-- **Perfect Success Rate**: 100% request success rate under high load on both instances
-- **Total Overhead**: Less than only _15µs added per request_ on average
-- **Efficient Queue Management**: Minimal queue wait time (1.67 µs on t3.xlarge)
-- **Fast Key Selection**: Near-instantaneous key selection (10 ns on t3.xlarge)
-- **Improved Performance on t3.xlarge**:
-  - 24% faster average latency
-  - 81% faster response parsing
-  - 58% faster JSON marshaling
-  - Significantly reduced queue wait times
+**Everything you need to master Bifrost, from 30-second setup to production-scale deployments.**
 
-One of Bifrost's key strengths is its flexibility in configuration. You can freely decide the tradeoff between memory usage and processing speed by adjusting Bifrost's configurations. This flexibility allows you to optimize Bifrost for your specific use case, whether you prioritize speed, memory efficiency, or a balance between the two.
+<details>
+<summary><strong>🚀 I want to get started (2 minutes)</strong></summary>
 
-- Higher buffer and pool sizes (like in t3.xlarge) improve speed but use more memory
-- Lower configurations (like in t3.medium) use less memory but may have slightly higher latencies
-- You can fine-tune these parameters based on your specific needs and available resources
+- **[📖 Documentation Hub](./docs/README.md)** - Your complete roadmap to Bifrost
+- **[🔧 Go Package Setup](./docs/quickstart/go-package.md)** - Direct integration into your Go app
+- **[🌐 HTTP API Setup](./docs/quickstart/http-transport.md)** - Language-agnostic service deployment
+- **[🔄 Drop-in Replacement](./docs/usage/http-transport/integrations/README.md)** - Replace OpenAI/Anthropic with zero code changes
 
-  - Initial Pool Size: Determines the initial allocation of resources
-  - Buffer and Concurrency Settings: Controls the queue size and maximum number of concurrent requests (adjustable per provider).
-  - Retry and Timeout Configurations: Customizable based on your requirements for each provider.
+</details>
 
-Curious? Run your own benchmarks. The [Bifrost Benchmarking](https://github.com/maximhq/bifrost-benchmarking) repo has everything you need to test it in your own environment.
+<details>
+<summary><strong>🎯 I want to understand what Bifrost can do</strong></summary>
+
+- **[🔗 Multi-Provider Support](./docs/usage/providers.md)** - Connect to 8+ AI providers with one API
+- **[🛡️ Fallback & Reliability](./docs/usage/providers.md#fallback-mechanisms)** - Never lose a request with automatic failover
+- **[🛠️ MCP Tool Integration](./docs/usage/http-transport/configuration/mcp.md)** - Give your AI external capabilities
+- **[🔌 Plugin Ecosystem](./docs/usage/http-transport/configuration/plugins.md)** - Extend Bifrost with custom middleware
+- **[🔑 Key Management](./docs/usage/key-management.md)** - Rotate API keys without downtime
+- **[📡 Networking](./docs/usage/networking.md)** - Proxies, timeouts, and connection tuning
+
+</details>
+
+<details>
+<summary><strong>⚙️ I want to deploy this to production</strong></summary>
+
+- **[🏗️ System Architecture](./docs/architecture/README.md)** - Understand how Bifrost works internally
+- **[📊 Performance Tuning](./docs/benchmarks.md)** - Squeeze out every microsecond
+- **[🚀 Production Deployment](./docs/usage/http-transport/README.md)** - Scale to millions of requests
+- **[🔧 Complete API Reference](./docs/usage/README.md)** - Every endpoint, parameter, and response
+- **[🐛 Error Handling](./docs/usage/errors.md)** - Troubleshoot like a pro
+
+</details>
+
+<details>
+<summary><strong>📱 I'm migrating from another tool</strong></summary>
+
+- **[🔄 Migration Guides](./docs/usage/http-transport/integrations/migration-guide.md)** - Step-by-step migration from OpenAI, Anthropic, LiteLLM
+- **[🎓 Real-World Examples](./docs/examples/)** - Production-ready code samples
+- **[❓ Common Questions](./docs/usage/errors.md)** - Solutions to frequent issues
+
+</details>
+
+---
+
+## 💬 Need Help?
+
+**🔗 [Join our Discord](https://discord.gg/qPaAuTCv)** for:
+
+- ❓ Quick setup assistance and troubleshooting
+- 💡 Best practices and configuration tips
+- 🤝 Community discussions and support
+- 🚀 Real-time help with integrations
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions of all kinds—whether it's bug fixes, features, documentation improvements, or new ideas. Feel free to open an issue, and once it's assigned, submit a Pull Request.
-
-Here's how to get started (after picking up an issue):
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request and describe your changes
+See our **[Contributing Guide](./docs/contributing/README.md)** for detailed information on how to contribute to Bifrost. We welcome contributions of all kinds—whether it's bug fixes, features, documentation improvements, or new ideas. Feel free to open an issue, and once it's assigned, submit a Pull Request.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
 
 Built with ❤️ by [Maxim](https://github.com/maximhq)

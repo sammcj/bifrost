@@ -6,7 +6,7 @@ Production-ready end-to-end test suite for testing AI integrations through Bifro
 
 The Bifrost integration tests use a centralized configuration system that routes all AI integration requests through Bifrost as a gateway/proxy:
 
-```
+```text
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Test Client   │───▶│  Bifrost Gateway │───▶│  AI Integration    │
 │                 │    │  localhost:8080  │    │  (OpenAI, etc.) │
@@ -50,7 +50,7 @@ Our test suite covers 11 comprehensive scenarios for each integration:
 
 ## 📁 Directory Structure
 
-```
+```text
 transports-integrations/
 ├── config.yml                   # Central configuration file
 ├── requirements.txt             # Python dependencies
@@ -437,7 +437,7 @@ pytest tests/integrations/test_google.py::TestGoogleIntegration::test_03_single_
 
 #### Quick Reference: Test Categories
 
-```
+```text
 Test 01: Simple Chat              - Basic single-message conversations
 Test 02: Multi-turn Conversation  - Conversation history and context
 Test 03: Single Tool Call         - Basic function calling

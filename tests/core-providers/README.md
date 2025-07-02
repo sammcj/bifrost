@@ -17,7 +17,7 @@ This directory contains comprehensive tests for all Bifrost AI providers, ensuri
 
 ### Development with Local Bifrost Core
 
-If you're working with a forked or local version of bifrost-core and want to test your changes:
+To test changes with a forked or local version of bifrost-core:
 
 1. **Uncomment the replace directive** in `tests/core-providers/go.mod`:
 
@@ -39,11 +39,11 @@ If you're working with a forked or local version of bifrost-core and want to tes
    go test -v ./tests/core-providers/
    ```
 
-⚠️ **Important**: Make sure your local `../../core` directory contains your bifrost-core implementation. The path should be relative to the `tests/core-providers` directory.
+⚠️ **Important**: Ensure your local `../../core` directory contains your bifrost-core implementation. The path should be relative to the `tests/core-providers` directory.
 
 ### Prerequisites
 
-Set up your environment variables for the providers you want to test:
+Set up environment variables for the providers you want to test:
 
 ```bash
 # OpenAI

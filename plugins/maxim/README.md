@@ -6,20 +6,20 @@ This plugin integrates the Maxim SDK into Bifrost, enabling seamless observabili
 
 1. Download the Plugin
 
-```bash
-go get github.com/maximhq/bifrost/plugins/maxim
-```
+   ```bash
+   go get github.com/maximhq/bifrost/plugins/maxim
+   ```
 
 2. Initialise the Plugin
 
-```go
-    maximPlugin, err := maxim.NewMaximLoggerPlugin("your_maxim_api_key", "your_maxim_log_repo_id")
-    if err != nil {
-        return nil, err
-        }
-```
+   ```go
+       maximPlugin, err := maxim.NewMaximLoggerPlugin("your_maxim_api_key", "your_maxim_log_repo_id")
+       if err != nil {
+           return nil, err
+           }
+   ```
 
-3.  Pass to plugin to bifrost
+3. Pass the plugin to Bifrost
 
 ```go
     client, err := bifrost.Init(schemas.BifrostConfig{
@@ -32,26 +32,32 @@ go get github.com/maximhq/bifrost/plugins/maxim
 
 1. Set up the environment variables
 
-```bash
-export MAXIM_API_KEY=your_maxim_api_key
-```
+   ```bash
+   export MAXIM_API_KEY=your_maxim_api_key
+   export MAXIM_LOG_REPO_ID=your_maxim_log_repo_id
+   ```
 
-2. Setup flags to use the plugin
-   Use include `maxim` in `--plugins` and your maxim log repo id in `--maxim-log-repo-id"`
+2. Set up flags to add the plugin
+   Add `maxim` to the `--plugins` flag
 
-   eg. `bifrost-http -config config.json -env .env -plugins maxim -maxim-log-repo-id your_maxim_log_repo_id`
+   e.g., `bifrost-http -config config.json -env .env -plugins maxim`
 
    For docker build
 
    ```bash
-   docker build \
-   --build-arg CONFIG_PATH=./config.example.json \
-   --build-arg ENV_PATH=./.env.sample \
-   --build-arg PORT=8080 \
-   --build-arg POOL_SIZE=300 \
-   --build-arg PLUGINS=maxim \
-   --build-arg MAXIM_LOG_REPO_ID=your_maxim_log_repo_id \
-   -t bifrost-transports .
+   docker build -t bifrost-transports .
+   ```
+
+   Running the docker container
+
+   ```bash
+   docker run -d \
+    -p 8080:8080 \
+    -v $(pwd)/config.json:/app/config/config.json \
+    -e APP_PORT=8080 \
+    -e MAXIM_API_KEY \
+    -e MAXIM_LOG_REPO_ID \
+    bifrost-transport
    ```
 
 ## Viewing Your Traces
@@ -66,9 +72,9 @@ export MAXIM_API_KEY=your_maxim_api_key
 
 ## Additional Features
 
-The plugin also supports custom `session-id`, `trace-id` and `generation-id` if the user wish to log the generations to their custom logging implementation. To use it, just pass your trace id to the passed request context with the key `trace-id`, and similarly to `generation-id` for generation id. In these cases no new trace/generation is created and the output is just logged to your provided generation. Likewise, `session-id` can be used to add the traces to your generated session.
+The plugin also supports custom `session-id`, `trace-id` and `generation-id` if the user wishes to log the generations to their custom logging implementation. To use it, pass your trace ID to the request context with the key `trace-id`, and similarly `generation-id` for generation ID. In these cases, no new trace/generation is created and the output is logged to your provided generation. Likewise, `session-id` can be used to add the traces to your generated session.
 
-eg.
+e.g.
 
 ```go
     ctx = context.WithValue(ctx, "generation-id", "123")
@@ -82,7 +88,7 @@ eg.
             }, ctx)
 ```
 
-HTTP transport offers out of the box support for this feature(when maxim plugin is used), just pass `x-bf-maxim-session-id`, `x-bf-maxim-trace-id`, or `x-bf-maxim-generation-id` header with your request to use this feature.
+HTTP transport offers out-of-the-box support for this feature (when the Maxim plugin is used). Pass `x-bf-maxim-session-id`, `x-bf-maxim-trace-id`, or `x-bf-maxim-generation-id` headers with your request to use this feature.
 
 ## Testing Maxim Logger
 
