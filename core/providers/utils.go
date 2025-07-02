@@ -541,3 +541,14 @@ func isLikelyBase64(s string) bool {
 	// Check if it contains only base64 characters using pre-compiled regex
 	return base64Regex.MatchString(cleanData)
 }
+
+// newUnsupportedOperationError creates a standardized error for unsupported operations.
+// This helper reduces code duplication across providers that don't support certain operations.
+func newUnsupportedOperationError(operation string, providerName string) *schemas.BifrostError {
+	return &schemas.BifrostError{
+		IsBifrostError: false,
+		Error: schemas.ErrorField{
+			Message: fmt.Sprintf("%s is not supported by %s provider", operation, providerName),
+		},
+	}
+}

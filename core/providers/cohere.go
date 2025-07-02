@@ -147,12 +147,7 @@ func (provider *CohereProvider) GetProviderKey() schemas.ModelProvider {
 // TextCompletion is not supported by the Cohere provider.
 // Returns an error indicating that text completion is not supported.
 func (provider *CohereProvider) TextCompletion(ctx context.Context, model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	return nil, &schemas.BifrostError{
-		IsBifrostError: false,
-		Error: schemas.ErrorField{
-			Message: "text completion is not supported by cohere provider",
-		},
-	}
+	return nil, newUnsupportedOperationError("text completion", "cohere")
 }
 
 // ChatCompletion performs a chat completion request to the Cohere API.
@@ -560,7 +555,7 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 	requestBody := map[string]interface{}{
 		"texts":            input.Texts,
 		"model":            model,
-		"input_type":       "search_document", // Default input type
+		"input_type":       "search_document", // Default input type - can be overridden via ExtraParams
 		"embedding_types":  []string{"float"}, // Default to float embeddings
 	}
 
@@ -580,6 +575,7 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 			requestBody["embedding_types"] = []string{*params.EncodingFormat}
 		}
 
+		// Merge extra parameters - this allows overriding input_type and other parameters
 		if params.ExtraParams != nil {
 			for k, v := range params.ExtraParams {
 				requestBody[k] = v
