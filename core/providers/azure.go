@@ -374,7 +374,7 @@ func (provider *AzureProvider) ChatCompletion(ctx context.Context, model, key st
 // Embedding generates embeddings for the given input text(s) using Azure OpenAI.
 // The input can be either a single string or a slice of strings for batch embedding.
 // Returns a BifrostResponse containing the embedding(s) and any error that occurred.
-func (provider *AzureProvider) Embedding(ctx context.Context, model string, key string, input schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *AzureProvider) Embedding(ctx context.Context, model string, key string, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	if len(input.Texts) == 0 {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,

@@ -1094,7 +1094,7 @@ func signAWSRequest(req *http.Request, accessKey, secretKey string, sessionToken
 
 // Embedding generates embeddings for the given input text(s) using Amazon Bedrock.
 // Supports Titan and Cohere embedding models. Returns a BifrostResponse containing the embedding(s) and any error that occurred.
-func (provider *BedrockProvider) Embedding(ctx context.Context, model string, key string, input schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *BedrockProvider) Embedding(ctx context.Context, model string, key string, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	switch {
 	case strings.HasPrefix(model, "amazon.titan-embed-text"):
 		return provider.handleTitanEmbedding(ctx, model, key, input, params)
@@ -1109,7 +1109,7 @@ func (provider *BedrockProvider) Embedding(ctx context.Context, model string, ke
 }
 
 // handleTitanEmbedding handles embedding requests for Amazon Titan models.
-func (provider *BedrockProvider) handleTitanEmbedding(ctx context.Context, model string, key string, input schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *BedrockProvider) handleTitanEmbedding(ctx context.Context, model string, key string, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Titan Text Embeddings V1/V2 - only supports single text input
 	if len(input.Texts) == 0 {
 		return nil, &schemas.BifrostError{
@@ -1198,7 +1198,7 @@ func (provider *BedrockProvider) handleTitanEmbedding(ctx context.Context, model
 }
 
 // handleCohereEmbedding handles embedding requests for Cohere models on Bedrock.
-func (provider *BedrockProvider) handleCohereEmbedding(ctx context.Context, model string, key string, input schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *BedrockProvider) handleCohereEmbedding(ctx context.Context, model string, key string, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	if len(input.Texts) == 0 {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
