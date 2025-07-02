@@ -1,158 +1,52 @@
-# Bifrost Transports
+# 🌐 Bifrost Transports
 
-This package contains clients for various transports that can be used to spin up your Bifrost client with just a single line of code.
+Bifrost Transports let you run Bifrost as a blazing-fast HTTP API or integrate it directly as a Go package. Connect to any AI provider (OpenAI, Anthropic, Bedrock, and more) in seconds with automatic fallbacks and advanced features.
 
-📖 **Comprehensive HTTP API documentation is available in** _[`docs/http-transport-api.md`](../docs/http-transport-api.md)_.
-
-## 📑 Table of Contents
-
-- [Bifrost Transports](#bifrost-transports)
-  - [📑 Table of Contents](#-table-of-contents)
-  - [🚀 Setting Up Transports](#-setting-up-transports)
-    - [Prerequisites](#prerequisites)
-    - [Configuration](#configuration)
-    - [Docker Setup](#docker-setup)
-    - [Go Setup](#go-setup)
-  - [🧰 Usage](#-usage)
-    - [Text Completions](#text-completions)
-    - [Chat Completions](#chat-completions)
-  - [🔧 Advanced Features](#-advanced-features)
-    - [Prometheus Support](#prometheus-support)
-    - [Plugin Support](#plugin-support)
-    - [Fallbacks](#fallbacks)
+📖 **Complete documentation**: [docs/usage/http-transport/](../docs/usage/http-transport/)
 
 ---
 
-## 🚀 Setting Up Transports
+## 🚀 Quick Start
 
-### Prerequisites
-
-- Go 1.23 or higher (if not using Docker)
-- Access to at least one AI model provider (OpenAI, Anthropic, etc.)
-- API keys for the providers you wish to use
-
-### Configuration
-
-Bifrost uses a combination of a JSON configuration file and environment variables:
-
-1. **JSON Configuration File**: Bifrost requires a configuration file to set up the gateway. This includes all your provider-level settings, keys, and meta configs for each of your providers.
-2. **Environment Variables**: If you don't want to include your keys in your config file, you can add a prefix of `env.` followed by its key in your environment.
-
-```json
-{
-  "openai": {
-    "keys": [
-      {
-        "value": "env.OPENAI_API_KEY",
-        "models": ["gpt-4o-mini"],
-        "weight": 1.0
-      }
-    ]
-  }
-}
-```
-
-In this example config file, `OPENAI_API_KEY` refers to a key set in your environment. At runtime, its value will be used to replace the placeholder.
-
-The same setup applies to keys in meta configs of all providers:
-
-```json
-{
-  "meta_config": {
-    "secret_access_key": "env.AWS_SECRET_ACCESS_KEY",
-    "region": "env.AWS_REGION"
-  }
-}
-```
-
-In this example, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION` refer to keys in the environment.
-
-**Please refer to `config.example.json` for examples.**
-
-### Docker Setup
-
-1. Download the Dockerfile:
+### Docker
 
 ```bash
-curl -L -o Dockerfile https://raw.githubusercontent.com/maximhq/bifrost/main/transports/Dockerfile
+# Pull and run Bifrost HTTP API
+docker pull maximhq/bifrost
+docker run -p 8080:8080 \
+  -v $(pwd)/config.json:/app/config/config.json \
+  -e OPENAI_API_KEY \
+  maximhq/bifrost
 ```
 
-2. Build the Docker image:
+### Go Binary
 
 ```bash
-docker build \
-  --build-arg CONFIG_PATH=./config.json \
-  --build-arg PORT=8080 \
-  --build-arg POOL_SIZE=300 \
-  -t bifrost-transports .
-```
-
-3. Run the Docker container:
-
-```bash
-docker run -p 8080:8080 -e OPENAI_API_KEY -e ANTHROPIC_API_KEY bifrost-transports
-```
-
-Note: In the command above, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are just example environment variables.
-You need to pass all environment variables referenced in your `config.json` file that start with the prefix `env.` to the docker run command using the -e flag. This ensures Docker sets them correctly inside the container.
-
-example usage: Suppose your config.json only contains one environment variable placeholder, `env.COHERE_API_KEY`. Here's how you would run it:
-
-```bash
-export COHERE_API_KEY=your_cohere_api_key
-
-docker build --build-arg CONFIG_PATH=./config.example.json -t bifrost-transports .
-
-docker run -p 8080:8080 -e COHERE_API_KEY bifrost-transports
-```
-
-You can also add a flag for `DROP_EXCESS_REQUESTS=false` in your Docker build command to drop excess requests when the buffer is full. Read more about `DROP_EXCESS_REQUESTS` and `POOL_SIZE` [here](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
-
----
-
-### Go Setup
-
-If you wish to run Bifrost in your Go environment, follow these steps:
-
-1. Install your binary:
-
-```bash
+# Install and run locally (Make sure Go is in your PATH)
 go install github.com/maximhq/bifrost/transports/bifrost-http@latest
+bifrost-http -config config.json -port 8080
 ```
 
-2. Run your binary (make sure Go is set in your PATH):
+**Ready in 30 seconds!** See [HTTP Transport Quickstart](../docs/quickstart/http-transport.md) for detailed setup.
 
-```bash
-bifrost-http -config config.json -port 8080 -pool-size 300
-```
+---
 
-You can also add a flag for `-drop-excess-requests=false` in your command to drop excess requests when the buffer is full. Read more about `DROP_EXCESS_REQUESTS` and `POOL_SIZE` [here](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
+## 🌟 Key Features
 
-## 🧰 Usage
+| Feature                       | Description                                                         | Learn More                                                 |
+| ----------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **🔄 Multi-Provider Support** | OpenAI, Anthropic, Bedrock, Vertex, Cohere, Mistral, Ollama         | [Provider Setup](../docs/usage/providers.md)               |
+| **🔌 Drop-in Compatibility**  | Replace OpenAI/Anthropic/GenAI APIs with zero code changes          | [Integrations](../docs/usage/http-transport/integrations/) |
+| **🛠️ MCP Tool Calling**       | Enable AI models to use external tools (filesystem, web, databases) | [MCP Guide](../docs/mcp.md)                                |
+| **⚡ Plugin System**          | Add analytics, caching, rate limiting, custom logic                 | [Plugin System](../docs/plugins.md)                        |
+| **📊 Built-in Monitoring**    | Prometheus metrics at `/metrics` endpoint                           | [Monitoring](../docs/usage/http-transport/endpoints.md)    |
+| **🔀 Automatic Fallbacks**    | Seamless failover between providers and models                      | [Fallback Config](../docs/usage/providers.md)              |
 
-Ensure that:
+---
 
-- Bifrost's HTTP server is running
-- The providers/models you use are configured in your JSON config file
+## 🎯 Usage Examples
 
-### Text Completions
-
-```bash
-# Make sure to setup anthropic and claude-2.1 in your config.json
-curl -X POST http://localhost:8080/v1/text/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "provider": "anthropic",
-    "model": "claude-2.1",
-    "text": "Once upon a time in the land of AI,",
-    "params": {
-      "temperature": 0.7,
-      "max_tokens": 100
-    }
-  }'
-```
-
-### Chat Completions
+### Basic Chat Completion
 
 ```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
@@ -160,59 +54,171 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -d '{
     "provider": "openai",
     "model": "gpt-4o-mini",
-    "messages": [
-      {"role": "system", "content": "You are a helpful assistant."},
-      {"role": "user", "content": "Tell me about Bifrost in Norse mythology."}
-    ],
-    "params": {
-      "temperature": 0.8,
-      "max_tokens": 500
-    }
+    "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
+### Drop-in OpenAI Replacement
+
+```python
+import openai
+
+# Just change the base_url - everything else stays the same!
+client = openai.OpenAI(
+    base_url="http://localhost:8080/openai",
+    api_key="dummy-key"  # Handled by Bifrost
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello from Bifrost!"}]
+)
+```
+
+### Multi-Provider Fallbacks
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "fallbacks": [
+      {"provider": "anthropic", "model": "claude-3-5-sonnet-20241022"},
+      {"provider": "bedrock", "model": "anthropic.claude-3-sonnet-20240229-v1:0"}
+    ]
+  }'
+```
+
+**More examples**: [HTTP Transport Endpoints](../docs/usage/http-transport/endpoints.md)
+
 ---
 
-## 🔧 Advanced Features
+## ⚙️ Configuration
 
-### Prometheus Support
-
-HTTP transport supports Prometheus out of the box. By default all the metrics are available at `/metrics` endpoint. It providers metrics for httpRequestsTotal, httpRequestDuration, httpRequestSizeBytes, httpResponseSizeBytes, bifrostUpstreamRequestsTotal, and bifrostUpstreamLatencySeconds. To add custom labels to these metrics using can pass a flag of `-prometheus-labels` while running the http transport.
-
-For eg. `-prometheus-labels team-id,task-id,location`
-
-Values for labels are then picked up from the HTTP request headers with the prefix `x-bf-prom-`.
-
-### Plugin Support
-
-You can explore the available plugins [here](https://github.com/maximhq/bifrost/tree/main/plugins). And to attached these plugins to your HTTP transport, just pass the flag `-plugins`.
-
-For eg. `-plugins maxim`
-
-Note: Please check plugin specific documentations (github.com/maximhq/bifrost/tree/main/plugins/{plugin_name}) for more nuanced control and any additional setup.
-
-### Fallbacks
-
-Configure fallback options in your requests:
+### Minimal Config
 
 ```json
 {
-  "provider": "openai",
-  "model": "gpt-4",
-  "messages": [...],
-  "fallbacks": [
-    {
-      "provider": "anthropic",
-      "model": "claude-3-opus-20240229"
-    },
-    {
-      "provider": "bedrock",
-      "model": "anthropic.claude-3-sonnet-20240229-v1:0"
+  "providers": {
+    "openai": {
+      "keys": [
+        {
+          "value": "env.OPENAI_API_KEY",
+          "models": ["gpt-4o-mini"],
+          "weight": 1.0
+        }
+      ]
     }
-  ]
+  }
 }
 ```
 
-Read more about fallbacks and other additional configurations [here](https://github.com/maximhq/bifrost/tree/main?tab=README-ov-file#additional-configurations).
+**Learn More:**
 
-Built with ❤️ by [Maxim](https://github.com/maximhq)
+- [Provider Setup Guide](../docs/usage/http-transport/configuration/providers.md)
+- [MCP Configuration](../docs/usage/http-transport/configuration/mcp.md)
+- [Plugin Configuration](../docs/usage/http-transport/configuration/plugins.md)
+- [Complete Examples](config.example.json)
+
+---
+
+## 🛠️ Advanced Features
+
+### MCP Tool Integration
+
+Enable AI models to use external tools like filesystem operations, web search, and databases:
+
+```bash
+# AI automatically uses configured tools
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -d '{"provider": "openai", "model": "gpt-4o-mini",
+       "messages": [{"role": "user", "content": "List files in /tmp"}]}'
+```
+
+**Learn more**: [MCP Integration Guide](../docs/mcp.md)
+
+### Plugin System
+
+Add custom middleware for analytics, caching, rate limiting:
+
+```bash
+# Run with plugins
+bifrost-http -config config.json -plugins "maxim,redis"
+```
+
+**Available plugins**: [Plugin Repository](https://github.com/maximhq/bifrost/tree/main/plugins) | [Plugin Guide](../docs/plugins.md)
+
+### Prometheus Monitoring
+
+Built-in metrics collection at `/metrics`:
+
+```bash
+curl http://localhost:8080/metrics
+```
+
+**Custom labels**: `-prometheus-labels team-id,task-id`
+
+---
+
+## 🔧 Runtime Configuration
+
+### For Go Binary
+
+| Flag                 | Default | Description                 |
+| -------------------- | ------- | --------------------------- |
+| `-config`            | -       | Path to config.json file    |
+| `-port`              | 8080    | HTTP server port            |
+| `-pool-size`         | 300     | Connection pool size        |
+| `-plugins`           | -       | Comma-separated plugin list |
+| `-prometheus-labels` | -       | Custom Prometheus labels    |
+
+### For Docker
+
+| Variable                   | Description                           |
+| -------------------------- | ------------------------------------- |
+| `APP_PORT`                 | Server port override                  |
+| `APP_POOL_SIZE`            | Pool size override                    |
+| `APP_PLUGINS`              | Plugin list override                  |
+| `APP_DROP_EXCESS_REQUESTS` | Drop excess requests when buffer full |
+
+---
+
+## 📚 Documentation
+
+### 🎯 Getting Started
+
+- **[⚡ 30-Second Quickstart](../docs/quickstart/http-transport.md)** - Get running immediately
+- **[🔧 Configuration Guide](../docs/usage/http-transport/configuration/)** - Providers, MCP, plugins
+- **[🔄 Migration Guide](../docs/usage/http-transport/integrations/migration-guide.md)** - Migrate from existing providers
+
+### 🚀 Core Features
+
+- **[🔗 Multi-Provider Support](../docs/usage/providers.md)** - 8+ AI providers with fallbacks
+- **[🛠️ MCP Integration](../docs/mcp.md)** - External tool calling for AI models
+- **[🔌 Plugin System](../docs/plugins.md)** - Extensible middleware architecture
+
+### 🌐 API Integrations
+
+- **[🤖 OpenAI Compatible](../docs/usage/http-transport/integrations/openai-compatible.md)** - Drop-in OpenAI replacement
+- **[🧠 Anthropic Compatible](../docs/usage/http-transport/integrations/anthropic-compatible.md)** - Drop-in Anthropic replacement
+- **[🔍 GenAI Compatible](../docs/usage/http-transport/integrations/genai-compatible.md)** - Drop-in Google GenAI replacement
+
+### 🏛️ Architecture & Performance
+
+- **[📊 Benchmarks](../docs/benchmarks.md)** - Performance metrics and optimization
+- **[🏗️ Architecture](../docs/architecture/)** - System design and internals
+- **[💡 Examples](../docs/examples/)** - Real-world usage patterns
+
+---
+
+## 🎉 Ready to Scale?
+
+🚀 **Production Deployment**: [Production Guide](../docs/usage/http-transport/configuration/)  
+📈 **Performance Tuning**: [Benchmarks & Optimization](../docs/benchmarks.md)  
+🔍 **Troubleshooting**: [Common Issues](../docs/usage/errors.md)
+
+---
+
+_Built with ❤️ by [Maxim](https://github.com/maximhq)_

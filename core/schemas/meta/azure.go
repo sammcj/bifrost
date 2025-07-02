@@ -19,7 +19,7 @@ func (c *AzureMetaConfig) GetEndpoint() *string {
 
 // GetDeployments returns the deployment configurations.
 // This maps model names to their corresponding Azure deployment names.
-// Eg. "gpt-4o": "your-deployment-name-for-gpt-4o"
+// E.g. "gpt-4o": "your-deployment-name-for-gpt-4o"
 func (c *AzureMetaConfig) GetDeployments() map[string]string {
 	return c.Deployments
 }

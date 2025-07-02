@@ -17,8 +17,9 @@ type BifrostConfig struct {
 	Account            Account
 	Plugins            []Plugin
 	Logger             Logger
-	InitialPoolSize    int  // Initial pool size for sync pools in Bifrost. Higher values will reduce memory allocations but will increase memory usage.
-	DropExcessRequests bool // If true, in cases where the queue is full, requests will not wait for the queue to be empty and will be dropped instead.
+	InitialPoolSize    int        // Initial pool size for sync pools in Bifrost. Higher values will reduce memory allocations but will increase memory usage.
+	DropExcessRequests bool       // If true, in cases where the queue is full, requests will not wait for the queue to be empty and will be dropped instead.
+	MCPConfig          *MCPConfig // MCP (Model Context Protocol) configuration for tool integration
 }
 
 // ModelChatMessageRole represents the role of a chat message
@@ -424,12 +425,18 @@ const (
 )
 
 // BifrostError represents an error from the Bifrost system.
+//
+// PLUGIN DEVELOPERS: When creating BifrostError in PreHook or PostHook, you can set AllowFallbacks:
+// - AllowFallbacks = &true: Bifrost will try fallback providers if available
+// - AllowFallbacks = &false: Bifrost will return this error immediately, no fallbacks
+// - AllowFallbacks = nil: Treated as true by default (fallbacks allowed for resilience)
 type BifrostError struct {
 	EventID        *string    `json:"event_id,omitempty"`
 	Type           *string    `json:"type,omitempty"`
 	IsBifrostError bool       `json:"is_bifrost_error"`
 	StatusCode     *int       `json:"status_code,omitempty"`
 	Error          ErrorField `json:"error"`
+	AllowFallbacks *bool      `json:"-"` // Optional: Controls fallback behavior (nil = true by default)
 }
 
 // ErrorField represents detailed error information.

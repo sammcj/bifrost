@@ -2,6 +2,7 @@ package integrations
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 
@@ -126,7 +127,7 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 			body := ctx.Request.Body()
 			if len(body) > 0 {
 				if err := json.Unmarshal(body, req); err != nil {
-					g.sendError(ctx, fasthttp.StatusBadRequest, "Invalid JSON: "+err.Error())
+					g.sendError(ctx, newBifrostError(err, "Invalid JSON"))
 					return
 				}
 			}
@@ -137,7 +138,7 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		// or performing request-specific validation
 		if config.PreCallback != nil {
 			if err := config.PreCallback(ctx, req); err != nil {
-				g.sendError(ctx, fasthttp.StatusBadRequest, err.Error())
+				g.sendError(ctx, newBifrostError(err, "failed to execute pre-request callback"))
 				return
 			}
 		}
@@ -145,15 +146,15 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		// Convert the integration-specific request to Bifrost format
 		bifrostReq, err := config.RequestConverter(req)
 		if err != nil {
-			g.sendError(ctx, fasthttp.StatusBadRequest, err.Error())
+			g.sendError(ctx, newBifrostError(err, "failed to convert request to Bifrost format"))
 			return
 		}
 		if bifrostReq == nil {
-			g.sendError(ctx, fasthttp.StatusBadRequest, "Invalid request")
+			g.sendError(ctx, newBifrostError(nil, "Invalid request"))
 			return
 		}
 		if bifrostReq.Model == "" {
-			g.sendError(ctx, fasthttp.StatusBadRequest, "Model parameter is required")
+			g.sendError(ctx, newBifrostError(nil, "Model parameter is required"))
 			return
 		}
 
@@ -161,32 +162,27 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		bifrostCtx := lib.ConvertToBifrostContext(ctx)
 		result, bifrostErr := g.client.ChatCompletionRequest(*bifrostCtx, bifrostReq)
 		if bifrostErr != nil {
-			g.sendError(ctx, func() int {
-				if bifrostErr.IsBifrostError {
-					return fasthttp.StatusInternalServerError
-				}
-				return fasthttp.StatusBadRequest
-			}(), err)
+			g.sendError(ctx, bifrostErr)
 			return
 		}
 		// Execute post-request callback if configured
 		// This is typically used for response modification or additional processing
 		if config.PostCallback != nil {
 			if err := config.PostCallback(ctx, req, result); err != nil {
-				g.sendError(ctx, fasthttp.StatusInternalServerError, err.Error())
+				g.sendError(ctx, newBifrostError(err, "failed to execute post-request callback"))
 				return
 			}
 		}
 
 		if result == nil {
-			g.sendError(ctx, fasthttp.StatusInternalServerError, "Bifrost response is nil after post-request callback")
+			g.sendError(ctx, newBifrostError(nil, "Bifrost response is nil after post-request callback"))
 			return
 		}
 
 		// Convert Bifrost response to integration-specific format and send
 		response, err := config.ResponseConverter(result)
 		if err != nil {
-			g.sendError(ctx, fasthttp.StatusInternalServerError, err.Error())
+			g.sendError(ctx, newBifrostError(err, "failed to encode response"))
 			return
 		}
 		g.sendSuccess(ctx, response)
@@ -195,20 +191,18 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 
 // sendError sends an error response with the appropriate status code and JSON body.
 // It handles different error types (string, error interface, or arbitrary objects).
-func (g *GenericRouter) sendError(ctx *fasthttp.RequestCtx, statusCode int, err interface{}) {
-	ctx.SetStatusCode(statusCode)
-	ctx.SetContentType("application/json")
-
-	var errorBody []byte
-	switch e := err.(type) {
-	case string:
-		errorBody, _ = json.Marshal(map[string]string{"error": e})
-	case error:
-		errorBody, _ = json.Marshal(map[string]string{"error": e.Error()})
-	default:
-		errorBody, _ = json.Marshal(err)
+func (g *GenericRouter) sendError(ctx *fasthttp.RequestCtx, err *schemas.BifrostError) {
+	if err.StatusCode != nil {
+		ctx.SetStatusCode(*err.StatusCode)
+	} else {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 	}
-	ctx.SetBody(errorBody)
+
+	ctx.SetContentType("application/json")
+	if encodeErr := json.NewEncoder(ctx).Encode(err); encodeErr != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(fmt.Sprintf("failed to encode error response: %v", encodeErr))
+	}
 }
 
 // sendSuccess sends a successful response with HTTP 200 status and JSON body.
@@ -218,11 +212,47 @@ func (g *GenericRouter) sendSuccess(ctx *fasthttp.RequestCtx, response interface
 
 	responseBody, err := json.Marshal(response)
 	if err != nil {
-		g.sendError(ctx, fasthttp.StatusInternalServerError, "failed to encode response: "+err.Error())
+		g.sendError(ctx, newBifrostError(err, "failed to encode response"))
 		return
 	}
 
 	ctx.SetBody(responseBody)
+}
+
+// validProviders is a pre-computed map for efficient O(1) provider validation.
+var validProviders = map[schemas.ModelProvider]bool{
+	schemas.OpenAI:    true,
+	schemas.Azure:     true,
+	schemas.Anthropic: true,
+	schemas.Bedrock:   true,
+	schemas.Cohere:    true,
+	schemas.Vertex:    true,
+	schemas.Mistral:   true,
+	schemas.Ollama:    true,
+}
+
+// ParseModelString extracts provider and model from a model string.
+// For model strings like "anthropic/claude", it returns ("anthropic", "claude").
+// For model strings like "claude", it returns ("", "claude").
+// If the extracted provider is not valid, it treats the whole string as a model name.
+func ParseModelString(model string, defaultProvider schemas.ModelProvider) (schemas.ModelProvider, string) {
+	// Check if model contains a provider prefix (only split on first "/" to preserve model names with "/")
+	if strings.Contains(model, "/") {
+		parts := strings.SplitN(model, "/", 2)
+		if len(parts) == 2 {
+			extractedProvider := parts[0]
+			extractedModel := parts[1]
+
+			// Validate that the extracted provider is actually a valid provider
+			if validProviders[schemas.ModelProvider(extractedProvider)] {
+				return schemas.ModelProvider(extractedProvider), extractedModel
+			}
+			// If extracted provider is not valid, treat the whole string as model name
+			// This prevents corrupting model names that happen to contain "/"
+		}
+	}
+	// No provider prefix found or invalid provider, return empty provider and the original model
+	return defaultProvider, model
 }
 
 // GetProviderFromModel determines the appropriate provider based on model name patterns
@@ -345,4 +375,25 @@ func matchesAnyPattern(model string, patterns []string) bool {
 		}
 	}
 	return false
+}
+
+// newBifrostError wraps a standard error into a BifrostError with IsBifrostError set to false.
+// This helper function reduces code duplication when handling non-Bifrost errors.
+func newBifrostError(err error, message string) *schemas.BifrostError {
+	if err == nil {
+		return &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: schemas.ErrorField{
+				Message: message,
+			},
+		}
+	}
+
+	return &schemas.BifrostError{
+		IsBifrostError: false,
+		Error: schemas.ErrorField{
+			Message: message,
+			Error:   err,
+		},
+	}
 }

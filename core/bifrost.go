@@ -49,6 +49,7 @@ type Bifrost struct {
 	logger              schemas.Logger                                // logger instance, default logger is used if not provided
 	dropExcessRequests  bool                                          // If true, in cases where the queue is full, requests will not wait for the queue to be empty and will be dropped instead.
 	backgroundCtx       context.Context                               // Shared background context for nil context handling
+	mcpManager          *MCPManager                                   // MCP integration manager (nil if MCP not configured)
 }
 
 // PluginPipeline encapsulates the execution of plugin PreHooks and PostHooks, tracks how many plugins ran, and manages short-circuiting and error aggregation.
@@ -71,19 +72,19 @@ func NewPluginPipeline(plugins []schemas.Plugin, logger schemas.Logger) *PluginP
 	}
 }
 
-// RunPreHooks executes PreHooks in order, tracks how many ran, and returns the final request, any short-circuit response, and the count.
-func (p *PluginPipeline) RunPreHooks(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.BifrostResponse, int) {
-	var resp *schemas.BifrostResponse
+// RunPreHooks executes PreHooks in order, tracks how many ran, and returns the final request, any short-circuit decision, and the count.
+func (p *PluginPipeline) RunPreHooks(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, int) {
+	var shortCircuit *schemas.PluginShortCircuit
 	var err error
 	for i, plugin := range p.plugins {
-		req, resp, err = plugin.PreHook(ctx, req)
+		req, shortCircuit, err = plugin.PreHook(ctx, req)
 		if err != nil {
 			p.preHookErrors = append(p.preHookErrors, err)
 			p.logger.Warn(fmt.Sprintf("Error in PreHook for plugin %s: %v", plugin.GetName(), err))
 		}
 		p.executedPreHooks = i + 1
-		if resp != nil {
-			return req, resp, p.executedPreHooks // short-circuit: only plugins up to and including i ran
+		if shortCircuit != nil {
+			return req, shortCircuit, p.executedPreHooks // short-circuit: only plugins up to and including i ran
 		}
 	}
 	return req, nil, p.executedPreHooks
@@ -236,6 +237,17 @@ func Init(config schemas.BifrostConfig) (*Bifrost, error) {
 		config.Logger = NewDefaultLogger(schemas.LogLevelInfo)
 	}
 	bifrost.logger = config.Logger
+
+	// Initialize MCP manager if configured
+	if config.MCPConfig != nil {
+		mcpManager, err := newMCPManager(*config.MCPConfig, bifrost.logger)
+		if err != nil {
+			bifrost.logger.Warn(fmt.Sprintf("failed to initialize MCP manager: %v", err))
+		} else {
+			bifrost.mcpManager = mcpManager
+			bifrost.logger.Info("MCP integration initialized successfully")
+		}
+	}
 
 	// Create buffered channels for each provider and start workers
 	for _, providerKey := range providerKeys {
@@ -572,7 +584,14 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 		return nil, primaryErr
 	}
 
+	// Check if this is a short-circuit error that doesn't allow fallbacks
+	// Note: AllowFallbacks = nil is treated as true (allow fallbacks by default)
+	if primaryErr.AllowFallbacks != nil && !*primaryErr.AllowFallbacks {
+		return nil, primaryErr
+	}
+
 	// If primary provider failed and we have fallbacks, try them in order
+	// This includes both regular provider errors and plugin short-circuit errors with AllowFallbacks=true/nil
 	if len(req.Fallbacks) > 0 {
 		for _, fallback := range req.Fallbacks {
 			// Check if we have config for this fallback provider
@@ -613,15 +632,30 @@ func (bifrost *Bifrost) tryTextCompletion(req *schemas.BifrostRequest, ctx conte
 		return nil, newBifrostError(err)
 	}
 
+	// Add MCP tools to request if MCP is configured
+	if bifrost.mcpManager != nil {
+		req = bifrost.mcpManager.addMCPToolsToBifrostRequest(ctx, req)
+	}
+
 	pipeline := NewPluginPipeline(bifrost.plugins, bifrost.logger)
-	preReq, preResp, preCount := pipeline.RunPreHooks(&ctx, req)
-	if preResp != nil {
-		resp, bifrostErr := pipeline.RunPostHooks(&ctx, preResp, nil, preCount)
-		// If PostHooks recovered from error, return resp; if not, return error
-		if bifrostErr != nil {
-			return nil, bifrostErr
+	preReq, shortCircuit, preCount := pipeline.RunPreHooks(&ctx, req)
+	if shortCircuit != nil {
+		// Handle short-circuit with response (success case)
+		if shortCircuit.Response != nil {
+			resp, bifrostErr := pipeline.RunPostHooks(&ctx, shortCircuit.Response, nil, preCount)
+			if bifrostErr != nil {
+				return nil, bifrostErr
+			}
+			return resp, nil
 		}
-		return resp, nil
+		// Handle short-circuit with error
+		if shortCircuit.Error != nil {
+			resp, bifrostErr := pipeline.RunPostHooks(&ctx, nil, shortCircuit.Error, preCount)
+			if bifrostErr != nil {
+				return nil, bifrostErr
+			}
+			return resp, nil
+		}
 	}
 	if preReq == nil {
 		return nil, newBifrostErrorFromMsg("bifrost request after plugin hooks cannot be nil")
@@ -698,7 +732,14 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.
 		return primaryResult, nil
 	}
 
+	// Check if this is a short-circuit error that doesn't allow fallbacks
+	// Note: AllowFallbacks = nil is treated as true (allow fallbacks by default)
+	if primaryErr.AllowFallbacks != nil && !*primaryErr.AllowFallbacks {
+		return nil, primaryErr
+	}
+
 	// If primary provider failed and we have fallbacks, try them in order
+	// This includes both regular provider errors and plugin short-circuit errors with AllowFallbacks=true/nil
 	if len(req.Fallbacks) > 0 {
 		for _, fallback := range req.Fallbacks {
 			// Check if we have config for this fallback provider
@@ -739,14 +780,30 @@ func (bifrost *Bifrost) tryChatCompletion(req *schemas.BifrostRequest, ctx conte
 		return nil, newBifrostError(err)
 	}
 
+	// Add MCP tools to request if MCP is configured
+	if bifrost.mcpManager != nil {
+		req = bifrost.mcpManager.addMCPToolsToBifrostRequest(ctx, req)
+	}
+
 	pipeline := NewPluginPipeline(bifrost.plugins, bifrost.logger)
-	preReq, preResp, preCount := pipeline.RunPreHooks(&ctx, req)
-	if preResp != nil {
-		resp, bifrostErr := pipeline.RunPostHooks(&ctx, preResp, nil, preCount)
-		if bifrostErr != nil {
-			return nil, bifrostErr
+	preReq, shortCircuit, preCount := pipeline.RunPreHooks(&ctx, req)
+	if shortCircuit != nil {
+		// Handle short-circuit with response (success case)
+		if shortCircuit.Response != nil {
+			resp, bifrostErr := pipeline.RunPostHooks(&ctx, shortCircuit.Response, nil, preCount)
+			if bifrostErr != nil {
+				return nil, bifrostErr
+			}
+			return resp, nil
 		}
-		return resp, nil
+		// Handle short-circuit with error
+		if shortCircuit.Error != nil {
+			resp, bifrostErr := pipeline.RunPostHooks(&ctx, nil, shortCircuit.Error, preCount)
+			if bifrostErr != nil {
+				return nil, bifrostErr
+			}
+			return resp, nil
+		}
 	}
 	if preReq == nil {
 		return nil, newBifrostErrorFromMsg("bifrost request after plugin hooks cannot be nil")
@@ -823,6 +880,12 @@ func (bifrost *Bifrost) EmbeddingRequest(ctx context.Context, req *schemas.Bifro
 		return primaryResult, nil
 	}
 
+	// Check if this is a short-circuit error that doesn't allow fallbacks
+	// Note: AllowFallbacks = nil is treated as true (allow fallbacks by default)
+	if primaryErr.AllowFallbacks != nil && !*primaryErr.AllowFallbacks {
+		return nil, primaryErr
+	}
+
 	// If primary provider failed and we have fallbacks, try them in order
 	if len(req.Fallbacks) > 0 {
 		for _, fallback := range req.Fallbacks {
@@ -865,13 +928,24 @@ func (bifrost *Bifrost) tryEmbedding(req *schemas.BifrostRequest, ctx context.Co
 	}
 
 	pipeline := NewPluginPipeline(bifrost.plugins, bifrost.logger)
-	preReq, preResp, preCount := pipeline.RunPreHooks(&ctx, req)
-	if preResp != nil {
-		resp, bifrostErr := pipeline.RunPostHooks(&ctx, preResp, nil, preCount)
-		if bifrostErr != nil {
-			return nil, bifrostErr
+	preReq, shortCircuit, preCount := pipeline.RunPreHooks(&ctx, req)
+	if shortCircuit != nil {
+		// Handle short-circuit with response (success case)
+		if shortCircuit.Response != nil {
+			resp, bifrostErr := pipeline.RunPostHooks(&ctx, shortCircuit.Response, nil, preCount)
+			if bifrostErr != nil {
+				return nil, bifrostErr
+			}
+			return resp, nil
 		}
-		return resp, nil
+		// Handle short-circuit with error
+		if shortCircuit.Error != nil {
+			resp, bifrostErr := pipeline.RunPostHooks(&ctx, nil, shortCircuit.Error, preCount)
+			if bifrostErr != nil {
+				return nil, bifrostErr
+			}
+			return resp, nil
+		}
 	}
 	if preReq == nil {
 		return nil, newBifrostErrorFromMsg("bifrost request after plugin hooks cannot be nil")
@@ -926,6 +1000,71 @@ func (bifrost *Bifrost) tryEmbedding(req *schemas.BifrostRequest, ctx context.Co
 	}
 }
 
+// ExecuteMCPTool executes an MCP tool call and returns the result as a tool message.
+// This is the main public API for manual MCP tool execution.
+//
+// Parameters:
+//   - ctx: Execution context
+//   - toolCall: The tool call to execute (from assistant message)
+//
+// Returns:
+//   - schemas.BifrostMessage: Tool message with execution result
+//   - schemas.BifrostError: Any execution error
+func (bifrost *Bifrost) ExecuteMCPTool(ctx context.Context, toolCall schemas.ToolCall) (*schemas.BifrostMessage, *schemas.BifrostError) {
+	if bifrost.mcpManager == nil {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: schemas.ErrorField{
+				Message: "MCP is not configured in this Bifrost instance",
+			},
+		}
+	}
+
+	result, err := bifrost.mcpManager.executeTool(ctx, toolCall)
+	if err != nil {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: schemas.ErrorField{
+				Message: err.Error(),
+				Error:   err,
+			},
+		}
+	}
+
+	return result, nil
+}
+
+// RegisterMCPTool registers a typed tool handler with the MCP integration.
+// This allows developers to easily add custom tools that will be available
+// to all LLM requests processed by this Bifrost instance.
+//
+// Parameters:
+//   - name: Unique tool name
+//   - description: Human-readable tool description
+//   - handler: Function that handles tool execution
+//   - toolSchema: Bifrost tool schema for function calling
+//
+// Returns:
+//   - error: Any registration error
+//
+// Example:
+//
+//	type EchoArgs struct {
+//	    Message string `json:"message"`
+//	}
+//
+//	err := bifrost.RegisterMCPTool("echo", "Echo a message",
+//	    func(args EchoArgs) (string, error) {
+//	        return args.Message, nil
+//	    }, toolSchema)
+func (bifrost *Bifrost) RegisterMCPTool(name, description string, handler func(args any) (string, error), toolSchema schemas.Tool) error {
+	if bifrost.mcpManager == nil {
+		return fmt.Errorf("MCP is not configured in this Bifrost instance")
+	}
+
+	return bifrost.mcpManager.registerTool(name, description, handler, toolSchema)
+}
+
 // Cleanup gracefully stops all workers when triggered.
 // It closes all request channels and waits for workers to exit.
 func (bifrost *Bifrost) Cleanup() {
@@ -939,6 +1078,14 @@ func (bifrost *Bifrost) Cleanup() {
 	// Wait for all workers to exit
 	for _, waitGroup := range bifrost.waitGroups {
 		waitGroup.Wait()
+	}
+
+	// Cleanup MCP manager
+	if bifrost.mcpManager != nil {
+		err := bifrost.mcpManager.cleanup()
+		if err != nil {
+			bifrost.logger.Warn(fmt.Sprintf("Error cleaning up MCP manager: %s", err.Error()))
+		}
 	}
 
 	// Cleanup plugins

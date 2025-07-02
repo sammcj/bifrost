@@ -5,6 +5,7 @@
 //   - /v1/text/completions: For text completion requests
 //   - /v1/chat/completions: For chat completion requests
 //   - /v1/embeddings: For text embedding requests
+//   - /v1/mcp/tool/execute: For MCP tool execution requests
 //
 // Configuration is handled through a JSON config file and environment variables:
 //   - Use -config flag to specify the config file location
@@ -66,7 +67,6 @@ var (
 	port               string   // Port to run the server on
 	configPath         string   // Path to the config file
 	pluginsToLoad      []string // Path to the plugins
-	maximLogRepoId     string   // ID of the Maxim log repo
 	prometheusLabels   []string // Labels to add to Prometheus metrics (optional)
 )
 
@@ -85,7 +85,6 @@ func init() {
 	flag.StringVar(&configPath, "config", "", "Path to the config file")
 	flag.BoolVar(&dropExcessRequests, "drop-excess-requests", false, "Drop excess requests")
 	flag.StringVar(&pluginString, "plugins", "", "Comma separated list of plugins to load")
-	flag.StringVar(&maximLogRepoId, "maxim-log-repo-id", "", "ID of the Maxim log repo")
 	flag.StringVar(&prometheusLabelsString, "prometheus-labels", "", "Labels to add to Prometheus metrics")
 	flag.Parse()
 
@@ -164,10 +163,14 @@ func main() {
 	log.Println("Prometheus Go/Process collectors registered.")
 
 	config := lib.ReadConfig(configPath)
-	account := &lib.BaseAccount{Config: config}
+	account := &lib.BaseAccount{Config: config.ProviderConfig}
 
 	if err := account.ReadKeys(); err != nil {
 		log.Printf("warning: failed to read environment variables: %v", err)
+	}
+
+	if err := config.ReadMCPKeys(); err != nil {
+		log.Printf("warning: failed to read MCP environment variables: %v", err)
 	}
 
 	loadedPlugins := []schemas.Plugin{}
@@ -175,7 +178,7 @@ func main() {
 	for _, plugin := range pluginsToLoad {
 		switch strings.ToLower(plugin) {
 		case "maxim":
-			if maximLogRepoId == "" {
+			if os.Getenv("MAXIM_LOG_REPO_ID") == "" {
 				log.Println("warning: maxim log repo id is required to initialize maxim plugin")
 				continue
 			}
@@ -184,7 +187,7 @@ func main() {
 				continue
 			}
 
-			maximPlugin, err := maxim.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), maximLogRepoId)
+			maximPlugin, err := maxim.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), os.Getenv("MAXIM_LOG_REPO_ID"))
 			if err != nil {
 				log.Printf("warning: failed to initialize maxim plugin: %v", err)
 				continue
@@ -202,6 +205,7 @@ func main() {
 		InitialPoolSize:    initialPoolSize,
 		DropExcessRequests: dropExcessRequests,
 		Plugins:            loadedPlugins,
+		MCPConfig:          config.MCPConfig,
 	})
 	if err != nil {
 		log.Fatalf("failed to initialize bifrost: %v", err)
@@ -226,6 +230,10 @@ func main() {
 
 	r.POST("/v1/embeddings", func(ctx *fasthttp.RequestCtx) {
 		handleEmbedding(ctx, client)
+	})
+
+	r.POST("/v1/mcp/tool/execute", func(ctx *fasthttp.RequestCtx) {
+		handleMCPToolExecution(ctx, client)
 	})
 
 	for _, extension := range extensions {
@@ -318,7 +326,7 @@ func handleCompletion(ctx *fasthttp.RequestCtx, client *bifrost.Bifrost, isChat 
 	bifrostCtx := lib.ConvertToBifrostContext(ctx)
 
 	var resp *schemas.BifrostResponse
-	var err *schemas.BifrostError
+	var bifrostErr *schemas.BifrostError
 
 	if bifrostCtx == nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
@@ -327,25 +335,60 @@ func handleCompletion(ctx *fasthttp.RequestCtx, client *bifrost.Bifrost, isChat 
 	}
 
 	if isChat {
-		resp, err = client.ChatCompletionRequest(*bifrostCtx, bifrostReq)
+		resp, bifrostErr = client.ChatCompletionRequest(*bifrostCtx, bifrostReq)
 	} else {
-		resp, err = client.TextCompletionRequest(*bifrostCtx, bifrostReq)
+		resp, bifrostErr = client.TextCompletionRequest(*bifrostCtx, bifrostReq)
 	}
 
-	if err != nil {
-		if err.IsBifrostError {
-			ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-		} else {
-			ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		}
-		ctx.SetContentType("application/json")
-		json.NewEncoder(ctx).Encode(err)
+	if bifrostErr != nil {
+		handleBifrostError(ctx, bifrostErr)
 		return
 	}
 
 	ctx.SetStatusCode(fasthttp.StatusOK)
 	ctx.SetContentType("application/json")
-	json.NewEncoder(ctx).Encode(resp)
+	if encodeErr := json.NewEncoder(ctx).Encode(resp); encodeErr != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(fmt.Sprintf("failed to encode response: %v", encodeErr))
+	}
+}
+
+func handleMCPToolExecution(ctx *fasthttp.RequestCtx, client *bifrost.Bifrost) {
+	var req schemas.ToolCall
+	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		ctx.SetBodyString(fmt.Sprintf("invalid request format: %v", err))
+		return
+	}
+
+	bifrostCtx := lib.ConvertToBifrostContext(ctx)
+
+	resp, bifrostErr := client.ExecuteMCPTool(*bifrostCtx, req)
+	if bifrostErr != nil {
+		handleBifrostError(ctx, bifrostErr)
+		return
+	}
+
+	ctx.SetStatusCode(fasthttp.StatusOK)
+	ctx.SetContentType("application/json")
+	if encodeErr := json.NewEncoder(ctx).Encode(resp); encodeErr != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(fmt.Sprintf("failed to encode response: %v", encodeErr))
+	}
+}
+
+func handleBifrostError(ctx *fasthttp.RequestCtx, bifrostErr *schemas.BifrostError) {
+	if bifrostErr.StatusCode != nil {
+		ctx.SetStatusCode(*bifrostErr.StatusCode)
+	} else {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+	}
+
+	ctx.SetContentType("application/json")
+	if encodeErr := json.NewEncoder(ctx).Encode(bifrostErr); encodeErr != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(fmt.Sprintf("failed to encode error response: %v", encodeErr))
+	}
 }
 
 // handleEmbedding processes embedding requests.
