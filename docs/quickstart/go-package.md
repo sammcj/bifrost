@@ -2,6 +2,8 @@
 
 Get Bifrost running in your Go application in 30 seconds with this minimal setup guide.
 
+![Bifrost Go Package Demo Video](../media/package-demo.mp4)
+
 ## ⚡ 30-Second Setup
 
 ### 1. Install Package

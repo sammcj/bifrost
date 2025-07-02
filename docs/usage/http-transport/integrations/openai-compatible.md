@@ -467,6 +467,39 @@ benchmark_response_time(openai_client, "Direct OpenAI")
 
 ---
 
+## 🌐 Multi-Provider Support
+
+Use multiple providers with OpenAI SDK format by prefixing model names:
+
+```python
+import openai
+
+client = openai.OpenAI(
+    base_url="http://localhost:8080/openai",
+    api_key="dummy"  # API keys configured in Bifrost
+)
+
+# OpenAI models (default)
+response1 = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# Anthropic models via OpenAI SDK
+response2 = client.chat.completions.create(
+    model="anthropic/claude-3-sonnet-20240229",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# Vertex models via OpenAI SDK
+response3 = client.chat.completions.create(
+    model="vertex/gemini-pro",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+---
+
 ## 🔧 Configuration
 
 ### **Bifrost Config for OpenAI**

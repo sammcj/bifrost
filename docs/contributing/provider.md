@@ -595,6 +595,51 @@ Before submitting your provider implementation:
 - [ ] **Key Handling** - Proper API key requirement configuration
 - [ ] **Configuration** - Standard provider configuration support
 
+### **HTTP Transport Integration**
+
+- [ ] **Provider Recognition** - Added to `validProviders` map in `transports/bifrost-http/integrations/utils.go`
+- [ ] **Model Patterns** - Added patterns to appropriate `is*Model()` functions in utils.go
+- [ ] **Transport Tests** - All tests pass in `tests/transports-integrations/` directory
+- [ ] **Multi-Provider Support** - Verified `ParseModelString` correctly handles your provider prefix
+
+**Required Updates in `utils.go`:**
+
+```go
+// 1. Add to validProviders map
+var validProviders = map[schemas.ModelProvider]bool{
+    // ... existing providers
+    schemas.YourProvider: true,  // Add this line
+}
+
+// 2. Add model patterns to appropriate function
+func isYourProviderModel(model string) bool {
+    yourProviderPatterns := []string{
+        "your-provider-pattern", "your-model-prefix", "yourprovider/",
+    }
+    return matchesAnyPattern(model, yourProviderPatterns)
+}
+
+// 3. Add pattern check to GetProviderFromModel
+func GetProviderFromModel(model string) schemas.ModelProvider {
+    // ... existing checks
+
+    // Your Provider Models
+    if isYourProviderModel(modelLower) {
+        return schemas.YourProvider
+    }
+
+    // ... rest of function
+}
+```
+
+**Test Your Integration:**
+
+```bash
+# Run HTTP transport integration tests
+cd tests/transports-integrations
+python -m pytest tests/integrations/ -v
+```
+
 ---
 
 ## 🚀 **Advanced Features**
