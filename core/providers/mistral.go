@@ -283,9 +283,12 @@ func (provider *MistralProvider) Embedding(ctx context.Context, model string, ke
 		return nil, bifrostErr
 	}
 
-	// Parse response
+	// Parse response using json.RawMessage to avoid double parsing
+	var rawMessage json.RawMessage = resp.Body()
+
+	// Parse into structured response
 	var mistralResp MistralEmbeddingResponse
-	if err := json.Unmarshal(resp.Body(), &mistralResp); err != nil {
+	if err := json.Unmarshal(rawMessage, &mistralResp); err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: schemas.ErrorField{
@@ -297,7 +300,7 @@ func (provider *MistralProvider) Embedding(ctx context.Context, model string, ke
 
 	// Parse raw response for consistent format
 	var rawResponse interface{}
-	if err := json.Unmarshal(resp.Body(), &rawResponse); err != nil {
+	if err := json.Unmarshal(rawMessage, &rawResponse); err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: schemas.ErrorField{

@@ -1150,12 +1150,24 @@ func (provider *BedrockProvider) handleTitanEmbedding(ctx context.Context, model
 		return nil, err
 	}
 
-	// Parse Titan response
+	// Parse response using json.RawMessage to avoid double parsing
+	var rawMessage json.RawMessage
+	if err := json.Unmarshal(responseBody, &rawMessage); err != nil {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: true,
+			Error: schemas.ErrorField{
+				Message: "error parsing raw response for Titan embedding",
+				Error:   err,
+			},
+		}
+	}
+
+	// Parse Titan response from raw message
 	var titanResp struct {
 		Embedding           []float32 `json:"embedding"`
 		InputTextTokenCount int       `json:"inputTextTokenCount"`
 	}
-	if err := json.Unmarshal(responseBody, &titanResp); err != nil {
+	if err := json.Unmarshal(rawMessage, &titanResp); err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: schemas.ErrorField{
@@ -1165,13 +1177,13 @@ func (provider *BedrockProvider) handleTitanEmbedding(ctx context.Context, model
 		}
 	}
 
-	// Parse raw response for consistent format
+	// Convert raw message to interface{} for consistent format
 	var rawResponse interface{}
-	if err := json.Unmarshal(responseBody, &rawResponse); err != nil {
+	if err := json.Unmarshal(rawMessage, &rawResponse); err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: schemas.ErrorField{
-				Message: "error parsing raw response for Titan embedding",
+				Message: "error parsing raw response interface for Titan embedding",
 				Error:   err,
 			},
 		}
@@ -1255,11 +1267,7 @@ func (provider *BedrockProvider) handleCohereEmbedding(ctx context.Context, mode
 	}
 
 	// Calculate token usage based on input texts (approximation since Cohere doesn't provide this)
-	totalInputTokens := 0
-	for _, text := range input.Texts {
-		// Rough approximation: 1 token per 4 characters
-		totalInputTokens += len(text) / 4
-	}
+	totalInputTokens := approximateTokenCount(input.Texts)
 
 	bifrostResponse := &schemas.BifrostResponse{
 		Embedding: cohereResp.Embeddings,

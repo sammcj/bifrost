@@ -272,6 +272,16 @@ func prepareOpenAIChatRequest(messages []schemas.BifrostMessage, params *schemas
 // The input can be either a single string or a slice of strings for batch embedding.
 // Returns a BifrostResponse containing the embedding(s) and any error that occurred.
 func (provider *OpenAIProvider) Embedding(ctx context.Context, model string, key string, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	// Validate input texts are not empty
+	if len(input.Texts) == 0 {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: true,
+			Error: schemas.ErrorField{
+				Message: "input texts cannot be empty",
+			},
+		}
+	}
+
 	// Prepare request body with base parameters
 	requestBody := map[string]interface{}{
 		"model": model,
@@ -412,7 +422,17 @@ func (provider *OpenAIProvider) Embedding(ctx context.Context, model string, key
 					}
 				}
 
+				// Validate that decoded data length is divisible by 4 (size of float32)
 				const sizeOfFloat32 = 4
+				if len(decodedData)%sizeOfFloat32 != 0 {
+					return nil, &schemas.BifrostError{
+						IsBifrostError: true,
+						Error: schemas.ErrorField{
+							Message: "malformed base64 embedding data: length not divisible by 4",
+						},
+					}
+				}
+
 				floats := make([]float32, len(decodedData)/sizeOfFloat32)
 				for i := 0; i < len(floats); i++ {
 					floats[i] = math.Float32frombits(binary.LittleEndian.Uint32(decodedData[i*4 : (i+1)*4]))
