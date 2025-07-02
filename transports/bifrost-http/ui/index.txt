@@ -1,0 +1,29 @@
+1:"$Sreact.fragment"
+2:I[7942,["867","static/chunks/867-ee04be25d0141432.js","213","static/chunks/213-672494f56acc68a6.js","874","static/chunks/874-37fb0661d0af7eec.js","473","static/chunks/473-3e3a48663e3561da.js","154","static/chunks/154-7b9dae231ea16969.js","177","static/chunks/app/layout-e528237e8bb14184.js"],"default"]
+3:I[9304,["867","static/chunks/867-ee04be25d0141432.js","213","static/chunks/213-672494f56acc68a6.js","874","static/chunks/874-37fb0661d0af7eec.js","473","static/chunks/473-3e3a48663e3561da.js","154","static/chunks/154-7b9dae231ea16969.js","177","static/chunks/app/layout-e528237e8bb14184.js"],"ThemeProvider"]
+4:I[6671,["867","static/chunks/867-ee04be25d0141432.js","213","static/chunks/213-672494f56acc68a6.js","874","static/chunks/874-37fb0661d0af7eec.js","473","static/chunks/473-3e3a48663e3561da.js","154","static/chunks/154-7b9dae231ea16969.js","177","static/chunks/app/layout-e528237e8bb14184.js"],"Toaster"]
+5:I[193,["867","static/chunks/867-ee04be25d0141432.js","213","static/chunks/213-672494f56acc68a6.js","874","static/chunks/874-37fb0661d0af7eec.js","473","static/chunks/473-3e3a48663e3561da.js","154","static/chunks/154-7b9dae231ea16969.js","177","static/chunks/app/layout-e528237e8bb14184.js"],"SidebarProvider"]
+6:I[9685,["867","static/chunks/867-ee04be25d0141432.js","213","static/chunks/213-672494f56acc68a6.js","874","static/chunks/874-37fb0661d0af7eec.js","473","static/chunks/473-3e3a48663e3561da.js","154","static/chunks/154-7b9dae231ea16969.js","177","static/chunks/app/layout-e528237e8bb14184.js"],"default"]
+7:I[7555,[],""]
+8:I[1295,[],""]
+9:I[894,[],"ClientPageRoot"]
+a:I[6794,["586","static/chunks/13b76428-4be7d9456b47e491.js","867","static/chunks/867-ee04be25d0141432.js","519","static/chunks/519-45533824b2718864.js","213","static/chunks/213-672494f56acc68a6.js","866","static/chunks/866-b29a8568c4caa97e.js","443","static/chunks/443-5702d24d72c89eac.js","341","static/chunks/341-5aa9f869e119bce4.js","974","static/chunks/app/page-9c52c1dd03452de9.js"],"default"]
+d:I[9665,[],"OutletBoundary"]
+10:I[4911,[],"AsyncMetadataOutlet"]
+12:I[9665,[],"ViewportBoundary"]
+14:I[9665,[],"MetadataBoundary"]
+16:I[6614,[],""]
+:HL["/_next/static/media/569ce4b8f30dc480-s.p.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+:HL["/_next/static/media/93f479601ee12b01-s.p.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+:HL["/_next/static/css/0451d03ec40c67fa.css","style"]
+0:{"P":null,"b":"build","p":"","c":["",""],"i":false,"f":[[["",{"children":["__PAGE__",{}]},"$undefined","$undefined",true],["",["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/0451d03ec40c67fa.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}]],["$","html",null,{"lang":"en","suppressHydrationWarning":true,"children":["$","body",null,{"className":"__variable_5cfdac __variable_9a8899 antialiased","children":["$","$L2",null,{"children":["$","$L3",null,{"attribute":"class","defaultTheme":"system","enableSystem":true,"children":[["$","$L4",null,{}],["$","$L5",null,{"children":[["$","$L6",null,{}],["$","main",null,{"className":"relative mx-auto flex min-h-screen w-5xl flex-col pt-24","children":["$","$L7",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L8",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]]}]]}]}]}]}]]}],{"children":["__PAGE__",["$","$1","c",{"children":[["$","$L9",null,{"Component":"$a","searchParams":{},"params":{},"promises":["$@b","$@c"]}],null,["$","$Ld",null,{"children":["$Le","$Lf",["$","$L10",null,{"promise":"$@11"}]]}]]}],{},null,false]},null,false],["$","$1","h",{"children":[null,["$","$1","2STqmFDe5vJeB4yOICqS_v",{"children":[["$","$L12",null,{"children":"$L13"}],["$","meta",null,{"name":"next-size-adjust","content":""}]]}],["$","$L14",null,{"children":"$L15"}]]}],false]],"m":"$undefined","G":["$16","$undefined"],"s":false,"S":true}
+17:"$Sreact.suspense"
+18:I[4911,[],"AsyncMetadata"]
+b:{}
+c:{}
+15:["$","div",null,{"hidden":true,"children":["$","$17",null,{"fallback":null,"children":["$","$L18",null,{"promise":"$@19"}]}]}]
+f:null
+13:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]
+e:null
+11:{"metadata":[["$","title","0",{"children":"Bifrost UI - AI Gateway Dashboard"}],["$","meta","1",{"name":"description","content":"Production-ready AI gateway that connects to 8+ providers through a single API. Get automatic failover, intelligent load balancing, and zero-downtime deployments."}]],"error":null,"digest":"$undefined"}
+19:{"metadata":"$11:metadata","error":null,"digest":"$undefined"}

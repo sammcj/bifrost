@@ -33,11 +33,11 @@ func NewMCPHandler(client *bifrost.Bifrost, logger schemas.Logger, store *lib.Co
 func (h *MCPHandler) RegisterRoutes(r *router.Router) {
 	// MCP tool execution endpoint
 	r.POST("/v1/mcp/tool/execute", h.ExecuteTool)
-	r.GET("/mcp/clients", h.GetMCPClients)
-	r.POST("/mcp/client", h.AddMCPClient)
-	r.PUT("/mcp/client/{name}", h.EditMCPClientTools)
-	r.DELETE("/mcp/client/{name}", h.RemoveMCPClient)
-	r.POST("/mcp/client/{name}/reconnect", h.ReconnectMCPClient)
+	r.GET("/api/mcp/clients", h.GetMCPClients)
+	r.POST("/api/mcp/client", h.AddMCPClient)
+	r.PUT("/api/mcp/client/{name}", h.EditMCPClientTools)
+	r.DELETE("/api/mcp/client/{name}", h.RemoveMCPClient)
+	r.POST("/api/mcp/client/{name}/reconnect", h.ReconnectMCPClient)
 }
 
 // ExecuteTool handles POST /v1/mcp/tool/execute - Execute MCP tool

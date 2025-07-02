@@ -5,6 +5,8 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,8 +48,36 @@ var upgrader = websocket.FastHTTPUpgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(ctx *fasthttp.RequestCtx) bool {
-		return true // Allow all origins since we are running on localhost, restrictions can be added on network level
+		// Only allow connections from localhost for security
+		origin := string(ctx.Request.Header.Peek("Origin"))
+		if origin == "" {
+			// If no Origin header, check the Host header for direct connections
+			host := string(ctx.Request.Header.Peek("Host"))
+			return isLocalhost(host)
+		}
+
+		// Parse the origin URL
+		originURL, err := url.Parse(origin)
+		if err != nil {
+			return false
+		}
+
+		return isLocalhost(originURL.Host)
 	},
+}
+
+// isLocalhost checks if the given host is localhost
+func isLocalhost(host string) bool {
+	// Remove port if present
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+
+	// Check for localhost variations
+	return host == "localhost" ||
+		host == "127.0.0.1" ||
+		host == "::1" ||
+		host == ""
 }
 
 // HandleLogStream handles WebSocket connections for real-time log streaming

@@ -55,6 +55,7 @@ Choose your adventure based on what you'd like to work on:
 | **🌐 New Providers**      | Advanced       | 4-8 hours         | [Provider Guide →](./provider.md)            |
 | **🔌 Plugin Development** | Intermediate   | 2-6 hours         | [Plugin Guide →](./plugin.md)                |
 | **🌍 HTTP Integrations**  | Advanced       | 6-12 hours        | [Integration Guide →](./http-integration.md) |
+| **🎨 UI Development**     | Variable       | 1-2 hours         | [UI Guide →](#-ui-development)               |
 | **🐛 Bug Fixes**          | Variable       | 1-4 hours         | [Bug Reports →](#-bug-reports)               |
 | **📝 Documentation**      | Beginner       | 30-120 min        | [Documentation →](#-documentation)           |
 
@@ -82,6 +83,13 @@ mindmap
       LlamaIndex Support
       Vercel AI SDK
       Anthropic Claude API
+
+    UI & Frontend
+      Configuration Pages
+      Analytics Dashboard
+      Log Visualization
+      Plugin Management
+      Theme & Accessibility
 
     Documentation
       Tutorial Videos
@@ -120,6 +128,173 @@ mindmap
 - **Skills:** HTTP server development, API design, protocol translation
 - **Examples:** OpenAI API compatibility, Anthropic integration, custom adapters
 - **Impact:** Enable seamless migration from existing solutions
+
+### **🎨 UI Development**
+
+**Build and enhance the Bifrost web interface**
+
+- **What:** Develop React components, pages, and user interfaces for Bifrost management
+- **Skills:** React/Next.js, TypeScript, Tailwind CSS, UI/UX design
+- **Examples:** Configuration panels, analytics dashboards, log viewers, plugin management
+- **Impact:** Provide intuitive visual tools for Bifrost administration and monitoring
+
+#### **🚀 UI Quick Start**
+
+```bash
+# Navigate to UI directory
+cd ui
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Open http://localhost:3000 in your browser
+```
+
+#### **🛠️ Tech Stack**
+
+- **Framework:** Next.js 15 with React 19
+- **Language:** TypeScript for type safety
+- **Styling:** Tailwind CSS with custom design system
+- **Components:** Radix UI primitives for accessibility
+- **Icons:** Lucide React icon library
+- **Charts:** Recharts for data visualization
+- **Code Editor:** Monaco Editor for configuration editing
+
+#### **📁 UI Structure**
+
+```
+ui/
+├── app/                    # Next.js app router pages
+│   ├── config/            # Provider & plugin configuration
+│   ├── docs/              # Documentation viewer
+│   ├── plugins/           # Plugin management
+│   └── page.tsx           # Dashboard homepage
+├── components/            # React components
+│   ├── config/            # Configuration UI components
+│   ├── logs/              # Log viewing & analytics
+│   ├── ui/                # Design system components
+│   └── [shared components]
+├── lib/                   # Utilities and API clients
+├── hooks/                 # Custom React hooks
+└── types/                 # TypeScript type definitions
+```
+
+#### **🎯 UI Contribution Areas**
+
+| **Area**                  | **Difficulty** | **Description**                           | **Skills Needed**             |
+| ------------------------- | -------------- | ----------------------------------------- | ----------------------------- |
+| **🎨 Design System**      | Beginner       | Improve components, themes, accessibility | CSS, Design, Accessibility    |
+| **📊 Analytics & Charts** | Intermediate   | Enhance data visualization and metrics    | React, Data Viz, Statistics   |
+| **⚙️ Configuration UI**   | Intermediate   | Build provider/plugin setup interfaces    | React, Forms, Validation      |
+| **📝 Log Management**     | Advanced       | Real-time log viewing and analysis        | WebSockets, Performance, UX   |
+| **🔌 Plugin Interface**   | Advanced       | Dynamic plugin configuration and status   | React, State Management, APIs |
+| **🌙 Theming & UX**       | Beginner       | Dark/light themes, responsive design      | CSS, Design, UX Principles    |
+
+#### **🧪 UI Testing Guidelines**
+
+```bash
+# Run linting
+npm run lint
+
+# Run type checking
+npx tsc --noEmit
+
+# Run component tests (when available)
+npm test
+
+# Build for production
+npm run build
+```
+
+#### **🎨 UI Design Principles**
+
+- **Accessibility First:** WCAG 2.1 AA compliance, keyboard navigation, screen reader support
+- **Responsive Design:** Mobile-first approach with breakpoint considerations
+- **Performance:** Optimized bundle size, lazy loading, efficient re-renders
+- **Consistency:** Unified design system using Radix UI and Tailwind
+- **User Experience:** Intuitive navigation, clear feedback, minimal cognitive load
+
+#### **🔧 Common UI Tasks**
+
+**Adding a New Page:**
+
+```typescript
+// app/new-feature/page.tsx
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "New Feature - Bifrost",
+  description: "Description of the new feature",
+};
+
+export default function NewFeaturePage() {
+  return (
+    <div className="container mx-auto p-6">
+      <h1 className="text-2xl font-bold">New Feature</h1>
+      {/* Your component JSX */}
+    </div>
+  );
+}
+```
+
+**Creating a Component:**
+
+```typescript
+// components/ui/custom-component.tsx
+import { cn } from "@/lib/utils";
+
+interface CustomComponentProps {
+  className?: string;
+  children: React.ReactNode;
+}
+
+export function CustomComponent({ className, children }: CustomComponentProps) {
+  return <div className={cn("base-styles", className)}>{children}</div>;
+}
+```
+
+**Adding API Integration:**
+
+```typescript
+// lib/api.ts
+export async function fetchBifrostData(endpoint: string) {
+  const response = await fetch(`/api/bifrost/${endpoint}`);
+  if (!response.ok) throw new Error("Failed to fetch");
+  return response.json();
+}
+```
+
+#### **📋 UI Contribution Checklist**
+
+- [ ] **Code Quality**
+
+  - [ ] TypeScript types defined for all props and state
+  - [ ] ESLint and Prettier formatting passes
+  - [ ] No console.log statements in production code
+  - [ ] Error boundaries implemented for fault tolerance
+
+- [ ] **Accessibility**
+
+  - [ ] Semantic HTML elements used appropriately
+  - [ ] ARIA labels and roles where needed
+  - [ ] Keyboard navigation functional
+  - [ ] Color contrast meets WCAG standards
+
+- [ ] **Performance**
+
+  - [ ] Components use React.memo where appropriate
+  - [ ] Images optimized with Next.js Image component
+  - [ ] Bundle impact assessed (avoid heavy dependencies)
+  - [ ] Loading states implemented for async operations
+
+- [ ] **Design Consistency**
+  - [ ] Tailwind CSS classes used consistently
+  - [ ] Radix UI components leveraged where possible
+  - [ ] Design system patterns followed
+  - [ ] Responsive design implemented
 
 ### **📋 [Code Conventions →](./code-conventions.md)**
 
