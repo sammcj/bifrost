@@ -31,7 +31,7 @@ func NewLoggingHandler(logManager logging.LogManager, logger schemas.Logger) *Lo
 // RegisterRoutes registers all logging-related routes
 func (h *LoggingHandler) RegisterRoutes(r *router.Router) {
 	// Log retrieval with filtering, search, and pagination
-	r.GET("/v1/logs", h.GetLogs)
+	r.GET("/api/logs", h.GetLogs)
 }
 
 // GetLogs handles GET /v1/logs - Get logs with filtering, search, and pagination via query parameters
