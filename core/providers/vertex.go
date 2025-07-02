@@ -304,6 +304,6 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, model, key s
 }
 
 // Embedding is not supported by the Vertex provider.
-func (provider *VertexProvider) Embedding(ctx context.Context, model string, key string, input schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *VertexProvider) Embedding(ctx context.Context, model string, key string, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("embedding", "vertex")
 }

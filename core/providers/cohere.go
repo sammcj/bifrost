@@ -543,7 +543,7 @@ func convertChatHistory(history []struct {
 
 // Embedding generates embeddings for the given input text(s) using the Cohere API.
 // Supports Cohere's embedding models and returns a BifrostResponse containing the embedding(s).
-func (provider *CohereProvider) Embedding(ctx context.Context, model string, key string, input schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *CohereProvider) Embedding(ctx context.Context, model string, key string, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	if len(input.Texts) == 0 {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,

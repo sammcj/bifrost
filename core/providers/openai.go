@@ -271,7 +271,7 @@ func prepareOpenAIChatRequest(messages []schemas.BifrostMessage, params *schemas
 // Embedding generates embeddings for the given input text(s).
 // The input can be either a single string or a slice of strings for batch embedding.
 // Returns a BifrostResponse containing the embedding(s) and any error that occurred.
-func (provider *OpenAIProvider) Embedding(ctx context.Context, model string, key string, input schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *OpenAIProvider) Embedding(ctx context.Context, model string, key string, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Prepare request body with base parameters
 	requestBody := map[string]interface{}{
 		"model": model,

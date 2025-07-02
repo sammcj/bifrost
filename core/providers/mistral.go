@@ -197,7 +197,7 @@ func (provider *MistralProvider) ChatCompletion(ctx context.Context, model, key 
 
 // Embedding generates embeddings for the given input text(s) using the Mistral API.
 // Supports Mistral's embedding models and returns a BifrostResponse containing the embedding(s).
-func (provider *MistralProvider) Embedding(ctx context.Context, model string, key string, input schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *MistralProvider) Embedding(ctx context.Context, model string, key string, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	if len(input.Texts) == 0 {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
