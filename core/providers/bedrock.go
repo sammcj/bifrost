@@ -1146,21 +1146,9 @@ func (provider *BedrockProvider) handleTitanEmbedding(ctx context.Context, model
 
 	// Properly escape model name for URL path to ensure AWS SIGv4 signing works correctly
 	path := url.PathEscape(model) + "/invoke"
-	responseBody, err := provider.completeRequest(ctx, requestBody, path, key)
+	rawResponse, err := provider.completeRequest(ctx, requestBody, path, key)
 	if err != nil {
 		return nil, err
-	}
-
-	// Parse response using json.RawMessage to avoid double parsing
-	var rawMessage json.RawMessage
-	if err := json.Unmarshal(responseBody, &rawMessage); err != nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: true,
-			Error: schemas.ErrorField{
-				Message: "error parsing raw response for Titan embedding",
-				Error:   err,
-			},
-		}
 	}
 
 	// Parse Titan response from raw message
@@ -1168,23 +1156,11 @@ func (provider *BedrockProvider) handleTitanEmbedding(ctx context.Context, model
 		Embedding           []float32 `json:"embedding"`
 		InputTextTokenCount int       `json:"inputTextTokenCount"`
 	}
-	if err := json.Unmarshal(rawMessage, &titanResp); err != nil {
+	if err := json.Unmarshal(rawResponse, &titanResp); err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: schemas.ErrorField{
 				Message: "error parsing Titan embedding response",
-				Error:   err,
-			},
-		}
-	}
-
-	// Convert raw message to interface{} for consistent format
-	var rawResponse interface{}
-	if err := json.Unmarshal(rawMessage, &rawResponse); err != nil {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: true,
-			Error: schemas.ErrorField{
-				Message: "error parsing raw response interface for Titan embedding",
 				Error:   err,
 			},
 		}
