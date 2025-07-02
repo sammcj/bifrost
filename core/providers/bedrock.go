@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -1222,13 +1223,8 @@ func (provider *BedrockProvider) handleCohereEmbedding(ctx context.Context, mode
 		"texts":      input.Texts,
 		"input_type": "search_document",
 	}
-
-	if params != nil {
-		if params.ExtraParams != nil {
-			for k, v := range params.ExtraParams {
-				requestBody[k] = v
-			}
-		}
+	if params != nil && params.ExtraParams != nil {
+		maps.Copy(requestBody, params.ExtraParams)
 	}
 
 	// Properly escape model name for URL path to ensure AWS SIGv4 signing works correctly
