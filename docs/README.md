@@ -15,19 +15,54 @@ Choose your preferred way to use Bifrost:
 
 ---
 
+## 🔄 Drop-in API Integrations
+
+After you have set up Bifrost's HTTP transport, you can replace your existing AI provider calls with zero code changes. Bifrost provides 100% compatible endpoints for major AI providers:
+
+| Integration                 | Compatible With                | Instant Migration                                                           |
+| --------------------------- | ------------------------------ | --------------------------------------------------------------------------- |
+| **🤖 OpenAI Compatible**    | OpenAI SDK, LangChain, LiteLLM | ✅ [Setup Guide](usage/http-transport/integrations/openai-compatible.md)    |
+| **🧠 Anthropic Compatible** | Anthropic SDK, Claude API      | ✅ [Setup Guide](usage/http-transport/integrations/anthropic-compatible.md) |
+| **🔍 GenAI Compatible**     | Google GenAI SDK               | ✅ [Setup Guide](usage/http-transport/integrations/genai-compatible.md)     |
+
+```python
+# Before (OpenAI)
+client = openai.OpenAI(api_key="sk-...")
+
+# After (Bifrost) - Same code, multi-provider benefits
+client = openai.OpenAI(
+    base_url="http://localhost:8080/openai",  # Only change needed
+    api_key="dummy-api-key" # Handled by Bifrost
+)
+```
+
+**Migration Benefits:**
+
+- **🔄 Instant Fallbacks** - Never hit rate limits or downtime again
+- **🌐 Multi-provider routing** - Route to any available provider, while keeping your existing codebase
+- **🚀 Enhanced Features** - [MCP tools](mcp.md), [custom plugins](plugins.md), monitoring
+
+[📖 **Complete Migration Guide**](usage/http-transport/integrations/migration-guide.md)
+
+---
+
 ## 🎯 I Want To...
 
-| Task                            | Go Here                                                                         |
-| ------------------------------- | ------------------------------------------------------------------------------- |
-| **Get started in 30 seconds**   | [⚡ Quick Start](quickstart/)                                                   |
-| **Replace my OpenAI SDK calls** | [🔄 OpenAI Integration](usage/http-transport/integrations/openai-compatible.md) |
-| **Use Bifrost in my Go app**    | [🔧 Go Package Usage](usage/go-package/)                                        |
-| **Configure via HTTP/JSON**     | [🌐 HTTP Transport Usage](usage/http-transport/)                                |
-| **Add fallback providers**      | [🔄 Providers](usage/providers.md)                                              |
-| **Understand the architecture** | [🏛️ Architecture](architecture/)                                                |
-| **See practical examples**      | [💡 Examples](examples/)                                                        |
-| **Deploy to production**        | [🚀 Production Guide](usage/http-transport/configuration/)                      |
-| **Contribute to the project**   | [🤝 Contributing](contributing/)                                                |
+| Task                               | Go Here                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------- |
+| **Get started in 30 seconds**      | [⚡ Quick Start](quickstart/)                                                         |
+| **Replace my OpenAI SDK calls**    | [🔄 OpenAI Integration](usage/http-transport/integrations/openai-compatible.md)       |
+| **Replace my Anthropic SDK calls** | [🧠 Anthropic Integration](usage/http-transport/integrations/anthropic-compatible.md) |
+| **Replace my GenAI SDK calls**     | [🔍 GenAI Integration](usage/http-transport/integrations/genai-compatible.md)         |
+| **Use external tools with AI**     | [🛠️ MCP Integration](mcp.md)                                                          |
+| **Add custom middleware**          | [🔌 Plugin System](plugins.md)                                                        |
+| **Use Bifrost in my Go app**       | [🔧 Go Package Usage](usage/go-package/)                                              |
+| **Configure via HTTP/JSON**        | [🌐 HTTP Transport Usage](usage/http-transport/)                                      |
+| **Add fallback providers**         | [🔄 Providers](usage/providers.md)                                                    |
+| **Understand the architecture**    | [🏛️ Architecture](architecture/)                                                      |
+| **See practical examples**         | [💡 Examples](examples/)                                                              |
+| **Deploy to production**           | [🚀 Production Guide](usage/http-transport/configuration/)                            |
+| **Contribute to the project**      | [🤝 Contributing](contributing/)                                                      |
 
 ---
 
@@ -90,8 +125,8 @@ Help improve Bifrost for everyone:
 
 - **🔄 Unified API** - One interface for OpenAI, Anthropic, Bedrock, and more
 - **⚡ Intelligent Fallbacks** - Automatic failover between providers and models
-- **🛠️ MCP Integration** - Model Context Protocol for external tools
-- **🔌 Extensible Plugins** - Custom middleware and request processing
+- **🛠️ [MCP Integration](mcp.md)** - Enable AI models to use external tools (filesystem, web search, databases) through Model Context Protocol
+- **🔌 [Extensible Plugins](plugins.md)** - Lightweight core with endless possibilities through custom middleware and request processing
 - **🎯 Drop-in Compatibility** - Replace existing provider APIs without code changes
 - **🚀 Production Ready** - Built for scale with comprehensive monitoring
 

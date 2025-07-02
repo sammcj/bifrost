@@ -6,6 +6,7 @@ import (
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
 )
 
 var fnTypePtr = bifrost.Ptr(string(schemas.ToolChoiceTypeFunction))
@@ -133,9 +134,11 @@ func (mc *AnthropicContent) UnmarshalJSON(data []byte) error {
 
 // ConvertToBifrostRequest converts an Anthropic messages request to Bifrost format
 func (r *AnthropicMessageRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
+	provider, model := integrations.ParseModelString(r.Model, schemas.Anthropic)
+
 	bifrostReq := &schemas.BifrostRequest{
-		Provider: schemas.Anthropic,
-		Model:    r.Model,
+		Provider: provider,
+		Model:    model,
 	}
 
 	messages := []schemas.BifrostMessage{}

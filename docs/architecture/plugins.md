@@ -314,30 +314,6 @@ graph TD
 
 ## 🔧 Plugin Discovery & Configuration
 
-### **Multi-Source Discovery System**
-
-Bifrost supports multiple plugin discovery methods to fit different deployment patterns:
-
-```mermaid
-flowchart TD
-    Discovery[Plugin Discovery] --> Sources{Discovery Sources}
-
-    Sources -->|CLI Args| CLI[Command Line<br/>-plugins "auth,ratelimit"]
-    Sources -->|Environment| ENV[Environment Variable<br/>APP_PLUGINS="auth,monitor"]
-    Sources -->|JSON Config| JSON[Configuration File<br/>plugins[] array]
-    Sources -->|Directory| DIR[Directory Scan<br/>Auto-discovery]
-
-    CLI --> Validation[Plugin Validation]
-    ENV --> Validation
-    JSON --> Validation
-    DIR --> Validation
-
-    Validation --> Security[Security Checks]
-    Security --> Loading[Plugin Loading]
-    Loading --> Registry[Plugin Registry]
-    Registry --> Available[Available for Pipeline]
-```
-
 ### **Configuration Methods**
 
 **Current: Command-Line Plugin Loading**
