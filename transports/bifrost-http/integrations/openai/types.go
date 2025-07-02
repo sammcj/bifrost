@@ -2,6 +2,7 @@ package openai
 
 import (
 	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
 )
 
 // OpenAIChatRequest represents an OpenAI chat completion request
@@ -40,9 +41,11 @@ type OpenAIChatResponse struct {
 
 // ConvertToBifrostRequest converts an OpenAI chat request to Bifrost format
 func (r *OpenAIChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
+	provider, model := integrations.ParseModelString(r.Model, schemas.OpenAI)
+
 	bifrostReq := &schemas.BifrostRequest{
-		Provider: schemas.OpenAI,
-		Model:    r.Model,
+		Provider: provider,
+		Model:    model,
 		Input: schemas.RequestInput{
 			ChatCompletionInput: &r.Messages,
 		},
