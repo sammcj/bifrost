@@ -8,6 +8,7 @@ import (
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
 	genai_sdk "google.golang.org/genai"
 )
 
@@ -136,9 +137,11 @@ type GeminiChatRequest struct {
 }
 
 func (r *GeminiChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
+	provider, model := integrations.ParseModelString(r.Model, schemas.Vertex)
+
 	bifrostReq := &schemas.BifrostRequest{
-		Provider: schemas.Vertex,
-		Model:    r.Model,
+		Provider: provider,
+		Model:    model,
 		Input: schemas.RequestInput{
 			ChatCompletionInput: &[]schemas.BifrostMessage{},
 		},
