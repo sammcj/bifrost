@@ -94,12 +94,7 @@ func (provider *OllamaProvider) GetProviderKey() schemas.ModelProvider {
 
 // TextCompletion is not supported by the Ollama provider.
 func (provider *OllamaProvider) TextCompletion(ctx context.Context, model, key, text string, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	return nil, &schemas.BifrostError{
-		IsBifrostError: false,
-		Error: schemas.ErrorField{
-			Message: "text completion is not supported by ollama provider",
-		},
-	}
+	return nil, newUnsupportedOperationError("text completion", "ollama")
 }
 
 // ChatCompletion performs a chat completion request to the Ollama API.
@@ -187,4 +182,9 @@ func (provider *OllamaProvider) ChatCompletion(ctx context.Context, model, key s
 	}
 
 	return bifrostResponse, nil
+}
+
+// Embedding is not supported by the Ollama provider.
+func (provider *OllamaProvider) Embedding(ctx context.Context, model string, key string, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	return nil, newUnsupportedOperationError("embedding", "ollama")
 }

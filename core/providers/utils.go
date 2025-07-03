@@ -541,3 +541,37 @@ func isLikelyBase64(s string) bool {
 	// Check if it contains only base64 characters using pre-compiled regex
 	return base64Regex.MatchString(cleanData)
 }
+
+// newUnsupportedOperationError creates a standardized error for unsupported operations.
+// This helper reduces code duplication across providers that don't support certain operations.
+func newUnsupportedOperationError(operation string, providerName string) *schemas.BifrostError {
+	return &schemas.BifrostError{
+		IsBifrostError: false,
+		Error: schemas.ErrorField{
+			Message: fmt.Sprintf("%s is not supported by %s provider", operation, providerName),
+		},
+	}
+}
+
+// approximateTokenCount provides a rough approximation of token count for text.
+// WARNING: This is a best-effort approximation using 1 token per 4 characters.
+// This heuristic is particularly inaccurate for:
+// - Non-ASCII text (multi-byte characters)
+// - Short texts
+// - Different languages and tokenization methods
+// - Various model-specific tokenizers
+// 
+// The actual token count may vary significantly based on tokenization method,
+// language, and text structure. Consider omitting token metrics when precise
+// counts are unavailable to avoid misleading usage information.
+//
+// For precise token usage tracking, implement a proper tokenizer that matches
+// the model's tokenization method.
+func approximateTokenCount(texts []string) int {
+	totalInputTokens := 0
+	for _, text := range texts {
+		// Rough approximation: 1 token per 4 characters
+		totalInputTokens += len(text) / 4
+	}
+	return totalInputTokens
+}
