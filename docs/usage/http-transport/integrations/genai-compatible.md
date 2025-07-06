@@ -27,24 +27,23 @@ Bifrost provides **100% Google GenAI API compatibility** with enhanced features:
 ### **Python (Google GenAI SDK)**
 
 ```python
-import google.generativeai as genai
+from google import genai
+from google.genai.types import HttpOptions
 
 # Before - Direct Google GenAI
-genai.configure(
-    api_key="your-google-api-key",
-    transport="rest"
-)
+client = genai.Client(api_key="your-google-api-key")
 
 # After - Via Bifrost
-genai.configure(
+client = genai.Client(
     api_key="your-google-api-key",
-    transport="rest",
-    client_options={"api_endpoint": "http://localhost:8080/genai"}  # Only change this
+    http_options=HttpOptions(base_url="http://localhost:8080/genai")  # Only change this
 )
 
 # Everything else stays the same
-model = genai.GenerativeModel('gemini-pro')
-response = model.generate_content("Hello!")
+response = client.models.generate_content(
+    model="gemini-pro",
+    contents="Hello!"
+)
 ```
 
 ### **JavaScript (Google GenAI SDK)**
@@ -249,89 +248,93 @@ curl -X POST http://localhost:8080/genai/v1beta/models/gemini-pro:generateConten
 ### **System Instructions**
 
 ```python
-import google.generativeai as genai
+from google import genai
+from google.genai.types import HttpOptions, GenerateContentConfig
 
-genai.configure(
-    api_key=google_api_key,
-    client_options={"api_endpoint": "http://localhost:8080/genai"}
+client = genai.Client(
+    api_key="your-google-api-key",
+    http_options=HttpOptions(base_url="http://localhost:8080/genai")
 )
 
-model = genai.GenerativeModel(
-    'gemini-pro',
-    system_instruction="You are a helpful assistant that answers questions about geography."
+response = client.models.generate_content(
+    model="gemini-pro",
+    contents="What is the capital of France?",
+    config=GenerateContentConfig(
+        system_instruction="You are a helpful assistant that answers questions about geography."
+    )
 )
-
-response = model.generate_content("What is the capital of France?")
 ```
 
 ### **Generation Configuration**
 
 ```python
-import google.generativeai as genai
+from google import genai
+from google.genai.types import HttpOptions, GenerateContentConfig
 
-genai.configure(
-    api_key=google_api_key,
-    client_options={"api_endpoint": "http://localhost:8080/genai"}
+client = genai.Client(
+    api_key="your-google-api-key",
+    http_options=HttpOptions(base_url="http://localhost:8080/genai")
 )
 
-generation_config = genai.types.GenerationConfig(
-    candidate_count=1,
-    max_output_tokens=1000,
-    temperature=0.7,
-    top_p=0.8,
-    top_k=40,
-    stop_sequences=["END"]
-)
-
-model = genai.GenerativeModel('gemini-pro')
-response = model.generate_content(
-    "Tell me a story",
-    generation_config=generation_config
+response = client.models.generate_content(
+    model="gemini-pro",
+    contents="Tell me a story",
+    config=GenerateContentConfig(
+        candidate_count=1,
+        max_output_tokens=1000,
+        temperature=0.7,
+        top_p=0.8,
+        top_k=40,
+        stop_sequences=["END"]
+    )
 )
 ```
 
 ### **Safety Settings**
 
 ```python
-import google.generativeai as genai
+from google import genai
+from google.genai.types import HttpOptions, GenerateContentConfig, SafetySetting
 
-genai.configure(
-    api_key=google_api_key,
-    client_options={"api_endpoint": "http://localhost:8080/genai"}
+client = genai.Client(
+    api_key="your-google-api-key",
+    http_options=HttpOptions(base_url="http://localhost:8080/genai")
 )
 
 safety_settings = [
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-    },
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-    }
+    SafetySetting(
+        category="HARM_CATEGORY_HARASSMENT",
+        threshold="BLOCK_MEDIUM_AND_ABOVE"
+    ),
+    SafetySetting(
+        category="HARM_CATEGORY_HATE_SPEECH",
+        threshold="BLOCK_MEDIUM_AND_ABOVE"
+    )
 ]
 
-model = genai.GenerativeModel('gemini-pro')
-response = model.generate_content(
-    "Your content here",
-    safety_settings=safety_settings
+response = client.models.generate_content(
+    model="gemini-pro",
+    contents="Your content here",
+    config=GenerateContentConfig(safety_settings=safety_settings)
 )
 ```
 
 ### **Error Handling**
 
 ```python
-import google.generativeai as genai
+from google import genai
+from google.genai.types import HttpOptions
 from google.api_core import exceptions
 
-genai.configure(
-    api_key=google_api_key,
-    client_options={"api_endpoint": "http://localhost:8080/genai"}
-)
-
 try:
-    model = genai.GenerativeModel('gemini-pro')
-    response = model.generate_content("Hello!")
+    client = genai.Client(
+        api_key=google_api_key,
+        http_options=HttpOptions(base_url="http://localhost:8080/genai")
+    )
+    response = client.models.generate_content(
+        model="gemini-pro",
+        contents="Hello!"
+    )
 except exceptions.InvalidArgument as e:
     print(f"Invalid argument: {e}")
 except exceptions.PermissionDenied as e:
@@ -349,23 +352,73 @@ except Exception as e:
 MCP tools are automatically available in GenAI-compatible requests:
 
 ```python
-import google.generativeai as genai
+from google import genai
+from google.genai.types import HttpOptions, Tool, FunctionDeclaration, Schema
 
-genai.configure(
-    api_key=google_api_key,
-    client_options={"api_endpoint": "http://localhost:8080/genai"}
+client = genai.Client(
+    api_key="your-google-api-key",
+    http_options=HttpOptions(base_url="http://localhost:8080/genai")
 )
 
-# No tool definitions needed - MCP tools auto-discovered
-model = genai.GenerativeModel('gemini-pro')
-response = model.generate_content(
-    "List the files in the current directory and tell me about the project structure"
+# Define tools if needed (or use auto-discovered MCP tools)
+tools = [
+    Tool(function_declarations=[
+        FunctionDeclaration(
+            name="list_files",
+            description="List files in a directory",
+            parameters=Schema(
+                type="OBJECT",
+                properties={
+                    "path": Schema(type="STRING", description="Directory path")
+                },
+                required=["path"]
+            )
+        )
+    ])
+]
+
+response = client.models.generate_content(
+    model="gemini-pro",
+    contents="List the files in the current directory and tell me about the project structure",
+    config=GenerateContentConfig(tools=tools)
 )
 
-# Response may include automatic function calls
+# Check for function calls in response
 if response.candidates[0].content.parts[0].function_call:
     function_call = response.candidates[0].content.parts[0].function_call
-    print(f"Called MCP tool: {function_call.name}")
+    print(f"Called tool: {function_call.name}")
+```
+
+### **Multi-provider Support**
+
+Use multiple providers with Google GenAI SDK format by prefixing model names:
+
+```python
+from google import genai
+from google.genai.types import HttpOptions
+
+client = genai.Client(
+    api_key="dummy",  # API keys configured in Bifrost
+    http_options=HttpOptions(base_url="http://localhost:8080/genai")
+)
+
+# Google models (default)
+response1 = client.models.generate_content(
+    model="gemini-pro",
+    contents="Hello!"
+)
+
+# OpenAI models via GenAI SDK
+response2 = client.models.generate_content(
+    model="openai/gpt-4o-mini",
+    contents="Hello!"
+)
+
+# Anthropic models via GenAI SDK
+response3 = client.models.generate_content(
+    model="anthropic/claude-3-sonnet-20240229",
+    contents="Hello!"
+)
 ```
 
 ### **Multi-provider Fallbacks**
@@ -428,28 +481,32 @@ Multiple Google Cloud projects automatically load balanced:
 Test your existing Google GenAI code with Bifrost:
 
 ```python
-import google.generativeai as genai
+from google import genai
+from google.genai.types import HttpOptions
 
 def test_bifrost_compatibility():
     # Test with Bifrost
-    genai.configure(
+    bifrost_client = genai.Client(
         api_key=google_api_key,
-        client_options={"api_endpoint": "http://localhost:8080/genai"}
+        http_options=HttpOptions(base_url="http://localhost:8080/genai")
     )
-    bifrost_model = genai.GenerativeModel('gemini-pro')
 
     # Test with direct Google GenAI (for comparison)
-    genai.configure(
-        api_key=google_api_key,
-        client_options={}  # Reset to default
+    google_client = genai.Client(
+        api_key=google_api_key
     )
-    google_model = genai.GenerativeModel('gemini-pro')
 
     test_prompt = "Hello, test!"
 
     # Both should work identically
-    bifrost_response = bifrost_model.generate_content(test_prompt)
-    google_response = google_model.generate_content(test_prompt)
+    bifrost_response = bifrost_client.models.generate_content(
+        model="gemini-pro",
+        contents=test_prompt
+    )
+    google_response = google_client.models.generate_content(
+        model="gemini-pro",
+        contents=test_prompt
+    )
 
     # Compare response structure
     assert bifrost_response.candidates[0].content.parts[0].text is not None
@@ -463,23 +520,34 @@ test_bifrost_compatibility()
 ### **Function Calling Testing**
 
 ```python
-import google.generativeai as genai
+from google import genai
+from google.genai.types import HttpOptions, Tool, FunctionDeclaration, Schema
 
 def test_function_calling():
-    genai.configure(
+    client = genai.Client(
         api_key=google_api_key,
-        client_options={"api_endpoint": "http://localhost:8080/genai"}
+        http_options=HttpOptions(base_url="http://localhost:8080/genai")
     )
 
-    # Define a test function
-    def get_time():
-        """Get current time"""
-        return "2024-01-01 12:00:00"
+    # Define a test tool
+    tools = [
+        Tool(function_declarations=[
+            FunctionDeclaration(
+                name="get_time",
+                description="Get current time",
+                parameters=Schema(
+                    type="OBJECT",
+                    properties={},
+                    required=[]
+                )
+            )
+        ])
+    ]
 
-    model = genai.GenerativeModel('gemini-pro')
-    response = model.generate_content(
-        "What time is it?",
-        tools=[get_time]
+    response = client.models.generate_content(
+        model="gemini-pro",
+        contents="What time is it?",
+        config=GenerateContentConfig(tools=tools)
     )
 
     # Should include function call
@@ -498,7 +566,7 @@ test_function_calling()
 Use multiple providers with Google GenAI SDK format by prefixing model names:
 
 ```python
-import google.generativeai as genai
+from google import genai
 
 genai.configure(
     api_key="dummy",  # API keys configured in Bifrost
