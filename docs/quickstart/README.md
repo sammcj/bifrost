@@ -25,11 +25,13 @@ Get up and running with Bifrost in under 30 seconds. Choose your preferred integ
 
 ## 🌐 **HTTP Transport** - Choose if you:
 
+- ✅ Want a clean UI for configuration and monitoring
 - ✅ Use any programming language (Python, Node.js, etc.)
 - ✅ Want to keep AI logic separate from your application
 - ✅ Need a centralized AI gateway for multiple services
 - ✅ Prefer REST API integration patterns
 - ✅ Want drop-in compatibility with existing provider SDKs
+- ✅ Want to **add providers & MCP clients on-the-fly** without restarts
 
 **→ [Start with HTTP Transport](http-transport.md)**
 

@@ -26,43 +26,47 @@ Bifrost is a high-performance AI gateway that connects you to 8+ providers (Open
 
 📖 For detailed setup guides with multiple providers, advanced configuration, and language examples, see [Quick Start Documentation](./docs/quickstart/README.md)
 
-**Step 1:** Create your config (copy & paste this)
-
-```json
-{
-  "providers": {
-    "openai": {
-      "keys": [
-        {
-          "value": "env.OPENAI_API_KEY",
-          "models": ["gpt-4o-mini"],
-          "weight": 1.0
-        }
-      ]
-    }
-  }
-}
-```
-
-**Step 2:** Add your API key
+**Step 1:** Start Bifrost (choose one)
 
 ```bash
-export OPENAI_API_KEY=your_openai_api_key
-```
-
-**Step 3:** Start Bifrost (choose one)
-
-```bash
-# 🐳 Docker
+# 🐳 Docker (easiest - zero config needed!)
 docker pull maximhq/bifrost
-docker run -p 8080:8080 \
-  -v $(pwd)/config.json:/app/config/config.json \
-  -e OPENAI_API_KEY \
-  maximhq/bifrost
+docker run -p 8080:8080 maximhq/bifrost
 
 # 🔧 Or install Go binary (Make sure Go is in your PATH)
 go install github.com/maximhq/bifrost/transports/bifrost-http@latest
-bifrost-http -config config.json -port 8080
+bifrost-http -port 8080
+```
+
+**Step 2:** Open the built-in web interface
+
+```bash
+# 🖥️ Configure visually - no config files needed!
+# macOS:
+open http://localhost:8080
+
+# Linux:
+xdg-open http://localhost:8080
+
+# Windows:
+start http://localhost:8080
+
+# Or simply open http://localhost:8080 manually in your browser
+```
+
+**Step 3:** Add your provider via the web UI or API
+
+```bash
+# Via Web UI: Just click "Add Provider" and enter your OpenAI API key
+# Or via API:
+curl -X POST http://localhost:8080/providers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai",
+    "keys": [{"value": "env.OPENAI_API_KEY", "models": ["gpt-4o-mini"], "weight": 1.0}]
+  }'
+
+# Make sure to set the environment variable OPENAI_API_KEY in bifrost's session, or pass it as a flag in Docker (docker run -e OPENAI_API_KEY maximhq/bifrost).
 ```
 
 **Step 4:** Test it works
@@ -81,11 +85,12 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 **🎉 Boom! You're done!**
 
-Your AI gateway is now running and ready for production. You can:
+Your AI gateway is now running with a beautiful web interface. You can:
 
-- Add more providers for automatic failover
-- Scale to thousands of requests per second
-- Drop this into existing OpenAI/Anthropic code with zero changes
+- **🖥️ Configure everything visually** - No more JSON files!
+- **📊 Monitor requests in real-time** - See logs, analytics, and metrics
+- **🔄 Add providers and MCP clients on-the-fly** - Scale and failover without restarts
+- **🚀 Drop into existing code** - Zero changes to your OpenAI/Anthropic apps
 
 > **Want more?** See our [Complete Setup Guide](./docs/quickstart/http-transport.md) for multi-provider configuration, failover strategies, and production deployment.
 
@@ -112,18 +117,19 @@ Your AI gateway is now running and ready for production. You can:
 
 ## ✨ Features
 
-- **Multi-Provider Support**: Integrate with OpenAI, Anthropic, Amazon Bedrock, Mistral, Ollama, and more through a single API
-- **Fallback Mechanisms**: Automatically retry failed requests with alternative models or providers
-- **Dynamic Key Management**: Rotate and manage API keys efficiently with weighted distribution
-- **Connection Pooling**: Optimize network resources for better performance
-- **Concurrency Control**: Manage rate limits and parallel requests effectively
-- **Flexible Transports**: Multiple transports for easy integration into your infra
-- **Plugin First Architecture**: No callback hell, simple addition/creation of custom plugins
-- **MCP Integration**: Built-in Model Context Protocol (MCP) support for external tool integration and execution
-- **Custom Configuration**: Offers granular control over pool sizes, network retry settings, fallback providers, and network proxy configurations
-- **Built-in Observability**: Native Prometheus metrics out of the box, no wrappers, no sidecars, just drop it in and scrape
-- **SDK Support**: Bifrost is available as a Go package, so you can use it directly in your own applications.
-- **Seamless Integration with Generative AI SDKs**: Effortlessly transition to Bifrost by simply updating the `base_url` in your existing SDKs, such as OpenAI, Anthropic, GenAI, and more. Just one line of code is all it takes to make the switch.
+- **🖥️ Built-in Web UI**: Visual configuration, real-time monitoring, and analytics dashboard - no config files needed
+- **🚀 Zero-Config Startup & Easy Integration**: Start immediately with dynamic provider configuration, or integrate existing SDKs by simply updating the `base_url` - one line of code to get running
+- **🔄 Multi-Provider Support**: Integrate with OpenAI, Anthropic, Amazon Bedrock, Mistral, Ollama, and more through a single API
+- **🛡️ Fallback Mechanisms**: Automatically retry failed requests with alternative models or providers
+- **🔑 Dynamic Key Management**: Rotate and manage API keys efficiently with weighted distribution
+- **⚡ Connection Pooling**: Optimize network resources for better performance
+- **🎯 Concurrency Control**: Manage rate limits and parallel requests effectively
+- **🔌 Flexible Transports**: Multiple transports for easy integration into your infra
+- **🏗️ Plugin First Architecture**: No callback hell, simple addition/creation of custom plugins
+- **🛠️ MCP Integration**: Built-in Model Context Protocol (MCP) support for external tool integration and execution
+- **⚙️ Custom Configuration**: Offers granular control over pool sizes, network retry settings, fallback providers, and network proxy configurations
+- **📊 Built-in Observability**: Native Prometheus metrics out of the box, no wrappers, no sidecars, just drop it in and scrape
+- **🔧 SDK Support**: Bifrost is available as a Go package, so you can use it directly in your own applications
 
 ---
 

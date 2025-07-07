@@ -111,6 +111,7 @@ type LogStats struct {
 // Config represents the configuration for the logging plugin
 type Config struct {
 	DatabasePath string `json:"database_path"`
+	LogQueueSize int    `json:"log_queue_size"`
 }
 
 // LogCallback is a function that gets called when a new log entry is created
@@ -125,14 +126,16 @@ type LoggerPlugin struct {
 	logQueue    chan *LogEntry
 	done        chan struct{}
 	wg          sync.WaitGroup
+	logger      schemas.Logger
 	logCallback LogCallback // Callback for real-time log updates
 }
 
 // NewLoggerPlugin creates a new logging plugin
-func NewLoggerPlugin(config *Config) (*LoggerPlugin, error) {
+func NewLoggerPlugin(config *Config, logger schemas.Logger) (*LoggerPlugin, error) {
 	if config == nil {
 		config = &Config{
-			DatabasePath: "./badger_logs",
+			DatabasePath: "./bifrost-logs",
+			LogQueueSize: 1000,
 		}
 	}
 
@@ -148,8 +151,9 @@ func NewLoggerPlugin(config *Config) (*LoggerPlugin, error) {
 	plugin := &LoggerPlugin{
 		config:   config,
 		db:       db,
-		logQueue: make(chan *LogEntry, 1000), // Buffer for 1000 log entries
+		logQueue: make(chan *LogEntry, config.LogQueueSize), // Buffer for 1000 log entries
 		done:     make(chan struct{}),
+		logger:   logger,
 		stats: &LogStats{
 			ProviderStats: make(map[string]int64),
 			ModelStats:    make(map[string]int64),
@@ -175,9 +179,9 @@ func (p *LoggerPlugin) processLogEntry(entry *LogEntry, isShutdown bool) {
 	// Store the log entry
 	if err := p.storeLogEntry(entry); err != nil {
 		if isShutdown {
-			fmt.Printf("BadgerDB Logger: failed to store log entry during shutdown: %v\n", err)
+			p.logger.Error(fmt.Errorf("failed to store log entry during shutdown: %w", err))
 		} else {
-			fmt.Printf("BadgerDB Logger: failed to store log entry: %v\n", err)
+			p.logger.Error(fmt.Errorf("failed to store log entry: %w", err))
 		}
 	}
 
@@ -366,7 +370,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 		// Successfully queued
 	default:
 		// Queue is full, log warning but don't block the request
-		fmt.Printf("Logger: log queue is full, dropping log entry\n")
+		p.logger.Warn("log queue is full, dropping log entry")
 	}
 
 	return result, err, nil

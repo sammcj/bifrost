@@ -1,12 +1,43 @@
 # 🌐 HTTP Transport Quick Start
 
-Get Bifrost running as an HTTP API in 30 seconds using Docker. Perfect for any programming language.
+Get Bifrost running as an HTTP API in **15 seconds** with **zero configuration**! Perfect for any programming language.
 
-## ⚡ 30-Second Setup
+## 🚀 Zero-Config Setup (15 seconds!)
 
-### 1. Create `config.json`
+### 1. Start Bifrost (No config needed!)
 
-This file should contain your provider settings and API keys.
+```bash
+# 🐳 Docker (fastest)
+docker pull maximhq/bifrost
+docker run -p 8080:8080 maximhq/bifrost
+
+# 🔧 OR Go Binary (Make sure Go is in your PATH)
+go install github.com/maximhq/bifrost/transports/bifrost-http@latest
+bifrost-http -port 8080
+```
+
+### 2. Open the Web Interface
+
+```bash
+# 🖥️ Beautiful web UI for zero-config setup
+# macOS:
+open http://localhost:8080
+# Linux:
+xdg-open http://localhost:8080
+# Windows:
+start http://localhost:8080
+# Or simply open http://localhost:8080 manually in your browser
+```
+
+**🎉 That's it!** Configure providers visually, monitor requests in real-time, and get analytics - all through the web interface!
+
+---
+
+## 📂 File-Based Configuration (Optional)
+
+Want to use a config file instead? Bifrost automatically looks for `config.json` in your app directory:
+
+### 1. Create `config.json` in your app directory
 
 ```json
 {
@@ -24,32 +55,77 @@ This file should contain your provider settings and API keys.
 }
 ```
 
-### 2. Set Up Your Environment
-
-Add your environment variable to the session.
+### 2. Set environment variables and start
 
 ```bash
 export OPENAI_API_KEY="your-openai-api-key"
-```
 
-### 3. Start the Bifrost HTTP Server
-
-You can run using Docker or Go binary.
-
-```bash
-# Docker
-docker pull maximhq/bifrost
+# Docker with volume mount for persistence
 docker run -p 8080:8080 \
-  -v $(pwd)/config.json:/app/config/config.json \
+  -v $(pwd):/app/data \
   -e OPENAI_API_KEY \
   maximhq/bifrost
 
-# OR Go Binary (Make sure Go in your PATH)
-go install github.com/maximhq/bifrost/transports/bifrost-http@latest
-bifrost-http -config config.json -port 8080
+# OR Go Binary with app directory
+bifrost-http -app-dir . -port 8080
 ```
 
-### 4. Test the API
+---
+
+## 📁 Understanding App Directory & Docker Volumes
+
+### **How the `-app-dir` Flag Works**
+
+The `-app-dir` flag tells Bifrost where to store and look for data:
+
+```bash
+# Use current directory as app directory
+bifrost-http -app-dir .
+
+# Use specific directory as app directory
+bifrost-http -app-dir /path/to/bifrost-data
+
+# Default: current directory if no flag specified
+bifrost-http -port 8080
+```
+
+**What Bifrost stores in the app directory:**
+
+- `config.json` - Configuration file (if using file-based config)
+- `logs/` - Database logs and request history
+- Any other persistent data
+
+### **How Docker Volumes Work with App Directory**
+
+Docker volumes map your host directory to Bifrost's app directory:
+
+```bash
+# Map current host directory → /app/data inside container
+docker run -p 8080:8080 -v $(pwd):/app/data maximhq/bifrost
+
+# Map specific host directory → /app/data inside container
+docker run -p 8080:8080 -v /host/path/bifrost-data:/app/data maximhq/bifrost
+
+# No volume = ephemeral storage (lost when container stops)
+docker run -p 8080:8080 maximhq/bifrost
+```
+
+### **Persistence Scenarios**
+
+| Scenario                     | Command                                                       | Result                                  |
+| ---------------------------- | ------------------------------------------------------------- | --------------------------------------- |
+| **Ephemeral (testing)**      | `docker run -p 8080:8080 maximhq/bifrost`                     | No persistence, configure via web UI    |
+| **Persistent (recommended)** | `docker run -p 8080:8080 -v $(pwd):/app/data maximhq/bifrost` | Saves config & logs to host directory   |
+| **Pre-configured**           | Create `config.json`, then run with volume                    | Starts with your existing configuration |
+
+### **Best Practices**
+
+- **🔧 Development**: Use `-v $(pwd):/app/data` to persist config between restarts
+- **🚀 Production**: Mount dedicated volume for data persistence
+- **🧪 Testing**: Run without volume for clean ephemeral instances
+- **👥 Teams**: Share `config.json` in version control, mount directory with volume
+
+### 3. Test the API
 
 ```bash
 # Make your first request
@@ -131,31 +207,33 @@ client = genai.Client(
 
 ---
 
-## 🚀 Next Steps (2 minutes each)
+## 🚀 Next Steps (30 seconds each)
 
-### **🔗 Add Multiple Providers**
+### **🖥️ Add Multiple Providers via Web UI**
+
+1. Open `http://localhost:8080` in your browser
+2. Click **"Add Provider"**
+3. Select **OpenAI**, enter your API key, choose models
+4. Click **"Add Provider"** again
+5. Select **Anthropic**, enter your API key, choose models
+6. **Done!** Your providers are now load-balanced automatically
+
+### **📡 Or Add Multiple Providers via API**
 
 ```bash
-# Create config.json
-echo '{
-  "providers": {
-    "openai": {
-      "keys": [{"value": "env.OPENAI_API_KEY", "models": ["gpt-4o-mini"], "weight": 1.0}]
-    },
-    "anthropic": {
-      "keys": [{"value": "env.ANTHROPIC_API_KEY", "models": ["claude-3-sonnet-20240229"], "weight": 1.0}]
-    }
-  }
-}' > config.json
+# Add OpenAI
+curl -X POST http://localhost:8080/providers \
+  -H "Content-Type: application/json" \
+  -d '{"provider": "openai", "keys": [{"value": "env.OPENAI_API_KEY", "models": ["gpt-4o-mini"], "weight": 1.0}]}'
+
+# Add Anthropic
+curl -X POST http://localhost:8080/providers \
+  -H "Content-Type: application/json" \
+  -d '{"provider": "anthropic", "keys": [{"value": "env.ANTHROPIC_API_KEY", "models": ["claude-3-sonnet-20240229"], "weight": 1.0}]}'
 
 # Set environment variables
+export OPENAI_API_KEY="your-openai-key"
 export ANTHROPIC_API_KEY="your-anthropic-key"
-
-# Start with config
-docker run -p 8080:8080 \
-  -v $(pwd)/config.json:/app/config/config.json \
-  -e OPENAI_API_KEY -e ANTHROPIC_API_KEY \
-  maximhq/bifrost
 ```
 
 ### **⚡ Test Different Providers**
@@ -239,12 +317,14 @@ response, err := http.Post(
 
 ## 🔧 Setup Methods Comparison
 
-| Method        | Pros                                            | Use When                         |
-| ------------- | ----------------------------------------------- | -------------------------------- |
-| **Docker**    | No Go installation needed, isolated environment | Production, CI/CD, quick testing |
-| **Go Binary** | Direct execution, easier debugging              | Development, custom builds       |
+| Method          | Pros                                                 | Use When                         |
+| --------------- | ---------------------------------------------------- | -------------------------------- |
+| **Zero Config** | No files needed, visual setup, instant start         | Quick testing, demos, new users  |
+| **File-Based**  | Version control, automation, reproducible deployment | Production, CI/CD, team setups   |
+| **Docker**      | No Go installation needed, isolated environment      | Production, CI/CD, quick testing |
+| **Go Binary**   | Direct execution, easier debugging                   | Development, custom builds       |
 
-Both methods require the same `config.json` file and environment variables.
+**Note:** When using file-based config, Bifrost only looks for `config.json` in your specified app directory.
 
 ---
 
@@ -274,10 +354,12 @@ If you're building a Go application and want direct integration, try the **[Go P
 
 ## 💡 Why HTTP Transport?
 
-- ✅ **Language agnostic** - Use from Python, Node.js, PHP, etc.
-- ✅ **Drop-in replacement** - Zero code changes for existing apps
-- ✅ **OpenAI compatible** - All responses follow OpenAI structure
-- ✅ **Microservices ready** - Centralized AI gateway
-- ✅ **Production features** - Health checks, metrics, monitoring
+- **🖥️ Built-in Web UI** - Visual configuration, monitoring, and analytics
+- **🚀 Zero configuration** - Start instantly, configure dynamically
+- **🌐 Language agnostic** - Use from Python, Node.js, PHP, etc.
+- **🔄 Drop-in replacement** - Zero code changes for existing apps
+- **🔗 OpenAI compatible** - All responses follow OpenAI structure
+- **⚙️ Microservices ready** - Centralized AI gateway
+- **📊 Production features** - Health checks, metrics, monitoring
 
 **🎯 Ready for production? Check out [Complete HTTP Usage Guide](../usage/http-transport/) →**
