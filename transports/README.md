@@ -13,18 +13,35 @@ Bifrost Transports let you run Bifrost as a blazing-fast HTTP API or integrate i
 ```bash
 # Pull and run Bifrost HTTP API
 docker pull maximhq/bifrost
-docker run -p 8080:8080 \
-  -v $(pwd)/config.json:/app/config/config.json \
-  -e OPENAI_API_KEY \
-  maximhq/bifrost
+docker run -p 8080:8080 maximhq/bifrost
+
+# 🖥️ Open web interface for visual configuration
+# macOS:
+open http://localhost:8080
+# Linux:
+xdg-open http://localhost:8080
+# Windows:
+start http://localhost:8080
+# Or simply open http://localhost:8080 manually in your browser
 ```
+
+**🎉 That's it!** No config files needed. Configure providers, monitor requests, and manage everything through the **built-in web interface**.
 
 ### Go Binary
 
 ```bash
 # Install and run locally (Make sure Go is in your PATH)
 go install github.com/maximhq/bifrost/transports/bifrost-http@latest
-bifrost-http -config config.json -port 8080
+bifrost-http -port 8080
+
+# Open web interface at http://localhost:8080
+```
+
+### Volume Mount (Optional)
+
+```bash
+# For configuration persistence across restarts
+docker run -p 8080:8080 -v $(pwd)/data:/app/data maximhq/bifrost
 ```
 
 **Ready in 30 seconds!** See [HTTP Transport Quickstart](../docs/quickstart/http-transport.md) for detailed setup.
@@ -35,6 +52,7 @@ bifrost-http -config config.json -port 8080
 
 | Feature                       | Description                                                         | Learn More                                                 |
 | ----------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **🖥️ Built-in Web UI**        | Visual configuration, live monitoring, request logs, and analytics  | Open `http://localhost:8080` after startup                 |
 | **🔄 Multi-Provider Support** | OpenAI, Anthropic, Bedrock, Vertex, Cohere, Mistral, Ollama         | [Provider Setup](../docs/usage/providers.md)               |
 | **🔌 Drop-in Compatibility**  | Replace OpenAI/Anthropic/GenAI APIs with zero code changes          | [Integrations](../docs/usage/http-transport/integrations/) |
 | **🛠️ MCP Tool Calling**       | Enable AI models to use external tools (filesystem, web, databases) | [MCP Guide](../docs/mcp.md)                                |
@@ -97,10 +115,59 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ## ⚙️ Configuration
 
-### Minimal Config
+Bifrost supports **two configuration modes**:
+
+### 1. 🚀 Dynamic Configuration (Recommended)
+
+**No config file needed!** Start the container and configure via **Web UI** or **API**:
+
+```bash
+# Start with zero configuration
+docker run -p 8080:8080 maximhq/bifrost
+
+# Open web interface for easy configuration
+# macOS: open http://localhost:8080
+# Linux: xdg-open http://localhost:8080
+# Windows: start http://localhost:8080
+# Or simply open http://localhost:8080 manually in your browser
+```
+
+🖥️ **Web UI Features:**
+
+- **Visual provider setup** - Add OpenAI, Anthropic, Bedrock, etc.
+- **Real-time configuration** - Changes apply immediately
+- **Live monitoring** - Request logs, metrics, and analytics
+- **Export/Import** - Save configurations as JSON
+
+📡 **Or configure via API:**
+
+```bash
+# Add providers programmatically
+curl -X POST http://localhost:8080/providers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai",
+    "keys": [{"value": "env.OPENAI_API_KEY", "models": ["gpt-4o-mini"], "weight": 1.0}],
+    "network_config": {"default_request_timeout_in_seconds": 30},
+    "concurrency_and_buffer_size": {"concurrency": 3, "buffer_size": 10}
+  }'
+
+# Save configuration to file for persistence
+curl -X POST http://localhost:8080/config/save
+```
+
+**Benefits**: Perfect for containerized deployments, GitOps workflows, and both visual and API-first configuration management.
+
+### 2. 📄 File-based Configuration
+
+Traditional config file approach _(Volume mount needed when using docker)_:
 
 ```json
 {
+  "client": {
+    "drop_excess_requests": false,
+    "prometheus_labels": ["model", "provider"]
+  },
   "providers": {
     "openai": {
       "keys": [
@@ -109,11 +176,21 @@ curl -X POST http://localhost:8080/v1/chat/completions \
           "models": ["gpt-4o-mini"],
           "weight": 1.0
         }
-      ]
+      ],
+      "concurrency_and_buffer_size": {
+        "concurrency": 3,
+        "buffer_size": 10
+      }
     }
   }
 }
 ```
+
+**Client Configuration Options:**
+
+- `drop_excess_requests`: Whether to drop requests when queues are full (default: `false`)
+- `initial_pool_size`: Initial connection pool size (default: `300`)
+- `prometheus_labels`: Custom labels for Prometheus metrics
 
 **Learn More:**
 
@@ -145,7 +222,7 @@ Add custom middleware for analytics, caching, rate limiting:
 
 ```bash
 # Run with plugins
-bifrost-http -config config.json -plugins "maxim,redis"
+bifrost-http -app-dir . -plugins "maxim,redis"
 ```
 
 **Available plugins**: [Plugin Repository](https://github.com/maximhq/bifrost/tree/main/plugins) | [Plugin Guide](../docs/plugins.md)
@@ -158,7 +235,7 @@ Built-in metrics collection at `/metrics`:
 curl http://localhost:8080/metrics
 ```
 
-**Custom labels**: `-prometheus-labels team-id,task-id`
+**Custom labels**: Configure via `prometheus_labels` in config file or web UI
 
 ---
 
@@ -166,22 +243,30 @@ curl http://localhost:8080/metrics
 
 ### For Go Binary
 
-| Flag                 | Default | Description                 |
-| -------------------- | ------- | --------------------------- |
-| `-config`            | -       | Path to config.json file    |
-| `-port`              | 8080    | HTTP server port            |
-| `-pool-size`         | 300     | Connection pool size        |
-| `-plugins`           | -       | Comma-separated plugin list |
-| `-prometheus-labels` | -       | Custom Prometheus labels    |
+| Flag       | Default | Description                              |
+| ---------- | ------- | ---------------------------------------- |
+| `-app-dir` | .       | Application data directory (config+logs) |
+| `-port`    | 8080    | HTTP server port                         |
+| `-plugins` | -       | Comma-separated plugin list              |
+
+### Understanding App Directory & Docker Volumes
+
+> **📖 Detailed Guide:** See [Understanding App Directory & Docker Volumes](../docs/quickstart/http-transport.md#understanding-app-directory--docker-volumes) for complete details on data persistence and Docker deployment.
+
+**Quick Reference:**
+
+- Default app directory: Current working directory (`.`)
+- Docker volume mount: `-v $(pwd)/data:/app/data`
+- Key files: `config.json`, `logs/`
+
+For complete setup instructions, deployment scenarios, and best practices, see the [detailed guide](../docs/quickstart/http-transport.md#understanding-app-directory--docker-volumes).
 
 ### For Docker
 
-| Variable                   | Description                           |
-| -------------------------- | ------------------------------------- |
-| `APP_PORT`                 | Server port override                  |
-| `APP_POOL_SIZE`            | Pool size override                    |
-| `APP_PLUGINS`              | Plugin list override                  |
-| `APP_DROP_EXCESS_REQUESTS` | Drop excess requests when buffer full |
+| Variable      | Description          |
+| ------------- | -------------------- |
+| `APP_PORT`    | Server port override |
+| `APP_PLUGINS` | Plugin list override |
 
 ---
 

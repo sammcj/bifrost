@@ -8,9 +8,9 @@
 //   - /providers/*: For provider configuration management
 //
 // Configuration is handled through a JSON config file, high-performance ConfigStore, and environment variables:
-//   - Use -config flag to specify the config file location
+//   - Use -app-dir flag to specify the application data directory (contains config.json and logs)
 //   - Use -port flag to specify the server port (default: 8080)
-//   - Use -pool-size flag to specify the initial connection pool size (default: 300)
+//   - When no config file exists, common environment variables are auto-detected (OPENAI_API_KEY, ANTHROPIC_API_KEY, MISTRAL_API_KEY)
 //
 // ConfigStore Features:
 //   - Pure in-memory storage for ultra-fast config access
@@ -29,8 +29,8 @@
 //
 // Example usage:
 //
-//	go run main.go -config config.example.json -port 8080 -pool-size 300
-//	after setting the environment variables present in config.example.json in the environment.
+//	go run main.go -app-dir ./data -port 8080
+//	after setting provider API keys like OPENAI_API_KEY in the environment.
 //
 // Integration Support:
 // Bifrost supports multiple AI provider integrations through dedicated HTTP endpoints.
@@ -52,7 +52,6 @@ package main
 import (
 	"embed"
 	"flag"
-	"fmt"
 	"log"
 	"mime"
 	"os"
@@ -81,28 +80,24 @@ var uiContent embed.FS
 // Command line flags
 var (
 	port          string   // Port to run the server on
-	configPath    string   // Path to the config file
-	pluginsToLoad []string // Path to the plugins
+	appDir        string   // Application data directory
+	pluginsToLoad []string // Plugins to load
 )
 
 // init initializes command line flags and validates required configuration.
 // It sets up the following flags:
-//   - pool-size: Initial connection pool size (default: 300)
 //   - port: Server port (default: 8080)
-//   - config: Path to config file (required)
+//   - app-dir: Application data directory (default: current directory)
+//   - plugins: Comma-separated list of plugins to load
 func init() {
 	pluginString := ""
 
 	flag.StringVar(&port, "port", "8080", "Port to run the server on")
-	flag.StringVar(&configPath, "config", "", "Path to the config file")
+	flag.StringVar(&appDir, "app-dir", ".", "Application data directory (contains config.json and logs)")
 	flag.StringVar(&pluginString, "plugins", "", "Comma separated list of plugins to load")
 	flag.Parse()
 
 	pluginsToLoad = strings.Split(pluginString, ",")
-
-	if configPath == "" {
-		log.Fatalf("config path is required")
-	}
 }
 
 // registerCollectorSafely attempts to register a Prometheus collector,
@@ -238,6 +233,15 @@ func uiHandler(ctx *fasthttp.RequestCtx) {
 //   - POST /v1/chat/completions: For chat completion requests
 //   - GET /metrics: For Prometheus metrics
 func main() {
+	// Ensure app directory exists
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		log.Fatalf("failed to create app directory %s: %v", appDir, err)
+	}
+
+	// Derive paths from app-dir
+	configPath := filepath.Join(appDir, "config.json")
+	logDir := filepath.Join(appDir, "logs")
+
 	// Register Prometheus collectors
 	registerCollectorSafely(collectors.NewGoCollector())
 	registerCollectorSafely(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
@@ -253,7 +257,7 @@ func main() {
 	// Load configuration from JSON file into the store with full preprocessing
 	// This processes environment variables and stores all configurations in memory for ultra-fast access
 	if err := store.LoadFromConfig(configPath); err != nil {
-		log.Fatalf("failed to load config into store: %v", err)
+		log.Fatalf("failed to load config: %v", err)
 	}
 
 	// Create account backed by the high-performance store (all processing is done in LoadFromConfig)
@@ -288,7 +292,14 @@ func main() {
 	log.Println("Prometheus Go/Process collectors registered.")
 
 	promPlugin := telemetry.NewPrometheusPlugin()
-	loggingPlugin, err := logging.NewLoggerPlugin(nil)
+
+	// Initialize logging plugin with app-dir based path
+	loggingConfig := &logging.Config{
+		DatabasePath: logDir,
+		LogQueueSize: 1000,
+	}
+
+	loggingPlugin, err := logging.NewLoggerPlugin(loggingConfig, logger)
 	if err != nil {
 		log.Fatalf("failed to initialize logging plugin: %v", err)
 	}
@@ -346,22 +357,12 @@ func main() {
 		handlers.SendError(ctx, fasthttp.StatusNotFound, "Route not found: "+string(ctx.Path()), logger)
 	}
 
-	server := &fasthttp.Server{
-		// A custom handler that applies CORS to all routes
-		Handler: func(ctx *fasthttp.RequestCtx) {
-			if string(ctx.Path()) == "/metrics" {
-				// Apply CORS even to metrics endpoint for monitoring dashboards
-				corsMiddleware(r.Handler)(ctx)
-				return
-			}
-			// Apply CORS middleware for all API routes
-			corsMiddleware(telemetry.PrometheusMiddleware(r.Handler))(ctx)
-		},
-	}
+	// Apply CORS middleware to all routes
+	corsHandler := corsMiddleware(r.Handler)
 
-	log.Println("Started Bifrost HTTP server on port", port)
-	if err := server.ListenAndServe(fmt.Sprintf(":%s", port)); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+	log.Printf("Starting server on port %s", port)
+	if err := fasthttp.ListenAndServe(":"+port, corsHandler); err != nil {
+		log.Fatalf("Error starting server: %v", err)
 	}
 
 	wsHandler.Stop()

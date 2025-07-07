@@ -1,6 +1,7 @@
 {
   "client": {
     "drop_excess_requests": false,
+    "initial_pool_size": 500,
     "prometheus_labels": ["model", "provider"]
   },
   "providers": {

@@ -11,7 +11,7 @@ Choose your preferred way to use Bifrost:
 | **🔧 Go Package**     | Direct integration, maximum control | 2 minutes  | [📖 Go Package Guide](quickstart/go-package.md)         |
 | **🌐 HTTP Transport** | Language-agnostic, microservices    | 30 seconds | [📖 HTTP Transport Guide](quickstart/http-transport.md) |
 
-**New to Bifrost?** Start with [⚡ Quick Start](quickstart/) to get running in under 30 seconds.
+**New to Bifrost?** Start with [⚡ Quick Start](quickstart/) to get running with zero configuration in under 30 seconds.
 
 ---
 
