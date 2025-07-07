@@ -40,7 +40,7 @@ func (baseAccount *BaseAccount) GetKeysForProvider(providerKey schemas.ModelProv
 		return nil, fmt.Errorf("store not initialized")
 	}
 
-	config, err := baseAccount.store.GetProviderConfig(providerKey)
+	config, err := baseAccount.store.GetProviderConfigRaw(providerKey)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func (baseAccount *BaseAccount) GetConfigForProvider(providerKey schemas.ModelPr
 		return nil, fmt.Errorf("store not initialized")
 	}
 
-	config, err := baseAccount.store.GetProviderConfig(providerKey)
+	config, err := baseAccount.store.GetProviderConfigRaw(providerKey)
 	if err != nil {
 		return nil, err
 	}

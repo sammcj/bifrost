@@ -50,7 +50,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -74,10 +73,9 @@ import (
 
 // Command line flags
 var (
-	initialPoolSize int      // Initial size of the connection pool
-	port            string   // Port to run the server on
-	configPath      string   // Path to the config file
-	pluginsToLoad   []string // Path to the plugins
+	port          string   // Port to run the server on
+	configPath    string   // Path to the config file
+	pluginsToLoad []string // Path to the plugins
 )
 
 // init initializes command line flags and validates required configuration.
@@ -88,7 +86,6 @@ var (
 func init() {
 	pluginString := ""
 
-	flag.IntVar(&initialPoolSize, "pool-size", 300, "Initial pool size for Bifrost")
 	flag.StringVar(&port, "port", "8080", "Port to run the server on")
 	flag.StringVar(&configPath, "config", "", "Path to the config file")
 	flag.StringVar(&pluginString, "plugins", "", "Comma separated list of plugins to load")
@@ -131,28 +128,6 @@ func main() {
 
 	logger := bifrost.NewDefaultLogger(schemas.LogLevelInfo)
 
-	// Define a struct to unmarshal the entire config file
-	var config struct {
-		Client struct {
-			DropExcessRequests bool     `json:"drop_excess_requests"`
-			PrometheusLabels   []string `json:"prometheus_labels"`
-		} `json:"client"`
-		Providers json.RawMessage    `json:"providers"`
-		MCP       *schemas.MCPConfig `json:"mcp"`
-	}
-
-	// Read and parse config
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		log.Fatalf("failed to read config file: %v", err)
-	}
-	if err := json.Unmarshal(data, &config); err != nil {
-		log.Fatalf("failed to parse config JSON: %v", err)
-	}
-
-	telemetry.InitPrometheusMetrics(config.Client.PrometheusLabels)
-	log.Println("Prometheus Go/Process collectors registered.")
-
 	// Initialize high-performance configuration store with caching
 	store, err := lib.NewConfigStore(logger)
 	if err != nil {
@@ -168,10 +143,6 @@ func main() {
 	// Create account backed by the high-performance store (all processing is done in LoadFromConfig)
 	// The account interface now benefits from ultra-fast config access times via in-memory storage
 	account := lib.NewBaseAccount(store)
-
-	// Get the processed MCP configuration from the store
-	// All environment variable processing is already done during LoadFromConfig
-	mcpConfig := store.GetMCPConfig()
 
 	loadedPlugins := []schemas.Plugin{}
 
@@ -197,6 +168,9 @@ func main() {
 		}
 	}
 
+	telemetry.InitPrometheusMetrics(store.ClientConfig.PrometheusLabels)
+	log.Println("Prometheus Go/Process collectors registered.")
+
 	promPlugin := telemetry.NewPrometheusPlugin()
 	loggingPlugin, err := logging.NewLoggerPlugin(nil)
 	if err != nil {
@@ -207,10 +181,10 @@ func main() {
 
 	client, err := bifrost.Init(schemas.BifrostConfig{
 		Account:            account,
-		InitialPoolSize:    initialPoolSize,
-		DropExcessRequests: config.Client.DropExcessRequests,
+		InitialPoolSize:    store.ClientConfig.InitialPoolSize,
+		DropExcessRequests: store.ClientConfig.DropExcessRequests,
 		Plugins:            loadedPlugins,
-		MCPConfig:          mcpConfig,
+		MCPConfig:          store.MCPConfig,
 		Logger:             logger,
 	})
 	if err != nil {
@@ -224,7 +198,7 @@ func main() {
 	completionHandler := handlers.NewCompletionHandler(client, logger)
 	mcpHandler := handlers.NewMCPHandler(client, logger, store)
 	integrationHandler := handlers.NewIntegrationHandler(client)
-	configHandler := handlers.NewConfigHandler(client, logger, configPath)
+	configHandler := handlers.NewConfigHandler(client, logger, store, configPath)
 	loggingHandler := handlers.NewLoggingHandler(loggingPlugin.GetPluginLogManager(), logger)
 	wsHandler := handlers.NewWebSocketHandler(loggingPlugin.GetPluginLogManager(), logger)
 

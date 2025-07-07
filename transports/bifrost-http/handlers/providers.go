@@ -5,6 +5,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
@@ -79,9 +80,6 @@ func (h *ProviderHandler) RegisterRoutes(r *router.Router) {
 	r.POST("/providers", h.AddProvider)
 	r.PUT("/providers/{provider}", h.UpdateProvider)
 	r.DELETE("/providers/{provider}", h.DeleteProvider)
-
-	// Configuration persistence
-	r.POST("/config/save", h.SaveConfig)
 }
 
 // ListProviders handles GET /providers - List all providers
@@ -93,8 +91,14 @@ func (h *ProviderHandler) ListProviders(ctx *fasthttp.RequestCtx) {
 	}
 
 	var providerResponses []ProviderResponse
+
+	// Sort providers alphabetically
+	sort.Slice(providers, func(i, j int) bool {
+		return string(providers[i]) < string(providers[j])
+	})
+
 	for _, provider := range providers {
-		config, err := h.store.GetProviderConfig(provider)
+		config, err := h.store.GetProviderConfigRedacted(provider)
 		if err != nil {
 			h.logger.Warn(fmt.Sprintf("Failed to get config for provider %s: %v", provider, err))
 			// Include provider even if config fetch fails
@@ -123,7 +127,7 @@ func (h *ProviderHandler) GetProvider(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	config, err := h.store.GetProviderConfig(provider)
+	config, err := h.store.GetProviderConfigRedacted(provider)
 	if err != nil {
 		SendError(ctx, fasthttp.StatusNotFound, fmt.Sprintf("Provider not found: %v", err), h.logger)
 		return
@@ -166,7 +170,7 @@ func (h *ProviderHandler) AddProvider(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Check if provider already exists
-	if _, err := h.store.GetProviderConfig(req.Provider); err == nil {
+	if _, err := h.store.GetProviderConfigRedacted(req.Provider); err == nil {
 		SendError(ctx, fasthttp.StatusConflict, fmt.Sprintf("Provider %s already exists", req.Provider), h.logger)
 		return
 	}
@@ -220,8 +224,8 @@ func (h *ProviderHandler) UpdateProvider(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	// Check if provider exists
-	oldConfig, err := h.store.GetProviderConfig(provider)
+	// Get the raw config to access actual values for merging with redacted request values
+	oldConfigRaw, err := h.store.GetProviderConfigRaw(provider)
 	if err != nil {
 		SendError(ctx, fasthttp.StatusNotFound, fmt.Sprintf("Provider not found: %v", err), h.logger)
 		return
@@ -229,24 +233,81 @@ func (h *ProviderHandler) UpdateProvider(ctx *fasthttp.RequestCtx) {
 
 	// Construct ProviderConfig from individual fields
 	config := lib.ProviderConfig{
-		Keys:                     oldConfig.Keys,
-		NetworkConfig:            oldConfig.NetworkConfig,
-		ConcurrencyAndBufferSize: oldConfig.ConcurrencyAndBufferSize,
+		Keys:                     oldConfigRaw.Keys,
+		NetworkConfig:            oldConfigRaw.NetworkConfig,
+		ConcurrencyAndBufferSize: oldConfigRaw.ConcurrencyAndBufferSize,
 	}
 
-	// Validate required keys (at least one key must be provided)
+	// For now, don't replace any environment keys - preserve all existing ones
+	// TODO: Implement proper tracking of which env keys should be dropped
+	envKeysToReplace := make(map[string]struct{})
+
+	// Validate and process keys
 	if req.Keys != nil {
 		if len(req.Keys) == 0 && provider != schemas.Vertex && provider != schemas.Ollama {
 			SendError(ctx, fasthttp.StatusBadRequest, "At least one API key is required", h.logger)
 			return
+		}
+
+		// Create a map of old keys by model patterns for quick lookup
+		oldKeysByModels := make(map[string][]schemas.Key)
+		for _, oldKey := range oldConfigRaw.Keys {
+			for _, model := range oldKey.Models {
+				oldKeysByModels[model] = append(oldKeysByModels[model], oldKey)
+			}
+		}
+
+		// Process each key in the request
+		for i, newKey := range req.Keys {
+			// If the key is redacted, try to find and use the old key for the same models
+			if lib.IsRedacted(newKey.Value) {
+				// Look for matching old keys
+				var matchingKeys []schemas.Key
+				for _, model := range newKey.Models {
+					if oldKeys, exists := oldKeysByModels[model]; exists {
+						matchingKeys = append(matchingKeys, oldKeys...)
+					}
+				}
+
+				// If we found matching keys, use the most appropriate one
+				if len(matchingKeys) > 0 {
+					// Try to find a key that matches all the same models
+					var bestMatch schemas.Key
+					bestMatchScore := 0
+
+					for _, oldKey := range matchingKeys {
+						// Calculate how many models match between the old and new key
+						matchCount := 0
+						oldModelsMap := make(map[string]bool)
+						for _, m := range oldKey.Models {
+							oldModelsMap[m] = true
+						}
+
+						for _, m := range newKey.Models {
+							if oldModelsMap[m] {
+								matchCount++
+							}
+						}
+
+						// Update best match if this key has more matching models
+						if matchCount > bestMatchScore {
+							bestMatch = oldKey
+							bestMatchScore = matchCount
+						}
+					}
+
+					// Use the best matching key's value
+					req.Keys[i].Value = bestMatch.Value
+				}
+			}
 		}
 		config.Keys = req.Keys
 	}
 
 	// Handle meta config if provided
 	if req.MetaConfig != nil && len(*req.MetaConfig) > 0 {
-		// Convert to appropriate meta config type based on provider
-		metaConfig, err := h.convertToProviderMetaConfig(provider, *req.MetaConfig)
+		// Merge new meta config with old, preserving redacted values
+		metaConfig, err := h.mergeMetaConfig(provider, oldConfigRaw.MetaConfig, *req.MetaConfig)
 		if err != nil {
 			SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid meta config: %v", err), h.logger)
 			return
@@ -273,14 +334,14 @@ func (h *ProviderHandler) UpdateProvider(ctx *fasthttp.RequestCtx) {
 	config.ProxyConfig = req.ProxyConfig
 
 	// Update provider config in store (env vars will be processed by store)
-	if err := h.store.UpdateProviderConfig(provider, config); err != nil {
+	if err := h.store.UpdateProviderConfig(provider, config, envKeysToReplace); err != nil {
 		h.logger.Warn(fmt.Sprintf("Failed to update provider %s: %v", provider, err))
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to update provider: %v", err), h.logger)
 		return
 	}
 
-	if config.ConcurrencyAndBufferSize.Concurrency != oldConfig.ConcurrencyAndBufferSize.Concurrency ||
-		config.ConcurrencyAndBufferSize.BufferSize != oldConfig.ConcurrencyAndBufferSize.BufferSize {
+	if config.ConcurrencyAndBufferSize.Concurrency != oldConfigRaw.ConcurrencyAndBufferSize.Concurrency ||
+		config.ConcurrencyAndBufferSize.BufferSize != oldConfigRaw.ConcurrencyAndBufferSize.BufferSize {
 		// Update concurrency and queue configuration in Bifrost
 		if err := h.client.UpdateProviderConcurrency(provider); err != nil {
 			// Note: Store update succeeded, continue but log the concurrency update failure
@@ -302,7 +363,7 @@ func (h *ProviderHandler) DeleteProvider(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Check if provider exists
-	if _, err := h.store.GetProviderConfig(provider); err != nil {
+	if _, err := h.store.GetProviderConfigRedacted(provider); err != nil {
 		SendError(ctx, fasthttp.StatusNotFound, fmt.Sprintf("Provider not found: %v", err), h.logger)
 		return
 	}
@@ -318,25 +379,6 @@ func (h *ProviderHandler) DeleteProvider(ctx *fasthttp.RequestCtx) {
 
 	response := ProviderResponse{
 		Name: provider,
-	}
-
-	SendJSON(ctx, response, h.logger)
-}
-
-// SaveConfig handles POST /config/save - Persist current configuration to JSON file
-func (h *ProviderHandler) SaveConfig(ctx *fasthttp.RequestCtx) {
-	// Save current configuration back to the original JSON file
-	if err := h.store.SaveConfig(); err != nil {
-		h.logger.Warn(fmt.Sprintf("Failed to save configuration: %v", err))
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to save configuration: %v", err), h.logger)
-		return
-	}
-
-	h.logger.Info("Configuration saved successfully")
-
-	response := map[string]interface{}{
-		"status":  "success",
-		"message": "Configuration saved successfully",
 	}
 
 	SendJSON(ctx, response, h.logger)
@@ -381,6 +423,96 @@ func (h *ProviderHandler) convertToProviderMetaConfig(provider schemas.ModelProv
 
 	default:
 		// For providers that don't support meta config, return nil
+		return nil, nil
+	}
+}
+
+// mergeMetaConfig merges new meta config with old, preserving values that are redacted in the new config
+func (h *ProviderHandler) mergeMetaConfig(provider schemas.ModelProvider, oldConfig *schemas.MetaConfig, newConfigMap map[string]interface{}) (*schemas.MetaConfig, error) {
+	if oldConfig == nil || len(newConfigMap) == 0 {
+		return h.convertToProviderMetaConfig(provider, newConfigMap)
+	}
+
+	switch provider {
+	case schemas.Azure:
+		var newAzureConfig meta.AzureMetaConfig
+		newConfigJSON, _ := json.Marshal(newConfigMap)
+		if err := json.Unmarshal(newConfigJSON, &newAzureConfig); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal new Azure meta config: %w", err)
+		}
+
+		oldAzureConfig, ok := (*oldConfig).(*meta.AzureMetaConfig)
+		if !ok {
+			return nil, fmt.Errorf("existing meta config type mismatch: expected AzureMetaConfig")
+		}
+
+		// Preserve old values if new ones are redacted
+		if lib.IsRedacted(newAzureConfig.Endpoint) {
+			newAzureConfig.Endpoint = oldAzureConfig.Endpoint
+		}
+		if newAzureConfig.APIVersion != nil && oldAzureConfig.APIVersion != nil && lib.IsRedacted(*newAzureConfig.APIVersion) {
+			newAzureConfig.APIVersion = oldAzureConfig.APIVersion
+		}
+
+		var metaConfig schemas.MetaConfig = &newAzureConfig
+		return &metaConfig, nil
+
+	case schemas.Bedrock:
+		var newBedrockConfig meta.BedrockMetaConfig
+		newConfigJSON, _ := json.Marshal(newConfigMap)
+		if err := json.Unmarshal(newConfigJSON, &newBedrockConfig); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal new Bedrock meta config: %w", err)
+		}
+
+		oldBedrockConfig, ok := (*oldConfig).(*meta.BedrockMetaConfig)
+		if !ok {
+			return nil, fmt.Errorf("existing meta config type mismatch: expected BedrockMetaConfig")
+		}
+
+		// Preserve old values if new ones are redacted
+		if lib.IsRedacted(newBedrockConfig.SecretAccessKey) {
+			newBedrockConfig.SecretAccessKey = oldBedrockConfig.SecretAccessKey
+		}
+		if newBedrockConfig.Region != nil && oldBedrockConfig.Region != nil && lib.IsRedacted(*newBedrockConfig.Region) {
+			newBedrockConfig.Region = oldBedrockConfig.Region
+		}
+		if newBedrockConfig.SessionToken != nil && oldBedrockConfig.SessionToken != nil && lib.IsRedacted(*newBedrockConfig.SessionToken) {
+			newBedrockConfig.SessionToken = oldBedrockConfig.SessionToken
+		}
+		if newBedrockConfig.ARN != nil && oldBedrockConfig.ARN != nil && lib.IsRedacted(*newBedrockConfig.ARN) {
+			newBedrockConfig.ARN = oldBedrockConfig.ARN
+		}
+
+		var metaConfig schemas.MetaConfig = &newBedrockConfig
+		return &metaConfig, nil
+
+	case schemas.Vertex:
+		var newVertexConfig meta.VertexMetaConfig
+		newConfigJSON, _ := json.Marshal(newConfigMap)
+		if err := json.Unmarshal(newConfigJSON, &newVertexConfig); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal new Vertex meta config: %w", err)
+		}
+
+		oldVertexConfig, ok := (*oldConfig).(*meta.VertexMetaConfig)
+		if !ok {
+			return nil, fmt.Errorf("existing meta config type mismatch: expected VertexMetaConfig")
+		}
+
+		// Preserve old values if new ones are redacted
+		if lib.IsRedacted(newVertexConfig.ProjectID) {
+			newVertexConfig.ProjectID = oldVertexConfig.ProjectID
+		}
+		if lib.IsRedacted(newVertexConfig.Region) {
+			newVertexConfig.Region = oldVertexConfig.Region
+		}
+		if lib.IsRedacted(newVertexConfig.AuthCredentials) {
+			newVertexConfig.AuthCredentials = oldVertexConfig.AuthCredentials
+		}
+
+		var metaConfig schemas.MetaConfig = &newVertexConfig
+		return &metaConfig, nil
+
+	default:
 		return nil, nil
 	}
 }

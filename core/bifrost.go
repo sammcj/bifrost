@@ -959,6 +959,11 @@ func (bifrost *Bifrost) tryRequest(req *schemas.BifrostRequest, ctx context.Cont
 	}
 }
 
+// GetDropExcessRequests returns the current value of DropExcessRequests
+func (bifrost *Bifrost) GetDropExcessRequests() bool {
+	return bifrost.dropExcessRequests.Load()
+}
+
 // UpdateDropExcessRequests updates the DropExcessRequests setting at runtime.
 // This allows for hot-reloading of this configuration value.
 func (bifrost *Bifrost) UpdateDropExcessRequests(value bool) {
