@@ -33,15 +33,28 @@ type ConfigStore struct {
 	client     *bifrost.Bifrost
 
 	// In-memory storage
-	providers map[schemas.ModelProvider]ProviderConfig
-	mcpConfig *schemas.MCPConfig
+	ClientConfig ClientConfig
+	Providers    map[schemas.ModelProvider]ProviderConfig
+	MCPConfig    *schemas.MCPConfig
+
+	// Track which keys come from environment variables
+	EnvKeys map[string][]EnvKeyInfo
+}
+
+// EnvKeyInfo stores information about a key sourced from environment
+type EnvKeyInfo struct {
+	EnvVar     string // The environment variable name (without env. prefix)
+	Provider   string // The provider this key belongs to (empty for core/mcp configs)
+	KeyType    string // Type of key (e.g., "api_key", "meta_config", "connection_string")
+	ConfigPath string // Path in config where this env var is used
 }
 
 // NewConfigStore creates a new in-memory configuration store instance.
 func NewConfigStore(logger schemas.Logger) (*ConfigStore, error) {
 	return &ConfigStore{
 		logger:    logger,
-		providers: make(map[schemas.ModelProvider]ProviderConfig),
+		Providers: make(map[schemas.ModelProvider]ProviderConfig),
+		EnvKeys:   make(map[string][]EnvKeyInfo),
 	}, nil
 }
 
@@ -70,12 +83,22 @@ func (s *ConfigStore) LoadFromConfig(configPath string) error {
 
 	// Parse the JSON directly
 	var configData struct {
+		Client    json.RawMessage            `json:"client"`
 		Providers map[string]json.RawMessage `json:"providers"`
 		MCP       json.RawMessage            `json:"mcp,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &configData); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	// Process core configuration if present
+	if len(configData.Client) > 0 {
+		var clientConfig ClientConfig
+		if err := json.Unmarshal(configData.Client, &clientConfig); err != nil {
+			return fmt.Errorf("failed to unmarshal client config: %w", err)
+		}
+		s.ClientConfig = clientConfig
 	}
 
 	// Process provider configurations
@@ -102,12 +125,16 @@ func (s *ConfigStore) LoadFromConfig(configPath string) error {
 
 	// Process each provider configuration
 	for rawProviderName, cfg := range rawProviders {
+		newEnvKeys := make(map[string]struct{})
+
 		provider := schemas.ModelProvider(strings.ToLower(rawProviderName))
 
 		// Process meta config if it exists
 		if tempProvider, exists := tempConfig.Providers[rawProviderName]; exists && len(tempProvider.MetaConfig) > 0 {
-			processedMetaConfig, err := s.processMetaConfigEnvVars(tempProvider.MetaConfig, provider)
+			processedMetaConfig, envKeys, err := s.processMetaConfigEnvVars(tempProvider.MetaConfig, provider)
+
 			if err != nil {
+				s.cleanupEnvKeys(string(provider), "", envKeys)
 				s.logger.Warn(fmt.Sprintf("failed to process env vars in meta config for %s: %v", provider, err))
 				continue
 			}
@@ -115,7 +142,8 @@ func (s *ConfigStore) LoadFromConfig(configPath string) error {
 			// Parse and set the meta config
 			metaConfig, err := s.parseMetaConfig(processedMetaConfig, provider)
 			if err != nil {
-				s.logger.Warn(fmt.Sprintf("failed to parse meta config for %s: %v", provider, err))
+				s.cleanupEnvKeys(string(provider), "", envKeys)
+				s.logger.Warn(fmt.Sprintf("failed to process meta config for %s: %v", provider, err))
 				continue
 			} else {
 				cfg.MetaConfig = metaConfig
@@ -124,19 +152,31 @@ func (s *ConfigStore) LoadFromConfig(configPath string) error {
 
 		// Process environment variables in keys
 		for i, key := range cfg.Keys {
-			processedValue, err := s.replaceEnvValue(key.Value)
+			processedValue, envVar, err := s.processEnvValue(key.Value)
 			if err != nil {
+				s.cleanupEnvKeys(string(provider), "", newEnvKeys)
 				s.logger.Warn(fmt.Sprintf("failed to process env vars in keys for %s: %v", provider, err))
 				continue
 			}
 			cfg.Keys[i].Value = processedValue
+
+			// Track environment key if it came from env
+			if envVar != "" {
+				newEnvKeys[envVar] = struct{}{}
+				s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+					EnvVar:     envVar,
+					Provider:   string(provider),
+					KeyType:    "api_key",
+					ConfigPath: fmt.Sprintf("providers.%s.keys[%d]", provider, i),
+				})
+			}
 		}
 
 		processedProviders[provider] = cfg
 	}
 
 	// Store processed configurations in memory
-	s.providers = processedProviders
+	s.Providers = processedProviders
 
 	// Parse MCP config if present
 	if len(configData.MCP) > 0 {
@@ -145,13 +185,32 @@ func (s *ConfigStore) LoadFromConfig(configPath string) error {
 			s.logger.Warn(fmt.Sprintf("failed to parse MCP config: %v", err))
 		} else {
 			// Process environment variables in MCP config
-			s.mcpConfig = &mcpConfig
+			s.MCPConfig = &mcpConfig
 			s.processMCPEnvVars()
 		}
 	}
 
 	s.logger.Info("Successfully loaded configuration.")
 	return nil
+}
+
+// processEnvValue checks and replaces environment variable references in configuration values.
+// Returns the processed value and the environment variable name if it was an env reference.
+// Supports the "env.VARIABLE_NAME" syntax for referencing environment variables.
+// This enables secure configuration management without hardcoding sensitive values.
+//
+// Examples:
+//   - "env.OPENAI_API_KEY" -> actual value from OPENAI_API_KEY environment variable
+//   - "sk-1234567890" -> returned as-is (no env prefix)
+func (s *ConfigStore) processEnvValue(value string) (string, string, error) {
+	if strings.HasPrefix(value, "env.") {
+		envKey := strings.TrimPrefix(value, "env.")
+		if envValue := os.Getenv(envKey); envValue != "" {
+			return envValue, envKey, nil
+		}
+		return "", envKey, fmt.Errorf("environment variable %s not found", envKey)
+	}
+	return value, "", nil
 }
 
 // WriteConfigToFile writes the current in-memory configuration back to a JSON file
@@ -167,13 +226,15 @@ func (s *ConfigStore) WriteConfigToFile(configPath string) error {
 	output := struct {
 		Providers map[string]interface{} `json:"providers"`
 		MCP       *schemas.MCPConfig     `json:"mcp,omitempty"`
+		Client    ClientConfig           `json:"client,omitempty"`
 	}{
 		Providers: make(map[string]interface{}),
-		MCP:       s.mcpConfig,
+		MCP:       s.MCPConfig,
+		Client:    s.ClientConfig,
 	}
 
 	// Convert providers back to the original format
-	for provider, config := range s.providers {
+	for provider, config := range s.Providers {
 		providerName := string(provider)
 
 		// Create provider config without processed values (keep env.* references)
@@ -250,26 +311,6 @@ func (s *ConfigStore) parseMetaConfig(rawMetaConfig json.RawMessage, provider sc
 	return nil, fmt.Errorf("unsupported provider for meta config: %s", provider)
 }
 
-// replaceEnvValue checks and replaces environment variable references in configuration values.
-// Supports the "env.VARIABLE_NAME" syntax for referencing environment variables.
-// This enables secure configuration management without hardcoding sensitive values.
-//
-// Examples:
-//   - "env.OPENAI_API_KEY" -> actual value from OPENAI_API_KEY environment variable
-//   - "sk-1234567890" -> returned as-is (no env prefix)
-//
-// Returns an error if the referenced environment variable is not found.
-func (s *ConfigStore) replaceEnvValue(value string) (string, error) {
-	if strings.HasPrefix(value, "env.") {
-		envKey := strings.TrimPrefix(value, "env.")
-		if envValue := os.Getenv(envKey); envValue != "" {
-			return envValue, nil
-		}
-		return "", fmt.Errorf("environment variable %s not found", envKey)
-	}
-	return value, nil
-}
-
 // processMetaConfigEnvVars processes environment variables in provider-specific meta configurations.
 // This method handles the provider-specific meta config structures and processes environment
 // variables in their fields, ensuring type safety and proper field handling.
@@ -281,111 +322,196 @@ func (s *ConfigStore) replaceEnvValue(value string) (string, error) {
 //
 // For unsupported providers, the meta config is returned unchanged.
 // This approach ensures type safety while supporting environment variable substitution.
-func (s *ConfigStore) processMetaConfigEnvVars(rawMetaConfig json.RawMessage, provider schemas.ModelProvider) (json.RawMessage, error) {
+func (s *ConfigStore) processMetaConfigEnvVars(rawMetaConfig json.RawMessage, provider schemas.ModelProvider) (json.RawMessage, map[string]struct{}, error) {
+	// Track new environment variables
+	newEnvKeys := make(map[string]struct{})
+
 	switch provider {
 	case schemas.Azure:
 		var azureMetaConfig meta.AzureMetaConfig
 		if err := json.Unmarshal(rawMetaConfig, &azureMetaConfig); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal Azure meta config: %w", err)
+			return nil, newEnvKeys, fmt.Errorf("failed to unmarshal Azure meta config: %w", err)
 		}
 
-		endpoint, err := s.replaceEnvValue(azureMetaConfig.Endpoint)
+		endpoint, envVar, err := s.processEnvValue(azureMetaConfig.Endpoint)
 		if err != nil {
-			return nil, err
+			return nil, newEnvKeys, err
+		}
+		if envVar != "" {
+			newEnvKeys[envVar] = struct{}{}
+			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+				EnvVar:     envVar,
+				Provider:   string(provider),
+				KeyType:    "meta_config",
+				ConfigPath: fmt.Sprintf("providers.%s.meta_config.endpoint", provider),
+			})
 		}
 		azureMetaConfig.Endpoint = endpoint
+
 		if azureMetaConfig.APIVersion != nil {
-			apiVersion, err := s.replaceEnvValue(*azureMetaConfig.APIVersion)
+			apiVersion, envVar, err := s.processEnvValue(*azureMetaConfig.APIVersion)
 			if err != nil {
-				return nil, err
+				return nil, newEnvKeys, err
+			}
+			if envVar != "" {
+				newEnvKeys[envVar] = struct{}{}
+				s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+					EnvVar:     envVar,
+					Provider:   string(provider),
+					KeyType:    "meta_config",
+					ConfigPath: fmt.Sprintf("providers.%s.meta_config.api_version", provider),
+				})
 			}
 			azureMetaConfig.APIVersion = &apiVersion
 		}
 
 		processedJSON, err := json.Marshal(azureMetaConfig)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal processed Azure meta config: %w", err)
+			return nil, newEnvKeys, fmt.Errorf("failed to marshal processed Azure meta config: %w", err)
 		}
-		return processedJSON, nil
+		return processedJSON, newEnvKeys, nil
 
 	case schemas.Bedrock:
 		var bedrockMetaConfig meta.BedrockMetaConfig
 		if err := json.Unmarshal(rawMetaConfig, &bedrockMetaConfig); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal Bedrock meta config: %w", err)
+			return nil, newEnvKeys, fmt.Errorf("failed to unmarshal Bedrock meta config: %w", err)
 		}
 
-		secretAccessKey, err := s.replaceEnvValue(bedrockMetaConfig.SecretAccessKey)
+		secretAccessKey, envVar, err := s.processEnvValue(bedrockMetaConfig.SecretAccessKey)
 		if err != nil {
-			return nil, err
+			return nil, newEnvKeys, err
+		}
+		if envVar != "" {
+			newEnvKeys[envVar] = struct{}{}
+			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+				EnvVar:     envVar,
+				Provider:   string(provider),
+				KeyType:    "meta_config",
+				ConfigPath: fmt.Sprintf("providers.%s.meta_config.secret_access_key", provider),
+			})
 		}
 		bedrockMetaConfig.SecretAccessKey = secretAccessKey
 
 		if bedrockMetaConfig.Region != nil {
-			region, err := s.replaceEnvValue(*bedrockMetaConfig.Region)
+			region, envVar, err := s.processEnvValue(*bedrockMetaConfig.Region)
 			if err != nil {
-				return nil, err
+				return nil, newEnvKeys, err
+			}
+			if envVar != "" {
+				newEnvKeys[envVar] = struct{}{}
+				s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+					EnvVar:     envVar,
+					Provider:   string(provider),
+					KeyType:    "meta_config",
+					ConfigPath: fmt.Sprintf("providers.%s.meta_config.region", provider),
+				})
 			}
 			bedrockMetaConfig.Region = &region
 		}
 
 		if bedrockMetaConfig.SessionToken != nil {
-			sessionToken, err := s.replaceEnvValue(*bedrockMetaConfig.SessionToken)
+			sessionToken, envVar, err := s.processEnvValue(*bedrockMetaConfig.SessionToken)
 			if err != nil {
-				return nil, err
+				return nil, newEnvKeys, err
+			}
+			if envVar != "" {
+				newEnvKeys[envVar] = struct{}{}
+				s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+					EnvVar:     envVar,
+					Provider:   string(provider),
+					KeyType:    "meta_config",
+					ConfigPath: fmt.Sprintf("providers.%s.meta_config.session_token", provider),
+				})
 			}
 			bedrockMetaConfig.SessionToken = &sessionToken
 		}
 
 		if bedrockMetaConfig.ARN != nil {
-			arn, err := s.replaceEnvValue(*bedrockMetaConfig.ARN)
+			arn, envVar, err := s.processEnvValue(*bedrockMetaConfig.ARN)
 			if err != nil {
-				return nil, err
+				return nil, newEnvKeys, err
+			}
+			if envVar != "" {
+				newEnvKeys[envVar] = struct{}{}
+				s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+					EnvVar:     envVar,
+					Provider:   string(provider),
+					KeyType:    "meta_config",
+					ConfigPath: fmt.Sprintf("providers.%s.meta_config.arn", provider),
+				})
 			}
 			bedrockMetaConfig.ARN = &arn
 		}
 
 		processedJSON, err := json.Marshal(bedrockMetaConfig)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal processed Bedrock meta config: %w", err)
+			return nil, newEnvKeys, fmt.Errorf("failed to marshal processed Bedrock meta config: %w", err)
 		}
-		return processedJSON, nil
+		return processedJSON, newEnvKeys, nil
 
 	case schemas.Vertex:
 		var vertexMetaConfig meta.VertexMetaConfig
 		if err := json.Unmarshal(rawMetaConfig, &vertexMetaConfig); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal Vertex meta config: %w", err)
+			return nil, newEnvKeys, fmt.Errorf("failed to unmarshal Vertex meta config: %w", err)
 		}
 
-		projectID, err := s.replaceEnvValue(vertexMetaConfig.ProjectID)
+		projectID, envVar, err := s.processEnvValue(vertexMetaConfig.ProjectID)
 		if err != nil {
-			return nil, err
+			return nil, newEnvKeys, err
+		}
+		if envVar != "" {
+			newEnvKeys[envVar] = struct{}{}
+			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+				EnvVar:     envVar,
+				Provider:   string(provider),
+				KeyType:    "meta_config",
+				ConfigPath: fmt.Sprintf("providers.%s.meta_config.project_id", provider),
+			})
 		}
 		vertexMetaConfig.ProjectID = projectID
 
-		region, err := s.replaceEnvValue(vertexMetaConfig.Region)
+		region, envVar, err := s.processEnvValue(vertexMetaConfig.Region)
 		if err != nil {
-			return nil, err
+			return nil, newEnvKeys, err
+		}
+		if envVar != "" {
+			newEnvKeys[envVar] = struct{}{}
+			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+				EnvVar:     envVar,
+				Provider:   string(provider),
+				KeyType:    "meta_config",
+				ConfigPath: fmt.Sprintf("providers.%s.meta_config.region", provider),
+			})
 		}
 		vertexMetaConfig.Region = region
 
-		authCredentials, err := s.replaceEnvValue(vertexMetaConfig.AuthCredentials)
+		authCredentials, envVar, err := s.processEnvValue(vertexMetaConfig.AuthCredentials)
 		if err != nil {
-			return nil, err
+			return nil, newEnvKeys, err
+		}
+		if envVar != "" {
+			newEnvKeys[envVar] = struct{}{}
+			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+				EnvVar:     envVar,
+				Provider:   string(provider),
+				KeyType:    "meta_config",
+				ConfigPath: fmt.Sprintf("providers.%s.meta_config.auth_credentials", provider),
+			})
 		}
 		vertexMetaConfig.AuthCredentials = authCredentials
 
 		processedJSON, err := json.Marshal(vertexMetaConfig)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal processed Vertex meta config: %w", err)
+			return nil, newEnvKeys, fmt.Errorf("failed to marshal processed Vertex meta config: %w", err)
 		}
-		return processedJSON, nil
+		return processedJSON, newEnvKeys, nil
 	}
 
-	return rawMetaConfig, nil
+	return rawMetaConfig, newEnvKeys, nil
 }
 
-// GetProviderConfig retrieves a fully processed provider configuration from memory.
-// This is the primary method called by the account interface and is optimized for minimal latency.
+// GetProviderConfigRaw retrieves the raw, unredacted provider configuration from memory.
+// This method is for internal use only, particularly by the account implementation.
 //
 // Performance characteristics:
 //   - Memory access: ultra-fast direct memory access
@@ -393,78 +519,166 @@ func (s *ConfigStore) processMetaConfigEnvVars(rawMetaConfig json.RawMessage, pr
 //   - Thread-safe with read locks for concurrent access
 //
 // Returns a copy of the configuration to prevent external modifications.
-func (s *ConfigStore) GetProviderConfig(provider schemas.ModelProvider) (*ProviderConfig, error) {
+func (s *ConfigStore) GetProviderConfigRaw(provider schemas.ModelProvider) (*ProviderConfig, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	config, exists := s.providers[provider]
+	config, exists := s.Providers[provider]
 	if !exists {
 		return nil, fmt.Errorf("provider %s not found", provider)
 	}
 
-	// Return a copy to prevent external modifications
-	configCopy := config
-	return &configCopy, nil
+	// Return direct reference for maximum performance - this is used by Bifrost core
+	// CRITICAL: Never modify the returned data as it's shared
+	return &config, nil
 }
 
-// GetAllProviders returns all configured providers.
+// GetProviderConfigRedacted retrieves a provider configuration with sensitive values redacted.
+// This method is intended for external API responses and logging.
+//
+// The returned configuration has sensitive values redacted:
+// - API keys are redacted using RedactKey()
+// - Values from environment variables show the original env var name (env.VAR_NAME)
+//
+// Returns a new copy with redacted values that is safe to expose externally.
+func (s *ConfigStore) GetProviderConfigRedacted(provider schemas.ModelProvider) (*ProviderConfig, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	config, exists := s.Providers[provider]
+	if !exists {
+		return nil, fmt.Errorf("provider %s not found", provider)
+	}
+
+	// Create a map for quick lookup of env vars for this provider
+	envVarsByPath := make(map[string]string)
+	for envVar, infos := range s.EnvKeys {
+		for _, info := range infos {
+			if info.Provider == string(provider) {
+				envVarsByPath[info.ConfigPath] = envVar
+			}
+		}
+	}
+
+	// Create redacted config with same structure but redacted values
+	redactedConfig := ProviderConfig{
+		NetworkConfig:            config.NetworkConfig,
+		ConcurrencyAndBufferSize: config.ConcurrencyAndBufferSize,
+	}
+
+	// Create redacted keys
+	redactedConfig.Keys = make([]schemas.Key, len(config.Keys))
+	for i, key := range config.Keys {
+		redactedConfig.Keys[i] = schemas.Key{
+			Models: key.Models, // Copy slice reference - read-only so safe
+			Weight: key.Weight,
+		}
+
+		path := fmt.Sprintf("providers.%s.keys[%d]", provider, i)
+		if envVar, ok := envVarsByPath[path]; ok {
+			redactedConfig.Keys[i].Value = "env." + envVar
+		} else {
+			redactedConfig.Keys[i].Value = RedactKey(key.Value)
+		}
+	}
+
+	// Handle meta config redaction if present
+	if config.MetaConfig != nil {
+		redactedMetaConfig := s.redactMetaConfig(provider, *config.MetaConfig, envVarsByPath)
+		redactedConfig.MetaConfig = &redactedMetaConfig
+	}
+
+	return &redactedConfig, nil
+}
+
+// redactMetaConfig creates a redacted copy of meta config based on provider type
+func (s *ConfigStore) redactMetaConfig(provider schemas.ModelProvider, metaConfig schemas.MetaConfig, envVarsByPath map[string]string) schemas.MetaConfig {
+	switch m := metaConfig.(type) {
+	case *meta.AzureMetaConfig:
+		azureConfig := *m // Copy the struct
+		path := fmt.Sprintf("providers.%s.meta_config.endpoint", provider)
+		if envVar, ok := envVarsByPath[path]; ok {
+			azureConfig.Endpoint = "env." + envVar
+		} else {
+			azureConfig.Endpoint = RedactKey(azureConfig.Endpoint)
+		}
+		if azureConfig.APIVersion != nil {
+			path = fmt.Sprintf("providers.%s.meta_config.api_version", provider)
+			if envVar, ok := envVarsByPath[path]; ok {
+				apiVersion := "env." + envVar
+				azureConfig.APIVersion = &apiVersion
+			}
+		}
+		return &azureConfig
+
+	case *meta.BedrockMetaConfig:
+		bedrockConfig := *m // Copy the struct
+		path := fmt.Sprintf("providers.%s.meta_config.secret_access_key", provider)
+		if envVar, ok := envVarsByPath[path]; ok {
+			bedrockConfig.SecretAccessKey = "env." + envVar
+		} else {
+			bedrockConfig.SecretAccessKey = RedactKey(bedrockConfig.SecretAccessKey)
+		}
+		if bedrockConfig.Region != nil {
+			path = fmt.Sprintf("providers.%s.meta_config.region", provider)
+			if envVar, ok := envVarsByPath[path]; ok {
+				region := "env." + envVar
+				bedrockConfig.Region = &region
+			}
+		}
+		if bedrockConfig.SessionToken != nil {
+			path = fmt.Sprintf("providers.%s.meta_config.session_token", provider)
+			if envVar, ok := envVarsByPath[path]; ok {
+				sessionToken := "env." + envVar
+				bedrockConfig.SessionToken = &sessionToken
+			} else {
+				sessionToken := RedactKey(*bedrockConfig.SessionToken)
+				bedrockConfig.SessionToken = &sessionToken
+			}
+		}
+		if bedrockConfig.ARN != nil {
+			path = fmt.Sprintf("providers.%s.meta_config.arn", provider)
+			if envVar, ok := envVarsByPath[path]; ok {
+				arn := "env." + envVar
+				bedrockConfig.ARN = &arn
+			}
+		}
+		return &bedrockConfig
+
+	case *meta.VertexMetaConfig:
+		vertexConfig := *m // Copy the struct
+		path := fmt.Sprintf("providers.%s.meta_config.project_id", provider)
+		if envVar, ok := envVarsByPath[path]; ok {
+			vertexConfig.ProjectID = "env." + envVar
+		}
+		path = fmt.Sprintf("providers.%s.meta_config.region", provider)
+		if envVar, ok := envVarsByPath[path]; ok {
+			vertexConfig.Region = "env." + envVar
+		}
+		path = fmt.Sprintf("providers.%s.meta_config.auth_credentials", provider)
+		if envVar, ok := envVarsByPath[path]; ok {
+			vertexConfig.AuthCredentials = "env." + envVar
+		} else {
+			vertexConfig.AuthCredentials = RedactKey(vertexConfig.AuthCredentials)
+		}
+		return &vertexConfig
+
+	default:
+		return metaConfig
+	}
+}
+
+// GetAllProviders returns all configured provider names.
 func (s *ConfigStore) GetAllProviders() ([]schemas.ModelProvider, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	providers := make([]schemas.ModelProvider, 0, len(s.providers))
-	for provider := range s.providers {
+	providers := make([]schemas.ModelProvider, 0, len(s.Providers))
+	for provider := range s.Providers {
 		providers = append(providers, provider)
 	}
 
 	return providers, nil
-}
-
-// UpdateProviderConfig updates a provider configuration in memory with full environment
-// variable processing. This method is called when provider configurations are modified
-// via the HTTP API and ensures all data processing is done upfront.
-//
-// The method:
-//   - Processes environment variables in API keys and meta configurations
-//   - Stores the processed configuration in memory
-//   - Updates metadata and timestamps
-//   - Thread-safe operation with write locks
-func (s *ConfigStore) UpdateProviderConfig(provider schemas.ModelProvider, config ProviderConfig) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Process environment variables in keys
-	for i, key := range config.Keys {
-		processedValue, err := s.replaceEnvValue(key.Value)
-		if err != nil {
-			return fmt.Errorf("failed to process env var in key: %w", err)
-		}
-		config.Keys[i].Value = processedValue
-	}
-
-	// Process environment variables in meta config if present
-	if config.MetaConfig != nil {
-		rawMetaData, err := json.Marshal(*config.MetaConfig)
-		if err != nil {
-			return fmt.Errorf("failed to marshal meta config: %w", err)
-		}
-
-		processedMetaData, err := s.processMetaConfigEnvVars(rawMetaData, provider)
-		if err != nil {
-			return fmt.Errorf("failed to process env vars in meta config: %w", err)
-		}
-
-		metaConfig, err := s.parseMetaConfig(processedMetaData, provider)
-		if err != nil {
-			return fmt.Errorf("failed to parse processed meta config: %w", err)
-		}
-		config.MetaConfig = metaConfig
-	}
-
-	s.providers[provider] = config
-
-	s.logger.Info(fmt.Sprintf("Updated configuration for provider: %s", provider))
-	return nil
 }
 
 // AddProvider adds a new provider configuration to memory with full environment variable
@@ -480,18 +694,11 @@ func (s *ConfigStore) AddProvider(provider schemas.ModelProvider, config Provide
 	defer s.mu.Unlock()
 
 	// Check if provider already exists
-	if _, exists := s.providers[provider]; exists {
+	if _, exists := s.Providers[provider]; exists {
 		return fmt.Errorf("provider %s already exists", provider)
 	}
 
-	// Process environment variables in keys
-	for i, key := range config.Keys {
-		processedValue, err := s.replaceEnvValue(key.Value)
-		if err != nil {
-			return fmt.Errorf("failed to process env var in key: %w", err)
-		}
-		config.Keys[i].Value = processedValue
-	}
+	newEnvKeys := make(map[string]struct{})
 
 	// Process environment variables in meta config if present
 	if config.MetaConfig != nil {
@@ -500,21 +707,148 @@ func (s *ConfigStore) AddProvider(provider schemas.ModelProvider, config Provide
 			return fmt.Errorf("failed to marshal meta config: %w", err)
 		}
 
-		processedMetaData, err := s.processMetaConfigEnvVars(rawMetaData, provider)
+		processedMetaData, envKeys, err := s.processMetaConfigEnvVars(rawMetaData, provider)
+
+		newEnvKeys = envKeys
 		if err != nil {
+			s.cleanupEnvKeys(string(provider), "", newEnvKeys)
 			return fmt.Errorf("failed to process env vars in meta config: %w", err)
 		}
 
 		metaConfig, err := s.parseMetaConfig(processedMetaData, provider)
 		if err != nil {
+			s.cleanupEnvKeys(string(provider), "", newEnvKeys)
 			return fmt.Errorf("failed to parse processed meta config: %w", err)
 		}
 		config.MetaConfig = metaConfig
 	}
 
-	s.providers[provider] = config
+	// Process environment variables in keys
+	for i, key := range config.Keys {
+		processedValue, envVar, err := s.processEnvValue(key.Value)
+		if err != nil {
+			s.cleanupEnvKeys(string(provider), "", newEnvKeys)
+			return fmt.Errorf("failed to process env var in key: %w", err)
+		}
+		config.Keys[i].Value = processedValue
+
+		// Track environment key if it came from env
+		if envVar != "" {
+			newEnvKeys[envVar] = struct{}{}
+			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+				EnvVar:     envVar,
+				Provider:   string(provider),
+				KeyType:    "api_key",
+				ConfigPath: fmt.Sprintf("providers.%s.keys[%d]", provider, i),
+			})
+		}
+	}
+
+	s.Providers[provider] = config
 
 	s.logger.Info(fmt.Sprintf("Added provider: %s", provider))
+	return nil
+}
+
+// UpdateProviderConfig updates a provider configuration in memory with full environment
+// variable processing. This method is called when provider configurations are modified
+// via the HTTP API and ensures all data processing is done upfront.
+//
+// The method:
+//   - Processes environment variables in API keys and meta configurations
+//   - Stores the processed configuration in memory
+//   - Updates metadata and timestamps
+//   - Thread-safe operation with write locks
+//
+// Parameters:
+//   - provider: The provider to update
+//   - config: The new configuration
+//   - envKeysToReplace: Map of environment keys that should be replaced (only these will be cleaned up)
+func (s *ConfigStore) UpdateProviderConfig(provider schemas.ModelProvider, config ProviderConfig, envKeysToReplace map[string]struct{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Track new environment variables being added
+	newEnvKeys := make(map[string]struct{})
+
+	// Track which old env vars will be replaced (only those specified in envKeysToReplace)
+	oldEnvKeys := make(map[string]struct{})
+
+	// Process environment variables in meta config if present
+	if config.MetaConfig != nil {
+		rawMetaData, err := json.Marshal(*config.MetaConfig)
+		if err != nil {
+			return fmt.Errorf("failed to marshal meta config: %w", err)
+		}
+
+		// Find old meta config env vars that should be replaced
+		for envVar, infos := range s.EnvKeys {
+			for _, info := range infos {
+				if info.Provider == string(provider) && info.KeyType == "meta_config" {
+					if _, shouldReplace := envKeysToReplace[envVar]; shouldReplace {
+						oldEnvKeys[envVar] = struct{}{}
+					}
+				}
+			}
+		}
+
+		processedMetaData, envKeys, err := s.processMetaConfigEnvVars(rawMetaData, provider)
+		if err != nil {
+			s.cleanupEnvKeys(string(provider), "", envKeys) // Clean up only new vars on failure
+			return fmt.Errorf("failed to process env vars in meta config: %w", err)
+		}
+
+		metaConfig, err := s.parseMetaConfig(processedMetaData, provider)
+		if err != nil {
+			s.cleanupEnvKeys(string(provider), "", envKeys) // Clean up only new vars on failure
+			return fmt.Errorf("failed to parse processed meta config: %w", err)
+		}
+		config.MetaConfig = metaConfig
+
+		// Add the new env vars to tracking
+		for envVar := range envKeys {
+			newEnvKeys[envVar] = struct{}{}
+		}
+	}
+
+	// Find old API key env vars that should be replaced
+	for envVar, infos := range s.EnvKeys {
+		for _, info := range infos {
+			if info.Provider == string(provider) && info.KeyType == "api_key" {
+				if _, shouldReplace := envKeysToReplace[envVar]; shouldReplace {
+					oldEnvKeys[envVar] = struct{}{}
+				}
+			}
+		}
+	}
+
+	// Process environment variables in keys
+	for i, key := range config.Keys {
+		processedValue, envVar, err := s.processEnvValue(key.Value)
+		if err != nil {
+			s.cleanupEnvKeys(string(provider), "", newEnvKeys) // Clean up only new vars on failure
+			return fmt.Errorf("failed to process env var in key: %w", err)
+		}
+		config.Keys[i].Value = processedValue
+
+		// Track environment key if it came from env
+		if envVar != "" {
+			newEnvKeys[envVar] = struct{}{}
+			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+				EnvVar:     envVar,
+				Provider:   string(provider),
+				KeyType:    "api_key",
+				ConfigPath: fmt.Sprintf("providers.%s.keys[%d]", provider, i),
+			})
+		}
+	}
+
+	s.Providers[provider] = config
+
+	// Clean up old env vars that were replaced
+	s.cleanupEnvKeys(string(provider), "", oldEnvKeys)
+
+	s.logger.Info(fmt.Sprintf("Updated configuration for provider: %s", provider))
 	return nil
 }
 
@@ -523,11 +857,12 @@ func (s *ConfigStore) RemoveProvider(provider schemas.ModelProvider) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.providers[provider]; !exists {
+	if _, exists := s.Providers[provider]; !exists {
 		return fmt.Errorf("provider %s not found", provider)
 	}
 
-	delete(s.providers, provider)
+	delete(s.Providers, provider)
+	s.cleanupEnvKeys(string(provider), "", nil)
 
 	s.logger.Info(fmt.Sprintf("Removed provider: %s", provider))
 	return nil
@@ -542,19 +877,36 @@ func (s *ConfigStore) RemoveProvider(provider schemas.ModelProvider) error {
 //
 // Returns an error if any required environment variable is missing.
 // This approach ensures type safety while supporting environment variable substitution.
-func (s *ConfigStore) processMCPEnvVars() {
+func (s *ConfigStore) processMCPEnvVars() error {
+	var missingEnvVars []string
+
 	// Process each client config
-	for i, clientConfig := range s.mcpConfig.ClientConfigs {
+	for i, clientConfig := range s.MCPConfig.ClientConfigs {
 		// Process ConnectionString if present
 		if clientConfig.ConnectionString != nil {
-			newValue, err := s.replaceEnvValue(*clientConfig.ConnectionString)
+			newValue, envVar, err := s.processEnvValue(*clientConfig.ConnectionString)
 			if err != nil {
 				s.logger.Warn(fmt.Sprintf("failed to process env vars in MCP client %s: %v", clientConfig.Name, err))
+				missingEnvVars = append(missingEnvVars, envVar)
 				continue
 			}
-			s.mcpConfig.ClientConfigs[i].ConnectionString = &newValue
+			if envVar != "" {
+				s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+					EnvVar:     envVar,
+					Provider:   "",
+					KeyType:    "connection_string",
+					ConfigPath: fmt.Sprintf("mcp.client_configs[%d].connection_string", i),
+				})
+			}
+			s.MCPConfig.ClientConfigs[i].ConnectionString = &newValue
 		}
 	}
+
+	if len(missingEnvVars) > 0 {
+		return fmt.Errorf("missing environment variables: %v", missingEnvVars)
+	}
+
+	return nil
 }
 
 // SetBifrostClient sets the Bifrost client in the store.
@@ -565,13 +917,6 @@ func (s *ConfigStore) SetBifrostClient(client *bifrost.Bifrost) {
 	defer s.muMCP.Unlock()
 
 	s.client = client
-}
-
-// GetMCPConfig retrieves the processed MCP configuration from memory.
-// Returns nil if no MCP configuration was loaded.
-// The returned configuration has all environment variables already processed.
-func (s *ConfigStore) GetMCPConfig() *schemas.MCPConfig {
-	return s.mcpConfig
 }
 
 // AddMCPClient adds a new MCP client to the configuration.
@@ -589,16 +934,38 @@ func (s *ConfigStore) AddMCPClient(clientConfig schemas.MCPClientConfig) error {
 	s.muMCP.Lock()
 	defer s.muMCP.Unlock()
 
-	if s.mcpConfig == nil {
-		s.mcpConfig = &schemas.MCPConfig{}
+	if s.MCPConfig == nil {
+		s.MCPConfig = &schemas.MCPConfig{}
 	}
 
-	s.mcpConfig.ClientConfigs = append(s.mcpConfig.ClientConfigs, clientConfig)
-	s.processMCPEnvVars()
+	// Track new environment variables
+	newEnvKeys := make(map[string]struct{})
+
+	s.MCPConfig.ClientConfigs = append(s.MCPConfig.ClientConfigs, clientConfig)
+
+	// Process environment variables in the new client config
+	if clientConfig.ConnectionString != nil {
+		processedValue, envVar, err := s.processEnvValue(*clientConfig.ConnectionString)
+		if err != nil {
+			s.MCPConfig.ClientConfigs = s.MCPConfig.ClientConfigs[:len(s.MCPConfig.ClientConfigs)-1]
+			return fmt.Errorf("failed to process env var in connection string: %w", err)
+		}
+		if envVar != "" {
+			newEnvKeys[envVar] = struct{}{}
+			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+				EnvVar:     envVar,
+				Provider:   "",
+				KeyType:    "connection_string",
+				ConfigPath: fmt.Sprintf("mcp.client_configs.%s.connection_string", clientConfig.Name),
+			})
+		}
+		s.MCPConfig.ClientConfigs[len(s.MCPConfig.ClientConfigs)-1].ConnectionString = &processedValue
+	}
 
 	// Config with processed env vars
-	if err := s.client.AddMCPClient(s.mcpConfig.ClientConfigs[len(s.mcpConfig.ClientConfigs)-1]); err != nil {
-		s.mcpConfig.ClientConfigs = s.mcpConfig.ClientConfigs[:len(s.mcpConfig.ClientConfigs)-1]
+	if err := s.client.AddMCPClient(s.MCPConfig.ClientConfigs[len(s.MCPConfig.ClientConfigs)-1]); err != nil {
+		s.MCPConfig.ClientConfigs = s.MCPConfig.ClientConfigs[:len(s.MCPConfig.ClientConfigs)-1]
+		s.cleanupEnvKeys("", clientConfig.Name, newEnvKeys)
 		return fmt.Errorf("failed to add MCP client: %w", err)
 	}
 
@@ -620,7 +987,7 @@ func (s *ConfigStore) RemoveMCPClient(name string) error {
 	s.muMCP.Lock()
 	defer s.muMCP.Unlock()
 
-	if s.mcpConfig == nil {
+	if s.MCPConfig == nil {
 		return fmt.Errorf("no MCP config found")
 	}
 
@@ -628,12 +995,14 @@ func (s *ConfigStore) RemoveMCPClient(name string) error {
 		return fmt.Errorf("failed to remove MCP client: %w", err)
 	}
 
-	for i, clientConfig := range s.mcpConfig.ClientConfigs {
+	for i, clientConfig := range s.MCPConfig.ClientConfigs {
 		if clientConfig.Name == name {
-			s.mcpConfig.ClientConfigs = append(s.mcpConfig.ClientConfigs[:i], s.mcpConfig.ClientConfigs[i+1:]...)
+			s.MCPConfig.ClientConfigs = append(s.MCPConfig.ClientConfigs[:i], s.MCPConfig.ClientConfigs[i+1:]...)
 			break
 		}
 	}
+
+	s.cleanupEnvKeys("", name, nil)
 
 	return nil
 }
@@ -653,7 +1022,7 @@ func (s *ConfigStore) EditMCPClientTools(name string, toolsToAdd []string, tools
 	s.muMCP.Lock()
 	defer s.muMCP.Unlock()
 
-	if s.mcpConfig == nil {
+	if s.MCPConfig == nil {
 		return fmt.Errorf("no MCP config found")
 	}
 
@@ -661,13 +1030,144 @@ func (s *ConfigStore) EditMCPClientTools(name string, toolsToAdd []string, tools
 		return fmt.Errorf("failed to edit MCP client tools: %w", err)
 	}
 
-	for i, clientConfig := range s.mcpConfig.ClientConfigs {
+	for i, clientConfig := range s.MCPConfig.ClientConfigs {
 		if clientConfig.Name == name {
-			s.mcpConfig.ClientConfigs[i].ToolsToExecute = toolsToAdd
-			s.mcpConfig.ClientConfigs[i].ToolsToSkip = toolsToRemove
+			s.MCPConfig.ClientConfigs[i].ToolsToExecute = toolsToAdd
+			s.MCPConfig.ClientConfigs[i].ToolsToSkip = toolsToRemove
 			break
 		}
 	}
 
 	return nil
+}
+
+// RedactMCPClientConfig creates a redacted copy of an MCP client configuration.
+// Connection strings are either redacted or replaced with their environment variable names.
+func (s *ConfigStore) RedactMCPClientConfig(config schemas.MCPClientConfig) schemas.MCPClientConfig {
+	// Create a copy with basic fields
+	configCopy := schemas.MCPClientConfig{
+		Name:             config.Name,
+		ConnectionType:   config.ConnectionType,
+		ConnectionString: config.ConnectionString,
+		StdioConfig:      config.StdioConfig,
+		ToolsToExecute:   append([]string{}, config.ToolsToExecute...),
+		ToolsToSkip:      append([]string{}, config.ToolsToSkip...),
+	}
+
+	// Handle connection string if present
+	if config.ConnectionString != nil {
+		connStr := *config.ConnectionString
+
+		// Check if this value came from an env var
+		for envVar, infos := range s.EnvKeys {
+			for _, info := range infos {
+				if info.Provider == "" && info.KeyType == "connection_string" && info.ConfigPath == fmt.Sprintf("mcp.client_configs.%s.connection_string", config.Name) {
+					connStr = "env." + envVar
+					break
+				}
+			}
+		}
+
+		// If not from env var, redact it
+		if !strings.HasPrefix(connStr, "env.") {
+			connStr = RedactKey(connStr)
+		}
+		configCopy.ConnectionString = &connStr
+	}
+
+	return configCopy
+}
+
+// RedactKey redacts sensitive key values by showing only the first and last 4 characters
+func RedactKey(key string) string {
+	if key == "" {
+		return ""
+	}
+
+	// If key is 8 characters or less, just return all asterisks
+	if len(key) <= 8 {
+		return strings.Repeat("*", len(key))
+	}
+
+	// Show first 4 and last 4 characters, replace middle with asterisks
+	prefix := key[:4]
+	suffix := key[len(key)-4:]
+	middle := strings.Repeat("*", 24)
+
+	return prefix + middle + suffix
+}
+
+// IsRedacted checks if a key value is redacted, either by being an environment variable
+// reference (env.VAR_NAME) or containing the exact redaction pattern from RedactKey.
+func IsRedacted(key string) bool {
+	if key == "" {
+		return false
+	}
+
+	// Check if it's an environment variable reference
+	if strings.HasPrefix(key, "env.") {
+		return true
+	}
+
+	// Check for exact redaction pattern: 4 chars + 24 asterisks + 4 chars
+	if len(key) == 32 {
+		middle := key[4:28]
+		if middle == strings.Repeat("*", 24) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// cleanupEnvKeys removes environment variable entries from the store based on the given criteria.
+// If envVarsToRemove is nil, it removes all env vars for the specified provider/client.
+// If envVarsToRemove is provided, it only removes those specific env vars.
+//
+// Parameters:
+//   - provider: Provider name to clean up (empty string for MCP clients)
+//   - mcpClientName: MCP client name to clean up (empty string for providers)
+//   - envVarsToRemove: Optional map of specific env vars to remove (nil to remove all)
+func (s *ConfigStore) cleanupEnvKeys(provider string, mcpClientName string, envVarsToRemove map[string]struct{}) {
+	// If envVarsToRemove is provided, only clean those specific vars
+	if envVarsToRemove != nil {
+		for envVar := range envVarsToRemove {
+			s.cleanupEnvVar(envVar, provider, mcpClientName)
+		}
+		return
+	}
+
+	// If envVarsToRemove is nil, clean all vars for the provider/client
+	for envVar := range s.EnvKeys {
+		s.cleanupEnvVar(envVar, provider, mcpClientName)
+	}
+}
+
+// cleanupEnvVar removes entries for a specific environment variable based on provider/client.
+// This is a helper function to avoid duplicating the filtering logic.
+func (s *ConfigStore) cleanupEnvVar(envVar, provider, mcpClientName string) {
+	infos := s.EnvKeys[envVar]
+	if len(infos) == 0 {
+		return
+	}
+
+	// Keep entries that don't match the provider/client we're cleaning up
+	filteredInfos := make([]EnvKeyInfo, 0, len(infos))
+	for _, info := range infos {
+		shouldKeep := false
+		if provider != "" {
+			shouldKeep = info.Provider != provider
+		} else if mcpClientName != "" {
+			shouldKeep = info.Provider != "" || !strings.HasPrefix(info.ConfigPath, fmt.Sprintf("mcp.client_configs.%s", mcpClientName))
+		}
+		if shouldKeep {
+			filteredInfos = append(filteredInfos, info)
+		}
+	}
+
+	if len(filteredInfos) == 0 {
+		delete(s.EnvKeys, envVar)
+	} else {
+		s.EnvKeys[envVar] = filteredInfos
+	}
 }

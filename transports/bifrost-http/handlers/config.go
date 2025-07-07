@@ -3,11 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"slices"
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 )
 
@@ -16,15 +17,17 @@ import (
 type ConfigHandler struct {
 	client     *bifrost.Bifrost
 	logger     schemas.Logger
+	store      *lib.ConfigStore
 	configPath string
 }
 
 // NewConfigHandler creates a new handler for configuration management.
 // It requires the Bifrost client, a logger, and the path to the config file to be reloaded.
-func NewConfigHandler(client *bifrost.Bifrost, logger schemas.Logger, configPath string) *ConfigHandler {
+func NewConfigHandler(client *bifrost.Bifrost, logger schemas.Logger, store *lib.ConfigStore, configPath string) *ConfigHandler {
 	return &ConfigHandler{
 		client:     client,
 		logger:     logger,
+		store:      store,
 		configPath: configPath,
 	}
 }
@@ -32,34 +35,66 @@ func NewConfigHandler(client *bifrost.Bifrost, logger schemas.Logger, configPath
 // RegisterRoutes registers the configuration-related routes.
 // It adds the `PUT /config` endpoint.
 func (h *ConfigHandler) RegisterRoutes(r *router.Router) {
-	r.PUT("/config", h.handleReloadConfig)
+	r.GET("/config", h.GetConfig)
+	r.PUT("/config", h.handleUpdateConfig)
+	r.POST("/config/save", h.SaveConfig)
 }
 
-// handleReloadConfig re-reads the configuration file and applies updatable settings.
+// GetConfig handles GET /config - Get the current configuration
+func (h *ConfigHandler) GetConfig(ctx *fasthttp.RequestCtx) {
+	config := h.store.ClientConfig
+	SendJSON(ctx, config, h.logger)
+}
+
+// handleUpdateConfig updates the core configuration settings.
 // Currently, it supports hot-reloading of the `drop_excess_requests` setting.
 // Note that settings like `prometheus_labels` cannot be changed at runtime.
-func (h *ConfigHandler) handleReloadConfig(ctx *fasthttp.RequestCtx) {
-	var config struct {
-		BifrostSettings struct {
-			DropExcessRequests *bool `json:"drop_excess_requests,omitempty"`
-		} `json:"bifrost_settings"`
-	}
+func (h *ConfigHandler) handleUpdateConfig(ctx *fasthttp.RequestCtx) {
+	var req lib.ClientConfig
 
-	data, err := os.ReadFile(h.configPath)
-	if err != nil {
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to read config file: %v", err), h.logger)
+	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid request format: %v", err), h.logger)
 		return
 	}
 
-	if err := json.Unmarshal(data, &config); err != nil {
-		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("failed to parse config file: %v", err), h.logger)
-		return
+	// Get current config with proper locking
+	currentConfig := h.store.ClientConfig
+	updatedConfig := currentConfig
+
+	if req.DropExcessRequests != currentConfig.DropExcessRequests {
+		h.client.UpdateDropExcessRequests(req.DropExcessRequests)
+		updatedConfig.DropExcessRequests = req.DropExcessRequests
 	}
 
-	if config.BifrostSettings.DropExcessRequests != nil {
-		h.client.UpdateDropExcessRequests(*config.BifrostSettings.DropExcessRequests)
+	if !slices.Equal(req.PrometheusLabels, currentConfig.PrometheusLabels) {
+		updatedConfig.PrometheusLabels = req.PrometheusLabels
 	}
+
+	if req.InitialPoolSize != currentConfig.InitialPoolSize {
+		updatedConfig.InitialPoolSize = req.InitialPoolSize
+	}
+
+	// Update the store with the new config
+	h.store.ClientConfig = updatedConfig
 
 	ctx.SetStatusCode(fasthttp.StatusOK)
-	SendJSON(ctx, map[string]interface{}{"status": "config reloaded", "drop_excess_requests": config.BifrostSettings.DropExcessRequests}, h.logger)
+	SendJSON(ctx, map[string]any{
+		"status":  "success",
+		"message": "Configuration updated successfully",
+	}, h.logger)
+}
+
+// SaveConfig handles POST /config/save - Persist current configuration to JSON file
+func (h *ConfigHandler) SaveConfig(ctx *fasthttp.RequestCtx) {
+	// Save current configuration back to the original JSON file
+	if err := h.store.SaveConfig(); err != nil {
+		h.logger.Warn(fmt.Sprintf("Failed to save configuration: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to save configuration: %v", err), h.logger)
+		return
+	}
+
+	SendJSON(ctx, map[string]any{
+		"status":  "success",
+		"message": "Configuration saved successfully",
+	}, h.logger)
 }
