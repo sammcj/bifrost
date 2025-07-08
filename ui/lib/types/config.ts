@@ -117,6 +117,7 @@ export interface CoreConfig {
 	drop_excess_requests?: boolean;
 	initial_pool_size?: number;
 	prometheus_labels?: string;
+	log_queue_size?: number;
 }
 
 // Utility types for form handling

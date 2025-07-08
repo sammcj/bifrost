@@ -25,8 +25,7 @@ const EXAMPLES: Examples = {
 	curl: `curl -X POST http://localhost:8080/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [
       {"role": "user", "content": "Hello!"}
     ]

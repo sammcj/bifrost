@@ -104,7 +104,7 @@ export default function PluginsPage() {
 	return (
 		<div className="bg-background min-h-screen">
 			<Header title="Plugins" />
-			<div className="mx-auto max-w-7xl p-8 pt-0">
+			<div className="mx-auto max-w-7xl">
 				<div className="space-y-12">
 					{/* Hero Section */}
 					<div className="space-y-4 text-center">
@@ -354,7 +354,7 @@ export default function PluginsPage() {
 					</section>
 
 					{/* Community & Resources */}
-					<section className="from-primary/5 rounded-2xl bg-gradient-to-r to-blue-600/5 p-8">
+					<section className="from-primary/5 rounded-2xl bg-gradient-to-r to-green-600/5 p-8">
 						<div className="space-y-6 text-center">
 							<h2 className="text-3xl font-bold">Join the Plugin Ecosystem</h2>
 							<p className="text-muted-foreground mx-auto max-w-2xl text-lg">

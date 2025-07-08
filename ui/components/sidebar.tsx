@@ -19,7 +19,9 @@ import { Badge } from "@/components/ui/badge";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Icons } from "@/lib/constants/icons";
+import { useTheme } from "next-themes";
+import { useMemo, useState, useEffect } from "react";
+import Image from "next/image";
 
 // Main navigation items
 const navigationItems = [
@@ -67,6 +69,12 @@ const externalLinks = [
 
 export default function AppSidebar() {
 	const pathname = usePathname();
+	const [mounted, setMounted] = useState(false);
+	const { resolvedTheme } = useTheme();
+
+	useEffect(() => {
+		setMounted(true);
+	}, []);
 
 	const isActiveRoute = (url: string) => {
 		if (url === "/" && pathname === "/") return true;
@@ -74,12 +82,14 @@ export default function AppSidebar() {
 		return false;
 	};
 
+	// Always render the light theme version for SSR to avoid hydration mismatch
+	const logoSrc = mounted && resolvedTheme === "dark" ? "/bifrost-logo-dark.png" : "/bifrost-logo.png";
+
 	return (
 		<Sidebar className="border-border border-r">
 			<SidebarHeader className="flex h-12 justify-center">
-				<Link href="/" className="group flex items-center gap-2">
-					<div className="from-primary flex h-6 w-6 items-center justify-center">{Icons.bifrost}</div>
-					<h1 className="text-foreground text-lg leading-none font-bold">Bifrost</h1>
+				<Link href="/" className="group flex items-center gap-2 pl-1.5">
+					<Image className="h-10 w-auto" src={logoSrc} alt="Bifrost" width={100} height={100} />
 				</Link>
 			</SidebarHeader>
 
@@ -87,7 +97,7 @@ export default function AppSidebar() {
 
 			<SidebarContent>
 				<SidebarGroup>
-					<SidebarGroupLabel className="text-muted-foreground px-2 py-2 text-xs font-semibold tracking-wider uppercase">
+					<SidebarGroupLabel className="text-muted-foreground px-3 py-2 text-xs font-semibold tracking-wider uppercase">
 						Navigation
 					</SidebarGroupLabel>
 					<SidebarGroupContent>
@@ -137,7 +147,7 @@ export default function AppSidebar() {
 				<SidebarSeparator className="my-4" />
 
 				<SidebarGroup>
-					<SidebarGroupLabel className="text-muted-foreground px-2 py-2 text-xs font-semibold tracking-wider uppercase">
+					<SidebarGroupLabel className="text-muted-foreground px-3 py-2 text-xs font-semibold tracking-wider uppercase">
 						Resources
 					</SidebarGroupLabel>
 					<SidebarGroupContent>

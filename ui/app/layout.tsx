@@ -18,9 +18,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-	title: "Bifrost UI - AI Gateway Dashboard",
+	title: "Bifrost - The fastest LLM gateway",
 	description:
-		"Production-ready AI gateway that connects to 8+ providers through a single API. Get automatic failover, intelligent load balancing, and zero-downtime deployments.",
+		"Production-ready fastest LLM gateway that connects to 8+ providers through a single API. Get automatic failover, load balancing, mcp support and zero-downtime deployments.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -32,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 						<Toaster />
 						<SidebarProvider>
 							<Sidebar />
-							<main className="relative mx-auto flex min-h-screen w-5xl flex-col pt-24">{children}</main>
+							<main className="relative mx-auto flex min-h-screen w-5xl flex-col pt-24 pb-12">{children}</main>
 						</SidebarProvider>
 					</ThemeProvider>
 				</ProgressProvider>

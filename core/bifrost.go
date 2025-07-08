@@ -568,7 +568,12 @@ func (bifrost *Bifrost) GetMCPClients() ([]schemas.MCPClient, error) {
 //	})
 func (bifrost *Bifrost) AddMCPClient(config schemas.MCPClientConfig) error {
 	if bifrost.mcpManager == nil {
-		return fmt.Errorf("MCP is not configured in this Bifrost instance")
+		manager := &MCPManager{
+			clientMap: make(map[string]*MCPClient),
+			logger:    bifrost.logger,
+		}
+
+		bifrost.mcpManager = manager
 	}
 
 	return bifrost.mcpManager.AddClient(config)

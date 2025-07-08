@@ -72,7 +72,7 @@ func (h *MCPHandler) ExecuteTool(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, resp, h.logger)
 }
 
-// GetMCPClients handles GET /mcp/clients - Get all MCP clients
+// GetMCPClients handles GET /api/mcp/clients - Get all MCP clients
 func (h *MCPHandler) GetMCPClients(ctx *fasthttp.RequestCtx) {
 	// Get clients from store config
 	configsInStore := h.store.MCPConfig
@@ -120,7 +120,7 @@ func (h *MCPHandler) GetMCPClients(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, clients, h.logger)
 }
 
-// ReconnectMCPClient handles POST /mcp/client/{name}/reconnect - Reconnect an MCP client
+// ReconnectMCPClient handles POST /api/mcp/client/{name}/reconnect - Reconnect an MCP client
 func (h *MCPHandler) ReconnectMCPClient(ctx *fasthttp.RequestCtx) {
 	name, err := getNameFromCtx(ctx)
 	if err != nil {
@@ -139,7 +139,7 @@ func (h *MCPHandler) ReconnectMCPClient(ctx *fasthttp.RequestCtx) {
 	}, h.logger)
 }
 
-// AddMCPClient handles POST /mcp/client - Add a new MCP client
+// AddMCPClient handles POST /api/mcp/client - Add a new MCP client
 func (h *MCPHandler) AddMCPClient(ctx *fasthttp.RequestCtx) {
 	var req schemas.MCPClientConfig
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
@@ -152,13 +152,19 @@ func (h *MCPHandler) AddMCPClient(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	if err := h.store.SaveConfig(); err != nil {
+		h.logger.Warn(fmt.Sprintf("Failed to save configuration: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to save configuration: %v", err), h.logger)
+		return
+	}
+
 	SendJSON(ctx, map[string]any{
 		"status":  "success",
 		"message": "MCP client added successfully",
 	}, h.logger)
 }
 
-// EditMCPClientTools handles PUT /mcp/client/{name} - Edit MCP client tools
+// EditMCPClientTools handles PUT /api/mcp/client/{name} - Edit MCP client tools
 func (h *MCPHandler) EditMCPClientTools(ctx *fasthttp.RequestCtx) {
 	name, err := getNameFromCtx(ctx)
 	if err != nil {
@@ -180,13 +186,19 @@ func (h *MCPHandler) EditMCPClientTools(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	if err := h.store.SaveConfig(); err != nil {
+		h.logger.Warn(fmt.Sprintf("Failed to save configuration: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to save configuration: %v", err), h.logger)
+		return
+	}
+
 	SendJSON(ctx, map[string]any{
 		"status":  "success",
 		"message": "MCP client tools edited successfully",
 	}, h.logger)
 }
 
-// RemoveMCPClient handles DELETE /mcp/client/{name} - Remove an MCP client
+// RemoveMCPClient handles DELETE /api/mcp/client/{name} - Remove an MCP client
 func (h *MCPHandler) RemoveMCPClient(ctx *fasthttp.RequestCtx) {
 	name, err := getNameFromCtx(ctx)
 	if err != nil {
@@ -196,6 +208,12 @@ func (h *MCPHandler) RemoveMCPClient(ctx *fasthttp.RequestCtx) {
 
 	if err := h.store.RemoveMCPClient(name); err != nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to remove MCP client: %v", err), h.logger)
+		return
+	}
+
+	if err := h.store.SaveConfig(); err != nil {
+		h.logger.Warn(fmt.Sprintf("Failed to save configuration: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to save configuration: %v", err), h.logger)
 		return
 	}
 

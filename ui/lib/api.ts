@@ -93,6 +93,15 @@ class ApiService {
 		}
 	}
 
+	async getDroppedRequests(): ServiceResponse<{ dropped_requests: number }> {
+		try {
+			const response = await this.client.get("/logs/dropped");
+			return [response.data, null];
+		} catch (error) {
+			return [null, this.getErrorMessage(error)];
+		}
+	}
+
 	// Provider endpoints
 	async getProviders(): ServiceResponse<ListProvidersResponse> {
 		try {
@@ -186,14 +195,6 @@ class ApiService {
 	}
 
 	// Config endpoints
-	async saveConfig(): ServiceResponse<null> {
-		try {
-			await this.client.post("/config/save");
-			return [null, null];
-		} catch (error) {
-			return [null, this.getErrorMessage(error)];
-		}
-	}
 
 	async getCoreConfig(): ServiceResponse<CoreConfig> {
 		try {

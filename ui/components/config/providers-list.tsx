@@ -97,7 +97,7 @@ export default function ProvidersList({ providers, onRefresh }: ProvidersListPro
 					<TableBody>
 						{providers.length === 0 && (
 							<TableRow>
-								<TableCell colSpan={5} className="py-6 text-center">
+								<TableCell colSpan={6} className="py-6 text-center">
 									No providers found.
 								</TableCell>
 							</TableRow>
