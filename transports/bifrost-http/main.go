@@ -296,7 +296,7 @@ func main() {
 	// Initialize logging plugin with app-dir based path
 	loggingConfig := &logging.Config{
 		DatabasePath: logDir,
-		LogQueueSize: 1000,
+		LogQueueSize: store.ClientConfig.LogQueueSize,
 	}
 
 	loggingPlugin, err := logging.NewLoggerPlugin(loggingConfig, logger)

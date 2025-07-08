@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
@@ -25,6 +26,7 @@ const (
 	// Index types
 	ProviderIndex  = "provider:"
 	ModelIndex     = "model:"
+	ObjectIndex    = "object:"
 	TimestampIndex = "timestamp:"
 	StatusIndex    = "status:"
 	LatencyIndex   = "latency:"
@@ -119,15 +121,16 @@ type LogCallback func(*LogEntry)
 
 // LoggerPlugin implements the schemas.Plugin interface
 type LoggerPlugin struct {
-	config      *Config
-	db          *badger.DB
-	mu          sync.RWMutex
-	stats       *LogStats
-	logQueue    chan *LogEntry
-	done        chan struct{}
-	wg          sync.WaitGroup
-	logger      schemas.Logger
-	logCallback LogCallback // Callback for real-time log updates
+	config          *Config
+	db              *badger.DB
+	mu              sync.RWMutex
+	stats           *LogStats
+	logQueue        chan *LogEntry
+	done            chan struct{}
+	wg              sync.WaitGroup
+	logger          schemas.Logger
+	logCallback     LogCallback // Callback for real-time log updates
+	droppedRequests atomic.Int64
 }
 
 // NewLoggerPlugin creates a new logging plugin
@@ -151,7 +154,7 @@ func NewLoggerPlugin(config *Config, logger schemas.Logger) (*LoggerPlugin, erro
 	plugin := &LoggerPlugin{
 		config:   config,
 		db:       db,
-		logQueue: make(chan *LogEntry, config.LogQueueSize), // Buffer for 1000 log entries
+		logQueue: make(chan *LogEntry, config.LogQueueSize),
 		done:     make(chan struct{}),
 		logger:   logger,
 		stats: &LogStats{
@@ -277,8 +280,9 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 	// Calculate latency
 	latency := float64(time.Since(startTime).Milliseconds())
 
-	// Create log entry
+	// Create log entry with guaranteed unique ID
 	logEntry := &LogEntry{
+		ID:        uuid.New().String(), // Always generate a unique ID
 		Timestamp: startTime,
 	}
 
@@ -308,11 +312,20 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 		logEntry.Status = "success"
 
 		if result != nil {
-			logEntry.ID = result.ID
-			logEntry.Object = result.Object
+			// Use result ID if available, otherwise keep the generated UUID
+			if result.ID != "" {
+				logEntry.ID = result.ID
+			}
 			logEntry.Model = result.Model
 			logEntry.Latency = &latency
 			logEntry.TokenUsage = &result.Usage
+			logEntry.Object = result.Object
+
+			if ctx != nil && result.Object == "" {
+				if object, ok := (*ctx).Value(RequestObjectKey).(string); ok {
+					logEntry.Object = object
+				}
+			}
 
 			// Handle ExtraFields safely
 			// Set provider if available
@@ -324,10 +337,6 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 			if result.ExtraFields.Params.Tools != nil {
 				logEntry.Tools = result.ExtraFields.Params.Tools
 				logEntry.Params = &result.ExtraFields.Params
-
-				if result.ID == "" {
-					logEntry.ID = uuid.New().String()
-				}
 			}
 
 			// Extract chat history if available
@@ -350,10 +359,12 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 			if result.ExtraFields.ChatHistory != nil {
 				logEntry.InputHistory = *result.ExtraFields.ChatHistory
 			} else {
-				if chatHistory, ok := (*ctx).Value(RequestChatHistory).([]schemas.BifrostMessage); ok {
-					logEntry.InputHistory = chatHistory
-				} else {
-					logEntry.InputHistory = []schemas.BifrostMessage{}
+				if ctx != nil {
+					if chatHistory, ok := (*ctx).Value(RequestChatHistory).([]schemas.BifrostMessage); ok {
+						logEntry.InputHistory = chatHistory
+					} else {
+						logEntry.InputHistory = []schemas.BifrostMessage{}
+					}
 				}
 			}
 
@@ -371,6 +382,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 	default:
 		// Queue is full, log warning but don't block the request
 		p.logger.Warn("log queue is full, dropping log entry")
+		p.droppedRequests.Add(1)
 	}
 
 	return result, err, nil

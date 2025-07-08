@@ -49,6 +49,13 @@ type EnvKeyInfo struct {
 	ConfigPath string // Path in config where this env var is used
 }
 
+var DefaultClientConfig = ClientConfig{
+	DropExcessRequests: false,
+	PrometheusLabels:   []string{},
+	InitialPoolSize:    300,
+	LogQueueSize:       1000,
+}
+
 // NewConfigStore creates a new in-memory configuration store instance.
 func NewConfigStore(logger schemas.Logger) (*ConfigStore, error) {
 	return &ConfigStore{
@@ -83,14 +90,10 @@ func (s *ConfigStore) LoadFromConfig(configPath string) error {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			s.logger.Info(fmt.Sprintf("Config file %s not found, starting with default configuration. Providers can be added dynamically via API.", configPath))
+			s.logger.Info(fmt.Sprintf("Config file %s not found, starting with default configuration. Providers can be added dynamically via UI.", configPath))
 
 			// Initialize with default configuration
-			s.ClientConfig = ClientConfig{
-				DropExcessRequests: false,
-				PrometheusLabels:   []string{},
-				InitialPoolSize:    300,
-			}
+			s.ClientConfig = DefaultClientConfig
 			s.Providers = make(map[schemas.ModelProvider]ProviderConfig)
 			s.MCPConfig = nil
 
@@ -122,12 +125,7 @@ func (s *ConfigStore) LoadFromConfig(configPath string) error {
 		}
 		s.ClientConfig = clientConfig
 	} else {
-		// Default client configuration
-		s.ClientConfig = ClientConfig{
-			DropExcessRequests: false,
-			PrometheusLabels:   []string{},
-			InitialPoolSize:    300,
-		}
+		s.ClientConfig = DefaultClientConfig
 	}
 
 	// Process provider configurations
@@ -246,14 +244,22 @@ func (s *ConfigStore) processEnvValue(value string) (string, string, error) {
 	return value, "", nil
 }
 
-// WriteConfigToFile writes the current in-memory configuration back to a JSON file
+// writeConfigToFile writes the current in-memory configuration back to a JSON file
 // in the exact same format that LoadFromConfig expects. This enables persistence
-// of runtime configuration changes.
-func (s *ConfigStore) WriteConfigToFile(configPath string) error {
+// of runtime configuration changes with environment variable references restored.
+func (s *ConfigStore) writeConfigToFile(configPath string) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	s.logger.Info(fmt.Sprintf("Writing current configuration to: %s", configPath))
+
+	// Create a map for quick lookup of env vars by provider and path
+	envVarsByPath := make(map[string]string)
+	for envVar, infos := range s.EnvKeys {
+		for _, info := range infos {
+			envVarsByPath[info.ConfigPath] = envVar
+		}
+	}
 
 	// Prepare the output structure
 	output := struct {
@@ -262,17 +268,33 @@ func (s *ConfigStore) WriteConfigToFile(configPath string) error {
 		Client    ClientConfig           `json:"client,omitempty"`
 	}{
 		Providers: make(map[string]interface{}),
-		MCP:       s.MCPConfig,
+		MCP:       s.getRestoredMCPConfig(envVarsByPath),
 		Client:    s.ClientConfig,
 	}
 
-	// Convert providers back to the original format
+	// Convert providers back to the original format with env variable restoration
 	for provider, config := range s.Providers {
 		providerName := string(provider)
 
-		// Create provider config without processed values (keep env.* references)
+		// Create redacted keys that restore env.* references
+		redactedKeys := make([]schemas.Key, len(config.Keys))
+		for i, key := range config.Keys {
+			redactedKeys[i] = schemas.Key{
+				Models: key.Models,
+				Weight: key.Weight,
+			}
+
+			path := fmt.Sprintf("providers.%s.keys[%d]", provider, i)
+			if envVar, ok := envVarsByPath[path]; ok {
+				redactedKeys[i].Value = "env." + envVar
+			} else {
+				redactedKeys[i].Value = key.Value // Keep actual value, no asterisk redaction
+			}
+		}
+
+		// Create provider config with restored env references
 		providerConfig := map[string]interface{}{
-			"keys": config.Keys, // Note: This will contain actual values, not env refs
+			"keys": redactedKeys,
 		}
 
 		if config.NetworkConfig != nil {
@@ -283,8 +305,10 @@ func (s *ConfigStore) WriteConfigToFile(configPath string) error {
 			providerConfig["concurrency_and_buffer_size"] = config.ConcurrencyAndBufferSize
 		}
 
+		// Handle meta config with env variable restoration
 		if config.MetaConfig != nil {
-			providerConfig["meta_config"] = *config.MetaConfig
+			restoredMetaConfig := s.restoreMetaConfigEnvVars(provider, *config.MetaConfig, envVarsByPath)
+			providerConfig["meta_config"] = restoredMetaConfig
 		}
 
 		output.Providers[providerName] = providerConfig
@@ -305,12 +329,148 @@ func (s *ConfigStore) WriteConfigToFile(configPath string) error {
 	return nil
 }
 
+// getRestoredMCPConfig creates a copy of MCP config with env variable references restored
+func (s *ConfigStore) getRestoredMCPConfig(envVarsByPath map[string]string) *schemas.MCPConfig {
+	if s.MCPConfig == nil {
+		return nil
+	}
+
+	// Create a copy of the MCP config
+	mcpConfigCopy := &schemas.MCPConfig{
+		ClientConfigs: make([]schemas.MCPClientConfig, len(s.MCPConfig.ClientConfigs)),
+	}
+
+	// Process each client config
+	for i, clientConfig := range s.MCPConfig.ClientConfigs {
+		configCopy := schemas.MCPClientConfig{
+			Name:           clientConfig.Name,
+			ConnectionType: clientConfig.ConnectionType,
+			StdioConfig:    clientConfig.StdioConfig,
+			ToolsToExecute: append([]string{}, clientConfig.ToolsToExecute...),
+			ToolsToSkip:    append([]string{}, clientConfig.ToolsToSkip...),
+		}
+
+		// Handle connection string with env variable restoration
+		if clientConfig.ConnectionString != nil {
+			connStr := *clientConfig.ConnectionString
+			path := fmt.Sprintf("mcp.client_configs[%d].connection_string", i)
+			if envVar, ok := envVarsByPath[path]; ok {
+				connStr = "env." + envVar
+			}
+			// If not from env var, keep actual value (no asterisk redaction)
+			configCopy.ConnectionString = &connStr
+		}
+
+		mcpConfigCopy.ClientConfigs[i] = configCopy
+	}
+
+	return mcpConfigCopy
+}
+
+// restoreMetaConfigEnvVars creates a copy of meta config with env variable references restored
+func (s *ConfigStore) restoreMetaConfigEnvVars(provider schemas.ModelProvider, metaConfig schemas.MetaConfig, envVarsByPath map[string]string) interface{} {
+	switch m := metaConfig.(type) {
+	case *meta.AzureMetaConfig:
+		azureConfig := *m // Copy the struct
+
+		// Restore endpoint if it came from env var
+		path := fmt.Sprintf("providers.%s.meta_config.endpoint", provider)
+		if envVar, ok := envVarsByPath[path]; ok {
+			azureConfig.Endpoint = "env." + envVar
+		}
+		// Otherwise keep actual value (no asterisk redaction)
+
+		// Restore API version if it came from env var
+		if azureConfig.APIVersion != nil {
+			path = fmt.Sprintf("providers.%s.meta_config.api_version", provider)
+			if envVar, ok := envVarsByPath[path]; ok {
+				apiVersion := "env." + envVar
+				azureConfig.APIVersion = &apiVersion
+			}
+			// Otherwise keep actual value (no asterisk redaction)
+		}
+
+		return azureConfig
+
+	case *meta.BedrockMetaConfig:
+		bedrockConfig := *m // Copy the struct
+
+		// Restore secret access key if it came from env var
+		path := fmt.Sprintf("providers.%s.meta_config.secret_access_key", provider)
+		if envVar, ok := envVarsByPath[path]; ok {
+			bedrockConfig.SecretAccessKey = "env." + envVar
+		}
+		// Otherwise keep actual value (no asterisk redaction)
+
+		// Restore region if it came from env var
+		if bedrockConfig.Region != nil {
+			path = fmt.Sprintf("providers.%s.meta_config.region", provider)
+			if envVar, ok := envVarsByPath[path]; ok {
+				region := "env." + envVar
+				bedrockConfig.Region = &region
+			}
+			// Otherwise keep actual value (no asterisk redaction)
+		}
+
+		// Restore session token if it came from env var
+		if bedrockConfig.SessionToken != nil {
+			path = fmt.Sprintf("providers.%s.meta_config.session_token", provider)
+			if envVar, ok := envVarsByPath[path]; ok {
+				sessionToken := "env." + envVar
+				bedrockConfig.SessionToken = &sessionToken
+			}
+			// Otherwise keep actual value (no asterisk redaction)
+		}
+
+		// Restore ARN if it came from env var
+		if bedrockConfig.ARN != nil {
+			path = fmt.Sprintf("providers.%s.meta_config.arn", provider)
+			if envVar, ok := envVarsByPath[path]; ok {
+				arn := "env." + envVar
+				bedrockConfig.ARN = &arn
+			}
+			// Otherwise keep actual value (no asterisk redaction)
+		}
+
+		return bedrockConfig
+
+	case *meta.VertexMetaConfig:
+		vertexConfig := *m // Copy the struct
+
+		// Restore project ID if it came from env var
+		path := fmt.Sprintf("providers.%s.meta_config.project_id", provider)
+		if envVar, ok := envVarsByPath[path]; ok {
+			vertexConfig.ProjectID = "env." + envVar
+		}
+		// Otherwise keep actual value (no asterisk redaction)
+
+		// Restore region if it came from env var
+		path = fmt.Sprintf("providers.%s.meta_config.region", provider)
+		if envVar, ok := envVarsByPath[path]; ok {
+			vertexConfig.Region = "env." + envVar
+		}
+		// Otherwise keep actual value (no asterisk redaction)
+
+		// Restore auth credentials if it came from env var
+		path = fmt.Sprintf("providers.%s.meta_config.auth_credentials", provider)
+		if envVar, ok := envVarsByPath[path]; ok {
+			vertexConfig.AuthCredentials = "env." + envVar
+		}
+		// Otherwise keep actual value (no asterisk redaction)
+
+		return vertexConfig
+
+	default:
+		return metaConfig
+	}
+}
+
 // SaveConfig writes the current configuration back to the original config file path
 func (s *ConfigStore) SaveConfig() error {
 	if s.configPath == "" {
 		return fmt.Errorf("no config path set - use LoadFromConfig first")
 	}
-	return s.WriteConfigToFile(s.configPath)
+	return s.writeConfigToFile(s.configPath)
 }
 
 // parseMetaConfig converts raw JSON to the appropriate provider-specific meta config interface
@@ -1263,7 +1423,5 @@ func (s *ConfigStore) autoDetectProviders() {
 
 	if detectedCount > 0 {
 		s.logger.Info(fmt.Sprintf("Auto-configured %d provider(s) from environment variables", detectedCount))
-	} else {
-		s.logger.Info("No common provider environment variables detected. Use the web UI or configuration file to add providers.")
 	}
 }
