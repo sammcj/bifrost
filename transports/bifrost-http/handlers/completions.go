@@ -5,6 +5,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
@@ -29,12 +30,11 @@ func NewCompletionHandler(client *bifrost.Bifrost, logger schemas.Logger) *Compl
 
 // CompletionRequest represents a request for either text or chat completion
 type CompletionRequest struct {
-	Provider  schemas.ModelProvider    `json:"provider"`  // The AI model provider to use
+	Model     string                   `json:"model"`     // Model to use in "provider/model" format
 	Messages  []schemas.BifrostMessage `json:"messages"`  // Chat messages (for chat completion)
 	Text      string                   `json:"text"`      // Text input (for text completion)
-	Model     string                   `json:"model"`     // Model to use
 	Params    *schemas.ModelParameters `json:"params"`    // Additional model parameters
-	Fallbacks []schemas.Fallback       `json:"fallbacks"` // Fallback providers and models
+	Fallbacks []string                 `json:"fallbacks"` // Fallback providers and models in "provider/model" format
 }
 
 type CompletionType string
@@ -70,23 +70,39 @@ func (h *CompletionHandler) handleCompletion(ctx *fasthttp.RequestCtx, completio
 		return
 	}
 
-	// Validate required fields
-	if req.Provider == "" {
-		SendError(ctx, fasthttp.StatusBadRequest, "Provider is required", h.logger)
-		return
-	}
-
 	if req.Model == "" {
 		SendError(ctx, fasthttp.StatusBadRequest, "Model is required", h.logger)
 		return
 	}
 
+	model := strings.Split(req.Model, "/")
+	if len(model) != 2 {
+		SendError(ctx, fasthttp.StatusBadRequest, "Model must be in the format of 'provider/model'", h.logger)
+		return
+	}
+
+	provider := model[0]
+	modelName := model[1]
+
+	fallbacks := make([]schemas.Fallback, len(req.Fallbacks))
+	for i, fallback := range req.Fallbacks {
+		fallbackModel := strings.Split(fallback, "/")
+		if len(fallbackModel) != 2 {
+			SendError(ctx, fasthttp.StatusBadRequest, "Fallback must be in the format of 'provider/model'", h.logger)
+			return
+		}
+		fallbacks[i] = schemas.Fallback{
+			Provider: schemas.ModelProvider(fallbackModel[0]),
+			Model:    fallbackModel[1],
+		}
+	}
+
 	// Create BifrostRequest
 	bifrostReq := &schemas.BifrostRequest{
-		Provider:  req.Provider,
-		Model:     req.Model,
+		Model:     modelName,
+		Provider:  schemas.ModelProvider(provider),
 		Params:    req.Params,
-		Fallbacks: req.Fallbacks,
+		Fallbacks: fallbacks,
 	}
 
 	// Validate and set input based on completion type

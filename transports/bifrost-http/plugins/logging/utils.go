@@ -329,6 +329,7 @@ func (p *LoggerPlugin) searchByTimeRange(txn *badger.Txn, startTime, endTime *ti
 						return nil
 					}); err != nil {
 						// Log error but continue processing
+						p.logger.Debug(fmt.Sprintf("error getting log entry by ID: %v", err))
 					}
 				}
 			}
@@ -492,7 +493,8 @@ func (p *LoggerPlugin) searchByLatencyRange(txn *badger.Txn, minLatency, maxLate
 						idMap[string(val)] = true
 						return nil
 					}); err != nil {
-						// Log error but continue
+						// Log error but continue processing
+						p.logger.Debug(fmt.Sprintf("error getting log entry by ID: %v", err))
 					}
 				}
 			}
@@ -542,7 +544,8 @@ func (p *LoggerPlugin) searchByTokenRange(txn *badger.Txn, minTokens, maxTokens 
 						idMap[string(val)] = true
 						return nil
 					}); err != nil {
-						// Log error but continue
+						// Log error but continue processing
+						p.logger.Debug(fmt.Sprintf("error getting log entry by ID: %v", err))
 					}
 				}
 			}

@@ -132,8 +132,7 @@ docker run -p 8080:8080 maximhq/bifrost
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [{"role": "user", "content": "Hello, Bifrost!"}]
   }'
 ```
@@ -242,12 +241,12 @@ export ANTHROPIC_API_KEY="your-anthropic-key"
 # Use OpenAI
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"provider": "openai", "model": "gpt-4o-mini", "messages": [{"role": "user", "content": "Hello from OpenAI!"}]}'
+  -d '{"model": "openai/gpt-4o-mini", "messages": [{"role": "user", "content": "Hello from OpenAI!"}]}'
 
 # Use Anthropic
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"provider": "anthropic", "model": "claude-3-sonnet-20240229", "messages": [{"role": "user", "content": "Hello from Anthropic!"}]}'
+  -d '{"model": "anthropic/claude-3-sonnet-20240229", "messages": [{"role": "user", "content": "Hello from Anthropic!"}]}'
 ```
 
 ### **🔄 Add Automatic Fallbacks**
@@ -257,10 +256,9 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [{"role": "user", "content": "Hello!"}],
-    "fallbacks": [{"provider": "anthropic", "model": "claude-3-sonnet-20240229"}]
+    "fallbacks": ["anthropic/claude-3-sonnet-20240229"]
   }'
 ```
 
@@ -276,8 +274,7 @@ import requests
 response = requests.post(
     "http://localhost:8080/v1/chat/completions",
     json={
-        "provider": "openai",
-        "model": "gpt-4o-mini",
+        "model": "openai/gpt-4o-mini",
         "messages": [{"role": "user", "content": "Hello from Python!"}]
     }
 )
@@ -291,8 +288,7 @@ const response = await fetch("http://localhost:8080/v1/chat/completions", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    provider: "openai",
-    model: "gpt-4o-mini",
+    model: "openai/gpt-4o-mini",
     messages: [{ role: "user", content: "Hello from Node.js!" }],
   }),
 });
@@ -306,8 +302,7 @@ response, err := http.Post(
     "http://localhost:8080/v1/chat/completions",
     "application/json",
     strings.NewReader(`{
-        "provider": "openai",
-        "model": "gpt-4o-mini",
+        "model": "openai/gpt-4o-mini",
         "messages": [{"role": "user", "content": "Hello from Go!"}]
     }`)
 )

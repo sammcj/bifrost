@@ -134,8 +134,7 @@ export OPENAI_API_KEY=your_openai_api_key
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [{"role": "user", "content": "Hello from OpenAI!"}]
   }'
 ```
@@ -280,8 +279,7 @@ func useWithFallback(bf *bifrost.Bifrost) {
 response=$(curl -s -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [{"role": "user", "content": "Hello!"}]
   }')
 

@@ -209,8 +209,7 @@ Tools are automatically available in chat completions:
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [
       {"role": "user", "content": "List the files in the current directory"}
     ]
@@ -269,8 +268,7 @@ When MCP is configured, Bifrost automatically adds available tools to requests. 
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [
       {"role": "user", "content": "Can you list the files in the /tmp directory?"}
     ]
@@ -337,8 +335,7 @@ curl -X POST http://localhost:8080/v1/mcp/tool/execute \
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [
       {"role": "user", "content": "Can you list the files in the /tmp directory?"},
       {
@@ -394,8 +391,7 @@ Control which MCP tools are available per request using context:
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [
       {"role": "user", "content": "List files and search web"}
     ],
@@ -407,8 +403,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [
       {"role": "user", "content": "Help me with file operations"}
     ],
@@ -479,8 +474,7 @@ bifrost-http -config config.json -port 8080 -plugins maxim
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [
       {"role": "user", "content": "What files are in this directory?"}
     ]
@@ -563,8 +557,7 @@ docker logs bifrost-container | grep MCP
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [
       {
         "role": "user",

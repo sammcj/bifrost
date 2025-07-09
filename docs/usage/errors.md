@@ -221,8 +221,7 @@ client = BifrostClient("http://localhost:8080")
 
 try:
     response = client.chat_completion({
-        "provider": "openai",
-        "model": "gpt-4o-mini",
+        "model": "openai/gpt-4o-mini",
         "messages": [{"role": "user", "content": "Hello!"}]
     })
     print("Success:", response)

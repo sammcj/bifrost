@@ -70,8 +70,7 @@ docker run -p 8080:8080 -v $(pwd)/data:/app/data maximhq/bifrost
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
@@ -99,8 +98,7 @@ response = client.chat.completions.create(
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [{"role": "user", "content": "Hello!"}],
     "fallbacks": [
       {"provider": "anthropic", "model": "claude-3-5-sonnet-20241022"},
@@ -210,7 +208,7 @@ Enable AI models to use external tools like filesystem operations, web search, a
 ```bash
 # AI automatically uses configured tools
 curl -X POST http://localhost:8080/v1/chat/completions \
-  -d '{"provider": "openai", "model": "gpt-4o-mini",
+  -d '{"model": "openai/gpt-4o-mini",
        "messages": [{"role": "user", "content": "List files in /tmp"}]}'
 ```
 
