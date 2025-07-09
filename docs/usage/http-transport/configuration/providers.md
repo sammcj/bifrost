@@ -497,8 +497,7 @@ docker run -p 8080:8080 \
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [{"role": "user", "content": "Test message"}]
   }'
 
@@ -506,11 +505,10 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [{"role": "user", "content": "Test message"}],
     "fallbacks": [
-      {"provider": "anthropic", "model": "claude-3-sonnet-20240229"}
+      "anthropic/claude-3-sonnet-20240229"
     ]
   }'
 ```

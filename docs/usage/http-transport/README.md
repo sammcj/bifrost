@@ -28,7 +28,7 @@ open http://localhost:8080
 # Make requests to any provider
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"provider": "openai", "model": "gpt-4o-mini", "messages": [...]}'
+  -d '{"model": "openai/gpt-4o-mini", "messages": [...]}'
 ```
 
 ---
@@ -171,10 +171,9 @@ const response = await openai.chat.completions.create({
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [{"role": "user", "content": "Hello!"}],
-    "fallbacks": [{"provider": "anthropic", "model": "claude-3-sonnet-20240229"}]
+    "fallbacks": ["anthropic/claude-3-sonnet-20240229"]
   }'
 
 # OpenAI-compatible endpoint

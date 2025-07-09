@@ -37,8 +37,7 @@
                 "simple_chat": {
                   "summary": "Simple chat message",
                   "value": {
-                    "provider": "openai",
-                    "model": "gpt-4o",
+                    "model": "openai/gpt-4o",
                     "messages": [
                       {
                         "role": "user",
@@ -50,8 +49,7 @@
                 "tool_calling": {
                   "summary": "Chat with tool calling",
                   "value": {
-                    "provider": "openai",
-                    "model": "gpt-4o",
+                    "model": "openai/gpt-4o",
                     "messages": [
                       {
                         "role": "user",
@@ -90,8 +88,7 @@
                 "with_fallbacks": {
                   "summary": "Chat with fallback providers",
                   "value": {
-                    "provider": "openai",
-                    "model": "gpt-4o",
+                    "model": "openai/gpt-4o",
                     "messages": [
                       {
                         "role": "user",
@@ -113,8 +110,7 @@
                 "structured_content": {
                   "summary": "Chat with structured content (text and image)",
                   "value": {
-                    "provider": "openai",
-                    "model": "gpt-4o",
+                    "model": "openai/gpt-4o",
                     "messages": [
                       {
                         "role": "user",
@@ -258,8 +254,7 @@
                 "simple_text": {
                   "summary": "Simple text completion",
                   "value": {
-                    "provider": "openai",
-                    "model": "gpt-3.5-turbo-instruct",
+                    "model": "openai/gpt-3.5-turbo-instruct",
                     "text": "The future of artificial intelligence is",
                     "params": {
                       "max_tokens": 100,
@@ -452,15 +447,12 @@
     "schemas": {
       "ChatCompletionRequest": {
         "type": "object",
-        "required": ["provider", "model", "messages"],
+        "required": ["model", "messages"],
         "properties": {
-          "provider": {
-            "$ref": "#/components/schemas/ModelProvider"
-          },
           "model": {
             "type": "string",
-            "description": "Model identifier (provider-specific)",
-            "example": "gpt-4o"
+            "description": "Model identifier in 'provider/model' format (e.g., 'openai/gpt-4o-mini', 'anthropic/claude-3-sonnet-20240229')",
+            "example": "openai/gpt-4o-mini"
           },
           "messages": {
             "type": "array",
@@ -476,23 +468,21 @@
           "fallbacks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Fallback"
+              "type": "string"
             },
-            "description": "Fallback providers and models"
+            "description": "Fallback model names in 'provider/model' format",
+            "example": ["anthropic/claude-3-sonnet-20240229", "openai/gpt-4o"]
           }
         }
       },
       "TextCompletionRequest": {
         "type": "object",
-        "required": ["provider", "model", "text"],
+        "required": ["model", "text"],
         "properties": {
-          "provider": {
-            "$ref": "#/components/schemas/ModelProvider"
-          },
           "model": {
             "type": "string",
-            "description": "Model identifier (provider-specific)",
-            "example": "gpt-3.5-turbo-instruct"
+            "description": "Model identifier in 'provider/model' format (e.g., 'openai/gpt-3.5-turbo-instruct', 'anthropic/claude-3-haiku-20240307')",
+            "example": "openai/gpt-3.5-turbo-instruct"
           },
           "text": {
             "type": "string",
@@ -505,9 +495,13 @@
           "fallbacks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Fallback"
+              "type": "string"
             },
-            "description": "Fallback providers and models"
+            "description": "Fallback model names in 'provider/model' format",
+            "example": [
+              "anthropic/claude-3-haiku-20240307",
+              "openai/gpt-4o-mini"
+            ]
           }
         }
       },
