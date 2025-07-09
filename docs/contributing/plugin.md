@@ -130,6 +130,20 @@ type PluginShortCircuit struct {
 }
 ```
 
+### **Context Utilities**
+
+Plugin developers can access useful information from the context:
+
+```go
+// Get unique request ID for tracking and correlation
+requestID := ctx.Value("request-id").(string)
+
+// Use request ID in your plugin logic
+fmt.Printf("Processing request: %s", requestID)
+```
+
+> **💡 Tip**: The `request-id` context key provides a unique identifier for each request that remains consistent across all plugin hooks and provider calls. This is essential for logging, tracing, and correlating plugin operations.
+
 ---
 
 ## 🔧 **Plugin Implementation Patterns**

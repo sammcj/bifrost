@@ -295,13 +295,18 @@ func main() {
 
 	// Initialize logging plugin with app-dir based path
 	loggingConfig := &logging.Config{
-		DatabasePath: logDir,
-		LogQueueSize: store.ClientConfig.LogQueueSize,
+		DatabasePath:     logDir,
+		LogQueueSize:     store.ClientConfig.LogQueueSize,
+		MaxCacheMemoryMB: 5,
 	}
 
 	loggingPlugin, err := logging.NewLoggerPlugin(loggingConfig, logger)
 	if err != nil {
 		log.Fatalf("failed to initialize logging plugin: %v", err)
+	}
+
+	if err != nil {
+		log.Fatalf("failed to initialize mocker plugin: %v", err)
 	}
 
 	loadedPlugins = append(loadedPlugins, promPlugin, loggingPlugin)
