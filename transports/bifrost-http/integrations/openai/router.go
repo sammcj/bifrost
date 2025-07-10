@@ -32,6 +32,9 @@ func NewOpenAIRouter(client *bifrost.Bifrost) *OpenAIRouter {
 			ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
 				return DeriveOpenAIFromBifrostResponse(resp), nil
 			},
+			ErrorConverter: func(err *schemas.BifrostError) interface{} {
+				return DeriveOpenAIErrorFromBifrostError(err)
+			},
 		},
 	}
 

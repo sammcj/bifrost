@@ -140,6 +140,19 @@ func NewLiteLLMRouter(client *bifrost.Bifrost) *LiteLLMRouter {
 		}
 	}
 
+	errorConverter := func(err *schemas.BifrostError) interface{} {
+		switch err.Provider {
+		case schemas.OpenAI, schemas.Azure:
+			return openai.DeriveOpenAIErrorFromBifrostError(err)
+		case schemas.Anthropic:
+			return anthropic.DeriveAnthropicErrorFromBifrostError(err)
+		case schemas.Vertex:
+			return genai.DeriveGeminiErrorFromBifrostError(err)
+		default:
+			return err
+		}
+	}
+
 	routes := []integrations.RouteConfig{}
 	for _, path := range paths {
 		routes = append(routes, integrations.RouteConfig{
@@ -148,6 +161,7 @@ func NewLiteLLMRouter(client *bifrost.Bifrost) *LiteLLMRouter {
 			GetRequestTypeInstance: getRequestTypeInstance,
 			RequestConverter:       requestConverter,
 			ResponseConverter:      responseConverter,
+			ErrorConverter:         errorConverter,
 			PreCallback:            preHook,
 		})
 	}

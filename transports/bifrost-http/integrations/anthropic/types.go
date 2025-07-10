@@ -93,6 +93,18 @@ type AnthropicUsage struct {
 	OutputTokens int `json:"output_tokens"`
 }
 
+// AnthropicMessageError represents an Anthropic messages API error response
+type AnthropicMessageError struct {
+	Type  string                      `json:"type"`  // always "error"
+	Error AnthropicMessageErrorStruct `json:"error"` // Error details
+}
+
+// AnthropicMessageErrorStruct represents the error structure of an Anthropic messages API error response
+type AnthropicMessageErrorStruct struct {
+	Type    string `json:"type"`    // Error type
+	Message string `json:"message"` // Error message
+}
+
 // MarshalJSON implements custom JSON marshalling for MessageContent.
 // It marshals either ContentStr or ContentBlocks directly without wrapping.
 func (mc AnthropicContent) MarshalJSON() ([]byte, error) {
@@ -463,4 +475,32 @@ func DeriveAnthropicFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *A
 
 	anthropicResp.Content = content
 	return anthropicResp
+}
+
+// DeriveAnthropicErrorFromBifrostError derives a AnthropicMessageError from a BifrostError
+func DeriveAnthropicErrorFromBifrostError(bifrostErr *schemas.BifrostError) *AnthropicMessageError {
+	if bifrostErr == nil {
+		return nil
+	}
+
+	// Provide blank strings for nil pointer fields
+	errorType := ""
+	if bifrostErr.Type != nil {
+		errorType = *bifrostErr.Type
+	}
+
+	// Handle nested error fields with nil checks
+	errorStruct := AnthropicMessageErrorStruct{
+		Type:    "",
+		Message: bifrostErr.Error.Message,
+	}
+
+	if bifrostErr.Error.Type != nil {
+		errorStruct.Type = *bifrostErr.Error.Type
+	}
+
+	return &AnthropicMessageError{
+		Type:  errorType,
+		Error: errorStruct,
+	}
 }

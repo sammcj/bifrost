@@ -151,6 +151,75 @@ COMPLEX_E2E_MESSAGES = [
     },
 ]
 
+# Common keyword arrays for flexible assertions
+COMPARISON_KEYWORDS = [
+    "compare",
+    "comparison",
+    "different",
+    "difference",
+    "differences",
+    "both",
+    "two",
+    "first",
+    "second",
+    "images",
+    "image",
+    "versus",
+    "vs",
+    "contrast",
+    "unlike",
+    "while",
+    "whereas",
+]
+
+WEATHER_KEYWORDS = [
+    "weather",
+    "temperature",
+    "sunny",
+    "cloudy",
+    "rain",
+    "snow",
+    "celsius",
+    "fahrenheit",
+    "degrees",
+    "hot",
+    "cold",
+    "warm",
+    "cool",
+]
+
+LOCATION_KEYWORDS = ["boston", "san francisco", "new york", "city", "location", "place"]
+
+# Error test data for invalid role testing
+INVALID_ROLE_MESSAGES = [
+    {"role": "tester", "content": "Hello! This should fail due to invalid role."}
+]
+
+# GenAI-specific invalid role content that passes SDK validation but fails at Bifrost
+GENAI_INVALID_ROLE_CONTENT = [
+    {
+        "role": "tester",  # Invalid role that should be caught by Bifrost
+        "parts": [
+            {"text": "Hello! This should fail due to invalid role in GenAI format."}
+        ],
+    }
+]
+
+# Error keywords for validating error messages
+ERROR_KEYWORDS = [
+    "invalid",
+    "error",
+    "role",
+    "tester",
+    "unsupported",
+    "unknown",
+    "bad",
+    "incorrect",
+    "not allowed",
+    "not supported",
+    "forbidden",
+]
+
 
 # Helper Functions
 def safe_eval_arithmetic(expression: str) -> float:
@@ -392,44 +461,178 @@ def assert_valid_image_response(response: Any):
     ), f"Response should reference the image content. Got: {content}"
 
 
-# Common keyword arrays for flexible assertions
-COMPARISON_KEYWORDS = [
-    "compare",
-    "comparison",
-    "different",
-    "difference",
-    "differences",
-    "both",
-    "two",
-    "first",
-    "second",
-    "images",
-    "image",
-    "versus",
-    "vs",
-    "contrast",
-    "unlike",
-    "while",
-    "whereas",
-]
+def assert_valid_error_response(
+    response_or_exception: Any, expected_invalid_role: str = "tester"
+):
+    """
+    Assert that an error response or exception properly indicates an invalid role error.
 
-WEATHER_KEYWORDS = [
-    "weather",
-    "temperature",
-    "sunny",
-    "cloudy",
-    "rain",
-    "snow",
-    "celsius",
-    "fahrenheit",
-    "degrees",
-    "hot",
-    "cold",
-    "warm",
-    "cool",
-]
+    Args:
+        response_or_exception: Either an HTTP error response or a raised exception
+        expected_invalid_role: The invalid role that should be mentioned in the error
+    """
+    error_message = ""
+    error_type = ""
+    status_code = None
 
-LOCATION_KEYWORDS = ["boston", "san francisco", "new york", "city", "location", "place"]
+    # Handle different error response formats
+    if hasattr(response_or_exception, "response"):
+        # This is likely a requests.HTTPError or similar
+        try:
+            error_data = response_or_exception.response.json()
+            status_code = response_or_exception.response.status_code
+
+            # Extract error message from various formats
+            if isinstance(error_data, dict):
+                if "error" in error_data:
+                    if isinstance(error_data["error"], dict):
+                        error_message = error_data["error"].get(
+                            "message", str(error_data["error"])
+                        )
+                        error_type = error_data["error"].get("type", "")
+                    else:
+                        error_message = str(error_data["error"])
+                else:
+                    error_message = error_data.get("message", str(error_data))
+            else:
+                error_message = str(error_data)
+        except:
+            error_message = str(response_or_exception)
+
+    elif hasattr(response_or_exception, "message"):
+        # Direct error object
+        error_message = response_or_exception.message
+
+    elif hasattr(response_or_exception, "args") and response_or_exception.args:
+        # Exception with args
+        error_message = str(response_or_exception.args[0])
+
+    else:
+        # Fallback to string representation
+        error_message = str(response_or_exception)
+
+    # Convert to lowercase for case-insensitive matching
+    error_message_lower = error_message.lower()
+    error_type_lower = error_type.lower()
+
+    # Validate that error message indicates role-related issue
+    role_error_indicators = [
+        expected_invalid_role.lower(),
+        "role",
+        "invalid",
+        "unsupported",
+        "unknown",
+        "not allowed",
+        "not supported",
+        "bad request",
+        "invalid_request",
+    ]
+
+    has_role_error = any(
+        indicator in error_message_lower or indicator in error_type_lower
+        for indicator in role_error_indicators
+    )
+
+    assert has_role_error, (
+        f"Error message should indicate invalid role '{expected_invalid_role}'. "
+        f"Got error message: '{error_message}', error type: '{error_type}'"
+    )
+
+    # Validate status code if available (should be 4xx for client errors)
+    if status_code is not None:
+        assert (
+            400 <= status_code < 500
+        ), f"Expected 4xx status code for invalid role error, got {status_code}"
+
+    return True
+
+
+def assert_error_propagation(error_response: Any, integration: str):
+    """
+    Assert that error is properly propagated through Bifrost to the integration.
+
+    Args:
+        error_response: The error response from the integration
+        integration: The integration name (openai, anthropic, etc.)
+    """
+    # Check that we got an error response (not a success)
+    assert error_response is not None, "Should have received an error response"
+
+    # Integration-specific error format validation
+    if integration.lower() == "openai":
+        # OpenAI format: should have top-level 'type', 'event_id' and 'error' field with nested structure
+        if hasattr(error_response, "response"):
+            error_data = error_response.response.json()
+            assert "error" in error_data, "OpenAI error should have 'error' field"
+            assert (
+                "type" in error_data
+            ), "OpenAI error should have top-level 'type' field"
+            assert (
+                "event_id" in error_data
+            ), "OpenAI error should have top-level 'event_id' field"
+            assert isinstance(
+                error_data["type"], str
+            ), "OpenAI error type should be a string"
+            assert isinstance(
+                error_data["event_id"], str
+            ), "OpenAI error event_id should be a string"
+
+            # Check nested error structure
+            error_obj = error_data["error"]
+            assert (
+                "message" in error_obj
+            ), "OpenAI error.error should have 'message' field"
+            assert "type" in error_obj, "OpenAI error.error should have 'type' field"
+            assert "code" in error_obj, "OpenAI error.error should have 'code' field"
+            assert (
+                "event_id" in error_obj
+            ), "OpenAI error.error should have 'event_id' field"
+
+    elif integration.lower() == "anthropic":
+        # Anthropic format: should have 'type' and 'error' with 'type' and 'message'
+        if hasattr(error_response, "response"):
+            error_data = error_response.response.json()
+            assert "type" in error_data, "Anthropic error should have 'type' field"
+            # Type field can be empty string if not set in original error
+            assert isinstance(
+                error_data["type"], str
+            ), "Anthropic error type should be a string"
+            assert "error" in error_data, "Anthropic error should have 'error' field"
+            assert (
+                "type" in error_data["error"]
+            ), "Anthropic error.error should have 'type' field"
+            assert (
+                "message" in error_data["error"]
+            ), "Anthropic error.error should have 'message' field"
+
+    elif integration.lower() in ["google", "gemini", "genai"]:
+        # Gemini format: follows Google API design guidelines with error.code, error.message, error.status
+        if hasattr(error_response, "response"):
+            error_data = error_response.response.json()
+            assert "error" in error_data, "Gemini error should have 'error' field"
+
+            # Check Google API standard error structure
+            error_obj = error_data["error"]
+            assert (
+                "code" in error_obj
+            ), "Gemini error.error should have 'code' field (HTTP status code)"
+            assert isinstance(
+                error_obj["code"], int
+            ), "Gemini error.error.code should be an integer"
+            assert (
+                "message" in error_obj
+            ), "Gemini error.error should have 'message' field"
+            assert isinstance(
+                error_obj["message"], str
+            ), "Gemini error.error.message should be a string"
+            assert (
+                "status" in error_obj
+            ), "Gemini error.error should have 'status' field"
+            assert isinstance(
+                error_obj["status"], str
+            ), "Gemini error.error.status should be a string"
+
+    return True
 
 
 # Test Categories
@@ -447,6 +650,7 @@ class TestCategories:
     MULTIPLE_IMAGES = "multiple_images"
     COMPLEX_E2E = "complex_e2e"
     INTEGRATION_SPECIFIC = "integration_specific"
+    ERROR_HANDLING = "error_handling"
 
 
 # Environment helpers
