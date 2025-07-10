@@ -31,15 +31,19 @@ from ..utils.common import (
     MULTIPLE_TOOL_CALL_MESSAGES,
     IMAGE_URL,
     BASE64_IMAGE,
+    INVALID_ROLE_MESSAGES,
     WEATHER_TOOL,
     CALCULATOR_TOOL,
     assert_valid_chat_response,
     assert_valid_image_response,
+    assert_valid_error_response,
+    assert_error_propagation,
     get_api_key,
     skip_if_no_api_key,
     COMPARISON_KEYWORDS,
     WEATHER_KEYWORDS,
     LOCATION_KEYWORDS,
+    GENAI_INVALID_ROLE_CONTENT,
 )
 from ..utils.config_loader import get_model
 
@@ -421,6 +425,19 @@ class TestGoogleIntegration:
         )
 
         assert_valid_chat_response(response3)
+
+    @skip_if_no_api_key("google")
+    def test_12_error_handling_invalid_roles(self, google_client, test_config):
+        """Test Case 12: Error handling for invalid roles"""
+        with pytest.raises(Exception) as exc_info:
+            google_client.models.generate_content(
+                model=get_model("google", "chat"), contents=GENAI_INVALID_ROLE_CONTENT
+            )
+
+        # Verify the error is properly caught and contains role-related information
+        error = exc_info.value
+        assert_valid_error_response(error, "tester")
+        assert_error_propagation(error, "google")
 
 
 # Additional helper functions specific to Google GenAI

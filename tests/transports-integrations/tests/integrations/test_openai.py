@@ -36,12 +36,15 @@ from ..utils.common import (
     IMAGE_BASE64_MESSAGES,
     MULTIPLE_IMAGES_MESSAGES,
     COMPLEX_E2E_MESSAGES,
+    INVALID_ROLE_MESSAGES,
     WEATHER_TOOL,
     CALCULATOR_TOOL,
     mock_tool_response,
     assert_valid_chat_response,
     assert_has_tool_calls,
     assert_valid_image_response,
+    assert_valid_error_response,
+    assert_error_propagation,
     extract_tool_calls,
     get_api_key,
     skip_if_no_api_key,
@@ -389,3 +392,18 @@ class TestOpenAIIntegration:
         )
 
         assert_valid_chat_response(response3)
+
+    @skip_if_no_api_key("openai")
+    def test_12_error_handling_invalid_roles(self, openai_client, test_config):
+        """Test Case 12: Error handling for invalid roles"""
+        with pytest.raises(Exception) as exc_info:
+            openai_client.chat.completions.create(
+                model=get_model("openai", "chat"),
+                messages=INVALID_ROLE_MESSAGES,
+                max_tokens=100,
+            )
+
+        # Verify the error is properly caught and contains role-related information
+        error = exc_info.value
+        assert_valid_error_response(error, "tester")
+        assert_error_propagation(error, "openai")
