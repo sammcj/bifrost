@@ -50,10 +50,14 @@
 package main
 
 import (
+	"embed"
 	"flag"
 	"fmt"
 	"log"
+	"mime"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/fasthttp/router"
@@ -70,6 +74,9 @@ import (
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttpadaptor"
 )
+
+//go:embed all:ui
+var uiContent embed.FS
 
 // Command line flags
 var (
@@ -107,6 +114,115 @@ func registerCollectorSafely(collector prometheus.Collector) {
 			log.Printf("Failed to register collector: %v", err)
 		}
 	}
+}
+
+// corsMiddleware handles CORS headers for localhost requests
+func corsMiddleware(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	return func(ctx *fasthttp.RequestCtx) {
+		origin := string(ctx.Request.Header.Peek("Origin"))
+
+		// Allow requests from localhost on any port
+		if strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "https://localhost:") ||
+			strings.HasPrefix(origin, "http://127.0.0.1:") || strings.HasPrefix(origin, "https://127.0.0.1:") {
+			ctx.Response.Header.Set("Access-Control-Allow-Origin", origin)
+		}
+
+		ctx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+		ctx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
+		ctx.Response.Header.Set("Access-Control-Max-Age", "86400")
+
+		// Handle preflight OPTIONS requests
+		if string(ctx.Method()) == "OPTIONS" {
+			ctx.SetStatusCode(fasthttp.StatusOK)
+			return
+		}
+
+		next(ctx)
+	}
+}
+
+// uiHandler serves the embedded Next.js UI files
+func uiHandler(ctx *fasthttp.RequestCtx) {
+	// Get the request path
+	requestPath := string(ctx.Path())
+
+	// Clean the path to prevent directory traversal
+	cleanPath := path.Clean(requestPath)
+
+	// Handle .txt files (Next.js RSC payload files) - map from /{page}.txt to /{page}/index.txt
+	if strings.HasSuffix(cleanPath, ".txt") {
+		// Remove .txt extension and add /index.txt
+		basePath := strings.TrimSuffix(cleanPath, ".txt")
+		if basePath == "/" || basePath == "" {
+			basePath = "/index"
+		}
+		cleanPath = basePath + "/index.txt"
+	}
+
+	// Remove leading slash and add ui prefix
+	if cleanPath == "/" {
+		cleanPath = "ui/index.html"
+	} else {
+		cleanPath = "ui" + cleanPath
+	}
+
+	// Check if this is a static asset request (has file extension)
+	hasExtension := strings.Contains(filepath.Base(cleanPath), ".")
+
+	// Try to read the file from embedded filesystem
+	data, err := uiContent.ReadFile(cleanPath)
+	if err != nil {
+
+		// If it's a static asset (has extension) and not found, return 404
+		if hasExtension {
+			ctx.SetStatusCode(fasthttp.StatusNotFound)
+			ctx.SetBodyString("404 - Static asset not found: " + requestPath)
+			return
+		}
+
+		// For routes without extensions (SPA routing), try {path}/index.html first
+		if !hasExtension {
+			indexPath := cleanPath + "/index.html"
+			data, err = uiContent.ReadFile(indexPath)
+			if err == nil {
+				cleanPath = indexPath
+			} else {
+				// If that fails, serve root index.html as fallback
+				data, err = uiContent.ReadFile("ui/index.html")
+				if err != nil {
+					ctx.SetStatusCode(fasthttp.StatusNotFound)
+					ctx.SetBodyString("404 - File not found")
+					return
+				}
+				cleanPath = "ui/index.html"
+			}
+		} else {
+			ctx.SetStatusCode(fasthttp.StatusNotFound)
+			ctx.SetBodyString("404 - File not found")
+			return
+		}
+	}
+
+	// Set content type based on file extension
+	ext := filepath.Ext(cleanPath)
+	contentType := mime.TypeByExtension(ext)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	ctx.SetContentType(contentType)
+
+	// Set cache headers for static assets
+	if strings.HasPrefix(cleanPath, "ui/_next/static/") {
+		ctx.Response.Header.Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else if ext == ".html" {
+		ctx.Response.Header.Set("Cache-Control", "no-cache")
+	} else {
+		ctx.Response.Header.Set("Cache-Control", "public, max-age=3600")
+	}
+
+	// Send the file content
+	ctx.SetBody(data)
 }
 
 // main is the entry point of the application.
@@ -222,18 +338,24 @@ func main() {
 	// Add Prometheus /metrics endpoint
 	r.GET("/metrics", fasthttpadaptor.NewFastHTTPHandler(promhttp.Handler()))
 
+	// Add UI routes - serve the embedded Next.js build
+	r.GET("/", uiHandler)
+	r.GET("/{filepath:*}", uiHandler)
+
 	r.NotFound = func(ctx *fasthttp.RequestCtx) {
 		handlers.SendError(ctx, fasthttp.StatusNotFound, "Route not found: "+string(ctx.Path()), logger)
 	}
 
 	server := &fasthttp.Server{
-		// A custom handler that excludes middleware from /metrics
+		// A custom handler that applies CORS to all routes
 		Handler: func(ctx *fasthttp.RequestCtx) {
 			if string(ctx.Path()) == "/metrics" {
-				r.Handler(ctx)
+				// Apply CORS even to metrics endpoint for monitoring dashboards
+				corsMiddleware(r.Handler)(ctx)
 				return
 			}
-			telemetry.PrometheusMiddleware(r.Handler)(ctx)
+			// Apply CORS middleware for all API routes
+			corsMiddleware(telemetry.PrometheusMiddleware(r.Handler))(ctx)
 		},
 	}
 
