@@ -62,7 +62,7 @@ After completing the quick start:
 
 ## 💡 Need Help?
 
-- **[💬 Join Discord](https://discord.gg/qPaAuTCv)** - Real-time setup help and community support
+- **[💬 Join Discord](https://getmax.im/bifrost-discord)** - Real-time setup help and community support
 - **[🔍 Troubleshooting](../troubleshooting.md)** - Common issues and solutions
 - **[❓ FAQ](../faq.md)** - Frequently asked questions
 - **[📖 Full Documentation](../README.md)** - Complete documentation hub

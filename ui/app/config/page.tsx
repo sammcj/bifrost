@@ -62,7 +62,6 @@ export default function ConfigPage() {
 
 	return (
 		<div className="bg-background">
-			<Header title="Configuration" />
 			{isLoadingProviders || isLoadingMcpClients ? (
 				<FullPageLoader />
 			) : (

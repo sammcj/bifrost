@@ -325,7 +325,7 @@ response, err := http.Post(
 
 ## 💬 Need Help?
 
-**🔗 [Join our Discord](https://discord.gg/qPaAuTCv)** for real-time setup assistance and HTTP integration support!
+**🔗 [Join our Discord](https://getmax.im/bifrost-discord)** for real-time setup assistance and HTTP integration support!
 
 ---
 

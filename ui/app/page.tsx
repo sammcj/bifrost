@@ -92,7 +92,12 @@ export default function LogsPage() {
 		[pagination.offset, pagination.sort_by, pagination.order, pagination.limit, filters, showEmptyState],
 	);
 
-	const { ws, isConnected: isSocketConnected } = useWebSocket({ onMessage: handleNewLog });
+	const { isConnected: isSocketConnected, setMessageHandler } = useWebSocket();
+
+	// Set up the message handler when the component mounts
+	useEffect(() => {
+		setMessageHandler(handleNewLog);
+	}, [handleNewLog, setMessageHandler]);
 
 	const fetchLogs = useCallback(async () => {
 		setFetchingLogs(true);
@@ -109,17 +114,18 @@ export default function LogsPage() {
 				setLogs(response.logs || []);
 				setTotalItems(response.stats.total_requests);
 				setStats(response.stats);
+			}
 
-				// Only set showEmptyState on initial load and only based on total logs
-				if (initialLoading) {
-					// Check if there are any logs globally, not just in the current filter
-					setShowEmptyState(response.stats.total_requests === 0);
-				}
+			// Only set showEmptyState on initial load and only based on total logs
+			if (initialLoading) {
+				// Check if there are any logs globally, not just in the current filter
+				setShowEmptyState(response ? response.stats.total_requests === 0 : true);
 			}
 		} catch {
-			setError("Failed to fetch logs. Please try again.");
+			setError("Cannot fetch logs. Please check if logs are enabled in your Bifrost config.");
 			setLogs([]);
 			setTotalItems(0);
+			setShowEmptyState(true);
 		} finally {
 			setFetchingLogs(false);
 		}
@@ -225,11 +231,10 @@ export default function LogsPage() {
 
 	return (
 		<div className="bg-background">
-			<Header title="Request Logs" />
 			{initialLoading ? (
 				<FullPageLoader />
 			) : showEmptyState ? (
-				<EmptyState isSocketConnected={isSocketConnected} />
+				<EmptyState isSocketConnected={isSocketConnected} error={error} />
 			) : (
 				<div className="space-y-6">
 					<div>

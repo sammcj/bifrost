@@ -4,7 +4,7 @@ import { ProgressProvider } from "@bprogress/next/app";
 
 const AppProgressProvider = ({ children }: { children: React.ReactNode }) => {
 	return (
-		<ProgressProvider height="4px" color="#33a9fd" options={{ showSpinner: false }} shallowRouting>
+		<ProgressProvider height="4px" color="#188410" options={{ showSpinner: false }} shallowRouting>
 			{children}
 		</ProgressProvider>
 	);

@@ -5,7 +5,8 @@ import { LogEntry } from "@/lib/types/logs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown } from "lucide-react";
-import { PROVIDER_COLORS, STATUS_COLORS, Provider, Status, REQUEST_TYPE_LABELS, REQUEST_TYPE_COLORS } from "@/lib/constants/logs";
+import { STATUS_COLORS, Provider, Status, REQUEST_TYPE_LABELS, REQUEST_TYPE_COLORS } from "@/lib/constants/logs";
+import { renderProviderIcon, ProviderIconType } from "@/lib/constants/icons";
 
 export const createColumns = (): ColumnDef<LogEntry>[] => [
 	{
@@ -27,7 +28,8 @@ export const createColumns = (): ColumnDef<LogEntry>[] => [
 		cell: ({ row }) => {
 			const provider = row.original.provider as Provider;
 			return (
-				<Badge variant="secondary" className={`${PROVIDER_COLORS[provider]} capitalize`}>
+				<Badge variant="secondary" className={`uppercase`}>
+					{renderProviderIcon(provider as ProviderIconType, { size: "sm" })}
 					{provider}
 				</Badge>
 			);

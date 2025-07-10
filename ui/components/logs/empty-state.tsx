@@ -3,11 +3,12 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, RefreshCw, ArrowRight } from "lucide-react";
+import { Copy, RefreshCw, ArrowRight, AlertTriangle } from "lucide-react";
 import { CodeEditor } from "./ui/code-editor";
 import { toast } from "sonner";
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "../ui/alert";
 
 type Provider = "openai" | "anthropic" | "genai";
 type Language = "python" | "typescript";
@@ -183,13 +184,14 @@ const CARDS = [
 
 interface EmptyStateProps {
 	isSocketConnected: boolean;
+	error: string | null;
 }
 
-export function EmptyState({ isSocketConnected }: EmptyStateProps) {
+export function EmptyState({ isSocketConnected, error }: EmptyStateProps) {
 	const [language, setLanguage] = useState<Language>("python");
 
 	return (
-		<div className="flex flex-col items-center justify-center space-y-8">
+		<div className="flex w-full flex-col items-center justify-center space-y-8">
 			<div className="space-y-2 text-center">
 				<h2 className="text-3xl font-bold">Welcome to Request Logs</h2>
 				<p className="text-muted-foreground text-lg">Monitor and analyze all your API requests in real-time</p>
@@ -202,7 +204,14 @@ export function EmptyState({ isSocketConnected }: EmptyStateProps) {
 				</div>
 			)}
 
-			<div className="grid w-full max-w-4xl grid-cols-1 gap-6 px-4 md:grid-cols-2">
+			{error && (
+				<Alert>
+					<AlertTriangle className="h-4 w-4" />
+					<AlertDescription>{error}</AlertDescription>
+				</Alert>
+			)}
+
+			<div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2">
 				{CARDS.map((card) => (
 					<Card key={card.title} className="p-6">
 						<h3 className="text-lg font-semibold">{card.title}</h3>
@@ -219,7 +228,7 @@ export function EmptyState({ isSocketConnected }: EmptyStateProps) {
 				))}
 			</div>
 
-			<div className="w-full max-w-4xl px-4">
+			<div className="w-full">
 				<h3 className="mb-4 text-lg font-semibold">Integration Examples</h3>
 				<Tabs defaultValue="curl" className="w-full">
 					<TabsList className="h-10 w-full justify-start">

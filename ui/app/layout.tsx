@@ -6,6 +6,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
 import ProgressProvider from "@/components/progress-bar";
+import { WebSocketProvider } from "@/hooks/useWebSocket";
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
@@ -30,10 +31,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 				<ProgressProvider>
 					<ThemeProvider attribute="class" defaultTheme="system" enableSystem>
 						<Toaster />
-						<SidebarProvider>
-							<Sidebar />
-							<main className="relative mx-auto flex min-h-screen w-5xl flex-col pt-24 pb-12">{children}</main>
-						</SidebarProvider>
+						<WebSocketProvider>
+							<SidebarProvider>
+								<Sidebar />
+								<main className="custom-scrollbar relative mx-auto flex min-h-screen w-5xl flex-col py-12">{children}</main>
+							</SidebarProvider>
+						</WebSocketProvider>
 					</ThemeProvider>
 				</ProgressProvider>
 			</body>
