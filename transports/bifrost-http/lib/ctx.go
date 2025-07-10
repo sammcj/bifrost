@@ -10,7 +10,9 @@ import (
 	"context"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/maximhq/bifrost/plugins/maxim"
+	"github.com/maximhq/bifrost/transports/bifrost-http/plugins/logging"
 	"github.com/maximhq/bifrost/transports/bifrost-http/plugins/telemetry"
 	"github.com/valyala/fasthttp"
 )
@@ -52,7 +54,14 @@ type ContextKey string
 func ConvertToBifrostContext(ctx *fasthttp.RequestCtx) *context.Context {
 	bifrostCtx := context.Background()
 
-	// Copy all prometheus header values to the new context
+	// First, check if x-request-id header exists
+	requestID := string(ctx.Request.Header.Peek("x-request-id"))
+	if requestID == "" {
+		requestID = uuid.New().String()
+	}
+	bifrostCtx = context.WithValue(bifrostCtx, logging.ContextKey("request-id"), requestID)
+
+	// Then process other headers
 	ctx.Request.Header.VisitAll(func(key, value []byte) {
 		keyStr := strings.ToLower(string(key))
 
