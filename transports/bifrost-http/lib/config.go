@@ -10,8 +10,8 @@ import (
 // It includes settings for excess request handling, Prometheus metrics, and initial pool size.
 type ClientConfig struct {
 	DropExcessRequests bool     `json:"drop_excess_requests"`
-	PrometheusLabels   []string `json:"prometheus_labels"`
 	InitialPoolSize    int      `json:"initial_pool_size"`
+	PrometheusLabels   []string `json:"prometheus_labels"`
 }
 
 // ProviderConfig represents the configuration for a specific AI model provider.
