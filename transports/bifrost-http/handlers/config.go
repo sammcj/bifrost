@@ -33,11 +33,11 @@ func NewConfigHandler(client *bifrost.Bifrost, logger schemas.Logger, store *lib
 }
 
 // RegisterRoutes registers the configuration-related routes.
-// It adds the `PUT /config` endpoint.
+// It adds the `PUT /api/config` endpoint.
 func (h *ConfigHandler) RegisterRoutes(r *router.Router) {
-	r.GET("/config", h.GetConfig)
-	r.PUT("/config", h.handleUpdateConfig)
-	r.POST("/config/save", h.SaveConfig)
+	r.GET("/api/config", h.GetConfig)
+	r.PUT("/api/config", h.handleUpdateConfig)
+	r.POST("/api/config/save", h.SaveConfig)
 }
 
 // GetConfig handles GET /config - Get the current configuration

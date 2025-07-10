@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "core/v*" # Triggers dependency update
+      - "ui/v*" # Triggers UI update
       - "transports/v*" # Triggers docker build (for manual tags)
 
 concurrency:
@@ -121,9 +122,123 @@ jobs:
           git tag ${{ steps.next_version.outputs.new_tag }}
           git push origin ${{ steps.next_version.outputs.new_tag }}
 
+  update-transport-ui:
+    if: startsWith(github.ref, 'refs/tags/ui/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      new_transport_tag: ${{ steps.next_version.outputs.new_tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.24.1"
+
+      - name: Get and validate UI version from tag
+        id: get_version
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/ui/}
+
+          # Validate UI tag format
+          if ! echo "$TAG_NAME" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: Invalid UI tag format 'ui/$TAG_NAME'. Expected format: ui/vMAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+          echo "version=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "UI version: ${TAG_NAME}"
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Build UI
+        working-directory: ui
+        run: |
+          echo "Installing UI dependencies..."
+          npm i
+          echo "Building UI..."
+          npm run build
+
+      - name: Update transports with new UI build
+        working-directory: transports
+        run: |
+          echo "Downloading Go dependencies..."
+          go mod download
+          echo "Building transports..."
+          go build ./...
+
+      - name: Get latest transport version and increment
+        id: next_version
+        run: |
+          # Get the latest transport tag (using transports/ prefix to match docker build)
+          LATEST_TAG=$(git tag -l 'transports/v*' | sort -V | tail -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            # If no transport tag exists, start with v0.1.0
+            NEW_TAG="transports/v0.1.0"
+          else
+            # Extract version numbers
+            VERSION=${LATEST_TAG#transports/v}
+            
+            # Validate version format
+            if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "Error: Invalid tag format '$LATEST_TAG'. Expected format: transports/vMAJOR.MINOR.PATCH"
+              exit 1
+            fi
+            
+            MAJOR=$(echo $VERSION | cut -d. -f1)
+            MINOR=$(echo $VERSION | cut -d. -f2)
+            PATCH=$(echo $VERSION | cut -d. -f3)
+            
+            # Increment patch version
+            NEW_PATCH=$((PATCH + 1))
+            NEW_TAG="transports/v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          fi
+
+          # Check if the new tag already exists
+          if git tag --list | grep -q "^${NEW_TAG}$"; then
+            echo "Error: Tag '$NEW_TAG' already exists!"
+            exit 1
+          fi
+
+          echo "new_tag=${NEW_TAG}" >> $GITHUB_OUTPUT
+          echo "New transport version will be: ${NEW_TAG}"
+
+      - name: Commit and push UI changes
+        run: |
+          git add .
+          if git diff --staged --quiet; then
+            echo "No changes to commit. UI build is already up to date."
+          else
+            git commit -m "chore: update transports with UI build from ${{ steps.get_version.outputs.version }}"
+            git push
+          fi
+
+      - name: Create and push transport tag
+        run: |
+          git tag ${{ steps.next_version.outputs.new_tag }}
+          git push origin ${{ steps.next_version.outputs.new_tag }}
+
   build-and-push-docker:
-    if: always() && needs.update-transport-dependency.result != 'failure' && (startsWith(github.ref, 'refs/tags/transports/v') || needs.update-transport-dependency.result == 'success')
-    needs: [update-transport-dependency]
+    if: always() && (needs.update-transport-dependency.result != 'failure' && needs.update-transport-ui.result != 'failure') && (startsWith(github.ref, 'refs/tags/transports/v') || needs.update-transport-dependency.result == 'success' || needs.update-transport-ui.result == 'success')
+    needs: [update-transport-dependency, update-transport-ui]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -138,6 +253,9 @@ jobs:
           if [ "${{ needs.update-transport-dependency.outputs.new_transport_tag }}" != "" ]; then
             # Use the tag created by dependency update
             TAG="${{ needs.update-transport-dependency.outputs.new_transport_tag }}"
+          elif [ "${{ needs.update-transport-ui.outputs.new_transport_tag }}" != "" ]; then
+            # Use the tag created by UI update
+            TAG="${{ needs.update-transport-ui.outputs.new_transport_tag }}"
           else
             # Use the tag that triggered this workflow (manual tag)
             TAG=${GITHUB_REF#refs/tags/}

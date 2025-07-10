@@ -75,11 +75,11 @@ type ErrorResponse struct {
 // RegisterRoutes registers all provider management routes
 func (h *ProviderHandler) RegisterRoutes(r *router.Router) {
 	// Provider CRUD operations
-	r.GET("/providers", h.ListProviders)
-	r.GET("/providers/{provider}", h.GetProvider)
-	r.POST("/providers", h.AddProvider)
-	r.PUT("/providers/{provider}", h.UpdateProvider)
-	r.DELETE("/providers/{provider}", h.DeleteProvider)
+	r.GET("/api/providers", h.ListProviders)
+	r.GET("/api/providers/{provider}", h.GetProvider)
+	r.POST("/api/providers", h.AddProvider)
+	r.PUT("/api/providers/{provider}", h.UpdateProvider)
+	r.DELETE("/api/providers/{provider}", h.DeleteProvider)
 }
 
 // ListProviders handles GET /providers - List all providers
