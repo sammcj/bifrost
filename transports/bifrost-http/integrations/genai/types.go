@@ -136,6 +136,18 @@ type GeminiChatRequest struct {
 	ResponseModalities []string                   `json:"responseModalities,omitempty"`
 }
 
+// GeminiChatRequestError represents a Gemini chat completion error response
+type GeminiChatRequestError struct {
+	Error GeminiChatRequestErrorStruct `json:"error"` // Error details following Google API format
+}
+
+// GeminiChatRequestErrorStruct represents the error structure of a Gemini chat completion error response
+type GeminiChatRequestErrorStruct struct {
+	Code    int    `json:"code"`    // HTTP status code
+	Message string `json:"message"` // Error message
+	Status  string `json:"status"`  // Error status string (e.g., "INVALID_REQUEST")
+}
+
 func (r *GeminiChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
 	provider, model := integrations.ParseModelString(r.Model, schemas.Vertex)
 
@@ -565,6 +577,32 @@ func DeriveGenAIFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *genai
 	}
 
 	return genaiResp
+}
+
+// DeriveGeminiErrorFromBifrostError derives a GeminiChatRequestError from a BifrostError
+func DeriveGeminiErrorFromBifrostError(bifrostErr *schemas.BifrostError) *GeminiChatRequestError {
+	if bifrostErr == nil {
+		return nil
+	}
+
+	code := 500
+	status := ""
+
+	if bifrostErr.Error.Type != nil {
+		status = *bifrostErr.Error.Type
+	}
+
+	if bifrostErr.StatusCode != nil {
+		code = *bifrostErr.StatusCode
+	}
+
+	return &GeminiChatRequestError{
+		Error: GeminiChatRequestErrorStruct{
+			Code:    code,
+			Message: bifrostErr.Error.Message,
+			Status:  status,
+		},
+	}
 }
 
 // isImageMimeType checks if a MIME type represents an image format

@@ -27,6 +27,10 @@ type RequestConverter func(req interface{}) (*schemas.BifrostRequest, error)
 // It takes a BifrostResponse and returns the format expected by the specific integration.
 type ResponseConverter func(*schemas.BifrostResponse) (interface{}, error)
 
+// ErrorConverter is a function that converts BifrostError to integration-specific format.
+// It takes a BifrostError and returns the format expected by the specific integration.
+type ErrorConverter func(*schemas.BifrostError) interface{}
+
 // PreRequestCallback is called before processing the request.
 // It can be used to modify the request object (e.g., extract model from URL parameters)
 // or perform validation. If it returns an error, the request processing stops.
@@ -45,6 +49,7 @@ type RouteConfig struct {
 	GetRequestTypeInstance func() interface{}  // Factory function to create request instance (SHOULD NOT BE NIL)
 	RequestConverter       RequestConverter    // Function to convert request to BifrostRequest (SHOULD NOT BE NIL)
 	ResponseConverter      ResponseConverter   // Function to convert BifrostResponse to integration format (SHOULD NOT BE NIL)
+	ErrorConverter         ErrorConverter      // Function to convert BifrostError to integration format (SHOULD NOT BE NIL)
 	PreCallback            PreRequestCallback  // Optional: called before request processing
 	PostCallback           PostRequestCallback // Optional: called after request processing
 }
@@ -81,6 +86,10 @@ func (g *GenericRouter) RegisterRoutes(r *router.Router) {
 		}
 		if route.ResponseConverter == nil {
 			log.Println("[WARN] route configuration is invalid: ResponseConverter cannot be nil for route " + route.Path)
+			continue
+		}
+		if route.ErrorConverter == nil {
+			log.Println("[WARN] route configuration is invalid: ErrorConverter cannot be nil for route " + route.Path)
 			continue
 		}
 
@@ -127,7 +136,7 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 			body := ctx.Request.Body()
 			if len(body) > 0 {
 				if err := json.Unmarshal(body, req); err != nil {
-					g.sendError(ctx, newBifrostError(err, "Invalid JSON"))
+					g.sendError(ctx, config.ErrorConverter, newBifrostError(err, "Invalid JSON"))
 					return
 				}
 			}
@@ -138,7 +147,7 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		// or performing request-specific validation
 		if config.PreCallback != nil {
 			if err := config.PreCallback(ctx, req); err != nil {
-				g.sendError(ctx, newBifrostError(err, "failed to execute pre-request callback"))
+				g.sendError(ctx, config.ErrorConverter, newBifrostError(err, "failed to execute pre-request callback"))
 				return
 			}
 		}
@@ -146,15 +155,15 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		// Convert the integration-specific request to Bifrost format
 		bifrostReq, err := config.RequestConverter(req)
 		if err != nil {
-			g.sendError(ctx, newBifrostError(err, "failed to convert request to Bifrost format"))
+			g.sendError(ctx, config.ErrorConverter, newBifrostError(err, "failed to convert request to Bifrost format"))
 			return
 		}
 		if bifrostReq == nil {
-			g.sendError(ctx, newBifrostError(nil, "Invalid request"))
+			g.sendError(ctx, config.ErrorConverter, newBifrostError(nil, "Invalid request"))
 			return
 		}
 		if bifrostReq.Model == "" {
-			g.sendError(ctx, newBifrostError(nil, "Model parameter is required"))
+			g.sendError(ctx, config.ErrorConverter, newBifrostError(nil, "Model parameter is required"))
 			return
 		}
 
@@ -162,57 +171,61 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		bifrostCtx := lib.ConvertToBifrostContext(ctx)
 		result, bifrostErr := g.client.ChatCompletionRequest(*bifrostCtx, bifrostReq)
 		if bifrostErr != nil {
-			g.sendError(ctx, bifrostErr)
+			g.sendError(ctx, config.ErrorConverter, bifrostErr)
 			return
 		}
 		// Execute post-request callback if configured
 		// This is typically used for response modification or additional processing
 		if config.PostCallback != nil {
 			if err := config.PostCallback(ctx, req, result); err != nil {
-				g.sendError(ctx, newBifrostError(err, "failed to execute post-request callback"))
+				g.sendError(ctx, config.ErrorConverter, newBifrostError(err, "failed to execute post-request callback"))
 				return
 			}
 		}
 
 		if result == nil {
-			g.sendError(ctx, newBifrostError(nil, "Bifrost response is nil after post-request callback"))
+			g.sendError(ctx, config.ErrorConverter, newBifrostError(nil, "Bifrost response is nil after post-request callback"))
 			return
 		}
 
 		// Convert Bifrost response to integration-specific format and send
 		response, err := config.ResponseConverter(result)
 		if err != nil {
-			g.sendError(ctx, newBifrostError(err, "failed to encode response"))
+			g.sendError(ctx, config.ErrorConverter, newBifrostError(err, "failed to encode response"))
 			return
 		}
-		g.sendSuccess(ctx, response)
+		g.sendSuccess(ctx, config.ErrorConverter, response)
 	}
 }
 
 // sendError sends an error response with the appropriate status code and JSON body.
 // It handles different error types (string, error interface, or arbitrary objects).
-func (g *GenericRouter) sendError(ctx *fasthttp.RequestCtx, err *schemas.BifrostError) {
-	if err.StatusCode != nil {
-		ctx.SetStatusCode(*err.StatusCode)
+func (g *GenericRouter) sendError(ctx *fasthttp.RequestCtx, errorConverter ErrorConverter, bifrostErr *schemas.BifrostError) {
+	if bifrostErr.StatusCode != nil {
+		ctx.SetStatusCode(*bifrostErr.StatusCode)
 	} else {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 	}
-
 	ctx.SetContentType("application/json")
-	if encodeErr := json.NewEncoder(ctx).Encode(err); encodeErr != nil {
+
+	errorBody, err := json.Marshal(errorConverter(bifrostErr))
+	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-		ctx.SetBodyString(fmt.Sprintf("failed to encode error response: %v", encodeErr))
+		ctx.SetBodyString(fmt.Sprintf("failed to encode error response: %v", err))
+		return
 	}
+
+	ctx.SetBody(errorBody)
 }
 
 // sendSuccess sends a successful response with HTTP 200 status and JSON body.
-func (g *GenericRouter) sendSuccess(ctx *fasthttp.RequestCtx, response interface{}) {
+func (g *GenericRouter) sendSuccess(ctx *fasthttp.RequestCtx, errorConverter ErrorConverter, response interface{}) {
 	ctx.SetStatusCode(fasthttp.StatusOK)
 	ctx.SetContentType("application/json")
 
 	responseBody, err := json.Marshal(response)
 	if err != nil {
-		g.sendError(ctx, newBifrostError(err, "failed to encode response"))
+		g.sendError(ctx, errorConverter, newBifrostError(err, "failed to encode response"))
 		return
 	}
 

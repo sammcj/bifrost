@@ -34,6 +34,9 @@ func NewGenAIRouter(client *bifrost.Bifrost) *GenAIRouter {
 			ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
 				return DeriveGenAIFromBifrostResponse(resp), nil
 			},
+			ErrorConverter: func(err *schemas.BifrostError) interface{} {
+				return DeriveGeminiErrorFromBifrostError(err)
+			},
 			PreCallback: extractAndSetModelFromURL,
 		},
 	}
