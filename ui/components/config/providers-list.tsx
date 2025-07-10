@@ -8,7 +8,7 @@ import { Edit, Trash2, Key, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ProviderResponse } from "@/lib/types/config";
 import { apiService } from "@/lib/api";
-import { PROVIDER_COLORS, PROVIDER_LABELS } from "@/lib/constants/logs";
+import { PROVIDER_LABELS } from "@/lib/constants/logs";
 import {
 	AlertDialog,
 	AlertDialogTrigger,
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CardHeader, CardTitle, CardDescription } from "../ui/card";
 import ProviderForm from "./provider-form";
+import { ProviderIconType, renderProviderIcon } from "@/lib/constants/icons";
 
 interface ProvidersListProps {
 	providers: ProviderResponse[];
@@ -105,12 +106,9 @@ export default function ProvidersList({ providers, onRefresh }: ProvidersListPro
 						{providers.map((provider) => (
 							<TableRow key={provider.name}>
 								<TableCell>
-									<div className="flex items-center space-x-3">
-										<div className={`h-3 w-3 rounded-full ${PROVIDER_COLORS[provider.name] || "bg-gray-400"}`} />
-										<div>
-											<p className="font-medium">{PROVIDER_LABELS[provider.name] || provider.name}</p>
-											<p className="text-muted-foreground text-sm">{provider.name}</p>
-										</div>
+									<div className="flex items-center space-x-2">
+										{renderProviderIcon(provider.name as ProviderIconType, { size: 16 })}
+										<p className="font-medium">{PROVIDER_LABELS[provider.name] || provider.name}</p>
 									</div>
 								</TableCell>
 								<TableCell>

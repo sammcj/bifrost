@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { TagInput } from "@/components/ui/tag-input";
-import { Separator } from "@/components/ui/separator";
-import { X, Plus, Save, Key, Globe, Zap, Edit, Info, AlertTriangle } from "lucide-react";
+import { X, Plus, Save, Key, Globe, Zap, Info, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
 	ProviderResponse,
 	Key as KeyType,
@@ -25,10 +24,10 @@ import {
 } from "@/lib/types/config";
 import { apiService } from "@/lib/api";
 import isEqual from "lodash.isequal";
-import { PROVIDER_COLORS, PROVIDER_LABELS } from "@/lib/constants/logs";
+import { PROVIDER_LABELS } from "@/lib/constants/logs";
 import MetaConfigRenderer from "./meta-config-renderer";
 import { Validator } from "@/lib/utils/validation";
-import { Icons } from "@/lib/constants/icons";
+import { renderProviderIcon, ProviderIconType } from "@/lib/constants/icons";
 import { PROVIDERS } from "@/lib/constants/logs";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "../ui/alert";
@@ -142,8 +141,6 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
 	};
 
 	const { valid: metaValid, message: metaErrorMessage } = getMetaValidation();
-
-	const showConfigSections = !!provider || selectedProvider !== "";
 
 	useEffect(() => {
 		const currentData = {
@@ -306,17 +303,57 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
 		updateField("metaConfig", { ...metaConfig, [field]: value });
 	};
 
+	const tabs = useMemo(() => {
+		const availableTabs = [];
+
+		// Only add API Keys tab if required for this provider
+		if (keysRequired) {
+			availableTabs.push({
+				id: "api-keys",
+				label: "API Keys",
+			});
+		}
+
+		// Add Meta Config tab for providers that need it
+		if (selectedProvider === "azure" || selectedProvider === "bedrock" || selectedProvider === "vertex") {
+			availableTabs.push({
+				id: "meta-config",
+				label: "Meta Config",
+			});
+		}
+
+		// Network tab is always available
+		availableTabs.push({
+			id: "network",
+			label: "Network",
+		});
+
+		// Performance tab is always available
+		availableTabs.push({
+			id: "performance",
+			label: "Performance",
+		});
+
+		return availableTabs;
+	}, [keysRequired, selectedProvider]);
+
+	const [selectedTab, setSelectedTab] = useState(tabs[0]?.id || "api-keys");
+
+	useEffect(() => {
+		if (!tabs.map((t) => t.id).includes(selectedTab)) {
+			setSelectedTab(tabs[0]?.id || "api-keys");
+		}
+	}, [tabs]);
+
 	return (
 		<Dialog open={true} onOpenChange={onCancel}>
-			<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+			<DialogContent className="custom-scrollbar max-h-[90vh] overflow-y-auto sm:max-w-3xl">
 				<DialogHeader>
 					<DialogTitle>
 						{provider ? (
 							<div className="flex items-center gap-2">
-								Edit Provider{" "}
-								<span className={`font-semibold ${PROVIDER_COLORS[provider.name]} rounded-md px-2 py-1`}>
-									{PROVIDER_LABELS[provider.name]}
-								</span>
+								{renderProviderIcon(provider.name as ProviderIconType, { size: 20 })}
+								<span className="font-semibold">{PROVIDER_LABELS[provider.name]}</span>
 							</div>
 						) : (
 							<div className="flex items-center gap-2">Add Provider</div>
@@ -325,322 +362,325 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
 					<DialogDescription>Configure AI provider settings, API keys, and network options.</DialogDescription>
 				</DialogHeader>
 
-				<Separator />
-
 				<form onSubmit={handleSubmit} className="space-y-6">
-					<div className="space-y-8">
-						{/* Provider Selection */}
-						{!provider &&
-							(availableProviders.length === 0 ? (
-								<div className="text-muted-foreground py-8 text-center font-medium">All providers have been configured.</div>
-							) : (
+					{/* Provider Selection */}
+					{!provider &&
+						(availableProviders.length === 0 ? (
+							<div className="text-muted-foreground py-8 text-center font-medium">All providers have been configured.</div>
+						) : (
+							<TooltipProvider>
 								<div className="grid grid-cols-4 gap-4">
 									{PROVIDERS.map((p) => (
-										<div
-											key={p}
-											className={cn(
-												"flex w-full items-center gap-2 rounded-lg border px-4 py-3 text-sm",
-												PROVIDER_COLORS[p as keyof typeof PROVIDER_COLORS],
-												selectedProvider === p
-													? "border-primary/20 opacity-100 hover:opacity-100"
-													: availableProviders.includes(p)
-														? "cursor-pointer border-transparent opacity-60 hover:opacity-80 hover:shadow-md"
-														: "cursor-not-allowed border-transparent opacity-30",
-											)}
-											onClick={() => {
-												if (availableProviders.includes(p)) {
-													updateField("selectedProvider", p);
-												}
-											}}
-										>
-											{Icons[p as keyof typeof Icons]}
-											<div className="text-sm">{PROVIDER_LABELS[p as keyof typeof PROVIDER_LABELS]}</div>
-										</div>
+										<Tooltip key={p}>
+											<TooltipTrigger
+												className={cn(
+													"flex w-full items-center gap-2 rounded-lg border px-4 py-3 text-sm",
+													selectedProvider === p
+														? "border-primary/20 opacity-100 hover:opacity-100"
+														: availableProviders.includes(p)
+															? "cursor-pointer border-transparent opacity-100 hover:shadow-sm dark:shadow-gray-700"
+															: "cursor-not-allowed border-transparent opacity-30",
+												)}
+												onClick={(e) => {
+													e.preventDefault();
+													if (availableProviders.includes(p)) {
+														updateField("selectedProvider", p);
+													}
+												}}
+												asChild
+											>
+												<span>
+													{renderProviderIcon(p as ProviderIconType, { size: "sm" })}
+													<div className="text-sm">{PROVIDER_LABELS[p as keyof typeof PROVIDER_LABELS]}</div>
+												</span>
+											</TooltipTrigger>
+											{!availableProviders.includes(p) && <TooltipContent>Provider is already configured</TooltipContent>}
+										</Tooltip>
 									))}
 								</div>
-							))}
+							</TooltipProvider>
+						))}
 
-						{/* Remaining sections appear only after provider is chosen */}
-						{showConfigSections && (
-							<>
-								{/* API Keys */}
-								{keysRequired && (
-									<div className="space-y-2">
-										<CardHeader className="mb-2 px-0">
-											<CardTitle className="flex items-center justify-between text-base">
+					<Tabs defaultValue={tabs[0]?.id} value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
+						<TabsList className={`grid h-10 w-full grid-cols-${tabs.length}`}>
+							{tabs.map((tab) => (
+								<TabsTrigger key={tab.id} value={tab.id} className="flex items-center gap-2">
+									{tab.label}
+								</TabsTrigger>
+							))}
+						</TabsList>
+
+						{/* API Keys Tab */}
+						{keysRequired && (
+							<TabsContent value="api-keys" className="space-y-4">
+								<div className="flex items-center justify-between">
+									<div className="flex items-center gap-2">
+										<Key className="h-4 w-4" />
+										<h3 className="text-base font-medium">API Keys</h3>
+										<TooltipProvider>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<span>
+														<Info className="text-muted-foreground ml-1 h-3 w-3" />
+													</span>
+												</TooltipTrigger>
+												<TooltipContent className="max-w-fit">
+													<p>
+														Use <code className="rounded bg-neutral-100 px-1 py-0.5 text-neutral-800">env.&lt;VAR&gt;</code> to read the
+														value from an environment variable.
+													</p>
+												</TooltipContent>
+											</Tooltip>
+										</TooltipProvider>
+									</div>
+									<Button type="button" variant="outline" size="sm" onClick={addKey}>
+										<Plus className="h-4 w-4" />
+										Add Key
+									</Button>
+								</div>
+								<div className="space-y-4">
+									{keys.map((key, index) => (
+										<div key={index} className="space-y-4 rounded-md border p-4">
+											<div className="flex gap-4">
+												<div className="flex-1">
+													<div className="text-sm font-medium">API Key</div>
+													<Input
+														placeholder="API Key or env.MY_KEY"
+														value={key.value}
+														onChange={(e) => updateKey(index, "value", e.target.value)}
+														type="text"
+														className={`flex-1 ${keysRequired && key.value.trim() === "" ? "border-destructive" : ""}`}
+													/>
+												</div>
+												<div>
+													<div className="flex items-center gap-2">
+														<label className="text-sm font-medium">Weight</label>
+														<TooltipProvider>
+															<Tooltip>
+																<TooltipTrigger asChild>
+																	<span>
+																		<Info className="text-muted-foreground h-3 w-3" />
+																	</span>
+																</TooltipTrigger>
+																<TooltipContent>
+																	<p>Determines traffic distribution between keys. Higher weights receive more requests.</p>
+																</TooltipContent>
+															</Tooltip>
+														</TooltipProvider>
+													</div>
+													<Input
+														placeholder="1.0"
+														value={key.weight}
+														onChange={(e) => updateKey(index, "weight", e.target.value)}
+														type="number"
+														step="0.1"
+														min="0"
+														max="1.0"
+														className="w-20"
+													/>
+												</div>
+											</div>
+											<div>
 												<div className="flex items-center gap-2">
-													<Key className="h-4 w-4" />
-													API Keys
+													<label className="text-sm font-medium">Models (Optional)</label>
 													<TooltipProvider>
 														<Tooltip>
 															<TooltipTrigger asChild>
 																<span>
-																	<Info className="text-muted-foreground ml-1 h-3 w-3" />
+																	<Info className="text-muted-foreground h-3 w-3" />
 																</span>
 															</TooltipTrigger>
-															<TooltipContent className="max-w-fit">
-																<p>
-																	Use <code className="rounded bg-neutral-100 px-1 py-0.5 text-neutral-800">env.&lt;VAR&gt;</code> to read
-																	the value from an environment variable.
-																</p>
+															<TooltipContent>
+																<p>Comma-separated list of models this key applies to. Leave blank for all models.</p>
 															</TooltipContent>
 														</Tooltip>
 													</TooltipProvider>
 												</div>
-												<Button type="button" variant="outline" size="sm" onClick={addKey}>
-													<Plus className="h-4 w-4" />
-													Add Key
+												<TagInput
+													placeholder="e.g. gpt-4, gpt-3.5-turbo"
+													value={key.models || []}
+													onValueChange={(newModels) => updateKey(index, "models", newModels)}
+												/>
+											</div>
+											{keys.length > 1 && (
+												<Button type="button" variant="destructive" size="sm" onClick={() => removeKey(index)} className="mt-2">
+													<X className="h-4 w-4" />
+													Remove Key
 												</Button>
-											</CardTitle>
-										</CardHeader>
-										<div className="space-y-4">
-											{keys.map((key, index) => (
-												<div key={index} className="space-y-4 rounded-md border p-4">
-													<div className="flex gap-4">
-														<div className="flex-1">
-															<div className="text-sm font-medium">API Key</div>
-															<Input
-																placeholder="API Key or env.MY_KEY"
-																value={key.value}
-																onChange={(e) => updateKey(index, "value", e.target.value)}
-																type="text"
-																className={`flex-1 ${keysRequired && key.value.trim() === "" ? "border-destructive" : ""}`}
-															/>
-														</div>
-														<div>
-															<div className="flex items-center gap-2">
-																<label className="text-sm font-medium">Weight</label>
-																<TooltipProvider>
-																	<Tooltip>
-																		<TooltipTrigger asChild>
-																			<span>
-																				<Info className="text-muted-foreground h-3 w-3" />
-																			</span>
-																		</TooltipTrigger>
-																		<TooltipContent>
-																			<p>Determines traffic distribution between keys. Higher weights receive more requests.</p>
-																		</TooltipContent>
-																	</Tooltip>
-																</TooltipProvider>
-															</div>
-															<Input
-																placeholder="1.0"
-																value={key.weight}
-																onChange={(e) => updateKey(index, "weight", e.target.value)}
-																type="number"
-																step="0.1"
-																min="0.1"
-																className="w-20"
-															/>
-														</div>
-													</div>
-													<div>
-														<div className="flex items-center gap-2">
-															<label className="text-sm font-medium">Models (Optional)</label>
-															<TooltipProvider>
-																<Tooltip>
-																	<TooltipTrigger asChild>
-																		<span>
-																			<Info className="text-muted-foreground h-3 w-3" />
-																		</span>
-																	</TooltipTrigger>
-																	<TooltipContent>
-																		<p>Comma-separated list of models this key applies to. Leave blank for all models.</p>
-																	</TooltipContent>
-																</Tooltip>
-															</TooltipProvider>
-														</div>
-														<TagInput
-															placeholder="e.g. gpt-4, gpt-3.5-turbo"
-															value={key.models || []}
-															onValueChange={(newModels) => updateKey(index, "models", newModels)}
-														/>
-													</div>
-													{keys.length > 1 && (
-														<Button type="button" variant="destructive" size="sm" onClick={() => removeKey(index)} className="mt-2">
-															<X className="h-4 w-4" />
-															Remove Key
-														</Button>
-													)}
-												</div>
-											))}
+											)}
+										</div>
+									))}
+								</div>
+							</TabsContent>
+						)}
+
+						{/* Meta Config Tab */}
+						{selectedProvider !== "anthropic" && selectedProvider !== "openai" && selectedProvider !== "cohere" && (
+							<TabsContent value="meta-config">
+								<MetaConfigRenderer provider={selectedProvider} metaConfig={metaConfig} onMetaConfigChange={handleMetaConfigChange} />
+							</TabsContent>
+						)}
+
+						{/* Network Tab */}
+						<TabsContent value="network" className="space-y-6">
+							{/* Network Configuration */}
+							<div className="space-y-4">
+								<div className="flex items-center gap-2">
+									<Globe className="h-4 w-4" />
+									<h3 className="text-base font-medium">Network Configuration</h3>
+								</div>
+								<div className="grid grid-cols-1 gap-4">
+									<div>
+										<label className="text-sm font-medium">Base URL {baseURLRequired ? "(Required)" : "(Optional)"}</label>
+										<Input
+											placeholder="https://api.example.com"
+											value={networkConfig.base_url || ""}
+											onChange={(e) =>
+												updateField("networkConfig", {
+													...networkConfig,
+													base_url: e.target.value,
+												})
+											}
+											className={baseURLRequired && !networkConfig.base_url ? "border-destructive" : ""}
+										/>
+									</div>
+									<div className="grid grid-cols-2 gap-4">
+										<div>
+											<label className="text-sm font-medium">Timeout (seconds)</label>
+											<Input
+												type="number"
+												placeholder="30"
+												value={networkConfig.default_request_timeout_in_seconds}
+												onChange={(e) =>
+													updateField("networkConfig", {
+														...networkConfig,
+														default_request_timeout_in_seconds: parseInt(e.target.value) || 30,
+													})
+												}
+											/>
+										</div>
+										<div>
+											<label className="text-sm font-medium">Max Retries</label>
+											<Input
+												type="number"
+												placeholder="0"
+												value={networkConfig.max_retries}
+												onChange={(e) =>
+													updateField("networkConfig", {
+														...networkConfig,
+														max_retries: parseInt(e.target.value) || 0,
+													})
+												}
+											/>
 										</div>
 									</div>
-								)}
+								</div>
+							</div>
 
-								{/* Meta Config */}
-								<MetaConfigRenderer provider={selectedProvider} metaConfig={metaConfig} onMetaConfigChange={handleMetaConfigChange} />
+							{/* Proxy Configuration */}
+							<div className="space-y-4">
+								<div className="flex items-center gap-2">
+									<Globe className="h-4 w-4" />
+									<h3 className="text-base font-medium">Proxy Settings</h3>
+								</div>
+								<div className="space-y-4">
+									<div className="space-y-2">
+										<label className="text-sm font-medium">Proxy Type</label>
+										<Select value={proxyConfig.type} onValueChange={(value) => updateProxyField("type", value as ProxyType)}>
+											<SelectTrigger className="w-48">
+												<SelectValue placeholder="Select type" />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="none">None</SelectItem>
+												<SelectItem value="http">HTTP</SelectItem>
+												<SelectItem value="socks5">SOCKS5</SelectItem>
+												<SelectItem value="environment">Environment</SelectItem>
+											</SelectContent>
+										</Select>
+									</div>
 
-								{/* Network Configuration */}
-								<div>
-									<CardHeader className="mb-2 px-0">
-										<CardTitle className="flex items-center gap-2 text-base">
-											<Globe className="h-4 w-4" />
-											Network Configuration
-										</CardTitle>
-									</CardHeader>
-									<CardContent className="space-y-4 px-0">
-										<div className="grid grid-cols-1 gap-4">
+									{proxyConfig.type !== "none" && proxyConfig.type !== "environment" && (
+										<div className="space-y-4">
 											<div>
-												<label className="text-sm font-medium">Base URL {baseURLRequired ? "(Required)" : "(Optional)"}</label>
+												<label className="text-sm font-medium">Proxy URL</label>
 												<Input
-													placeholder="https://api.example.com"
-													value={networkConfig.base_url || ""}
-													onChange={(e) =>
-														updateField("networkConfig", {
-															...networkConfig,
-															base_url: e.target.value,
-														})
-													}
-													className={baseURLRequired && !networkConfig.base_url ? "border-destructive" : ""}
+													placeholder="http://proxy.example.com:8080"
+													value={proxyConfig.url || ""}
+													onChange={(e) => updateProxyField("url", e.target.value)}
 												/>
 											</div>
 											<div className="grid grid-cols-2 gap-4">
 												<div>
-													<label className="text-sm font-medium">Timeout (seconds)</label>
+													<label className="text-sm font-medium">Username</label>
 													<Input
-														type="number"
-														placeholder="30"
-														value={networkConfig.default_request_timeout_in_seconds}
-														onChange={(e) =>
-															updateField("networkConfig", {
-																...networkConfig,
-																default_request_timeout_in_seconds: parseInt(e.target.value) || 30,
-															})
-														}
+														value={proxyConfig.username || ""}
+														onChange={(e) => updateProxyField("username", e.target.value)}
+														placeholder="Proxy username"
 													/>
 												</div>
 												<div>
-													<label className="text-sm font-medium">Max Retries</label>
+													<label className="text-sm font-medium">Password</label>
 													<Input
-														type="number"
-														placeholder="0"
-														value={networkConfig.max_retries}
-														onChange={(e) =>
-															updateField("networkConfig", {
-																...networkConfig,
-																max_retries: parseInt(e.target.value) || 0,
-															})
-														}
+														type="password"
+														value={proxyConfig.password || ""}
+														onChange={(e) => updateProxyField("password", e.target.value)}
+														placeholder="Proxy password"
 													/>
 												</div>
 											</div>
 										</div>
-									</CardContent>
-								</div>
-
-								{/* Performance Configuration */}
-								<div>
-									<CardHeader className="mb-2 px-0">
-										<CardTitle className="flex items-center gap-2 text-base">
-											<Zap className="h-4 w-4" />
-											Performance Settings
-										</CardTitle>
-									</CardHeader>
-									{performanceChanged && (
-										<Alert className="mb-3">
-											<AlertTriangle className="h-4 w-4" />
-											<AlertDescription>
-												<strong>Heads up:</strong> Changing concurrency or buffer size may temporarily affect request latency for this
-												provider while the new settings are being applied.
-											</AlertDescription>
-										</Alert>
 									)}
-									<CardContent className="space-y-4 px-0">
-										<div className="grid grid-cols-2 gap-4">
-											<div>
-												<label className="text-sm font-medium">Concurrency</label>
-												<Input
-													type="number"
-													value={performanceConfig.concurrency}
-													onChange={(e) =>
-														updateField("performanceConfig", {
-															...performanceConfig,
-															concurrency: parseInt(e.target.value) || 0,
-														})
-													}
-													className={!performanceValid ? "border-destructive" : ""}
-												/>
-											</div>
-											<div>
-												<label className="text-sm font-medium">Buffer Size</label>
-												<Input
-													type="number"
-													value={performanceConfig.buffer_size}
-													onChange={(e) =>
-														updateField("performanceConfig", {
-															...performanceConfig,
-															buffer_size: parseInt(e.target.value) || 0,
-														})
-													}
-													className={!performanceValid ? "border-destructive" : ""}
-												/>
-											</div>
-										</div>
-									</CardContent>
 								</div>
+							</div>
+						</TabsContent>
 
-								{/* Proxy Configuration */}
-								<div className="space-y-4">
-									<CardHeader className="mb-2 px-0">
-										<CardTitle className="flex items-center gap-2 text-base">
-											<Globe className="h-4 w-4" />
-											Proxy Settings
-										</CardTitle>
-									</CardHeader>
-									<div className="space-y-4">
-										<div className="space-y-2">
-											<label className="text-sm font-medium">Proxy Type</label>
-											<Select value={proxyConfig.type} onValueChange={(value) => updateProxyField("type", value as ProxyType)}>
-												<SelectTrigger className="w-48">
-													<SelectValue placeholder="Select type" />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="none">None</SelectItem>
-													<SelectItem value="http">HTTP</SelectItem>
-													<SelectItem value="socks5">SOCKS5</SelectItem>
-													<SelectItem value="environment">Environment</SelectItem>
-												</SelectContent>
-											</Select>
-										</div>
-
-										{proxyConfig.type !== "none" && proxyConfig.type !== "environment" && (
-											<div className="space-y-4">
-												<div>
-													<label className="text-sm font-medium">Proxy URL</label>
-													<Input
-														placeholder="http://proxy.example.com:8080"
-														value={proxyConfig.url || ""}
-														onChange={(e) => updateProxyField("url", e.target.value)}
-													/>
-												</div>
-												<div className="grid grid-cols-2 gap-4">
-													<div>
-														<label className="text-sm font-medium">Username</label>
-														<Input
-															value={proxyConfig.username || ""}
-															onChange={(e) => updateProxyField("username", e.target.value)}
-															placeholder="Proxy username"
-														/>
-													</div>
-													<div>
-														<label className="text-sm font-medium">Password</label>
-														<Input
-															type="password"
-															value={proxyConfig.password || ""}
-															onChange={(e) => updateProxyField("password", e.target.value)}
-															placeholder="Proxy password"
-														/>
-													</div>
-												</div>
-											</div>
-										)}
-									</div>
+						{/* Performance Tab */}
+						<TabsContent value="performance" className="space-y-4">
+							<div className="flex items-center gap-2">
+								<Zap className="h-4 w-4" />
+								<h3 className="text-base font-medium">Performance Settings</h3>
+							</div>
+							{performanceChanged && (
+								<Alert>
+									<AlertTriangle className="h-4 w-4" />
+									<AlertDescription>
+										<strong>Heads up:</strong> Changing concurrency or buffer size may temporarily affect request latency for this provider
+										while the new settings are being applied.
+									</AlertDescription>
+								</Alert>
+							)}
+							<div className="grid grid-cols-2 gap-4">
+								<div>
+									<label className="text-sm font-medium">Concurrency</label>
+									<Input
+										type="number"
+										value={performanceConfig.concurrency}
+										onChange={(e) =>
+											updateField("performanceConfig", {
+												...performanceConfig,
+												concurrency: parseInt(e.target.value) || 0,
+											})
+										}
+										className={!performanceValid ? "border-destructive" : ""}
+									/>
 								</div>
-								{/* End Proxy Configuration */}
-							</> /* end fragment shown when provider selected */
-						)}
-					</div>
+								<div>
+									<label className="text-sm font-medium">Buffer Size</label>
+									<Input
+										type="number"
+										value={performanceConfig.buffer_size}
+										onChange={(e) =>
+											updateField("performanceConfig", {
+												...performanceConfig,
+												buffer_size: parseInt(e.target.value) || 0,
+											})
+										}
+										className={!performanceValid ? "border-destructive" : ""}
+									/>
+								</div>
+							</div>
+						</TabsContent>
+					</Tabs>
 
 					{/* Form Actions */}
 					{availableProviders.length > 0 && (
@@ -648,7 +688,6 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
 							<Button type="button" variant="outline" onClick={onCancel}>
 								Cancel
 							</Button>
-							{/* Save button with tooltip explaining disabled state */}
 							<TooltipProvider>
 								<Tooltip>
 									<TooltipTrigger asChild>

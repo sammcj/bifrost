@@ -293,7 +293,7 @@ Choose higher settings (like the t3.xlarge profile above) for raw speed, or lowe
 
 ## 💬 Need Help?
 
-**🔗 [Join our Discord](https://discord.gg/qPaAuTCv)** for:
+**🔗 [Join our Discord](https://getmax.im/bifrost-discord)** for:
 
 - ❓ Quick setup assistance and troubleshooting
 - 💡 Best practices and configuration tips

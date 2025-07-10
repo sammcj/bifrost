@@ -193,7 +193,7 @@ response, err := client.ChatCompletionRequest(context.Background(), schemas.Chat
 
 ## 💬 Need Help?
 
-**🔗 [Join our Discord](https://discord.gg/qPaAuTCv)** for real-time setup assistance and Go-specific support!
+**🔗 [Join our Discord](https://getmax.im/bifrost-discord)** for real-time setup assistance and Go-specific support!
 
 ---
 

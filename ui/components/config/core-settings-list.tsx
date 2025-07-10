@@ -17,18 +17,16 @@ export default function CoreSettingsList() {
 	const [config, setConfig] = useState<CoreConfig>({
 		drop_excess_requests: false,
 		initial_pool_size: 300,
-		log_queue_size: 1000,
+		enable_logging: true,
 	});
 	const [droppedRequests, setDroppedRequests] = useState<number>(0);
 	const [isLoading, setIsLoading] = useState(true);
 	const [localValues, setLocalValues] = useState<{
 		initial_pool_size: string;
 		prometheus_labels: string;
-		log_queue_size: string;
 	}>({
 		initial_pool_size: "300",
 		prometheus_labels: "",
-		log_queue_size: "1000",
 	});
 
 	useEffect(() => {
@@ -46,7 +44,6 @@ export default function CoreSettingsList() {
 	// Use refs to store timeout IDs
 	const poolSizeTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 	const prometheusLabelsTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
-	const logQueueSizeTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
 	useEffect(() => {
 		const fetchConfig = async () => {
@@ -58,7 +55,6 @@ export default function CoreSettingsList() {
 				setLocalValues({
 					initial_pool_size: coreConfig.initial_pool_size?.toString() || "300",
 					prometheus_labels: coreConfig.prometheus_labels || "",
-					log_queue_size: coreConfig.log_queue_size?.toString() || "1000",
 				});
 			}
 			setIsLoading(false);
@@ -122,26 +118,6 @@ export default function CoreSettingsList() {
 		[updateConfig],
 	);
 
-	const handleLogQueueSizeChange = useCallback(
-		(value: string) => {
-			setLocalValues((prev) => ({ ...prev, log_queue_size: value }));
-
-			// Clear existing timeout
-			if (logQueueSizeTimeoutRef.current) {
-				clearTimeout(logQueueSizeTimeoutRef.current);
-			}
-
-			// Set new timeout
-			logQueueSizeTimeoutRef.current = setTimeout(() => {
-				const numValue = Number.parseInt(value);
-				if (!isNaN(numValue) && numValue > 0) {
-					updateConfig("log_queue_size", numValue);
-				}
-			}, 1000);
-		},
-		[updateConfig],
-	);
-
 	// Cleanup timeouts on unmount
 	useEffect(() => {
 		return () => {
@@ -150,9 +126,6 @@ export default function CoreSettingsList() {
 			}
 			if (prometheusLabelsTimeoutRef.current) {
 				clearTimeout(prometheusLabelsTimeoutRef.current);
-			}
-			if (logQueueSizeTimeoutRef.current) {
-				clearTimeout(logQueueSizeTimeoutRef.current);
 			}
 		};
 	}, []);
@@ -216,21 +189,17 @@ export default function CoreSettingsList() {
 
 				<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
 					<div className="space-y-0.5">
-						<label htmlFor="log-queue-size" className="text-sm font-medium">
-							Log Queue Size
+						<label htmlFor="enable-logging" className="text-sm font-medium">
+							Enable Logs
 						</label>
 						<p className="text-muted-foreground text-sm">
-							Additional logs will be dropped if the queue is full. Bifrost has dropped{" "}
-							<span className="font-bold">{droppedRequests} logs</span> so far.
+							Enable logging of requests and responses to a SQLite database. This can add 40-60mb of overhead to the system memory.
 						</p>
 					</div>
-					<Input
-						id="log-queue-size"
-						type="number"
-						className="w-24"
-						value={localValues.log_queue_size}
-						onChange={(e) => handleLogQueueSizeChange(e.target.value)}
-						min="1"
+					<Switch
+						id="enable-logging"
+						checked={config.enable_logging}
+						onCheckedChange={(checked) => handleConfigChange("enable_logging", checked)}
 					/>
 				</div>
 
