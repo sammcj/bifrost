@@ -38,7 +38,7 @@ cd ../transports-integrations/
 
 ### **💬 Need Help Contributing?**
 
-**🔗 [Join our Discord](https://discord.gg/qPaAuTCv)** for:
+**🔗 [Join our Discord](https://getmax.im/bifrost-discord)** for:
 
 - ❓ Quick questions about contributing
 - 💡 Discuss your contribution ideas
@@ -524,7 +524,7 @@ We value every contribution and recognize contributors:
 
 - **💬 [GitHub Discussions](https://github.com/maximhq/bifrost/discussions)** - Questions, ideas, and general discussion
 - **🐛 [GitHub Issues](https://github.com/maximhq/bifrost/issues)** - Bug reports and feature requests
-- **🔗 [Discord Community](https://discord.gg/qPaAuTCv)** - Real-time chat and collaboration
+- **🔗 [Discord Community](https://getmax.im/bifrost-discord)** - Real-time chat and collaboration
 
 ---
 
