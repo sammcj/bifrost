@@ -293,23 +293,27 @@ func main() {
 
 	promPlugin := telemetry.NewPrometheusPlugin()
 
-	// Initialize logging plugin with app-dir based path
-	loggingConfig := &logging.Config{
-		DatabasePath:     logDir,
-		LogQueueSize:     store.ClientConfig.LogQueueSize,
-		MaxCacheMemoryMB: 5,
-	}
+	var loggingPlugin *logging.LoggerPlugin
+	var loggingHandler *handlers.LoggingHandler
+	var wsHandler *handlers.WebSocketHandler
 
-	loggingPlugin, err := logging.NewLoggerPlugin(loggingConfig, logger)
-	if err != nil {
-		log.Fatalf("failed to initialize logging plugin: %v", err)
-	}
+	if store.ClientConfig.EnableLogging {
+		// Initialize logging plugin with app-dir based path
+		loggingConfig := &logging.Config{
+			DatabasePath: logDir,
+		}
 
-	if err != nil {
-		log.Fatalf("failed to initialize mocker plugin: %v", err)
-	}
+		var err error
+		loggingPlugin, err = logging.NewLoggerPlugin(loggingConfig, logger)
+		if err != nil {
+			log.Fatalf("failed to initialize logging plugin: %v", err)
+		}
 
-	loadedPlugins = append(loadedPlugins, promPlugin, loggingPlugin)
+		loadedPlugins = append(loadedPlugins, promPlugin, loggingPlugin)
+
+		loggingHandler = handlers.NewLoggingHandler(loggingPlugin.GetPluginLogManager(), logger)
+		wsHandler = handlers.NewWebSocketHandler(loggingPlugin.GetPluginLogManager(), logger)
+	}
 
 	client, err := bifrost.Init(schemas.BifrostConfig{
 		Account:            account,
@@ -331,14 +335,14 @@ func main() {
 	mcpHandler := handlers.NewMCPHandler(client, logger, store)
 	integrationHandler := handlers.NewIntegrationHandler(client)
 	configHandler := handlers.NewConfigHandler(client, logger, store, configPath)
-	loggingHandler := handlers.NewLoggingHandler(loggingPlugin.GetPluginLogManager(), logger)
-	wsHandler := handlers.NewWebSocketHandler(loggingPlugin.GetPluginLogManager(), logger)
 
 	// Set up WebSocket callback for real-time log updates
-	loggingPlugin.SetLogCallback(wsHandler.BroadcastLogUpdate)
+	if wsHandler != nil && loggingPlugin != nil {
+		loggingPlugin.SetLogCallback(wsHandler.BroadcastLogUpdate)
 
-	// Start WebSocket heartbeat
-	wsHandler.StartHeartbeat()
+		// Start WebSocket heartbeat
+		wsHandler.StartHeartbeat()
+	}
 
 	r := router.New()
 
@@ -348,8 +352,12 @@ func main() {
 	mcpHandler.RegisterRoutes(r)
 	integrationHandler.RegisterRoutes(r)
 	configHandler.RegisterRoutes(r)
-	loggingHandler.RegisterRoutes(r)
-	wsHandler.RegisterRoutes(r)
+	if loggingHandler != nil {
+		loggingHandler.RegisterRoutes(r)
+	}
+	if wsHandler != nil {
+		wsHandler.RegisterRoutes(r)
+	}
 
 	// Add Prometheus /metrics endpoint
 	r.GET("/metrics", fasthttpadaptor.NewFastHTTPHandler(promhttp.Handler()))
@@ -370,6 +378,9 @@ func main() {
 		log.Fatalf("Error starting server: %v", err)
 	}
 
-	wsHandler.Stop()
+	if wsHandler != nil {
+		wsHandler.Stop()
+	}
+
 	client.Cleanup()
 }

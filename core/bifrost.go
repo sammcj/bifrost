@@ -53,6 +53,7 @@ type Bifrost struct {
 	plugins             []schemas.Plugin // list of plugins
 	requestQueues       sync.Map         // provider request queues (thread-safe)
 	waitGroups          sync.Map         // wait groups for each provider (thread-safe)
+	providerMutexes     sync.Map         // mutexes for each provider to prevent concurrent updates (thread-safe)
 	channelMessagePool  sync.Pool        // Pool for ChannelMessage objects, initial pool size is set in Init
 	responseChannelPool sync.Pool        // Pool for response channels, initial pool size is set in Init
 	errorChannelPool    sync.Pool        // Pool for error channels, initial pool size is set in Init
@@ -170,7 +171,13 @@ func Init(config schemas.BifrostConfig) (*Bifrost, error) {
 			continue
 		}
 
-		if err := bifrost.prepareProvider(providerKey, config); err != nil {
+		// Lock the provider mutex during initialization
+		providerMutex := bifrost.getProviderMutex(providerKey)
+		providerMutex.Lock()
+		err = bifrost.prepareProvider(providerKey, config)
+		providerMutex.Unlock()
+
+		if err != nil {
 			bifrost.logger.Warn(fmt.Sprintf("failed to prepare provider %s: %v", providerKey, err))
 		}
 	}
@@ -361,6 +368,7 @@ func (bifrost *Bifrost) EmbeddingRequest(ctx context.Context, req *schemas.Bifro
 //
 // Note: This operation will temporarily pause request processing for the specified provider
 // while the transition occurs. In-flight requests will complete before workers are stopped.
+// Buffered requests in the old queue will be transferred to the new queue to prevent loss.
 func (bifrost *Bifrost) UpdateProviderConcurrency(providerKey schemas.ModelProvider) error {
 	bifrost.logger.Info(fmt.Sprintf("Updating concurrency configuration for provider %s", providerKey))
 
@@ -370,13 +378,20 @@ func (bifrost *Bifrost) UpdateProviderConcurrency(providerKey schemas.ModelProvi
 		return fmt.Errorf("failed to get updated config for provider %s: %v", providerKey, err)
 	}
 
+	// Lock the provider to prevent concurrent access during update
+	providerMutex := bifrost.getProviderMutex(providerKey)
+	providerMutex.Lock()
+	defer providerMutex.Unlock()
+
 	// Check if provider currently exists
-	oldQueue, exists := bifrost.requestQueues.Load(providerKey)
+	oldQueueValue, exists := bifrost.requestQueues.Load(providerKey)
 	if !exists {
 		bifrost.logger.Debug(fmt.Sprintf("Provider %s not currently active, initializing with new configuration", providerKey))
 		// If provider doesn't exist, just prepare it with new configuration
 		return bifrost.prepareProvider(providerKey, providerConfig)
 	}
+
+	oldQueue := oldQueueValue.(chan ChannelMessage)
 
 	// Check if the provider has any keys (skip keyless providers)
 	if providerRequiresKey(providerKey) {
@@ -388,30 +403,71 @@ func (bifrost *Bifrost) UpdateProviderConcurrency(providerKey schemas.ModelProvi
 
 	bifrost.logger.Debug(fmt.Sprintf("Gracefully stopping existing workers for provider %s", providerKey))
 
-	// Step 1: Close the existing queue to signal workers to stop processing new requests
-	close(oldQueue.(chan ChannelMessage))
+	// Step 1: Create new queue with updated buffer size
+	newQueue := make(chan ChannelMessage, providerConfig.ConcurrencyAndBufferSize.BufferSize)
 
-	// Step 2: Wait for all existing workers to finish processing in-flight requests
+	// Step 2: Transfer any buffered requests from old queue to new queue
+	// This prevents request loss during the transition
+	transferredCount := 0
+	for {
+		select {
+		case msg := <-oldQueue:
+			select {
+			case newQueue <- msg:
+				transferredCount++
+			default:
+				// New queue is full, put message back and break
+				// This is unlikely with proper buffer sizing but provides safety
+				go func(m ChannelMessage) {
+					select {
+					case newQueue <- m:
+					case <-time.After(5 * time.Second):
+						bifrost.logger.Warn("Failed to transfer buffered request to new queue within timeout")
+						// Send error response to avoid hanging the client
+						m.Err <- schemas.BifrostError{
+							IsBifrostError: false,
+							Error: schemas.ErrorField{
+								Message: "request failed during provider concurrency update",
+							},
+						}
+					}
+				}(msg)
+				goto transferComplete
+			}
+		default:
+			// No more buffered messages
+			goto transferComplete
+		}
+	}
+
+transferComplete:
+	if transferredCount > 0 {
+		bifrost.logger.Info(fmt.Sprintf("Transferred %d buffered requests to new queue for provider %s", transferredCount, providerKey))
+	}
+
+	// Step 3: Close the old queue to signal workers to stop
+	close(oldQueue)
+
+	// Step 4: Atomically replace the queue
+	bifrost.requestQueues.Store(providerKey, newQueue)
+
+	// Step 5: Wait for all existing workers to finish processing in-flight requests
 	waitGroup, exists := bifrost.waitGroups.Load(providerKey)
 	if exists {
 		waitGroup.(*sync.WaitGroup).Wait()
 		bifrost.logger.Debug(fmt.Sprintf("All workers for provider %s have stopped", providerKey))
 	}
 
-	// Step 3: Create new queue with updated buffer size
-	newQueue := make(chan ChannelMessage, providerConfig.ConcurrencyAndBufferSize.BufferSize)
-	bifrost.requestQueues.Store(providerKey, newQueue)
-
-	// Step 4: Create new wait group for the updated workers
+	// Step 6: Create new wait group for the updated workers
 	bifrost.waitGroups.Store(providerKey, &sync.WaitGroup{})
 
-	// Step 5: Create provider instance
+	// Step 7: Create provider instance
 	provider, err := bifrost.createProviderFromProviderKey(providerKey, providerConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create provider instance for %s: %v", providerKey, err)
 	}
 
-	// Step 6: Start new workers with updated concurrency
+	// Step 8: Start new workers with updated concurrency
 	bifrost.logger.Debug(fmt.Sprintf("Starting %d new workers for provider %s with buffer size %d",
 		providerConfig.ConcurrencyAndBufferSize.Concurrency,
 		providerKey,
@@ -438,6 +494,12 @@ func (bifrost *Bifrost) GetDropExcessRequests() bool {
 func (bifrost *Bifrost) UpdateDropExcessRequests(value bool) {
 	bifrost.dropExcessRequests.Store(value)
 	bifrost.logger.Info(fmt.Sprintf("DropExcessRequests updated to: %v", value))
+}
+
+// getProviderMutex gets or creates a mutex for the given provider
+func (bifrost *Bifrost) getProviderMutex(providerKey schemas.ModelProvider) *sync.RWMutex {
+	mutexValue, _ := bifrost.providerMutexes.LoadOrStore(providerKey, &sync.RWMutex{})
+	return mutexValue.(*sync.RWMutex)
 }
 
 // MCP PUBLIC API
@@ -671,6 +733,7 @@ func (bifrost *Bifrost) createProviderFromProviderKey(providerKey schemas.ModelP
 
 // prepareProvider sets up a provider with its configuration, keys, and worker channels.
 // It initializes the request queue and starts worker goroutines for processing requests.
+// Note: This function assumes the caller has already acquired the appropriate mutex for the provider.
 func (bifrost *Bifrost) prepareProvider(providerKey schemas.ModelProvider, config *schemas.ProviderConfig) error {
 	providerConfig, err := bifrost.account.GetConfigForProvider(providerKey)
 	if err != nil {
@@ -710,26 +773,43 @@ func (bifrost *Bifrost) prepareProvider(providerKey schemas.ModelProvider, confi
 // getProviderQueue returns the request queue for a given provider key.
 // If the queue doesn't exist, it creates one at runtime and initializes the provider,
 // given the provider config is provided in the account interface implementation.
+// This function uses read locks to prevent race conditions during provider updates.
 func (bifrost *Bifrost) getProviderQueue(providerKey schemas.ModelProvider) (chan ChannelMessage, error) {
-	var queue chan ChannelMessage
+	// Use read lock to allow concurrent reads but prevent concurrent updates
+	providerMutex := bifrost.getProviderMutex(providerKey)
+	providerMutex.RLock()
 
-	if queueValue, exists := bifrost.requestQueues.Load(providerKey); !exists {
-		bifrost.logger.Debug(fmt.Sprintf("Creating new request queue for provider %s at runtime", providerKey))
-
-		config, err := bifrost.account.GetConfigForProvider(providerKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get config for provider: %v", err)
-		}
-
-		if err := bifrost.prepareProvider(providerKey, config); err != nil {
-			return nil, err
-		}
-
-		queueValue, _ = bifrost.requestQueues.Load(providerKey)
-		queue = queueValue.(chan ChannelMessage)
-	} else {
-		queue = queueValue.(chan ChannelMessage)
+	if queueValue, exists := bifrost.requestQueues.Load(providerKey); exists {
+		queue := queueValue.(chan ChannelMessage)
+		providerMutex.RUnlock()
+		return queue, nil
 	}
+
+	// Provider doesn't exist, need to create it
+	// Upgrade to write lock for creation
+	providerMutex.RUnlock()
+	providerMutex.Lock()
+	defer providerMutex.Unlock()
+
+	// Double-check after acquiring write lock (another goroutine might have created it)
+	if queueValue, exists := bifrost.requestQueues.Load(providerKey); exists {
+		queue := queueValue.(chan ChannelMessage)
+		return queue, nil
+	}
+
+	bifrost.logger.Debug(fmt.Sprintf("Creating new request queue for provider %s at runtime", providerKey))
+
+	config, err := bifrost.account.GetConfigForProvider(providerKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config for provider: %v", err)
+	}
+
+	if err := bifrost.prepareProvider(providerKey, config); err != nil {
+		return nil, err
+	}
+
+	queueValue, _ := bifrost.requestQueues.Load(providerKey)
+	queue := queueValue.(chan ChannelMessage)
 
 	return queue, nil
 }
