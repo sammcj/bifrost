@@ -1,3 +1,5 @@
+"use client";
+
 import Header from "@/components/header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import GradientHeader from "@/components/ui/gradient-header";
+import Image from "next/image";
+import { useTheme } from "next-themes";
 
 const featuredPlugins = [
 	{
@@ -54,7 +58,7 @@ const featuredPlugins = [
 			"Latency simulation",
 		],
 		icon: Code,
-		color: "bg-green-500",
+		color: "bg-blue-500",
 		url: "https://github.com/maximhq/bifrost/tree/main/plugins/mocker",
 		quickStart: {
 			http: "HTTP support coming soon",
@@ -66,7 +70,7 @@ const featuredPlugins = [
 		displayName: "Circuit Breaker",
 		description: "Resilience patterns for handling provider failures and preventing cascade errors",
 		category: "Reliability",
-		status: "available",
+		status: "enterprise",
 		httpSupport: false,
 		capabilities: ["Automatic failure detection", "Fallback mechanisms", "Rate limiting", "Health monitoring", "Recovery strategies"],
 		icon: Shield,
@@ -101,9 +105,9 @@ const upcomingPlugins = [
 ];
 
 export default function PluginsPage() {
+	const { resolvedTheme } = useTheme();
 	return (
 		<div className="bg-background min-h-screen">
-			<Header title="Plugins" />
 			<div className="mx-auto max-w-7xl">
 				<div className="space-y-12">
 					{/* Hero Section */}
@@ -161,11 +165,22 @@ export default function PluginsPage() {
 									<Card key={plugin.name} className="group hover:border-primary/50 border-2 transition-all duration-300 hover:shadow-xl">
 										<CardHeader>
 											<div className="flex items-start justify-between">
-												<div className={`rounded-xl p-3 ${plugin.color} bg-opacity-10`}>
-													<Icon className={`h-8 w-8 ${plugin.color.replace("bg-", "text-")}`} />
-												</div>
-												<Badge variant={plugin.status === "production" ? "default" : "secondary"} className="text-xs">
-													{plugin.status === "production" ? "Production" : "Available"}
+												{plugin.name == "maxim" ? (
+													<Image
+														src={`/maxim-logo${resolvedTheme === "dark" ? "-dark" : ""}.png`}
+														alt="Maxim"
+														width={32}
+														height={32}
+														className="h-14 w-auto"
+													/>
+												) : (
+													<div className={`rounded-xl p-3 ${plugin.color} bg-opacity-10`}>
+														<Icon className={`h-8 w-8 ${plugin.color.replace("bg-", "text-")}`} />
+													</div>
+												)}
+
+												<Badge variant={plugin.status === "production" ? "default" : "secondary"} className="text-xs capitalize">
+													{plugin.status}
 												</Badge>
 											</div>
 

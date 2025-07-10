@@ -56,7 +56,6 @@ const docSections = [
 export default function DocsPage() {
 	return (
 		<div className="bg-background">
-			<Header title="Documentation" />
 			<div className="mx-auto max-w-7xl">
 				<div className="space-y-8">
 					{/* Header */}

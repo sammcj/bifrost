@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, BookOpen, Settings, Puzzle, Zap, ExternalLink, ChevronRight } from "lucide-react";
+import { Home, BookOpen, Settings, Puzzle, ExternalLink, HeartHandshake } from "lucide-react";
 
 import {
 	Sidebar,
@@ -20,8 +20,11 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
-import { useMemo, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
+import { ThemeToggle } from "./theme-toggle";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { BookOpenTextIcon, DiscordLogoIcon, GithubLogoIcon } from "@phosphor-icons/react";
 
 // Main navigation items
 const navigationItems = [
@@ -30,7 +33,6 @@ const navigationItems = [
 		url: "/",
 		icon: Home,
 		description: "Request logs & monitoring",
-		badge: "Live",
 	},
 	{
 		title: "Config",
@@ -56,14 +58,19 @@ const navigationItems = [
 // External links
 const externalLinks = [
 	{
+		title: "Discord Server",
+		url: "https://getmax.im/bifrost-discord",
+		icon: DiscordLogoIcon,
+	},
+	{
 		title: "GitHub Repository",
 		url: "https://github.com/maximhq/bifrost",
-		icon: ExternalLink,
+		icon: GithubLogoIcon,
 	},
 	{
 		title: "Full Documentation",
 		url: "https://github.com/maximhq/bifrost/tree/main/docs",
-		icon: BookOpen,
+		icon: BookOpenTextIcon,
 	},
 ];
 
@@ -85,15 +92,18 @@ export default function AppSidebar() {
 	// Always render the light theme version for SSR to avoid hydration mismatch
 	const logoSrc = mounted && resolvedTheme === "dark" ? "/bifrost-logo-dark.png" : "/bifrost-logo.png";
 
+	const { isConnected: isWebSocketConnected } = useWebSocket();
+
 	return (
 		<Sidebar className="border-border border-r">
-			<SidebarHeader className="flex h-12 justify-center">
-				<Link href="/" className="group flex items-center gap-2 pl-1.5">
-					<Image className="h-10 w-auto" src={logoSrc} alt="Bifrost" width={100} height={100} />
-				</Link>
+			<SidebarHeader className="flex h-12 justify-between border-b px-0">
+				<div className="flex h-full items-center justify-between gap-2 px-1.5">
+					<Link href="/" className="group flex items-center gap-2">
+						<Image className="h-10 w-auto" src={logoSrc} alt="Bifrost" width={100} height={100} />
+					</Link>
+					<ThemeToggle />
+				</div>
 			</SidebarHeader>
-
-			<SidebarSeparator />
 
 			<SidebarContent>
 				<SidebarGroup>
@@ -124,17 +134,17 @@ export default function AppSidebar() {
 														{item.description}
 													</span>
 												</div>
-												<div className="flex items-center space-x-2">
-													{item.badge && (
-														<Badge
-															variant={item.badge === "Live" ? "default" : "secondary"}
-															className={cn("h-5 px-2 py-0.5 text-xs", item.badge === "Live" && "animate-pulse duration-200")}
-														>
-															{item.badge}
-														</Badge>
-													)}
-													{isActive && <ChevronRight className="text-primary h-3 w-3" />}
-												</div>
+												{item.url === "/" && isWebSocketConnected && (
+													<div className="h-2 w-2 animate-pulse rounded-full bg-green-800 dark:bg-green-200" />
+												)}
+												{item.badge && (
+													<Badge
+														variant={item.badge === "Live" ? "default" : "secondary"}
+														className={cn("h-5 px-2 py-0.5 text-xs", item.badge === "Live" && "animate-pulse duration-200")}
+													>
+														{item.badge}
+													</Badge>
+												)}
 											</Link>
 										</SidebarMenuButton>
 									</SidebarMenuItem>
@@ -160,7 +170,7 @@ export default function AppSidebar() {
 									>
 										<a href={item.url} target="_blank" rel="noopener noreferrer" className="group flex w-full items-center justify-between">
 											<div className="flex items-center space-x-3">
-												<item.icon className="text-muted-foreground group-hover:text-foreground h-4 w-4" />
+												<item.icon className="text-muted-foreground h-4 w-4" size={16} weight="bold" />
 												<span className="text-sm">{item.title}</span>
 											</div>
 											<ExternalLink className="text-muted-foreground h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
