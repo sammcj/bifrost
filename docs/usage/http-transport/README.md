@@ -1,27 +1,29 @@
 # 🌐 HTTP Transport
 
-Complete guide to using Bifrost as an HTTP API service for multi-provider AI access, drop-in integrations, and production deployment.
+Complete guide to using Bifrost as an HTTP API service with **built-in web UI**, zero-configuration startup, multi-provider AI access, drop-in integrations, and production deployment.
 
-> **💡 Quick Start:** See the [30-second setup](../../quickstart/http-transport.md) to get the HTTP service running quickly.
+> **💡 Quick Start:** See the [15-second zero-config setup](../../quickstart/http-transport.md) to get the HTTP service running with web UI instantly.
 
 ---
 
 ## 📋 HTTP Transport Overview
 
-Bifrost HTTP transport provides a REST API service for:
+Bifrost HTTP transport provides a REST API service with **built-in web UI** for:
 
-- **Multi-provider access** through unified endpoints
-- **Drop-in replacements** for OpenAI, Anthropic, Google GenAI APIs
-- **Language-agnostic integration** with any HTTP client
-- **Production-ready deployment** with monitoring and scaling
-- **MCP tool execution** via HTTP endpoints
+- **🖥️ Visual configuration** with real-time monitoring and analytics
+- **🚀 Zero-configuration startup** - begin immediately, configure dynamically
+- **🔄 Multi-provider access** through unified endpoints
+- **🔗 Drop-in replacements** for OpenAI, Anthropic, Google GenAI APIs
+- **🌐 Language-agnostic integration** with any HTTP client
+- **📊 Production-ready deployment** with monitoring and scaling
+- **🛠️ MCP tool execution** via HTTP endpoints
 
 ```bash
-# Start Bifrost HTTP service
-docker run -p 8080:8080 \
-  -v $(pwd)/config.json:/app/config/config.json \
-  -e OPENAI_API_KEY \
-  maximhq/bifrost
+# Start Bifrost HTTP service (zero config!)
+docker run -p 8080:8080 maximhq/bifrost
+
+# Open web interface for visual configuration
+open http://localhost:8080
 
 # Make requests to any provider
 curl -X POST http://localhost:8080/v1/chat/completions \
@@ -191,25 +193,23 @@ curl -X POST http://localhost:8080/openai/v1/chat/completions \
 
 ## 🚀 Deployment Options
 
-### **Docker (Recommended)**
+### **Zero-Config Docker (Recommended)**
 
 ```bash
-# Quick start
+# Start instantly with web UI
+docker run -p 8080:8080 maximhq/bifrost
+# Configure via http://localhost:8080
+```
+
+### **File-Based Docker**
+
+```bash
+# With persistent config.json in app directory
 docker run -p 8080:8080 \
-  -v $(pwd)/config.json:/app/config/config.json \
+  -v $(pwd):/app/data \
   -e OPENAI_API_KEY \
   -e ANTHROPIC_API_KEY \
   maximhq/bifrost
-
-# Production with custom settings
-docker run -p 8080:8080 \
-  -v $(pwd)/config.json:/app/config/config.json \
-  -v $(pwd)/logs:/app/logs \
-  -e OPENAI_API_KEY \
-  -e ANTHROPIC_API_KEY \
-  maximhq/bifrost \
-  -pool-size 500 \
-  -drop-excess-requests
 ```
 
 ### **Binary Deployment**
@@ -218,50 +218,14 @@ docker run -p 8080:8080 \
 # Install
 go install github.com/maximhq/bifrost/transports/bifrost-http@latest
 
-# Run
-bifrost-http \
-  -config config.json \
-  -port 8080 \
-  -pool-size 300 \
-  -plugins maxim
+# Zero config startup (uses current directory)
+bifrost-http -port 8080
 ```
 
-### **Kubernetes**
+For detailed deployment instructions including app directory setup, Docker volumes, and production best practices, see:
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: bifrost
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: bifrost
-  template:
-    metadata:
-      labels:
-        app: bifrost
-    spec:
-      containers:
-        - name: bifrost
-          image: maximhq/bifrost:latest
-          ports:
-            - containerPort: 8080
-          env:
-            - name: OPENAI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ai-keys
-                  key: openai
-          volumeMounts:
-            - name: config
-              mountPath: /app/config
-      volumes:
-        - name: config
-          configMap:
-            name: bifrost-config
-```
+- [Understanding App Directory & Docker Volumes](../../quickstart/http-transport.md#understanding-app-directory--docker-volumes)
+- [Production Deployment Guide](../../quickstart/http-transport.md#production-deployment)
 
 ---
 
@@ -321,3 +285,12 @@ curl http://localhost:8080/v1/chat/completions \
 4. **[🚀 Deploy to Production](../../quickstart/http-transport.md#production-deployment)** - Scale for production workloads
 
 > **🏛️ Architecture:** For HTTP transport design and performance details, see [Architecture Documentation](../../architecture/README.md).
+
+---
+
+## 📚 Additional Resources
+
+- [Configuration Guide](./configuration/providers.md)
+- [API Endpoints](./endpoints.md)
+- [Error Handling](../errors.md)
+- [Monitoring & Metrics](./configuration/plugins.md)

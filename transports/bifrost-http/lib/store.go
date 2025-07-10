@@ -62,12 +62,16 @@ func NewConfigStore(logger schemas.Logger) (*ConfigStore, error) {
 // with full preprocessing including environment variable resolution and meta config parsing.
 // All processing is done upfront to ensure zero latency when retrieving data.
 //
+// If the config file doesn't exist, the system starts with default configuration
+// and users can add providers dynamically via the HTTP API.
+//
 // This method handles:
 //   - JSON config file parsing
 //   - Environment variable substitution for API keys (env.VARIABLE_NAME)
 //   - Provider-specific meta config processing (Azure, Bedrock, Vertex)
 //   - Case conversion for provider names (e.g., "OpenAI" -> "openai")
 //   - In-memory storage for ultra-fast access during request processing
+//   - Graceful handling of missing config files
 func (s *ConfigStore) LoadFromConfig(configPath string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -75,9 +79,27 @@ func (s *ConfigStore) LoadFromConfig(configPath string) error {
 	s.configPath = configPath
 	s.logger.Info(fmt.Sprintf("Loading configuration from: %s", configPath))
 
-	// Read and parse the JSON config file
+	// Check if config file exists
 	data, err := os.ReadFile(configPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			s.logger.Info(fmt.Sprintf("Config file %s not found, starting with default configuration. Providers can be added dynamically via API.", configPath))
+
+			// Initialize with default configuration
+			s.ClientConfig = ClientConfig{
+				DropExcessRequests: false,
+				PrometheusLabels:   []string{},
+				InitialPoolSize:    300,
+			}
+			s.Providers = make(map[schemas.ModelProvider]ProviderConfig)
+			s.MCPConfig = nil
+
+			// Auto-detect and configure providers from common environment variables
+			s.autoDetectProviders()
+
+			s.logger.Info("Successfully initialized with default configuration.")
+			return nil
+		}
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
@@ -92,91 +114,102 @@ func (s *ConfigStore) LoadFromConfig(configPath string) error {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// Process core configuration if present
+	// Process core configuration if present, otherwise use defaults
 	if len(configData.Client) > 0 {
 		var clientConfig ClientConfig
 		if err := json.Unmarshal(configData.Client, &clientConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal client config: %w", err)
 		}
 		s.ClientConfig = clientConfig
+	} else {
+		// Default client configuration
+		s.ClientConfig = ClientConfig{
+			DropExcessRequests: false,
+			PrometheusLabels:   []string{},
+			InitialPoolSize:    300,
+		}
 	}
 
 	// Process provider configurations
 	processedProviders := make(map[schemas.ModelProvider]ProviderConfig)
 
-	// First unmarshal providers into a map with string keys to handle case conversion
-	var rawProviders map[string]ProviderConfig
-	if providersBytes, err := json.Marshal(configData.Providers); err != nil {
-		return fmt.Errorf("failed to marshal providers: %w", err)
-	} else if err := json.Unmarshal(providersBytes, &rawProviders); err != nil {
-		return fmt.Errorf("failed to unmarshal providers: %w", err)
-	}
-
-	// Create a temporary structure to unmarshal the full JSON with proper meta configs
-	var tempConfig struct {
-		Providers map[string]struct {
-			MetaConfig json.RawMessage `json:"meta_config"`
-		} `json:"providers"`
-	}
-
-	if err := json.Unmarshal(data, &tempConfig); err != nil {
-		return fmt.Errorf("failed to unmarshal configuration file: %w", err)
-	}
-
-	// Process each provider configuration
-	for rawProviderName, cfg := range rawProviders {
-		newEnvKeys := make(map[string]struct{})
-
-		provider := schemas.ModelProvider(strings.ToLower(rawProviderName))
-
-		// Process meta config if it exists
-		if tempProvider, exists := tempConfig.Providers[rawProviderName]; exists && len(tempProvider.MetaConfig) > 0 {
-			processedMetaConfig, envKeys, err := s.processMetaConfigEnvVars(tempProvider.MetaConfig, provider)
-
-			if err != nil {
-				s.cleanupEnvKeys(string(provider), "", envKeys)
-				s.logger.Warn(fmt.Sprintf("failed to process env vars in meta config for %s: %v", provider, err))
-				continue
-			}
-
-			// Parse and set the meta config
-			metaConfig, err := s.parseMetaConfig(processedMetaConfig, provider)
-			if err != nil {
-				s.cleanupEnvKeys(string(provider), "", envKeys)
-				s.logger.Warn(fmt.Sprintf("failed to process meta config for %s: %v", provider, err))
-				continue
-			} else {
-				cfg.MetaConfig = metaConfig
-			}
+	if len(configData.Providers) > 0 {
+		// First unmarshal providers into a map with string keys to handle case conversion
+		var rawProviders map[string]ProviderConfig
+		if providersBytes, err := json.Marshal(configData.Providers); err != nil {
+			return fmt.Errorf("failed to marshal providers: %w", err)
+		} else if err := json.Unmarshal(providersBytes, &rawProviders); err != nil {
+			return fmt.Errorf("failed to unmarshal providers: %w", err)
 		}
 
-		// Process environment variables in keys
-		for i, key := range cfg.Keys {
-			processedValue, envVar, err := s.processEnvValue(key.Value)
-			if err != nil {
-				s.cleanupEnvKeys(string(provider), "", newEnvKeys)
-				s.logger.Warn(fmt.Sprintf("failed to process env vars in keys for %s: %v", provider, err))
-				continue
-			}
-			cfg.Keys[i].Value = processedValue
-
-			// Track environment key if it came from env
-			if envVar != "" {
-				newEnvKeys[envVar] = struct{}{}
-				s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
-					EnvVar:     envVar,
-					Provider:   string(provider),
-					KeyType:    "api_key",
-					ConfigPath: fmt.Sprintf("providers.%s.keys[%d]", provider, i),
-				})
-			}
+		// Create a temporary structure to unmarshal the full JSON with proper meta configs
+		var tempConfig struct {
+			Providers map[string]struct {
+				MetaConfig json.RawMessage `json:"meta_config"`
+			} `json:"providers"`
 		}
 
-		processedProviders[provider] = cfg
-	}
+		if err := json.Unmarshal(data, &tempConfig); err != nil {
+			return fmt.Errorf("failed to unmarshal configuration file: %w", err)
+		}
 
-	// Store processed configurations in memory
-	s.Providers = processedProviders
+		// Process each provider configuration
+		for rawProviderName, cfg := range rawProviders {
+			newEnvKeys := make(map[string]struct{})
+
+			provider := schemas.ModelProvider(strings.ToLower(rawProviderName))
+
+			// Process meta config if it exists
+			if tempProvider, exists := tempConfig.Providers[rawProviderName]; exists && len(tempProvider.MetaConfig) > 0 {
+				processedMetaConfig, envKeys, err := s.processMetaConfigEnvVars(tempProvider.MetaConfig, provider)
+
+				if err != nil {
+					s.cleanupEnvKeys(string(provider), "", envKeys)
+					s.logger.Warn(fmt.Sprintf("failed to process env vars in meta config for %s: %v", provider, err))
+					continue
+				}
+
+				// Parse and set the meta config
+				metaConfig, err := s.parseMetaConfig(processedMetaConfig, provider)
+				if err != nil {
+					s.cleanupEnvKeys(string(provider), "", envKeys)
+					s.logger.Warn(fmt.Sprintf("failed to process meta config for %s: %v", provider, err))
+					continue
+				} else {
+					cfg.MetaConfig = metaConfig
+				}
+			}
+
+			// Process environment variables in keys
+			for i, key := range cfg.Keys {
+				processedValue, envVar, err := s.processEnvValue(key.Value)
+				if err != nil {
+					s.cleanupEnvKeys(string(provider), "", newEnvKeys)
+					s.logger.Warn(fmt.Sprintf("failed to process env vars in keys for %s: %v", provider, err))
+					continue
+				}
+				cfg.Keys[i].Value = processedValue
+
+				// Track environment key if it came from env
+				if envVar != "" {
+					newEnvKeys[envVar] = struct{}{}
+					s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+						EnvVar:     envVar,
+						Provider:   string(provider),
+						KeyType:    "api_key",
+						ConfigPath: fmt.Sprintf("providers.%s.keys[%d]", provider, i),
+					})
+				}
+			}
+
+			processedProviders[provider] = cfg
+		}
+
+		// Store processed configurations in memory
+		s.Providers = processedProviders
+	} else {
+		s.autoDetectProviders()
+	}
 
 	// Parse MCP config if present
 	if len(configData.MCP) > 0 {
@@ -1169,5 +1202,68 @@ func (s *ConfigStore) cleanupEnvVar(envVar, provider, mcpClientName string) {
 		delete(s.EnvKeys, envVar)
 	} else {
 		s.EnvKeys[envVar] = filteredInfos
+	}
+}
+
+// autoDetectProviders automatically detects common environment variables and sets up providers
+// when no configuration file exists. This enables zero-config startup when users have set
+// standard environment variables like OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.
+//
+// Supported environment variables:
+//   - OpenAI: OPENAI_API_KEY, OPENAI_KEY
+//   - Anthropic: ANTHROPIC_API_KEY, ANTHROPIC_KEY
+//   - Mistral: MISTRAL_API_KEY, MISTRAL_KEY
+//
+// For each detected provider, it creates a default configuration with:
+//   - The detected API key with weight 1.0
+//   - Empty models list (provider will use default models)
+//   - Default concurrency and buffer size settings
+func (s *ConfigStore) autoDetectProviders() {
+	// Define common environment variable patterns for each provider
+	providerEnvVars := map[schemas.ModelProvider][]string{
+		schemas.OpenAI:    {"OPENAI_API_KEY", "OPENAI_KEY"},
+		schemas.Anthropic: {"ANTHROPIC_API_KEY", "ANTHROPIC_KEY"},
+		schemas.Mistral:   {"MISTRAL_API_KEY", "MISTRAL_KEY"},
+	}
+
+	detectedCount := 0
+
+	for provider, envVars := range providerEnvVars {
+		for _, envVar := range envVars {
+			if apiKey := os.Getenv(envVar); apiKey != "" {
+				// Create default provider configuration
+				providerConfig := ProviderConfig{
+					Keys: []schemas.Key{
+						{
+							Value:  apiKey,
+							Models: []string{}, // Empty means all supported models
+							Weight: 1.0,
+						},
+					},
+					ConcurrencyAndBufferSize: &schemas.DefaultConcurrencyAndBufferSize,
+				}
+
+				// Add to providers map
+				s.Providers[provider] = providerConfig
+
+				// Track the environment variable
+				s.EnvKeys[envVar] = append(s.EnvKeys[envVar], EnvKeyInfo{
+					EnvVar:     envVar,
+					Provider:   string(provider),
+					KeyType:    "api_key",
+					ConfigPath: fmt.Sprintf("providers.%s.keys[0]", provider),
+				})
+
+				s.logger.Info(fmt.Sprintf("Auto-detected %s provider from environment variable %s", provider, envVar))
+				detectedCount++
+				break // Only use the first found env var for each provider
+			}
+		}
+	}
+
+	if detectedCount > 0 {
+		s.logger.Info(fmt.Sprintf("Auto-configured %d provider(s) from environment variables", detectedCount))
+	} else {
+		s.logger.Info("No common provider environment variables detected. Use the web UI or configuration file to add providers.")
 	}
 }

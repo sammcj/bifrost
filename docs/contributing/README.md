@@ -13,14 +13,17 @@ Ready to contribute? Here's your fastest path to making an impact:
 ```bash
 # 1. Fork and clone
 git clone https://github.com/YOUR_USERNAME/bifrost.git
-cd bifrost
+cd bifrost/core  # or bifrost/transports
 
 # 2. Install dependencies
 go mod download
 
 # 3. Verify setup
-go test ./core/...
-cd transports && go build -o bifrost-http
+cd ../tests/core-providers/
+go test -run TestOpenAI # or any provider you want to test
+
+cd ../transports-integrations/
+# read the README.md file in the transports-integrations directory for testing instructions
 
 # 4. You're ready! 🎉
 ```

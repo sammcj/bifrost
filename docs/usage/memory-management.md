@@ -112,10 +112,13 @@ bifrost, err := bifrost.Init(schemas.BifrostConfig{
 <details>
 <summary><strong>🌐 HTTP Transport - Buffer Configuration</strong></summary>
 
-The buffer size is set in your `config.json`. Note that `dropExcessRequests` is not configurable for the HTTP transport and defaults to `false` (blocking).
+The buffer size is set in your `config.json`. The `drop_excess_requests` setting can be configured in the `client` section and defaults to `false` (blocking).
 
 ```json
 {
+  "client": {
+    "drop_excess_requests": false
+  },
   "providers": {
     "openai": {
       // ...
@@ -141,7 +144,7 @@ Bifrost uses object pools to reuse request and response objects, reducing the lo
 - **Trade-offs**:
   - **Larger Pool**: Improves performance under heavy load by minimizing allocations. Increases the initial memory footprint of Bifrost.
   - **Smaller Pool**: Lower initial memory usage, but may lead to more GC activity and higher latency under load.
-- **Configuration**: This is a global setting. For the Go package, it is set in `BifrostConfig`. For the HTTP transport, it's configured via command-line flags or environment variables, not in `config.json`.
+- **Configuration**: This is a global setting. For the Go package, it is set in `BifrostConfig`. For the HTTP transport, it's configured in the `client` section of `config.json` or via the web UI.
 
 <details open>
 <summary><strong>🔧 Go Package - Object Pool Configuration</strong></summary>
@@ -162,27 +165,29 @@ bifrost, err := bifrost.Init(schemas.BifrostConfig{
 <details>
 <summary><strong>🌐 HTTP Transport - Object Pool Configuration</strong></summary>
 
-The pool size for the HTTP transport is set at startup.
+The pool size for the HTTP transport is configured in the `config.json` file under the `client` section or via the web UI.
 
-**Using Go Binary**
+**Using Config File**
 
-Use the `-pool-size` command-line flag.
-
-```bash
-bifrost-http -config config.json -port 8080 -pool-size 1000
+```json
+{
+  "client": {
+    "initial_pool_size": 1000,
+    "drop_excess_requests": false
+  },
+  "providers": {
+    // ... provider configurations
+  }
+}
 ```
 
-**Using Docker**
+**Using Web UI**
 
-Use the `APP_POOL_SIZE` environment variable.
-
-```bash
-docker run -p 8080:8080 \
-  -v $(pwd)/config.json:/app/config/config.json \
-  -e APP_POOL_SIZE=1000 \
-  -e OPENAI_API_KEY \
-  maximhq/bifrost
-```
+1. Start Bifrost: `docker run -p 8080:8080 maximhq/bifrost`
+2. Open `http://localhost:8080`
+3. Navigate to the "Configuration" section
+4. Set "Initial Pool Size" and other client settings
+5. Save configuration
 
 </details>
 
