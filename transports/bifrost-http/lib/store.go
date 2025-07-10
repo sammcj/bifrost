@@ -53,7 +53,7 @@ var DefaultClientConfig = ClientConfig{
 	DropExcessRequests: false,
 	PrometheusLabels:   []string{},
 	InitialPoolSize:    300,
-	LogQueueSize:       1000,
+	EnableLogging:      true,
 }
 
 // NewConfigStore creates a new in-memory configuration store instance.
@@ -251,7 +251,7 @@ func (s *ConfigStore) writeConfigToFile(configPath string) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	s.logger.Info(fmt.Sprintf("Writing current configuration to: %s", configPath))
+	s.logger.Debug(fmt.Sprintf("Writing current configuration to: %s", configPath))
 
 	// Create a map for quick lookup of env vars by provider and path
 	envVarsByPath := make(map[string]string)
@@ -325,7 +325,7 @@ func (s *ConfigStore) writeConfigToFile(configPath string) error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	s.logger.Info(fmt.Sprintf("Successfully wrote configuration to: %s", configPath))
+	s.logger.Debug(fmt.Sprintf("Successfully wrote configuration to: %s", configPath))
 	return nil
 }
 

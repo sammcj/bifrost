@@ -12,7 +12,7 @@ type ClientConfig struct {
 	DropExcessRequests bool     `json:"drop_excess_requests"` // Drop excess requests if the provider queue is full
 	InitialPoolSize    int      `json:"initial_pool_size"`    // The initial pool size for the bifrost client
 	PrometheusLabels   []string `json:"prometheus_labels"`    // The labels to be used for prometheus metrics
-	LogQueueSize       int      `json:"log_queue_size"`       // The size of the log queue, additional requests will be dropped (not saved for ui) if the queue is full
+	EnableLogging      bool     `json:"enable_logging"`       // Enable logging of requests and responses
 }
 
 // ProviderConfig represents the configuration for a specific AI model provider.

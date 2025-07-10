@@ -69,13 +69,9 @@ func (h *ConfigHandler) handleUpdateConfig(ctx *fasthttp.RequestCtx) {
 		updatedConfig.PrometheusLabels = req.PrometheusLabels
 	}
 
-	if req.InitialPoolSize != currentConfig.InitialPoolSize {
-		updatedConfig.InitialPoolSize = req.InitialPoolSize
-	}
+	updatedConfig.InitialPoolSize = req.InitialPoolSize
 
-	if req.LogQueueSize != currentConfig.LogQueueSize {
-		updatedConfig.LogQueueSize = req.LogQueueSize
-	}
+	updatedConfig.EnableLogging = req.EnableLogging
 
 	// Update the store with the new config
 	h.store.ClientConfig = updatedConfig
