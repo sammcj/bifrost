@@ -1,48 +1,73 @@
-// Package logging provides a BadgerDB-based logging plugin for Bifrost.
+// Package logging provides a SQLite-based logging plugin for Bifrost.
 // This plugin stores comprehensive logs of all requests and responses with search,
 // filter, and pagination capabilities.
 package logging
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v4"
-	"github.com/google/uuid"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
 const (
 	PluginName = "bifrost-http-logging"
-
-	// Key prefixes for different data types
-	LogPrefix   = "log:"
-	IndexPrefix = "idx:"
-	StatsPrefix = "stats:"
-
-	// Index types
-	ProviderIndex  = "provider:"
-	ModelIndex     = "model:"
-	ObjectIndex    = "object:"
-	TimestampIndex = "timestamp:"
-	StatusIndex    = "status:"
-	LatencyIndex   = "latency:"
-	TokenIndex     = "token:"
 )
 
 // ContextKey is a custom type for context keys to prevent collisions
 type ContextKey string
 
+// LogOperation represents the type of logging operation
+type LogOperation string
+
 const (
-	RequestProviderKey  ContextKey = "bifrost-http-logging-provider"
-	RequestModelKey     ContextKey = "bifrost-http-logging-model"
-	RequestObjectKey    ContextKey = "bifrost-http-logging-object"
-	RequestStartTimeKey ContextKey = "bifrost-http-logging-start-time"
-	RequestChatHistory  ContextKey = "bifrost-http-logging-chat-history"
+	LogOperationCreate LogOperation = "create"
+	LogOperationUpdate LogOperation = "update"
 )
+
+// Context keys for logging optimization
+const (
+	DroppedCreateContextKey ContextKey = "bifrost-logging-dropped"
+)
+
+// LogMessage represents a message in the logging queue
+type LogMessage struct {
+	Operation   LogOperation
+	RequestID   string
+	Timestamp   time.Time       // Of the preHook/postHook call
+	InitialData *InitialLogData // For create operations
+	UpdateData  *UpdateLogData  // For update operations
+}
+
+// InitialLogData contains data for initial log entry creation
+type InitialLogData struct {
+	Provider     string
+	Model        string
+	Object       string
+	InputHistory []schemas.BifrostMessage
+	Params       *schemas.ModelParameters
+	Tools        *[]schemas.Tool
+}
+
+// UpdateLogData contains data for log entry updates
+type UpdateLogData struct {
+	Status        string
+	TokenUsage    *schemas.LLMUsage
+	OutputMessage *schemas.BifrostMessage
+	ToolCalls     *[]schemas.ToolCall
+	ErrorDetails  *schemas.BifrostError
+	ExtraFields   map[string]interface{}
+	Model         string // May be different from request
+	Object        string // May be different from request
+}
 
 // LogEntry represents a complete log entry for a request/response cycle
 type LogEntry struct {
@@ -58,9 +83,10 @@ type LogEntry struct {
 	ToolCalls     *[]schemas.ToolCall      `json:"tool_calls,omitempty"`
 	Latency       *float64                 `json:"latency,omitempty"`
 	TokenUsage    *schemas.LLMUsage        `json:"token_usage,omitempty"`
-	Status        string                   `json:"status"` // "success" or "error"
+	Status        string                   `json:"status"` // "processing", "success", or "error"
 	ErrorDetails  *schemas.BifrostError    `json:"error_details,omitempty"`
 	ExtraFields   map[string]interface{}   `json:"extra_fields,omitempty"`
+	CreatedAt     time.Time                `json:"created_at"`
 }
 
 // SearchFilters represents the available filters for log searches
@@ -98,22 +124,10 @@ type SearchResult struct {
 	} `json:"stats"`
 }
 
-// LogStats represents aggregated statistics
-type LogStats struct {
-	TotalRequests      int64            `json:"total_requests"`
-	SuccessfulRequests int64            `json:"successful_requests"`
-	FailedRequests     int64            `json:"failed_requests"`
-	ProviderStats      map[string]int64 `json:"provider_stats"`
-	ModelStats         map[string]int64 `json:"model_stats"`
-	AverageLatency     float64          `json:"average_latency"`
-	TotalTokens        int64            `json:"total_tokens"`
-	LastUpdated        time.Time        `json:"last_updated"`
-}
-
 // Config represents the configuration for the logging plugin
 type Config struct {
 	DatabasePath string `json:"database_path"`
-	LogQueueSize int    `json:"log_queue_size"`
+	// SQLite memory optimization is now handled via connection string parameters
 }
 
 // LogCallback is a function that gets called when a new log entry is created
@@ -122,101 +136,249 @@ type LogCallback func(*LogEntry)
 // LoggerPlugin implements the schemas.Plugin interface
 type LoggerPlugin struct {
 	config          *Config
-	db              *badger.DB
-	mu              sync.RWMutex
-	stats           *LogStats
-	logQueue        chan *LogEntry
+	db              *sql.DB
+	mu              sync.Mutex
 	done            chan struct{}
 	wg              sync.WaitGroup
 	logger          schemas.Logger
-	logCallback     LogCallback // Callback for real-time log updates
+	logCallback     LogCallback
 	droppedRequests atomic.Int64
+	cleanupTicker   *time.Ticker // Ticker for cleaning up old processing logs
+	logMsgPool      sync.Pool    // Pool for reusing LogMessage structs
 }
 
 // NewLoggerPlugin creates a new logging plugin
 func NewLoggerPlugin(config *Config, logger schemas.Logger) (*LoggerPlugin, error) {
 	if config == nil {
 		config = &Config{
-			DatabasePath: "./bifrost-logs",
-			LogQueueSize: 1000,
+			DatabasePath: "./bifrost-logs.db",
 		}
 	}
 
-	// Open BadgerDB
-	opts := badger.DefaultOptions(config.DatabasePath)
-	opts.Logger = nil // Disable BadgerDB's own logging to avoid noise
+	// Handle legacy database path (if it was a directory for BadgerDB)
+	dbPath := config.DatabasePath
+	if !strings.HasSuffix(dbPath, ".db") {
+		dbPath = filepath.Join(dbPath, "logs.db")
+	}
 
-	db, err := badger.Open(opts)
+	// Ensure the directory exists
+	dbDir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create database directory %s: %w", dbDir, err)
+	}
+
+	// Open SQLite with optimized settings for low memory usage
+	db, err := sql.Open("sqlite3", dbPath+"?cache=shared&_journal_mode=WAL&_synchronous=NORMAL&_auto_vacuum=incremental&_page_size=4096&_temp_store=FILE&_mmap_size=0")
 	if err != nil {
-		return nil, fmt.Errorf("failed to open BadgerDB: %w", err)
+		return nil, fmt.Errorf("failed to open SQLite database at %s: %w", dbPath, err)
+	}
+
+	// Test the connection
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to ping SQLite database: %w", err)
 	}
 
 	plugin := &LoggerPlugin{
-		config:   config,
-		db:       db,
-		logQueue: make(chan *LogEntry, config.LogQueueSize),
-		done:     make(chan struct{}),
-		logger:   logger,
-		stats: &LogStats{
-			ProviderStats: make(map[string]int64),
-			ModelStats:    make(map[string]int64),
+		config: config,
+		db:     db,
+		done:   make(chan struct{}),
+		logger: logger,
+		logMsgPool: sync.Pool{
+			New: func() interface{} {
+				return &LogMessage{}
+			},
 		},
 	}
 
-	// Start background worker
+	// Prewarm the log message pool
+	for range 1000 {
+		plugin.getLogMessage()
+	}
+
+	// Create tables and indexes
+	if err := plugin.createTables(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to create tables: %w", err)
+	}
+
+	// Start cleanup ticker (runs every 30 seconds)
+	plugin.cleanupTicker = time.NewTicker(30 * time.Second)
 	plugin.wg.Add(1)
-	go plugin.backgroundWorker()
+	go plugin.cleanupWorker()
 
 	return plugin, nil
 }
 
-// SetLogCallback sets the callback function for real-time log updates
-func (p *LoggerPlugin) SetLogCallback(callback LogCallback) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.logCallback = callback
-}
+// createTables creates the SQLite tables and indexes
+func (p *LoggerPlugin) createTables() error {
+	// Main logs table with updated schema
+	createTable := `
+	CREATE TABLE IF NOT EXISTS logs (
+		id TEXT PRIMARY KEY,
+		timestamp INTEGER,
+		provider TEXT NOT NULL,
+		model TEXT NOT NULL,
+		object_type TEXT NOT NULL,
+		status TEXT NOT NULL,
+		latency REAL,
+		prompt_tokens INTEGER,
+		completion_tokens INTEGER,
+		total_tokens INTEGER,
+		
+		-- Store complex fields as JSON
+		input_history TEXT,
+		output_message TEXT,
+		tools TEXT,
+		tool_calls TEXT,
+		params TEXT,
+		error_details TEXT,
+		extra_fields TEXT,
+		
+		-- For content search
+		content_summary TEXT,
+		
+		-- Timestamps for tracking
+		created_at INTEGER NOT NULL
+	)`
 
-// processLogEntry handles storing a log entry and calling any registered callbacks
-func (p *LoggerPlugin) processLogEntry(entry *LogEntry, isShutdown bool) {
-	// Store the log entry
-	if err := p.storeLogEntry(entry); err != nil {
-		if isShutdown {
-			p.logger.Error(fmt.Errorf("failed to store log entry during shutdown: %w", err))
-		} else {
-			p.logger.Error(fmt.Errorf("failed to store log entry: %w", err))
+	if _, err := p.db.Exec(createTable); err != nil {
+		return fmt.Errorf("failed to create logs table: %w", err)
+	}
+
+	// Check if we need to add the new columns to existing table
+	if err := p.migrateTableSchema(); err != nil {
+		return fmt.Errorf("failed to migrate table schema: %w", err)
+	}
+
+	// Create indexes for fast filtering
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_timestamp ON logs(timestamp)",
+		"CREATE INDEX IF NOT EXISTS idx_provider ON logs(provider)",
+		"CREATE INDEX IF NOT EXISTS idx_model ON logs(model)",
+		"CREATE INDEX IF NOT EXISTS idx_object_type ON logs(object_type)",
+		"CREATE INDEX IF NOT EXISTS idx_status ON logs(status)",
+		"CREATE INDEX IF NOT EXISTS idx_created_at ON logs(created_at)",
+	}
+
+	for _, index := range indexes {
+		if _, err := p.db.Exec(index); err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
 		}
 	}
 
-	// Call the callback if set
-	p.mu.RLock()
-	if p.logCallback != nil {
-		p.logCallback(entry)
-	}
-	p.mu.RUnlock()
-}
+	// Check if FTS5 is available
+	var ftsAvailable bool
+	err := p.db.QueryRow("SELECT 1 FROM pragma_compile_options WHERE compile_options = 'ENABLE_FTS5'").Scan(&ftsAvailable)
+	if err != nil {
+		p.logger.Debug("FTS5 not available for logging, falling back to regular search")
+	} else {
+		createFTS := `
+			CREATE VIRTUAL TABLE IF NOT EXISTS logs_fts USING fts5(
+				id, content_summary, content='logs', content_rowid='rowid'
+			)`
 
-// backgroundWorker processes log entries asynchronously
-func (p *LoggerPlugin) backgroundWorker() {
-	defer p.wg.Done()
+		if _, err := p.db.Exec(createFTS); err != nil {
+			p.logger.Warn(fmt.Sprintf("Failed to create FTS table, falling back to LIKE search: %v", err))
+		} else {
+			// Create triggers to keep FTS table in sync
+			triggers := []string{
+				`CREATE TRIGGER IF NOT EXISTS logs_fts_insert AFTER INSERT ON logs BEGIN
+						INSERT INTO logs_fts(id, content_summary) VALUES (new.id, new.content_summary);
+					END`,
+				`CREATE TRIGGER IF NOT EXISTS logs_fts_update AFTER UPDATE ON logs BEGIN
+						UPDATE logs_fts SET content_summary = new.content_summary WHERE id = new.id;
+					END`,
+				`CREATE TRIGGER IF NOT EXISTS logs_fts_delete AFTER DELETE ON logs BEGIN
+						DELETE FROM logs_fts WHERE id = old.id;
+					END`,
+			}
 
-	for {
-		select {
-		case entry := <-p.logQueue:
-			p.processLogEntry(entry, false)
-
-		case <-p.done:
-			// Drain the remaining queue before exiting
-			for {
-				select {
-				case entry := <-p.logQueue:
-					p.processLogEntry(entry, true)
-				default:
-					return
+			for _, trigger := range triggers {
+				if _, err := p.db.Exec(trigger); err != nil {
+					p.logger.Warn(fmt.Sprintf("Failed to create FTS trigger: %v", err))
 				}
 			}
 		}
 	}
+
+	return nil
+}
+
+// migrateTableSchema adds new columns if they don't exist
+func (p *LoggerPlugin) migrateTableSchema() error {
+	// Check if created_at column exists
+	var columnExists bool
+	err := p.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('logs') WHERE name = 'created_at'").Scan(&columnExists)
+	if err != nil {
+		return fmt.Errorf("failed to check for created_at column: %w", err)
+	}
+
+	if !columnExists {
+		if _, err := p.db.Exec("ALTER TABLE logs ADD COLUMN created_at INTEGER DEFAULT 0"); err != nil {
+			return fmt.Errorf("failed to add created_at column: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// cleanupWorker periodically removes old processing logs
+func (p *LoggerPlugin) cleanupWorker() {
+	defer p.wg.Done()
+
+	for {
+		select {
+		case <-p.cleanupTicker.C:
+			p.cleanupOldProcessingLogs()
+
+		case <-p.done:
+			return
+		}
+	}
+}
+
+// cleanupOldProcessingLogs removes processing logs older than 1 minute
+func (p *LoggerPlugin) cleanupOldProcessingLogs() {
+	// Calculate timestamp for 1 minute ago
+	oneMinuteAgo := time.Now().Add(-1 * time.Minute).UnixNano()
+
+	// Delete processing logs older than 1 minute
+	query := `DELETE FROM logs WHERE status = 'processing' AND created_at < ?`
+	result, err := p.db.Exec(query, oneMinuteAgo)
+	if err != nil {
+		p.logger.Error(fmt.Errorf("failed to cleanup old processing logs: %w", err))
+		return
+	}
+
+	// Log the cleanup activity
+	if rowsAffected, err := result.RowsAffected(); err == nil && rowsAffected > 0 {
+		p.logger.Debug(fmt.Sprintf("Cleaned up %d old processing logs", rowsAffected))
+	}
+}
+
+// getLogMessage gets a LogMessage from the pool
+func (p *LoggerPlugin) getLogMessage() *LogMessage {
+	return p.logMsgPool.Get().(*LogMessage)
+}
+
+// putLogMessage returns a LogMessage to the pool after resetting it
+func (p *LoggerPlugin) putLogMessage(msg *LogMessage) {
+	// Reset the message fields to avoid memory leaks
+	msg.Operation = ""
+	msg.RequestID = ""
+	msg.Timestamp = time.Time{}
+	msg.InitialData = nil
+	msg.UpdateData = nil
+
+	p.logMsgPool.Put(msg)
+}
+
+// SetLogCallback sets a callback function that will be called for each log entry
+func (p *LoggerPlugin) SetLogCallback(callback LogCallback) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.logCallback = callback
 }
 
 // GetName returns the name of the plugin
@@ -224,172 +386,163 @@ func (p *LoggerPlugin) GetName() string {
 	return PluginName
 }
 
-// PreHook is called before a request is processed
+// PreHook is called before a request is processed - FULLY ASYNC, NO DATABASE I/O
 func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
-	// Generate unique request ID and record start time
-	startTime := time.Now()
-
-	// Store request ID and start time in context
-	if ctx != nil {
-		*ctx = context.WithValue(*ctx, RequestProviderKey, req.Provider)
-		*ctx = context.WithValue(*ctx, RequestModelKey, req.Model)
-		*ctx = context.WithValue(*ctx, RequestObjectKey, func() string {
-			if req.Input.ChatCompletionInput != nil {
-				return "chat.completion"
-			} else if req.Input.TextCompletionInput != nil {
-				return "text.completion"
-			} else if req.Input.EmbeddingInput != nil {
-				return "embedding"
-			}
-			return "unknown"
-		}())
-		*ctx = context.WithValue(*ctx, RequestStartTimeKey, startTime)
-
-		if req.Input.ChatCompletionInput != nil {
-			*ctx = context.WithValue(*ctx, RequestChatHistory, *req.Input.ChatCompletionInput)
-		} else if req.Input.TextCompletionInput != nil {
-			*ctx = context.WithValue(*ctx, RequestChatHistory, []schemas.BifrostMessage{
-				{
-					Role: schemas.ModelChatMessageRoleUser,
-					Content: schemas.MessageContent{
-						ContentStr: req.Input.TextCompletionInput,
-					},
-				},
-			})
-		}
+	if ctx == nil {
+		// Log error but don't fail the request
+		p.logger.Error(fmt.Errorf("context is nil in PreHook"))
+		return req, nil, nil
 	}
+
+	// Extract request ID from context
+	requestID, ok := (*ctx).Value(ContextKey("request-id")).(string)
+	if !ok || requestID == "" {
+		// Log error but don't fail the request
+		p.logger.Error(fmt.Errorf("request-id not found in context or is empty"))
+		return req, nil, nil
+	}
+
+	// Prepare initial log data
+	objectType := p.determineObjectType(req.Input)
+	inputHistory := p.extractInputHistory(req.Input)
+
+	initialData := &InitialLogData{
+		Provider:     string(req.Provider),
+		Model:        req.Model,
+		Object:       objectType,
+		InputHistory: inputHistory,
+		Params:       req.Params,
+	}
+
+	if req.Params != nil && req.Params.Tools != nil {
+		initialData.Tools = req.Params.Tools
+	}
+
+	// Queue the log creation message (non-blocking) - Using sync.Pool
+	logMsg := p.getLogMessage()
+	logMsg.Operation = LogOperationCreate
+	logMsg.RequestID = requestID
+	logMsg.Timestamp = time.Now()
+	logMsg.InitialData = initialData
+
+	go func(logMsg *LogMessage) {
+		defer p.putLogMessage(logMsg) // Return to pool when done
+		if err := p.insertInitialLogEntry(logMsg.RequestID, logMsg.Timestamp, logMsg.InitialData); err != nil {
+			p.logger.Error(fmt.Errorf("failed to insert initial log entry for request %s: %w", logMsg.RequestID, err))
+		}
+	}(logMsg)
 
 	return req, nil, nil
 }
 
-// PostHook is called after a response is received
+// PostHook is called after a response is received - FULLY ASYNC, NO DATABASE I/O
 func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
-	// Extract request metadata from context
-	var startTime time.Time
-
-	if ctx != nil {
-		if st, ok := (*ctx).Value(RequestStartTimeKey).(time.Time); ok {
-			startTime = st
-		}
+	if ctx == nil {
+		// Log error but don't fail the request
+		p.logger.Error(fmt.Errorf("context is nil in PostHook"))
+		return result, err, nil
 	}
 
-	if startTime.IsZero() {
-		startTime = time.Now()
+	// Check if the create operation was dropped - if so, skip the update
+	if dropped, ok := (*ctx).Value(DroppedCreateContextKey).(bool); ok && dropped {
+		// Create was dropped, skip update to avoid wasted processing and errors
+		return result, err, nil
 	}
 
-	// Calculate latency
-	latency := float64(time.Since(startTime).Milliseconds())
-
-	// Create log entry with guaranteed unique ID
-	logEntry := &LogEntry{
-		ID:        uuid.New().String(), // Always generate a unique ID
-		Timestamp: startTime,
+	// Extract request ID from context
+	requestID, ok := (*ctx).Value(ContextKey("request-id")).(string)
+	if !ok || requestID == "" {
+		// Log error but don't fail the request
+		p.logger.Error(fmt.Errorf("request-id not found in context or is empty"))
+		return result, err, nil
 	}
 
-	// Determine status and populate entry
+	// Queue the log update message (non-blocking)
+	logMsg := p.getLogMessage()
+	logMsg.Operation = LogOperationUpdate
+	logMsg.RequestID = requestID
+	logMsg.Timestamp = time.Now()
+
+	// Prepare update data (latency will be calculated in background worker)
+	updateData := &UpdateLogData{}
+
 	if err != nil {
-		logEntry.Status = "error"
-		logEntry.ErrorDetails = err
+		// Error case
+		updateData.Status = "error"
+		updateData.ErrorDetails = err
+	} else if result != nil {
+		// Success case
+		updateData.Status = "success"
 
-		if ctx != nil {
-			if provider, ok := (*ctx).Value(RequestProviderKey).(schemas.ModelProvider); ok {
-				logEntry.Provider = string(provider)
-			}
-			if model, ok := (*ctx).Value(RequestModelKey).(string); ok {
-				logEntry.Model = model
-			}
-			if chatHistory, ok := (*ctx).Value(RequestChatHistory).([]schemas.BifrostMessage); ok {
-				logEntry.InputHistory = chatHistory
-			} else {
-				logEntry.InputHistory = []schemas.BifrostMessage{}
-			}
-			if object, ok := (*ctx).Value(RequestObjectKey).(string); ok {
-				logEntry.Object = object
+		// Update model if different from request
+		if result.Model != "" {
+			updateData.Model = result.Model
+		}
+
+		// Update object type if available
+		if result.Object != "" {
+			updateData.Object = result.Object
+		}
+
+		// Token usage
+		if result.Usage.TotalTokens > 0 {
+			updateData.TokenUsage = &result.Usage
+		}
+
+		// Output message and tool calls
+		if len(result.Choices) > 0 {
+			updateData.OutputMessage = &result.Choices[0].Message
+
+			// Extract tool calls if present
+			if result.Choices[0].Message.AssistantMessage != nil &&
+				result.Choices[0].Message.AssistantMessage.ToolCalls != nil {
+				updateData.ToolCalls = result.Choices[0].Message.AssistantMessage.ToolCalls
 			}
 		}
 
-	} else {
-		logEntry.Status = "success"
-
-		if result != nil {
-			// Use result ID if available, otherwise keep the generated UUID
-			if result.ID != "" {
-				logEntry.ID = result.ID
-			}
-			logEntry.Model = result.Model
-			logEntry.Latency = &latency
-			logEntry.TokenUsage = &result.Usage
-			logEntry.Object = result.Object
-
-			if ctx != nil && result.Object == "" {
-				if object, ok := (*ctx).Value(RequestObjectKey).(string); ok {
-					logEntry.Object = object
-				}
-			}
-
-			// Handle ExtraFields safely
-			// Set provider if available
-			if result.ExtraFields.Provider != "" {
-				logEntry.Provider = string(result.ExtraFields.Provider)
-			}
-
-			// Set params if available
-			if result.ExtraFields.Params.Tools != nil {
-				logEntry.Tools = result.ExtraFields.Params.Tools
-				logEntry.Params = &result.ExtraFields.Params
-			}
-
-			// Extract chat history if available
-			if result.ExtraFields.ChatHistory != nil {
-				logEntry.InputHistory = *result.ExtraFields.ChatHistory
-			}
-
-			// Extract output message and tool calls
-			if len(result.Choices) > 0 {
-				logEntry.OutputMessage = &result.Choices[0].Message
-
-				// Extract tool calls if present
-				if result.Choices[0].Message.AssistantMessage != nil &&
-					result.Choices[0].Message.AssistantMessage.ToolCalls != nil {
-					logEntry.ToolCalls = result.Choices[0].Message.AssistantMessage.ToolCalls
-				}
-			}
-
-			// Extract chat history if available
-			if result.ExtraFields.ChatHistory != nil {
-				logEntry.InputHistory = *result.ExtraFields.ChatHistory
-			} else {
-				if ctx != nil {
-					if chatHistory, ok := (*ctx).Value(RequestChatHistory).([]schemas.BifrostMessage); ok {
-						logEntry.InputHistory = chatHistory
-					} else {
-						logEntry.InputHistory = []schemas.BifrostMessage{}
-					}
-				}
-			}
-
-			// Extract tools from params
-			if result.ExtraFields.Params.Tools != nil {
-				logEntry.Tools = result.ExtraFields.Params.Tools
+		// Extra fields if available
+		if result.ExtraFields.Provider != "" || result.ExtraFields.Params.MaxTokens != nil {
+			updateData.ExtraFields = map[string]interface{}{
+				"provider":     result.ExtraFields.Provider,
+				"params":       result.ExtraFields.Params,
+				"latency":      result.ExtraFields.Latency,
+				"billed_usage": result.ExtraFields.BilledUsage,
+				"raw_response": result.ExtraFields.RawResponse,
 			}
 		}
 	}
 
-	// Queue the log entry for async processing (non-blocking)
-	select {
-	case p.logQueue <- logEntry:
-		// Successfully queued
-	default:
-		// Queue is full, log warning but don't block the request
-		p.logger.Warn("log queue is full, dropping log entry")
-		p.droppedRequests.Add(1)
-	}
+	logMsg.UpdateData = updateData
+
+	go func(logMsg *LogMessage) {
+		defer p.putLogMessage(logMsg) // Return to pool when done
+		if err := p.updateLogEntry(logMsg.RequestID, logMsg.Timestamp, logMsg.UpdateData); err != nil {
+			p.logger.Error(fmt.Errorf("failed to update log entry for request %s: %w", logMsg.RequestID, err))
+		} else {
+			// Call callback if set (for real-time updates)
+			p.mu.Lock()
+			if p.logCallback != nil {
+				// Get the updated log entry for callback
+				if updatedEntry, getErr := p.getLogEntry(logMsg.RequestID); getErr == nil {
+					p.logCallback(updatedEntry)
+				}
+			}
+			p.mu.Unlock()
+		}
+	}(logMsg)
+
+	// p.putLogMessage(logMsg)
 
 	return result, err, nil
 }
 
 // Cleanup is called when the plugin is being shut down
 func (p *LoggerPlugin) Cleanup() error {
+	// Stop the cleanup ticker
+	if p.cleanupTicker != nil {
+		p.cleanupTicker.Stop()
+	}
+
 	// Signal the background worker to stop
 	close(p.done)
 

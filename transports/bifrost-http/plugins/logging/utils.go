@@ -1,111 +1,273 @@
 package logging
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math"
-	"slices"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v4"
+	"github.com/maximhq/bifrost/core/schemas"
 )
 
-// storeLogEntry stores a log entry in BadgerDB with optional indexing
-func (p *LoggerPlugin) storeLogEntry(entry *LogEntry) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+// insertInitialLogEntry stores an initial log entry in SQLite using the new async data structure
+func (p *LoggerPlugin) insertInitialLogEntry(requestID string, timestamp time.Time, data *InitialLogData) error {
+	// Serialize complex fields to JSON
+	inputHistoryJSON, _ := json.Marshal(data.InputHistory)
+	toolsJSON, _ := json.Marshal(data.Tools)
+	paramsJSON, _ := json.Marshal(data.Params)
 
-	// Serialize the log entry
-	data, err := json.Marshal(entry)
+	// Create content summary for searching
+	contentSummary := p.createContentSummaryFromInitialData(data)
+
+	// Insert into main table
+	query := `
+	INSERT INTO logs (
+		id, provider, model, object_type, status,
+		input_history, tools, params, content_summary,
+		created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := p.db.Exec(query,
+		requestID, data.Provider, data.Model,
+		data.Object, "processing",
+		string(inputHistoryJSON), string(toolsJSON), string(paramsJSON),
+		contentSummary, timestamp.UnixNano())
+
 	if err != nil {
-		return fmt.Errorf("failed to marshal log entry: %w", err)
-	}
-
-	return p.db.Update(func(txn *badger.Txn) error {
-		// Store the main log entry
-		logKey := LogPrefix + entry.ID
-		if err := txn.Set([]byte(logKey), data); err != nil {
-			return err
-		}
-
-		// Create indexes
-		if err := p.createIndexes(txn, entry); err != nil {
-			return err
-		}
-
-		return nil
-	})
-}
-
-// createIndexes creates various indexes for efficient searching
-func (p *LoggerPlugin) createIndexes(txn *badger.Txn, entry *LogEntry) error {
-	timestamp := entry.Timestamp.Unix()
-
-	// Provider index
-	if entry.Provider != "" {
-		providerKey := fmt.Sprintf("%s%s%s:%d:%s", IndexPrefix, ProviderIndex, entry.Provider, timestamp, entry.ID)
-		if err := txn.Set([]byte(providerKey), []byte(entry.ID)); err != nil {
-			return err
-		}
-	}
-
-	// Model index
-	if entry.Model != "" {
-		modelKey := fmt.Sprintf("%s%s%s:%d:%s", IndexPrefix, ModelIndex, entry.Model, timestamp, entry.ID)
-		if err := txn.Set([]byte(modelKey), []byte(entry.ID)); err != nil {
-			return err
-		}
-	}
-
-	// Object index
-	if entry.Object != "" {
-		objectKey := fmt.Sprintf("%s%s%s:%d:%s", IndexPrefix, ObjectIndex, entry.Object, timestamp, entry.ID)
-		if err := txn.Set([]byte(objectKey), []byte(entry.ID)); err != nil {
-			return err
-		}
-	}
-
-	// Timestamp index
-	timestampKey := fmt.Sprintf("%s%s%d:%s", IndexPrefix, TimestampIndex, timestamp, entry.ID)
-	if err := txn.Set([]byte(timestampKey), []byte(entry.ID)); err != nil {
-		return err
-	}
-
-	// Status index
-	statusKey := fmt.Sprintf("%s%s%s:%d:%s", IndexPrefix, StatusIndex, entry.Status, timestamp, entry.ID)
-	if err := txn.Set([]byte(statusKey), []byte(entry.ID)); err != nil {
-		return err
-	}
-
-	// Latency index (if available)
-	if entry.Latency != nil {
-		latencyBucket := getLatencyBucket(*entry.Latency)
-		latencyKey := fmt.Sprintf("%s%s%d:%d:%s", IndexPrefix, LatencyIndex, latencyBucket, timestamp, entry.ID)
-		if err := txn.Set([]byte(latencyKey), []byte(entry.ID)); err != nil {
-			return err
-		}
-	}
-
-	// Token count index (if available)
-	if entry.TokenUsage != nil {
-		tokenBucket := getTokenBucket(entry.TokenUsage.TotalTokens)
-		tokenKey := fmt.Sprintf("%s%s%d:%d:%s", IndexPrefix, TokenIndex, tokenBucket, timestamp, entry.ID)
-		if err := txn.Set([]byte(tokenKey), []byte(entry.ID)); err != nil {
-			return err
-		}
+		return fmt.Errorf("failed to insert initial log entry: %w", err)
 	}
 
 	return nil
 }
 
+// updateLogEntry updates an existing log entry with new data using the new async data structure
+func (p *LoggerPlugin) updateLogEntry(requestID string, timestamp time.Time, data *UpdateLogData) error {
+	// First, get the created_at timestamp to calculate latency
+	var createdAtUnix int64
+	err := p.db.QueryRow("SELECT created_at FROM logs WHERE id = ?", requestID).Scan(&createdAtUnix)
+	if err != nil {
+		return fmt.Errorf("failed to get created_at for latency calculation: %w", err)
+	}
+
+	createdAt := time.Unix(createdAtUnix/1e9, createdAtUnix%1e9) // Convert from nanoseconds
+	latency := float64(timestamp.Sub(createdAt).Milliseconds())
+
+	// Build dynamic UPDATE query
+	var setParts []string
+	var args []interface{}
+
+	// Update request timestamp
+	setParts = append(setParts, "timestamp = ?")
+	args = append(args, timestamp.UnixNano())
+
+	// Always update latency
+	setParts = append(setParts, "latency = ?")
+	args = append(args, latency)
+
+	// Update status
+	if data.Status != "" {
+		setParts = append(setParts, "status = ?")
+		args = append(args, data.Status)
+	}
+
+	// Update model if provided
+	if data.Model != "" {
+		setParts = append(setParts, "model = ?")
+		args = append(args, data.Model)
+	}
+
+	// Update object type if provided
+	if data.Object != "" {
+		setParts = append(setParts, "object_type = ?")
+		args = append(args, data.Object)
+	}
+
+	// Update token usage
+	if data.TokenUsage != nil {
+		setParts = append(setParts, "prompt_tokens = ?, completion_tokens = ?, total_tokens = ?")
+		args = append(args, data.TokenUsage.PromptTokens, data.TokenUsage.CompletionTokens, data.TokenUsage.TotalTokens)
+	}
+
+	// Update output message
+	if data.OutputMessage != nil {
+		outputMessageJSON, _ := json.Marshal(data.OutputMessage)
+		setParts = append(setParts, "output_message = ?")
+		args = append(args, string(outputMessageJSON))
+	}
+
+	// Update tool calls
+	if data.ToolCalls != nil {
+		toolCallsJSON, _ := json.Marshal(data.ToolCalls)
+		setParts = append(setParts, "tool_calls = ?")
+		args = append(args, string(toolCallsJSON))
+	}
+
+	// Update error details
+	if data.ErrorDetails != nil {
+		errorDetailsJSON, _ := json.Marshal(data.ErrorDetails)
+		setParts = append(setParts, "error_details = ?")
+		args = append(args, string(errorDetailsJSON))
+	}
+
+	// Update extra fields
+	if data.ExtraFields != nil {
+		extraFieldsJSON, _ := json.Marshal(data.ExtraFields)
+		setParts = append(setParts, "extra_fields = ?")
+		args = append(args, string(extraFieldsJSON))
+	}
+
+	// Add the WHERE clause parameter
+	args = append(args, requestID)
+
+	query := fmt.Sprintf("UPDATE logs SET %s WHERE id = ?", strings.Join(setParts, ", "))
+
+	// Update content summary if we have new content
+	if data.OutputMessage != nil {
+		// Get current log entry to rebuild content summary
+		if currentEntry, err := p.getLogEntry(requestID); err == nil {
+			newContentSummary := p.createContentSummary(currentEntry)
+			query = strings.Replace(query, "WHERE id = ?", ", content_summary = ? WHERE id = ?", 1)
+			// Insert content_summary before the requestID in args
+			args = append(args[:len(args)-1], newContentSummary, args[len(args)-1])
+		}
+	}
+
+	_, err = p.db.Exec(query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to update log entry: %w", err)
+	}
+
+	return nil
+}
+
+// createContentSummaryFromInitialData creates a searchable content summary from initial log data
+func (p *LoggerPlugin) createContentSummaryFromInitialData(data *InitialLogData) string {
+	var parts []string
+
+	// Add input history content
+	for _, msg := range data.InputHistory {
+		if msg.Content.ContentStr != nil {
+			parts = append(parts, *msg.Content.ContentStr)
+		}
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// getLogEntry retrieves a complete log entry by ID
+func (p *LoggerPlugin) getLogEntry(requestID string) (*LogEntry, error) {
+	query := `
+	SELECT id, timestamp, provider, model, object_type, status, latency,
+		   prompt_tokens, completion_tokens, total_tokens,
+		   input_history, output_message, tools, tool_calls,
+		   params, error_details, extra_fields, created_at
+	FROM logs WHERE id = ?`
+
+	var entry LogEntry
+	var timestampUnix, createdAtUnix int64
+	var inputHistoryJSON, outputMessageJSON, toolsJSON, toolCallsJSON sql.NullString
+	var paramsJSON, errorDetailsJSON, extraFieldsJSON sql.NullString
+	var promptTokens, completionTokens, totalTokensRow sql.NullInt64
+	var latency sql.NullFloat64
+
+	err := p.db.QueryRow(query, requestID).Scan(
+		&entry.ID, &timestampUnix, &entry.Provider, &entry.Model,
+		&entry.Object, &entry.Status, &latency,
+		&promptTokens, &completionTokens, &totalTokensRow,
+		&inputHistoryJSON, &outputMessageJSON, &toolsJSON, &toolCallsJSON,
+		&paramsJSON, &errorDetailsJSON, &extraFieldsJSON,
+		&createdAtUnix,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get log entry: %w", err)
+	}
+
+	// Convert timestamps
+	entry.Timestamp = time.Unix(timestampUnix/1e9, timestampUnix%1e9) // Convert from nanoseconds
+	entry.CreatedAt = time.Unix(createdAtUnix/1e9, createdAtUnix%1e9) // Convert from nanoseconds
+
+	// Handle latency
+	if latency.Valid {
+		entry.Latency = &latency.Float64
+	}
+
+	// Handle token usage
+	if promptTokens.Valid || completionTokens.Valid || totalTokensRow.Valid {
+		entry.TokenUsage = &schemas.LLMUsage{}
+		if promptTokens.Valid {
+			entry.TokenUsage.PromptTokens = int(promptTokens.Int64)
+		}
+		if completionTokens.Valid {
+			entry.TokenUsage.CompletionTokens = int(completionTokens.Int64)
+		}
+		if totalTokensRow.Valid {
+			entry.TokenUsage.TotalTokens = int(totalTokensRow.Int64)
+		}
+	}
+
+	// Deserialize JSON fields with NULL checks
+	if inputHistoryJSON.Valid {
+		json.Unmarshal([]byte(inputHistoryJSON.String), &entry.InputHistory)
+	}
+	if outputMessageJSON.Valid {
+		json.Unmarshal([]byte(outputMessageJSON.String), &entry.OutputMessage)
+	}
+	if toolsJSON.Valid {
+		json.Unmarshal([]byte(toolsJSON.String), &entry.Tools)
+	}
+	if toolCallsJSON.Valid {
+		json.Unmarshal([]byte(toolCallsJSON.String), &entry.ToolCalls)
+	}
+
+	if paramsJSON.Valid {
+		json.Unmarshal([]byte(paramsJSON.String), &entry.Params)
+	}
+	if errorDetailsJSON.Valid {
+		json.Unmarshal([]byte(errorDetailsJSON.String), &entry.ErrorDetails)
+	}
+	if extraFieldsJSON.Valid {
+		json.Unmarshal([]byte(extraFieldsJSON.String), &entry.ExtraFields)
+	}
+
+	return &entry, nil
+}
+
+// createContentSummary creates a searchable content summary from the log entry
+func (p *LoggerPlugin) createContentSummary(entry *LogEntry) string {
+	var parts []string
+
+	// Add input history content
+	for _, msg := range entry.InputHistory {
+		if msg.Content.ContentStr != nil {
+			parts = append(parts, *msg.Content.ContentStr)
+		}
+	}
+
+	// Add output message content
+	if entry.OutputMessage != nil && entry.OutputMessage.Content.ContentStr != nil {
+		parts = append(parts, *entry.OutputMessage.Content.ContentStr)
+	}
+
+	// Add tool calls content
+	if entry.ToolCalls != nil {
+		for _, toolCall := range *entry.ToolCalls {
+			if toolCall.Function.Arguments != "" {
+				parts = append(parts, toolCall.Function.Arguments)
+			}
+		}
+	}
+
+	// Add error details
+	if entry.ErrorDetails != nil {
+		parts = append(parts, entry.ErrorDetails.Error.Message)
+	}
+
+	return strings.Join(parts, " ")
+}
+
 // SearchLogs searches for log entries based on filters and pagination
 func (p *LoggerPlugin) SearchLogs(filters *SearchFilters, pagination *PaginationOptions) (*SearchResult, error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
 	if pagination == nil {
 		pagination = &PaginationOptions{
 			Limit:  50,
@@ -115,77 +277,138 @@ func (p *LoggerPlugin) SearchLogs(filters *SearchFilters, pagination *Pagination
 		}
 	}
 
-	var matchingIDs []string
-	var allLogs []LogEntry
-	seenIDs := make(map[string]bool)
+	// Build the SQL query
+	query, countQuery, args := p.buildSearchQuery(filters, pagination)
 
-	// Statistics variables
-	var successfulRequests int64
-	var totalLatency float64
-	var totalTokens int64
-	var logsWithLatency int64
+	// Get total count and global statistics (exclude LIMIT and OFFSET args)
+	filterArgs := args[:len(args)-2]
 
-	err := p.db.View(func(txn *badger.Txn) error {
-		if filters != nil {
-			// Use indexes for efficient filtering
-			matchingIDs = p.searchWithIndexes(txn, filters)
-		} else {
-			// Fallback to full scan if indexing is disabled
-			matchingIDs = p.searchFullScan(txn)
+	var totalCount int64
+	err := p.db.QueryRow(countQuery, filterArgs...).Scan(&totalCount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total count: %w", err)
+	}
+
+	// Calculate global statistics only from completed requests (exclude processing status)
+	var globalAverageLatency float64
+	var globalTotalTokens int64
+	var globalSuccessfulRequests int64
+	var globalCompletedRequests int64
+
+	if totalCount > 0 {
+		// Build statistics query with same filters but no pagination, excluding processing entries
+		statsQuery := strings.Replace(countQuery, "COUNT(*)",
+			"AVG(latency) as avg_latency, SUM(total_tokens) as total_tokens, COUNT(CASE WHEN status = 'success' THEN 1 END) as successful_requests, COUNT(CASE WHEN status IN ('success', 'error') THEN 1 END) as completed_requests", 1)
+
+		var avgLatency sql.NullFloat64
+		var totalTokens sql.NullInt64
+		var successfulRequests sql.NullInt64
+		var completedRequests sql.NullInt64
+
+		err = p.db.QueryRow(statsQuery, filterArgs...).Scan(&avgLatency, &totalTokens, &successfulRequests, &completedRequests)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get global statistics: %w", err)
 		}
 
-		// Fetch all matching logs, deduplicating by ID
-		for _, id := range matchingIDs {
-			if !seenIDs[id] {
-				if entry, err := p.getLogEntryByID(txn, id); err == nil && p.matchesFilters(entry, filters) {
-					allLogs = append(allLogs, *entry)
-					seenIDs[id] = true
+		if avgLatency.Valid {
+			globalAverageLatency = avgLatency.Float64
+		}
+		if totalTokens.Valid {
+			globalTotalTokens = totalTokens.Int64
+		}
+		if successfulRequests.Valid {
+			globalSuccessfulRequests = successfulRequests.Int64
+		}
+		if completedRequests.Valid {
+			globalCompletedRequests = completedRequests.Int64
+		}
+	}
 
-					// Update statistics
-					if entry.Status == "success" {
-						successfulRequests++
-					}
-					if entry.Latency != nil {
-						totalLatency += *entry.Latency
-						logsWithLatency++
-					}
-					if entry.TokenUsage != nil {
-						totalTokens += int64(entry.TokenUsage.TotalTokens)
-					}
-				}
+	// Execute main query
+	rows, err := p.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute search query: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []LogEntry
+
+	for rows.Next() {
+		var entry LogEntry
+		var timestampUnix int64
+		var inputHistoryJSON, outputMessageJSON, toolsJSON, toolCallsJSON sql.NullString
+		var paramsJSON, errorDetailsJSON, extraFieldsJSON sql.NullString
+		var promptTokens, completionTokens, totalTokensRow sql.NullInt64
+		var latency sql.NullFloat64
+
+		err := rows.Scan(
+			&entry.ID, &timestampUnix, &entry.Provider, &entry.Model,
+			&entry.Object, &entry.Status, &latency,
+			&promptTokens, &completionTokens, &totalTokensRow,
+			&inputHistoryJSON, &outputMessageJSON, &toolsJSON, &toolCallsJSON,
+			&paramsJSON, &errorDetailsJSON, &extraFieldsJSON,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		// Convert timestamp
+		entry.Timestamp = time.Unix(timestampUnix/1e9, timestampUnix%1e9) // Convert from nanoseconds
+
+		// Handle latency
+		if latency.Valid {
+			entry.Latency = &latency.Float64
+		}
+
+		// Handle token usage
+		if promptTokens.Valid || completionTokens.Valid || totalTokensRow.Valid {
+			entry.TokenUsage = &schemas.LLMUsage{}
+			if promptTokens.Valid {
+				entry.TokenUsage.PromptTokens = int(promptTokens.Int64)
+			}
+			if completionTokens.Valid {
+				entry.TokenUsage.CompletionTokens = int(completionTokens.Int64)
+			}
+			if totalTokensRow.Valid {
+				entry.TokenUsage.TotalTokens = int(totalTokensRow.Int64)
 			}
 		}
-		return nil
-	})
 
-	if err != nil {
-		return nil, err
+		// Deserialize JSON fields with NULL checks
+		if inputHistoryJSON.Valid {
+			json.Unmarshal([]byte(inputHistoryJSON.String), &entry.InputHistory)
+		}
+		if outputMessageJSON.Valid {
+			json.Unmarshal([]byte(outputMessageJSON.String), &entry.OutputMessage)
+		}
+		if toolsJSON.Valid {
+			json.Unmarshal([]byte(toolsJSON.String), &entry.Tools)
+		}
+		if toolCallsJSON.Valid {
+			json.Unmarshal([]byte(toolCallsJSON.String), &entry.ToolCalls)
+		}
+
+		if paramsJSON.Valid {
+			json.Unmarshal([]byte(paramsJSON.String), &entry.Params)
+		}
+		if errorDetailsJSON.Valid {
+			json.Unmarshal([]byte(errorDetailsJSON.String), &entry.ErrorDetails)
+		}
+		if extraFieldsJSON.Valid {
+			json.Unmarshal([]byte(extraFieldsJSON.String), &entry.ExtraFields)
+		}
+
+		logs = append(logs, entry)
 	}
 
-	// Sort logs based on pagination options
-	p.sortLogs(allLogs, pagination.SortBy, pagination.Order)
-
-	// Apply pagination
-	total := len(allLogs)
-	start := pagination.Offset
-	end := min(pagination.Offset+pagination.Limit, total)
-	if start > total {
-		start = total
-	}
-
-	// Calculate final statistics
+	// Calculate global success rate based on completed requests only
 	var successRate float64
-	if total > 0 {
-		successRate = float64(successfulRequests) / float64(total) * 100
-	}
-
-	var averageLatency float64
-	if logsWithLatency > 0 {
-		averageLatency = totalLatency / float64(logsWithLatency)
+	if globalCompletedRequests > 0 {
+		successRate = float64(globalSuccessfulRequests) / float64(globalCompletedRequests) * 100
 	}
 
 	return &SearchResult{
-		Logs:       allLogs[start:end],
+		Logs:       logs,
 		Pagination: *pagination,
 		Stats: struct {
 			TotalRequests  int64   `json:"total_requests"`
@@ -193,632 +416,198 @@ func (p *LoggerPlugin) SearchLogs(filters *SearchFilters, pagination *Pagination
 			AverageLatency float64 `json:"average_latency"`
 			TotalTokens    int64   `json:"total_tokens"`
 		}{
-			TotalRequests:  int64(total),
+			TotalRequests:  globalCompletedRequests, // Use completed requests count
 			SuccessRate:    successRate,
-			AverageLatency: averageLatency,
-			TotalTokens:    totalTokens,
+			AverageLatency: globalAverageLatency,
+			TotalTokens:    globalTotalTokens,
 		},
 	}, nil
 }
 
-// searchWithIndexes uses indexes to find matching log IDs efficiently
-func (p *LoggerPlugin) searchWithIndexes(txn *badger.Txn, filters *SearchFilters) []string {
-	var candidateIDs []string
-	var hasFilters bool
+// buildSearchQuery constructs the SQL query based on filters and pagination
+func (p *LoggerPlugin) buildSearchQuery(filters *SearchFilters, pagination *PaginationOptions) (string, string, []interface{}) {
+	var whereClauses []string
+	var args []interface{}
 
-	// Start with timestamp range if specified
-	if filters.StartTime != nil || filters.EndTime != nil {
-		candidateIDs = p.searchByTimeRange(txn, filters.StartTime, filters.EndTime)
-		hasFilters = true
-	}
+	baseQuery := `
+	SELECT id, timestamp, provider, model, object_type, status, latency,
+		   prompt_tokens, completion_tokens, total_tokens,
+		   input_history, output_message, tools, tool_calls,
+		   params, error_details, extra_fields
+	FROM logs`
 
-	// Intersect with other filters
-	if len(filters.Providers) > 0 {
-		providerIDs := p.searchByProviders(txn, filters.Providers)
-		if !hasFilters {
-			candidateIDs = providerIDs
-			hasFilters = true
-		} else {
-			candidateIDs = p.intersectIDLists(candidateIDs, providerIDs)
+	countQuery := "SELECT COUNT(*) FROM logs"
+
+	// Build WHERE clauses
+	if filters != nil {
+		// Provider filter
+		if len(filters.Providers) > 0 {
+			placeholders := make([]string, len(filters.Providers))
+			for i, provider := range filters.Providers {
+				placeholders[i] = "?"
+				args = append(args, provider)
+			}
+			whereClauses = append(whereClauses, fmt.Sprintf("provider IN (%s)", strings.Join(placeholders, ",")))
+		}
+
+		// Model filter
+		if len(filters.Models) > 0 {
+			placeholders := make([]string, len(filters.Models))
+			for i, model := range filters.Models {
+				placeholders[i] = "?"
+				args = append(args, model)
+			}
+			whereClauses = append(whereClauses, fmt.Sprintf("model IN (%s)", strings.Join(placeholders, ",")))
+		}
+
+		// Status filter
+		if len(filters.Status) > 0 {
+			placeholders := make([]string, len(filters.Status))
+			for i, status := range filters.Status {
+				placeholders[i] = "?"
+				args = append(args, status)
+			}
+			whereClauses = append(whereClauses, fmt.Sprintf("status IN (%s)", strings.Join(placeholders, ",")))
+		}
+
+		// Object type filter
+		if len(filters.Objects) > 0 {
+			placeholders := make([]string, len(filters.Objects))
+			for i, object := range filters.Objects {
+				placeholders[i] = "?"
+				args = append(args, object)
+			}
+			whereClauses = append(whereClauses, fmt.Sprintf("object_type IN (%s)", strings.Join(placeholders, ",")))
+		}
+
+		// Time range filters
+		if filters.StartTime != nil {
+			whereClauses = append(whereClauses, "timestamp >= ?")
+			args = append(args, filters.StartTime.UnixNano())
+		}
+		if filters.EndTime != nil {
+			whereClauses = append(whereClauses, "timestamp <= ?")
+			args = append(args, filters.EndTime.UnixNano())
+		}
+
+		// Latency range filters
+		if filters.MinLatency != nil {
+			whereClauses = append(whereClauses, "latency >= ?")
+			args = append(args, *filters.MinLatency)
+		}
+		if filters.MaxLatency != nil {
+			whereClauses = append(whereClauses, "latency <= ?")
+			args = append(args, *filters.MaxLatency)
+		}
+
+		// Token range filters
+		if filters.MinTokens != nil {
+			whereClauses = append(whereClauses, "total_tokens >= ?")
+			args = append(args, *filters.MinTokens)
+		}
+		if filters.MaxTokens != nil {
+			whereClauses = append(whereClauses, "total_tokens <= ?")
+			args = append(args, *filters.MaxTokens)
+		}
+
+		// Content search
+		if filters.ContentSearch != "" {
+			if p.checkFTSTableExists() {
+				// Use FTS if available and table exists
+				whereClauses = append(whereClauses, "id IN (SELECT id FROM logs_fts WHERE content_summary MATCH ?)")
+				args = append(args, filters.ContentSearch)
+			} else {
+				// Fallback to LIKE search
+				whereClauses = append(whereClauses, "content_summary LIKE ?")
+				args = append(args, "%"+filters.ContentSearch+"%")
+			}
 		}
 	}
 
-	if len(filters.Models) > 0 {
-		modelIDs := p.searchByModels(txn, filters.Models)
-		if !hasFilters {
-			candidateIDs = modelIDs
-			hasFilters = true
-		} else {
-			candidateIDs = p.intersectIDLists(candidateIDs, modelIDs)
-		}
+	// Add WHERE clause to queries
+	if len(whereClauses) > 0 {
+		whereClause := " WHERE " + strings.Join(whereClauses, " AND ")
+		baseQuery += whereClause
+		countQuery += whereClause
 	}
 
-	if len(filters.Status) > 0 {
-		statusIDs := p.searchByStatus(txn, filters.Status)
-		if !hasFilters {
-			candidateIDs = statusIDs
-			hasFilters = true
-		} else {
-			candidateIDs = p.intersectIDLists(candidateIDs, statusIDs)
-		}
+	// Add ORDER BY
+	orderBy := " ORDER BY "
+	switch pagination.SortBy {
+	case "latency":
+		orderBy += "latency"
+	case "tokens":
+		orderBy += "total_tokens"
+	default:
+		orderBy += "timestamp"
 	}
 
-	if len(filters.Objects) > 0 {
-		objectIDs := p.searchByObjects(txn, filters.Objects)
-		if !hasFilters {
-			candidateIDs = objectIDs
-			hasFilters = true
-		} else {
-			candidateIDs = p.intersectIDLists(candidateIDs, objectIDs)
-		}
+	if pagination.Order == "asc" {
+		orderBy += " ASC"
+	} else {
+		orderBy += " DESC"
 	}
 
-	// Latency range filtering (using buckets for efficiency)
-	if filters.MinLatency != nil || filters.MaxLatency != nil {
-		latencyIDs := p.searchByLatencyRange(txn, filters.MinLatency, filters.MaxLatency)
-		if !hasFilters {
-			candidateIDs = latencyIDs
-			hasFilters = true
-		} else {
-			candidateIDs = p.intersectIDLists(candidateIDs, latencyIDs)
-		}
-	}
+	baseQuery += orderBy
 
-	// Token range filtering (using buckets for efficiency)
-	if filters.MinTokens != nil || filters.MaxTokens != nil {
-		tokenIDs := p.searchByTokenRange(txn, filters.MinTokens, filters.MaxTokens)
-		if !hasFilters {
-			candidateIDs = tokenIDs
-			hasFilters = true
-		} else {
-			candidateIDs = p.intersectIDLists(candidateIDs, tokenIDs)
-		}
-	}
+	// Add LIMIT and OFFSET
+	baseQuery += " LIMIT ? OFFSET ?"
+	args = append(args, pagination.Limit, pagination.Offset)
 
-	// If no filters were applied, return all logs
-	if !hasFilters {
-		return p.searchFullScan(txn)
-	}
-
-	return candidateIDs
+	return baseQuery, countQuery, args
 }
 
-// searchFullScan performs a full database scan (fallback when indexes are disabled)
-func (p *LoggerPlugin) searchFullScan(txn *badger.Txn) []string {
-	var matchingIDs []string
-
-	opts := badger.DefaultIteratorOptions
-	opts.PrefetchValues = false
-	it := txn.NewIterator(opts)
-	defer it.Close()
-
-	prefix := []byte(LogPrefix)
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		item := it.Item()
-		key := string(item.Key())
-		id := strings.TrimPrefix(key, LogPrefix)
-		matchingIDs = append(matchingIDs, id)
-	}
-
-	return matchingIDs
+// checkFTSTableExists verifies if the FTS table exists and is accessible
+func (p *LoggerPlugin) checkFTSTableExists() bool {
+	var count int
+	err := p.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='logs_fts'").Scan(&count)
+	return err == nil && count > 0
 }
 
-// Helper methods for index-based searching
-func (p *LoggerPlugin) searchByTimeRange(txn *badger.Txn, startTime, endTime *time.Time) []string {
-	var ids []string
-
-	opts := badger.DefaultIteratorOptions
-	opts.PrefetchValues = false
-	it := txn.NewIterator(opts)
-	defer it.Close()
-
-	prefix := []byte(IndexPrefix + TimestampIndex)
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		item := it.Item()
-		key := string(item.Key())
-
-		// Extract timestamp from key
-		parts := strings.Split(strings.TrimPrefix(key, IndexPrefix+TimestampIndex), ":")
-		if len(parts) >= 2 {
-			if timestamp, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
-				logTime := time.Unix(timestamp, 0)
-				if (startTime == nil || logTime.After(*startTime)) &&
-					(endTime == nil || logTime.Before(*endTime)) {
-					if err := item.Value(func(val []byte) error {
-						ids = append(ids, string(val))
-						return nil
-					}); err != nil {
-						// Log error but continue processing
-						p.logger.Debug(fmt.Sprintf("error getting log entry by ID: %v", err))
-					}
-				}
-			}
-		}
+// determineObjectType determines the object type from the input
+func (p *LoggerPlugin) determineObjectType(input schemas.RequestInput) string {
+	if input.ChatCompletionInput != nil {
+		return "chat.completion"
+	} else if input.TextCompletionInput != nil {
+		return "text.completion"
+	} else if input.EmbeddingInput != nil {
+		return "embedding"
 	}
-
-	return ids
+	return "unknown"
 }
 
-func (p *LoggerPlugin) searchByProviders(txn *badger.Txn, providers []string) []string {
-	idMap := make(map[string]bool)
+// extractInputHistory extracts input history from the request
+func (p *LoggerPlugin) extractInputHistory(input schemas.RequestInput) []schemas.BifrostMessage {
+	var inputHistory []schemas.BifrostMessage
 
-	for _, provider := range providers {
-		prefix := []byte(IndexPrefix + ProviderIndex + provider + ":")
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = false
-		it := txn.NewIterator(opts)
-
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			if err := item.Value(func(val []byte) error {
-				idMap[string(val)] = true
-				return nil
-			}); err == nil {
-				// Continue
+	if input.ChatCompletionInput != nil {
+		// ChatCompletionInput is *[]BifrostMessage, so we dereference it
+		inputHistory = *input.ChatCompletionInput
+	} else if input.TextCompletionInput != nil {
+		// TextCompletionInput is *string, so we dereference it
+		if *input.TextCompletionInput != "" {
+			inputHistory = []schemas.BifrostMessage{
+				{
+					Role: schemas.ModelChatMessageRoleUser,
+					Content: schemas.MessageContent{
+						ContentStr: input.TextCompletionInput,
+					},
+				},
 			}
 		}
-		it.Close()
-	}
-
-	// Convert map to slice
-	var ids []string
-	for id := range idMap {
-		ids = append(ids, id)
-	}
-
-	return ids
-}
-
-func (p *LoggerPlugin) searchByModels(txn *badger.Txn, models []string) []string {
-	idMap := make(map[string]bool)
-
-	for _, model := range models {
-		prefix := []byte(IndexPrefix + ModelIndex + model + ":")
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = false
-		it := txn.NewIterator(opts)
-
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			if err := item.Value(func(val []byte) error {
-				idMap[string(val)] = true
-				return nil
-			}); err == nil {
-				// Continue
-			}
-		}
-		it.Close()
-	}
-
-	// Convert map to slice
-	var ids []string
-	for id := range idMap {
-		ids = append(ids, id)
-	}
-
-	return ids
-}
-
-func (p *LoggerPlugin) searchByStatus(txn *badger.Txn, statuses []string) []string {
-	idMap := make(map[string]bool)
-
-	for _, status := range statuses {
-		prefix := []byte(IndexPrefix + StatusIndex + status + ":")
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = false
-		it := txn.NewIterator(opts)
-
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			if err := item.Value(func(val []byte) error {
-				idMap[string(val)] = true
-				return nil
-			}); err == nil {
-				// Continue
-			}
-		}
-		it.Close()
-	}
-
-	// Convert map to slice
-	var ids []string
-	for id := range idMap {
-		ids = append(ids, id)
-	}
-
-	return ids
-}
-
-func (p *LoggerPlugin) searchByObjects(txn *badger.Txn, objects []string) []string {
-	idMap := make(map[string]bool)
-
-	for _, object := range objects {
-		prefix := []byte(IndexPrefix + ObjectIndex + object + ":")
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = false
-		it := txn.NewIterator(opts)
-
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			if err := item.Value(func(val []byte) error {
-				idMap[string(val)] = true
-				return nil
-			}); err == nil {
-				// Continue
-			}
-		}
-		it.Close()
-	}
-
-	// Convert map to slice
-	var ids []string
-	for id := range idMap {
-		ids = append(ids, id)
-	}
-
-	return ids
-}
-
-func (p *LoggerPlugin) searchByLatencyRange(txn *badger.Txn, minLatency, maxLatency *float64) []string {
-	idMap := make(map[string]bool)
-
-	// Determine which latency buckets to search
-	minBucket := 0
-	maxBucket := int(math.Pow(10, 6)) // Very large bucket
-
-	if minLatency != nil && *minLatency > 0 {
-		minBucket = getLatencyBucket(*minLatency)
-	}
-	if maxLatency != nil && *maxLatency > 0 {
-		maxBucket = getLatencyBucket(*maxLatency)
-	}
-
-	// Search through relevant latency buckets
-	opts := badger.DefaultIteratorOptions
-	opts.PrefetchValues = false
-	it := txn.NewIterator(opts)
-	defer it.Close()
-
-	prefix := []byte(IndexPrefix + LatencyIndex)
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		item := it.Item()
-		key := string(item.Key())
-
-		// Extract bucket from key
-		parts := strings.Split(strings.TrimPrefix(key, IndexPrefix+LatencyIndex), ":")
-		if len(parts) >= 3 {
-			if bucket, err := strconv.Atoi(parts[0]); err == nil {
-				if bucket >= minBucket && bucket <= maxBucket {
-					if err := item.Value(func(val []byte) error {
-						idMap[string(val)] = true
-						return nil
-					}); err != nil {
-						// Log error but continue processing
-						p.logger.Debug(fmt.Sprintf("error getting log entry by ID: %v", err))
-					}
-				}
-			}
+	} else if input.EmbeddingInput != nil {
+		// EmbeddingInput has Texts field
+		for _, text := range input.EmbeddingInput.Texts {
+			inputHistory = append(inputHistory, schemas.BifrostMessage{
+				Role: schemas.ModelChatMessageRoleUser,
+				Content: schemas.MessageContent{
+					ContentStr: &text,
+				},
+			})
 		}
 	}
 
-	// Convert map to slice
-	var ids []string
-	for id := range idMap {
-		ids = append(ids, id)
-	}
-
-	return ids
-}
-
-func (p *LoggerPlugin) searchByTokenRange(txn *badger.Txn, minTokens, maxTokens *int) []string {
-	idMap := make(map[string]bool)
-
-	// Determine which token buckets to search
-	minBucket := 0
-	maxBucket := int(math.Pow(2, 20)) // Very large bucket
-
-	if minTokens != nil && *minTokens > 0 {
-		minBucket = getTokenBucket(*minTokens)
-	}
-	if maxTokens != nil && *maxTokens > 0 {
-		maxBucket = getTokenBucket(*maxTokens)
-	}
-
-	// Search through relevant token buckets
-	opts := badger.DefaultIteratorOptions
-	opts.PrefetchValues = false
-	it := txn.NewIterator(opts)
-	defer it.Close()
-
-	prefix := []byte(IndexPrefix + TokenIndex)
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		item := it.Item()
-		key := string(item.Key())
-
-		// Extract bucket from key
-		parts := strings.Split(strings.TrimPrefix(key, IndexPrefix+TokenIndex), ":")
-		if len(parts) >= 3 {
-			if bucket, err := strconv.Atoi(parts[0]); err == nil {
-				if bucket >= minBucket && bucket <= maxBucket {
-					if err := item.Value(func(val []byte) error {
-						idMap[string(val)] = true
-						return nil
-					}); err != nil {
-						// Log error but continue processing
-						p.logger.Debug(fmt.Sprintf("error getting log entry by ID: %v", err))
-					}
-				}
-			}
-		}
-	}
-
-	// Convert map to slice
-	var ids []string
-	for id := range idMap {
-		ids = append(ids, id)
-	}
-
-	return ids
-}
-
-// intersectIDLists returns the intersection of two ID lists
-func (p *LoggerPlugin) intersectIDLists(list1, list2 []string) []string {
-	if len(list1) == 0 || len(list2) == 0 {
-		return []string{}
-	}
-
-	idMap := make(map[string]bool)
-	for _, id := range list1 {
-		idMap[id] = true
-	}
-
-	var result []string
-	for _, id := range list2 {
-		if idMap[id] {
-			result = append(result, id)
-		}
-	}
-
-	return result
-}
-
-// getLogEntryByID retrieves a log entry by ID
-func (p *LoggerPlugin) getLogEntryByID(txn *badger.Txn, id string) (*LogEntry, error) {
-	key := LogPrefix + id
-	item, err := txn.Get([]byte(key))
-	if err != nil {
-		return nil, err
-	}
-
-	var entry LogEntry
-	err = item.Value(func(val []byte) error {
-		return json.Unmarshal(val, &entry)
-	})
-
-	return &entry, err
-}
-
-// matchesFilters checks if a log entry matches the given filters
-func (p *LoggerPlugin) matchesFilters(entry *LogEntry, filters *SearchFilters) bool {
-	if filters == nil {
-		return true
-	}
-
-	// Provider filter
-	if len(filters.Providers) > 0 {
-		found := slices.Contains(filters.Providers, entry.Provider)
-		if !found {
-			return false
-		}
-	}
-
-	// Model filter
-	if len(filters.Models) > 0 {
-		found := slices.Contains(filters.Models, entry.Model)
-		if !found {
-			return false
-		}
-	}
-
-	// Status filter
-	if len(filters.Status) > 0 {
-		found := slices.Contains(filters.Status, entry.Status)
-		if !found {
-			return false
-		}
-	}
-
-	// Object type filter
-	if len(filters.Objects) > 0 {
-		found := slices.Contains(filters.Objects, entry.Object)
-		if !found {
-			return false
-		}
-	}
-
-	// Time range filter
-	if filters.StartTime != nil && entry.Timestamp.Before(*filters.StartTime) {
-		return false
-	}
-	if filters.EndTime != nil && entry.Timestamp.After(*filters.EndTime) {
-		return false
-	}
-
-	// Latency filter
-	if entry.Latency != nil {
-		if filters.MinLatency != nil && *entry.Latency < *filters.MinLatency {
-			return false
-		}
-		if filters.MaxLatency != nil && *entry.Latency > *filters.MaxLatency {
-			return false
-		}
-	}
-
-	// Token count filter
-	if entry.TokenUsage != nil {
-		if filters.MinTokens != nil && entry.TokenUsage.TotalTokens < *filters.MinTokens {
-			return false
-		}
-		if filters.MaxTokens != nil && entry.TokenUsage.TotalTokens > *filters.MaxTokens {
-			return false
-		}
-	}
-
-	// Content search
-	if filters.ContentSearch != "" {
-		searchTerm := strings.ToLower(filters.ContentSearch)
-		found := false
-
-		// Search in input history
-		for _, msg := range entry.InputHistory {
-			if msg.Content.ContentStr != nil &&
-				strings.Contains(strings.ToLower(*msg.Content.ContentStr), searchTerm) {
-				found = true
-				break
-			}
-		}
-
-		// Search in output message
-		if !found && entry.OutputMessage != nil && entry.OutputMessage.Content.ContentStr != nil &&
-			strings.Contains(strings.ToLower(*entry.OutputMessage.Content.ContentStr), searchTerm) {
-			found = true
-		}
-
-		if !found {
-			return false
-		}
-	}
-
-	return true
-}
-
-// sortLogs sorts log entries based on the specified criteria
-func (p *LoggerPlugin) sortLogs(logs []LogEntry, sortBy, order string) {
-	sort.Slice(logs, func(i, j int) bool {
-		var less bool
-
-		switch sortBy {
-		case "latency":
-			latencyI := float64(0)
-			latencyJ := float64(0)
-			if logs[i].Latency != nil {
-				latencyI = *logs[i].Latency
-			}
-			if logs[j].Latency != nil {
-				latencyJ = *logs[j].Latency
-			}
-			less = latencyI < latencyJ
-		case "tokens":
-			tokensI := 0
-			tokensJ := 0
-			if logs[i].TokenUsage != nil {
-				tokensI = logs[i].TokenUsage.TotalTokens
-			}
-			if logs[j].TokenUsage != nil {
-				tokensJ = logs[j].TokenUsage.TotalTokens
-			}
-			less = tokensI < tokensJ
-		default: // timestamp
-			less = logs[i].Timestamp.Before(logs[j].Timestamp)
-		}
-
-		if order == "desc" {
-			return !less
-		}
-		return less
-	})
-}
-
-// sortIDs sorts log IDs based on the specified criteria
-func (p *LoggerPlugin) sortIDs(txn *badger.Txn, ids []string, sortBy, order string) {
-	// Create a map to cache values for sorting
-	cache := make(map[string]interface{})
-
-	// Helper function to get cached value
-	getValue := func(id string) interface{} {
-		if val, ok := cache[id]; ok {
-			return val
-		}
-
-		entry, err := p.getLogEntryByID(txn, id)
-		if err != nil {
-			return nil
-		}
-
-		var value interface{}
-		switch sortBy {
-		case "timestamp":
-			value = entry.Timestamp.Unix()
-		case "latency":
-			if entry.Latency != nil {
-				value = *entry.Latency
-			}
-		case "tokens":
-			if entry.TokenUsage != nil {
-				value = entry.TokenUsage.TotalTokens
-			}
-		}
-
-		cache[id] = value
-		return value
-	}
-
-	// Sort the IDs
-	sort.Slice(ids, func(i, j int) bool {
-		a := getValue(ids[i])
-		b := getValue(ids[j])
-
-		// Handle nil values
-		if a == nil {
-			return order == "desc"
-		}
-		if b == nil {
-			return order == "asc"
-		}
-
-		// Compare based on type
-		switch v := a.(type) {
-		case int64:
-			if order == "asc" {
-				return v < b.(int64)
-			}
-			return v > b.(int64)
-		case float64:
-			if order == "asc" {
-				return v < b.(float64)
-			}
-			return v > b.(float64)
-		case int:
-			if order == "asc" {
-				return v < b.(int)
-			}
-			return v > b.(int)
-		}
-
-		return false
-	})
-}
-
-// getLatencyBucket returns the logarithmic bucket (base 10) for a latency value
-func getLatencyBucket(latency float64) int {
-	if latency <= 0 {
-		return 0
-	}
-	// Use floor(log10(latency)) to get the exponent, then 10^exponent for the bucket
-	// This creates buckets like: 0-1ms, 1-10ms, 10-100ms, 100-1000ms, etc.
-	exponent := math.Floor(math.Log10(latency))
-	return int(math.Pow(10, exponent))
-}
-
-// getTokenBucket returns the power-of-2 bucket for a token count
-func getTokenBucket(tokens int) int {
-	if tokens <= 0 {
-		return 0
-	}
-	// Use floor(log2(tokens)) to get the exponent, then 2^exponent for the bucket
-	// This creates buckets like: 0-1, 1-2, 2-4, 4-8, 8-16, 16-32, etc.
-	exponent := math.Floor(math.Log2(float64(tokens)))
-	return int(math.Pow(2, exponent))
+	return inputHistory
 }
 
 // LogManager defines the main interface that combines all logging functionality

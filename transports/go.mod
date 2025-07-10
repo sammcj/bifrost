@@ -3,10 +3,10 @@ module github.com/maximhq/bifrost/transports
 go 1.24.1
 
 require (
-	github.com/dgraph-io/badger/v4 v4.7.0
 	github.com/fasthttp/router v1.5.4
 	github.com/fasthttp/websocket v1.5.12
 	github.com/google/uuid v1.6.0
+	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/maximhq/bifrost/core v1.1.6
 	github.com/maximhq/bifrost/plugins/maxim v1.0.6
 	github.com/prometheus/client_golang v1.22.0
@@ -18,6 +18,7 @@ require (
 	cloud.google.com/go v0.121.0 // indirect
 	cloud.google.com/go/auth v0.16.0 // indirect
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
+	crawshaw.io/sqlite v0.3.2 // indirect
 	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.36.3 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.29.14 // indirect
@@ -34,20 +35,19 @@ require (
 	github.com/aws/smithy-go v1.22.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/dgraph-io/ristretto/v2 v2.2.0 // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
-	github.com/google/flatbuffers v25.2.10+incompatible // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/jaswdr/faker/v2 v2.5.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mark3labs/mcp-go v0.32.0 // indirect
+	github.com/maximhq/bifrost/plugins/mocker v0.0.0-20250703175143-9ed8169f4edc // indirect
 	github.com/maximhq/maxim-go v0.1.3 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
@@ -71,3 +71,5 @@ require (
 	google.golang.org/grpc v1.72.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 )
+
+replace github.com/maximhq/bifrost/core => ../core
