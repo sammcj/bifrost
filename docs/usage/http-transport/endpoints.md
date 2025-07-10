@@ -31,8 +31,7 @@ Chat conversation endpoint supporting all providers.
 
 ```json
 {
-  "provider": "openai",
-  "model": "gpt-4o-mini",
+  "model": "openai/gpt-4o-mini",
   "messages": [
     {
       "role": "user",
@@ -43,12 +42,7 @@ Chat conversation endpoint supporting all providers.
     "temperature": 0.7,
     "max_tokens": 1000
   },
-  "fallbacks": [
-    {
-      "provider": "anthropic",
-      "model": "claude-3-sonnet-20240229"
-    }
-  ]
+  "fallbacks": ["anthropic/claude-3-sonnet-20240229"]
 }
 ```
 
@@ -83,8 +77,7 @@ Chat conversation endpoint supporting all providers.
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [
       {"role": "user", "content": "What is the capital of France?"}
     ]
@@ -99,8 +92,7 @@ Text completion endpoint for simple text generation.
 
 ```json
 {
-  "provider": "openai",
-  "model": "gpt-4o-mini",
+  "model": "openai/gpt-4o-mini",
   "text": "The future of AI is",
   "params": {
     "temperature": 0.8,
@@ -254,12 +246,11 @@ bifrost_provider_errors_total{provider="openai",error_type="rate_limit"} 23
 
 ### **Common Parameters**
 
-| Parameter   | Type   | Description             | Example                       |
-| ----------- | ------ | ----------------------- | ----------------------------- |
-| `provider`  | string | AI provider to use      | `"openai"`                    |
-| `model`     | string | Model name              | `"gpt-4o-mini"`               |
-| `params`    | object | Model parameters        | `{"temperature": 0.7}`        |
-| `fallbacks` | array  | Fallback configurations | `[{"provider": "anthropic"}]` |
+| Parameter   | Type   | Description             | Example                                  |
+| ----------- | ------ | ----------------------- | ---------------------------------------- |
+| `model`     | string | Provider and model name | `"openai/gpt-4o-mini"`                   |
+| `params`    | object | Model parameters        | `{"temperature": 0.7}`                   |
+| `fallbacks` | array  | Fallback model names    | `["anthropic/claude-3-sonnet-20240229"]` |
 
 ### **Model Parameters**
 
@@ -315,8 +306,7 @@ MCP tools are automatically available in chat completions:
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [
       {"role": "user", "content": "List files in the current directory"}
     ]
@@ -354,8 +344,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 # Initial request
 curl -X POST http://localhost:8080/v1/chat/completions \
   -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [
       {"role": "user", "content": "Read the README.md file"},
       {
