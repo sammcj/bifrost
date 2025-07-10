@@ -32,6 +32,9 @@ func NewAnthropicRouter(client *bifrost.Bifrost) *AnthropicRouter {
 			ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
 				return DeriveAnthropicFromBifrostResponse(resp), nil
 			},
+			ErrorConverter: func(err *schemas.BifrostError) interface{} {
+				return DeriveAnthropicErrorFromBifrostError(err)
+			},
 		},
 	}
 

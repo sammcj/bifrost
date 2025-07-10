@@ -34,7 +34,7 @@ The Bifrost integration tests use a centralized configuration system that routes
 
 ## 📋 Test Categories
 
-Our test suite covers 11 comprehensive scenarios for each integration:
+Our test suite covers 12 comprehensive scenarios for each integration:
 
 1. **Simple Chat** - Basic single-message conversations
 2. **Multi-turn Conversation** - Conversation history and context retention
@@ -47,6 +47,7 @@ Our test suite covers 11 comprehensive scenarios for each integration:
 9. **Multiple Images** - Multi-image analysis and comparison
 10. **Complex End-to-End** - Comprehensive multimodal workflows
 11. **Integration-Specific Features** - Integration-unique capabilities
+12. **Error Handling** - Invalid request error processing and propagation
 
 ## 📁 Directory Structure
 
@@ -179,6 +180,10 @@ python run_integration_tests.py litellm
 
 # Option 3: Using pytest directly
 pytest tests/integrations/test_openai.py -v
+
+# Run specific test categories
+pytest tests/integrations/ -k "error_handling" -v  # Run only error handling tests
+pytest tests/integrations/ -k "test_12" -v         # Run all 12th test cases (error handling)
 ```
 
 #### Makefile Commands

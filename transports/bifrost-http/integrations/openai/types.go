@@ -39,6 +39,28 @@ type OpenAIChatResponse struct {
 	SystemFingerprint *string                         `json:"system_fingerprint,omitempty"`
 }
 
+// OpenAIChatError represents an OpenAI chat completion error response
+type OpenAIChatError struct {
+	EventID string `json:"event_id"` // Unique identifier for the error event
+	Type    string `json:"type"`     // Type of error
+	Error   struct {
+		Type    string      `json:"type"`     // Error type
+		Code    string      `json:"code"`     // Error code
+		Message string      `json:"message"`  // Error message
+		Param   interface{} `json:"param"`    // Parameter that caused the error
+		EventID string      `json:"event_id"` // Event ID for tracking
+	} `json:"error"`
+}
+
+// OpenAIChatErrorStruct represents the error structure of an OpenAI chat completion error response
+type OpenAIChatErrorStruct struct {
+	Type    string      `json:"type"`     // Error type
+	Code    string      `json:"code"`     // Error code
+	Message string      `json:"message"`  // Error message
+	Param   interface{} `json:"param"`    // Parameter that caused the error
+	EventID string      `json:"event_id"` // Event ID for tracking
+}
+
 // ConvertToBifrostRequest converts an OpenAI chat request to Bifrost format
 func (r *OpenAIChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
 	provider, model := integrations.ParseModelString(r.Model, schemas.OpenAI)
@@ -129,4 +151,49 @@ func DeriveOpenAIFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *Open
 	}
 
 	return openaiResp
+}
+
+// DeriveOpenAIErrorFromBifrostError derives a OpenAIChatError from a BifrostError
+func DeriveOpenAIErrorFromBifrostError(bifrostErr *schemas.BifrostError) *OpenAIChatError {
+	if bifrostErr == nil {
+		return nil
+	}
+
+	// Provide blank strings for nil pointer fields
+	eventID := ""
+	if bifrostErr.EventID != nil {
+		eventID = *bifrostErr.EventID
+	}
+
+	errorType := ""
+	if bifrostErr.Type != nil {
+		errorType = *bifrostErr.Type
+	}
+
+	// Handle nested error fields with nil checks
+	errorStruct := OpenAIChatErrorStruct{
+		Type:    "",
+		Code:    "",
+		Message: bifrostErr.Error.Message,
+		Param:   bifrostErr.Error.Param,
+		EventID: eventID,
+	}
+
+	if bifrostErr.Error.Type != nil {
+		errorStruct.Type = *bifrostErr.Error.Type
+	}
+
+	if bifrostErr.Error.Code != nil {
+		errorStruct.Code = *bifrostErr.Error.Code
+	}
+
+	if bifrostErr.Error.EventID != nil {
+		errorStruct.EventID = *bifrostErr.Error.EventID
+	}
+
+	return &OpenAIChatError{
+		EventID: eventID,
+		Type:    errorType,
+		Error:   errorStruct,
+	}
 }

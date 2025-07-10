@@ -192,6 +192,7 @@ func Init(config schemas.BifrostConfig) (*Bifrost, error) {
 // If the primary provider fails, it will try each fallback provider in order until one succeeds.
 func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.BifrostRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	if err := validateRequest(req); err != nil {
+		err.Provider = req.Provider
 		return nil, err
 	}
 
@@ -202,12 +203,14 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 	}
 
 	if primaryErr.Error.Type != nil && *primaryErr.Error.Type == schemas.RequestCancelled {
+		primaryErr.Provider = req.Provider
 		return nil, primaryErr
 	}
 
 	// Check if this is a short-circuit error that doesn't allow fallbacks
 	// Note: AllowFallbacks = nil is treated as true (allow fallbacks by default)
 	if primaryErr.AllowFallbacks != nil && !*primaryErr.AllowFallbacks {
+		primaryErr.Provider = req.Provider
 		return nil, primaryErr
 	}
 
@@ -234,12 +237,15 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 				return result, nil
 			}
 			if fallbackErr.Error.Type != nil && *fallbackErr.Error.Type == schemas.RequestCancelled {
+				fallbackErr.Provider = fallback.Provider
 				return nil, fallbackErr
 			}
 
 			bifrost.logger.Warn(fmt.Sprintf("Fallback provider %s failed: %s", fallback.Provider, fallbackErr.Error.Message))
 		}
 	}
+
+	primaryErr.Provider = req.Provider
 
 	// All providers failed, return the original error
 	return nil, primaryErr
@@ -250,6 +256,7 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 // If the primary provider fails, it will try each fallback provider in order until one succeeds.
 func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.BifrostRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	if err := validateRequest(req); err != nil {
+		err.Provider = req.Provider
 		return nil, err
 	}
 
@@ -259,9 +266,15 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.
 		return primaryResult, nil
 	}
 
+	if primaryErr.Error.Type != nil && *primaryErr.Error.Type == schemas.RequestCancelled {
+		primaryErr.Provider = req.Provider
+		return nil, primaryErr
+	}
+
 	// Check if this is a short-circuit error that doesn't allow fallbacks
 	// Note: AllowFallbacks = nil is treated as true (allow fallbacks by default)
 	if primaryErr.AllowFallbacks != nil && !*primaryErr.AllowFallbacks {
+		primaryErr.Provider = req.Provider
 		return nil, primaryErr
 	}
 
@@ -288,12 +301,15 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.
 				return result, nil
 			}
 			if fallbackErr.Error.Type != nil && *fallbackErr.Error.Type == schemas.RequestCancelled {
+				fallbackErr.Provider = fallback.Provider
 				return nil, fallbackErr
 			}
 
 			bifrost.logger.Warn(fmt.Sprintf("Fallback provider %s failed: %s", fallback.Provider, fallbackErr.Error.Message))
 		}
 	}
+
+	primaryErr.Provider = req.Provider
 
 	// All providers failed, return the original error
 	return nil, primaryErr
@@ -304,6 +320,7 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx context.Context, req *schemas.
 // If the primary provider fails, it will try each fallback provider in order until one succeeds.
 func (bifrost *Bifrost) EmbeddingRequest(ctx context.Context, req *schemas.BifrostRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	if err := validateRequest(req); err != nil {
+		err.Provider = req.Provider
 		return nil, err
 	}
 
@@ -317,9 +334,15 @@ func (bifrost *Bifrost) EmbeddingRequest(ctx context.Context, req *schemas.Bifro
 		return primaryResult, nil
 	}
 
+	if primaryErr.Error.Type != nil && *primaryErr.Error.Type == schemas.RequestCancelled {
+		primaryErr.Provider = req.Provider
+		return nil, primaryErr
+	}
+
 	// Check if this is a short-circuit error that doesn't allow fallbacks
 	// Note: AllowFallbacks = nil is treated as true (allow fallbacks by default)
 	if primaryErr.AllowFallbacks != nil && !*primaryErr.AllowFallbacks {
+		primaryErr.Provider = req.Provider
 		return nil, primaryErr
 	}
 
@@ -345,12 +368,15 @@ func (bifrost *Bifrost) EmbeddingRequest(ctx context.Context, req *schemas.Bifro
 				return result, nil
 			}
 			if fallbackErr.Error.Type != nil && *fallbackErr.Error.Type == schemas.RequestCancelled {
+				fallbackErr.Provider = fallback.Provider
 				return nil, fallbackErr
 			}
 
 			bifrost.logger.Warn(fmt.Sprintf("Fallback provider %s failed: %s", fallback.Provider, fallbackErr.Error.Message))
 		}
 	}
+
+	primaryErr.Provider = req.Provider
 
 	// All providers failed, return the original error
 	return nil, primaryErr
