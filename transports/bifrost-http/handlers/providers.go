@@ -82,7 +82,7 @@ func (h *ProviderHandler) RegisterRoutes(r *router.Router) {
 	r.DELETE("/api/providers/{provider}", h.DeleteProvider)
 }
 
-// ListProviders handles GET /providers - List all providers
+// ListProviders handles GET /api/providers - List all providers
 func (h *ProviderHandler) ListProviders(ctx *fasthttp.RequestCtx) {
 	providers, err := h.store.GetAllProviders()
 	if err != nil {
@@ -119,7 +119,7 @@ func (h *ProviderHandler) ListProviders(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, response, h.logger)
 }
 
-// GetProvider handles GET /providers/{provider} - Get specific provider
+// GetProvider handles GET /api/providers/{provider} - Get specific provider
 func (h *ProviderHandler) GetProvider(ctx *fasthttp.RequestCtx) {
 	provider, err := getProviderFromCtx(ctx)
 	if err != nil {
@@ -138,7 +138,7 @@ func (h *ProviderHandler) GetProvider(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, response, h.logger)
 }
 
-// AddProvider handles POST /providers - Add a new provider
+// AddProvider handles POST /api/providers - Add a new provider
 func (h *ProviderHandler) AddProvider(ctx *fasthttp.RequestCtx) {
 	var req AddProviderRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
@@ -200,6 +200,12 @@ func (h *ProviderHandler) AddProvider(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	if err := h.store.SaveConfig(); err != nil {
+		h.logger.Warn(fmt.Sprintf("Failed to save configuration: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to save configuration: %v", err), h.logger)
+		return
+	}
+
 	h.logger.Info(fmt.Sprintf("Provider %s added successfully", req.Provider))
 
 	response := h.getProviderResponseFromConfig(req.Provider, config)
@@ -207,7 +213,7 @@ func (h *ProviderHandler) AddProvider(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, response, h.logger)
 }
 
-// UpdateProvider handles PUT /providers/{provider} - Update provider config
+// UpdateProvider handles PUT /api/providers/{provider} - Update provider config
 // NOTE: This endpoint expects ALL fields to be provided in the request body,
 // including both edited and non-edited fields. Partial updates are not supported.
 // The frontend should send the complete provider configuration.
@@ -340,6 +346,12 @@ func (h *ProviderHandler) UpdateProvider(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	if err := h.store.SaveConfig(); err != nil {
+		h.logger.Warn(fmt.Sprintf("Failed to save configuration: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to save configuration: %v", err), h.logger)
+		return
+	}
+
 	if config.ConcurrencyAndBufferSize.Concurrency != oldConfigRaw.ConcurrencyAndBufferSize.Concurrency ||
 		config.ConcurrencyAndBufferSize.BufferSize != oldConfigRaw.ConcurrencyAndBufferSize.BufferSize {
 		// Update concurrency and queue configuration in Bifrost
@@ -354,7 +366,7 @@ func (h *ProviderHandler) UpdateProvider(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, response, h.logger)
 }
 
-// DeleteProvider handles DELETE /providers/{provider} - Remove provider
+// DeleteProvider handles DELETE /api/providers/{provider} - Remove provider
 func (h *ProviderHandler) DeleteProvider(ctx *fasthttp.RequestCtx) {
 	provider, err := getProviderFromCtx(ctx)
 	if err != nil {
@@ -372,6 +384,12 @@ func (h *ProviderHandler) DeleteProvider(ctx *fasthttp.RequestCtx) {
 	if err := h.store.RemoveProvider(provider); err != nil {
 		h.logger.Warn(fmt.Sprintf("Failed to remove provider %s: %v", provider, err))
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to remove provider: %v", err), h.logger)
+		return
+	}
+
+	if err := h.store.SaveConfig(); err != nil {
+		h.logger.Warn(fmt.Sprintf("Failed to save configuration: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to save configuration: %v", err), h.logger)
 		return
 	}
 

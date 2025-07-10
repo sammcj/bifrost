@@ -2,11 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Header from "@/components/header";
-import { CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Database, Zap, Save, RefreshCw } from "lucide-react";
+import { Settings, Database, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ProviderResponse } from "@/lib/types/config";
 import { apiService } from "@/lib/api";
@@ -15,7 +13,6 @@ import ProvidersList from "@/components/config/providers-list";
 import MCPClientsList from "@/components/config/mcp-clients-lists";
 import { MCPClient } from "@/lib/types/mcp";
 import FullPageLoader from "@/components/full-page-loader";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function ConfigPage() {
 	const [activeTab, setActiveTab] = useState("providers");
@@ -63,23 +60,6 @@ export default function ConfigPage() {
 		setMcpClients(data || []);
 	};
 
-	const handleSaveConfig = async () => {
-		const [, error] = await apiService.saveConfig();
-
-		if (error) {
-			toast({
-				title: "Error",
-				description: error,
-				variant: "destructive",
-			});
-		} else {
-			toast({
-				title: "Success",
-				description: "Configuration saved successfully",
-			});
-		}
-	};
-
 	return (
 		<div className="bg-background">
 			<Header title="Configuration" />
@@ -88,23 +68,9 @@ export default function ConfigPage() {
 			) : (
 				<div className="space-y-6">
 					{/* Page Header */}
-					<div className="flex items-center justify-between">
-						<div>
-							<h1 className="text-3xl font-bold">Configuration</h1>
-							<p className="text-muted-foreground mt-2">Configure AI providers, API keys, and system settings for your Bifrost instance.</p>
-						</div>
-
-						<TooltipProvider>
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<Button onClick={handleSaveConfig} variant="outline" disabled={isLoadingProviders || isLoadingMcpClients}>
-										<Save className="h-4 w-4" />
-										Save Config
-									</Button>
-								</TooltipTrigger>
-								<TooltipContent>Persist configuration for next server start.</TooltipContent>
-							</Tooltip>
-						</TooltipProvider>
+					<div>
+						<h1 className="text-3xl font-bold">Configuration</h1>
+						<p className="text-muted-foreground mt-2">Configure AI providers, API keys, and system settings for your Bifrost instance.</p>
 					</div>
 
 					{/* Configuration Tabs */}

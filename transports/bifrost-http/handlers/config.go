@@ -37,7 +37,6 @@ func NewConfigHandler(client *bifrost.Bifrost, logger schemas.Logger, store *lib
 func (h *ConfigHandler) RegisterRoutes(r *router.Router) {
 	r.GET("/api/config", h.GetConfig)
 	r.PUT("/api/config", h.handleUpdateConfig)
-	r.POST("/api/config/save", h.SaveConfig)
 }
 
 // GetConfig handles GET /config - Get the current configuration
@@ -74,27 +73,22 @@ func (h *ConfigHandler) handleUpdateConfig(ctx *fasthttp.RequestCtx) {
 		updatedConfig.InitialPoolSize = req.InitialPoolSize
 	}
 
+	if req.LogQueueSize != currentConfig.LogQueueSize {
+		updatedConfig.LogQueueSize = req.LogQueueSize
+	}
+
 	// Update the store with the new config
 	h.store.ClientConfig = updatedConfig
 
-	ctx.SetStatusCode(fasthttp.StatusOK)
-	SendJSON(ctx, map[string]any{
-		"status":  "success",
-		"message": "Configuration updated successfully",
-	}, h.logger)
-}
-
-// SaveConfig handles POST /config/save - Persist current configuration to JSON file
-func (h *ConfigHandler) SaveConfig(ctx *fasthttp.RequestCtx) {
-	// Save current configuration back to the original JSON file
 	if err := h.store.SaveConfig(); err != nil {
 		h.logger.Warn(fmt.Sprintf("Failed to save configuration: %v", err))
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to save configuration: %v", err), h.logger)
 		return
 	}
 
+	ctx.SetStatusCode(fasthttp.StatusOK)
 	SendJSON(ctx, map[string]any{
 		"status":  "success",
-		"message": "Configuration saved successfully",
+		"message": "Configuration updated successfully",
 	}, h.logger)
 }

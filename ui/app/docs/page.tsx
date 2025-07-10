@@ -57,7 +57,7 @@ export default function DocsPage() {
 	return (
 		<div className="bg-background">
 			<Header title="Documentation" />
-			<div className="mx-auto max-w-7xl p-8 pt-0">
+			<div className="mx-auto max-w-7xl">
 				<div className="space-y-8">
 					{/* Header */}
 					<div className="space-y-4 text-center">

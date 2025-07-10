@@ -17,19 +17,36 @@ export default function CoreSettingsList() {
 	const [config, setConfig] = useState<CoreConfig>({
 		drop_excess_requests: false,
 		initial_pool_size: 300,
+		log_queue_size: 1000,
 	});
+	const [droppedRequests, setDroppedRequests] = useState<number>(0);
 	const [isLoading, setIsLoading] = useState(true);
 	const [localValues, setLocalValues] = useState<{
 		initial_pool_size: string;
 		prometheus_labels: string;
+		log_queue_size: string;
 	}>({
 		initial_pool_size: "300",
 		prometheus_labels: "",
+		log_queue_size: "1000",
 	});
+
+	useEffect(() => {
+		const fetchDroppedRequests = async () => {
+			const [response, error] = await apiService.getDroppedRequests();
+			if (error) {
+				toast.error(error);
+			} else if (response) {
+				setDroppedRequests(response.dropped_requests);
+			}
+		};
+		fetchDroppedRequests();
+	}, []);
 
 	// Use refs to store timeout IDs
 	const poolSizeTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 	const prometheusLabelsTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+	const logQueueSizeTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
 	useEffect(() => {
 		const fetchConfig = async () => {
@@ -41,6 +58,7 @@ export default function CoreSettingsList() {
 				setLocalValues({
 					initial_pool_size: coreConfig.initial_pool_size?.toString() || "300",
 					prometheus_labels: coreConfig.prometheus_labels || "",
+					log_queue_size: coreConfig.log_queue_size?.toString() || "1000",
 				});
 			}
 			setIsLoading(false);
@@ -78,7 +96,7 @@ export default function CoreSettingsList() {
 
 			// Set new timeout
 			poolSizeTimeoutRef.current = setTimeout(() => {
-				const numValue = parseInt(value);
+				const numValue = Number.parseInt(value);
 				if (!isNaN(numValue) && numValue > 0) {
 					updateConfig("initial_pool_size", numValue);
 				}
@@ -104,6 +122,26 @@ export default function CoreSettingsList() {
 		[updateConfig],
 	);
 
+	const handleLogQueueSizeChange = useCallback(
+		(value: string) => {
+			setLocalValues((prev) => ({ ...prev, log_queue_size: value }));
+
+			// Clear existing timeout
+			if (logQueueSizeTimeoutRef.current) {
+				clearTimeout(logQueueSizeTimeoutRef.current);
+			}
+
+			// Set new timeout
+			logQueueSizeTimeoutRef.current = setTimeout(() => {
+				const numValue = Number.parseInt(value);
+				if (!isNaN(numValue) && numValue > 0) {
+					updateConfig("log_queue_size", numValue);
+				}
+			}, 1000);
+		},
+		[updateConfig],
+	);
+
 	// Cleanup timeouts on unmount
 	useEffect(() => {
 		return () => {
@@ -112,6 +150,9 @@ export default function CoreSettingsList() {
 			}
 			if (prometheusLabelsTimeoutRef.current) {
 				clearTimeout(prometheusLabelsTimeoutRef.current);
+			}
+			if (logQueueSizeTimeoutRef.current) {
+				clearTimeout(logQueueSizeTimeoutRef.current);
 			}
 		};
 	}, []);
@@ -134,10 +175,13 @@ export default function CoreSettingsList() {
 				{/* Drop Excess Requests */}
 				<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
 					<div className="space-y-0.5">
-						<label className="text-sm font-medium">Drop Excess Requests</label>
+						<label htmlFor="drop-excess-requests" className="text-sm font-medium">
+							Drop Excess Requests
+						</label>
 						<p className="text-muted-foreground text-sm">If enabled, Bifrost will drop requests that exceed pool capacity.</p>
 					</div>
 					<Switch
+						id="drop-excess-requests"
 						checked={config.drop_excess_requests}
 						onCheckedChange={(checked) => handleConfigChange("drop_excess_requests", checked)}
 					/>
@@ -148,17 +192,20 @@ export default function CoreSettingsList() {
 				<Alert>
 					<AlertTriangle className="h-4 w-4" />
 					<AlertDescription>
-						The settings below won't affect current connections. You will need to save the configuration for changes to take effect on the
-						next restart.
+						The settings below require a Bifrost service restart to take effect. Current connections will continue with existing settings
+						until restart.
 					</AlertDescription>
 				</Alert>
 
 				<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
 					<div className="space-y-0.5">
-						<label className="text-sm font-medium">Initial Pool Size</label>
+						<label htmlFor="initial-pool-size" className="text-sm font-medium">
+							Initial Pool Size
+						</label>
 						<p className="text-muted-foreground text-sm">The initial connection pool size.</p>
 					</div>
 					<Input
+						id="initial-pool-size"
 						type="number"
 						className="w-24"
 						value={localValues.initial_pool_size}
@@ -167,12 +214,35 @@ export default function CoreSettingsList() {
 					/>
 				</div>
 
+				<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+					<div className="space-y-0.5">
+						<label htmlFor="log-queue-size" className="text-sm font-medium">
+							Log Queue Size
+						</label>
+						<p className="text-muted-foreground text-sm">
+							Additional logs will be dropped if the queue is full. Bifrost has dropped{" "}
+							<span className="font-bold">{droppedRequests} logs</span> so far.
+						</p>
+					</div>
+					<Input
+						id="log-queue-size"
+						type="number"
+						className="w-24"
+						value={localValues.log_queue_size}
+						onChange={(e) => handleLogQueueSizeChange(e.target.value)}
+						min="1"
+					/>
+				</div>
+
 				<div className="space-y-2 rounded-lg border p-4">
 					<div className="space-y-0.5">
-						<label className="text-sm font-medium">Prometheus Labels</label>
+						<label htmlFor="prometheus-labels" className="text-sm font-medium">
+							Prometheus Labels
+						</label>
 						<p className="text-muted-foreground text-sm">Comma-separated list of custom labels to add to the Prometheus metrics.</p>
 					</div>
 					<Textarea
+						id="prometheus-labels"
 						className="h-24"
 						placeholder="teamId, projectId, environment"
 						value={localValues.prometheus_labels}
