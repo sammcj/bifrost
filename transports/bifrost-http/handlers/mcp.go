@@ -69,18 +69,13 @@ func (h *MCPHandler) ExecuteTool(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Send successful response
-	ctx.SetStatusCode(fasthttp.StatusOK)
-	ctx.SetContentType("application/json")
-	if encodeErr := json.NewEncoder(ctx).Encode(resp); encodeErr != nil {
-		h.logger.Warn(fmt.Sprintf("Failed to encode response: %v", encodeErr))
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to encode response: %v", encodeErr), h.logger)
-	}
+	SendJSON(ctx, resp, h.logger)
 }
 
 // GetMCPClients handles GET /mcp/clients - Get all MCP clients
 func (h *MCPHandler) GetMCPClients(ctx *fasthttp.RequestCtx) {
 	// Get clients from store config
-	configsInStore := h.store.GetMCPConfig()
+	configsInStore := h.store.MCPConfig
 	if configsInStore == nil {
 		SendJSON(ctx, []schemas.MCPClient{}, h.logger)
 		return
@@ -105,12 +100,17 @@ func (h *MCPHandler) GetMCPClients(ctx *fasthttp.RequestCtx) {
 	for _, configClient := range configsInStore.ClientConfigs {
 		if connectedClient, exists := connectedClientsMap[configClient.Name]; exists {
 			// Client is connected, use the actual client data
-			clients = append(clients, connectedClient)
+			clients = append(clients, schemas.MCPClient{
+				Name:   connectedClient.Name,
+				Config: h.store.RedactMCPClientConfig(connectedClient.Config),
+				Tools:  connectedClient.Tools,
+				State:  connectedClient.State,
+			})
 		} else {
 			// Client is in config but not connected, mark as errored
 			clients = append(clients, schemas.MCPClient{
 				Name:   configClient.Name,
-				Config: configClient,
+				Config: h.store.RedactMCPClientConfig(configClient),
 				Tools:  []string{}, // No tools available since connection failed
 				State:  schemas.MCPConnectionStateError,
 			})
