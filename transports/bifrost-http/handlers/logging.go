@@ -32,9 +32,10 @@ func NewLoggingHandler(logManager logging.LogManager, logger schemas.Logger) *Lo
 func (h *LoggingHandler) RegisterRoutes(r *router.Router) {
 	// Log retrieval with filtering, search, and pagination
 	r.GET("/api/logs", h.GetLogs)
+	r.GET("/api/logs/dropped", h.GetDroppedRequests)
 }
 
-// GetLogs handles GET /v1/logs - Get logs with filtering, search, and pagination via query parameters
+// GetLogs handles GET /api/logs - Get logs with filtering, search, and pagination via query parameters
 func (h *LoggingHandler) GetLogs(ctx *fasthttp.RequestCtx) {
 	// Parse query parameters into filters
 	filters := &logging.SearchFilters{}
@@ -137,6 +138,12 @@ func (h *LoggingHandler) GetLogs(ctx *fasthttp.RequestCtx) {
 	}
 
 	SendJSON(ctx, result, h.logger)
+}
+
+// GetDroppedRequests handles GET /api/logs/dropped - Get the number of dropped requests
+func (h *LoggingHandler) GetDroppedRequests(ctx *fasthttp.RequestCtx) {
+	droppedRequests := h.logManager.GetDroppedRequests()
+	SendJSON(ctx, map[string]int64{"dropped_requests": droppedRequests}, h.logger)
 }
 
 // Helper functions

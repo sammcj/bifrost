@@ -60,6 +60,14 @@ func (p *LoggerPlugin) createIndexes(txn *badger.Txn, entry *LogEntry) error {
 		}
 	}
 
+	// Object index
+	if entry.Object != "" {
+		objectKey := fmt.Sprintf("%s%s%s:%d:%s", IndexPrefix, ObjectIndex, entry.Object, timestamp, entry.ID)
+		if err := txn.Set([]byte(objectKey), []byte(entry.ID)); err != nil {
+			return err
+		}
+	}
+
 	// Timestamp index
 	timestampKey := fmt.Sprintf("%s%s%d:%s", IndexPrefix, TimestampIndex, timestamp, entry.ID)
 	if err := txn.Set([]byte(timestampKey), []byte(entry.ID)); err != nil {
@@ -93,13 +101,10 @@ func (p *LoggerPlugin) createIndexes(txn *badger.Txn, entry *LogEntry) error {
 	return nil
 }
 
-// SearchLogs searches for log entries based on filters and pagination options
+// SearchLogs searches for log entries based on filters and pagination
 func (p *LoggerPlugin) SearchLogs(filters *SearchFilters, pagination *PaginationOptions) (*SearchResult, error) {
-	var result SearchResult
-	var successfulRequests int64
-	var totalLatency float64
-	var logsWithLatency int
-	var totalTokens int64
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 
 	if pagination == nil {
 		pagination = &PaginationOptions{
@@ -110,67 +115,46 @@ func (p *LoggerPlugin) SearchLogs(filters *SearchFilters, pagination *Pagination
 		}
 	}
 
-	// Initialize result stats
-	result.Stats.TotalRequests = 0
-	result.Stats.SuccessRate = 0
-	result.Stats.AverageLatency = 0
-	result.Stats.TotalTokens = 0
-	result.Pagination = *pagination
+	var matchingIDs []string
+	var allLogs []LogEntry
+	seenIDs := make(map[string]bool)
+
+	// Statistics variables
+	var successfulRequests int64
+	var totalLatency float64
+	var totalTokens int64
+	var logsWithLatency int64
 
 	err := p.db.View(func(txn *badger.Txn) error {
-		// Get matching IDs using indexes
-		var matchingIDs []string
 		if filters != nil {
+			// Use indexes for efficient filtering
 			matchingIDs = p.searchWithIndexes(txn, filters)
 		} else {
+			// Fallback to full scan if indexing is disabled
 			matchingIDs = p.searchFullScan(txn)
 		}
 
-		// Early return if no matches
-		if len(matchingIDs) == 0 {
-			result.Stats.TotalRequests = 0
-			return nil
-		}
+		// Fetch all matching logs, deduplicating by ID
+		for _, id := range matchingIDs {
+			if !seenIDs[id] {
+				if entry, err := p.getLogEntryByID(txn, id); err == nil && p.matchesFilters(entry, filters) {
+					allLogs = append(allLogs, *entry)
+					seenIDs[id] = true
 
-		// Sort IDs based on pagination options
-		p.sortIDs(txn, matchingIDs, pagination.SortBy, pagination.Order)
-
-		// Calculate total for stats
-		result.Stats.TotalRequests = int64(len(matchingIDs))
-
-		// Apply offset and limit for efficient pagination
-		start := pagination.Offset
-		if start >= len(matchingIDs) {
-			return nil
-		}
-		end := min(start+pagination.Limit, len(matchingIDs))
-		pageIDs := matchingIDs[start:end]
-
-		// Fetch only the required log entries for the current page
-		for _, id := range pageIDs {
-			entry, err := p.getLogEntryByID(txn, id)
-			if err != nil {
-				continue
-			}
-
-			// Verify the entry matches all filters
-			if p.matchesFilters(entry, filters) {
-				result.Logs = append(result.Logs, *entry)
-
-				// Update statistics
-				if entry.Status == "success" {
-					successfulRequests++
-				}
-				if entry.Latency != nil {
-					totalLatency += *entry.Latency
-					logsWithLatency++
-				}
-				if entry.TokenUsage != nil {
-					totalTokens += int64(entry.TokenUsage.TotalTokens)
+					// Update statistics
+					if entry.Status == "success" {
+						successfulRequests++
+					}
+					if entry.Latency != nil {
+						totalLatency += *entry.Latency
+						logsWithLatency++
+					}
+					if entry.TokenUsage != nil {
+						totalTokens += int64(entry.TokenUsage.TotalTokens)
+					}
 				}
 			}
 		}
-
 		return nil
 	})
 
@@ -178,16 +162,43 @@ func (p *LoggerPlugin) SearchLogs(filters *SearchFilters, pagination *Pagination
 		return nil, err
 	}
 
-	// Calculate final statistics
-	if result.Stats.TotalRequests > 0 {
-		result.Stats.SuccessRate = float64(successfulRequests) / float64(result.Stats.TotalRequests) * 100
-	}
-	if logsWithLatency > 0 {
-		result.Stats.AverageLatency = totalLatency / float64(logsWithLatency)
-	}
-	result.Stats.TotalTokens = totalTokens
+	// Sort logs based on pagination options
+	p.sortLogs(allLogs, pagination.SortBy, pagination.Order)
 
-	return &result, nil
+	// Apply pagination
+	total := len(allLogs)
+	start := pagination.Offset
+	end := min(pagination.Offset+pagination.Limit, total)
+	if start > total {
+		start = total
+	}
+
+	// Calculate final statistics
+	var successRate float64
+	if total > 0 {
+		successRate = float64(successfulRequests) / float64(total) * 100
+	}
+
+	var averageLatency float64
+	if logsWithLatency > 0 {
+		averageLatency = totalLatency / float64(logsWithLatency)
+	}
+
+	return &SearchResult{
+		Logs:       allLogs[start:end],
+		Pagination: *pagination,
+		Stats: struct {
+			TotalRequests  int64   `json:"total_requests"`
+			SuccessRate    float64 `json:"success_rate"`
+			AverageLatency float64 `json:"average_latency"`
+			TotalTokens    int64   `json:"total_tokens"`
+		}{
+			TotalRequests:  int64(total),
+			SuccessRate:    successRate,
+			AverageLatency: averageLatency,
+			TotalTokens:    totalTokens,
+		},
+	}, nil
 }
 
 // searchWithIndexes uses indexes to find matching log IDs efficiently
@@ -229,6 +240,38 @@ func (p *LoggerPlugin) searchWithIndexes(txn *badger.Txn, filters *SearchFilters
 			hasFilters = true
 		} else {
 			candidateIDs = p.intersectIDLists(candidateIDs, statusIDs)
+		}
+	}
+
+	if len(filters.Objects) > 0 {
+		objectIDs := p.searchByObjects(txn, filters.Objects)
+		if !hasFilters {
+			candidateIDs = objectIDs
+			hasFilters = true
+		} else {
+			candidateIDs = p.intersectIDLists(candidateIDs, objectIDs)
+		}
+	}
+
+	// Latency range filtering (using buckets for efficiency)
+	if filters.MinLatency != nil || filters.MaxLatency != nil {
+		latencyIDs := p.searchByLatencyRange(txn, filters.MinLatency, filters.MaxLatency)
+		if !hasFilters {
+			candidateIDs = latencyIDs
+			hasFilters = true
+		} else {
+			candidateIDs = p.intersectIDLists(candidateIDs, latencyIDs)
+		}
+	}
+
+	// Token range filtering (using buckets for efficiency)
+	if filters.MinTokens != nil || filters.MaxTokens != nil {
+		tokenIDs := p.searchByTokenRange(txn, filters.MinTokens, filters.MaxTokens)
+		if !hasFilters {
+			candidateIDs = tokenIDs
+			hasFilters = true
+		} else {
+			candidateIDs = p.intersectIDLists(candidateIDs, tokenIDs)
 		}
 	}
 
@@ -284,8 +327,8 @@ func (p *LoggerPlugin) searchByTimeRange(txn *badger.Txn, startTime, endTime *ti
 					if err := item.Value(func(val []byte) error {
 						ids = append(ids, string(val))
 						return nil
-					}); err == nil {
-						// Continue to next item
+					}); err != nil {
+						// Log error but continue processing
 					}
 				}
 			}
@@ -374,6 +417,136 @@ func (p *LoggerPlugin) searchByStatus(txn *badger.Txn, statuses []string) []stri
 			}
 		}
 		it.Close()
+	}
+
+	// Convert map to slice
+	var ids []string
+	for id := range idMap {
+		ids = append(ids, id)
+	}
+
+	return ids
+}
+
+func (p *LoggerPlugin) searchByObjects(txn *badger.Txn, objects []string) []string {
+	idMap := make(map[string]bool)
+
+	for _, object := range objects {
+		prefix := []byte(IndexPrefix + ObjectIndex + object + ":")
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			if err := item.Value(func(val []byte) error {
+				idMap[string(val)] = true
+				return nil
+			}); err == nil {
+				// Continue
+			}
+		}
+		it.Close()
+	}
+
+	// Convert map to slice
+	var ids []string
+	for id := range idMap {
+		ids = append(ids, id)
+	}
+
+	return ids
+}
+
+func (p *LoggerPlugin) searchByLatencyRange(txn *badger.Txn, minLatency, maxLatency *float64) []string {
+	idMap := make(map[string]bool)
+
+	// Determine which latency buckets to search
+	minBucket := 0
+	maxBucket := int(math.Pow(10, 6)) // Very large bucket
+
+	if minLatency != nil && *minLatency > 0 {
+		minBucket = getLatencyBucket(*minLatency)
+	}
+	if maxLatency != nil && *maxLatency > 0 {
+		maxBucket = getLatencyBucket(*maxLatency)
+	}
+
+	// Search through relevant latency buckets
+	opts := badger.DefaultIteratorOptions
+	opts.PrefetchValues = false
+	it := txn.NewIterator(opts)
+	defer it.Close()
+
+	prefix := []byte(IndexPrefix + LatencyIndex)
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		item := it.Item()
+		key := string(item.Key())
+
+		// Extract bucket from key
+		parts := strings.Split(strings.TrimPrefix(key, IndexPrefix+LatencyIndex), ":")
+		if len(parts) >= 3 {
+			if bucket, err := strconv.Atoi(parts[0]); err == nil {
+				if bucket >= minBucket && bucket <= maxBucket {
+					if err := item.Value(func(val []byte) error {
+						idMap[string(val)] = true
+						return nil
+					}); err != nil {
+						// Log error but continue
+					}
+				}
+			}
+		}
+	}
+
+	// Convert map to slice
+	var ids []string
+	for id := range idMap {
+		ids = append(ids, id)
+	}
+
+	return ids
+}
+
+func (p *LoggerPlugin) searchByTokenRange(txn *badger.Txn, minTokens, maxTokens *int) []string {
+	idMap := make(map[string]bool)
+
+	// Determine which token buckets to search
+	minBucket := 0
+	maxBucket := int(math.Pow(2, 20)) // Very large bucket
+
+	if minTokens != nil && *minTokens > 0 {
+		minBucket = getTokenBucket(*minTokens)
+	}
+	if maxTokens != nil && *maxTokens > 0 {
+		maxBucket = getTokenBucket(*maxTokens)
+	}
+
+	// Search through relevant token buckets
+	opts := badger.DefaultIteratorOptions
+	opts.PrefetchValues = false
+	it := txn.NewIterator(opts)
+	defer it.Close()
+
+	prefix := []byte(IndexPrefix + TokenIndex)
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		item := it.Item()
+		key := string(item.Key())
+
+		// Extract bucket from key
+		parts := strings.Split(strings.TrimPrefix(key, IndexPrefix+TokenIndex), ":")
+		if len(parts) >= 3 {
+			if bucket, err := strconv.Atoi(parts[0]); err == nil {
+				if bucket >= minBucket && bucket <= maxBucket {
+					if err := item.Value(func(val []byte) error {
+						idMap[string(val)] = true
+						return nil
+					}); err != nil {
+						// Log error but continue
+					}
+				}
+			}
+		}
 	}
 
 	// Convert map to slice
@@ -649,6 +822,9 @@ func getTokenBucket(tokens int) int {
 type LogManager interface {
 	// Search searches for log entries based on filters and pagination
 	Search(filters *SearchFilters, pagination *PaginationOptions) (*SearchResult, error)
+
+	// Get the number of dropped requests
+	GetDroppedRequests() int64
 }
 
 type PluginLogManager struct {
@@ -657,6 +833,10 @@ type PluginLogManager struct {
 
 func (p *PluginLogManager) Search(filters *SearchFilters, pagination *PaginationOptions) (*SearchResult, error) {
 	return p.plugin.SearchLogs(filters, pagination)
+}
+
+func (p *PluginLogManager) GetDroppedRequests() int64 {
+	return p.plugin.droppedRequests.Load()
 }
 
 func (p *LoggerPlugin) GetPluginLogManager() *PluginLogManager {

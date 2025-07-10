@@ -43,6 +43,8 @@ _\*Bifrost's overhead is measured at 59 µs on t3.medium and 11 µs on t3.xlarge
 
 **Note**: On the t3.xlarge, we tested with significantly larger response payloads (~10 KB average vs ~1 KB on t3.medium). Even so, response parsing time dropped dramatically thanks to better CPU throughput and Bifrost's optimized memory reuse.
 
+**Disclaimer**: These metrics are measured without the UI enabled. When using the UI, there is no drop in performance - only memory usage increases due to the additional UI build being served.
+
 ---
 
 ## 🎯 Key Performance Highlights
