@@ -18,7 +18,6 @@ require (
 	cloud.google.com/go v0.121.0 // indirect
 	cloud.google.com/go/auth v0.16.0 // indirect
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
-	crawshaw.io/sqlite v0.3.2 // indirect
 	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.36.3 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.29.14 // indirect
@@ -44,10 +43,8 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/jaswdr/faker/v2 v2.5.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mark3labs/mcp-go v0.32.0 // indirect
-	github.com/maximhq/bifrost/plugins/mocker v0.0.0-20250703175143-9ed8169f4edc // indirect
 	github.com/maximhq/maxim-go v0.1.3 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
@@ -72,4 +69,3 @@ require (
 	google.golang.org/protobuf v1.36.6 // indirect
 )
 
-replace github.com/maximhq/bifrost/core => ../core
