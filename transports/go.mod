@@ -7,7 +7,7 @@ require (
 	github.com/fasthttp/websocket v1.5.12
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.28
-	github.com/maximhq/bifrost/core v1.1.6
+	github.com/maximhq/bifrost/core v1.1.7
 	github.com/maximhq/bifrost/plugins/maxim v1.0.6
 	github.com/prometheus/client_golang v1.22.0
 	github.com/valyala/fasthttp v1.62.0
@@ -68,4 +68,3 @@ require (
 	google.golang.org/grpc v1.72.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 )
-
