@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Copy, RefreshCw, ArrowRight, AlertTriangle } from "lucide-react";
 import { CodeEditor } from "./ui/code-editor";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "../ui/alert";
+import { getExampleBaseUrl } from "@/lib/utils/port";
 
-type Provider = "openai" | "anthropic" | "genai";
+type Provider = "openai" | "anthropic" | "genai" | "litellm";
 type Language = "python" | "typescript";
 
 type Examples = {
@@ -20,91 +21,6 @@ type Examples = {
 			[L in Language]: string;
 		};
 	};
-};
-
-const EXAMPLES: Examples = {
-	curl: `curl -X POST http://localhost:8080/v1/chat/completions \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "model": "openai/gpt-4o-mini",
-    "messages": [
-      {"role": "user", "content": "Hello!"}
-    ]
-  }'`,
-	sdk: {
-		openai: {
-			python: `import openai
-
-client = openai.OpenAI(
-    base_url="http://localhost:8080/openai",
-    api_key="dummy-api-key" # Handled by Bifrost
-)
-
-response = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=[{"role": "user", "content": "Hello!"}]
-)`,
-			typescript: `import OpenAI from "openai";
-
-const openai = new OpenAI({
-  baseURL: "http://localhost:8080/openai",
-  apiKey: "dummy-api-key", // Handled by Bifrost
-});
-
-const response = await openai.chat.completions.create({
-  model: "gpt-4o-mini",
-  messages: [{ role: "user", content: "Hello!" }],
-});`,
-		},
-		anthropic: {
-			python: `import anthropic
-
-client = anthropic.Anthropic(
-    base_url="http://localhost:8080/anthropic",
-    api_key="dummy-api-key" # Handled by Bifrost
-)
-
-response = client.messages.create(
-    model="claude-3-sonnet-20240229",
-    max_tokens=1000,
-    messages=[{"role": "user", "content": "Hello!"}]
-)`,
-			typescript: `import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({
-  baseURL: "http://localhost:8080/anthropic",
-  apiKey: "dummy-api-key", // Handled by Bifrost
-});
-
-const response = await anthropic.messages.create({
-  model: "claude-3-sonnet-20240229",
-  max_tokens: 1000,
-  messages: [{ role: "user", content: "Hello!" }],
-});`,
-		},
-		genai: {
-			python: `from google import genai
-from google.genai.types import HttpOptions
-
-client = genai.Client(
-    api_key="dummy-api-key", # Handled by Bifrost
-    http_options=HttpOptions(base_url="http://localhost:8080/genai")
-)
-
-response = client.models.generate_content(
-    model="gemini-pro",
-    contents="Hello!"
-)`,
-			typescript: `import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const genAI = new GoogleGenerativeAI("dummy-api-key", { // Handled by Bifrost
-  baseUrl: "http://localhost:8080/genai",
-});
-
-const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-const response = await model.generateContent("Hello!");`,
-		},
-	},
 };
 
 // Common editor options to reduce duplication
@@ -190,6 +106,113 @@ interface EmptyStateProps {
 export function EmptyState({ isSocketConnected, error }: EmptyStateProps) {
 	const [language, setLanguage] = useState<Language>("python");
 
+	// Generate examples dynamically using the port utility
+	const examples: Examples = useMemo(() => {
+		const baseUrl = getExampleBaseUrl();
+
+		return {
+			curl: `curl -X POST ${baseUrl}/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "openai/gpt-4o-mini",
+    "messages": [
+      {"role": "user", "content": "Hello!"}
+    ]
+  }'`,
+			sdk: {
+				openai: {
+					python: `import openai
+
+client = openai.OpenAI(
+    base_url="${baseUrl}/openai",
+    api_key="dummy-api-key" # Handled by Bifrost
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o-mini", # or "provider/model" for other providers (anthropic/claude-3-sonnet)
+    messages=[{"role": "user", "content": "Hello!"}]
+)`,
+					typescript: `import OpenAI from "openai";
+
+const openai = new OpenAI({
+  baseURL: "${baseUrl}/openai",
+  apiKey: "dummy-api-key", // Handled by Bifrost
+});
+
+const response = await openai.chat.completions.create({
+  model: "gpt-4o-mini", // or "provider/model" for other providers (anthropic/claude-3-sonnet)
+  messages: [{ role: "user", content: "Hello!" }],
+});`,
+				},
+				anthropic: {
+					python: `import anthropic
+
+client = anthropic.Anthropic(
+    base_url="${baseUrl}/anthropic",
+    api_key="dummy-api-key" # Handled by Bifrost
+)
+
+response = client.messages.create(
+    model="claude-3-sonnet-20240229", # or "provider/model" for other providers (openai/gpt-4o-mini)
+    max_tokens=1000,
+    messages=[{"role": "user", "content": "Hello!"}]
+)`,
+					typescript: `import Anthropic from "@anthropic-ai/sdk";
+
+const anthropic = new Anthropic({
+  baseURL: "${baseUrl}/anthropic",
+  apiKey: "dummy-api-key", // Handled by Bifrost
+});
+
+const response = await anthropic.messages.create({
+  model: "claude-3-sonnet-20240229", // or "provider/model" for other providers (openai/gpt-4o-mini)
+  max_tokens: 1000,
+  messages: [{ role: "user", content: "Hello!" }],
+});`,
+				},
+				genai: {
+					python: `from google import genai
+from google.genai.types import HttpOptions
+
+client = genai.Client(
+    api_key="dummy-api-key", # Handled by Bifrost
+    http_options=HttpOptions(base_url="${baseUrl}/genai")
+)
+
+response = client.models.generate_content(
+    model="gemini-2.5-pro", # or "provider/model" for other providers (openai/gpt-4o-mini)
+    contents="Hello!"
+)`,
+					typescript: `import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI("dummy-api-key", { // Handled by Bifrost
+  baseUrl: "${baseUrl}/genai",
+});
+
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" }); // or "provider/model" for other providers (openai/gpt-4o-mini)
+const response = await model.generateContent("Hello!");`,
+				},
+				litellm: {
+					python: `import litellm
+
+litellm.api_base = "${baseUrl}/litellm"
+
+response = litellm.completion(
+    model="openai/gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello!"}]
+)`,
+					typescript: `import { completion } from "litellm";
+
+const response = await completion({
+  model: "openai/gpt-4o-mini",
+  messages: [{ role: "user", content: "Hello!" }],
+  api_base: "${baseUrl}/litellm",
+});`,
+				},
+			},
+		};
+	}, []);
+
 	return (
 		<div className="flex w-full flex-col items-center justify-center space-y-8">
 			<div className="space-y-2 text-center">
@@ -228,32 +251,60 @@ export function EmptyState({ isSocketConnected, error }: EmptyStateProps) {
 				))}
 			</div>
 
-			<div className="w-full">
-				<h3 className="mb-4 text-lg font-semibold">Integration Examples</h3>
+			<div className="w-full space-y-6">
+				<div className="">
+					<h3 className="text-xl font-semibold">Integration Examples</h3>
+					<p className="text-muted-foreground">Send your first request to get started</p>
+				</div>
+
 				<Tabs defaultValue="curl" className="w-full">
-					<TabsList className="h-10 w-full justify-start">
+					<TabsList className="grid h-10 w-full grid-cols-5">
 						<TabsTrigger value="curl">cURL</TabsTrigger>
 						<TabsTrigger value="openai">OpenAI SDK</TabsTrigger>
 						<TabsTrigger value="anthropic">Anthropic SDK</TabsTrigger>
 						<TabsTrigger value="genai">Google GenAI SDK</TabsTrigger>
+						<TabsTrigger value="litellm">LiteLLM SDK</TabsTrigger>
 					</TabsList>
 
-					{/* cURL Example Tab */}
-					<TabsContent value="curl" className="p-4">
-						<CodeBlock code={EXAMPLES.curl} language="bash" readonly={false} />
+					<TabsContent value="curl" className="mt-4">
+						<CodeBlock code={examples.curl} language="bash" readonly={false} />
 					</TabsContent>
 
-					{/* SDK Tabs */}
-					{(Object.keys(EXAMPLES.sdk) as Provider[]).map((provider) => (
-						<TabsContent key={provider} value={provider} className="space-y-4 p-4">
-							<CodeBlock
-								code={EXAMPLES.sdk[provider][language]}
-								language={language === "typescript" ? "typescript" : "python"}
-								onLanguageChange={(lang) => setLanguage(lang as Language)}
-								showLanguageSelect={true}
-							/>
-						</TabsContent>
-					))}
+					<TabsContent value="openai" className="mt-4">
+						<CodeBlock
+							code={examples.sdk.openai[language]}
+							language={language}
+							onLanguageChange={(newLang) => setLanguage(newLang as Language)}
+							showLanguageSelect
+						/>
+					</TabsContent>
+
+					<TabsContent value="anthropic" className="mt-4">
+						<CodeBlock
+							code={examples.sdk.anthropic[language]}
+							language={language}
+							onLanguageChange={(newLang) => setLanguage(newLang as Language)}
+							showLanguageSelect
+						/>
+					</TabsContent>
+
+					<TabsContent value="genai" className="mt-4">
+						<CodeBlock
+							code={examples.sdk.genai[language]}
+							language={language}
+							onLanguageChange={(newLang) => setLanguage(newLang as Language)}
+							showLanguageSelect
+						/>
+					</TabsContent>
+
+					<TabsContent value="litellm" className="mt-4">
+						<CodeBlock
+							code={examples.sdk.litellm[language]}
+							language={language}
+							onLanguageChange={(newLang) => setLanguage(newLang as Language)}
+							showLanguageSelect
+						/>
+					</TabsContent>
 				</Tabs>
 			</div>
 		</div>

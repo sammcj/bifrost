@@ -64,7 +64,6 @@ type UpdateLogData struct {
 	OutputMessage *schemas.BifrostMessage
 	ToolCalls     *[]schemas.ToolCall
 	ErrorDetails  *schemas.BifrostError
-	ExtraFields   map[string]interface{}
 	Model         string // May be different from request
 	Object        string // May be different from request
 }
@@ -85,7 +84,6 @@ type LogEntry struct {
 	TokenUsage    *schemas.LLMUsage        `json:"token_usage,omitempty"`
 	Status        string                   `json:"status"` // "processing", "success", or "error"
 	ErrorDetails  *schemas.BifrostError    `json:"error_details,omitempty"`
-	ExtraFields   map[string]interface{}   `json:"extra_fields,omitempty"`
 	CreatedAt     time.Time                `json:"created_at"`
 }
 
@@ -233,7 +231,6 @@ func (p *LoggerPlugin) createTables() error {
 		tool_calls TEXT,
 		params TEXT,
 		error_details TEXT,
-		extra_fields TEXT,
 		
 		-- For content search
 		content_summary TEXT,
@@ -497,17 +494,6 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 			if result.Choices[0].Message.AssistantMessage != nil &&
 				result.Choices[0].Message.AssistantMessage.ToolCalls != nil {
 				updateData.ToolCalls = result.Choices[0].Message.AssistantMessage.ToolCalls
-			}
-		}
-
-		// Extra fields if available
-		if result.ExtraFields.Provider != "" || result.ExtraFields.Params.MaxTokens != nil {
-			updateData.ExtraFields = map[string]interface{}{
-				"provider":     result.ExtraFields.Provider,
-				"params":       result.ExtraFields.Params,
-				"latency":      result.ExtraFields.Latency,
-				"billed_usage": result.ExtraFields.BilledUsage,
-				"raw_response": result.ExtraFields.RawResponse,
 			}
 		}
 	}

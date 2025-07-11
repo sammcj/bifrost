@@ -402,7 +402,7 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
 						))}
 
 					<Tabs defaultValue={tabs[0]?.id} value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-						<TabsList className={`grid h-10 w-full grid-cols-${tabs.length}`}>
+						<TabsList className={`grid h-10 w-full grid-cols-${tabs.length} mb-4`}>
 							{tabs.map((tab) => (
 								<TabsTrigger key={tab.id} value={tab.id} className="flex items-center gap-2">
 									{tab.label}
@@ -604,7 +604,7 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
 											<div>
 												<label className="text-sm font-medium">Proxy URL</label>
 												<Input
-													placeholder="http://proxy.example.com:8080"
+													placeholder="http://proxy.example.com"
 													value={proxyConfig.url || ""}
 													onChange={(e) => updateProxyField("url", e.target.value)}
 												/>

@@ -6,25 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-	Puzzle,
-	Code,
-	Terminal,
-	Rocket,
-	Zap,
-	Shield,
-	Monitor,
-	Database,
-	Container,
-	ChevronRight,
-	Github,
-	AlertTriangle,
-	Info,
-} from "lucide-react";
+import { Puzzle, Code, Terminal, Rocket, Zap, Shield, Monitor, Database, Container, ChevronRight, AlertTriangle, Info } from "lucide-react";
 import Link from "next/link";
 import GradientHeader from "@/components/ui/gradient-header";
 import Image from "next/image";
 import { useTheme } from "next-themes";
+import { GithubLogoIcon } from "@phosphor-icons/react";
 
 const featuredPlugins = [
 	{
@@ -129,13 +116,13 @@ export default function PluginsPage() {
 
 						<div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
 							<Button size="lg" asChild>
-								<Link href="https://github.com/maximhq/bifrost/tree/main/plugins">
-									<Github className="mr-2 h-5 w-5" />
+								<Link href="https://github.com/maximhq/bifrost/tree/main/plugins" target="_blank">
+									<GithubLogoIcon className="mr-2 h-5 w-5" weight="bold" />
 									Browse All Plugins
 								</Link>
 							</Button>
 							<Button size="lg" variant="outline" asChild>
-								<Link href="https://github.com/maximhq/bifrost/tree/main/docs/contributing/plugin.md">
+								<Link href="https://github.com/maximhq/bifrost/tree/main/docs/contributing/plugin.md" target="_blank">
 									<Code className="mr-2 h-5 w-5" />
 									Build Your Own
 								</Link>
@@ -379,7 +366,7 @@ export default function PluginsPage() {
 							<div className="flex flex-col justify-center gap-4 sm:flex-row">
 								<Button size="lg" asChild>
 									<Link href="https://github.com/maximhq/bifrost/tree/main/plugins" target="_blank">
-										<Github className="mr-2 h-5 w-5" />
+										<GithubLogoIcon className="mr-2 h-5 w-5" weight="bold" />
 										Plugin Repository
 									</Link>
 								</Button>
