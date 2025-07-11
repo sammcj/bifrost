@@ -9,6 +9,7 @@ import {
 } from "@/lib/types/config";
 import { MCPClient, CreateMCPClientRequest, UpdateMCPClientRequest } from "@/lib/types/mcp";
 import { LogEntry, LogFilters, LogStats, Pagination } from "./types/logs";
+import { getApiBaseUrl } from "@/lib/utils/port";
 
 type ServiceResponse<T> = Promise<[T | null, string | null]>;
 
@@ -16,17 +17,8 @@ class ApiService {
 	private client: AxiosInstance;
 
 	constructor() {
-		let baseURL: string;
-
-		if (process.env.NODE_ENV === "development") {
-			// Development mode: Next.js dev server runs on different port than Go server
-			const bifrostPort = process.env.NEXT_PUBLIC_BIFROST_PORT || "8080";
-			baseURL = `http://localhost:${bifrostPort}/api`;
-		} else {
-			// Production mode: UI is served by the same Go server, use relative URLs
-			// This automatically works with any host:port combination
-			baseURL = "/api";
-		}
+		// Use the centralized port utility for API base URL generation
+		const baseURL = getApiBaseUrl();
 
 		this.client = axios.create({
 			baseURL,

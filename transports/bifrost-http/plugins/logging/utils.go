@@ -110,13 +110,6 @@ func (p *LoggerPlugin) updateLogEntry(requestID string, timestamp time.Time, dat
 		args = append(args, string(errorDetailsJSON))
 	}
 
-	// Update extra fields
-	if data.ExtraFields != nil {
-		extraFieldsJSON, _ := json.Marshal(data.ExtraFields)
-		setParts = append(setParts, "extra_fields = ?")
-		args = append(args, string(extraFieldsJSON))
-	}
-
 	// Add the WHERE clause parameter
 	args = append(args, requestID)
 
@@ -161,13 +154,13 @@ func (p *LoggerPlugin) getLogEntry(requestID string) (*LogEntry, error) {
 	SELECT id, timestamp, provider, model, object_type, status, latency,
 		   prompt_tokens, completion_tokens, total_tokens,
 		   input_history, output_message, tools, tool_calls,
-		   params, error_details, extra_fields, created_at
+		   params, error_details, created_at
 	FROM logs WHERE id = ?`
 
 	var entry LogEntry
 	var timestampUnix, createdAtUnix int64
 	var inputHistoryJSON, outputMessageJSON, toolsJSON, toolCallsJSON sql.NullString
-	var paramsJSON, errorDetailsJSON, extraFieldsJSON sql.NullString
+	var paramsJSON, errorDetailsJSON sql.NullString
 	var promptTokens, completionTokens, totalTokensRow sql.NullInt64
 	var latency sql.NullFloat64
 
@@ -176,7 +169,7 @@ func (p *LoggerPlugin) getLogEntry(requestID string) (*LogEntry, error) {
 		&entry.Object, &entry.Status, &latency,
 		&promptTokens, &completionTokens, &totalTokensRow,
 		&inputHistoryJSON, &outputMessageJSON, &toolsJSON, &toolCallsJSON,
-		&paramsJSON, &errorDetailsJSON, &extraFieldsJSON,
+		&paramsJSON, &errorDetailsJSON,
 		&createdAtUnix,
 	)
 	if err != nil {
@@ -225,9 +218,6 @@ func (p *LoggerPlugin) getLogEntry(requestID string) (*LogEntry, error) {
 	}
 	if errorDetailsJSON.Valid {
 		json.Unmarshal([]byte(errorDetailsJSON.String), &entry.ErrorDetails)
-	}
-	if extraFieldsJSON.Valid {
-		json.Unmarshal([]byte(extraFieldsJSON.String), &entry.ExtraFields)
 	}
 
 	return &entry, nil
@@ -335,9 +325,9 @@ func (p *LoggerPlugin) SearchLogs(filters *SearchFilters, pagination *Pagination
 
 	for rows.Next() {
 		var entry LogEntry
-		var timestampUnix int64
+		var timestampUnix sql.NullInt64
 		var inputHistoryJSON, outputMessageJSON, toolsJSON, toolCallsJSON sql.NullString
-		var paramsJSON, errorDetailsJSON, extraFieldsJSON sql.NullString
+		var paramsJSON, errorDetailsJSON sql.NullString
 		var promptTokens, completionTokens, totalTokensRow sql.NullInt64
 		var latency sql.NullFloat64
 
@@ -346,14 +336,18 @@ func (p *LoggerPlugin) SearchLogs(filters *SearchFilters, pagination *Pagination
 			&entry.Object, &entry.Status, &latency,
 			&promptTokens, &completionTokens, &totalTokensRow,
 			&inputHistoryJSON, &outputMessageJSON, &toolsJSON, &toolCallsJSON,
-			&paramsJSON, &errorDetailsJSON, &extraFieldsJSON,
+			&paramsJSON, &errorDetailsJSON,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
-		// Convert timestamp
-		entry.Timestamp = time.Unix(timestampUnix/1e9, timestampUnix%1e9) // Convert from nanoseconds
+		// Convert timestamp (handle NULL values)
+		if timestampUnix.Valid {
+			entry.Timestamp = time.Unix(timestampUnix.Int64/1e9, timestampUnix.Int64%1e9) // Convert from nanoseconds
+		} else {
+			entry.Timestamp = time.Time{} // Set to zero time if NULL
+		}
 
 		// Handle latency
 		if latency.Valid {
@@ -394,9 +388,6 @@ func (p *LoggerPlugin) SearchLogs(filters *SearchFilters, pagination *Pagination
 		if errorDetailsJSON.Valid {
 			json.Unmarshal([]byte(errorDetailsJSON.String), &entry.ErrorDetails)
 		}
-		if extraFieldsJSON.Valid {
-			json.Unmarshal([]byte(extraFieldsJSON.String), &entry.ExtraFields)
-		}
 
 		logs = append(logs, entry)
 	}
@@ -433,7 +424,7 @@ func (p *LoggerPlugin) buildSearchQuery(filters *SearchFilters, pagination *Pagi
 	SELECT id, timestamp, provider, model, object_type, status, latency,
 		   prompt_tokens, completion_tokens, total_tokens,
 		   input_history, output_message, tools, tool_calls,
-		   params, error_details, extra_fields
+		   params, error_details
 	FROM logs`
 
 	countQuery := "SELECT COUNT(*) FROM logs"

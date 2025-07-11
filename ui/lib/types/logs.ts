@@ -141,7 +141,6 @@ export interface LogEntry {
 	token_usage?: LLMUsage;
 	status: string; // "success" or "error"
 	error_details?: BifrostError;
-	extra_fields?: Record<string, unknown>;
 }
 
 export interface LogFilters {

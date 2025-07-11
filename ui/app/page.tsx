@@ -47,12 +47,12 @@ export default function LogsPage() {
 
 			// Only prepend the new log if we're on the first page and sorted by timestamp desc
 			if (pagination.offset === 0 && pagination.sort_by === "timestamp" && pagination.order === "desc") {
-				setLogs((prevLogs: LogEntry[]) => {
-					// Check if the log matches current filters
-					if (!matchesFilters(log, filters)) {
-						return prevLogs;
-					}
+				// Check if the log matches current filters
+				if (!matchesFilters(log, filters)) {
+					return;
+				}
 
+				setLogs((prevLogs: LogEntry[]) => {
 					// Remove the last log if we're at the page limit
 					const updatedLogs = [log, ...prevLogs];
 					if (updatedLogs.length > pagination.limit) {
@@ -62,7 +62,6 @@ export default function LogsPage() {
 				});
 				setTotalItems((prev: number) => prev + 1);
 
-				// Update stats
 				setStats((prevStats) => {
 					if (!prevStats) return prevStats;
 
