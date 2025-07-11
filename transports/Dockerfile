@@ -2,11 +2,11 @@
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
-# Install dependencies in a single layer
-RUN apk add --no-cache upx
+# Install dependencies including gcc for CGO and sqlite
+RUN apk add --no-cache upx gcc musl-dev sqlite-dev
 
-# Set environment for static build
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+# Set environment for CGO-enabled build (required for go-sqlite3)
+ENV CGO_ENABLED=1 GOOS=linux
 
 # Define build-time variables
 ARG TRANSPORT_TYPE=http
@@ -16,10 +16,11 @@ ARG TAG_VERSION=latest
 RUN go mod init bifrost-build && \
     go get github.com/maximhq/bifrost/transports/bifrost-${TRANSPORT_TYPE}@${TAG_VERSION}
 
-# Build the binary locally
+# Build the binary with CGO enabled and static SQLite linking
 RUN go build \
         -ldflags="-w -s -extldflags '-static'" \
         -a -trimpath \
+        -tags "sqlite_static" \
         -o /app/main \
         github.com/maximhq/bifrost/transports/bifrost-${TRANSPORT_TYPE}
 

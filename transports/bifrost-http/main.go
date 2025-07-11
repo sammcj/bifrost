@@ -373,7 +373,7 @@ func main() {
 	// Apply CORS middleware to all routes
 	corsHandler := corsMiddleware(r.Handler)
 
-	log.Printf("Starting server on port %s", port)
+	log.Printf("Successfully started bifrost. Serving UI on http://localhost:%s", port)
 	if err := fasthttp.ListenAndServe(":"+port, corsHandler); err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}

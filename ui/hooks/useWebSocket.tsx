@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { LogEntry } from "../lib/types/logs";
+import { getWebSocketUrl } from "@/lib/utils/port";
 
 interface WebSocketContextType {
 	isConnected: boolean;
@@ -10,12 +11,6 @@ interface WebSocketContextType {
 }
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
-
-declare const process: {
-	env: {
-		NEXT_PUBLIC_BIFROST_PORT?: string;
-	};
-};
 
 interface WebSocketProviderProps {
 	children: ReactNode;
@@ -36,13 +31,14 @@ export function WebSocketProvider({ children, onMessage }: WebSocketProviderProp
 	};
 
 	useEffect(() => {
-		const port = process.env.NEXT_PUBLIC_BIFROST_PORT || "8080";
 		const connect = () => {
 			if (wsRef.current?.readyState === WebSocket.OPEN) {
 				return;
 			}
 
-			const ws = new WebSocket(`ws://localhost:${port}/ws/logs`);
+			const wsUrl = getWebSocketUrl("/ws/logs");
+
+			const ws = new WebSocket(wsUrl);
 			wsRef.current = ws;
 			globalWsRef = ws;
 
