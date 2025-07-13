@@ -1,28 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Edit, Trash2, Key, Loader2, Plus } from "lucide-react";
-import { toast } from "sonner";
-import { ProviderResponse } from "@/lib/types/config";
-import { apiService } from "@/lib/api";
-import { PROVIDER_LABELS } from "@/lib/constants/logs";
 import {
 	AlertDialog,
-	AlertDialogTrigger,
+	AlertDialogAction,
+	AlertDialogCancel,
 	AlertDialogContent,
-	AlertDialogHeader,
-	AlertDialogTitle,
 	AlertDialogDescription,
 	AlertDialogFooter,
-	AlertDialogCancel,
-	AlertDialogAction,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { CardHeader, CardTitle, CardDescription } from "../ui/card";
-import ProviderForm from "./provider-form";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { apiService } from "@/lib/api";
 import { ProviderIconType, renderProviderIcon } from "@/lib/constants/icons";
+import { PROVIDER_LABELS } from "@/lib/constants/logs";
+import { ProviderResponse } from "@/lib/types/config";
+import { Edit, Key, Loader2, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { CardDescription, CardHeader, CardTitle } from "../ui/card";
+import ProviderForm from "./provider-form";
 
 interface ProvidersListProps {
 	providers: ProviderResponse[];
@@ -68,7 +68,7 @@ export default function ProvidersList({ providers, onRefresh }: ProvidersListPro
 			{showProviderForm && (
 				<ProviderForm
 					provider={editingProvider}
-					onSave={handleProviderSaved}
+					onSave={handleProviderSaved}					
 					onCancel={() => setShowProviderForm(false)}
 					existingProviders={providers.map((p) => p.name)}
 				/>

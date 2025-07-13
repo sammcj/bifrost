@@ -1,0 +1,18 @@
+{
+	"root": true,
+	"printWidth": 140,
+	"singleQuote": true,
+	"semi": false,
+	"bracketSpacing": true,
+	"bracketSameLine": false,
+	"useTabs": false,
+	"tabWidth": 2,
+	"trailingComma": "all",
+	"plugins": [
+		"prettier-plugin-tailwindcss"
+	],
+	"tailwindFunctions": [
+		"cn",
+		"classNames"
+	]
+}
