@@ -1,8 +1,8 @@
 "use client";
 
-import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { XIcon } from "lucide-react";
+import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -70,7 +70,7 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-	return <div data-slot="dialog-header" className={cn("flex flex-col gap-2 text-center sm:text-left", className)} {...props} />;
+	return <div data-slot="dialog-header" className={cn("flex flex-col gap-2 text-center sm:text-left sticky top-0 bg-background pb-2", className)} {...props} />;
 }
 
 function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
@@ -97,5 +97,6 @@ export {
 	DialogOverlay,
 	DialogPortal,
 	DialogTitle,
-	DialogTrigger,
+	DialogTrigger
 };
+

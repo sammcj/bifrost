@@ -1,20 +1,19 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MCPClient, CreateMCPClientRequest, UpdateMCPClientRequest, MCPConnectionType, MCPStdioConfig } from "@/lib/types/mcp";
-import { apiService } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, AlertTriangle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiService } from "@/lib/api";
+import { CreateMCPClientRequest, MCPClient, MCPConnectionType, MCPStdioConfig, UpdateMCPClientRequest } from "@/lib/types/mcp";
+import { isArrayEqual, parseArrayFromText } from "@/lib/utils/array";
 import { Validator } from "@/lib/utils/validation";
-import { parseArrayFromText, isArrayEqual } from "@/lib/utils/array";
+import { Info } from "lucide-react";
+import React, { useEffect, useState } from "react";
 
 interface ClientFormProps {
 	client?: MCPClient | null;
@@ -210,14 +209,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, open, onClose, onSaved 
 			<DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle>{client ? "Edit MCP Client Tools" : "New MCP Client"}</DialogTitle>
-				</DialogHeader>
-				<Alert>
-					<AlertTriangle className="h-4 w-4" />
-					<AlertDescription>
-						<strong>Performance Notice:</strong> This operation may temporarily increase latency for incoming requests while being
-						processed.
-					</AlertDescription>
-				</Alert>
+				</DialogHeader>				
 				<div className="space-y-4">
 					<div className="space-y-2">
 						<Label>Name</Label>
