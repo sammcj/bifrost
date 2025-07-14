@@ -1,49 +1,79 @@
 "use client";
 
-import { Home, BookOpen, Settings, Puzzle, ExternalLink, HeartHandshake } from "lucide-react";
+import { BoxIcon, BugIcon, ExternalLink, Puzzle, Settings2Icon, Telescope } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import {
 	Sidebar,
 	SidebarContent,
+	SidebarFooter,
 	SidebarGroup,
 	SidebarGroupContent,
 	SidebarGroupLabel,
 	SidebarHeader,
 	SidebarMenu,
 	SidebarMenuButton,
-	SidebarMenuItem,
-	SidebarSeparator,
-	SidebarFooter,
+	SidebarMenuItem
 } from "@/components/ui/sidebar";
-import { Badge } from "@/components/ui/badge";
-import { usePathname } from "next/navigation";
-import Link from "next/link";
-import { cn } from "@/lib/utils";
-import { useTheme } from "next-themes";
-import { useState, useEffect } from "react";
-import Image from "next/image";
-import { ThemeToggle } from "./theme-toggle";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { BookOpenTextIcon, DiscordLogoIcon, GithubLogoIcon } from "@phosphor-icons/react";
+import { cn } from "@/lib/utils";
+import { BooksIcon, DiscordLogoIcon, GithubLogoIcon } from "@phosphor-icons/react";
+import { useTheme } from "next-themes";
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { ThemeToggle } from "./theme-toggle";
+
+// Custom MCP Icon Component
+const MCPIcon = ({ className }: { className?: string }) => (
+	<svg 
+		className={className} 
+		fill="currentColor" 
+		fillRule="evenodd" 
+		height="1em" 
+		style={{flex:'none',lineHeight:1}} 
+		viewBox="0 0 24 24" 
+		width="1em" 
+		xmlns="http://www.w3.org/2000/svg"
+		aria-label="MCP clients icon"
+	>
+		<title>MCP clients icon</title>
+		<path d="M15.688 2.343a2.588 2.588 0 00-3.61 0l-9.626 9.44a.863.863 0 01-1.203 0 .823.823 0 010-1.18l9.626-9.44a4.313 4.313 0 016.016 0 4.116 4.116 0 011.204 3.54 4.3 4.3 0 013.609 1.18l.05.05a4.115 4.115 0 010 5.9l-8.706 8.537a.274.274 0 000 .393l1.788 1.754a.823.823 0 010 1.18.863.863 0 01-1.203 0l-1.788-1.753a1.92 1.92 0 010-2.754l8.706-8.538a2.47 2.47 0 000-3.54l-.05-.049a2.588 2.588 0 00-3.607-.003l-7.172 7.034-.002.002-.098.097a.863.863 0 01-1.204 0 .823.823 0 010-1.18l7.273-7.133a2.47 2.47 0 00-.003-3.537z" />
+		<path d="M14.485 4.703a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a4.115 4.115 0 000 5.9 4.314 4.314 0 006.016 0l7.12-6.982a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a2.588 2.588 0 01-3.61 0 2.47 2.47 0 010-3.54l7.12-6.982z" />
+	</svg>
+);
 
 // Main navigation items
 const navigationItems = [
 	{
 		title: "Logs",
 		url: "/",
-		icon: Home,
+		icon: Telescope,
 		description: "Request logs & monitoring",
+	},
+	{
+		title: "Providers",
+		url: "/providers",
+		icon: BoxIcon,
+		description: "Configure models",
+	},
+	{
+		title: "MCP clients",
+		url: "/mcp-clients",
+		icon: MCPIcon,
+		description: "MCP configuration",
 	},
 	{
 		title: "Config",
 		url: "/config",
-		icon: Settings,
-		description: "Providers & MCP configuration",
+		icon: Settings2Icon,
+		description: "Bifrost settings",
 	},
 	{
 		title: "Docs",
 		url: "/docs",
-		icon: BookOpen,
+		icon: BooksIcon,
 		description: "Documentation & guides",
 	},
 	{
@@ -68,9 +98,14 @@ const externalLinks = [
 		icon: GithubLogoIcon,
 	},
 	{
+		title: "Report a bug",
+		url: "https://github.com/maximhq/bifrost/issues/new?title=[Bug Report]&labels=bug&type=bug&projects=maximhq/1",
+		icon: BugIcon,
+	},
+	{
 		title: "Full Documentation",
 		url: "https://github.com/maximhq/bifrost/tree/main/docs",
-		icon: BookOpenTextIcon,
+		icon: BooksIcon,
 	},
 ];
 
@@ -107,9 +142,6 @@ export default function AppSidebar() {
 
 			<SidebarContent>
 				<SidebarGroup>
-					<SidebarGroupLabel className="text-muted-foreground px-3 py-2 text-xs font-semibold tracking-wider uppercase">
-						Navigation
-					</SidebarGroupLabel>
 					<SidebarGroupContent>
 						<SidebarMenu className="space-y-1">
 							{navigationItems.map((item) => {
@@ -120,7 +152,7 @@ export default function AppSidebar() {
 											asChild
 											className={`relative h-16 rounded-lg border px-3 transition-all duration-200 ${
 												isActive
-													? "bg-accent text-primary border-primary/20 shadow-sm"
+													? "bg-accent text-primary border-primary/10"
 													: "hover:bg-accent hover:text-accent-foreground border-transparent"
 											} `}
 										>
@@ -139,7 +171,7 @@ export default function AppSidebar() {
 												)}
 												{item.badge && (
 													<Badge
-														variant={item.badge === "Live" ? "default" : "secondary"}
+														variant={item.badge === "Live" ? "default" : "outline"}
 														className={cn("h-5 px-2 py-0.5 text-xs", item.badge === "Live" && "animate-pulse duration-200")}
 													>
 														{item.badge}
@@ -153,8 +185,6 @@ export default function AppSidebar() {
 						</SidebarMenu>
 					</SidebarGroupContent>
 				</SidebarGroup>
-
-				<SidebarSeparator className="my-4" />
 
 				<SidebarGroup>
 					<SidebarGroupLabel className="text-muted-foreground px-3 py-2 text-xs font-semibold tracking-wider uppercase">

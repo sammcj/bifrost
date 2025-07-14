@@ -6,4 +6,13 @@
 **/__pycache__/**
 private.*
 .venv
+
+# Temporary directories
 **/temp/
+**/tmp/
+temp/
+tmp/
+
+# Specific transport ignores
+transports/bifrost-http/logs/
+transports/bifrost-http/tmp/
