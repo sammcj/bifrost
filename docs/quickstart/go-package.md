@@ -40,55 +40,59 @@ func (a *MyAccount) GetConfiguredProviders() ([]schemas.ModelProvider, error) {
 }
 
 func (a *MyAccount) GetKeysForProvider(provider schemas.ModelProvider) ([]schemas.Key, error) {
-    if provider == schemas.OpenAI {
-        return []schemas.Key{{
-            Value: os.Getenv("OPENAI_API_KEY"),
-            Models: []string{"gpt-4o-mini"},
-            Weight: 1.0,
-        }}, nil
-    }
-    return nil, fmt.Errorf("provider %s not supported", provider)
+	if provider == schemas.OpenAI {
+		return []schemas.Key{{
+			Value:  os.Getenv("OPENAI_API_KEY"),
+			Models: []string{"gpt-4o-mini"},
+			Weight: 1.0,
+		}}, nil
+	}
+	return nil, fmt.Errorf("provider %s not supported", provider)
 }
 
 func (a *MyAccount) GetConfigForProvider(provider schemas.ModelProvider) (*schemas.ProviderConfig, error) {
-    if provider == schemas.OpenAI {
-        // Return default config (can be customized for advanced use cases)
-        return &schemas.ProviderConfig{
-            NetworkConfig:            schemas.DefaultNetworkConfig,
-            ConcurrencyAndBufferSize: schemas.DefaultConcurrencyAndBufferSize,
-        }, nil
-    }
-    return nil, fmt.Errorf("provider %s not supported", provider)
+	if provider == schemas.OpenAI {
+		// Return default config (can be customized for advanced use cases)
+		return &schemas.ProviderConfig{
+			NetworkConfig:            schemas.DefaultNetworkConfig,
+			ConcurrencyAndBufferSize: schemas.DefaultConcurrencyAndBufferSize,
+		}, nil
+	}
+	return nil, fmt.Errorf("provider %s not supported", provider)
 }
+
 
 func main() {
-    // Initialize Bifrost
-    client, err := bifrost.Init(schemas.BifrostConfig{
-        Account: &MyAccount{},
-    })
-    if err != nil {
-        panic(err)
-    }
-    defer client.Cleanup()
+	client, err := bifrost.Init(schemas.BifrostConfig{
+		Account: &MyAccount{},
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer client.Cleanup()
 
-    // Make a chat completion request
-    response, err := client.ChatCompletionRequest(context.Background(), schemas.ChatCompletionRequest{
-        Provider: schemas.OpenAI,
-        Model:    "gpt-4o-mini",
-        Messages: []schemas.Message{
-            {Role: schemas.User, Content: schemas.Content{ContentStr: bifrost.Ptr("Hello, Bifrost!")}},
-        },
-    })
+	messages := []schemas.BifrostMessage{
+		{Role: schemas.ModelChatMessageRoleUser, Content: schemas.MessageContent{ContentStr: bifrost.Ptr("Hello, Bifrost!")}},
+	}
 
-    if err != nil {
-        panic(err)
-    }
+	response, bifrostErr := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+		Provider: schemas.OpenAI,
+		Model:    "gpt-4o-mini",
+		Input: schemas.RequestInput{
+			ChatCompletionInput: &messages,
+		},
+	})
 
-    // Print response
-    if len(response.Choices) > 0 && response.Choices[0].Message.Content.ContentStr != nil {
-        fmt.Println("AI Response:", *response.Choices[0].Message.Content.ContentStr)
-    }
+	if bifrostErr != nil {
+		panic(bifrostErr)
+	}
+
+	if len(response.Choices) > 0 && response.Choices[0].Message.Content.ContentStr != nil {
+		fmt.Println("AI Response:", *response.Choices[0].Message.Content.ContentStr)
+	}
+
 }
+
 ```
 
 ### 4. Run Your App
@@ -146,13 +150,18 @@ func (a *MyAccount) GetConfigForProvider(provider schemas.ModelProvider) (*schem
 
 ```go
 // Request with fallback providers
+
+messages := []schemas.BifrostMessage{
+		{Role: schemas.ModelChatMessageRoleUser, Content: schemas.MessageContent{ContentStr: bifrost.Ptr("Hello, Bifrost!")}},
+	}
+
 response, err := client.ChatCompletionRequest(context.Background(), schemas.ChatCompletionRequest{
     Provider: schemas.OpenAI,        // Primary provider
     Model:    "gpt-4o-mini",
-    Messages: []schemas.Message{
-        {Role: schemas.User, Content: schemas.Content{ContentStr: bifrost.Ptr("Hello!")}},
-    },
-    Fallbacks: []schemas.FallbackConfig{
+    Input: schemas.RequestInput{
+			ChatCompletionInput: &messages,
+		},
+    Fallbacks: []schemas.Fallback{
         {Provider: schemas.Anthropic, Model: "claude-3-sonnet-20240229"},
     },
 })
@@ -162,31 +171,37 @@ response, err := client.ChatCompletionRequest(context.Background(), schemas.Chat
 
 ```go
 // Add tools to your request
-response, err := client.ChatCompletionRequest(context.Background(), schemas.ChatCompletionRequest{
-    Provider: schemas.OpenAI,
-    Model:    "gpt-4o-mini",
-    Messages: []schemas.Message{
-        {Role: schemas.User, Content: schemas.Content{ContentStr: bifrost.Ptr("What's the weather?")}},
-    },
-    Tools: []schemas.Tool{
-        {
-            Type: "function",
-            Function: schemas.FunctionTool{
-                Name: "get_weather",
-                Description: "Get current weather information",
-                Parameters: map[string]interface{}{
-                    "type": "object",
-                    "properties": map[string]interface{}{
-                        "location": map[string]interface{}{
-                            "type": "string",
-                            "description": "City name",
-                        },
-                    },
-                },
-            },
-        },
-    },
-})
+messages := []schemas.BifrostMessage{
+		{Role: schemas.ModelChatMessageRoleUser, Content: schemas.MessageContent{ContentStr: bifrost.Ptr("Hello, Bifrost!")}},
+	}
+
+response, bifrostErr := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+		Provider: schemas.OpenAI,
+		Model:    "gpt-4o-mini",
+		Input: schemas.RequestInput{
+			ChatCompletionInput: &messages,
+		},
+		Params: &schemas.ModelParameters{
+			Tools: &[]schemas.Tool{
+				{
+					Type: "function",
+					Function: schemas.Function{
+						Name:        "get_weather",
+						Description: "Get current weather information",
+						Parameters: schemas.FunctionParameters{
+							Type: "object",
+							Properties: map[string]interface{}{
+								"location": map[string]interface{}{
+									"type":        "string",
+									"description": "City name",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
 ```
 
 ---
