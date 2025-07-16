@@ -14,7 +14,7 @@ func Ptr[T any](v T) *T {
 // providerRequiresKey returns true if the given provider requires an API key for authentication.
 // Some providers like Vertex and Ollama are keyless and don't require API keys.
 func providerRequiresKey(providerKey schemas.ModelProvider) bool {
-	return providerKey != schemas.Vertex && providerKey != schemas.Ollama
+	return providerKey != schemas.Vertex && providerKey != schemas.Ollama && providerKey != schemas.SGL
 }
 
 // calculateBackoff implements exponential backoff with jitter for retry attempts.
@@ -65,4 +65,19 @@ func newBifrostErrorFromMsg(message string) *schemas.BifrostError {
 			Message: message,
 		},
 	}
+}
+
+// newBifrostMessageChan creates a channel that sends a bifrost response.
+// It is used to send a bifrost response to the client.
+func newBifrostMessageChan(message *schemas.BifrostResponse) chan *schemas.BifrostStream {
+	ch := make(chan *schemas.BifrostStream)
+
+	go func() {
+		defer close(ch)
+		ch <- &schemas.BifrostStream{
+			BifrostResponse: message,
+		}
+	}()
+
+	return ch
 }
