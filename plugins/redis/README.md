@@ -166,6 +166,7 @@ config := redis.RedisPluginConfig{
 | ----------------- | --------------- | -------- | ----------------- | ----------------------------------- |
 | `Addr`            | `string`        | ✅       | -                 | Redis server address (host:port)    |
 | `CacheKey`        | `string`        | ✅       | -                 | Context key for cache identification|
+| `CacheTTLKey`     | `string`        | ❌       | `""`              | Context key for per-request TTL override |
 | `Username`        | `string`        | ❌       | `""`              | Username for Redis AUTH (Redis 6+) |
 | `Password`        | `string`        | ❌       | `""`              | Password for Redis AUTH            |
 | `DB`              | `int`           | ❌       | `0`               | Redis database number              |
