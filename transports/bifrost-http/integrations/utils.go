@@ -806,13 +806,12 @@ func isSGLModel(model string) bool {
 
 // isParasailModel checks for Parasail model patterns
 func isParasailModel(model string) bool {
-	parasailPatterns := []string{
-		"parasail-", "parasail/", "qwencoder",
-	}
+    parasailPatterns := []string{
+        "parasail-", "parasail/",
+    }
 
-	return matchesAnyPattern(model, parasailPatterns)
+    return matchesAnyPattern(model, parasailPatterns)
 }
-
 // matchesAnyPattern checks if the model matches any of the given patterns
 func matchesAnyPattern(model string, patterns []string) bool {
 	for _, pattern := range patterns {
