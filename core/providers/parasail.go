@@ -144,9 +144,7 @@ func (provider *ParasailProvider) ChatCompletion(ctx context.Context, model stri
 	responseBody := resp.Body()
 
 	// Pre-allocate response structs from pools
-	response := acquireParasailResponse()
-	defer releaseParasailResponse(response)
-
+response := acquireParasailResponse()
 	// Use enhanced response handler with pre-allocated response
 	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)
 	if bifrostErr != nil {
