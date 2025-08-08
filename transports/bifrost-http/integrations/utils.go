@@ -630,6 +630,9 @@ var validProviders = map[schemas.ModelProvider]bool{
 	schemas.Vertex:    true,
 	schemas.Mistral:   true,
 	schemas.Ollama:    true,
+	schemas.Groq:      true,
+	schemas.SGL:       true,
+	schemas.Parasail:  true,
 }
 
 // ParseModelString extracts provider and model from a model string.
@@ -691,6 +694,21 @@ func GetProviderFromModel(model string) schemas.ModelProvider {
 	// Cohere Models - Command and Embed family
 	if isCohereModel(modelLower) {
 		return schemas.Cohere
+	}
+
+	// Groq Models
+	if isGroqModel(modelLower) {
+		return schemas.Groq
+	}
+
+	// SGL Models
+	if isSGLModel(modelLower) {
+		return schemas.SGL
+	}
+
+	// Parasail Models
+	if isParasailModel(modelLower) {
+		return schemas.Parasail
 	}
 
 	// Default to OpenAI for unknown models (most LiteLLM compatible)
@@ -766,6 +784,33 @@ func isCohereModel(model string) bool {
 	}
 
 	return matchesAnyPattern(model, coherePatterns)
+}
+
+// isGroqModel checks for Groq model patterns
+func isGroqModel(model string) bool {
+	groqPatterns := []string{
+		"groq/", "llama-3", "mixtral-", "gemma-", "groq-",
+	}
+
+	return matchesAnyPattern(model, groqPatterns)
+}
+
+// isSGLModel checks for SGL model patterns
+func isSGLModel(model string) bool {
+	sglPatterns := []string{
+		"sgl/", "sgl-",
+	}
+
+	return matchesAnyPattern(model, sglPatterns)
+}
+
+// isParasailModel checks for Parasail model patterns
+func isParasailModel(model string) bool {
+	parasailPatterns := []string{
+		"parasail-", "parasail/", "qwencoder",
+	}
+
+	return matchesAnyPattern(model, parasailPatterns)
 }
 
 // matchesAnyPattern checks if the model matches any of the given patterns
