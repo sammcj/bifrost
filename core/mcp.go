@@ -460,7 +460,7 @@ func (m *MCPManager) createLocalMCPClient() (*MCPClient, error) {
 		},
 		ToolMap: make(map[string]schemas.Tool),
 		ConnectionInfo: MCPClientConnectionInfo{
-			Type: schemas.MCPConnectionTypeSTDIO, // NOTE: Although the actual connection is in-process, we keep the type as STDIO for compatibility with other parts of the system that expect this value. Update this if/when all consumers support an explicit in-process type.
+			Type: schemas.MCPConnectionTypeSTDIO, // Keep as STDIO for type consistency
 		},
 	}, nil
 }
@@ -485,7 +485,7 @@ func (m *MCPManager) startLocalMCPServer() error {
 	// Create in-process client directly connected to the server
 	inProcessClient, err := client.NewInProcessClient(m.server)
 	if err != nil {
-		return fmt.Errorf("failed to create in-process MCP client: %v", err)
+		return fmt.Errorf("failed to create in-process MCP client: %w", err)
 	}
 
 	// Update the client connection
@@ -496,7 +496,7 @@ func (m *MCPManager) startLocalMCPServer() error {
 	clientEntry.Conn = inProcessClient
 
 	// Initialize the in-process client
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), MCPClientConnectionEstablishTimeout)
 	defer cancel()
 
 	// Create proper initialize request with correct structure
@@ -513,7 +513,7 @@ func (m *MCPManager) startLocalMCPServer() error {
 
 	_, err = inProcessClient.Initialize(ctx, initRequest)
 	if err != nil {
-		return fmt.Errorf("failed to initialize MCP client: %v", err)
+		return fmt.Errorf("failed to initialize MCP client: %w", err)
 	}
 
 	// Mark server as running
