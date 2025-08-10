@@ -11,6 +11,7 @@ import (
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/anthropic"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/genai"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/openai"
+	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 )
 
@@ -45,7 +46,7 @@ type LiteLLMRouter struct {
 }
 
 // NewLiteLLMRouter creates a new LiteLLMRouter with the given bifrost client.
-func NewLiteLLMRouter(client *bifrost.Bifrost) *LiteLLMRouter {
+func NewLiteLLMRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *LiteLLMRouter {
 	paths := []string{
 		"/chat/completions",
 		"/v1/messages",
@@ -222,6 +223,6 @@ func NewLiteLLMRouter(client *bifrost.Bifrost) *LiteLLMRouter {
 	}
 
 	return &LiteLLMRouter{
-		GenericRouter: integrations.NewGenericRouter(client, routes),
+		GenericRouter: integrations.NewGenericRouter(client, handlerStore, routes),
 	}
 }

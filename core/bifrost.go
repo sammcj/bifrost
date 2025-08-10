@@ -1462,6 +1462,14 @@ func (bifrost *Bifrost) releaseChannelMessage(msg *ChannelMessage) {
 // selectKeyFromProviderForModel selects an appropriate API key for a given provider and model.
 // It uses weighted random selection if multiple keys are available.
 func (bifrost *Bifrost) selectKeyFromProviderForModel(ctx *context.Context, providerKey schemas.ModelProvider, model string) (schemas.Key, error) {
+	// Check if key has been set in the context explicitly
+	if ctx != nil {
+		key, ok := (*ctx).Value(schemas.BifrostContextKey).(schemas.Key)
+		if ok {
+			return key, nil
+		}
+	}
+
 	keys, err := bifrost.account.GetKeysForProvider(ctx, providerKey)
 	if err != nil {
 		return schemas.Key{}, err

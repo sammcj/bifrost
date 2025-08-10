@@ -155,16 +155,18 @@ type RouteConfig struct {
 // It handles the common flow of: parse request → convert to Bifrost → execute → convert response.
 // Integration-specific logic is handled through the RouteConfig callbacks and converters.
 type GenericRouter struct {
-	client *bifrost.Bifrost // Bifrost client for executing requests
-	routes []RouteConfig    // List of route configurations
+	client       *bifrost.Bifrost // Bifrost client for executing requests
+	handlerStore lib.HandlerStore // Config provider for the router
+	routes       []RouteConfig    // List of route configurations
 }
 
 // NewGenericRouter creates a new generic router with the given bifrost client and route configurations.
 // Each integration should create their own routes and pass them to this constructor.
-func NewGenericRouter(client *bifrost.Bifrost, routes []RouteConfig) *GenericRouter {
+func NewGenericRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore, routes []RouteConfig) *GenericRouter {
 	return &GenericRouter{
-		client: client,
-		routes: routes,
+		client:       client,
+		handlerStore: handlerStore,
+		routes:       routes,
 	}
 }
 
@@ -280,7 +282,7 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		}
 
 		// Execute the request through Bifrost
-		bifrostCtx := lib.ConvertToBifrostContext(ctx)
+		bifrostCtx := lib.ConvertToBifrostContext(ctx, g.handlerStore.ShouldAllowDirectKeys())
 
 		if isStreaming {
 			g.handleStreamingRequest(ctx, config, req, bifrostReq, bifrostCtx)

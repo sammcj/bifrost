@@ -82,6 +82,34 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   }'
 ```
 
+**Using API Key Headers:**
+
+> Note: This requires allow_direct_keys to be enabled in the server configuration.
+
+You can provide API keys directly in headers instead of relying on configured keys:
+
+```bash
+# Using Authorization header with Bearer format (OpenAI style)
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-your-openai-key-here" \
+  -d '{
+    "model": "openai/gpt-4o-mini",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+
+# Using x-api-key header (Anthropic style)
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: sk-ant-your-anthropic-key-here" \
+  -d '{
+    "model": "anthropic/claude-3-5-sonnet-20241022",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+> **📖 For more details:** See [Direct API Key Usage](../key-management.md#-direct-api-key-usage) for complete usage patterns and security considerations.
+
 ### **Streaming Responses**
 
 To receive a stream of partial responses, set `"stream": true` in your request. The response will be a `text/event-stream` of Server-Sent Events (SSE).

@@ -23,6 +23,7 @@ const defaultConfig = {
   enable_logging: true,
   enable_governance: true,
   enforce_governance_header: false,
+  allow_direct_keys: false,
   enable_caching: false,
   allowed_origins: [],
 }
@@ -246,6 +247,24 @@ export default function ConfigPage() {
               />
             </div>
           )}
+
+          <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <label htmlFor="allow-direct-keys" className="text-sm font-medium">
+                Allow Direct API Keys
+              </label>
+              <p className="text-muted-foreground text-sm">
+                Allow API keys to be passed directly in request headers (<b>Authorization</b> or <b>x-api-key</b>). Bifrost will directly
+                use the key.
+              </p>
+            </div>
+            <Switch
+              id="allow-direct-keys"
+              size="md"
+              checked={config.allow_direct_keys}
+              onCheckedChange={(checked) => handleConfigChange('allow_direct_keys', checked)}
+            />
+          </div>
 
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
