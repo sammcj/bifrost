@@ -139,7 +139,7 @@ func registerCollectorSafely(collector prometheus.Collector) {
 }
 
 // corsMiddleware handles CORS headers for localhost and configured allowed origins
-func corsMiddleware(store *lib.ConfigStore, next fasthttp.RequestHandler) fasthttp.RequestHandler {
+func corsMiddleware(store *lib.ConfigStore, logger schemas.Logger, next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		origin := string(ctx.Request.Header.Peek("Origin"))
 
@@ -523,7 +523,7 @@ func main() {
 	}
 
 	// Apply CORS middleware to all routes
-	corsHandler := corsMiddleware(store, r.Handler)
+	corsHandler := corsMiddleware(store, logger, r.Handler)
 
 	logger.Info(fmt.Sprintf("Successfully started bifrost. Serving UI on http://%s:%s", host, port))
 	if err := fasthttp.ListenAndServe(net.JoinHostPort(host, port), corsHandler); err != nil {

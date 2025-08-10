@@ -14,11 +14,11 @@ type AnthropicRouter struct {
 	*integrations.GenericRouter
 }
 
-// NewAnthropicRouter creates a new AnthropicRouter with the given bifrost client.
-func NewAnthropicRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *AnthropicRouter {
-	routes := []integrations.RouteConfig{
+// CreateAnthropicRouteConfigs creates route configurations for Anthropic endpoints.
+func CreateAnthropicRouteConfigs(pathPrefix string) []integrations.RouteConfig {
+	return []integrations.RouteConfig{
 		{
-			Path:   "/anthropic/v1/messages",
+			Path:   pathPrefix + "/v1/messages",
 			Method: "POST",
 			GetRequestTypeInstance: func() interface{} {
 				return &AnthropicMessageRequest{}
@@ -45,8 +45,11 @@ func NewAnthropicRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) 
 			},
 		},
 	}
+}
 
+// NewAnthropicRouter creates a new AnthropicRouter with the given bifrost client.
+func NewAnthropicRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *AnthropicRouter {
 	return &AnthropicRouter{
-		GenericRouter: integrations.NewGenericRouter(client, handlerStore, routes),
+		GenericRouter: integrations.NewGenericRouter(client, handlerStore, CreateAnthropicRouteConfigs("/anthropic")),
 	}
 }

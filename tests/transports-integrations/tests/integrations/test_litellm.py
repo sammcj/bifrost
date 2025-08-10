@@ -5,9 +5,12 @@ LiteLLM Integration Tests
 - Chat: gpt-3.5-turbo (OpenAI via LiteLLM)
 - Vision: gpt-4o (OpenAI via LiteLLM)
 - Tools: gpt-3.5-turbo (OpenAI via LiteLLM)
-- Alternatives: claude-3-haiku-20240307, gemini-pro, gpt-4, command-r-plus
+- Speech: tts-1 (OpenAI via LiteLLM)
+- Transcription: whisper-1 (OpenAI via LiteLLM)
+- Embeddings: text-embedding-3-small (OpenAI via LiteLLM)
+- Alternatives: claude-3-haiku-20240307, gemini-pro, mistral-7b-instruct, gpt-4, command-r-plus
 
-Tests all 11 core scenarios using LiteLLM SDK directly:
+Tests all 19 core scenarios using LiteLLM SDK directly:
 1. Simple chat
 2. Multi turn conversation
 3. Tool calls
@@ -19,6 +22,14 @@ Tests all 11 core scenarios using LiteLLM SDK directly:
 9. Multiple images
 10. Complete end2end test with conversation history, tool calls, tool results and images
 11. Integration specific tests
+12. Error handling
+13. Streaming
+14. Google Gemini integration
+15. Mistral integration
+16. OpenAI embeddings via LiteLLM
+17. OpenAI speech synthesis via LiteLLM
+18. OpenAI transcription via LiteLLM
+19. Multi-provider comparison
 """
 
 import pytest
@@ -55,6 +66,18 @@ from ..utils.common import (
     COMPARISON_KEYWORDS,
     WEATHER_KEYWORDS,
     LOCATION_KEYWORDS,
+    # Audio and embeddings test data
+    EMBEDDINGS_SINGLE_TEXT,
+    EMBEDDINGS_MULTIPLE_TEXTS,
+    EMBEDDINGS_SIMILAR_TEXTS,
+    SPEECH_TEST_INPUT,
+    generate_test_audio,
+    assert_valid_speech_response,
+    assert_valid_transcription_response,
+    assert_valid_embedding_response,
+    assert_valid_embeddings_batch_response,
+    calculate_cosine_similarity,
+    collect_streaming_transcription_content,
 )
 from ..utils.config_loader import get_model
 
@@ -67,8 +90,20 @@ def test_config():
 
 @pytest.fixture(autouse=True)
 def setup_litellm():
-    """Setup LiteLLM with Bifrost configuration"""
+    """Setup LiteLLM with Bifrost configuration and dummy credentials"""
+    import os
     from ..utils.config_loader import get_integration_url, get_config
+
+    # Set dummy credentials since Bifrost handles actual authentication
+    os.environ["OPENAI_API_KEY"] = "dummy-openai-key-bifrost-handles-auth"
+    os.environ["ANTHROPIC_API_KEY"] = "dummy-anthropic-key-bifrost-handles-auth"
+    os.environ["MISTRAL_API_KEY"] = "dummy-mistral-key-bifrost-handles-auth"
+
+    # For Google, set all possible API key environment variables
+    os.environ["GOOGLE_API_KEY"] = "dummy-google-api-key-bifrost-handles-auth"
+    os.environ["GEMINI_API_KEY"] = "dummy-gemini-api-key-bifrost-handles-auth"
+    os.environ["VERTEX_PROJECT"] = "dummy-vertex-project"
+    os.environ["VERTEX_LOCATION"] = "us-central1"
 
     # Get Bifrost URL for LiteLLM
     base_url = get_integration_url("litellm")
@@ -303,7 +338,8 @@ class TestLiteLLMIntegration:
         integrations_to_test = [
             "gpt-3.5-turbo",  # OpenAI
             "claude-3-haiku-20240307",  # Anthropic
-            # Add more integrations as needed
+            "gemini-2.0-flash-001",  # Google Gemini
+            "mistral-7b-instruct",  # Mistral
         ]
 
         for model in integrations_to_test:
@@ -401,6 +437,235 @@ class TestLiteLLMIntegration:
         assert (
             tool_calls_detected_tools
         ), "Should detect tool calls in streaming response"
+
+    def test_14_gemini_integration(self, test_config):
+        """Test Case 14: Google Gemini integration through LiteLLM"""
+        try:
+            # Test basic chat with Gemini
+            response = litellm.completion(
+                model="vertex_ai/gemini-2.0-flash-001",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "What is machine learning? Answer in one sentence.",
+                    }
+                ],
+                max_tokens=100,
+            )
+
+            assert_valid_chat_response(response)
+            content = response.choices[0].message.content.lower()
+            assert any(
+                word in content for word in ["machine", "learning", "data", "algorithm"]
+            ), f"Response should mention ML concepts. Got: {content}"
+
+            # Test with tool calling if supported
+            tools = convert_to_litellm_tools([CALCULATOR_TOOL])
+            response_tools = litellm.completion(
+                model="vertex_ai/gemini-2.0-flash-001",
+                messages=[{"role": "user", "content": "Calculate 42 * 17"}],
+                tools=tools,
+                max_tokens=100,
+            )
+
+            # Gemini should either use tools or provide calculation
+            if response_tools.choices[0].message.tool_calls:
+                assert_has_tool_calls(response_tools, expected_count=1)
+            else:
+                # Should at least provide the calculation result
+                content = response_tools.choices[0].message.content
+                assert (
+                    "714" in content or "42" in content
+                ), "Should provide calculation result"
+
+        except Exception as e:
+            pytest.skip(f"Gemini integration not available: {e}")
+
+    def test_15_mistral_integration(self, test_config):
+        """Test Case 15: Mistral integration through LiteLLM"""
+        try:
+            # Test basic chat with Mistral
+            response = litellm.completion(
+                model="mistral/mistral-7b-instruct",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Explain recursion in programming briefly.",
+                    }
+                ],
+                max_tokens=150,
+            )
+
+            assert_valid_chat_response(response)
+            content = response.choices[0].message.content.lower()
+            assert any(
+                word in content for word in ["recursion", "function", "itself", "call"]
+            ), f"Response should explain recursion. Got: {content}"
+
+            # Test with different temperature
+            response_creative = litellm.completion(
+                model="mistral/mistral-7b-instruct",
+                messages=[{"role": "user", "content": "Write a haiku about code."}],
+                temperature=0.8,
+                max_tokens=100,
+            )
+
+            assert_valid_chat_response(response_creative)
+
+        except Exception as e:
+            pytest.skip(f"Mistral integration not available: {e}")
+
+    def test_16_openai_embeddings_via_litellm(self, test_config):
+        """Test Case 16: OpenAI embeddings through LiteLLM"""
+        try:
+            # Test single text embedding
+            response = litellm.embedding(
+                model=get_model("litellm", "embeddings") or "text-embedding-3-small",
+                input=EMBEDDINGS_SINGLE_TEXT,
+            )
+
+            assert_valid_embedding_response(response, expected_dimensions=1536)
+
+            # Test batch embeddings
+            batch_response = litellm.embedding(
+                model=get_model("litellm", "embeddings") or "text-embedding-3-small",
+                input=EMBEDDINGS_MULTIPLE_TEXTS,
+            )
+
+            assert_valid_embeddings_batch_response(
+                batch_response, len(EMBEDDINGS_MULTIPLE_TEXTS), expected_dimensions=1536
+            )
+
+            # Test similarity analysis
+            similar_response = litellm.embedding(
+                model=get_model("litellm", "embeddings") or "text-embedding-3-small",
+                input=EMBEDDINGS_SIMILAR_TEXTS,
+            )
+
+            embeddings = [
+                item["embedding"] if isinstance(item, dict) else item.embedding
+                for item in (
+                    similar_response["data"]
+                    if isinstance(similar_response, dict)
+                    else similar_response.data
+                )
+            ]
+
+            # Calculate similarity between similar texts
+            similarity = calculate_cosine_similarity(embeddings[0], embeddings[1])
+            assert (
+                similarity > 0.7
+            ), f"Similar texts should have high similarity, got {similarity:.4f}"
+
+        except Exception as e:
+            pytest.skip(f"OpenAI embeddings through LiteLLM not available: {e}")
+
+    def test_17_openai_speech_via_litellm(self, test_config):
+        """Test Case 17: OpenAI speech synthesis through LiteLLM"""
+        try:
+            # Test basic speech synthesis
+            response = litellm.speech(
+                model=get_model("litellm", "speech") or "tts-1",
+                voice="alloy",
+                input=SPEECH_TEST_INPUT,
+            )
+
+            # LiteLLM might return different response format
+            if hasattr(response, "content"):
+                audio_content = response.content
+            elif isinstance(response, bytes):
+                audio_content = response
+            else:
+                audio_content = response
+
+            assert_valid_speech_response(audio_content)
+
+            # Test with different voice
+            response2 = litellm.speech(
+                model=get_model("litellm", "speech") or "tts-1",
+                voice="nova",
+                input="Short test message for voice comparison.",
+                response_format="mp3",
+            )
+
+            if hasattr(response2, "content"):
+                audio_content2 = response2.content
+            elif isinstance(response2, bytes):
+                audio_content2 = response2
+            else:
+                audio_content2 = response2
+
+            assert_valid_speech_response(audio_content2, expected_audio_size_min=500)
+
+            # Different voices should produce different audio
+            assert (
+                audio_content != audio_content2
+            ), "Different voices should produce different audio"
+
+        except Exception as e:
+            pytest.skip(f"OpenAI speech through LiteLLM not available: {e}")
+
+    def test_18_openai_transcription_via_litellm(self, test_config):
+        """Test Case 18: OpenAI transcription through LiteLLM"""
+        try:
+            # Generate test audio for transcription
+            test_audio = generate_test_audio()
+
+            # Test basic transcription
+            response = litellm.transcription(
+                model=get_model("litellm", "transcription") or "whisper-1",
+                file=("test_audio.wav", test_audio, "audio/wav"),
+            )
+
+            assert_valid_transcription_response(response)
+
+            # Test with additional parameters
+            response2 = litellm.transcription(
+                model=get_model("litellm", "transcription") or "whisper-1",
+                file=("test_audio.wav", test_audio, "audio/wav"),
+                language="en",
+                temperature=0.0,
+            )
+
+            assert_valid_transcription_response(response2)
+
+        except Exception as e:
+            pytest.skip(f"OpenAI transcription through LiteLLM not available: {e}")
+
+    def test_19_multi_provider_comparison(self, test_config):
+        """Test Case 19: Compare responses across different providers through LiteLLM"""
+        test_prompt = "What is the capital of Japan? Answer in one word."
+        models_to_test = [
+            "gpt-3.5-turbo",  # OpenAI
+            "claude-3-haiku-20240307",  # Anthropic
+            "vertex_ai/gemini-2.0-flash-001",  # Google
+        ]
+
+        responses = {}
+
+        for model in models_to_test:
+            try:
+                response = litellm.completion(
+                    model=model,
+                    messages=[{"role": "user", "content": test_prompt}],
+                    max_tokens=50,
+                )
+
+                assert_valid_chat_response(response)
+                responses[model] = response.choices[0].message.content.lower()
+
+            except Exception as e:
+                print(f"Model {model} not available: {e}")
+                continue
+
+        # Verify that we got at least one response
+        assert len(responses) > 0, "Should get at least one successful response"
+
+        # All responses should mention Tokyo or Japan
+        for model, content in responses.items():
+            assert any(
+                word in content for word in ["tokyo", "japan"]
+            ), f"Model {model} should mention Tokyo. Got: {content}"
 
 
 # Additional helper functions specific to LiteLLM

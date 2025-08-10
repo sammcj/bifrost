@@ -745,8 +745,8 @@ type BifrostError struct {
 }
 
 type StreamControl struct {
-	LogError   *bool   `json:"log_error,omitempty"`
-	SkipStream *bool   `json:"skip_stream,omitempty"`
+    LogError   *bool   `json:"log_error,omitempty"`
+    SkipStream *bool   `json:"skip_stream,omitempty"`
 }
 
 type ErrorField struct {

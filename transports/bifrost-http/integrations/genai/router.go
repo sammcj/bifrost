@@ -17,11 +17,11 @@ type GenAIRouter struct {
 	*integrations.GenericRouter
 }
 
-// NewGenAIRouter creates a new GenAIRouter with the given bifrost client.
-func NewGenAIRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *GenAIRouter {
-	routes := []integrations.RouteConfig{
+// CreateGenAIRouteConfigs creates a route configurations for GenAI endpoints.
+func CreateGenAIRouteConfigs(pathPrefix string) []integrations.RouteConfig {
+	return []integrations.RouteConfig{
 		{
-			Path:   "/genai/v1beta/models/{model}",
+			Path:   pathPrefix + "/v1beta/models/{model}",
 			Method: "POST",
 			GetRequestTypeInstance: func() interface{} {
 				return &GeminiChatRequest{}
@@ -49,9 +49,12 @@ func NewGenAIRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *Gen
 			PreCallback: extractAndSetModelFromURL,
 		},
 	}
+}
 
+// NewGenAIRouter creates a new GenAIRouter with the given bifrost client.
+func NewGenAIRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *GenAIRouter {
 	return &GenAIRouter{
-		GenericRouter: integrations.NewGenericRouter(client, handlerStore, routes),
+		GenericRouter: integrations.NewGenericRouter(client, handlerStore, CreateGenAIRouteConfigs("/genai")),
 	}
 }
 
