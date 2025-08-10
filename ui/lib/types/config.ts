@@ -126,6 +126,7 @@ export interface CoreConfig {
   enable_logging: boolean
   enable_governance: boolean
   enforce_governance_header: boolean
+  allow_direct_keys: boolean
   enable_caching: boolean
   allowed_origins: string[]
 }
