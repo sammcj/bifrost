@@ -664,6 +664,9 @@ func ParseModelString(model string, defaultProvider schemas.ModelProvider, check
 			// This prevents corrupting model names that happen to contain "/"
 		}
 	}
+
+	//TODO add model wise check for provider
+
 	// No provider prefix found or invalid provider, return empty provider and the original model
 	return defaultProvider, model
 }
