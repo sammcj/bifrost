@@ -153,8 +153,8 @@ type OpenAIStreamResponse struct {
 }
 
 // ConvertToBifrostRequest converts an OpenAI chat request to Bifrost format
-func (r *OpenAIChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
-	provider, model := integrations.ParseModelString(r.Model, schemas.OpenAI)
+func (r *OpenAIChatRequest) ConvertToBifrostRequest(checkProviderFromModel bool) *schemas.BifrostRequest {
+	provider, model := integrations.ParseModelString(r.Model, schemas.OpenAI, checkProviderFromModel)
 
 	bifrostReq := &schemas.BifrostRequest{
 		Provider: provider,
@@ -171,8 +171,8 @@ func (r *OpenAIChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
 }
 
 // ConvertToBifrostRequest converts an OpenAI speech request to Bifrost format
-func (r *OpenAISpeechRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
-	provider, model := integrations.ParseModelString(r.Model, schemas.OpenAI)
+func (r *OpenAISpeechRequest) ConvertToBifrostRequest(checkProviderFromModel bool) *schemas.BifrostRequest {
+	provider, model := integrations.ParseModelString(r.Model, schemas.OpenAI, checkProviderFromModel)
 
 	// Create speech input
 	speechInput := &schemas.SpeechInput{
@@ -207,8 +207,8 @@ func (r *OpenAISpeechRequest) ConvertToBifrostRequest() *schemas.BifrostRequest 
 }
 
 // ConvertToBifrostRequest converts an OpenAI transcription request to Bifrost format
-func (r *OpenAITranscriptionRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
-	provider, model := integrations.ParseModelString(r.Model, schemas.OpenAI)
+func (r *OpenAITranscriptionRequest) ConvertToBifrostRequest(checkProviderFromModel bool) *schemas.BifrostRequest {
+	provider, model := integrations.ParseModelString(r.Model, schemas.OpenAI, checkProviderFromModel)
 
 	// Create transcription input
 	transcriptionInput := &schemas.TranscriptionInput{
@@ -241,8 +241,8 @@ func (r *OpenAITranscriptionRequest) ConvertToBifrostRequest() *schemas.BifrostR
 }
 
 // ConvertToBifrostRequest converts an OpenAI embedding request to Bifrost format
-func (r *OpenAIEmbeddingRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
-	provider, model := integrations.ParseModelString(r.Model, schemas.OpenAI)
+func (r *OpenAIEmbeddingRequest) ConvertToBifrostRequest(checkProviderFromModel bool) *schemas.BifrostRequest {
+	provider, model := integrations.ParseModelString(r.Model, schemas.OpenAI, checkProviderFromModel)
 
 	// Prepare input texts array
 	var texts []string

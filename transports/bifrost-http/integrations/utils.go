@@ -255,7 +255,7 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		// or performing request validation after parsing
 		if config.PreCallback != nil {
 			if err := config.PreCallback(ctx, req); err != nil {
-				g.sendError(ctx, config.ErrorConverter, newBifrostError(err, "failed to execute pre-request callback"))
+				g.sendError(ctx, config.ErrorConverter, newBifrostError(err, "failed to execute pre-request callback: "+err.Error()))
 				return
 			}
 		}
@@ -283,6 +283,13 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 
 		// Execute the request through Bifrost
 		bifrostCtx := lib.ConvertToBifrostContext(ctx, g.handlerStore.ShouldAllowDirectKeys())
+
+		if ctx.UserValue(string(schemas.BifrostContextKey)) != nil {
+			key, ok := ctx.UserValue(string(schemas.BifrostContextKey)).(schemas.Key)
+			if ok {
+				*bifrostCtx = context.WithValue(*bifrostCtx, schemas.BifrostContextKey, key)
+			}
+		}
 
 		if isStreaming {
 			g.handleStreamingRequest(ctx, config, req, bifrostReq, bifrostCtx)
@@ -622,8 +629,8 @@ func (g *GenericRouter) sendSuccess(ctx *fasthttp.RequestCtx, errorConverter Err
 	ctx.SetBody(responseBody)
 }
 
-// validProviders is a pre-computed map for efficient O(1) provider validation.
-var validProviders = map[schemas.ModelProvider]bool{
+// ValidProviders is a pre-computed map for efficient O(1) provider validation.
+var ValidProviders = map[schemas.ModelProvider]bool{
 	schemas.OpenAI:    true,
 	schemas.Azure:     true,
 	schemas.Anthropic: true,
@@ -632,13 +639,16 @@ var validProviders = map[schemas.ModelProvider]bool{
 	schemas.Vertex:    true,
 	schemas.Mistral:   true,
 	schemas.Ollama:    true,
+	schemas.Groq:      true,
+	schemas.SGL:       true,
 }
 
 // ParseModelString extracts provider and model from a model string.
 // For model strings like "anthropic/claude", it returns ("anthropic", "claude").
 // For model strings like "claude", it returns ("", "claude").
 // If the extracted provider is not valid, it treats the whole string as a model name.
-func ParseModelString(model string, defaultProvider schemas.ModelProvider) (schemas.ModelProvider, string) {
+// If checkProviderFromModel is true, model will be used to check for the corresponding provider.
+func ParseModelString(model string, defaultProvider schemas.ModelProvider, checkProviderFromModel bool) (schemas.ModelProvider, string) {
 	// Check if model contains a provider prefix (only split on first "/" to preserve model names with "/")
 	if strings.Contains(model, "/") {
 		parts := strings.SplitN(model, "/", 2)
@@ -647,7 +657,7 @@ func ParseModelString(model string, defaultProvider schemas.ModelProvider) (sche
 			extractedModel := parts[1]
 
 			// Validate that the extracted provider is actually a valid provider
-			if validProviders[schemas.ModelProvider(extractedProvider)] {
+			if ValidProviders[schemas.ModelProvider(extractedProvider)] {
 				return schemas.ModelProvider(extractedProvider), extractedModel
 			}
 			// If extracted provider is not valid, treat the whole string as model name
@@ -662,6 +672,18 @@ func ParseModelString(model string, defaultProvider schemas.ModelProvider) (sche
 // This function uses comprehensive pattern matching to identify the correct provider
 // for various model naming conventions used across different AI providers.
 func GetProviderFromModel(model string) schemas.ModelProvider {
+	// Check if model contains a provider prefix (only split on first "/" to preserve model names with "/")
+	if strings.Contains(model, "/") {
+		parts := strings.SplitN(model, "/", 2)
+		if len(parts) > 1 {
+			extractedProvider := parts[0]
+
+			if ValidProviders[schemas.ModelProvider(extractedProvider)] {
+				return schemas.ModelProvider(extractedProvider)
+			}
+		}
+	}
+
 	// Normalize model name for case-insensitive matching
 	modelLower := strings.ToLower(strings.TrimSpace(model))
 
