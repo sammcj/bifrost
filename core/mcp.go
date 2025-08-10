@@ -460,7 +460,7 @@ func (m *MCPManager) createLocalMCPClient() (*MCPClient, error) {
 		},
 		ToolMap: make(map[string]schemas.Tool),
 		ConnectionInfo: MCPClientConnectionInfo{
-			Type: schemas.MCPConnectionTypeSTDIO, // Keep as STDIO for type consistency
+			Type: schemas.MCPConnectionTypeSTDIO, // NOTE: Although the actual connection is in-process, we keep the type as STDIO for compatibility with other parts of the system that expect this value. Update this if/when all consumers support an explicit in-process type.
 		},
 	}, nil
 }
