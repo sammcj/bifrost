@@ -110,6 +110,7 @@ type DBClientConfig struct {
 	EnableLogging           bool      `gorm:"" json:"enable_logging"`
 	EnableGovernance        bool      `gorm:"" json:"enable_governance"`
 	EnforceGovernanceHeader bool      `gorm:"" json:"enforce_governance_header"`
+	AllowDirectKeys         bool      `gorm:"" json:"allow_direct_keys"`
 	EnableCaching           bool      `gorm:"" json:"enable_caching"`
 	CreatedAt               time.Time `gorm:"index;not null" json:"created_at"`
 	UpdatedAt               time.Time `gorm:"index;not null" json:"updated_at"`

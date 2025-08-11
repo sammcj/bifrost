@@ -6,6 +6,7 @@ import (
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
+	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 )
 
 // AnthropicRouter handles Anthropic-compatible API endpoints
@@ -14,7 +15,7 @@ type AnthropicRouter struct {
 }
 
 // NewAnthropicRouter creates a new AnthropicRouter with the given bifrost client.
-func NewAnthropicRouter(client *bifrost.Bifrost) *AnthropicRouter {
+func NewAnthropicRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *AnthropicRouter {
 	routes := []integrations.RouteConfig{
 		{
 			Path:   "/anthropic/v1/messages",
@@ -46,6 +47,6 @@ func NewAnthropicRouter(client *bifrost.Bifrost) *AnthropicRouter {
 	}
 
 	return &AnthropicRouter{
-		GenericRouter: integrations.NewGenericRouter(client, routes),
+		GenericRouter: integrations.NewGenericRouter(client, handlerStore, routes),
 	}
 }

@@ -62,6 +62,8 @@ var DefaultClientConfig = ClientConfig{
 	EnableLogging:           true,
 	EnableGovernance:        true,
 	EnforceGovernanceHeader: false,
+	AllowDirectKeys:         false,
+	AllowedOrigins:          []string{},
 	EnableCaching:           false,
 }
 
@@ -315,6 +317,7 @@ func (s *ConfigStore) loadClientConfigFromDB() error {
 		EnableLogging:           dbConfig.EnableLogging,
 		EnableGovernance:        dbConfig.EnableGovernance,
 		EnforceGovernanceHeader: dbConfig.EnforceGovernanceHeader,
+		AllowDirectKeys:         dbConfig.AllowDirectKeys,
 		EnableCaching:           dbConfig.EnableCaching,
 		AllowedOrigins:          dbConfig.AllowedOrigins,
 	}
@@ -696,6 +699,7 @@ func (s *ConfigStore) saveClientConfigToDB() error {
 		EnableLogging:           s.ClientConfig.EnableLogging,
 		EnableGovernance:        s.ClientConfig.EnableGovernance,
 		EnforceGovernanceHeader: s.ClientConfig.EnforceGovernanceHeader,
+		AllowDirectKeys:         s.ClientConfig.AllowDirectKeys,
 		EnableCaching:           s.ClientConfig.EnableCaching,
 		PrometheusLabels:        s.ClientConfig.PrometheusLabels,
 		AllowedOrigins:          s.ClientConfig.AllowedOrigins,
@@ -868,6 +872,15 @@ func (s *ConfigStore) GetProviderConfigRaw(provider schemas.ModelProvider) (*Pro
 	return &config, nil
 }
 
+// HandlerStore interface implementation
+// ShouldAllowDirectKeys returns whether direct API keys in headers are allowed
+// Note: This method doesn't use locking for performance. In rare cases during
+// config updates, it may return stale data, but this is acceptable since bool
+// reads are atomic and won't cause panics.
+func (s *ConfigStore) ShouldAllowDirectKeys() bool {
+	return s.ClientConfig.AllowDirectKeys
+}
+
 func (s *ConfigStore) GetClientConfigFromDB() (*DBClientConfig, error) {
 	var dbConfig DBClientConfig
 	if err := s.db.First(&dbConfig).Error; err != nil {
@@ -879,6 +892,8 @@ func (s *ConfigStore) GetClientConfigFromDB() (*DBClientConfig, error) {
 				EnableLogging:           s.ClientConfig.EnableLogging,
 				EnableGovernance:        s.ClientConfig.EnableGovernance,
 				EnforceGovernanceHeader: s.ClientConfig.EnforceGovernanceHeader,
+				AllowDirectKeys:         s.ClientConfig.AllowDirectKeys,
+				AllowedOrigins:          s.ClientConfig.AllowedOrigins,
 				EnableCaching:           s.ClientConfig.EnableCaching,
 			}, nil
 		}

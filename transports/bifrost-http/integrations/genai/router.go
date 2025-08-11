@@ -8,6 +8,7 @@ import (
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
+	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 )
 
@@ -17,7 +18,7 @@ type GenAIRouter struct {
 }
 
 // NewGenAIRouter creates a new GenAIRouter with the given bifrost client.
-func NewGenAIRouter(client *bifrost.Bifrost) *GenAIRouter {
+func NewGenAIRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *GenAIRouter {
 	routes := []integrations.RouteConfig{
 		{
 			Path:   "/genai/v1beta/models/{model}",
@@ -50,7 +51,7 @@ func NewGenAIRouter(client *bifrost.Bifrost) *GenAIRouter {
 	}
 
 	return &GenAIRouter{
-		GenericRouter: integrations.NewGenericRouter(client, routes),
+		GenericRouter: integrations.NewGenericRouter(client, handlerStore, routes),
 	}
 }
 

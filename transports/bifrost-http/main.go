@@ -477,9 +477,9 @@ func main() {
 
 	// Initialize handlers
 	providerHandler := handlers.NewProviderHandler(store, client, logger)
-	completionHandler := handlers.NewCompletionHandler(client, logger)
+	completionHandler := handlers.NewCompletionHandler(client, store, logger)
 	mcpHandler := handlers.NewMCPHandler(client, logger, store)
-	integrationHandler := handlers.NewIntegrationHandler(client)
+	integrationHandler := handlers.NewIntegrationHandler(client, store)
 	configHandler := handlers.NewConfigHandler(client, logger, store)
 
 	// Set up WebSocket callback for real-time log updates

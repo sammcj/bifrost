@@ -10,6 +10,7 @@ import (
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/genai"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/litellm"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations/openai"
+	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 )
 
 // IntegrationHandler manages HTTP requests for AI provider integrations
@@ -18,13 +19,13 @@ type IntegrationHandler struct {
 }
 
 // NewIntegrationHandler creates a new integration handler instance
-func NewIntegrationHandler(client *bifrost.Bifrost) *IntegrationHandler {
+func NewIntegrationHandler(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *IntegrationHandler {
 	// Initialize all available integration routers
 	extensions := []integrations.ExtensionRouter{
-		genai.NewGenAIRouter(client),
-		openai.NewOpenAIRouter(client),
-		anthropic.NewAnthropicRouter(client),
-		litellm.NewLiteLLMRouter(client),
+		genai.NewGenAIRouter(client, handlerStore),
+		openai.NewOpenAIRouter(client, handlerStore),
+		anthropic.NewAnthropicRouter(client, handlerStore),
+		litellm.NewLiteLLMRouter(client, handlerStore),
 	}
 
 	return &IntegrationHandler{
