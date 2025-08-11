@@ -309,3 +309,160 @@ export function validateOrigins(origins: string[]): { isValid: boolean; invalidO
     invalidOrigins,
   }
 }
+
+/**
+ * Validates if a string is a valid Redis address
+ * Supports formats:
+ * - host:port (IPv4)
+ * - [host]:port (IPv6)
+ * - redis://host:port
+ * - rediss://host:port
+ * @param addr - The Redis address to validate
+ * @returns true if valid Redis address
+ */
+export function isValidRedisAddress(addr: string): boolean {
+  if (!addr) {
+    return false
+  }
+
+  // Trim input once before processing
+  const trimmedAddr = addr.trim()
+  if (!trimmedAddr) {
+    return false
+  }
+
+  try {
+    // Handle URL schemes (redis:// or rediss://)
+    if (trimmedAddr.startsWith('redis://') || trimmedAddr.startsWith('rediss://')) {
+      try {
+        const url = new URL(trimmedAddr)
+        const host = url.hostname
+        const port = url.port || '6379' // Default Redis port
+
+        // Check if host is IPv6 (contains colons or is bracketed)
+        const isIPv6Host = host.includes(':') || host.startsWith('[')
+        const hostToValidate = isIPv6Host ? host.replace(/^\[|\]$/g, '') : host
+
+        const isValidHostResult = isIPv6Host ? isValidIPv6(hostToValidate) : isValidHost(hostToValidate)
+        return isValidHostResult && isValidPort(port)
+      } catch {
+        return false
+      }
+    }
+
+    // Handle IPv6 addresses in brackets [host]:port
+    const ipv6Match = trimmedAddr.match(/^\[([^\]]+)\]:(\d+)$/)
+    if (ipv6Match) {
+      const [, host, port] = ipv6Match
+      return isValidIPv6(host) && isValidPort(port)
+    }
+
+    // Handle standard host:port format
+    const colonIndex = trimmedAddr.lastIndexOf(':')
+    if (colonIndex === -1) {
+      return false
+    }
+
+    const host = trimmedAddr.substring(0, colonIndex)
+    const port = trimmedAddr.substring(colonIndex + 1)
+
+    // Validate both host and port
+    return isValidHost(host) && isValidPort(port)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Validates if a string is a valid host (hostname or IP address)
+ * @param host - The host to validate
+ * @returns true if valid host
+ */
+function isValidHost(host: string): boolean {
+  if (!host || !host.trim()) {
+    return false
+  }
+
+  const trimmedHost = host.trim()
+
+  // Check if this looks like an IPv6 address (contains colons or is bracketed)
+  if (trimmedHost.includes(':') || trimmedHost.startsWith('[')) {
+    // Strip brackets if present and validate as IPv6
+    const ipv6Host = trimmedHost.replace(/^\[|\]$/g, '')
+    return isValidIPv6(ipv6Host)
+  }
+
+  // Check for valid hostname/IPv4 patterns
+  // Allow alphanumeric characters, dots, hyphens, and underscores
+  const hostPattern = /^[a-zA-Z0-9._-]+$/
+  return hostPattern.test(trimmedHost) && trimmedHost.length <= 253
+}
+
+/**
+ * Validates if a string is a valid port number (strict digit-only validation)
+ * @param port - The port to validate
+ * @returns true if valid port
+ */
+function isValidPort(port: string): boolean {
+  if (!port) {
+    return false
+  }
+
+  const trimmedPort = port.trim()
+
+  // Port must consist only of digits (no trailing characters like "6379abc")
+  if (!/^\d+$/.test(trimmedPort)) {
+    return false
+  }
+
+  // Convert to number and check range
+  const portNum = Number(trimmedPort)
+  return portNum >= 1 && portNum <= 65535
+}
+
+/**
+ * Validates if a string is a valid IPv6 address
+ * @param host - The IPv6 address to validate (without brackets)
+ * @returns true if valid IPv6 address
+ */
+function isValidIPv6(host: string): boolean {
+  if (!host || !host.trim()) {
+    return false
+  }
+
+  const trimmedHost = host.trim()
+
+  // Basic IPv6 pattern validation
+  // IPv6 addresses contain colons and hexadecimal characters
+  const ipv6Pattern =
+    /^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}$|^::$|^::1$|^([0-9a-fA-F]{0,4}:){0,6}::([0-9a-fA-F]{0,4}:){0,6}[0-9a-fA-F]{0,4}$/
+
+  // Check basic pattern
+  if (!ipv6Pattern.test(trimmedHost)) {
+    // Also allow IPv6 with embedded IPv4 (e.g., ::ffff:192.168.1.1)
+    const ipv6WithIpv4Pattern = /^([0-9a-fA-F]{0,4}:){1,6}(\d{1,3}\.){3}\d{1,3}$|^::([0-9a-fA-F]{0,4}:){0,5}(\d{1,3}\.){3}\d{1,3}$/
+    if (!ipv6WithIpv4Pattern.test(trimmedHost)) {
+      return false
+    }
+  }
+
+  // Additional validation: check for valid hex groups and proper structure
+  const parts = trimmedHost.split(':')
+
+  // IPv6 should not have more than 8 groups (unless it's compressed with ::)
+  if (parts.length > 8) {
+    return false
+  }
+
+  // Check for valid hexadecimal groups
+  for (const part of parts) {
+    if (part !== '' && !/^[0-9a-fA-F]{1,4}$/.test(part)) {
+      // Allow IPv4 dotted notation in the last part
+      if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(part)) {
+        return false
+      }
+    }
+  }
+
+  return true
+}

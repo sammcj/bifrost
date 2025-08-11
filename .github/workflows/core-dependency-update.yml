@@ -92,6 +92,6 @@ jobs:
             🔧 **Core Dependency Update Complete**
             **Status**: ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }}
             **Branch**: `main`
-            **Commit**: `${{ github.sha }}`
+            **Commit**: ```${{ github.sha }}```
             **Author**: ${{ github.actor }}
             **[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})**

@@ -8,10 +8,13 @@ package lib
 
 import (
 	"context"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/maximhq/bifrost/plugins/maxim"
+	"github.com/maximhq/bifrost/plugins/redis"
 	"github.com/maximhq/bifrost/transports/bifrost-http/plugins/logging"
 	"github.com/maximhq/bifrost/transports/bifrost-http/plugins/telemetry"
 	"github.com/valyala/fasthttp"
@@ -109,6 +112,32 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx) *context.Context {
 		// Handle virtual key header (x-bf-vk)
 		if keyStr == "x-bf-vk" {
 			bifrostCtx = context.WithValue(bifrostCtx, ContextKey(keyStr), string(value))
+		}
+
+		// Handle cache key header (x-bf-cache-key)
+		if keyStr == "x-bf-cache-key" {
+			bifrostCtx = context.WithValue(bifrostCtx, redis.ContextKey("request-cache-key"), string(value))
+		}
+
+		// Handle cache TTL header (x-bf-cache-ttl)
+		if keyStr == "x-bf-cache-ttl" {
+			valueStr := string(value)
+			var ttlDuration time.Duration
+			var err error
+
+			// First try to parse as duration (e.g., "30s", "5m", "1h")
+			if ttlDuration, err = time.ParseDuration(valueStr); err != nil {
+				// If that fails, try to parse as plain number and treat as seconds
+				if seconds, parseErr := strconv.Atoi(valueStr); parseErr == nil && seconds > 0 {
+					ttlDuration = time.Duration(seconds) * time.Second
+					err = nil // Reset error since we successfully parsed as seconds
+				}
+			}
+
+			if err == nil {
+				bifrostCtx = context.WithValue(bifrostCtx, redis.ContextKey("request-cache-ttl"), ttlDuration)
+			}
+			// If both parsing attempts fail, we silently ignore the header and use default TTL
 		}
 	})
 

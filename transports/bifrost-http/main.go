@@ -62,11 +62,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/plugins/maxim"
+	"github.com/maximhq/bifrost/plugins/redis"
 	"github.com/maximhq/bifrost/transports/bifrost-http/handlers"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/maximhq/bifrost/transports/bifrost-http/plugins/governance"
@@ -424,6 +426,39 @@ func main() {
 		governanceHandler = handlers.NewGovernanceHandler(governancePlugin, configDB, logger)
 	}
 
+	var cacheHandler *handlers.CacheHandler
+
+	if store.ClientConfig.EnableCaching {
+		// Get Redis configuration from database
+		cacheDBConfig, err := store.GetCacheConfig()
+		if err != nil {
+			logger.Fatal("failed to get cache config", err)
+		}
+
+		// Convert DBCacheConfig to RedisPluginConfig
+		pluginConfig := redis.RedisPluginConfig{
+			Addr:            cacheDBConfig.Addr,
+			Username:        cacheDBConfig.Username,
+			Password:        cacheDBConfig.Password,
+			DB:              cacheDBConfig.DB,
+			CacheKey:        "request-cache-key", // Always use this key as specified
+			CacheTTLKey:     "request-cache-ttl", // Always use this key as specified
+			TTL:             time.Duration(cacheDBConfig.TTLSeconds) * time.Second,
+			Prefix:          cacheDBConfig.Prefix,
+			CacheByModel:    &cacheDBConfig.CacheByModel,
+			CacheByProvider: &cacheDBConfig.CacheByProvider,
+		}
+
+		redisPlugin, err := redis.NewRedisPlugin(pluginConfig, logger)
+		if err != nil {
+			logger.Fatal("failed to initialize Redis plugin", err)
+		}
+
+		loadedPlugins = append(loadedPlugins, redisPlugin)
+
+		cacheHandler = handlers.NewCacheHandler(store, redisPlugin.(*redis.Plugin), logger)
+	}
+
 	loadedPlugins = append(loadedPlugins, promPlugin)
 
 	client, err := bifrost.Init(schemas.BifrostConfig{
@@ -471,6 +506,9 @@ func main() {
 	}
 	if wsHandler != nil {
 		wsHandler.RegisterRoutes(r)
+	}
+	if cacheHandler != nil {
+		cacheHandler.RegisterRoutes(r)
 	}
 
 	// Add Prometheus /metrics endpoint
