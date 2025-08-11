@@ -93,6 +93,7 @@
               "features/telemetry",              
               "features/governance",
               "features/semantic-caching",
+              "features/custom-providers",
               {
                 "group": "Plugins",
                 "icon": "puzzle-piece",

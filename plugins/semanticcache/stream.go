@@ -116,7 +116,6 @@ func (plugin *Plugin) processAccumulatedStream(ctx context.Context, requestID st
 		finalMetadata[k] = v
 	}
 	finalMetadata["stream_chunks"] = streamResponses
-	finalMetadata["from_bifrost_semantic_cache_plugin"] = true
 
 	// Store complete unified entry using original requestID - this is the final .Add() call
 	if err := plugin.store.Add(ctx, requestID, accumulator.Embedding, finalMetadata); err != nil {

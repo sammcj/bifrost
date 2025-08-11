@@ -81,17 +81,87 @@ type ProxyConfig struct {
 	Password string    `json:"password"` // Password for proxy authentication
 }
 
+// AllowedRequests controls which operations are permitted.
+// A nil *AllowedRequests means "all operations allowed."
+// A non-nil value only allows fields set to true; omitted or false fields are disallowed.
+type AllowedRequests struct {
+	TextCompletion       bool `json:"text_completion"`
+	ChatCompletion       bool `json:"chat_completion"`
+	ChatCompletionStream bool `json:"chat_completion_stream"`
+	Embedding            bool `json:"embedding"`
+	Speech               bool `json:"speech"`
+	SpeechStream         bool `json:"speech_stream"`
+	Transcription        bool `json:"transcription"`
+	TranscriptionStream  bool `json:"transcription_stream"`
+}
+
+// IsOperationAllowed checks if a specific operation is allowed
+func (ar *AllowedRequests) IsOperationAllowed(operation Operation) bool {
+	if ar == nil {
+		return true // Default to allowed if no restrictions
+	}
+
+	switch operation {
+	case OperationTextCompletion:
+		return ar.TextCompletion
+	case OperationChatCompletion:
+		return ar.ChatCompletion
+	case OperationChatCompletionStream:
+		return ar.ChatCompletionStream
+	case OperationEmbedding:
+		return ar.Embedding
+	case OperationSpeech:
+		return ar.Speech
+	case OperationSpeechStream:
+		return ar.SpeechStream
+	case OperationTranscription:
+		return ar.Transcription
+	case OperationTranscriptionStream:
+		return ar.TranscriptionStream
+	default:
+		return false // Default to not allowed for unknown operations
+	}
+}
+
+type CustomProviderConfig struct {
+	CustomProviderKey string           `json:"-"`                  // Custom provider key, internally set by Bifrost
+	BaseProviderType  ModelProvider    `json:"base_provider_type"` // Base provider type
+	AllowedRequests   *AllowedRequests `json:"allowed_requests,omitempty"`
+}
+
+// IsOperationAllowed checks if a specific operation is allowed for this custom provider
+func (cpc *CustomProviderConfig) IsOperationAllowed(operation Operation) bool {
+	if cpc == nil || cpc.AllowedRequests == nil {
+		return true // Default to allowed if no restrictions
+	}
+	return cpc.AllowedRequests.IsOperationAllowed(operation)
+}
+
 // ProviderConfig represents the complete configuration for a provider.
-// An array of ProviderConfig needs to provided in GetConfigForProvider
+// An array of ProviderConfig needs to be provided in GetConfigForProvider
 // in your account interface implementation.
 type ProviderConfig struct {
 	NetworkConfig            NetworkConfig            `json:"network_config"`              // Network configuration
 	ConcurrencyAndBufferSize ConcurrencyAndBufferSize `json:"concurrency_and_buffer_size"` // Concurrency settings
 	// Logger instance, can be provided by the user or bifrost default logger is used if not provided
-	Logger              Logger       `json:"logger"`
-	ProxyConfig         *ProxyConfig `json:"proxy_config,omitempty"` // Proxy configuration
-	SendBackRawResponse bool         `json:"send_back_raw_response"` // Send raw response back in the bifrost response (default: false)
+	Logger               Logger                `json:"-"`
+	ProxyConfig          *ProxyConfig          `json:"proxy_config,omitempty"` // Proxy configuration
+	SendBackRawResponse  bool                  `json:"send_back_raw_response"` // Send raw response back in the bifrost response (default: false)
+	CustomProviderConfig *CustomProviderConfig `json:"custom_provider_config,omitempty"`
 }
+
+type Operation string
+
+const (
+	OperationTextCompletion       Operation = "text_completion"
+	OperationChatCompletion       Operation = "chat_completion"
+	OperationChatCompletionStream Operation = "chat_completion_stream"
+	OperationEmbedding            Operation = "embedding"
+	OperationSpeech               Operation = "speech"
+	OperationSpeechStream         Operation = "speech_stream"
+	OperationTranscription        Operation = "transcription"
+	OperationTranscriptionStream  Operation = "transcription_stream"
+)
 
 func (config *ProviderConfig) CheckAndSetDefaults() {
 	if config.ConcurrencyAndBufferSize.Concurrency == 0 {

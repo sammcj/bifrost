@@ -52,6 +52,30 @@ const (
 	Cerebras  ModelProvider = "cerebras"
 )
 
+// SupportedBaseProviders is the list of base providers allowed for custom providers.
+var SupportedBaseProviders = []ModelProvider{
+	OpenAI,
+	Anthropic,
+	Bedrock,
+	Cohere,
+}
+
+// StandardProviders is the list of all built-in (non-custom) providers.
+var StandardProviders = []ModelProvider{
+	OpenAI,
+	Azure,
+	Anthropic,
+	Bedrock,
+	Cohere,
+	Vertex,
+	Groq,
+	SGL,
+	Parasail,
+	Cerebras,
+	Ollama,
+	Mistral,
+}
+
 //* Request Structs
 
 // RequestInput represents the input for a model request, which can be either

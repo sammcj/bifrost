@@ -13,6 +13,9 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
+// ProviderOpenAICustom represents the custom OpenAI provider for testing
+const ProviderOpenAICustom = schemas.ModelProvider("openai-custom")
+
 // TestScenarios defines the comprehensive test scenarios
 type TestScenarios struct {
 	TextCompletion        bool
@@ -71,6 +74,7 @@ func (account *ComprehensiveTestAccount) GetConfiguredProviders() ([]schemas.Mod
 		schemas.SGL,
 		schemas.Parasail,
 		schemas.Cerebras,
+		ProviderOpenAICustom,
 	}, nil
 }
 
@@ -81,6 +85,14 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 		return []schemas.Key{
 			{
 				Value:  os.Getenv("OPENAI_API_KEY"),
+				Models: []string{},
+				Weight: 1.0,
+			},
+		}, nil
+	case ProviderOpenAICustom:
+		return []schemas.Key{
+			{
+				Value:  os.Getenv("GROQ_API_KEY"), // Use GROQ API key for OpenAI-compatible endpoint
 				Models: []string{},
 				Weight: 1.0,
 			},
@@ -196,6 +208,33 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 			ConcurrencyAndBufferSize: schemas.ConcurrencyAndBufferSize{
 				Concurrency: 3,
 				BufferSize:  10,
+			},
+		}, nil
+	case ProviderOpenAICustom:
+		return &schemas.ProviderConfig{
+			NetworkConfig: schemas.NetworkConfig{
+				BaseURL:                        getEnvWithDefault("GROQ_OPENAI_BASE_URL", "https://api.groq.com/openai"),
+				DefaultRequestTimeoutInSeconds: 30,
+				MaxRetries:                     1,
+				RetryBackoffInitial:            100 * time.Millisecond,
+				RetryBackoffMax:                2 * time.Second,
+			},
+			ConcurrencyAndBufferSize: schemas.ConcurrencyAndBufferSize{
+				Concurrency: 3,
+				BufferSize:  10,
+			},
+			CustomProviderConfig: &schemas.CustomProviderConfig{
+				BaseProviderType: schemas.OpenAI,
+				AllowedRequests: &schemas.AllowedRequests{
+					TextCompletion:       false,
+					ChatCompletion:       true,
+					ChatCompletionStream: true,
+					Embedding:            true,
+					Speech:               false,
+					SpeechStream:         false,
+					Transcription:        false,
+					TranscriptionStream:  false,
+				},
 			},
 		}, nil
 	case schemas.Anthropic:
@@ -527,6 +566,33 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 			ImageURL:              true,
 			ImageBase64:           true,
 			MultipleImages:        true,
+			CompleteEnd2End:       true,
+			ProviderSpecific:      true,
+			SpeechSynthesis:       false, // Not supported
+			SpeechSynthesisStream: false, // Not supported
+			Transcription:         false, // Not supported
+			TranscriptionStream:   false, // Not supported
+		},
+		Fallbacks: []schemas.Fallback{
+			{Provider: schemas.OpenAI, Model: "gpt-4o-mini"},
+		},
+	},
+	{
+		Provider:  ProviderOpenAICustom,
+		ChatModel: "llama-3.3-70b-versatile",
+		TextModel: "", // Custom OpenAI instance doesn't support text completion
+		Scenarios: TestScenarios{
+			TextCompletion:        false,
+			SimpleChat:            true, // Enable simple chat for testing
+			ChatCompletionStream:  true,
+			MultiTurnConversation: true,
+			ToolCalls:             true,
+			MultipleToolCalls:     true,
+			End2EndToolCalling:    true,
+			AutomaticFunctionCall: true,
+			ImageURL:              false,
+			ImageBase64:           false,
+			MultipleImages:        false,
 			CompleteEnd2End:       true,
 			ProviderSpecific:      true,
 			SpeechSynthesis:       false, // Not supported
