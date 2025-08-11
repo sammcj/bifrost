@@ -49,6 +49,14 @@ class BifrostTestRunner:
                 "description": "LiteLLM integration tests",
                 "env_vars": ["OPENAI_API_KEY"],  # LiteLLM can use OpenAI key
             },
+            "langchain": {
+                "file": "tests/integrations/test_langchain.py",
+                "description": "LangChain integration tests",
+                "env_vars": [
+                    "OPENAI_API_KEY",
+                    "ANTHROPIC_API_KEY",
+                ],  # LangChain uses multiple providers
+            },
             "google": {
                 "file": "tests/integrations/test_google.py",
                 "description": "Google GenAI integration tests",

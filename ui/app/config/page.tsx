@@ -13,6 +13,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { parseArrayFromText, isArrayEqual } from '@/lib/utils/array'
 import { validateOrigins } from '@/lib/utils/validation'
 import FullPageLoader from '@/components/full-page-loader'
+import CacheConfigForm from '@/components/config/cache-config-form'
+import { Separator } from '@/components/ui/separator'
 
 const defaultConfig = {
   drop_excess_requests: false,
@@ -21,6 +23,8 @@ const defaultConfig = {
   enable_logging: true,
   enable_governance: true,
   enforce_governance_header: false,
+  allow_direct_keys: false,
+  enable_caching: false,
   allowed_origins: [],
 }
 
@@ -244,6 +248,24 @@ export default function ConfigPage() {
             </div>
           )}
 
+          <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <label htmlFor="allow-direct-keys" className="text-sm font-medium">
+                Allow Direct API Keys
+              </label>
+              <p className="text-muted-foreground text-sm">
+                Allow API keys to be passed directly in request headers (<b>Authorization</b> or <b>x-api-key</b>). Bifrost will directly
+                use the key.
+              </p>
+            </div>
+            <Switch
+              id="allow-direct-keys"
+              size="md"
+              checked={config.allow_direct_keys}
+              onCheckedChange={(checked) => handleConfigChange('allow_direct_keys', checked)}
+            />
+          </div>
+
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
@@ -310,6 +332,36 @@ export default function ConfigPage() {
               />
             </div>
             {configInDB.enable_governance !== config.enable_governance && <RestartWarning />}
+          </div>
+
+          <div>
+            <div className="rounded-lg border p-4">
+              <div className="flex items-center justify-between space-x-2">
+                <div className="space-y-0.5">
+                  <label htmlFor="enable-caching" className="text-sm font-medium">
+                    Enable Caching
+                  </label>
+                  <p className="text-muted-foreground text-sm">
+                    Enable Redis caching for requests. Send <b>x-bf-cache-key</b> header with requests to use caching.
+                  </p>
+                </div>
+                <Switch
+                  id="enable-caching"
+                  size="md"
+                  checked={config.enable_caching}
+                  onCheckedChange={(checked) => handleConfigChange('enable_caching', checked)}
+                />
+              </div>
+
+              {configInDB.enable_caching && config.enable_caching && (
+                <div className="mt-4 space-y-4">
+                  <Separator />
+                  <CacheConfigForm />
+                </div>
+              )}
+            </div>
+
+            {configInDB.enable_caching !== config.enable_caching && <RestartWarning />}
           </div>
 
           <div>

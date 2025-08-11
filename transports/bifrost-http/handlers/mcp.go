@@ -55,7 +55,7 @@ func (h *MCPHandler) ExecuteTool(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Convert context
-	bifrostCtx := lib.ConvertToBifrostContext(ctx)
+	bifrostCtx := lib.ConvertToBifrostContext(ctx, false)
 	if bifrostCtx == nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context", h.logger)
 		return

@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import { Alert, AlertDescription } from '../ui/alert'
 import { CodeEditor } from './ui/code-editor'
 
-type Provider = 'openai' | 'anthropic' | 'genai' | 'litellm'
+type Provider = 'openai' | 'anthropic' | 'genai' | 'litellm' | 'langchain'
 type Language = 'python' | 'typescript'
 
 type Examples = {
@@ -185,6 +185,60 @@ const response = await completion({
   api_base: "${baseUrl}/litellm",
 });`,
         },
+        langchain: {
+          python: `from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+# Initialize ChatOpenAI with Bifrost
+llm = ChatOpenAI(
+    model="gpt-4o-mini",
+    api_key="dummy-api-key",  # Handled by Bifrost
+    base_url="${baseUrl}/langchain",
+    max_tokens=100,
+)
+
+# Simple message
+messages = [HumanMessage(content="Hello from LangChain!")]
+response = llm.invoke(messages)
+
+# Chain with prompt template
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    ("human", "{input}")
+])
+
+chain = prompt | llm | StrOutputParser()
+result = chain.invoke({"input": "What is LangChain?"})`,
+          typescript: `import { ChatOpenAI } from "@langchain/openai";
+import { HumanMessage } from "@langchain/core/messages";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { StringOutputParser } from "@langchain/core/output_parsers";
+
+// Initialize ChatOpenAI with Bifrost
+const llm = new ChatOpenAI({
+  model: "gpt-4o-mini",
+  openAIApiKey: "dummy-api-key", // Handled by Bifrost
+  clientOptions: {
+    baseURL: "${baseUrl}/langchain",
+  },
+  maxTokens: 100,
+});
+
+// Simple message
+const messages = [new HumanMessage("Hello from LangChain!")];
+const response = await llm.invoke(messages);
+
+// Chain with prompt template
+const prompt = ChatPromptTemplate.fromMessages([
+  ["system", "You are a helpful assistant."],
+  ["human", "{input}"],
+]);
+
+const chain = prompt.pipe(llm).pipe(new StringOutputParser());
+const result = await chain.invoke({ input: "What is LangChain?" });`,
+        },
       },
     }
   }, [])
@@ -218,12 +272,13 @@ const response = await completion({
         </div>
 
         <Tabs defaultValue="curl" className="w-full rounded-lg border">
-          <TabsList className="grid h-10 w-full grid-cols-5 rounded-b-none rounded-t-lg">
+          <TabsList className="grid h-10 w-full grid-cols-6 rounded-b-none rounded-t-lg">
             <TabsTrigger value="curl">cURL</TabsTrigger>
             <TabsTrigger value="openai">OpenAI SDK</TabsTrigger>
             <TabsTrigger value="anthropic">Anthropic SDK</TabsTrigger>
             <TabsTrigger value="genai">Google GenAI SDK</TabsTrigger>
             <TabsTrigger value="litellm">LiteLLM SDK</TabsTrigger>
+            <TabsTrigger value="langchain">LangChain SDK</TabsTrigger>
           </TabsList>
 
           <TabsContent value="curl" className="px-4">
@@ -260,6 +315,15 @@ const response = await completion({
           <TabsContent value="litellm" className="px-4">
             <CodeBlock
               code={examples.sdk.litellm[language]}
+              language={language}
+              onLanguageChange={(newLang) => setLanguage(newLang as Language)}
+              showLanguageSelect
+            />
+          </TabsContent>
+
+          <TabsContent value="langchain" className="px-4">
+            <CodeBlock
+              code={examples.sdk.langchain[language]}
               language={language}
               onLanguageChange={(newLang) => setLanguage(newLang as Language)}
               showLanguageSelect

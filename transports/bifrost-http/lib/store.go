@@ -62,6 +62,9 @@ var DefaultClientConfig = ClientConfig{
 	EnableLogging:           true,
 	EnableGovernance:        true,
 	EnforceGovernanceHeader: false,
+	AllowDirectKeys:         false,
+	AllowedOrigins:          []string{},
+	EnableCaching:           false,
 }
 
 // NewConfigStore creates a new in-memory configuration store instance with database connection.
@@ -243,6 +246,7 @@ func (s *ConfigStore) autoMigrate() error {
 		&DBMCPClient{},
 		&DBClientConfig{},
 		&DBEnvKey{},
+		&DBCacheConfig{},
 	)
 }
 
@@ -313,6 +317,8 @@ func (s *ConfigStore) loadClientConfigFromDB() error {
 		EnableLogging:           dbConfig.EnableLogging,
 		EnableGovernance:        dbConfig.EnableGovernance,
 		EnforceGovernanceHeader: dbConfig.EnforceGovernanceHeader,
+		AllowDirectKeys:         dbConfig.AllowDirectKeys,
+		EnableCaching:           dbConfig.EnableCaching,
 		AllowedOrigins:          dbConfig.AllowedOrigins,
 	}
 
@@ -693,6 +699,8 @@ func (s *ConfigStore) saveClientConfigToDB() error {
 		EnableLogging:           s.ClientConfig.EnableLogging,
 		EnableGovernance:        s.ClientConfig.EnableGovernance,
 		EnforceGovernanceHeader: s.ClientConfig.EnforceGovernanceHeader,
+		AllowDirectKeys:         s.ClientConfig.AllowDirectKeys,
+		EnableCaching:           s.ClientConfig.EnableCaching,
 		PrometheusLabels:        s.ClientConfig.PrometheusLabels,
 		AllowedOrigins:          s.ClientConfig.AllowedOrigins,
 	}
@@ -864,6 +872,15 @@ func (s *ConfigStore) GetProviderConfigRaw(provider schemas.ModelProvider) (*Pro
 	return &config, nil
 }
 
+// HandlerStore interface implementation
+// ShouldAllowDirectKeys returns whether direct API keys in headers are allowed
+// Note: This method doesn't use locking for performance. In rare cases during
+// config updates, it may return stale data, but this is acceptable since bool
+// reads are atomic and won't cause panics.
+func (s *ConfigStore) ShouldAllowDirectKeys() bool {
+	return s.ClientConfig.AllowDirectKeys
+}
+
 func (s *ConfigStore) GetClientConfigFromDB() (*DBClientConfig, error) {
 	var dbConfig DBClientConfig
 	if err := s.db.First(&dbConfig).Error; err != nil {
@@ -875,6 +892,9 @@ func (s *ConfigStore) GetClientConfigFromDB() (*DBClientConfig, error) {
 				EnableLogging:           s.ClientConfig.EnableLogging,
 				EnableGovernance:        s.ClientConfig.EnableGovernance,
 				EnforceGovernanceHeader: s.ClientConfig.EnforceGovernanceHeader,
+				AllowDirectKeys:         s.ClientConfig.AllowDirectKeys,
+				AllowedOrigins:          s.ClientConfig.AllowedOrigins,
+				EnableCaching:           s.ClientConfig.EnableCaching,
 			}, nil
 		}
 		return nil, err
@@ -2075,4 +2095,55 @@ func (s *ConfigStore) storeConfigHash(tx *gorm.DB, hash string) error {
 		}
 	}
 	return nil
+}
+
+// GetCacheConfig retrieves the cache configuration from the database
+func (s *ConfigStore) GetCacheConfig() (*DBCacheConfig, error) {
+	var cacheConfig DBCacheConfig
+	if err := s.db.First(&cacheConfig).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Return default cache configuration
+			return &DBCacheConfig{
+				Addr:            "localhost:6379",
+				DB:              0,
+				TTLSeconds:      300, // 5 minutes
+				CacheByModel:    true,
+				CacheByProvider: true,
+			}, nil
+		}
+		return nil, err
+	}
+	return &cacheConfig, nil
+}
+
+// GetCacheConfigRedacted retrieves the cache configuration with password redacted for safe external exposure
+func (s *ConfigStore) GetCacheConfigRedacted() (*DBCacheConfig, error) {
+	config, err := s.GetCacheConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a copy to avoid modifying the original
+	redactedConfig := *config
+
+	// Redact password if it exists
+	if redactedConfig.Password != "" {
+		redactedConfig.Password = RedactKey(redactedConfig.Password)
+	}
+
+	return &redactedConfig, nil
+}
+
+// UpdateCacheConfig updates the cache configuration in the database
+// Uses a transaction to ensure atomicity - either both delete and create succeed, or both are rolled back
+func (s *ConfigStore) UpdateCacheConfig(config *DBCacheConfig) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// Delete existing cache config
+		if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DBCacheConfig{}).Error; err != nil {
+			return err
+		}
+
+		// Create new cache config
+		return tx.Create(config).Error
+	})
 }

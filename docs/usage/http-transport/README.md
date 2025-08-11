@@ -107,6 +107,33 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ---
 
+### Runtime logging
+
+Control verbosity and output format via CLI flags when starting the server:
+
+- `-log-level`: debug | info | warn | error (default: info)
+- `-log-style`: json | pretty (default: json)
+
+Examples:
+
+```bash
+# Human-friendly console logs at debug level
+npx -y @maximhq/bifrost -log-level debug -log-style pretty
+
+# Docker with pretty logs for local debugging
+docker run -p 8080:8080 maximhq/bifrost -log-level debug -log-style pretty
+
+# Production-friendly structured logs
+docker run -p 8080:8080 maximhq/bifrost -log-level info -log-style json
+```
+
+Notes:
+
+- `pretty` is easier to read locally; `json` is best for log aggregation.
+- Log level controls which messages are emitted at runtime; lower levels include higher ones (e.g., debug includes info/warn/error).
+
+---
+
 ## 🔗 Integration Patterns
 
 ### **"I want to..."**
@@ -129,10 +156,28 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ```python
 from openai import OpenAI
 
-# Change base URL to use Bifrost
+# Option 1: Change base URL to use Bifrost with configured keys
 client = OpenAI(
     base_url="http://localhost:8080/openai",  # Point to Bifrost
-    api_key="your-openai-key"
+    api_key="your-openai-key"  # Will be passed in Authorization header
+)
+
+# Option 2: Use Bifrost unified API with header-based keys
+
+> Note: This requires enabling "Allow Direct Keys" in the Bifrost UI (Settings) or setting `allow_direct_keys: true` in client config.
+
+import requests
+
+response = requests.post(
+    "http://localhost:8080/v1/chat/completions",
+    headers={
+        "Content-Type": "application/json",
+        "Authorization": "Bearer sk-your-openai-key"  # Bearer format required
+    },
+    json={
+        "model": "openai/gpt-4o-mini",
+        "messages": [{"role": "user", "content": "Hello!"}]
+    }
 )
 
 # Use normally - Bifrost handles provider routing
@@ -150,14 +195,28 @@ response = client.chat.completions.create(
 ```javascript
 import OpenAI from "openai";
 
+// Option 1: Use OpenAI SDK with Bifrost
 const openai = new OpenAI({
   baseURL: "http://localhost:8080/openai", // Point to Bifrost
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY,      // Passed in Authorization header
 });
 
 const response = await openai.chat.completions.create({
   model: "gpt-4o-mini",
   messages: [{ role: "user", content: "Hello!" }],
+});
+
+// Option 2: Use fetch with direct headers
+const response = await fetch("http://localhost:8080/v1/chat/completions", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${process.env.OPENAI_API_KEY}` // Bearer format required
+  },
+  body: JSON.stringify({
+    model: "openai/gpt-4o-mini",
+    messages: [{ role: "user", content: "Hello!" }]
+  })
 });
 ```
 

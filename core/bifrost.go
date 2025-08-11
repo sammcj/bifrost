@@ -82,6 +82,12 @@ var retryableStatusCodes = map[int]bool{
 	429: true, // Too Many Requests
 }
 
+// BifrostContextKey is a type for context keys used in Bifrost.
+type BifrostContextKey string
+
+// BifrostContextKeyRequestType is a context key for the request type.
+const BifrostContextKeyRequestType BifrostContextKey = "bifrost-request-type"
+
 // INITIALIZATION
 
 // Init initializes a new Bifrost instance with the given configuration.
@@ -838,6 +844,14 @@ func (bifrost *Bifrost) handleRequest(ctx context.Context, req *schemas.BifrostR
 		return nil, err
 	}
 
+	// Handle nil context early to prevent blocking
+	if ctx == nil {
+		ctx = bifrost.backgroundCtx
+	}
+
+	// Add request type to context
+	ctx = context.WithValue(ctx, BifrostContextKeyRequestType, requestType)
+
 	// Try the primary provider first
 	primaryResult, primaryErr := bifrost.tryRequest(req, ctx, requestType)
 
@@ -882,6 +896,14 @@ func (bifrost *Bifrost) handleStreamRequest(ctx context.Context, req *schemas.Bi
 		return nil, err
 	}
 
+	// Handle nil context early to prevent blocking
+	if ctx == nil {
+		ctx = bifrost.backgroundCtx
+	}
+
+	// Add request type to context
+	ctx = context.WithValue(ctx, BifrostContextKeyRequestType, requestType)
+
 	// Try the primary provider first
 	primaryResult, primaryErr := bifrost.tryStreamRequest(req, ctx, requestType)
 
@@ -922,11 +944,6 @@ func (bifrost *Bifrost) tryRequest(req *schemas.BifrostRequest, ctx context.Cont
 	queue, err := bifrost.getProviderQueue(req.Provider)
 	if err != nil {
 		return nil, newBifrostError(err)
-	}
-
-	// Handle nil context early to prevent blocking
-	if ctx == nil {
-		ctx = bifrost.backgroundCtx
 	}
 
 	// Add MCP tools to request if MCP is configured and requested
@@ -1014,11 +1031,6 @@ func (bifrost *Bifrost) tryStreamRequest(req *schemas.BifrostRequest, ctx contex
 		return nil, newBifrostError(err)
 	}
 
-	// Handle nil context early to prevent blocking
-	if ctx == nil {
-		ctx = bifrost.backgroundCtx
-	}
-
 	// Add MCP tools to request if MCP is configured and requested
 	if requestType != SpeechStreamRequest && requestType != TranscriptionStreamRequest && bifrost.mcpManager != nil {
 		req = bifrost.mcpManager.addMCPToolsToBifrostRequest(ctx, req)
@@ -1036,6 +1048,36 @@ func (bifrost *Bifrost) tryStreamRequest(req *schemas.BifrostRequest, ctx contex
 				return nil, bifrostErr
 			}
 			return newBifrostMessageChan(resp), nil
+		}
+		// Handle short-circuit with stream
+		if shortCircuit.Stream != nil {
+			outputStream := make(chan *schemas.BifrostStream)
+
+			// Create a post hook runner cause pipeline object is put back in the pool on defer
+			pipelinePostHookRunner := func(ctx *context.Context, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError) {
+				return pipeline.RunPostHooks(ctx, result, err, preCount)
+			}
+
+			go func() {
+				defer close(outputStream)
+
+				for streamMsg := range shortCircuit.Stream {
+					if streamMsg == nil {
+						continue
+					}
+
+					// Run post hooks on the stream message
+					processedResp, processedErr := pipelinePostHookRunner(&ctx, streamMsg.BifrostResponse, streamMsg.BifrostError)
+
+					// Send the processed message to the output stream
+					outputStream <- &schemas.BifrostStream{
+						BifrostResponse: processedResp,
+						BifrostError:    processedErr,
+					}
+				}
+			}()
+
+			return outputStream, nil
 		}
 		// Handle short-circuit with error
 		if shortCircuit.Error != nil {
@@ -1422,6 +1464,14 @@ func (bifrost *Bifrost) releaseChannelMessage(msg *ChannelMessage) {
 // selectKeyFromProviderForModel selects an appropriate API key for a given provider and model.
 // It uses weighted random selection if multiple keys are available.
 func (bifrost *Bifrost) selectKeyFromProviderForModel(ctx *context.Context, providerKey schemas.ModelProvider, model string) (schemas.Key, error) {
+	// Check if key has been set in the context explicitly
+	if ctx != nil {
+		key, ok := (*ctx).Value(schemas.BifrostContextKey).(schemas.Key)
+		if ok {
+			return key, nil
+		}
+	}
+
 	keys, err := bifrost.account.GetKeysForProvider(ctx, providerKey)
 	if err != nil {
 		return schemas.Key{}, err
