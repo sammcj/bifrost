@@ -1,19 +1,20 @@
 // Configuration types that match the Go backend structures
 
-// ModelProvider enum matching Go's schemas.ModelProvider
-export type ModelProvider =
-	| "openai"
-	| "azure"
-	| "anthropic"
-	| "bedrock"
-	| "cohere"
-	| "vertex"
-	| "mistral"
-	| "ollama"
-	| "groq"
-	| "parasail"
-	| "sgl"
-	| "cerebras";
+import { KNOWN_PROVIDERS } from "@/lib/constants/logs";
+
+// Known provider names - all supported standard providers
+export type KnownProvider = (typeof KNOWN_PROVIDERS)[number];
+
+// Branded type for custom provider names to prevent collision with known providers
+export type CustomProviderName = string & { readonly __brand: "CustomProviderName" };
+
+// ModelProvider union - either known providers or branded custom providers
+export type ModelProvider = KnownProvider | CustomProviderName;
+
+// Helper function to check if a provider name is a known provider
+export const isKnownProvider = (provider: string): provider is KnownProvider => {
+	return KNOWN_PROVIDERS.includes(provider.toLowerCase() as KnownProvider);
+};
 
 // AzureKeyConfig matching Go's schemas.AzureKeyConfig
 export interface AzureKeyConfig {
@@ -77,6 +78,24 @@ export interface ProxyConfig {
 	password?: string;
 }
 
+// CustomProviderConfig matching Go's schemas.CustomProviderConfig
+export interface CustomProviderConfig {
+	base_provider_type: KnownProvider;
+	allowed_requests?: AllowedRequests;
+}
+
+// AllowedRequests matching Go's schemas.AllowedRequests
+export interface AllowedRequests {
+	text_completion: boolean;
+	chat_completion: boolean;
+	chat_completion_stream: boolean;
+	embedding: boolean;
+	speech: boolean;
+	speech_stream: boolean;
+	transcription: boolean;
+	transcription_stream: boolean;
+}
+
 // ProviderConfig matching Go's lib.ProviderConfig
 export interface ProviderConfig {
 	keys: Key[];
@@ -84,6 +103,7 @@ export interface ProviderConfig {
 	concurrency_and_buffer_size: ConcurrencyAndBufferSize;
 	proxy_config?: ProxyConfig;
 	send_back_raw_response?: boolean;
+	custom_provider_config?: CustomProviderConfig;
 }
 
 // ProviderResponse matching Go's ProviderResponse
@@ -105,6 +125,7 @@ export interface AddProviderRequest {
 	concurrency_and_buffer_size?: ConcurrencyAndBufferSize;
 	proxy_config?: ProxyConfig;
 	send_back_raw_response?: boolean;
+	custom_provider_config?: CustomProviderConfig;
 }
 
 // UpdateProviderRequest matching Go's UpdateProviderRequest
@@ -114,6 +135,7 @@ export interface UpdateProviderRequest {
 	concurrency_and_buffer_size: ConcurrencyAndBufferSize;
 	proxy_config: ProxyConfig;
 	send_back_raw_response?: boolean;
+	custom_provider_config?: CustomProviderConfig;
 }
 
 // BifrostErrorResponse matching Go's schemas.BifrostError
@@ -176,6 +198,7 @@ export interface ProviderFormData {
 		concurrency: number;
 		bufferSize: number;
 	};
+	custom_provider_config?: CustomProviderConfig;
 }
 
 // Status types

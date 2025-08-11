@@ -174,6 +174,11 @@ func Init(config schemas.BifrostConfig) (*Bifrost, error) {
 
 	// Create buffered channels for each provider and start workers
 	for _, providerKey := range providerKeys {
+		if strings.TrimSpace(string(providerKey)) == "" {
+			bifrost.logger.Warn("provider key is empty, skipping init")
+			continue
+		}
+
 		config, err := bifrost.account.GetConfigForProvider(providerKey)
 		if err != nil {
 			bifrost.logger.Warn(fmt.Sprintf("failed to get config for provider, skipping init: %v", err))
@@ -417,7 +422,7 @@ transferComplete:
 	bifrost.waitGroups.Store(providerKey, &sync.WaitGroup{})
 
 	// Step 7: Create provider instance
-	provider, err := bifrost.createProviderFromProviderKey(providerKey, providerConfig)
+	provider, err := bifrost.createBaseProvider(providerKey, providerConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create provider instance for %s: %v", providerKey, err)
 	}
@@ -432,7 +437,7 @@ transferComplete:
 		waitGroupValue, _ := bifrost.waitGroups.Load(providerKey)
 		waitGroup := waitGroupValue.(*sync.WaitGroup)
 		waitGroup.Add(1)
-		go bifrost.requestWorker(provider, newQueue)
+		go bifrost.requestWorker(provider, providerConfig, newQueue)
 	}
 
 	bifrost.logger.Info("successfully updated concurrency configuration for provider %s", providerKey)
@@ -661,10 +666,29 @@ func (bifrost *Bifrost) ReconnectMCPClient(name string) error {
 
 // PROVIDER MANAGEMENT
 
-// createProviderFromProviderKey creates a new provider instance based on the provider key.
-// It returns an error if the provider is not supported.
-func (bifrost *Bifrost) createProviderFromProviderKey(providerKey schemas.ModelProvider, config *schemas.ProviderConfig) (schemas.Provider, error) {
-	switch providerKey {
+// createBaseProvider creates a provider based on the base provider type
+func (bifrost *Bifrost) createBaseProvider(providerKey schemas.ModelProvider, config *schemas.ProviderConfig) (schemas.Provider, error) {
+	// Determine which provider type to create
+	targetProviderKey := providerKey
+
+	if config.CustomProviderConfig != nil {
+		// Validate custom provider config
+		if config.CustomProviderConfig.BaseProviderType == "" {
+			return nil, fmt.Errorf("custom provider config missing base provider type")
+		}
+
+		// Validate that base provider type is supported
+		if !IsSupportedBaseProvider(config.CustomProviderConfig.BaseProviderType) {
+			return nil, fmt.Errorf("unsupported base provider type: %s", config.CustomProviderConfig.BaseProviderType)
+		}
+
+		// Automatically set the custom provider key to the provider name
+		config.CustomProviderConfig.CustomProviderKey = string(providerKey)
+
+		targetProviderKey = config.CustomProviderConfig.BaseProviderType
+	}
+
+	switch targetProviderKey {
 	case schemas.OpenAI:
 		return providers.NewOpenAIProvider(config, bifrost.logger), nil
 	case schemas.Anthropic:
@@ -690,7 +714,7 @@ func (bifrost *Bifrost) createProviderFromProviderKey(providerKey schemas.ModelP
 	case schemas.Cerebras:
 		return providers.NewCerebrasProvider(config, bifrost.logger)
 	default:
-		return nil, fmt.Errorf("unsupported provider: %s", providerKey)
+		return nil, fmt.Errorf("unsupported provider: %s", targetProviderKey)
 	}
 }
 
@@ -710,7 +734,7 @@ func (bifrost *Bifrost) prepareProvider(providerKey schemas.ModelProvider, confi
 	// Start specified number of workers
 	bifrost.waitGroups.Store(providerKey, &sync.WaitGroup{})
 
-	provider, err := bifrost.createProviderFromProviderKey(providerKey, config)
+	provider, err := bifrost.createBaseProvider(providerKey, config)
 	if err != nil {
 		return fmt.Errorf("failed to create provider for the given key: %v", err)
 	}
@@ -719,7 +743,7 @@ func (bifrost *Bifrost) prepareProvider(providerKey schemas.ModelProvider, confi
 		waitGroupValue, _ := bifrost.waitGroups.Load(providerKey)
 		waitGroup := waitGroupValue.(*sync.WaitGroup)
 		waitGroup.Add(1)
-		go bifrost.requestWorker(provider, queue)
+		go bifrost.requestWorker(provider, providerConfig, queue)
 	}
 
 	return nil
@@ -1130,7 +1154,7 @@ func (bifrost *Bifrost) tryStreamRequest(req *schemas.BifrostRequest, ctx contex
 
 // requestWorker handles incoming requests from the queue for a specific provider.
 // It manages retries, error handling, and response processing.
-func (bifrost *Bifrost) requestWorker(provider schemas.Provider, queue chan ChannelMessage) {
+func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas.ProviderConfig, queue chan ChannelMessage) {
 	defer func() {
 		if waitGroupValue, ok := bifrost.waitGroups.Load(provider.GetProviderKey()); ok {
 			waitGroup := waitGroupValue.(*sync.WaitGroup)
@@ -1144,9 +1168,16 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, queue chan Chan
 		var bifrostError *schemas.BifrostError
 		var err error
 
+		// Determine the base provider type for key requirement checks
+		baseProvider := provider.GetProviderKey()
+		if cfg := config.CustomProviderConfig; cfg != nil && cfg.BaseProviderType != "" {
+			baseProvider = cfg.BaseProviderType
+		}
+
 		key := schemas.Key{}
-		if providerRequiresKey(provider.GetProviderKey()) {
-			key, err = bifrost.selectKeyFromProviderForModel(&req.Context, provider.GetProviderKey(), req.Model)
+		if providerRequiresKey(baseProvider) {
+			// Use the custom provider name for actual key selection, but pass base provider type for key validation
+			key, err = bifrost.selectKeyFromProviderForModel(&req.Context, provider.GetProviderKey(), req.Model, baseProvider)
 			if err != nil {
 				bifrost.logger.Warn("error selecting key for model %s: %v", req.Model, err)
 				req.Err <- schemas.BifrostError{
@@ -1158,19 +1189,6 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, queue chan Chan
 				}
 				continue
 			}
-		}
-
-		config, err := bifrost.account.GetConfigForProvider(provider.GetProviderKey())
-		if err != nil {
-			bifrost.logger.Warn("error getting config for provider %s: %v", provider.GetProviderKey(), err)
-			req.Err <- schemas.BifrostError{
-				IsBifrostError: false,
-				Error: schemas.ErrorField{
-					Message: err.Error(),
-					Error:   err,
-				},
-			}
-			continue
 		}
 
 		// Track attempts
@@ -1459,7 +1477,7 @@ func (bifrost *Bifrost) releaseChannelMessage(msg *ChannelMessage) {
 
 // selectKeyFromProviderForModel selects an appropriate API key for a given provider and model.
 // It uses weighted random selection if multiple keys are available.
-func (bifrost *Bifrost) selectKeyFromProviderForModel(ctx *context.Context, providerKey schemas.ModelProvider, model string) (schemas.Key, error) {
+func (bifrost *Bifrost) selectKeyFromProviderForModel(ctx *context.Context, providerKey schemas.ModelProvider, model string, baseProviderType schemas.ModelProvider) (schemas.Key, error) {
 	// Check if key has been set in the context explicitly
 	if ctx != nil {
 		key, ok := (*ctx).Value(schemas.BifrostContextKey).(schemas.Key)
@@ -1480,16 +1498,16 @@ func (bifrost *Bifrost) selectKeyFromProviderForModel(ctx *context.Context, prov
 	// filter out keys which dont support the model, if the key has no models, it is supported for all models
 	var supportedKeys []schemas.Key
 	for _, key := range keys {
-		modelSupported := (slices.Contains(key.Models, model) && (strings.TrimSpace(key.Value) != "" || canProviderKeyValueBeEmpty(providerKey))) || len(key.Models) == 0
+		modelSupported := (slices.Contains(key.Models, model) && (strings.TrimSpace(key.Value) != "" || canProviderKeyValueBeEmpty(baseProviderType))) || len(key.Models) == 0
 
 		// Additional deployment checks for Azure and Bedrock
 		deploymentSupported := true
-		if providerKey == schemas.Azure && key.AzureKeyConfig != nil {
+		if baseProviderType == schemas.Azure && key.AzureKeyConfig != nil {
 			// For Azure, check if deployment exists for this model
 			if len(key.AzureKeyConfig.Deployments) > 0 {
 				_, deploymentSupported = key.AzureKeyConfig.Deployments[model]
 			}
-		} else if providerKey == schemas.Bedrock && key.BedrockKeyConfig != nil {
+		} else if baseProviderType == schemas.Bedrock && key.BedrockKeyConfig != nil {
 			// For Bedrock, check if deployment exists for this model
 			if len(key.BedrockKeyConfig.Deployments) > 0 {
 				_, deploymentSupported = key.BedrockKeyConfig.Deployments[model]
@@ -1502,7 +1520,7 @@ func (bifrost *Bifrost) selectKeyFromProviderForModel(ctx *context.Context, prov
 	}
 
 	if len(supportedKeys) == 0 {
-		if providerKey == schemas.Azure || providerKey == schemas.Bedrock {
+		if baseProviderType == schemas.Azure || baseProviderType == schemas.Bedrock {
 			return schemas.Key{}, fmt.Errorf("no keys found that support model/deployment: %s", model)
 		}
 		return schemas.Key{}, fmt.Errorf("no keys found that support model: %s", model)

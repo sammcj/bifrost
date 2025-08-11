@@ -10,7 +10,7 @@ import { CacheConfig, ModelProvider } from "@/lib/types/config";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PROVIDER_LABELS } from "@/lib/constants/logs";
+import { getProviderLabel } from "@/lib/constants/logs";
 import { Loader2 } from "lucide-react";
 import { SEMANTIC_CACHE_PLUGIN } from "@/lib/types/plugins";
 
@@ -229,7 +229,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 											<SelectContent>
 												{providers.map((provider) => (
 													<SelectItem key={provider.name} value={provider.name}>
-														{PROVIDER_LABELS[provider.name as ModelProvider]}
+														{getProviderLabel(provider.name)}
 													</SelectItem>
 												))}
 											</SelectContent>
