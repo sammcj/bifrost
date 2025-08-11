@@ -186,7 +186,7 @@ func (mc *AnthropicContent) UnmarshalJSON(data []byte) error {
 
 // ConvertToBifrostRequest converts an Anthropic messages request to Bifrost format
 func (r *AnthropicMessageRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
-	provider, model := integrations.ParseModelString(r.Model, schemas.Anthropic)
+	provider, model := integrations.ParseModelString(r.Model, schemas.Anthropic, false)
 
 	bifrostReq := &schemas.BifrostRequest{
 		Provider: provider,
