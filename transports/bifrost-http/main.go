@@ -451,7 +451,7 @@ func main() {
 
 		redisPlugin, err := redis.NewRedisPlugin(pluginConfig, logger)
 		if err != nil {
-			logger.Fatal("failed to initialize Redis plugin", err)
+			logger.Warn(fmt.Sprintf("failed to initialize Redis plugin: %v", err))
 		}
 
 		loadedPlugins = append(loadedPlugins, redisPlugin)
