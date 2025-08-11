@@ -460,7 +460,7 @@ func (m *MCPManager) createLocalMCPClient() (*MCPClient, error) {
 		},
 		ToolMap: make(map[string]schemas.Tool),
 		ConnectionInfo: MCPClientConnectionInfo{
-			Type: schemas.MCPConnectionTypeSTDIO, // Keep as STDIO for type consistency
+			Type: schemas.MCPConnectionTypeInProcess, // Accurate: in-process (in-memory) transport
 		},
 	}, nil
 }
