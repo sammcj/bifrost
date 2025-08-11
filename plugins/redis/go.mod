@@ -4,11 +4,9 @@ go 1.24.1
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/maximhq/bifrost/core v1.1.16
+	github.com/maximhq/bifrost/core v1.1.17
 	github.com/redis/go-redis/v9 v9.10.0
 )
-
-replace github.com/maximhq/bifrost/core => ../../core
 
 require (
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect

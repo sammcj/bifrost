@@ -7,19 +7,15 @@ require (
 	github.com/fasthttp/router v1.5.4
 	github.com/fasthttp/websocket v1.5.12
 	github.com/google/uuid v1.6.0
-	github.com/maximhq/bifrost/core v1.1.16
+	github.com/maximhq/bifrost/core v1.1.17
 	github.com/maximhq/bifrost/plugins/maxim v1.0.6
-	github.com/maximhq/bifrost/plugins/redis v0.0.0-00010101000000-000000000000
+	github.com/maximhq/bifrost/plugins/redis v1.0.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/valyala/fasthttp v1.62.0
 	google.golang.org/genai v1.4.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.30.0
 )
-
-replace github.com/maximhq/bifrost/plugins/redis => ../plugins/redis
-
-replace github.com/maximhq/bifrost/core => ../core
 
 require (
 	cloud.google.com/go v0.121.0 // indirect
