@@ -411,6 +411,92 @@ bifrost_provider_errors_total{provider="openai",error_type="rate_limit"} 23
 
 ---
 
+## 🧾 Redis Cache Management
+
+Bifrost provides built-in Redis caching capabilities to improve performance and reduce API costs.
+
+### **Cache Control Headers**
+
+Add these headers to your requests to control caching behavior:
+
+| Header | Type | Description | Example |
+|--------|------|-------------|---------|
+| `x-bf-cache-key` | string | Unique cache identifier for the request | `"user-123-session"` |
+| `x-bf-cache-ttl` | string | Time-to-live duration for cache entry. Supports Go duration format or plain numbers (treated as seconds) | `"30s"`, `"5m"`, `"1h"`, `"300"` |
+
+**TTL Format Options:**
+
+The `x-bf-cache-ttl` header accepts two formats:
+
+1. **Go Duration Format**: `"30s"`, `"5m"`, `"1h"`, `"2h30m"`
+2. **Plain Numbers**: `"30"`, `"300"`, `"3600"` (interpreted as seconds)
+
+**cURL Examples with Caching:**
+
+```bash
+# Using Go duration format
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "x-bf-cache-key: user-session-abc123" \
+  -H "x-bf-cache-ttl: 10m" \
+  -d '{
+    "model": "openai/gpt-4o-mini",
+    "messages": [
+      {"role": "user", "content": "What is the capital of France?"}
+    ]
+  }'
+
+# Using plain number format (300 seconds = 5 minutes)
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "x-bf-cache-key: user-session-xyz789" \
+  -H "x-bf-cache-ttl: 300" \
+  -d '{
+    "model": "openai/gpt-4o-mini",
+    "messages": [
+      {"role": "user", "content": "What is the capital of Spain?"}
+    ]
+  }'
+```
+
+**Cache Behavior:**
+
+- **First request**: Goes to the AI provider, response is cached
+- **Subsequent identical requests**: Served instantly from Redis cache
+- **Cache hits**: Include `bifrost_cached: true` in response metadata
+- **Streaming responses**: Cached and reconstructed chunk by chunk
+
+### **DELETE /api/cache/{key}**
+
+Delete a specific cache entry from Redis.
+
+**URL Parameters:**
+
+- `key` (required): The cache key to delete
+
+**cURL Example:**
+
+```bash
+curl -X DELETE http://localhost:8080/api/cache/user-session-abc123
+```
+
+**Response:**
+
+```json
+{
+  "status": "success",
+  "message": "Redis cache deleted successfully"
+}
+```
+
+**Notes:**
+
+- For streaming responses, this deletes all chunks associated with the cache key
+- Use the `bifrost_cache_key` from cached response metadata to get the exact key
+- Returns success even if the key doesn't exist
+
+---
+
 ## 🔧 Request Parameters
 
 ### **Common Parameters**
