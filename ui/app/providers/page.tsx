@@ -1,34 +1,33 @@
-'use client'
+"use client";
 
-import ProvidersList from '@/components/config/providers-list'
-import FullPageLoader from '@/components/full-page-loader'
-import { useToast } from '@/hooks/use-toast'
-import { apiService } from '@/lib/api'
-import { ProviderResponse } from '@/lib/types/config'
-import { useEffect, useState } from 'react'
+import ProvidersList from "@/app/providers/views/providers-list";
+import FullPageLoader from "@/components/full-page-loader";
+import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage, useGetProvidersQuery } from "@/lib/store";
+import { useEffect } from "react";
 
 export default function Providers() {
-  const [isLoadingProviders, setIsLoadingProviders] = useState(true)
-  const [providers, setProviders] = useState<ProviderResponse[]>([])
-  const { toast } = useToast()
+	const { data, error, isLoading, refetch } = useGetProvidersQuery();
 
-  useEffect(() => {
-    loadProviders()
-  }, [])
+	const { toast } = useToast();
 
-  const loadProviders = async () => {
-    const [data, error] = await apiService.getProviders()
-    setIsLoadingProviders(false)
+	useEffect(() => {
+		if (error) {
+			toast({
+				title: "Error",
+				description: getErrorMessage(error),
+				variant: "destructive",
+			});
+		}
+	}, [error, toast]);
 
-    if (error) {
-      toast({
-        title: 'Error',
-        description: error,
-        variant: 'destructive',
-      })
-      return
-    }
-    setProviders(data?.providers || [])
-  }
-  return <div>{isLoadingProviders ? <FullPageLoader /> : <ProvidersList providers={providers} onRefresh={loadProviders} />}</div>
+	if (isLoading) {
+		return <FullPageLoader />;
+	}
+
+	return (
+		<div>
+			<ProvidersList providers={data?.providers || []} onRefresh={() => refetch()} />
+		</div>
+	);
 }

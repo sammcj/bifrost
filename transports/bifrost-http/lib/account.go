@@ -13,11 +13,11 @@ import (
 // It manages provider configurations using a in-memory store for persistent storage.
 // All data processing (environment variables, key configs) is done upfront in the store.
 type BaseAccount struct {
-	store *ConfigStore // store for in-memory configuration
+	store *Config // store for in-memory configuration
 }
 
 // NewBaseAccount creates a new BaseAccount with the given store
-func NewBaseAccount(store *ConfigStore) *BaseAccount {
+func NewBaseAccount(store *Config) *BaseAccount {
 	return &BaseAccount{
 		store: store,
 	}
@@ -46,7 +46,32 @@ func (baseAccount *BaseAccount) GetKeysForProvider(ctx *context.Context, provide
 		return nil, err
 	}
 
-	return config.Keys, nil
+	keys := config.Keys
+
+	if baseAccount.store.ClientConfig.EnableGovernance {
+		if v := (*ctx).Value("bf-governance-include-only-keys"); v != nil {
+			if includeOnlyKeys, ok := v.([]string); ok {
+				if len(includeOnlyKeys) == 0 {
+					// header present but empty means "no keys allowed"
+					keys = nil
+				} else {
+					set := make(map[string]struct{}, len(includeOnlyKeys))
+					for _, id := range includeOnlyKeys {
+						set[id] = struct{}{}
+					}
+					filtered := make([]schemas.Key, 0, len(keys))
+					for _, key := range keys {
+						if _, ok := set[key.ID]; ok {
+							filtered = append(filtered, key)
+						}
+					}
+					keys = filtered
+				}
+			}
+		}
+	}
+
+	return keys, nil
 }
 
 // GetConfigForProvider returns the complete configuration for a specific provider.

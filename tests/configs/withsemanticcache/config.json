@@ -1,0 +1,27 @@
+{
+  "$schema": "https://www.getbifrost.ai/schema",
+  "vector_store": {
+    "enabled": true,
+    "type": "redis_cluster",
+    "config": {
+      "addrs": [
+        "localhost:7000",
+        "localhost:7001",
+        "localhost:7002"
+      ]
+    }
+  },
+  "plugins": [
+    {
+      "enabled": true,
+      "name": "semantic_cache",
+      "config": {
+        "cache_key": "bifrost-cckey",
+        "cache_ttl_key": "bifrost-cc-ttl",        
+        "prefix": "bifrost-cc-",
+        "cache_by_model": true,
+        "cache_by_provider": true
+      }
+    }
+  ]
+}

@@ -1,109 +1,98 @@
-'use client'
+"use client";
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { useState, useEffect } from 'react'
-import { toast } from 'sonner'
-import { apiService } from '@/lib/api'
-import { VirtualKey, Team, Customer } from '@/lib/types/governance'
-import VirtualKeysTable from '@/components/governance/virtual-keys-table'
-import TeamsTable from '@/components/governance/teams-table'
-import CustomersTable from '@/components/governance/customers-table'
-import FullPageLoader from '@/components/full-page-loader'
+import FullPageLoader from "@/components/full-page-loader";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getErrorMessage, useGetCoreConfigQuery, useGetCustomersQuery, useGetTeamsQuery, useGetVirtualKeysQuery } from "@/lib/store";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import CustomersTable from "./views/customers-table";
+import TeamsTable from "./views/teams-table";
+import VirtualKeysTable from "./views/virtual-keys-table";
+
 export default function GovernancePage() {
-  const [activeTab, setActiveTab] = useState('virtual-keys')
-  const [virtualKeys, setVirtualKeys] = useState<VirtualKey[]>([])
-  const [teams, setTeams] = useState<Team[]>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [loading, setLoading] = useState(true)
+	const [activeTab, setActiveTab] = useState("virtual-keys");
 
-  const fetchData = async () => {
-    setLoading(true)
-    try {
-      const [vkResult, teamsResult, customersResult, coreConfigResult] = await Promise.all([
-        apiService.getVirtualKeys(),
-        apiService.getTeams(),
-        apiService.getCustomers(),
-        apiService.getCoreConfig(true),
-      ])
+	// Fetch all data with RTK Query
+	const { data: virtualKeysData, error: vkError, isLoading: vkLoading, refetch: refetchVirtualKeys } = useGetVirtualKeysQuery();
+	const { data: teamsData, error: teamsError, isLoading: teamsLoading, refetch: refetchTeams } = useGetTeamsQuery({});
+	const { data: customersData, error: customersError, isLoading: customersLoading, refetch: refetchCustomers } = useGetCustomersQuery();
+	const { data: coreConfig, error: configError, isLoading: configLoading } = useGetCoreConfigQuery({ fromDB: true });
 
-      if (coreConfigResult[1]) {
-        toast.error(`Failed to load core config: ${coreConfigResult[1]}`)
-        return
-      } else if (coreConfigResult[0]) {
-        const config = coreConfigResult[0]
-        if (!config.enable_governance) {
-          toast.error('Governance is not enabled. Please enable it in the core settings.')
-          return
-        }
-      }
+	const isLoading = vkLoading || teamsLoading || customersLoading || configLoading;
 
-      if (vkResult[1]) {
-        toast.error(`Failed to load virtual keys: ${vkResult[1]}`)
-        return
-      } else if (vkResult[0]) {
-        setVirtualKeys(vkResult[0].virtual_keys)
-      }
+	// Handle errors
+	useEffect(() => {
+		if (configError) {
+			toast.error(`Failed to load core config: ${getErrorMessage(configError)}`);
+			return;
+		}
 
-      if (teamsResult[1]) {
-        toast.error(`Failed to load teams: ${teamsResult[1]}`)
-        return
-      } else if (teamsResult[0]) {
-        setTeams(teamsResult[0].teams)
-      }
+		if (coreConfig && !coreConfig.client_config.enable_governance) {
+			toast.error("Governance is not enabled. Please enable it in the core settings.");
+			return;
+		}
 
-      if (customersResult[1]) {
-        toast.error(`Failed to load customers: ${customersResult[1]}`)
-        return
-      } else if (customersResult[0]) {
-        setCustomers(customersResult[0].customers)
-      }
+		if (vkError) {
+			toast.error(`Failed to load virtual keys: ${getErrorMessage(vkError)}`);
+		}
 
-      setLoading(false)
-    } catch (error) {
-      toast.error('Failed to load governance data')
-    }
-  }
+		if (teamsError) {
+			toast.error(`Failed to load teams: ${getErrorMessage(teamsError)}`);
+		}
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+		if (customersError) {
+			toast.error(`Failed to load customers: ${getErrorMessage(customersError)}`);
+		}
+	}, [configError, coreConfig, vkError, teamsError, customersError]);
 
-  const handleRefresh = () => {
-    fetchData()
-  }
+	const handleRefresh = () => {
+		refetchVirtualKeys();
+		refetchTeams();
+		refetchCustomers();
+	};
 
-  return loading ? (
-    <FullPageLoader />
-  ) : (
-    <div className="">
-      <div>
-        <h1 className="mb-2 text-3xl font-bold">Governance</h1>
-        <p className="text-muted-foreground">Manage virtual keys, teams, customers, budgets, and rate limits</p>
-      </div>
+	if (isLoading) {
+		return <FullPageLoader />;
+	}
 
-      <div className="mt-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-4 grid h-12 w-full grid-cols-3">
-            {['virtual-keys', 'teams', 'customers'].map((tab) => (
-              <TabsTrigger key={tab} value={tab} className="flex items-center gap-2 capitalize transition-all duration-200 ease-in-out">
-                {tab.replace('-', ' ')}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+	return (
+		<div className="">
+			<Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+				<TabsList className="mb-4 grid h-12 w-full grid-cols-3">
+					{["virtual-keys", "teams", "customers"].map((tab) => (
+						<TabsTrigger key={tab} value={tab} className="flex items-center gap-2 capitalize transition-all duration-200 ease-in-out">
+							{tab.replace("-", " ")}
+						</TabsTrigger>
+					))}
+				</TabsList>
 
-          <div className="">
-            <TabsContent value="virtual-keys" className="mt-0">
-              <VirtualKeysTable virtualKeys={virtualKeys} teams={teams} customers={customers} onRefresh={handleRefresh} />
-            </TabsContent>
-            <TabsContent value="teams" className="mt-0">
-              <TeamsTable teams={teams} customers={customers} virtualKeys={virtualKeys} onRefresh={handleRefresh} />
-            </TabsContent>
-            <TabsContent value="customers" className="mt-0">
-              <CustomersTable customers={customers} teams={teams} virtualKeys={virtualKeys} onRefresh={handleRefresh} />
-            </TabsContent>
-          </div>
-        </Tabs>
-      </div>
-    </div>
-  )
+				<div className="">
+					<TabsContent value="virtual-keys" className="mt-0">
+						<VirtualKeysTable
+							virtualKeys={virtualKeysData?.virtual_keys || []}
+							teams={teamsData?.teams || []}
+							customers={customersData?.customers || []}
+							onRefresh={handleRefresh}
+						/>
+					</TabsContent>
+					<TabsContent value="teams" className="mt-0">
+						<TeamsTable
+							teams={teamsData?.teams || []}
+							customers={customersData?.customers || []}
+							virtualKeys={virtualKeysData?.virtual_keys || []}
+							onRefresh={handleRefresh}
+						/>
+					</TabsContent>
+					<TabsContent value="customers" className="mt-0">
+						<CustomersTable
+							customers={customersData?.customers || []}
+							teams={teamsData?.teams || []}
+							virtualKeys={virtualKeysData?.virtual_keys || []}
+							onRefresh={handleRefresh}
+						/>
+					</TabsContent>
+				</div>
+			</Tabs>
+		</div>
+	);
 }
