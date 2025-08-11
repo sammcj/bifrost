@@ -21,9 +21,10 @@ type MCPClientConfig struct {
 type MCPConnectionType string
 
 const (
-	MCPConnectionTypeHTTP  MCPConnectionType = "http"  // HTTP-based MCP connection (streamable)
-	MCPConnectionTypeSTDIO MCPConnectionType = "stdio" // STDIO-based MCP connection
-	MCPConnectionTypeSSE   MCPConnectionType = "sse"   // Server-Sent Events MCP connection
+	MCPConnectionTypeHTTP      MCPConnectionType = "http"      // HTTP-based MCP connection (streamable)
+	MCPConnectionTypeSTDIO     MCPConnectionType = "stdio"     // STDIO-based MCP connection
+	MCPConnectionTypeSSE       MCPConnectionType = "sse"       // Server-Sent Events MCP connection
+	MCPConnectionTypeInProcess MCPConnectionType = "inprocess" // In-process (in-memory) MCP connection
 )
 
 // MCPStdioConfig defines how to launch a STDIO-based MCP server.
