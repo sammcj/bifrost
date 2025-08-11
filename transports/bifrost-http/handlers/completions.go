@@ -24,15 +24,17 @@ import (
 
 // CompletionHandler manages HTTP requests for completion operations
 type CompletionHandler struct {
-	client *bifrost.Bifrost
-	logger schemas.Logger
+	client       *bifrost.Bifrost
+	handlerStore lib.HandlerStore
+	logger       schemas.Logger
 }
 
 // NewCompletionHandler creates a new completion handler instance
-func NewCompletionHandler(client *bifrost.Bifrost, logger schemas.Logger) *CompletionHandler {
+func NewCompletionHandler(client *bifrost.Bifrost, handlerStore lib.HandlerStore, logger schemas.Logger) *CompletionHandler {
 	return &CompletionHandler{
-		client: client,
-		logger: logger,
+		client:       client,
+		handlerStore: handlerStore,
+		logger:       logger,
 	}
 }
 
@@ -372,7 +374,7 @@ func (h *CompletionHandler) TranscriptionCompletion(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Convert context
-	bifrostCtx := lib.ConvertToBifrostContext(ctx)
+	bifrostCtx := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys())
 	if bifrostCtx == nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context", h.logger)
 		return
@@ -491,7 +493,7 @@ func (h *CompletionHandler) handleRequest(ctx *fasthttp.RequestCtx, completionTy
 	}
 
 	// Convert context
-	bifrostCtx := lib.ConvertToBifrostContext(ctx)
+	bifrostCtx := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys())
 	if bifrostCtx == nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context", h.logger)
 		return

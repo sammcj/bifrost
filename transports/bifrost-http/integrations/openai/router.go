@@ -8,6 +8,7 @@ import (
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
+	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 )
 
@@ -18,7 +19,7 @@ type OpenAIRouter struct {
 }
 
 // NewOpenAIRouter creates a new OpenAIRouter with the given bifrost client.
-func NewOpenAIRouter(client *bifrost.Bifrost) *OpenAIRouter {
+func NewOpenAIRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *OpenAIRouter {
 	var routes []integrations.RouteConfig
 
 	// Chat completions endpoint
@@ -156,7 +157,7 @@ func NewOpenAIRouter(client *bifrost.Bifrost) *OpenAIRouter {
 	}
 
 	return &OpenAIRouter{
-		GenericRouter: integrations.NewGenericRouter(client, routes),
+		GenericRouter: integrations.NewGenericRouter(client, handlerStore, routes),
 	}
 }
 
