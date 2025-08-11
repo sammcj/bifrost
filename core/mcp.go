@@ -65,7 +65,7 @@ type MCPClient struct {
 
 // MCPClientConnectionInfo stores metadata about how a client is connected.
 type MCPClientConnectionInfo struct {
-	Type               schemas.MCPConnectionType `json:"type"`                           // Connection type (HTTP, STDIO, or SSE)
+	Type               schemas.MCPConnectionType `json:"type"`                           // Connection type (HTTP, STDIO, SSE, or InProcess)
 	ConnectionURL      *string                   `json:"connection_url,omitempty"`       // HTTP/SSE endpoint URL (for HTTP/SSE connections)
 	StdioCommandString *string                   `json:"stdio_command_string,omitempty"` // Command string for display (for STDIO connections)
 }
