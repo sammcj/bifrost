@@ -115,20 +115,23 @@ def pytest_sessionfinish(session, exitstatus):
 
     for result in results["passed"] + results["failed"] + results["skipped"]:
         integration = result.get("integration", "unknown")
-        if integration not in integration_results:
+        if integration and integration not in integration_results:
             integration_results[integration] = {"passed": 0, "failed": 0, "skipped": 0}
 
     for result in results["passed"]:
         integration = result.get("integration", "unknown")
-        integration_results[integration]["passed"] += 1
+        if integration and integration in integration_results:
+            integration_results[integration]["passed"] += 1
 
     for result in results["failed"]:
         integration = result.get("integration", "unknown")
-        integration_results[integration]["failed"] += 1
+        if integration and integration in integration_results:
+            integration_results[integration]["failed"] += 1
 
     for result in results["skipped"]:
         integration = result.get("integration", "unknown")
-        integration_results[integration]["skipped"] += 1
+        if integration and integration in integration_results:
+            integration_results[integration]["skipped"] += 1
 
     # Print summary by integration
     for integration, counts in integration_results.items():
