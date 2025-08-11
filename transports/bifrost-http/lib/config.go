@@ -6,6 +6,14 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
+// HandlerStore provides access to runtime configuration values for handlers.
+// This interface allows handlers to access only the configuration they need
+// without depending on the entire ConfigStore, improving testability and decoupling.
+type HandlerStore interface {
+	// ShouldAllowDirectKeys returns whether direct API keys in headers are allowed
+	ShouldAllowDirectKeys() bool
+}
+
 // ClientConfig represents the core configuration for Bifrost HTTP transport and the Bifrost Client.
 // It includes settings for excess request handling, Prometheus metrics, and initial pool size.
 type ClientConfig struct {
@@ -15,6 +23,8 @@ type ClientConfig struct {
 	EnableLogging           bool     `json:"enable_logging"`            // Enable logging of requests and responses
 	EnableGovernance        bool     `json:"enable_governance"`         // Enable governance on all requests
 	EnforceGovernanceHeader bool     `json:"enforce_governance_header"` // Enforce governance on all requests
+	AllowDirectKeys         bool     `json:"allow_direct_keys"`         // Allow direct keys to be used for requests
+	EnableCaching           bool     `json:"enable_caching"`            // Enable Redis caching plugin
 	AllowedOrigins          []string `json:"allowed_origins,omitempty"` // Additional allowed origins for CORS and WebSocket (localhost is always allowed)
 }
 

@@ -656,6 +656,7 @@ type BifrostResponseExtraFields struct {
 	Latency     *float64          `json:"latency,omitempty"`
 	ChatHistory *[]BifrostMessage `json:"chat_history,omitempty"`
 	BilledUsage *BilledLLMUsage   `json:"billed_usage,omitempty"`
+	ChunkIndex  int               `json:"chunk_index"` // used for streaming responses to identify the chunk index, will be 0 for non-streaming responses
 	RawResponse interface{}       `json:"raw_response"`
 }
 

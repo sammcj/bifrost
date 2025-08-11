@@ -8,10 +8,14 @@ package lib
 
 import (
 	"context"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/plugins/maxim"
+	"github.com/maximhq/bifrost/plugins/redis"
 	"github.com/maximhq/bifrost/transports/bifrost-http/plugins/logging"
 	"github.com/maximhq/bifrost/transports/bifrost-http/plugins/telemetry"
 	"github.com/valyala/fasthttp"
@@ -20,7 +24,7 @@ import (
 // ConvertToBifrostContext converts a FastHTTP RequestCtx to a Bifrost context,
 // preserving important header values for monitoring and tracing purposes.
 //
-// The function processes two types of special headers:
+// The function processes several types of special headers:
 // 1. Prometheus Headers (x-bf-prom-*):
 //   - All headers prefixed with 'x-bf-prom-' are copied to the context
 //   - The prefix is stripped and the remainder becomes the context key
@@ -42,6 +46,12 @@ import (
 //   - x-bf-user: User identifier for user-based governance rules
 //   - x-bf-customer: Customer identifier for customer-based governance rules
 //
+// 5. API Key Headers:
+//   - Authorization: Bearer token format only (e.g., "Bearer sk-...") - OpenAI style
+//   - x-api-key: Direct API key value - Anthropic style
+//   - Keys are extracted and stored in the context using schemas.BifrostContextKey
+//   - This enables explicit key usage for requests via headers
+//
 
 // Parameters:
 //   - ctx: The FastHTTP request context containing the original headers
@@ -57,7 +67,7 @@ import (
 
 type ContextKey string
 
-func ConvertToBifrostContext(ctx *fasthttp.RequestCtx) *context.Context {
+func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *context.Context {
 	bifrostCtx := context.Background()
 
 	// First, check if x-request-id header exists
@@ -110,7 +120,72 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx) *context.Context {
 		if keyStr == "x-bf-vk" {
 			bifrostCtx = context.WithValue(bifrostCtx, ContextKey(keyStr), string(value))
 		}
+
+		// Handle cache key header (x-bf-cache-key)
+		if keyStr == "x-bf-cache-key" {
+			bifrostCtx = context.WithValue(bifrostCtx, redis.ContextKey("request-cache-key"), string(value))
+		}
+
+		// Handle cache TTL header (x-bf-cache-ttl)
+		if keyStr == "x-bf-cache-ttl" {
+			valueStr := string(value)
+			var ttlDuration time.Duration
+			var err error
+
+			// First try to parse as duration (e.g., "30s", "5m", "1h")
+			if ttlDuration, err = time.ParseDuration(valueStr); err != nil {
+				// If that fails, try to parse as plain number and treat as seconds
+				if seconds, parseErr := strconv.Atoi(valueStr); parseErr == nil && seconds > 0 {
+					ttlDuration = time.Duration(seconds) * time.Second
+					err = nil // Reset error since we successfully parsed as seconds
+				}
+			}
+
+			if err == nil {
+				bifrostCtx = context.WithValue(bifrostCtx, redis.ContextKey("request-cache-ttl"), ttlDuration)
+			}
+			// If both parsing attempts fail, we silently ignore the header and use default TTL
+		}
 	})
+
+	if allowDirectKeys {
+		// Extract API key from Authorization header (Bearer format) or x-api-key header
+		var apiKey string
+
+		// TODO: fix plugin data leak
+		// Check Authorization header (Bearer format only - OpenAI style)
+		authHeader := string(ctx.Request.Header.Peek("Authorization"))
+		if authHeader != "" {
+			// Only accept Bearer token format: "Bearer ..."
+			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+				authHeaderValue := strings.TrimSpace(authHeader[7:]) // Remove "Bearer " prefix
+				if authHeaderValue != "" {
+					apiKey = authHeaderValue
+				}
+			} else {
+				apiKey = authHeader
+			}
+		}
+
+		// Check x-api-key header if no valid Authorization header found (Anthropic style)
+		if apiKey == "" {
+			xApiKey := string(ctx.Request.Header.Peek("x-api-key"))
+			if xApiKey != "" {
+				apiKey = strings.TrimSpace(xApiKey)
+			}
+		}
+
+		// If we found an API key, create a Key object and store it in context
+		if apiKey != "" {
+			key := schemas.Key{
+				ID:     "header-provided", // Identifier for header-provided keys
+				Value:  apiKey,
+				Models: []string{}, // Empty models list - will be validated by provider
+				Weight: 1.0,        // Default weight
+			}
+			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey, key)
+		}
+	}
 
 	return &bifrostCtx
 }

@@ -5,11 +5,25 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/transports/bifrost-http/integrations"
+	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 )
+
+// setAzureModelName sets the model name for Azure requests with proper prefix handling
+// When deploymentID is present, it always takes precedence over the request body model
+// to avoid deployment/model mismatches.
+func setAzureModelName(currentModel, deploymentID string) string {
+	if deploymentID != "" {
+		return "azure/" + deploymentID
+	} else if currentModel != "" && !strings.HasPrefix(currentModel, "azure/") {
+		return "azure/" + currentModel
+	}
+	return currentModel
+}
 
 // OpenAIRouter holds route registrations for OpenAI endpoints.
 // It supports standard chat completions, speech synthesis, audio transcription, and streaming capabilities with OpenAI-specific formatting.
@@ -17,24 +31,80 @@ type OpenAIRouter struct {
 	*integrations.GenericRouter
 }
 
-// NewOpenAIRouter creates a new OpenAIRouter with the given bifrost client.
-func NewOpenAIRouter(client *bifrost.Bifrost) *OpenAIRouter {
+func AzureEndpointPreHook(ctx *fasthttp.RequestCtx, req interface{}) error {
+	azureKey := ctx.Request.Header.Peek("authorization")
+	deploymentEndpoint := ctx.Request.Header.Peek("x-bf-azure-endpoint")
+	deploymentID := ctx.UserValue("deployment-id")
+	apiVersion := ctx.QueryArgs().Peek("api-version")
+
+	if deploymentID != nil && azureKey != nil {
+		if deploymentEndpoint == nil {
+			return errors.New("deployment-endpoint is required in header x-bf-azure-endpoint")
+		}
+
+		azureKeyStr := string(azureKey)
+		deploymentEndpointStr := string(deploymentEndpoint)
+		deploymentIDStr, ok := deploymentID.(string)
+		apiVersionStr := string(apiVersion)
+
+		if !ok {
+			return errors.New("deployment_id must be a string")
+		}
+
+		key := schemas.Key{
+			ID:             uuid.New().String(),
+			Models:         []string{},
+			AzureKeyConfig: &schemas.AzureKeyConfig{},
+		}
+
+		if deploymentEndpointStr != "" && deploymentIDStr != "" && azureKeyStr != "" {
+			switch r := req.(type) {
+			case *OpenAIChatRequest:
+				r.Model = setAzureModelName(r.Model, deploymentIDStr)
+			case *OpenAISpeechRequest:
+				r.Model = setAzureModelName(r.Model, deploymentIDStr)
+			case *OpenAITranscriptionRequest:
+				r.Model = setAzureModelName(r.Model, deploymentIDStr)
+			case *OpenAIEmbeddingRequest:
+				r.Model = setAzureModelName(r.Model, deploymentIDStr)
+			}
+
+			key.Value = strings.TrimPrefix(azureKeyStr, "Bearer ")
+			key.AzureKeyConfig.Endpoint = deploymentEndpointStr
+			key.AzureKeyConfig.Deployments = map[string]string{deploymentIDStr: deploymentIDStr}
+		}
+
+		if apiVersionStr != "" {
+			key.AzureKeyConfig.APIVersion = &apiVersionStr
+		}
+
+		ctx.SetUserValue(string(schemas.BifrostContextKey), key)
+
+		return nil
+	}
+
+	return nil
+}
+
+// CreateOpenAIRouteConfigs creates route configurations for OpenAI endpoints.
+func CreateOpenAIRouteConfigs(pathPrefix string) []integrations.RouteConfig {
 	var routes []integrations.RouteConfig
 
 	// Chat completions endpoint
 	for _, path := range []string{
-		"/openai/v1/chat/completions",
-		"/openai/chat/completions",
+		"/v1/chat/completions",
+		"/chat/completions",
+		"/openai/deployments/{deployment-id}/chat/completions",
 	} {
 		routes = append(routes, integrations.RouteConfig{
-			Path:   path,
+			Path:   pathPrefix + path,
 			Method: "POST",
 			GetRequestTypeInstance: func() interface{} {
 				return &OpenAIChatRequest{}
 			},
 			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if openaiReq, ok := req.(*OpenAIChatRequest); ok {
-					return openaiReq.ConvertToBifrostRequest(), nil
+					return openaiReq.ConvertToBifrostRequest(pathPrefix != "/openai"), nil
 				}
 				return nil, errors.New("invalid request type")
 			},
@@ -52,23 +122,25 @@ func NewOpenAIRouter(client *bifrost.Bifrost) *OpenAIRouter {
 					return DeriveOpenAIStreamFromBifrostError(err)
 				},
 			},
+			PreCallback: AzureEndpointPreHook,
 		})
 	}
 
 	// Embeddings endpoint
 	for _, path := range []string{
-		"/openai/v1/embeddings",
-		"/openai/embeddings",
+		"/v1/embeddings",
+		"/embeddings",
+		"/openai/deployments/{deployment-id}/embeddings",
 	} {
 		routes = append(routes, integrations.RouteConfig{
-			Path:   path,
+			Path:   pathPrefix + path,
 			Method: "POST",
 			GetRequestTypeInstance: func() interface{} {
 				return &OpenAIEmbeddingRequest{}
 			},
 			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if embeddingReq, ok := req.(*OpenAIEmbeddingRequest); ok {
-					return embeddingReq.ConvertToBifrostRequest(), nil
+					return embeddingReq.ConvertToBifrostRequest(pathPrefix != "/openai"), nil
 				}
 				return nil, errors.New("invalid embedding request type")
 			},
@@ -78,23 +150,25 @@ func NewOpenAIRouter(client *bifrost.Bifrost) *OpenAIRouter {
 			ErrorConverter: func(err *schemas.BifrostError) interface{} {
 				return DeriveOpenAIErrorFromBifrostError(err)
 			},
+			PreCallback: AzureEndpointPreHook,
 		})
 	}
 
 	// Speech synthesis endpoint
 	for _, path := range []string{
-		"/openai/v1/audio/speech",
-		"/openai/audio/speech",
+		"/v1/audio/speech",
+		"/audio/speech",
+		"/openai/deployments/{deployment-id}/audio/speech",
 	} {
 		routes = append(routes, integrations.RouteConfig{
-			Path:   path,
+			Path:   pathPrefix + path,
 			Method: "POST",
 			GetRequestTypeInstance: func() interface{} {
 				return &OpenAISpeechRequest{}
 			},
 			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if speechReq, ok := req.(*OpenAISpeechRequest); ok {
-					return speechReq.ConvertToBifrostRequest(), nil
+					return speechReq.ConvertToBifrostRequest(pathPrefix != "/openai"), nil
 				}
 				return nil, errors.New("invalid speech request type")
 			},
@@ -117,16 +191,18 @@ func NewOpenAIRouter(client *bifrost.Bifrost) *OpenAIRouter {
 					return DeriveOpenAIErrorFromBifrostError(err)
 				},
 			},
+			PreCallback: AzureEndpointPreHook,
 		})
 	}
 
 	// Audio transcription endpoint
 	for _, path := range []string{
-		"/openai/v1/audio/transcriptions",
-		"/openai/audio/transcriptions",
+		"/v1/audio/transcriptions",
+		"/audio/transcriptions",
+		"/openai/deployments/{deployment-id}/audio/transcriptions",
 	} {
 		routes = append(routes, integrations.RouteConfig{
-			Path:   path,
+			Path:   pathPrefix + path,
 			Method: "POST",
 			GetRequestTypeInstance: func() interface{} {
 				return &OpenAITranscriptionRequest{}
@@ -134,7 +210,7 @@ func NewOpenAIRouter(client *bifrost.Bifrost) *OpenAIRouter {
 			RequestParser: parseTranscriptionMultipartRequest, // Handle multipart form parsing
 			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if transcriptionReq, ok := req.(*OpenAITranscriptionRequest); ok {
-					return transcriptionReq.ConvertToBifrostRequest(), nil
+					return transcriptionReq.ConvertToBifrostRequest(pathPrefix != "/openai"), nil
 				}
 				return nil, errors.New("invalid transcription request type")
 			},
@@ -152,11 +228,17 @@ func NewOpenAIRouter(client *bifrost.Bifrost) *OpenAIRouter {
 					return DeriveOpenAIErrorFromBifrostError(err)
 				},
 			},
+			PreCallback: AzureEndpointPreHook,
 		})
 	}
 
+	return routes
+}
+
+// NewOpenAIRouter creates a new OpenAIRouter with the given bifrost client.
+func NewOpenAIRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *OpenAIRouter {
 	return &OpenAIRouter{
-		GenericRouter: integrations.NewGenericRouter(client, routes),
+		GenericRouter: integrations.NewGenericRouter(client, handlerStore, CreateOpenAIRouteConfigs("/openai")),
 	}
 }
 

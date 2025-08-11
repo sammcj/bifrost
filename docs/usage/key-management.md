@@ -22,6 +22,160 @@ Advanced API key management with weighted distribution, automatic rotation, and 
 
 ---
 
+## 🔑 Direct API Key Usage
+
+Bifrost supports providing API keys directly in HTTP headers, bypassing the configured key management system. This is particularly useful for:
+
+- **Per-request API keys** - Different users providing their own keys
+- **Dynamic key injection** - Applications that manage keys externally
+- **Development and testing** - Quick API key testing without configuration
+- **Multi-tenant scenarios** - Different tenants using their own keys
+
+**Supported Headers:**
+
+| Header          | Format             | Style       | Example                        |
+| --------------- | ------------------ | ----------- | ------------------------------ |
+| `Authorization` | `Bearer <api-key>` | OpenAI      | `Authorization: Bearer sk-...` |
+| `x-api-key`     | `<api-key>`        | Anthropic   | `x-api-key: sk-ant-...`        |
+
+**Priority Order:**
+1. `Authorization` header (Bearer format only - OpenAI style)
+2. `x-api-key` header (if Authorization not present - Anthropic style)
+3. Configured key management system (fallback)
+
+**Example Usage:**
+
+<details>
+<summary><strong>🔧 Go Package - Direct Key Usage</strong></summary>
+
+You can provide API keys directly in the context when making requests, bypassing the key management system:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    bifrost "github.com/maximhq/bifrost/core"
+    "github.com/maximhq/bifrost/core/schemas"
+)
+
+func main() {
+    // Initialize Bifrost client
+    client, err := bifrost.Init(schemas.BifrostConfig{
+        // Account can be minimal or empty for direct key usage
+        Account: &YourAccount{},
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Method 1: Set key directly in context
+    ctx := context.Background()
+    key := schemas.Key{
+        ID:     "direct-provided",
+        Value:  "sk-your-openai-key-here",
+        Models: []string{},  // Empty allows all models
+        Weight: 1.0,
+    }
+    ctx = context.WithValue(ctx, schemas.BifrostContextKey, key)
+
+    // Make request with explicit key
+    request := &schemas.BifrostRequest{
+        Provider: schemas.OpenAI,
+        Model:    "gpt-4o-mini",
+        Input: schemas.RequestInput{
+            ChatCompletionInput: &[]schemas.BifrostMessage{
+                {
+                    Role:    schemas.ModelChatMessageRoleUser,
+                    Content: schemas.MessageContent{ContentStr: &[]string{"Hello!"}[0]},
+                },
+            },
+        },
+    }
+
+    response, err := client.ChatCompletionRequest(ctx, request)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Printf("Response: %s\n", *response.Choices[0].Message.Content.ContentStr)
+}
+
+// Minimal account implementation for direct key usage
+type EmptyAccount struct{}
+
+func (a *EmptyAccount) GetKeysForProvider(ctx *context.Context, provider schemas.ModelProvider) ([]schemas.Key, error) {
+    return []schemas.Key{}, fmt.Errorf("no keys configured - use context keys")
+}
+
+func (a *EmptyAccount) GetConfigForProvider(provider schemas.ModelProvider) (schemas.ProviderConfig, error) {
+    return schemas.ProviderConfig{}, nil
+}
+
+func (a *EmptyAccount) GetConfiguredProviders() ([]schemas.ModelProvider, error) {
+    return []schemas.ModelProvider{schemas.OpenAI, schemas.Anthropic}, nil
+}
+```
+
+**Helper function for easier key injection:**
+
+```go
+// Helper function to create context with API key
+func WithAPIKey(ctx context.Context, apiKey string) context.Context {
+    key := schemas.Key{
+        ID:     "context-provided",
+        Value:  apiKey,
+        Models: []string{}, // Empty allows all models
+        Weight: 1.0,
+    }
+    return context.WithValue(ctx, schemas.BifrostContextKey, key)
+}
+
+// Usage
+ctx := WithAPIKey(context.Background(), "sk-your-api-key")
+response, err := client.ChatCompletionRequest(ctx, request)
+```
+
+</details>
+
+<details>
+<summary><strong>🌐 HTTP Transport - Header Usage</strong></summary>
+
+```bash
+# Using Authorization header with Bearer format (OpenAI style)
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-your-openai-key-here" \
+  -d '{
+    "model": "openai/gpt-4o-mini",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+
+# Using x-api-key header (Anthropic style)
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: sk-ant-your-anthropic-key-here" \
+  -d '{
+    "model": "anthropic/claude-3-5-sonnet-20241022",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+</details>
+
+**Key Features:**
+- ✅ **Provider agnostic** - Works with any provider (OpenAI, Anthropic, etc.)
+- ✅ **Fallback support** - Falls back to configured keys if header key fails
+- ✅ **Security** - No key storage in configuration files
+- ✅ **Flexibility** - Mix header keys with configured key management
+
+> **💡 Security Note:** Header-provided keys are used directly without validation against configured key lists. Ensure proper authentication and authorization in your application layer when using this feature.
+
+---
+
 ## ⚡ Basic Key Setup
 
 ### Single Key Configuration

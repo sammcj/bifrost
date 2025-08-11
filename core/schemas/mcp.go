@@ -10,7 +10,7 @@ type MCPConfig struct {
 // MCPClientConfig defines tool filtering for an MCP client.
 type MCPClientConfig struct {
 	Name             string            `json:"name"`                        // Client name
-	ConnectionType   MCPConnectionType `json:"connection_type"`             // How to connect (HTTP, STDIO, or SSE)
+	ConnectionType   MCPConnectionType `json:"connection_type"`             // How to connect (HTTP, STDIO, or SSE). The "inprocess" type is reserved for the local, in-memory client.
 	ConnectionString *string           `json:"connection_string,omitempty"` // HTTP or SSE URL (required for HTTP or SSE connections)
 	StdioConfig      *MCPStdioConfig   `json:"stdio_config,omitempty"`      // STDIO configuration (required for STDIO connections)
 	ToolsToSkip      []string          `json:"tools_to_skip,omitempty"`     // Tools to exclude from this client
@@ -21,9 +21,10 @@ type MCPClientConfig struct {
 type MCPConnectionType string
 
 const (
-	MCPConnectionTypeHTTP  MCPConnectionType = "http"  // HTTP-based MCP connection (streamable)
-	MCPConnectionTypeSTDIO MCPConnectionType = "stdio" // STDIO-based MCP connection
-	MCPConnectionTypeSSE   MCPConnectionType = "sse"   // Server-Sent Events MCP connection
+	MCPConnectionTypeHTTP      MCPConnectionType = "http"      // HTTP-based connection
+	MCPConnectionTypeSTDIO     MCPConnectionType = "stdio"     // STDIO-based connection
+	MCPConnectionTypeSSE       MCPConnectionType = "sse"       // Server-Sent Events connection
+	MCPConnectionTypeInProcess MCPConnectionType = "inprocess" // In-process (in-memory) connection
 )
 
 // MCPStdioConfig defines how to launch a STDIO-based MCP server.

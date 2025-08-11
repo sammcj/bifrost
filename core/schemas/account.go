@@ -42,6 +42,12 @@ type BedrockKeyConfig struct {
 	Deployments  map[string]string `json:"deployments,omitempty"`   // Mapping of model identifiers to inference profiles
 }
 
+type BifrostContext string
+
+const (
+	BifrostContextKey BifrostContext = "bifrost-key"
+)
+
 // Account defines the interface for managing provider accounts and their configurations.
 // It provides methods to access provider-specific settings, API keys, and configurations.
 type Account interface {
