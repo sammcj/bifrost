@@ -14,10 +14,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/plugins/logging"
 	"github.com/maximhq/bifrost/plugins/maxim"
-	"github.com/maximhq/bifrost/plugins/redis"
-	"github.com/maximhq/bifrost/transports/bifrost-http/plugins/logging"
-	"github.com/maximhq/bifrost/transports/bifrost-http/plugins/telemetry"
+	"github.com/maximhq/bifrost/plugins/semanticcache"
+	"github.com/maximhq/bifrost/plugins/telemetry"
 	"github.com/valyala/fasthttp"
 )
 
@@ -123,7 +123,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 
 		// Handle cache key header (x-bf-cache-key)
 		if keyStr == "x-bf-cache-key" {
-			bifrostCtx = context.WithValue(bifrostCtx, redis.ContextKey("request-cache-key"), string(value))
+			bifrostCtx = context.WithValue(bifrostCtx, semanticcache.ContextKey("request-cache-key"), string(value))
 		}
 
 		// Handle cache TTL header (x-bf-cache-ttl)
@@ -142,7 +142,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 			}
 
 			if err == nil {
-				bifrostCtx = context.WithValue(bifrostCtx, redis.ContextKey("request-cache-ttl"), ttlDuration)
+				bifrostCtx = context.WithValue(bifrostCtx, semanticcache.ContextKey("request-cache-ttl"), ttlDuration)
 			}
 			// If both parsing attempts fail, we silently ignore the header and use default TTL
 		}

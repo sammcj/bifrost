@@ -1,10 +1,10 @@
 "use client";
 
-import React from "react";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
+import React from "react";
 
 type OmittedInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">;
 
@@ -66,7 +66,7 @@ export const TagInput = React.forwardRef<HTMLInputElement, TagInputProps>(({ cla
 				onChange={handleInputChange}
 				onKeyDown={handleKeyDown}
 				onBlur={handleBlur}
-				className="flex-1 border-0 shadow-none focus-visible:ring-0"
+				className="min-w-32 flex-1 border-0 shadow-none focus-visible:ring-0"
 				{...props}
 			/>
 		</div>

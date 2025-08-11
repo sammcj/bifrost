@@ -1,35 +1,33 @@
-'use client'
+"use client";
 
-import MCPClientsList from '@/components/config/mcp-clients-lists'
-import FullPageLoader from '@/components/full-page-loader'
-import { useToast } from '@/hooks/use-toast'
-import { apiService } from '@/lib/api'
-import { MCPClient } from '@/lib/types/mcp'
-import { useEffect, useState } from 'react'
+import MCPClientsList from "@/app/config/views/mcp-clients-lists";
+import FullPageLoader from "@/components/full-page-loader";
+import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage, useGetMCPClientsQuery } from "@/lib/store";
+import { useEffect } from "react";
+
 export default function MCPServersPage() {
-  const [mcpClients, setMcpClients] = useState<MCPClient[]>([])
-  const [isLoadingMcpClients, setIsLoadingMcpClients] = useState(true)
-  const { toast } = useToast()
+	const { data: mcpClients, error, isLoading } = useGetMCPClientsQuery();
 
-  useEffect(() => {
-    loadMcpClients()
-  }, [])
+	const { toast } = useToast();
 
-  const loadMcpClients = async () => {
-    const [data, error] = await apiService.getMCPClients()
-    setIsLoadingMcpClients(false)
+	useEffect(() => {
+		if (error) {
+			toast({
+				title: "Error",
+				description: getErrorMessage(error),
+				variant: "destructive",
+			});
+		}
+	}, [error, toast]);
 
-    if (error) {
-      toast({
-        title: 'Error',
-        description: error,
-        variant: 'destructive',
-      })
-      return
-    }
+	if (isLoading) {
+		return <FullPageLoader />;
+	}
 
-    setMcpClients(data || [])
-  }
-
-  return <div>{isLoadingMcpClients ? <FullPageLoader /> : <MCPClientsList mcpClients={mcpClients} />}</div>
+	return (
+		<div>
+			<MCPClientsList mcpClients={mcpClients || []} />
+		</div>
+	);
 }

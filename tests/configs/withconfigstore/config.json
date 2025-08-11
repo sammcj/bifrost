@@ -1,0 +1,10 @@
+{
+  "$schema": "https://www.getbifrost.ai/schema",
+  "config_store": {
+    "enabled": true,
+    "type": "sqlite",
+    "config": {
+      "path": "../../tests/configs/withconfigstore/config.db"
+    }
+  }
+}
