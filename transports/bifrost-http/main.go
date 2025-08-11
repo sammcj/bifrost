@@ -452,11 +452,11 @@ func main() {
 		redisPlugin, err := redis.NewRedisPlugin(pluginConfig, logger)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("failed to initialize Redis plugin: %v", err))
+		} else {
+			loadedPlugins = append(loadedPlugins, redisPlugin)
+
+			cacheHandler = handlers.NewCacheHandler(store, redisPlugin.(*redis.Plugin), logger)
 		}
-
-		loadedPlugins = append(loadedPlugins, redisPlugin)
-
-		cacheHandler = handlers.NewCacheHandler(store, redisPlugin.(*redis.Plugin), logger)
 	}
 
 	loadedPlugins = append(loadedPlugins, promPlugin)
