@@ -696,21 +696,6 @@ func GetProviderFromModel(model string) schemas.ModelProvider {
 		return schemas.Cohere
 	}
 
-	// Groq Models
-	if isGroqModel(modelLower) {
-		return schemas.Groq
-	}
-
-	// SGL Models
-	if isSGLModel(modelLower) {
-		return schemas.SGL
-	}
-
-	// Parasail Models
-	if isParasailModel(modelLower) {
-		return schemas.Parasail
-	}
-
 	// Default to OpenAI for unknown models (most LiteLLM compatible)
 	return schemas.OpenAI
 }
@@ -786,32 +771,6 @@ func isCohereModel(model string) bool {
 	return matchesAnyPattern(model, coherePatterns)
 }
 
-// isGroqModel checks for Groq model patterns
-func isGroqModel(model string) bool {
-	groqPatterns := []string{
-		"groq/", "llama-3", "mixtral-", "gemma-", "groq-",
-	}
-
-	return matchesAnyPattern(model, groqPatterns)
-}
-
-// isSGLModel checks for SGL model patterns
-func isSGLModel(model string) bool {
-	sglPatterns := []string{
-		"sgl/", "sgl-",
-	}
-
-	return matchesAnyPattern(model, sglPatterns)
-}
-
-// isParasailModel checks for Parasail model patterns
-func isParasailModel(model string) bool {
-    parasailPatterns := []string{
-        "parasail-", "parasail/",
-    }
-
-    return matchesAnyPattern(model, parasailPatterns)
-}
 // matchesAnyPattern checks if the model matches any of the given patterns
 func matchesAnyPattern(model string, patterns []string) bool {
 	for _, pattern := range patterns {
