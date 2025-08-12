@@ -641,6 +641,7 @@ var ValidProviders = map[schemas.ModelProvider]bool{
 	schemas.Ollama:    true,
 	schemas.Groq:      true,
 	schemas.SGL:       true,
+	schemas.Parasail:  true,
 }
 
 // ParseModelString extracts provider and model from a model string.
