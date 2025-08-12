@@ -7,7 +7,10 @@
       "https://myapp.example.com",
       "https://staging.myapp.com",
       "https://app.production.com"
-    ]
+    ],
+    "enable_logging": true,
+    "enable_caching": true,
+    "enable_governance": false
   },
   "providers": {
     "openai": {
@@ -172,5 +175,15 @@
         }
       }
     ]
+  },
+  "cache": {
+    "addr": "localhost:6379",
+    "username": "",
+    "password": "env.REDIS_PASSWORD",
+    "db": 0,
+    "ttl_seconds": 300,
+    "prefix": "bifrost:",
+    "cache_by_model": true,
+    "cache_by_provider": true
   }
 }
