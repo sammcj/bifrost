@@ -128,6 +128,10 @@ Provider configuration in `config.json` defines:
 
 ### **AWS Bedrock**
 
+AWS Bedrock supports both explicit credential configuration and IAM role-based authentication.
+
+#### **Explicit Credentials Configuration**
+
 ```json
 {
   "providers": {
@@ -142,7 +146,7 @@ Provider configuration in `config.json` defines:
           ],
           "weight": 1.0,
           "bedrock_key_config": {
-            "access_key": "env.AWS_ACCESS_KEY",
+            "access_key": "env.AWS_ACCESS_KEY_ID",
             "secret_key": "env.AWS_SECRET_ACCESS_KEY",
             "session_token": "env.AWS_SESSION_TOKEN",
             "region": "us-east-1"
@@ -161,6 +165,68 @@ Provider configuration in `config.json` defines:
       }
     }
   }
+}
+```
+
+#### **IAM Role Authentication (Recommended)**
+
+For production environments, use IAM role authentication instead of explicit credentials:
+
+```json
+{
+  "providers": {
+    "bedrock": {
+      "keys": [
+        {
+          "models": [
+            "anthropic.claude-v2:1",
+            "mistral.mixtral-8x7b-instruct-v0:1",
+            "mistral.mistral-large-2402-v1:0",
+            "anthropic.claude-3-sonnet-20240229-v1:0"
+          ],
+          "weight": 1.0,
+          "bedrock_key_config": {
+            "region": "us-east-1"
+            // No access_key or secret_key - uses IAM role automatically
+          }
+        }
+      ],
+      "network_config": {
+        "default_request_timeout_in_seconds": 30,
+        "max_retries": 1,
+        "retry_backoff_initial_ms": 100,
+        "retry_backoff_max_ms": 2000
+      },
+      "concurrency_and_buffer_size": {
+        "concurrency": 3,
+        "buffer_size": 10
+      }
+    }
+  }
+}
+```
+
+**IAM Role Setup:**
+
+1. **EC2/ECS/Lambda**: Attach IAM role with Bedrock permissions
+2. **Local Development**: Use AWS CLI configured profiles or environment variables
+3. **Container Deployments**: Use IAM roles for service accounts (IRSA) on EKS
+
+**Required IAM Policy:**
+
+```json
+{
+  "Version": "2012-10-17", 
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
+      "Resource": "arn:aws:bedrock:*::foundation-model/*"
+    }
+  ]
 }
 ```
 
@@ -436,7 +502,7 @@ For production workloads:
           "models": ["anthropic.claude-3-sonnet-20240229-v1:0"],
           "weight": 1.0
           "bedrock_key_config": {
-            "access_key": "env.AWS_ACCESS_KEY",
+            "access_key": "env.AWS_ACCESS_KEY_ID",
             "secret_key": "env.AWS_SECRET_ACCESS_KEY",
             "session_token": "env.AWS_SESSION_TOKEN",
             "region": "us-east-1"
@@ -480,9 +546,11 @@ export OPENAI_API_KEY="sk-..."
 # Anthropic
 export ANTHROPIC_API_KEY="sk-ant-..."
 
-# AWS Bedrock
-export AWS_ACCESS_KEY="your-access-key"
-export AWS_SECRET_KEY="your-secret-key"
+# AWS Bedrock (Optional - only needed for explicit credentials)
+export AWS_ACCESS_KEY_ID="your-access-key"        # Optional: omit for IAM role auth
+export AWS_SECRET_ACCESS_KEY="your-secret-key"        # Optional: omit for IAM role auth
+export AWS_SESSION_TOKEN="your-session-token"  # Optional: only for temporary credentials
+export AWS_REGION="us-east-1"                  # Required: AWS region
 
 # Azure OpenAI
 export AZURE_API_KEY="your-azure-key"
@@ -502,14 +570,23 @@ export MISTRAL_API_KEY="your-mistral-key"
 ### **Docker Environment**
 
 ```bash
-# With persistent configuration
+# With persistent configuration (explicit AWS credentials)
 docker run -p 8080:8080 \
   -v $(pwd):/app/data \
   -e OPENAI_API_KEY \
   -e ANTHROPIC_API_KEY \
-  -e AWS_ACCESS_KEY \
+  -e AWS_ACCESS_KEY_ID \
   -e AWS_SECRET_ACCESS_KEY \
   -e AWS_SESSION_TOKEN \
+  -e AWS_REGION \
+  maximhq/bifrost
+
+# With IAM role authentication (no AWS credentials needed)
+docker run -p 8080:8080 \
+  -v $(pwd):/app/data \
+  -e OPENAI_API_KEY \
+  -e ANTHROPIC_API_KEY \
+  -e AWS_REGION \
   maximhq/bifrost
 
 # Legacy: Direct config.json mount
@@ -517,9 +594,10 @@ docker run -p 8080:8080 \
   -v $(pwd)/config.json:/app/config/config.json \
   -e OPENAI_API_KEY \
   -e ANTHROPIC_API_KEY \
-  -e AWS_ACCESS_KEY \
+  -e AWS_ACCESS_KEY_ID \
   -e AWS_SECRET_ACCESS_KEY \
   -e AWS_SESSION_TOKEN \
+  -e AWS_REGION \
   maximhq/bifrost
 ```
 

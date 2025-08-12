@@ -74,17 +74,17 @@
     "bedrock": {
       "keys": [
         {
-          "value": "env.BEDROCK_API_KEY",
-          "models": [
-            "anthropic.claude-v2:1",
-            "mistral.mixtral-8x7b-instruct-v0:1",
-            "mistral.mistral-large-2402-v1:0",
-            "anthropic.claude-3-sonnet-20240229-v1:0"
-          ],
+          "value": "",
+          "models": [],
           "weight": 1.0,
           "bedrock_key_config": {
-            "access_key": "env.AWS_ACCESS_KEY_ID",
+            "access_key": "env.AWS_ACCESS_KEY_ID_ID",
             "secret_key": "env.AWS_SECRET_ACCESS_KEY",
+            "session_token": "env.AWS_SESSION_TOKEN",
+            "deployments": {
+              "gpt-4o": "gpt-4o-deployment-id"
+            },
+            "arn": "your-arn",
             "region": "us-east-1"
           }
         }
