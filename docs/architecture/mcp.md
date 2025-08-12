@@ -69,10 +69,15 @@ graph TB
 
 ### **Multi-Protocol Connection System**
 
-Bifrost supports three MCP connection types, each optimized for different tool deployment patterns:
+Bifrost supports four MCP connection types, each optimized for different tool deployment patterns:
 
 ```mermaid
 graph TB
+    subgraph "InProcess Connections"
+        InProcess[In-Memory Tools<br/>Same Process]
+        InProcessEx[Examples:<br/>• Embedded tools<br/>• High-perf operations<br/>• Testing tools]
+    end
+
     subgraph "STDIO Connections"
         STDIO[Command Line Tools<br/>Local Execution]
         STDIOEx[Examples:<br/>• Filesystem tools<br/>• Local scripts<br/>• CLI utilities]
@@ -89,12 +94,13 @@ graph TB
     end
 
     subgraph "Connection Characteristics"
-        Latency[Latency:<br/>STDIO < HTTP < SSE]
-        Security[Security:<br/>Local > HTTP > SSE]
-        Scalability[Scalability:<br/>HTTP > SSE > STDIO]
-        Complexity[Complexity:<br/>STDIO < HTTP < SSE]
+        Latency[Latency:<br/>InProcess < STDIO < HTTP < SSE]
+        Security[Security:<br/>InProcess/Local > HTTP > SSE]
+        Scalability[Scalability:<br/>HTTP > SSE > STDIO > InProcess]
+        Complexity[Complexity:<br/>InProcess < STDIO < HTTP < SSE]
     end
 
+    InProcess --> Latency
     STDIO --> Latency
     HTTP --> Security
     SSE --> Scalability
@@ -103,11 +109,18 @@ graph TB
 
 ### **Connection Type Details**
 
+**InProcess Connections (In-Memory Tools):**
+
+- **Use Case:** Embedded tools, high-performance operations, testing
+- **Performance:** Lowest possible latency (~0.1ms) with no IPC overhead
+- **Security:** Highest security as tools run in the same process
+- **Limitations:** Go package only, cannot be configured via JSON
+
 **STDIO Connections (Local Tools):**
 
 - **Use Case:** Command-line tools, local scripts, filesystem operations
-- **Performance:** Lowest latency (~1-10ms) due to local execution
-- **Security:** Highest security with full local control
+- **Performance:** Low latency (~1-10ms) due to local execution
+- **Security:** High security with full local control
 - **Limitations:** Single-server deployment, resource sharing
 
 **HTTP Connections (Remote Services):**

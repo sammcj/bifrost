@@ -626,6 +626,8 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 		externalClient, connectionInfo, err = m.createSTDIOConnection(config)
 	case schemas.MCPConnectionTypeSSE:
 		externalClient, connectionInfo, err = m.createSSEConnection(config)
+	case schemas.MCPConnectionTypeInProcess:
+		externalClient, connectionInfo, err = m.createInProcessConnection(config)
 	default:
 		return fmt.Errorf("unknown connection type: %s", config.ConnectionType)
 	}
@@ -921,6 +923,12 @@ func validateMCPClientConfig(config *schemas.MCPClientConfig) error {
 		if config.StdioConfig == nil {
 			return fmt.Errorf("StdioConfig is required for STDIO connection type in client '%s'", config.Name)
 		}
+	case schemas.MCPConnectionTypeInProcess:
+		// InProcess requires a server instance to be provided programmatically
+		// This cannot be validated from JSON config - the server must be set when using the Go package
+		if config.InProcessServer == nil {
+			return fmt.Errorf("InProcessServer is required for InProcess connection type in client '%s' (Go package only)", config.Name)
+		}
 	default:
 		return fmt.Errorf("unknown connection type '%s' in client '%s'", config.ConnectionType, config.Name)
 	}
@@ -1059,6 +1067,34 @@ func (m *MCPManager) createSSEConnection(config schemas.MCPClientConfig) (*clien
 	client := client.NewClient(sseTransport)
 
 	return client, connectionInfo, nil
+}
+
+// createInProcessConnection creates an in-process MCP client connection without holding locks.
+// This allows direct connection to an MCP server running in the same process, providing
+// the lowest latency and highest performance for tool execution.
+func (m *MCPManager) createInProcessConnection(config schemas.MCPClientConfig) (*client.Client, MCPClientConnectionInfo, error) {
+	if config.InProcessServer == nil {
+		return nil, MCPClientConnectionInfo{}, fmt.Errorf("InProcess connection requires a server instance")
+	}
+
+	// Type assert to ensure we have a proper MCP server
+	mcpServer, ok := config.InProcessServer.(*server.MCPServer)
+	if !ok {
+		return nil, MCPClientConnectionInfo{}, fmt.Errorf("InProcessServer must be a *server.MCPServer instance")
+	}
+
+	// Create in-process client directly connected to the provided server
+	inProcessClient, err := client.NewInProcessClient(mcpServer)
+	if err != nil {
+		return nil, MCPClientConnectionInfo{}, fmt.Errorf("failed to create in-process client: %w", err)
+	}
+
+	// Prepare connection info
+	connectionInfo := MCPClientConnectionInfo{
+		Type: config.ConnectionType,
+	}
+
+	return inProcessClient, connectionInfo, nil
 }
 
 // cleanup performs cleanup of all MCP resources including clients and local server.
