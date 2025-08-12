@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -15,26 +14,26 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// ollamaResponsePool provides a pool for Ollama response objects.
-var ollamaResponsePool = sync.Pool{
-	New: func() interface{} {
-		return &schemas.BifrostResponse{}
-	},
-}
+// // ollamaResponsePool provides a pool for Ollama response objects.
+// var ollamaResponsePool = sync.Pool{
+// 	New: func() interface{} {
+// 		return &schemas.BifrostResponse{}
+// 	},
+// }
 
-// acquireOllamaResponse gets a Ollama response from the pool and resets it.
-func acquireOllamaResponse() *schemas.BifrostResponse {
-	resp := ollamaResponsePool.Get().(*schemas.BifrostResponse)
-	*resp = schemas.BifrostResponse{} // Reset the struct
-	return resp
-}
+// // acquireOllamaResponse gets a Ollama response from the pool and resets it.
+// func acquireOllamaResponse() *schemas.BifrostResponse {
+// 	resp := ollamaResponsePool.Get().(*schemas.BifrostResponse)
+// 	*resp = schemas.BifrostResponse{} // Reset the struct
+// 	return resp
+// }
 
-// releaseOllamaResponse returns a Ollama response to the pool.
-func releaseOllamaResponse(resp *schemas.BifrostResponse) {
-	if resp != nil {
-		ollamaResponsePool.Put(resp)
-	}
-}
+// // releaseOllamaResponse returns a Ollama response to the pool.
+// func releaseOllamaResponse(resp *schemas.BifrostResponse) {
+// 	if resp != nil {
+// 		ollamaResponsePool.Put(resp)
+// 	}
+// }
 
 // OllamaProvider implements the Provider interface for Ollama's API.
 type OllamaProvider struct {
@@ -62,10 +61,10 @@ func NewOllamaProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*
 		Timeout: time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
 	}
 
-	// Pre-warm response pools
-	for range config.ConcurrencyAndBufferSize.Concurrency {
-		ollamaResponsePool.Put(&schemas.BifrostResponse{})
-	}
+	// // Pre-warm response pools
+	// for range config.ConcurrencyAndBufferSize.Concurrency {
+	// 	ollamaResponsePool.Put(&schemas.BifrostResponse{})
+	// }
 
 	// Configure proxy if provided
 	client = configureProxy(client, config.ProxyConfig, logger)
@@ -147,8 +146,9 @@ func (provider *OllamaProvider) ChatCompletion(ctx context.Context, model string
 	responseBody := resp.Body()
 
 	// Pre-allocate response structs from pools
-	response := acquireOllamaResponse()
-	defer releaseOllamaResponse(response)
+	// response := acquireOllamaResponse()
+	// defer releaseOllamaResponse(response)
+	response := &schemas.BifrostResponse{}
 
 	// Use enhanced response handler with pre-allocated response
 	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)

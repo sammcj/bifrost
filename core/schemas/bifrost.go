@@ -49,6 +49,7 @@ const (
 	Groq      ModelProvider = "groq"
 	SGL       ModelProvider = "sgl"
 	Parasail  ModelProvider = "parasail"
+	Cerebras  ModelProvider = "cerebras"
 )
 
 //* Request Structs

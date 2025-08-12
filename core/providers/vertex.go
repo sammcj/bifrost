@@ -66,7 +66,7 @@ func NewVertexProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*
 
 	// Pre-warm response pools
 	for range config.ConcurrencyAndBufferSize.Concurrency {
-		openAIResponsePool.Put(&schemas.BifrostResponse{})
+		// openAIResponsePool.Put(&schemas.BifrostResponse{})
 		anthropicChatResponsePool.Put(&AnthropicChatResponse{})
 
 	}
@@ -276,8 +276,11 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, model string
 		}
 
 		bifrostResponse.ExtraFields = schemas.BifrostResponseExtraFields{
-			Provider:    schemas.Vertex,
-			RawResponse: rawResponse,
+			Provider: schemas.Vertex,
+		}
+
+		if provider.sendBackRawResponse {
+			bifrostResponse.ExtraFields.RawResponse = rawResponse
 		}
 
 		if params != nil {
@@ -287,8 +290,9 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, model string
 		return bifrostResponse, nil
 	} else {
 		// Pre-allocate response structs from pools
-		response := acquireOpenAIResponse()
-		defer releaseOpenAIResponse(response)
+		// response := acquireOpenAIResponse()
+		response := &schemas.BifrostResponse{}
+		// defer releaseOpenAIResponse(response)
 
 		// Use enhanced response handler with pre-allocated response
 		rawResponse, bifrostErr := handleProviderResponse(body, response, provider.sendBackRawResponse)
@@ -296,27 +300,17 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, model string
 			return nil, bifrostErr
 		}
 
-		// Create final response
-		bifrostResponse := &schemas.BifrostResponse{
-			ID:                response.ID,
-			Object:            response.Object,
-			Choices:           response.Choices,
-			Model:             response.Model,
-			Created:           response.Created,
-			ServiceTier:       response.ServiceTier,
-			SystemFingerprint: response.SystemFingerprint,
-			Usage:             response.Usage,
-			ExtraFields: schemas.BifrostResponseExtraFields{
-				Provider:    schemas.Vertex,
-				RawResponse: rawResponse,
-			},
+		response.ExtraFields.Provider = schemas.Vertex
+
+		if provider.sendBackRawResponse {
+			response.ExtraFields.RawResponse = rawResponse
 		}
 
 		if params != nil {
-			bifrostResponse.ExtraFields.Params = *params
+			response.ExtraFields.Params = *params
 		}
 
-		return bifrostResponse, nil
+		return response, nil
 	}
 }
 

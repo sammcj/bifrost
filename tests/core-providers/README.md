@@ -12,8 +12,10 @@ This directory contains comprehensive tests for all Bifrost AI providers, ensuri
 - **Google Vertex AI** - Google Cloud's AI platform
 - **Mistral** - Mistral AI models with vision capabilities
 - **Ollama** - Local LLM serving platform
-- **Groq** - Groq models
-- **SGLang** - SGLang models
+- **Groq** - OSS models
+- **SGLang** - OSS models
+- **Parasail** - OSS models
+- **Cerebras** - Llama, Qwen and GPT-OSS models
 
 ## 🏃‍♂️ Running Tests
 
