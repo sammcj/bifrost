@@ -48,6 +48,7 @@ const (
 	Ollama    ModelProvider = "ollama"
 	Groq      ModelProvider = "groq"
 	SGL       ModelProvider = "sgl"
+	Parasail  ModelProvider = "parasail"
 )
 
 //* Request Structs

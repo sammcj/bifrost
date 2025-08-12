@@ -301,6 +301,24 @@ export const ProviderIcons = {
     )
   },
 
+  parasail: ({ size = 'md', className = '' }: IconProps) => {
+    const resolvedSize = resolveSize(size)
+    return (
+      <svg
+        width={resolvedSize}
+        height={resolvedSize}
+        viewBox="-25 -25 171 171"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className={className}
+      >
+        <rect x="-25" y="-25" width="171" height="171" fill="#052259"/>
+        <path d="M0.657227 79.7451V79.7451C23.1332 79.7451 41.3537 97.9655 41.3537 120.442V120.442H0.657227V79.7451Z" fill="white"/>
+        <path fillRule="evenodd" clipRule="evenodd" d="M0.657471 38.9629V120.446H0.657583V39.0547C45.6091 39.0547 82.0497 75.4948 82.0504 120.446H82.1392L82.0506 120.269C98.6903 119.271 126.323 108.044 119.469 72.4159C110.372 37.8954 83.1863 10.7164 48.6621 1.62773C13.0537 -5.20823 1.83195 22.4151 0.83379 39.0511L0.657471 38.9629Z" fill="white"/>
+      </svg>
+    )
+  },
+
   sgl: ({ size = 'md', className = '' }: IconProps) => {
     const resolvedSize = resolveSize(size)
 
