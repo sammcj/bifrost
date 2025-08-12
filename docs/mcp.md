@@ -20,7 +20,7 @@ Bifrost's Model Context Protocol integration enables AI models to seamlessly dis
 | -------------------------- | ----------------------------------------------- |
 | **🔍 Dynamic Discovery**   | Tools are discovered at runtime, not hardcoded  |
 | **🛡️ Client-Side Control** | Bifrost manages all tool execution for security |
-| **🌐 Multiple Protocols**  | STDIO, HTTP, and SSE connections supported      |
+| **🌐 Multiple Protocols**  | InProcess, STDIO, HTTP, and SSE connections     |
 | **🎯 Granular Filtering**  | Control tool availability per request           |
 | **⚡ High Performance**    | Async execution with minimal overhead           |
 
@@ -93,11 +93,12 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ## 🔌 Connection Types
 
-| Type      | Use Case                      | Latency           | Security     | Scalability   |
-| --------- | ----------------------------- | ----------------- | ------------ | ------------- |
-| **STDIO** | Local tools, CLI utilities    | Lowest (~1-10ms)  | Highest      | Single server |
-| **HTTP**  | Web APIs, microservices       | Network dependent | Configurable | High          |
-| **SSE**   | Real-time streams, monitoring | Variable          | HTTP-level   | Medium        |
+| Type         | Use Case                          | Latency           | Security     | Scalability   | Availability      |
+| ------------ | --------------------------------- | ----------------- | ------------ | ------------- | ----------------- |
+| **InProcess**| Embedded tools, testing           | Lowest (~0.1ms)   | Highest      | Single process| Go package only   |
+| **STDIO**    | Local tools, CLI utilities        | Low (~1-10ms)     | High         | Single server | All transports    |
+| **HTTP**     | Web APIs, microservices           | Network dependent | Configurable | High          | All transports    |
+| **SSE**      | Real-time streams, monitoring     | Variable          | HTTP-level   | Medium        | All transports    |
 
 ---
 

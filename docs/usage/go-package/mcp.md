@@ -118,6 +118,57 @@ func setupSSEMCP() *schemas.MCPConfig {
 }
 ```
 
+### **InProcess Connection (Go Package Only)**
+
+Connect directly to an MCP server running in the same process for maximum performance:
+
+```go
+import (
+    "github.com/mark3labs/mcp-go/mcp"
+    "github.com/mark3labs/mcp-go/server"
+)
+
+func setupInProcessMCP() *schemas.MCPConfig {
+    // Create your own MCP server
+    myServer := server.NewMCPServer(
+        "MyCustomServer",
+        "1.0.0",
+        server.WithToolCapabilities(true),
+    )
+
+    // Register tools on your server
+    myServer.AddTool(
+        mcp.NewTool("custom_tool", mcp.WithDescription("My custom tool")),
+        func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+            // Your tool implementation
+            args := request.GetArguments()
+            // Process arguments and return result
+            return mcp.NewToolResultText("Tool executed successfully"), nil
+        },
+    )
+
+    return &schemas.MCPConfig{
+        ClientConfigs: []schemas.MCPClientConfig{
+            {
+                Name:            "my-inprocess-server",
+                ConnectionType:  schemas.MCPConnectionTypeInProcess,
+                InProcessServer: myServer, // Pass the server instance directly
+            },
+        },
+    }
+}
+
+// Use with Bifrost
+client, initErr := bifrost.Init(schemas.BifrostConfig{
+    Account:   &MyAccount{},
+    MCPConfig: setupInProcessMCP(),
+})
+```
+
+> **🚀 Performance Note:** InProcess connections have the lowest latency (~0.1ms) since there's no serialization, deserialization, or IPC overhead. This is ideal for high-performance applications where tools need to execute with minimal latency.
+
+> **⚠️ Important:** InProcess connections are only available when using the Go package directly. They cannot be configured via JSON or HTTP transport since server instances cannot be serialized.
+
 ---
 
 ## ⚡ Using MCP Tools
