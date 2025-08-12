@@ -48,3 +48,15 @@ type BifrostHTTPConfig struct {
 	ProviderConfig ConfigMap          `json:"providers"` // Provider configurations
 	MCPConfig      *schemas.MCPConfig `json:"mcp"`       // MCP configuration (optional)
 }
+
+// CacheConfig represents the configuration for the Redis cache.
+type CacheConfig struct {
+	Addr            string `json:"addr"`               // Cache server address (host:port)
+	Username        string `json:"username,omitempty"` // Username for Cache AUTH
+	Password        string `json:"password,omitempty"` // Password for Cache AUTH
+	DB              int    `json:"db"`                 // Cache database number
+	TTLSeconds      int    `json:"ttl_seconds"`        // TTL in seconds (default: 5 minutes)
+	Prefix          string `json:"prefix,omitempty"`   // Cache key prefix
+	CacheByModel    bool   `json:"cache_by_model"`     // Include model in cache key
+	CacheByProvider bool   `json:"cache_by_provider"`  // Include provider in cache key
+}

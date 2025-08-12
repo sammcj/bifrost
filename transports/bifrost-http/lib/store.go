@@ -41,6 +41,7 @@ type ConfigStore struct {
 	ClientConfig ClientConfig
 	Providers    map[schemas.ModelProvider]ProviderConfig
 	MCPConfig    *schemas.MCPConfig
+	CacheConfig  *CacheConfig
 
 	// Track which keys come from environment variables
 	EnvKeys map[string][]EnvKeyInfo
@@ -122,6 +123,7 @@ func (s *ConfigStore) LoadFromConfig(configPath string) error {
 		Client    json.RawMessage            `json:"client"`
 		Providers map[string]json.RawMessage `json:"providers"`
 		MCP       json.RawMessage            `json:"mcp,omitempty"`
+		Cache     json.RawMessage            `json:"cache,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &configData); err != nil {
@@ -230,6 +232,25 @@ func (s *ConfigStore) LoadFromConfig(configPath string) error {
 			// Process environment variables in MCP config
 			s.MCPConfig = &mcpConfig
 			s.processMCPEnvVars()
+		}
+	}
+
+	// Parse Cache config if present
+	if len(configData.Cache) > 0 {
+		var cacheConfig CacheConfig
+		if err := json.Unmarshal(configData.Cache, &cacheConfig); err != nil {
+			s.logger.Warn(fmt.Sprintf("failed to parse Cache config: %v", err))
+		} else {
+			s.UpdateCacheConfig(&DBCacheConfig{
+				Addr:            cacheConfig.Addr,
+				Username:        cacheConfig.Username,
+				Password:        cacheConfig.Password,
+				DB:              cacheConfig.DB,
+				TTLSeconds:      cacheConfig.TTLSeconds,
+				Prefix:          cacheConfig.Prefix,
+				CacheByModel:    cacheConfig.CacheByModel,
+				CacheByProvider: cacheConfig.CacheByProvider,
+			})
 		}
 	}
 
