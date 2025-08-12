@@ -1,6 +1,11 @@
 // Package schemas defines the core schemas and types used by the Bifrost system.
 package schemas
 
+// MCPServerInstance represents an MCP server instance for InProcess connections.
+// This should be a *github.com/mark3labs/mcp-go/server.MCPServer instance.
+// We use interface{} to avoid creating a dependency on the mcp-go package in schemas.
+type MCPServerInstance interface{}
+
 // MCPConfig represents the configuration for MCP integration in Bifrost.
 // It enables tool auto-discovery and execution from local and external MCP servers.
 type MCPConfig struct {
@@ -13,7 +18,7 @@ type MCPClientConfig struct {
 	ConnectionType   MCPConnectionType `json:"connection_type"`             // How to connect (HTTP, STDIO, SSE, or InProcess)
 	ConnectionString *string           `json:"connection_string,omitempty"` // HTTP or SSE URL (required for HTTP or SSE connections)
 	StdioConfig      *MCPStdioConfig   `json:"stdio_config,omitempty"`      // STDIO configuration (required for STDIO connections)
-	InProcessServer  interface{}       `json:"-"`                           // *server.MCPServer instance for in-process connections (Go package only, not serializable)
+	InProcessServer  MCPServerInstance `json:"-"`                           // MCP server instance for in-process connections (Go package only)
 	ToolsToSkip      []string          `json:"tools_to_skip,omitempty"`     // Tools to exclude from this client
 	ToolsToExecute   []string          `json:"tools_to_execute,omitempty"`  // Tools to include from this client (if specified, only these are used)
 }
