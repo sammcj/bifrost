@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Bifrost - The fastest LLM gateway',
   description:
-    'Production-ready fastest LLM gateway that connects to 10+ providers through a single API. Get automatic failover, load balancing, mcp support and zero-downtime deployments.',
+    'Production-ready fastest LLM gateway that connects to 12+ providers through a single API. Get automatic failover, load balancing, mcp support and zero-downtime deployments.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

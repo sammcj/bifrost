@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -15,26 +14,26 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// parasailResponsePool provides a pool for Parasail response objects.
-var parasailResponsePool = sync.Pool{
-	New: func() interface{} {
-		return &schemas.BifrostResponse{}
-	},
-}
+// // parasailResponsePool provides a pool for Parasail response objects.
+// var parasailResponsePool = sync.Pool{
+// 	New: func() interface{} {
+// 		return &schemas.BifrostResponse{}
+// 	},
+// }
 
-// acquireParasailResponse gets a Parasail response from the pool and resets it.
-func acquireParasailResponse() *schemas.BifrostResponse {
-	resp := parasailResponsePool.Get().(*schemas.BifrostResponse)
-	*resp = schemas.BifrostResponse{} // Reset the struct
-	return resp
-}
+// // acquireParasailResponse gets a Parasail response from the pool and resets it.
+// func acquireParasailResponse() *schemas.BifrostResponse {
+// 	resp := parasailResponsePool.Get().(*schemas.BifrostResponse)
+// 	*resp = schemas.BifrostResponse{} // Reset the struct
+// 	return resp
+// }
 
-// releaseParasailResponse returns a Parasail response to the pool.
-func releaseParasailResponse(resp *schemas.BifrostResponse) {
-	if resp != nil {
-		parasailResponsePool.Put(resp)
-	}
-}
+// // releaseParasailResponse returns a Parasail response to the pool.
+// func releaseParasailResponse(resp *schemas.BifrostResponse) {
+// 	if resp != nil {
+// 		parasailResponsePool.Put(resp)
+// 	}
+// }
 
 // ParasailProvider implements the Provider interface for Parasail's API.
 type ParasailProvider struct {
@@ -63,9 +62,9 @@ func NewParasailProvider(config *schemas.ProviderConfig, logger schemas.Logger) 
 	}
 
 	// Pre-warm response pools
-	for range config.ConcurrencyAndBufferSize.Concurrency {
-		parasailResponsePool.Put(&schemas.BifrostResponse{})
-	}
+	// for range config.ConcurrencyAndBufferSize.Concurrency {
+	// 	parasailResponsePool.Put(&schemas.BifrostResponse{})
+	// }
 
 	// Configure proxy if provided
 	client = configureProxy(client, config.ProxyConfig, logger)
@@ -144,7 +143,10 @@ func (provider *ParasailProvider) ChatCompletion(ctx context.Context, model stri
 	responseBody := resp.Body()
 
 	// Pre-allocate response structs from pools
-response := acquireParasailResponse()
+	// response := acquireParasailResponse()
+	// defer releaseParasailResponse(response)
+	response := &schemas.BifrostResponse{}
+
 	// Use enhanced response handler with pre-allocated response
 	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)
 	if bifrostErr != nil {
