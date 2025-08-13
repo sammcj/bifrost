@@ -70,6 +70,7 @@ func (account *ComprehensiveTestAccount) GetConfiguredProviders() ([]schemas.Mod
 		schemas.Groq,
 		schemas.SGL,
 		schemas.Parasail,
+		schemas.Cerebras,
 	}, nil
 }
 
@@ -164,6 +165,14 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 		return []schemas.Key{
 			{
 				Value:  os.Getenv("PARASAIL_API_KEY"),
+				Models: []string{},
+				Weight: 1.0,
+			},
+		}, nil
+	case schemas.Cerebras:
+		return []schemas.Key{
+			{
+				Value:  os.Getenv("CEREBRAS_API_KEY"),
 				Models: []string{},
 				Weight: 1.0,
 			},
@@ -271,6 +280,11 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 			ConcurrencyAndBufferSize: schemas.DefaultConcurrencyAndBufferSize,
 		}, nil
 	case schemas.Parasail:
+		return &schemas.ProviderConfig{
+			NetworkConfig:            schemas.DefaultNetworkConfig,
+			ConcurrencyAndBufferSize: schemas.DefaultConcurrencyAndBufferSize,
+		}, nil
+	case schemas.Cerebras:
 		return &schemas.ProviderConfig{
 			NetworkConfig:            schemas.DefaultNetworkConfig,
 			ConcurrencyAndBufferSize: schemas.DefaultConcurrencyAndBufferSize,

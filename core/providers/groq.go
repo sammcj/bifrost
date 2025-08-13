@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -15,26 +14,26 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// groqResponsePool provides a pool for Groq response objects.
-var groqResponsePool = sync.Pool{
-	New: func() interface{} {
-		return &schemas.BifrostResponse{}
-	},
-}
+// // groqResponsePool provides a pool for Groq response objects.
+// var groqResponsePool = sync.Pool{
+// 	New: func() interface{} {
+// 		return &schemas.BifrostResponse{}
+// 	},
+// }
 
-// acquireGroqResponse gets a Groq response from the pool and resets it.
-func acquireGroqResponse() *schemas.BifrostResponse {
-	resp := groqResponsePool.Get().(*schemas.BifrostResponse)
-	*resp = schemas.BifrostResponse{} // Reset the struct
-	return resp
-}
+// // acquireGroqResponse gets a Groq response from the pool and resets it.
+// func acquireGroqResponse() *schemas.BifrostResponse {
+// 	resp := groqResponsePool.Get().(*schemas.BifrostResponse)
+// 	*resp = schemas.BifrostResponse{} // Reset the struct
+// 	return resp
+// }
 
-// releaseGroqResponse returns a Groq response to the pool.
-func releaseGroqResponse(resp *schemas.BifrostResponse) {
-	if resp != nil {
-		groqResponsePool.Put(resp)
-	}
-}
+// // releaseGroqResponse returns a Groq response to the pool.
+// func releaseGroqResponse(resp *schemas.BifrostResponse) {
+// 	if resp != nil {
+// 		groqResponsePool.Put(resp)
+// 	}
+// }
 
 // GroqProvider implements the Provider interface for Groq's API.
 type GroqProvider struct {
@@ -62,10 +61,10 @@ func NewGroqProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*Gr
 		Timeout: time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
 	}
 
-	// Pre-warm response pools
-	for range config.ConcurrencyAndBufferSize.Concurrency {
-		groqResponsePool.Put(&schemas.BifrostResponse{})
-	}
+	// // Pre-warm response pools
+	// for range config.ConcurrencyAndBufferSize.Concurrency {
+	// 	groqResponsePool.Put(&schemas.BifrostResponse{})
+	// }
 
 	// Configure proxy if provided
 	client = configureProxy(client, config.ProxyConfig, logger)
@@ -144,8 +143,9 @@ func (provider *GroqProvider) ChatCompletion(ctx context.Context, model string, 
 	responseBody := resp.Body()
 
 	// Pre-allocate response structs from pools
-	response := acquireGroqResponse()
-	defer releaseGroqResponse(response)
+	// response := acquireGroqResponse()
+	// defer releaseGroqResponse(response)
+	response := &schemas.BifrostResponse{}
 
 	// Use enhanced response handler with pre-allocated response
 	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)
@@ -185,7 +185,7 @@ func (provider *GroqProvider) ChatCompletionStream(ctx context.Context, postHook
 		"stream":   true,
 	}, preparedParams)
 
-	// Prepare Groq headers (Groq typically doesn't require authorization, but we include it if provided)
+	// Prepare Groq headers
 	headers := map[string]string{
 		"Content-Type":  "application/json",
 		"Accept":        "text/event-stream",

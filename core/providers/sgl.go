@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -15,26 +14,26 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// sglResponsePool provides a pool for SGL response objects.
-var sglResponsePool = sync.Pool{
-	New: func() interface{} {
-		return &schemas.BifrostResponse{}
-	},
-}
+// // sglResponsePool provides a pool for SGL response objects.
+// var sglResponsePool = sync.Pool{
+// 	New: func() interface{} {
+// 		return &schemas.BifrostResponse{}
+// 	},
+// }
 
-// acquireSGLResponse gets a SGL response from the pool and resets it.
-func acquireSGLResponse() *schemas.BifrostResponse {
-	resp := sglResponsePool.Get().(*schemas.BifrostResponse)
-	*resp = schemas.BifrostResponse{} // Reset the struct
-	return resp
-}
+// // acquireSGLResponse gets a SGL response from the pool and resets it.
+// func acquireSGLResponse() *schemas.BifrostResponse {
+// 	resp := sglResponsePool.Get().(*schemas.BifrostResponse)
+// 	*resp = schemas.BifrostResponse{} // Reset the struct
+// 	return resp
+// }
 
-// releaseSGLResponse returns a SGL response to the pool.
-func releaseSGLResponse(resp *schemas.BifrostResponse) {
-	if resp != nil {
-		sglResponsePool.Put(resp)
-	}
-}
+// // releaseSGLResponse returns a SGL response to the pool.
+// func releaseSGLResponse(resp *schemas.BifrostResponse) {
+// 	if resp != nil {
+// 		sglResponsePool.Put(resp)
+// 	}
+// }
 
 // SGLProvider implements the Provider interface for SGL's API.
 type SGLProvider struct {
@@ -63,9 +62,9 @@ func NewSGLProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*SGL
 	}
 
 	// Pre-warm response pools
-	for range config.ConcurrencyAndBufferSize.Concurrency {
-		sglResponsePool.Put(&schemas.BifrostResponse{})
-	}
+	// for range config.ConcurrencyAndBufferSize.Concurrency {
+	// 	sglResponsePool.Put(&schemas.BifrostResponse{})
+	// }
 
 	// Configure proxy if provided
 	client = configureProxy(client, config.ProxyConfig, logger)
@@ -153,8 +152,9 @@ func (provider *SGLProvider) ChatCompletion(ctx context.Context, model string, k
 	responseBody := resp.Body()
 
 	// Pre-allocate response structs from pools
-	response := acquireSGLResponse()
-	defer releaseSGLResponse(response)
+	// response := acquireSGLResponse()
+	response := &schemas.BifrostResponse{}
+	// defer releaseSGLResponse(response)
 
 	// Use enhanced response handler with pre-allocated response
 	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)

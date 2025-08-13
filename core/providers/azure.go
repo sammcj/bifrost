@@ -50,26 +50,26 @@ var azureTextCompletionResponsePool = sync.Pool{
 	},
 }
 
-// azureChatResponsePool provides a pool for Azure chat response objects.
-var azureChatResponsePool = sync.Pool{
-	New: func() interface{} {
-		return &schemas.BifrostResponse{}
-	},
-}
+// // azureChatResponsePool provides a pool for Azure chat response objects.
+// var azureChatResponsePool = sync.Pool{
+// 	New: func() interface{} {
+// 		return &schemas.BifrostResponse{}
+// 	},
+// }
 
-// acquireAzureChatResponse gets an Azure chat response from the pool and resets it.
-func acquireAzureChatResponse() *schemas.BifrostResponse {
-	resp := azureChatResponsePool.Get().(*schemas.BifrostResponse)
-	*resp = schemas.BifrostResponse{} // Reset the struct
-	return resp
-}
+// // acquireAzureChatResponse gets an Azure chat response from the pool and resets it.
+// func acquireAzureChatResponse() *schemas.BifrostResponse {
+// 	resp := azureChatResponsePool.Get().(*schemas.BifrostResponse)
+// 	*resp = schemas.BifrostResponse{} // Reset the struct
+// 	return resp
+// }
 
-// releaseAzureChatResponse returns an Azure chat response to the pool.
-func releaseAzureChatResponse(resp *schemas.BifrostResponse) {
-	if resp != nil {
-		azureChatResponsePool.Put(resp)
-	}
-}
+// // releaseAzureChatResponse returns an Azure chat response to the pool.
+// func releaseAzureChatResponse(resp *schemas.BifrostResponse) {
+// 	if resp != nil {
+// 		azureChatResponsePool.Put(resp)
+// 	}
+// }
 
 // acquireAzureTextResponse gets an Azure text completion response from the pool and resets it.
 func acquireAzureTextResponse() *AzureTextResponse {
@@ -113,7 +113,7 @@ func NewAzureProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*A
 
 	// Pre-warm response pools
 	for range config.ConcurrencyAndBufferSize.Concurrency {
-		azureChatResponsePool.Put(&schemas.BifrostResponse{})
+		// azureChatResponsePool.Put(&schemas.BifrostResponse{})
 		azureTextCompletionResponsePool.Put(&AzureTextResponse{})
 
 	}
@@ -308,8 +308,10 @@ func (provider *AzureProvider) ChatCompletion(ctx context.Context, model string,
 	}
 
 	// Create response object from pool
-	response := acquireAzureChatResponse()
-	defer releaseAzureChatResponse(response)
+	// response := acquireAzureChatResponse()
+	// defer releaseAzureChatResponse(response)
+
+	response := &schemas.BifrostResponse{}
 
 	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)
 	if bifrostErr != nil {
@@ -359,8 +361,10 @@ func (provider *AzureProvider) Embedding(ctx context.Context, model string, key 
 	}
 
 	// Pre-allocate response structs from pools
-	response := acquireAzureChatResponse()
-	defer releaseAzureChatResponse(response)
+	// response := acquireAzureChatResponse()
+	// defer releaseAzureChatResponse(response)
+
+	response := &schemas.BifrostResponse{}
 
 	// Use enhanced response handler with pre-allocated response
 	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)

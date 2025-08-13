@@ -1,7 +1,19 @@
 // Configuration types that match the Go backend structures
 
 // ModelProvider enum matching Go's schemas.ModelProvider
-export type ModelProvider = 'openai' | 'azure' | 'anthropic' | 'bedrock' | 'cohere' | 'vertex' | 'mistral' | 'ollama' | 'groq' | 'parasail' | 'sgl'
+export type ModelProvider =
+  | 'openai'
+  | 'azure'
+  | 'anthropic'
+  | 'bedrock'
+  | 'cohere'
+  | 'vertex'
+  | 'mistral'
+  | 'ollama'
+  | 'groq'
+  | 'parasail'
+  | 'sgl'
+  | 'cerebras'
 
 // AzureKeyConfig matching Go's schemas.AzureKeyConfig
 export interface AzureKeyConfig {
