@@ -1,4 +1,17 @@
-export const PROVIDERS = ['openai', 'anthropic', 'azure', 'bedrock', 'cohere', 'vertex', 'mistral', 'ollama', 'groq', 'parasail', 'sgl'] as const
+export const PROVIDERS = [
+  'openai',
+  'anthropic',
+  'azure',
+  'bedrock',
+  'cohere',
+  'vertex',
+  'mistral',
+  'ollama',
+  'groq',
+  'parasail',
+  'sgl',
+  'cerebras',
+] as const
 
 export const STATUSES = ['success', 'error', 'processing', 'cancelled'] as const
 
@@ -26,6 +39,7 @@ export const PROVIDER_LABELS = {
   groq: 'Groq',
   parasail: 'Parasail',
   sgl: 'SGLang',
+  cerebras: 'Cerebras',
 } as const
 
 export const STATUS_COLORS = {

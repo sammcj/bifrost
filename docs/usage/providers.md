@@ -15,8 +15,9 @@ Multi-provider support with unified API across all AI providers. Switch between 
 | **Mistral**        | Mistral Large, Medium, Small           | European AI, cost-effective         | ✅         |
 | **Ollama**         | Llama, Mistral, CodeLlama              | Local deployment, privacy           | ✅         |
 | **Groq**           | Mixtral, Llama, Gemma                  | Enterprise AI platform              | ✅         |
-| **Parasail**       | GPT OSS, Llama, Qwen            | Enterprise AI platform              | ✅         |
-| **SGLang**         | Qwen                 | Enterprise AI platform              | ✅         |
+| **Parasail**       | GPT OSS, Llama, Qwen                   | Enterprise AI platform              | ✅         |
+| **SGLang**         | Qwen                                   | Enterprise AI platform              | ✅         |
+| **Cerebras**       | Llama 3.3 70B                          | Enterprise AI platform              | ✅         |
 
 ---
 
@@ -471,17 +472,17 @@ func (a *MyAccount) GetKeysForProvider(ctx *context.Context, provider schemas.Mo
 
 ## 📋 Provider Features Matrix
 
-| Feature              | OpenAI | Anthropic | Azure | Bedrock | Vertex | Cohere | Mistral | Ollama | Groq   | Parasail | SGLang |  
-| -------------------- | ------ | --------- | ----- | ------- | ------ | ------ | ------- | ------ | ------ | -------- | ------ |
-| **Chat Completion**  | ✅     | ✅        | ✅    | ✅      | ✅     | ✅     | ✅      | ✅     | ✅     | ✅       | ✅     |
-| **Function Calling** | ✅     | ✅        | ✅    | ✅      | ✅     | ❌     | ✅      | ✅     | ✅     | ✅       | ✅     |
-| **Streaming**        | ✅     | ✅        | ✅    | ✅      | ✅     | ✅     | ✅      | ✅     | ✅     | ✅       | ✅     |
-| **Vision**           | ✅     | ✅        |  ✅    | ✅      | ✅     | ❌     | ✅      | ✅     | ❌     | ✅       | ✅     |
-| **JSON Mode**        | ✅     | ✅        | ✅    | ✅      | ✅     | ❌     | ✅      | ✅     | ✅     | ✅       | ✅     |
-| **🔊 Audio Speech**   | ✅     | ❌        | ❌    | ❌      | ❌     | ❌     | ❌      | ❌     | ❌     | ❌       | ❌     |
-| **🎤 Transcription** | ✅     | ❌        | ❌    | ❌      | ❌     | ❌     | ❌      | ❌     | ❌     | ❌       | ❌     |
-| **Custom Base URL**  | ✅     | ✅        | ✅    | ❌      | ❌     | ✅     | ✅      | ✅     | ✅     | ✅       | ✅     |
-| **Proxy Support**    | ✅     | ✅        | ✅    | ❌      | ❌     | ✅     | ✅      | ✅     | ✅     | ✅       | ✅      |
+| Feature              | OpenAI | Anthropic | Azure | Bedrock | Vertex | Cohere | Mistral | Ollama | Groq   | Parasail | SGLang | Cerebras |
+| -------------------- | ------ | --------- | ----- | ------- | ------ | ------ | ------- | ------ | ------ | -------- | ------ | -------- |
+| **Text Completion**  | ❌     | ✅        | ✅    | ✅      | ❌     | ❌     | ❌      | ❌     | ❌     | ❌      | ❌     | ✅       |
+| **Chat Completion**  | ✅     | ✅        | ✅    | ✅      | ✅     | ✅     | ✅      | ✅     | ✅     | ✅       | ✅     | ✅       |
+| **Function Calling** | ✅     | ✅        | ✅    | ✅      | ✅     | ❌     | ✅      | ✅     | ✅     | ✅       | ✅     | ✅       |
+| **Streaming**        | ✅     | ✅        | ✅    | ✅      | ✅     | ✅     | ✅      | ✅     | ✅     | ✅       | ✅     | ✅       |
+| **Vision**           | ✅     | ✅        |  ✅    | ✅      | ✅     | ❌     | ✅      | ✅     | ❌     | ✅       | ✅     | ✅       |
+| **🔊 Audio Speech**   | ✅     | ❌        | ❌    | ❌      | ❌     | ❌     | ❌      | ❌     | ❌     | ❌       | ❌     | ❌       |
+| **🎤 Transcription** | ✅     | ❌        | ❌    | ❌      | ❌     | ❌     | ❌      | ❌     | ❌     | ❌       | ❌     | ❌       |
+| **Custom Base URL**  | ✅     | ✅        | ✅    | ❌      | ❌     | ✅     | ✅      | ✅     | ✅     | ✅       | ✅     | ✅       |
+| **Proxy Support**    | ✅     | ✅        | ✅    | ❌      | ❌     | ✅     | ✅      | ✅     | ✅     | ✅       | ✅      | ✅       |
 
 ### **🔊 Audio Features Details**
 
@@ -498,6 +499,7 @@ func (a *MyAccount) GetKeysForProvider(ctx *context.Context, provider schemas.Mo
 | **Groq** | ❌ Not Available | ❌ Not Available | N/A | ❌ N/A |
 | **Parasail** | ❌ Not Available | ❌ Not Available | N/A | ❌ N/A |
 | **SGLang** | ❌ Not Available | ❌ Not Available | N/A | ❌ N/A |
+| **Cerebras** | ❌ Not Available | ❌ Not Available | N/A | ❌ N/A |
 
 > **📝 Note:** Audio features are currently supported only through OpenAI. Other providers return `unsupported operation` errors for audio requests. This allows you to use fallback chains where non-audio requests can still use other providers.
 

@@ -801,6 +801,9 @@ providers := []schemas.ModelProvider{
     schemas.Mistral,     // Mistral models
     schemas.Ollama,      // Local Ollama
     schemas.Groq,        // Groq models
+    schemas.Parasail,    // Parasail models
+    schemas.SGLang,      // SGLang models
+    schemas.Cerebras,    // Cerebras models
 }
 
 // Popular model choices

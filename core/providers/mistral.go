@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -15,26 +14,26 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// mistralResponsePool provides a pool for Mistral response objects.
-var mistralResponsePool = sync.Pool{
-	New: func() interface{} {
-		return &schemas.BifrostResponse{}
-	},
-}
+// // mistralResponsePool provides a pool for Mistral response objects.
+// var mistralResponsePool = sync.Pool{
+// 	New: func() interface{} {
+// 		return &schemas.BifrostResponse{}
+// 	},
+// }
 
-// acquireMistralResponse gets a Mistral response from the pool and resets it.
-func acquireMistralResponse() *schemas.BifrostResponse {
-	resp := mistralResponsePool.Get().(*schemas.BifrostResponse)
-	*resp = schemas.BifrostResponse{} // Reset the struct
-	return resp
-}
+// // acquireMistralResponse gets a Mistral response from the pool and resets it.
+// func acquireMistralResponse() *schemas.BifrostResponse {
+// 	resp := mistralResponsePool.Get().(*schemas.BifrostResponse)
+// 	*resp = schemas.BifrostResponse{} // Reset the struct
+// 	return resp
+// }
 
-// releaseMistralResponse returns a Mistral response to the pool.
-func releaseMistralResponse(resp *schemas.BifrostResponse) {
-	if resp != nil {
-		mistralResponsePool.Put(resp)
-	}
-}
+// // releaseMistralResponse returns a Mistral response to the pool.
+// func releaseMistralResponse(resp *schemas.BifrostResponse) {
+// 	if resp != nil {
+// 		mistralResponsePool.Put(resp)
+// 	}
+// }
 
 // MistralProvider implements the Provider interface for Mistral's API.
 type MistralProvider struct {
@@ -63,9 +62,9 @@ func NewMistralProvider(config *schemas.ProviderConfig, logger schemas.Logger) *
 	}
 
 	// Pre-warm response pools
-	for range config.ConcurrencyAndBufferSize.Concurrency {
-		mistralResponsePool.Put(&schemas.BifrostResponse{})
-	}
+	// for range config.ConcurrencyAndBufferSize.Concurrency {
+	// 	mistralResponsePool.Put(&schemas.BifrostResponse{})
+	// }
 
 	// Configure proxy if provided
 	client = configureProxy(client, config.ProxyConfig, logger)
@@ -144,8 +143,9 @@ func (provider *MistralProvider) ChatCompletion(ctx context.Context, model strin
 	responseBody := resp.Body()
 
 	// Pre-allocate response structs from pools
-	response := acquireMistralResponse()
-	defer releaseMistralResponse(response)
+	// response := acquireMistralResponse()
+	// defer releaseMistralResponse(response)
+	response := &schemas.BifrostResponse{}
 
 	// Use enhanced response handler with pre-allocated response
 	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)
@@ -239,8 +239,9 @@ func (provider *MistralProvider) Embedding(ctx context.Context, model string, ke
 	responseBody := resp.Body()
 
 	// Pre-allocate response structs from pools
-	response := acquireMistralResponse()
-	defer releaseMistralResponse(response)
+	// response := acquireMistralResponse()
+	response := &schemas.BifrostResponse{}
+	// defer releaseMistralResponse(response)
 
 	// Use enhanced response handler with pre-allocated response
 	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)
