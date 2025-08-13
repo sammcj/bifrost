@@ -33,7 +33,7 @@ import isEqual from 'lodash.isequal'
 import { AlertTriangle, Globe, Info, Plus, Save, X, Zap } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Alert, AlertDescription } from '../ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
 import { Textarea } from '../ui/textarea'
 
 interface ProviderFormProps {
@@ -71,7 +71,7 @@ const createInitialState = (provider?: ProviderResponse | null, defaultProvider?
         access_key: '',
         secret_key: '',
         session_token: '',
-        region: '',
+        region: 'us-east-1',
         arn: '',
         deployments: {},
       }
@@ -179,16 +179,37 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
           break
         }
       } else if (selectedProvider === 'bedrock' && key.bedrock_key_config) {
-        const accessKeyValid = !!key.bedrock_key_config.access_key && key.bedrock_key_config.access_key.trim() !== ''
-        const secretKeyValid = !!key.bedrock_key_config.secret_key && key.bedrock_key_config.secret_key.trim() !== ''
+        const accessKey = key.bedrock_key_config.access_key?.trim() || ''
+        const secretKey = key.bedrock_key_config.secret_key?.trim() || ''
 
-        const deploymentsValid = isValidDeployments(key.bedrock_key_config.deployments)
+        // Allow both empty (IAM role auth) or both provided (explicit credentials)
+        // But not one empty and one provided
+        const bothEmpty = accessKey === '' && secretKey === ''
+        const bothProvided = accessKey !== '' && secretKey !== ''
 
-        if (!accessKeyValid || !secretKeyValid) {
+        if (!bothEmpty && !bothProvided) {
           valid = false
-          message = 'Access Key and Secret Key are required for Bedrock keys'
+          message = 'For Bedrock: either provide both Access Key and Secret Key, or leave both empty for IAM role authentication'
           break
         }
+
+        // Check for session token when using IAM role path (both keys empty)
+        const sessionToken = key.bedrock_key_config.session_token?.trim() || ''
+        if (bothEmpty && sessionToken !== '') {
+          valid = false
+          message = 'Session token cannot be provided when Access Key and Secret Key are empty; remove the token or supply both keys'
+          break
+        }
+
+        // Region is always required for Bedrock
+        const regionValid = !!key.bedrock_key_config.region && key.bedrock_key_config.region.trim() !== ''
+        if (!regionValid) {
+          valid = false
+          message = 'Region is required for Bedrock keys'
+          break
+        }
+
+        const deploymentsValid = isValidDeployments(key.bedrock_key_config.deployments)
 
         if (key.bedrock_key_config.deployments && Object.keys(key.bedrock_key_config.deployments).length > 0 && !deploymentsValid) {
           valid = false
@@ -346,7 +367,7 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
         access_key: '',
         secret_key: '',
         session_token: '',
-        region: '',
+        region: 'us-east-1',
         arn: '',
         deployments: {},
       }
@@ -440,6 +461,9 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
         access_key: '',
         secret_key: '',
         session_token: '',
+        region: 'us-east-1',
+        arn: '',
+        deployments: {},
       }
     }
 
@@ -601,6 +625,16 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
                           Add Key
                         </Button>
                       </div>
+                      {selectedProvider === 'bedrock' && (
+                        <Alert variant="default">
+                          <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
+                          <AlertTitle>IAM Role Authentication</AlertTitle>
+                          <AlertDescription>
+                            Leave both Access Key and Secret Key empty to use IAM roles attached to your environment (EC2, Lambda, ECS,
+                            EKS). This is the recommended approach for production deployments.
+                          </AlertDescription>
+                        </Alert>
+                      )}
                       <div className="space-y-4">
                         {keys.map((key, index) => (
                           <div
@@ -780,18 +814,18 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
                             {selectedProvider === 'bedrock' && (
                               <div className="space-y-4 pt-2">
                                 <div>
-                                  <label className="text-sm font-medium">Access Key (Required)</label>
+                                  <label className="text-sm font-medium">Access Key</label>
                                   <Input
-                                    placeholder="your-aws-access-key or env.AWS_ACCESS_KEY"
+                                    placeholder="your-aws-access-key or env.AWS_ACCESS_KEY_ID"
                                     value={key.bedrock_key_config?.access_key || ''}
                                     onChange={(e) => updateKeyBedrockConfig(index, 'access_key', e.target.value)}
                                     className="transition-all duration-200 ease-in-out"
                                   />
                                 </div>
                                 <div>
-                                  <label className="text-sm font-medium">Secret Key (Required)</label>
+                                  <label className="text-sm font-medium">Secret Key</label>
                                   <Input
-                                    placeholder="your-aws-secret-key or env.AWS_SECRET_KEY"
+                                    placeholder="your-aws-secret-key or env.AWS_SECRET_ACCESS_KEY"
                                     value={key.bedrock_key_config?.secret_key || ''}
                                     onChange={(e) => updateKeyBedrockConfig(index, 'secret_key', e.target.value)}
                                     className="transition-all duration-200 ease-in-out"
@@ -803,6 +837,15 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
                                     placeholder="your-aws-session-token or env.AWS_SESSION_TOKEN"
                                     value={key.bedrock_key_config?.session_token || ''}
                                     onChange={(e) => updateKeyBedrockConfig(index, 'session_token', e.target.value)}
+                                    className="transition-all duration-200 ease-in-out"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Region (Required)</label>
+                                  <Input
+                                    placeholder="us-east-1 or env.AWS_REGION"
+                                    value={key.bedrock_key_config?.region || ''}
+                                    onChange={(e) => updateKeyBedrockConfig(index, 'region', e.target.value)}
                                     className="transition-all duration-200 ease-in-out"
                                   />
                                 </div>

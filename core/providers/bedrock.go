@@ -292,17 +292,9 @@ func (provider *BedrockProvider) completeRequest(ctx context.Context, requestBod
 	// Set any extra headers from network config
 	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
 
-	if config.SecretKey != "" {
-		if err := signAWSRequest(req, config.AccessKey, config.SecretKey, config.SessionToken, region, "bedrock"); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, &schemas.BifrostError{
-			IsBifrostError: false,
-			Error: schemas.ErrorField{
-				Message: "secret access key not set",
-			},
-		}
+	// Sign the request using either explicit credentials or IAM role authentication
+	if err := signAWSRequest(ctx, req, config.AccessKey, config.SecretKey, config.SessionToken, region, "bedrock"); err != nil {
+		return nil, err
 	}
 
 	// Execute the request
@@ -1051,7 +1043,7 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, model strin
 // It sets required headers, calculates the request body hash, and signs the request
 // using the provided AWS credentials.
 // Returns a BifrostError if signing fails.
-func signAWSRequest(req *http.Request, accessKey, secretKey string, sessionToken *string, region, service string) *schemas.BifrostError {
+func signAWSRequest(ctx context.Context, req *http.Request, accessKey, secretKey string, sessionToken *string, region, service string) *schemas.BifrostError {
 	// Set required headers before signing
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -1074,19 +1066,31 @@ func signAWSRequest(req *http.Request, accessKey, secretKey string, sessionToken
 		bodyHash = hex.EncodeToString(hash[:])
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(region),
-		config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
-			creds := aws.Credentials{
-				AccessKeyID:     accessKey,
-				SecretAccessKey: secretKey,
-			}
-			if sessionToken != nil && *sessionToken != "" {
-				creds.SessionToken = *sessionToken
-			}
-			return creds, nil
-		})),
-	)
+	var cfg aws.Config
+	var err error
+
+	// If both accessKey and secretKey are empty, use the default credential provider chain
+	// This will automatically use IAM roles, environment variables, shared credentials, etc.
+	if accessKey == "" && secretKey == "" {
+		cfg, err = config.LoadDefaultConfig(ctx,
+			config.WithRegion(region),
+		)
+	} else {
+		// Use explicit credentials when provided
+		cfg, err = config.LoadDefaultConfig(ctx,
+			config.WithRegion(region),
+			config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
+				creds := aws.Credentials{
+					AccessKeyID:     accessKey,
+					SecretAccessKey: secretKey,
+				}
+				if sessionToken != nil && *sessionToken != "" {
+					creds.SessionToken = *sessionToken
+				}
+				return creds, nil
+			})),
+		)
+	}
 	if err != nil {
 		return newBifrostOperationError("failed to load aws config", err, schemas.Bedrock)
 	}
@@ -1095,13 +1099,13 @@ func signAWSRequest(req *http.Request, accessKey, secretKey string, sessionToken
 	signer := v4.NewSigner()
 
 	// Get credentials
-	creds, err := cfg.Credentials.Retrieve(context.TODO())
+	creds, err := cfg.Credentials.Retrieve(ctx)
 	if err != nil {
 		return newBifrostOperationError("failed to retrieve aws credentials", err, schemas.Bedrock)
 	}
 
 	// Sign the request with AWS Signature V4
-	if err := signer.SignHTTP(context.TODO(), creds, req, bodyHash, service, region, time.Now()); err != nil {
+	if err := signer.SignHTTP(ctx, creds, req, bodyHash, service, region, time.Now()); err != nil {
 		return newBifrostOperationError("failed to sign request", err, schemas.Bedrock)
 	}
 
@@ -1328,13 +1332,9 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 	// Set any extra headers from network config
 	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
 
-	// Sign the request for AWS
-	if key.BedrockKeyConfig.SecretKey != "" {
-		if signErr := signAWSRequest(req, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock"); signErr != nil {
-			return nil, signErr
-		}
-	} else {
-		return nil, newConfigurationError("secret access key not set", schemas.Bedrock)
+	// Sign the request using either explicit credentials or IAM role authentication
+	if signErr := signAWSRequest(ctx, req, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock"); signErr != nil {
+		return nil, signErr
 	}
 
 	// Make the request
