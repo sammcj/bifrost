@@ -22,7 +22,7 @@ func NewLiteLLMRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *L
 	routes := []integrations.RouteConfig{}
 
 	// Add OpenAI routes to LiteLLM for OpenAI API compatibility
-	routes = append(routes, openai.CreateOpenAIRouteConfigs("/litellm")...)
+	routes = append(routes, openai.CreateOpenAIRouteConfigs("/litellm", handlerStore)...)
 
 	// Add Anthropic routes to LiteLLM for Anthropic API compatibility
 	routes = append(routes, anthropic.CreateAnthropicRouteConfigs("/litellm")...)
