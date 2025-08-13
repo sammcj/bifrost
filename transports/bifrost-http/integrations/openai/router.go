@@ -31,33 +31,19 @@ type OpenAIRouter struct {
 	*integrations.GenericRouter
 }
 
-func AzureEndpointPreHook(ctx *fasthttp.RequestCtx, req interface{}) error {
-	azureKey := ctx.Request.Header.Peek("authorization")
-	deploymentEndpoint := ctx.Request.Header.Peek("x-bf-azure-endpoint")
-	deploymentID := ctx.UserValue("deployment-id")
-	apiVersion := ctx.QueryArgs().Peek("api-version")
+func AzureEndpointPreHook(handlerStore lib.HandlerStore) func(ctx *fasthttp.RequestCtx, req interface{}) error {
+	return func(ctx *fasthttp.RequestCtx, req interface{}) error {
+		azureKey := ctx.Request.Header.Peek("authorization")
+		deploymentEndpoint := ctx.Request.Header.Peek("x-bf-azure-endpoint")
+		deploymentID := ctx.UserValue("deployment-id")
+		apiVersion := ctx.QueryArgs().Peek("api-version")
 
-	if deploymentID != nil && azureKey != nil {
-		if deploymentEndpoint == nil {
-			return errors.New("deployment-endpoint is required in header x-bf-azure-endpoint")
-		}
+		if deploymentID != nil {
+			deploymentIDStr, ok := deploymentID.(string)
+			if !ok {
+				return errors.New("deployment_id must be a string")
+			}
 
-		azureKeyStr := string(azureKey)
-		deploymentEndpointStr := string(deploymentEndpoint)
-		deploymentIDStr, ok := deploymentID.(string)
-		apiVersionStr := string(apiVersion)
-
-		if !ok {
-			return errors.New("deployment_id must be a string")
-		}
-
-		key := schemas.Key{
-			ID:             uuid.New().String(),
-			Models:         []string{},
-			AzureKeyConfig: &schemas.AzureKeyConfig{},
-		}
-
-		if deploymentEndpointStr != "" && deploymentIDStr != "" && azureKeyStr != "" {
 			switch r := req.(type) {
 			case *OpenAIChatRequest:
 				r.Model = setAzureModelName(r.Model, deploymentIDStr)
@@ -69,25 +55,41 @@ func AzureEndpointPreHook(ctx *fasthttp.RequestCtx, req interface{}) error {
 				r.Model = setAzureModelName(r.Model, deploymentIDStr)
 			}
 
-			key.Value = strings.TrimPrefix(azureKeyStr, "Bearer ")
-			key.AzureKeyConfig.Endpoint = deploymentEndpointStr
-			key.AzureKeyConfig.Deployments = map[string]string{deploymentIDStr: deploymentIDStr}
+			if deploymentEndpoint == nil || azureKey == nil || !handlerStore.ShouldAllowDirectKeys() {
+				return nil
+			}
+
+			azureKeyStr := string(azureKey)
+			deploymentEndpointStr := string(deploymentEndpoint)
+			apiVersionStr := string(apiVersion)
+
+			key := schemas.Key{
+				ID:             uuid.New().String(),
+				Models:         []string{},
+				AzureKeyConfig: &schemas.AzureKeyConfig{},
+			}
+
+			if deploymentEndpointStr != "" && deploymentIDStr != "" && azureKeyStr != "" {
+				key.Value = strings.TrimPrefix(azureKeyStr, "Bearer ")
+				key.AzureKeyConfig.Endpoint = deploymentEndpointStr
+				key.AzureKeyConfig.Deployments = map[string]string{deploymentIDStr: deploymentIDStr}
+			}
+
+			if apiVersionStr != "" {
+				key.AzureKeyConfig.APIVersion = &apiVersionStr
+			}
+
+			ctx.SetUserValue(string(schemas.BifrostContextKey), key)
+
+			return nil
 		}
 
-		if apiVersionStr != "" {
-			key.AzureKeyConfig.APIVersion = &apiVersionStr
-		}
-
-		ctx.SetUserValue(string(schemas.BifrostContextKey), key)
-
-		return nil
+		return errors.New("deployment-id is required in path")
 	}
-
-	return nil
 }
 
 // CreateOpenAIRouteConfigs creates route configurations for OpenAI endpoints.
-func CreateOpenAIRouteConfigs(pathPrefix string) []integrations.RouteConfig {
+func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) []integrations.RouteConfig {
 	var routes []integrations.RouteConfig
 
 	// Chat completions endpoint
@@ -122,7 +124,7 @@ func CreateOpenAIRouteConfigs(pathPrefix string) []integrations.RouteConfig {
 					return DeriveOpenAIStreamFromBifrostError(err)
 				},
 			},
-			PreCallback: AzureEndpointPreHook,
+			PreCallback: AzureEndpointPreHook(handlerStore),
 		})
 	}
 
@@ -150,7 +152,7 @@ func CreateOpenAIRouteConfigs(pathPrefix string) []integrations.RouteConfig {
 			ErrorConverter: func(err *schemas.BifrostError) interface{} {
 				return DeriveOpenAIErrorFromBifrostError(err)
 			},
-			PreCallback: AzureEndpointPreHook,
+			PreCallback: AzureEndpointPreHook(handlerStore),
 		})
 	}
 
@@ -191,7 +193,7 @@ func CreateOpenAIRouteConfigs(pathPrefix string) []integrations.RouteConfig {
 					return DeriveOpenAIErrorFromBifrostError(err)
 				},
 			},
-			PreCallback: AzureEndpointPreHook,
+			PreCallback: AzureEndpointPreHook(handlerStore),
 		})
 	}
 
@@ -228,7 +230,7 @@ func CreateOpenAIRouteConfigs(pathPrefix string) []integrations.RouteConfig {
 					return DeriveOpenAIErrorFromBifrostError(err)
 				},
 			},
-			PreCallback: AzureEndpointPreHook,
+			PreCallback: AzureEndpointPreHook(handlerStore),
 		})
 	}
 
@@ -238,7 +240,7 @@ func CreateOpenAIRouteConfigs(pathPrefix string) []integrations.RouteConfig {
 // NewOpenAIRouter creates a new OpenAIRouter with the given bifrost client.
 func NewOpenAIRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *OpenAIRouter {
 	return &OpenAIRouter{
-		GenericRouter: integrations.NewGenericRouter(client, handlerStore, CreateOpenAIRouteConfigs("/openai")),
+		GenericRouter: integrations.NewGenericRouter(client, handlerStore, CreateOpenAIRouteConfigs("/openai", handlerStore)),
 	}
 }
 
