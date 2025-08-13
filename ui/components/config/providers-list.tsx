@@ -49,7 +49,7 @@ export default function ProvidersList({ providers, onRefresh }: ProvidersListPro
 
   const handleAddProvider = () => {
     // Open with first existing provider if any exist, otherwise null (which will default to first available)
-    const firstExistingProvider = providers.find(p => p.name === 'openai') || null
+    const firstExistingProvider = providers.find((p) => p.name === 'openai') || null
     setSelectedProvider(firstExistingProvider)
     setShowProviderForm(true)
   }
@@ -112,9 +112,9 @@ export default function ProvidersList({ providers, onRefresh }: ProvidersListPro
               </TableRow>
             )}
             {providers.map((provider) => (
-              <TableRow 
+              <TableRow
                 key={provider.name}
-                className="cursor-pointer hover:bg-muted/50 transition-colors"
+                className="hover:bg-muted/50 cursor-pointer transition-colors"
                 onClick={() => handleEditProvider(provider)}
               >
                 <TableCell>
@@ -154,7 +154,12 @@ export default function ProvidersList({ providers, onRefresh }: ProvidersListPro
                   <div className="flex items-center justify-end space-x-2">
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm" disabled={deletingProvider === provider.name}>
+                        <Button
+                          onClick={(e) => e.stopPropagation()}
+                          variant="outline"
+                          size="sm"
+                          disabled={deletingProvider === provider.name}
+                        >
                           {deletingProvider === provider.name ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
@@ -162,7 +167,7 @@ export default function ProvidersList({ providers, onRefresh }: ProvidersListPro
                           )}
                         </Button>
                       </AlertDialogTrigger>
-                      <AlertDialogContent>
+                      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                         <AlertDialogHeader>
                           <AlertDialogTitle>Delete Provider</AlertDialogTitle>
                           <AlertDialogDescription>
