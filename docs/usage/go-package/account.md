@@ -97,7 +97,7 @@ func (a *MultiProviderAccount) GetConfiguredProviders() ([]schemas.ModelProvider
     if os.Getenv("AZURE_API_KEY") != "" {
         providers = append(providers, schemas.Azure)
     }
-    if os.Getenv("AWS_ACCESS_KEY_ID") != "" {
+    if os.Getenv("AWS_ACCESS_KEY_ID_ID") != "" {
         providers = append(providers, schemas.Bedrock)
     }
     if os.Getenv("VERTEX_PROJECT_ID") != "" {
@@ -146,8 +146,8 @@ func (a *MultiProviderAccount) GetKeysForProvider(ctx *context.Context, provider
             Models: []string{"anthropic.claude-3-sonnet-20240229-v1:0"},
             Weight: 1.0,
             BedrockKeyConfig: &schemas.BedrockKeyConfig{
-                AccessKey:    os.Getenv("AWS_ACCESS_KEY"),
-                SecretKey:    os.Getenv("AWS_SECRET_KEY"),
+                AccessKey:    os.Getenv("AWS_ACCESS_KEY_ID"),
+                SecretKey:    os.Getenv("AWS_SECRET_ACCESS_KEY"),
                 SessionToken: bifrost.Ptr(os.Getenv("AWS_SESSION_TOKEN")),
                 Region:       bifrost.Ptr("us-east-1"),
             },

@@ -61,7 +61,7 @@ export AZURE_API_KEY="your-azure-key"
 export AZURE_ENDPOINT="your-azure-endpoint"
 
 # AWS Bedrock
-export AWS_ACCESS_KEY_ID="your-aws-access-key"
+export AWS_ACCESS_KEY_ID_ID="your-aws-access-key"
 export AWS_SECRET_ACCESS_KEY="your-aws-secret-key"
 export AWS_REGION="us-east-1"
 

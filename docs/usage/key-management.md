@@ -645,13 +645,33 @@ func (a *MyAccount) GetKeysForProvider(ctx *context.Context, provider schemas.Mo
             },
         }, nil
     case schemas.Bedrock:
+        // Option 1: IAM Role Authentication (Recommended for Production)
         return []schemas.Key{
             {
-                Value:  os.Getenv("AWS_ACCESS_KEY_ID"),
                 Models: []string{"anthropic.claude-3-5-sonnet-20241022-v2:0"},
                 Weight: 1.0,
+                BedrockKeyConfig: &schemas.BedrockKeyConfig{
+                    AccessKey: "", // Empty for IAM role authentication
+                    SecretKey: "", // Empty for IAM role authentication  
+                    Region:    "us-east-1",
+                },
             },
         }, nil
+        
+        // Option 2: Explicit Credentials (Development/Testing)
+        /*
+        return []schemas.Key{
+            {
+                Models: []string{"anthropic.claude-3-5-sonnet-20241022-v2:0"},
+                Weight: 1.0,
+                BedrockKeyConfig: &schemas.BedrockKeyConfig{
+                    AccessKey: os.Getenv("AWS_ACCESS_KEY_ID_ID"),
+                    SecretKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+                    Region:    "us-east-1",
+                },
+            },
+        }, nil
+        */
     }
     return nil, fmt.Errorf("provider %s not configured", provider)
 }
@@ -699,15 +719,27 @@ func (a *MyAccount) GetKeysForProvider(ctx *context.Context, provider schemas.Mo
           "models": ["anthropic.claude-3-5-sonnet-20241022-v2:0"],
           "weight": 1.0,
           "bedrock_key_config": {
-            "access_key": "env.AWS_ACCESS_KEY_ID",
-            "secret_key": "env.AWS_SECRET_ACCESS_KEY",
-            "session_token": "env.AWS_SESSION_TOKEN",
-            "region": "us-east-1",
-            "arn": "arn:aws:iam::123456789012:role/BedrockRole"
+            "region": "us-east-1"
+            // IAM Role Authentication - no access_key or secret_key needed
           }
         }
-      ],
-    }
+      ]
+    },
+    // "bedrock_explicit_credentials": {
+    //   "keys": [
+    //     {
+    //       "models": ["anthropic.claude-3-5-sonnet-20241022-v2:0"],
+    //       "weight": 1.0,
+    //       "bedrock_key_config": {
+    //         "access_key": "env.AWS_ACCESS_KEY_ID_ID",
+    //         "secret_key": "env.AWS_SECRET_ACCESS_KEY",
+    //         "session_token": "env.AWS_SESSION_TOKEN",
+    //         "region": "us-east-1",
+    //         "arn": "your-arn"
+    //       }
+    //     }
+    //   ]
+    // }
   }
 }
 ```

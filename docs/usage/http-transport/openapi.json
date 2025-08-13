@@ -2780,12 +2780,12 @@
               "access_key": {
                 "type": "string",
                 "description": "Bedrock access key",
-                "example": "env.AWS_ACCESS_KEY"
+                "example": "env.AWS_ACCESS_KEY_ID"
               },
               "secret_key": {
                 "type": "string",
                 "description": "Bedrock secret key",
-                "example": "env.AWS_SECRET_KEY"
+                "example": "env.AWS_SECRET_ACCESS_KEY"
               },
               "session_token": {
                 "type": "string",
