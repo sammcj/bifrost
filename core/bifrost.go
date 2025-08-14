@@ -1486,12 +1486,31 @@ func (bifrost *Bifrost) selectKeyFromProviderForModel(ctx *context.Context, prov
 	// filter out keys which dont support the model, if the key has no models, it is supported for all models
 	var supportedKeys []schemas.Key
 	for _, key := range keys {
-		if (slices.Contains(key.Models, model) && (strings.TrimSpace(key.Value) != "" || canProviderKeyValueBeEmpty(providerKey))) || len(key.Models) == 0 {
+		modelSupported := (slices.Contains(key.Models, model) && (strings.TrimSpace(key.Value) != "" || canProviderKeyValueBeEmpty(providerKey))) || len(key.Models) == 0
+
+		// Additional deployment checks for Azure and Bedrock
+		deploymentSupported := true
+		if providerKey == schemas.Azure && key.AzureKeyConfig != nil {
+			// For Azure, check if deployment exists for this model
+			if len(key.AzureKeyConfig.Deployments) > 0 {
+				_, deploymentSupported = key.AzureKeyConfig.Deployments[model]
+			}
+		} else if providerKey == schemas.Bedrock && key.BedrockKeyConfig != nil {
+			// For Bedrock, check if deployment exists for this model
+			if len(key.BedrockKeyConfig.Deployments) > 0 {
+				_, deploymentSupported = key.BedrockKeyConfig.Deployments[model]
+			}
+		}
+
+		if modelSupported && deploymentSupported {
 			supportedKeys = append(supportedKeys, key)
 		}
 	}
 
 	if len(supportedKeys) == 0 {
+		if providerKey == schemas.Azure || providerKey == schemas.Bedrock {
+			return schemas.Key{}, fmt.Errorf("no keys found that support model/deployment: %s", model)
+		}
 		return schemas.Key{}, fmt.Errorf("no keys found that support model: %s", model)
 	}
 
