@@ -479,3 +479,20 @@ func (p *LoggerPlugin) SearchLogs(filters SearchFilters, pagination PaginationOp
 		Stats:      stats,
 	}, nil
 }
+
+// GetAvailableModels returns all unique models from logs
+func (p *LoggerPlugin) GetAvailableModels() []string {
+	var models []string
+
+	// Query distinct models from logs
+	if err := p.db.Model(&LogEntry{}).
+		Distinct("model").
+		Where("model IS NOT NULL AND model != ''").
+		Pluck("model", &models).Error; err != nil {
+		// Log error but return empty slice to avoid breaking the UI
+		p.logger.Error(fmt.Errorf("failed to get available models: %w", err))
+		return []string{}
+	}
+
+	return models
+}
