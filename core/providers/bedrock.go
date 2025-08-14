@@ -358,7 +358,7 @@ func (provider *BedrockProvider) completeRequest(ctx context.Context, requestBod
 // Returns a BifrostResponse containing the completion results or an error if processing fails.
 func (provider *BedrockProvider) getTextCompletionResult(result []byte, model string) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	switch {
-	case strings.HasPrefix(model, "anthropic."):
+	case strings.Contains(model, "anthropic."):
 		var response BedrockAnthropicTextResponse
 		if err := sonic.Unmarshal(result, &response); err != nil {
 			return nil, &schemas.BifrostError{
@@ -392,7 +392,7 @@ func (provider *BedrockProvider) getTextCompletionResult(result []byte, model st
 			},
 		}, nil
 
-	case strings.HasPrefix(model, "mistral."):
+	case strings.Contains(model, "mistral."):
 		var response BedrockMistralTextResponse
 		if err := sonic.Unmarshal(result, &response); err != nil {
 			return nil, &schemas.BifrostError{
@@ -457,7 +457,7 @@ func parseBedrockAnthropicMessageToolCallContent(content string) map[string]inte
 // Returns a map containing the formatted messages and any system messages, or an error if formatting fails.
 func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schemas.BifrostMessage, model string) (map[string]interface{}, *schemas.BifrostError) {
 	switch {
-	case strings.HasPrefix(model, "anthropic."):
+	case strings.Contains(model, "anthropic."):
 		// Add system messages if present
 		var systemMessages []BedrockAnthropicSystemMessage
 		for _, msg := range messages {
@@ -659,7 +659,7 @@ func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schema
 
 		return body, nil
 
-	case strings.HasPrefix(model, "mistral."):
+	case strings.Contains(model, "mistral."):
 		var bedrockMessages []BedrockMistralChatMessage
 		for _, msg := range messages {
 			// Check if this is a tool message before changing the role
@@ -765,7 +765,7 @@ func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schema
 // Returns tool specifications appropriate for the given model type.
 func (provider *BedrockProvider) getChatCompletionTools(params *schemas.ModelParameters, model string) (interface{}, *schemas.BifrostError) {
 	switch {
-	case strings.HasPrefix(model, "anthropic."), strings.HasPrefix(model, "mistral."):
+	case strings.Contains(model, "anthropic."), strings.Contains(model, "mistral."):
 		// Both Anthropic and Mistral models on Bedrock use toolConfig.tools with toolSpec structure
 		var tools []BedrockAnthropicToolCall
 		for _, tool := range *params.Tools {
@@ -793,7 +793,7 @@ func (provider *BedrockProvider) getChatCompletionTools(params *schemas.ModelPar
 // Returns the modified parameters map with model-specific adjustments.
 func (provider *BedrockProvider) prepareTextCompletionParams(params map[string]interface{}, model string) map[string]interface{} {
 	switch {
-	case strings.HasPrefix(model, "anthropic."):
+	case strings.Contains(model, "anthropic."):
 		// Check if there is a key entry for max_tokens
 		if maxTokens, exists := params["max_tokens"]; exists {
 			// Check if max_tokens_to_sample is already present
@@ -905,7 +905,7 @@ func (provider *BedrockProvider) prepareToolChoice(params *schemas.ModelParamete
 	}
 
 	switch {
-	case strings.HasPrefix(model, "anthropic."), strings.HasPrefix(model, "mistral."):
+	case strings.Contains(model, "anthropic."), strings.Contains(model, "mistral."):
 		// Both Anthropic and Mistral models use toolChoice in toolConfig
 		// AWS Bedrock supports: "auto", "any", "tool" as union types
 		if params.ToolChoice.ToolChoiceStr != nil {
@@ -1183,9 +1183,9 @@ func (provider *BedrockProvider) Embedding(ctx context.Context, model string, ke
 	}
 
 	switch {
-	case strings.HasPrefix(model, "amazon.titan-embed-text"):
+	case strings.Contains(model, "amazon.titan-embed-text"):
 		return provider.handleTitanEmbedding(ctx, model, *key.BedrockKeyConfig, input, params)
-	case strings.HasPrefix(model, "cohere.embed"):
+	case strings.Contains(model, "cohere.embed"):
 		return provider.handleCohereEmbedding(ctx, model, *key.BedrockKeyConfig, input, params)
 	default:
 		return nil, newConfigurationError("embedding is not supported for this Bedrock model", schemas.Bedrock)
