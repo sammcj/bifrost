@@ -7,22 +7,20 @@ import { cn } from '@/lib/utils'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PROVIDERS, REQUEST_TYPE_LABELS, REQUEST_TYPES, STATUSES } from '@/lib/constants/logs'
 import type { LogFilters, Pagination } from '@/lib/types/logs'
+import { apiService } from '@/lib/api'
 
 interface LogFiltersProps {
   filters: LogFilters
   onFiltersChange: (filters: LogFilters) => void
 }
 
-const FILTER_OPTIONS = {
-  Status: STATUSES,
-  Providers: PROVIDERS,
-  Type: REQUEST_TYPES,
-} as const
-
 export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
   const [open, setOpen] = useState(false)
   const [localSearch, setLocalSearch] = useState(filters.content_search || '')
   const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
+  
+  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [modelsLoading, setModelsLoading] = useState(true)
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -31,6 +29,29 @@ export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
         clearTimeout(searchTimeoutRef.current)
       }
     }
+  }, [])
+
+  // Fetch available models for filtering
+  useEffect(() => {
+    const fetchModels = async () => {
+      setModelsLoading(true)
+      try {
+        const [response, err] = await apiService.getAvailableModels()
+        if (err) {
+          console.warn('Failed to fetch available models:', err)
+          setAvailableModels([])
+        } else if (response) {
+          setAvailableModels(response.models || [])
+        }
+      } catch (error) {
+        console.warn('Error fetching available models:', error)
+        setAvailableModels([])
+      } finally {
+        setModelsLoading(false)
+      }
+    }
+
+    fetchModels()
   }, [])
 
   const handleSearchChange = useCallback(
@@ -55,6 +76,7 @@ export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
       Status: 'status',
       Providers: 'providers',
       Type: 'objects',
+      Models: 'models',
     }
 
     const filterKey = filterKeyMap[category]
@@ -67,11 +89,12 @@ export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
     })
   }
 
-  const isSelected = (category: string, value: string) => {
-    const filterKeyMap: Record<string, keyof LogFilters> = {
+  const isSelected = (category: keyof typeof FILTER_OPTIONS, value: string) => {
+    const filterKeyMap: Record<keyof typeof FILTER_OPTIONS, keyof LogFilters> = {
       Status: 'status',
       Providers: 'providers',
       Type: 'objects',
+      Models: 'models',
     }
 
     const filterKey = filterKeyMap[category]
@@ -87,6 +110,13 @@ export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
       return count + (value ? 1 : 0)
     }, 0)
   }
+
+  const FILTER_OPTIONS = {
+    Status: STATUSES,
+    Providers: PROVIDERS,
+    Type: REQUEST_TYPES,
+    Models: modelsLoading ? ['Loading models...'] : availableModels,
+  } as const
 
   return (
     <div className="flex items-center justify-between space-x-4">
@@ -120,18 +150,27 @@ export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
               {Object.entries(FILTER_OPTIONS).map(([category, values]) => (
                 <CommandGroup key={category} heading={category}>
                   {values.map((value) => {
-                    const selected = isSelected(category, value)
+                    const selected = isSelected(category as keyof typeof FILTER_OPTIONS, value)
+                    const isModelLoading = category === 'Models' && value === 'Loading models...'
                     return (
-                      <CommandItem key={value} onSelect={() => handleFilterSelect(category as keyof typeof FILTER_OPTIONS, value)}>
+                      <CommandItem 
+                        key={value} 
+                        onSelect={() => !isModelLoading && handleFilterSelect(category as keyof typeof FILTER_OPTIONS, value)}
+                        disabled={isModelLoading}
+                      >
                         <div
                           className={cn(
                             'border-primary mr-2 flex h-4 w-4 items-center justify-center rounded-sm border',
                             selected ? 'bg-primary text-primary-foreground' : 'opacity-50 [&_svg]:invisible',
                           )}
                         >
-                          <Check className="text-primary-foreground size-3" />
+                          {isModelLoading ? (
+                            <div className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent" />
+                          ) : (
+                            <Check className="text-primary-foreground size-3" />
+                          )}
                         </div>
-                        <span className="lowercase">
+                        <span className={cn('lowercase', isModelLoading && 'text-muted-foreground')}>
                           {category === 'Type' ? REQUEST_TYPE_LABELS[value as keyof typeof REQUEST_TYPE_LABELS] : value}
                         </span>
                       </CommandItem>

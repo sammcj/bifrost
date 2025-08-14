@@ -119,6 +119,15 @@ class ApiService {
     }
   }
 
+  async getAvailableModels(): ServiceResponse<{ models: string[] }> {
+    try {
+      const response = await this.client.get('/logs/models')
+      return [response.data, null]
+    } catch (error) {
+      return [null, this.getErrorMessage(error)]
+    }
+  }
+
   // Provider endpoints
   async getProviders(): ServiceResponse<ListProvidersResponse> {
     try {

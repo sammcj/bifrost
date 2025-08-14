@@ -33,6 +33,7 @@ func (h *LoggingHandler) RegisterRoutes(r *router.Router) {
 	// Log retrieval with filtering, search, and pagination
 	r.GET("/api/logs", h.GetLogs)
 	r.GET("/api/logs/dropped", h.GetDroppedRequests)
+	r.GET("/api/logs/models", h.GetAvailableModels)
 }
 
 // GetLogs handles GET /api/logs - Get logs with filtering, search, and pagination via query parameters
@@ -144,6 +145,12 @@ func (h *LoggingHandler) GetLogs(ctx *fasthttp.RequestCtx) {
 func (h *LoggingHandler) GetDroppedRequests(ctx *fasthttp.RequestCtx) {
 	droppedRequests := h.logManager.GetDroppedRequests()
 	SendJSON(ctx, map[string]int64{"dropped_requests": droppedRequests}, h.logger)
+}
+
+// GetAvailableModels handles GET /api/logs/models - Get all unique models from logs
+func (h *LoggingHandler) GetAvailableModels(ctx *fasthttp.RequestCtx) {
+	models := h.logManager.GetAvailableModels()
+	SendJSON(ctx, map[string]interface{}{"models": models}, h.logger)
 }
 
 // Helper functions

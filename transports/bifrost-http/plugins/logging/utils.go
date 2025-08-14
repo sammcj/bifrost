@@ -10,6 +10,9 @@ type LogManager interface {
 
 	// Get the number of dropped requests
 	GetDroppedRequests() int64
+
+	// GetAvailableModels returns all unique models from logs
+	GetAvailableModels() []string
 }
 
 // PluginLogManager implements LogManager interface wrapping the plugin
@@ -26,6 +29,11 @@ func (p *PluginLogManager) Search(filters *SearchFilters, pagination *Pagination
 
 func (p *PluginLogManager) GetDroppedRequests() int64 {
 	return p.plugin.droppedRequests.Load()
+}
+
+// GetAvailableModels returns all unique models from logs
+func (p *PluginLogManager) GetAvailableModels() []string {
+	return p.plugin.GetAvailableModels()
 }
 
 // GetPluginLogManager returns a LogManager interface for this plugin
