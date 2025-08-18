@@ -123,6 +123,7 @@ type BedrockToolChoice struct {
 
 // BedrockSpecificTool represents a specific tool choice configuration.
 type BedrockSpecificTool struct {
+	Type string `json:"type"` // "tool" always
 	Name string `json:"name"`
 }
 
@@ -899,7 +900,7 @@ func (provider *BedrockProvider) extractToolsFromHistory(messages []schemas.Bifr
 
 // prepareToolChoice prepares tool choice configuration for different model types.
 // Both Anthropic and Mistral models on Bedrock support toolChoice in toolConfig.
-func (provider *BedrockProvider) prepareToolChoice(params *schemas.ModelParameters, model string) *BedrockToolChoice {
+func (provider *BedrockProvider) prepareToolChoice(params *schemas.ModelParameters, model string) interface{} {
 	if params == nil || params.ToolChoice == nil {
 		return nil
 	}
@@ -912,21 +913,28 @@ func (provider *BedrockProvider) prepareToolChoice(params *schemas.ModelParamete
 			choice := *params.ToolChoice.ToolChoiceStr
 			switch choice {
 			case string(schemas.ToolChoiceTypeAuto):
-				return &BedrockToolChoice{
-					Auto: map[string]interface{}{},
-				}
+				return &BedrockToolChoice{Auto: map[string]interface{}{}}
 			case string(schemas.ToolChoiceTypeAny):
+				return &BedrockToolChoice{Any: map[string]interface{}{}}
+			case string(schemas.ToolChoiceTypeFunction), "tool":
+				if params.ToolChoice.ToolChoiceStruct == nil {
+					return nil
+				}
 				return &BedrockToolChoice{
-					Any: map[string]interface{}{},
+					Tool: &BedrockSpecificTool{
+						Type: "tool",
+						Name: params.ToolChoice.ToolChoiceStruct.Function.Name,
+					},
 				}
 			}
 			// Note: "none" is not supported by AWS Bedrock for these models
 		} else if params.ToolChoice.ToolChoiceStruct != nil {
-			if params.ToolChoice.ToolChoiceStruct.Type == schemas.ToolChoiceTypeFunction &&
+			if (params.ToolChoice.ToolChoiceStruct.Type == schemas.ToolChoiceTypeFunction || params.ToolChoice.ToolChoiceStruct.Type == "tool") &&
 				params.ToolChoice.ToolChoiceStruct.Function.Name != "" {
 
 				return &BedrockToolChoice{
 					Tool: &BedrockSpecificTool{
+						Type: "tool",
 						Name: params.ToolChoice.ToolChoiceStruct.Function.Name,
 					},
 				}
@@ -968,6 +976,9 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, model strin
 		}
 
 		preparedParams["toolConfig"] = toolConfig
+
+		delete(preparedParams, "tools")
+		delete(preparedParams, "tool_choice")
 	} else {
 		// Check if conversation history contains tool use/result blocks
 		// Bedrock requires toolConfig when such blocks are present
