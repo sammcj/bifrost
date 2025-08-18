@@ -912,10 +912,8 @@ func (provider *BedrockProvider) prepareToolChoice(params *schemas.ModelParamete
 		if params.ToolChoice.ToolChoiceStr != nil {
 			choice := *params.ToolChoice.ToolChoiceStr
 			switch choice {
-			case string(schemas.ToolChoiceTypeAuto):
-				return &BedrockToolChoice{Auto: map[string]interface{}{}}
-			case string(schemas.ToolChoiceTypeAny):
-				return &BedrockToolChoice{Any: map[string]interface{}{}}
+			case string(schemas.ToolChoiceTypeAuto), string(schemas.ToolChoiceTypeAny):
+				return nil
 			case string(schemas.ToolChoiceTypeFunction), "tool":
 				if params.ToolChoice.ToolChoiceStruct == nil {
 					return nil
