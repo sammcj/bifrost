@@ -2,7 +2,6 @@ import { cn } from '@/lib/utils'
 
 interface Props {
   className?: string
-  containerClassName?: string
   isBeta?: boolean
   valueClassName?: string
   label: string
@@ -19,28 +18,26 @@ export default function LogEntryDetailsView(props: Props) {
   const orientation = props.orientation || 'vertical'
   return (
     <div
-      className={cn('items-top flex flex-col gap-2', {
+      className={cn('items-top flex w-full flex-col gap-2 truncate text-ellipsis', {
         [`${props.className}`]: props.className !== undefined,
         'items-start': props.align === 'left' || props.align === undefined,
         'items-end': props.align === 'right',
       })}
     >
-      <div className={props.containerClassName}>
-        {props.label !== '' && (
-          <div className="text-muted-foreground flex shrink-0 flex-row items-center gap-2 text-xs font-medium">
-            {props.label.toUpperCase()}
-          </div>
-        )}
-        <div
-          className={cn('text-md flex whitespace-nowrap text-xs font-medium transition-transform delay-75', {
-            'w-full flex-col items-center gap-2': orientation === 'horizontal',
-            'flex-row items-start gap-2': orientation === 'vertical',
-            [`${props.valueClassName}`]: props.valueClassName !== undefined,
-            'text-end': props.align === 'right',
-          })}
-        >
-          {props.value}
+      {props.label !== '' && (
+        <div className="text-muted-foreground flex shrink-0 flex-row items-center gap-2 text-xs font-medium">
+          {props.label.toUpperCase().replaceAll('_', ' ')}
         </div>
+      )}
+      <div
+        className={cn('text-md text-xs font-medium transition-transform delay-75', {
+          'w-full flex-col items-center gap-2': orientation === 'horizontal',
+          'flex-row items-start gap-2': orientation === 'vertical',
+          [`${props.valueClassName}`]: props.valueClassName !== undefined,
+          'text-end': props.align === 'right',
+        })}
+      >
+        {props.value}
       </div>
     </div>
   )
