@@ -53,13 +53,6 @@ export function LogDetailSheet({ log, open, onOpenChange }: LogDetailSheetProps)
     } catch (ignored) {}
   }
 
-  let toolChoice = null
-  if (log.params?.tool_choice) {
-    try {
-      toolChoice = JSON.stringify(log.params.tool_choice, null, 2)
-    } catch (ignored) {}
-  }
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col overflow-x-hidden p-8 sm:max-w-2xl">
@@ -150,21 +143,6 @@ export function LogDetailSheet({ log, open, onOpenChange }: LogDetailSheetProps)
             </>
           )}
         </div>
-        {toolChoice && (
-          <div className="w-full rounded-sm border">
-            <div className="border-b px-6 py-2 text-sm font-medium">Tool Choice</div>
-            <CodeEditor
-              className="z-0 w-full"
-              shouldAdjustInitialHeight={true}
-              maxHeight={450}
-              wrap={true}
-              code={toolChoice}
-              lang="json"
-              readonly={true}
-              options={{ scrollBeyondLastLine: false, collapsibleBlocks: true, lineNumbers: 'off', alwaysConsumeMouseWheel: false }}
-            />
-          </div>
-        )}
         {toolsParameter && (
           <div className="w-full rounded-sm border">
             <div className="border-b px-6 py-2 text-sm font-medium">Tools</div>
@@ -198,7 +176,7 @@ export function LogDetailSheet({ log, open, onOpenChange }: LogDetailSheetProps)
             />
           </>
         )}
-        
+
         {/* Show conversation history for chat/text completions */}
         {log.input_history && log.input_history.length > 1 && (
           <>
@@ -221,22 +199,7 @@ export function LogDetailSheet({ log, open, onOpenChange }: LogDetailSheetProps)
           <>
             {log.output_message && (
               <>
-                <div className="mt-4 flex w-full items-center  gap-2">
-                  <div className="text-sm font-medium">Response</div>
-                  {log.stream && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="h-4 w-4 text-gray-600" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          The response shown may appear incomplete or out of order due to the way streamed data is accumulated for real-time
-                          display.
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                </div>
+                <div className="mt-4 text-sm font-medium">Response</div>
                 <LogMessageView message={log.output_message} />
               </>
             )}
