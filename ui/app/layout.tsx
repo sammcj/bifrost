@@ -1,45 +1,64 @@
-import ProgressProvider from '@/components/progress-bar'
-import Sidebar from '@/components/sidebar'
-import { ThemeProvider } from '@/components/theme-provider'
-import { SidebarProvider } from '@/components/ui/sidebar'
-import { WebSocketProvider } from '@/hooks/useWebSocket'
-import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
-import { Toaster } from 'sonner'
-import './globals.css'
+"use client";
+
+import FullPageLoader from "@/components/full-page-loader";
+import NotAvailableBanner from "@/components/not-available-banner";
+import ProgressProvider from "@/components/progress-bar";
+import Sidebar from "@/components/sidebar";
+import { ThemeProvider } from "@/components/theme-provider";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { WebSocketProvider } from "@/hooks/useWebSocket";
+import { getErrorMessage, ReduxProvider, useGetCoreConfigQuery } from "@/lib/store";
+import { Geist, Geist_Mono } from "next/font/google";
+import { useEffect } from "react";
+import { toast, Toaster } from "sonner";
+import "./globals.css";
 
 const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-})
+	variable: "--font-geist-sans",
+	subsets: ["latin"],
+});
 
 const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-})
+	variable: "--font-geist-mono",
+	subsets: ["latin"],
+});
 
-export const metadata: Metadata = {
-  title: 'Bifrost - The fastest LLM gateway',
-  description:
-    'Production-ready fastest LLM gateway that connects to 12+ providers through a single API. Get automatic failover, load balancing, mcp support and zero-downtime deployments.',
+function AppContent({ children }: { children: React.ReactNode }) {
+	const { data: bifrostConfig, error } = useGetCoreConfigQuery({});
+
+	useEffect(() => {
+		if (error) {
+			toast.error(getErrorMessage(error));
+		}
+	}, [error]);
+
+	return (
+		<WebSocketProvider>
+			<SidebarProvider>
+				<Sidebar />
+				<div className="dark:bg-card custom-scrollbar my-[1rem] h-[calc(100dvh-2rem)] w-full overflow-auto rounded-md border border-gray-200 bg-white dark:border-zinc-800">
+					<main className="custom-scrollbar relative mx-auto flex w-5xl flex-col px-4 py-12">
+						{bifrostConfig?.is_db_connected ? children : bifrostConfig ? <NotAvailableBanner /> : <FullPageLoader />}
+					</main>
+				</div>
+			</SidebarProvider>
+		</WebSocketProvider>
+	);
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ProgressProvider>
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <Toaster />
-            <WebSocketProvider>
-              <SidebarProvider>
-                <Sidebar />
-                <main className="custom-scrollbar w-5xl relative mx-auto flex min-h-screen flex-col px-4 py-12">{children}</main>
-              </SidebarProvider>
-            </WebSocketProvider>
-          </ThemeProvider>
-        </ProgressProvider>
-      </body>
-    </html>
-  )
+	return (
+		<html lang="en" suppressHydrationWarning>
+			<body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+				<ProgressProvider>
+					<ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+						<Toaster />
+						<ReduxProvider>
+							<AppContent>{children}</AppContent>
+						</ReduxProvider>
+					</ThemeProvider>
+				</ProgressProvider>
+			</body>
+		</html>
+	);
 }

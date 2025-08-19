@@ -14,7 +14,7 @@ import (
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/core/schemas/meta"
+	// "github.com/maximhq/bifrost/core/schemas/meta" // FIXME: meta package doesn't exist
 )
 
 // ChatbotConfig holds configuration for the chatbot
@@ -62,7 +62,7 @@ func (account *ComprehensiveTestAccount) GetConfiguredProviders() ([]schemas.Mod
 }
 
 // GetKeysForProvider returns the API keys and associated models for a given provider.
-func (account *ComprehensiveTestAccount) GetKeysForProvider(providerKey schemas.ModelProvider) ([]schemas.Key, error) {
+func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context, providerKey schemas.ModelProvider) ([]schemas.Key, error) {
 	switch providerKey {
 	case schemas.OpenAI:
 		return []schemas.Key{
@@ -162,10 +162,10 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 				RetryBackoffInitial:            100 * time.Millisecond,
 				RetryBackoffMax:                2 * time.Second,
 			},
-			MetaConfig: &meta.BedrockMetaConfig{
-				SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
-				Region:          bifrost.Ptr(getEnvWithDefault("AWS_REGION", "us-east-1")),
-			},
+			// MetaConfig: &meta.BedrockMetaConfig{ // FIXME: meta package doesn't exist
+			//	SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+			//	Region:          bifrost.Ptr(getEnvWithDefault("AWS_REGION", "us-east-1")),
+			// },
 			ConcurrencyAndBufferSize: schemas.ConcurrencyAndBufferSize{
 				Concurrency: 3,
 				BufferSize:  10,
@@ -184,13 +184,13 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 				RetryBackoffInitial:            100 * time.Millisecond,
 				RetryBackoffMax:                2 * time.Second,
 			},
-			MetaConfig: &meta.AzureMetaConfig{
-				Endpoint: os.Getenv("AZURE_ENDPOINT"),
-				Deployments: map[string]string{
-					"gpt-4o": "gpt-4o-aug",
-				},
-				APIVersion: bifrost.Ptr(getEnvWithDefault("AZURE_API_VERSION", "2024-08-01-preview")),
-			},
+			// MetaConfig: &meta.AzureMetaConfig{ // FIXME: meta package doesn't exist
+			//	Endpoint: os.Getenv("AZURE_ENDPOINT"),
+			//	Deployments: map[string]string{
+			//		"gpt-4o": "gpt-4o-aug",
+			//	},
+			//	APIVersion: bifrost.Ptr(getEnvWithDefault("AZURE_API_VERSION", "2024-08-01-preview")),
+			// },
 			ConcurrencyAndBufferSize: schemas.ConcurrencyAndBufferSize{
 				Concurrency: 3,
 				BufferSize:  10,
@@ -204,11 +204,11 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 				RetryBackoffInitial:            100 * time.Millisecond,
 				RetryBackoffMax:                2 * time.Second,
 			},
-			MetaConfig: &meta.VertexMetaConfig{
-				ProjectID:       os.Getenv("VERTEX_PROJECT_ID"),
-				Region:          getEnvWithDefault("VERTEX_REGION", "us-central1"),
-				AuthCredentials: os.Getenv("VERTEX_CREDENTIALS"),
-			},
+			// MetaConfig: &meta.VertexMetaConfig{ // FIXME: meta package doesn't exist
+			//	ProjectID:       os.Getenv("VERTEX_PROJECT_ID"),
+			//	Region:          getEnvWithDefault("VERTEX_REGION", "us-central1"),
+			//	AuthCredentials: os.Getenv("VERTEX_CREDENTIALS"),
+			// },
 			ConcurrencyAndBufferSize: schemas.ConcurrencyAndBufferSize{
 				Concurrency: 3,
 				BufferSize:  10,
@@ -232,8 +232,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 // NewChatSession creates a new chat session with the given configuration
 func NewChatSession(config ChatbotConfig) (*ChatSession, error) {
 	// Create MCP configuration for Bifrost
-	mcpConfig := &schemas.MCPConfig{
-		ServerPort:    bifrost.Ptr(config.MCPServerPort),
+	mcpConfig := &schemas.MCPConfig{		
 		ClientConfigs: []schemas.MCPClientConfig{},
 	}
 
@@ -267,7 +266,9 @@ func NewChatSession(config ChatbotConfig) (*ChatSession, error) {
 	})
 
 	// Initialize Bifrost with MCP configuration
-	account := &ComprehensiveTestAccount{}
+	account := &ComprehensiveTestAccount{
+
+	}
 
 	client, err := bifrost.Init(schemas.BifrostConfig{
 		Account:   account,
@@ -315,8 +316,8 @@ func (s *ChatSession) getAvailableProviders() []schemas.ModelProvider {
 			availableProviders = append(availableProviders, provider)
 			continue
 		}
-
-		keys, err := s.account.GetKeysForProvider(provider)
+		ctx := context.Background()
+		keys, err := s.account.GetKeysForProvider(&ctx, provider)
 		if err == nil && len(keys) > 0 && keys[0].Value != "" {
 			availableProviders = append(availableProviders, provider)
 		}
@@ -326,7 +327,8 @@ func (s *ChatSession) getAvailableProviders() []schemas.ModelProvider {
 
 // getAvailableModels returns available models for a given provider
 func (s *ChatSession) getAvailableModels(provider schemas.ModelProvider) []string {
-	keys, err := s.account.GetKeysForProvider(provider)
+	ctx := context.Background()
+	keys, err := s.account.GetKeysForProvider(&ctx, provider)
 	if err != nil || len(keys) == 0 {
 		return []string{}
 	}

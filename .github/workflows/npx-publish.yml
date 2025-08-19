@@ -1,0 +1,106 @@
+name: NPX Package Publish
+
+# Triggers when npx package is tagged
+on:
+  push:
+    tags:
+      - "npx/v*"
+
+# Prevent concurrent runs for the same trigger
+concurrency:
+  group: npx-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # Required for npm provenance
+    steps:
+      # Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Set up Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+          cache-dependency-path: |
+            npx/package-lock.json
+
+      # Extract and validate version from tag
+      - name: Extract version from tag
+        id: extract-version
+        run: ./.github/workflows/scripts/extract-npx-version.sh
+
+      # Update package.json with the tagged version
+      - name: Update package version
+        working-directory: npx
+        run: |
+          VERSION="${{ steps.extract-version.outputs.version }}"
+          echo "📝 Updating package.json version to $VERSION"
+          npm version "$VERSION" --no-git-tag-version
+
+      # Install dependencies (if any)
+      - name: Install dependencies
+        working-directory: npx
+        run: npm ci
+
+      # Run tests (if any exist)
+      - name: Run tests
+        working-directory: npx
+        run: |
+          if [ -f "package.json" ] && npm run | grep -q "test"; then
+            echo "🧪 Running tests..."
+            npm test
+          else
+            echo "⏭️ No tests found, skipping..."
+          fi
+
+      # Publish to npm
+      - name: Publish to npm
+        working-directory: npx
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION="${{ steps.extract-version.outputs.version }}"
+          echo "📦 Publishing @maximhq/bifrost@${VERSION} to npm..."
+          if npm view @maximhq/bifrost@"${VERSION}" version >/dev/null 2>&1; then
+            echo "ℹ️ @maximhq/bifrost@${VERSION} already exists on npm. Skipping publish."
+          else
+            npm publish --provenance --access public
+          fi
+
+      # Create GitHub release
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: bash .github/workflows/scripts/create-npx-release.sh "${{ steps.extract-version.outputs.version }}" "${{ steps.extract-version.outputs.full-tag }}"
+
+      # Discord notification
+      - name: Discord Notification
+        if: always()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          AUTHOR="${{ github.actor }}"
+          COMMIT_AUTHOR="$(git log -1 --pretty=%an || true)"
+          if [ -n "$COMMIT_AUTHOR" ]; then AUTHOR="$COMMIT_AUTHOR"; fi
+          if [ "${{ job.status }}" = "success" ]; then
+            TITLE="📦 **NPX Package Published**"
+            STATUS="✅ Success"
+            VERSION_LINE="**Version**: \`${{ steps.extract-version.outputs.version }}\`"
+            PACKAGE_LINE="**Package**: \`@maximhq/bifrost\`"
+            NPM_LINK="**[View on npm](https://www.npmjs.com/package/@maximhq/bifrost)**"
+            MESSAGE="$TITLE\n**Status**: $STATUS\n$VERSION_LINE\n$PACKAGE_LINE\n$NPM_LINK\n**Tag**: \`${{ steps.extract-version.outputs.full-tag }}\`\n**Commit**: \`${{ github.sha }}\`\n**Author**: ${AUTHOR}\n**[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})**"
+          else
+            TITLE="📦 **NPX Package Publish Failed**"
+            STATUS="❌ Failed"
+            MESSAGE="$TITLE\n**Status**: $STATUS\n**Tag**: \`${{ steps.extract-version.outputs.full-tag }}\`\n**Commit**: \`${{ github.sha }}\`\n**Author**: ${AUTHOR}\n**[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})**"
+          fi
+          payload="$(jq -n --arg content "$MESSAGE" '{content:$content}')"
+          curl -sS -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK"

@@ -1,10 +1,15 @@
-import { FlatCompat } from "@eslint/eslintrc";
-import eslintPluginPrettier from "eslint-plugin-prettier";
-import typescriptEslintEslintPlugin from "@typescript-eslint/eslint-plugin";
-import eslintPluginUnusedImports from "eslint-plugin-unused-imports";
-import typescriptEslintParser from "@typescript-eslint/parser";
 import { fixupConfigRules } from "@eslint/compat";
+import { FlatCompat } from "@eslint/eslintrc";
 import js from "@eslint/js";
+import typescriptEslintEslintPlugin from "@typescript-eslint/eslint-plugin";
+import typescriptEslintParser from "@typescript-eslint/parser";
+import eslintPluginPrettier from "eslint-plugin-prettier";
+import eslintPluginUnusedImports from "eslint-plugin-unused-imports";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const compat = new FlatCompat({
 	baseDirectory: __dirname,
