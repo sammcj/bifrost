@@ -4,9 +4,7 @@ go 1.24
 
 toolchain go1.24.3
 
-replace github.com/maximhq/bifrost/core => ../../core
-
-require github.com/maximhq/bifrost/core v1.1.21
+require github.com/maximhq/bifrost/core v1.1.23
 
 require (
 	cloud.google.com/go/compute/metadata v0.8.0 // indirect
