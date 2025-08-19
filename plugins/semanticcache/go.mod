@@ -4,14 +4,10 @@ go 1.24
 
 toolchain go1.24.3
 
-replace github.com/maximhq/bifrost/framework => ../../framework
-
-replace github.com/maximhq/bifrost/core => ../../core
-
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/maximhq/bifrost/core v1.1.21
-	github.com/maximhq/bifrost/framework v0.0.0
+	github.com/maximhq/bifrost/core v1.1.23
+	github.com/maximhq/bifrost/framework v1.0.0
 )
 
 require (

@@ -58,11 +58,14 @@ func TestJsonParserPluginEndToEnd(t *testing.T) {
 	}
 
 	// Initialize the JSON parser plugin for all requests
-	plugin := Init(PluginConfig{
+	plugin, err := Init(PluginConfig{
 		Usage:           AllRequests,
 		CleanupInterval: 5 * time.Minute,
 		MaxAge:          30 * time.Minute,
 	})
+	if err != nil {
+		t.Fatalf("Error initializing JSON parser plugin: %v", err)
+	}
 
 	account := BaseAccount{}
 
@@ -159,11 +162,14 @@ func TestJsonParserPluginPerRequest(t *testing.T) {
 	}
 
 	// Initialize the JSON parser plugin for per-request usage
-	plugin := Init(PluginConfig{
+	plugin, err := Init(PluginConfig{
 		Usage:           PerRequest,
 		CleanupInterval: 5 * time.Minute,
 		MaxAge:          30 * time.Minute,
 	})
+	if err != nil {
+		t.Fatalf("Error initializing JSON parser plugin: %v", err)
+	}
 
 	account := BaseAccount{}
 
@@ -247,11 +253,14 @@ func TestJsonParserPluginPerRequest(t *testing.T) {
 }
 
 func TestParsePartialJSON(t *testing.T) {
-	plugin := Init(PluginConfig{
+	plugin, err := Init(PluginConfig{
 		Usage:           AllRequests,
 		CleanupInterval: 5 * time.Minute,
 		MaxAge:          30 * time.Minute,
 	})
+	if err != nil {
+		t.Fatalf("Error initializing JSON parser plugin: %v", err)
+	}
 
 	tests := []struct {
 		name     string
