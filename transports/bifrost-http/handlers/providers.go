@@ -355,8 +355,8 @@ func (h *ProviderHandler) ListKeys(ctx *fasthttp.RequestCtx) {
 // mergeKeys merges new keys with old, preserving values that are redacted in the new config
 func (h *ProviderHandler) mergeKeys(provider schemas.ModelProvider, oldRawKeys []schemas.Key, oldRedactedKeys []schemas.Key, keysToAdd []schemas.Key, keysToDelete []schemas.Key, keysToUpdate []schemas.Key) ([]schemas.Key, error) {
 	// Clean up environment variables for deleted and updated keys
-	h.store.CleanupEnvKeysForKeys(string(provider), keysToDelete)
-	h.store.CleanupEnvKeysForUpdatedKeys(string(provider), keysToUpdate)
+	h.store.CleanupEnvKeysForKeys(provider, keysToDelete)
+	h.store.CleanupEnvKeysForUpdatedKeys(provider, keysToUpdate)
 	// Create a map of indices to delete
 	toDelete := make(map[int]bool)
 	for _, key := range keysToDelete {
