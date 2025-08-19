@@ -444,7 +444,7 @@ func parseBedrockAnthropicMessageToolCallContent(content string) map[string]inte
 		if arr, ok := parsedJSON.([]interface{}); ok {
 			toolResultContentBlock["json"] = map[string]interface{}{"content": arr}
 		} else {
-			toolResultContentBlock["json"] = parsedJSON
+			toolResultContentBlock["json"] = map[string]interface{}{"output": parsedJSON}
 		}
 	} else {
 		toolResultContentBlock["text"] = content
@@ -503,6 +503,7 @@ func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schema
 						"toolResult": toolCallResult,
 					})
 				} else {
+					// Bedrock wants only toolUse block on content, text blocks are not allowed when tools are called.
 					if msg.AssistantMessage != nil && msg.AssistantMessage.ToolCalls != nil {
 						for _, toolCall := range *msg.AssistantMessage.ToolCalls {
 							var input map[string]interface{}
@@ -520,59 +521,60 @@ func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schema
 								},
 							})
 						}
-					}
-
-					if msg.Content.ContentStr != nil {
-						content = append(content, BedrockAnthropicTextMessage{
-							Type: "text",
-							Text: *msg.Content.ContentStr,
-						})
-					} else if msg.Content.ContentBlocks != nil {
-						for _, block := range *msg.Content.ContentBlocks {
-							if block.Text != nil {
-								content = append(content, BedrockAnthropicTextMessage{
-									Type: "text",
-									Text: *block.Text,
-								})
-							}
-							if block.ImageURL != nil {
-								sanitizedURL, _ := SanitizeImageURL(block.ImageURL.URL)
-								urlTypeInfo := ExtractURLTypeInfo(sanitizedURL)
-
-								formattedImgContent := AnthropicImageContent{
-									Type: urlTypeInfo.Type,
+					} else {
+						if msg.Content.ContentStr != nil {
+							content = append(content, BedrockAnthropicTextMessage{
+								Type: "text",
+								Text: *msg.Content.ContentStr,
+							})
+						} else if msg.Content.ContentBlocks != nil {
+							for _, block := range *msg.Content.ContentBlocks {
+								if block.Text != nil {
+									content = append(content, BedrockAnthropicTextMessage{
+										Type: "text",
+										Text: *block.Text,
+									})
 								}
+								if block.ImageURL != nil {
+									sanitizedURL, _ := SanitizeImageURL(block.ImageURL.URL)
+									urlTypeInfo := ExtractURLTypeInfo(sanitizedURL)
 
-								if urlTypeInfo.MediaType != nil {
-									formattedImgContent.MediaType = *urlTypeInfo.MediaType
-								}
+									formattedImgContent := AnthropicImageContent{
+										Type: urlTypeInfo.Type,
+									}
 
-								if urlTypeInfo.DataURLWithoutPrefix != nil {
-									formattedImgContent.URL = *urlTypeInfo.DataURLWithoutPrefix
-								} else {
-									formattedImgContent.URL = sanitizedURL
-								}
+									if urlTypeInfo.MediaType != nil {
+										formattedImgContent.MediaType = *urlTypeInfo.MediaType
+									}
 
-								content = append(content, BedrockAnthropicImageMessage{
-									Type: "image",
-									Image: BedrockAnthropicImage{
-										Format: func() string {
-											if formattedImgContent.MediaType != "" {
-												mediaType := formattedImgContent.MediaType
-												// Remove "image/" prefix if present, since normalizeMediaType ensures full format
-												mediaType = strings.TrimPrefix(mediaType, "image/")
-												return mediaType
-											}
-											return ""
-										}(),
-										Source: BedrockAnthropicImageSource{
-											Bytes: formattedImgContent.URL,
+									if urlTypeInfo.DataURLWithoutPrefix != nil {
+										formattedImgContent.URL = *urlTypeInfo.DataURLWithoutPrefix
+									} else {
+										formattedImgContent.URL = sanitizedURL
+									}
+
+									content = append(content, BedrockAnthropicImageMessage{
+										Type: "image",
+										Image: BedrockAnthropicImage{
+											Format: func() string {
+												if formattedImgContent.MediaType != "" {
+													mediaType := formattedImgContent.MediaType
+													// Remove "image/" prefix if present, since normalizeMediaType ensures full format
+													mediaType = strings.TrimPrefix(mediaType, "image/")
+													return mediaType
+												}
+												return ""
+											}(),
+											Source: BedrockAnthropicImageSource{
+												Bytes: formattedImgContent.URL,
+											},
 										},
-									},
-								})
+									})
+								}
 							}
 						}
 					}
+
 				}
 
 				if len(content) > 0 {
@@ -999,7 +1001,7 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, model strin
 	if key.BedrockKeyConfig.Deployments != nil {
 		if inferenceProfileId, ok := key.BedrockKeyConfig.Deployments[model]; ok {
 			if key.BedrockKeyConfig.ARN != nil {
-				encodedModelIdentifier := url.PathEscape(fmt.Sprintf("%s/%s", *key.BedrockKeyConfig.ARN, inferenceProfileId))
+				encodedModelIdentifier := url.QueryEscape(fmt.Sprintf("%s/%s", *key.BedrockKeyConfig.ARN, inferenceProfileId))
 				path = fmt.Sprintf("%s/converse", encodedModelIdentifier)
 			}
 		}
