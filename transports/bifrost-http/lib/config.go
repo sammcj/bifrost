@@ -391,7 +391,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					// Process API key value
 					processedValue, envVar, err := config.processEnvValue(key.Value)
 					if err != nil {
-						config.cleanupEnvKeys(string(provider), "", newEnvKeys)
+						config.cleanupEnvKeys(provider, "", newEnvKeys)
 						if strings.Contains(err.Error(), "not found") {
 							logger.Info("%s: %v", provider, err)
 						} else {
@@ -406,7 +406,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 						newEnvKeys[envVar] = struct{}{}
 						config.EnvKeys[envVar] = append(config.EnvKeys[envVar], configstore.EnvKeyInfo{
 							EnvVar:     envVar,
-							Provider:   string(provider),
+							Provider:   provider,
 							KeyType:    "api_key",
 							ConfigPath: fmt.Sprintf("providers.%s.keys[%s]", provider, key.ID),
 							KeyID:      key.ID,
@@ -416,7 +416,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					// Process Azure key config if present
 					if key.AzureKeyConfig != nil {
 						if err := config.processAzureKeyConfigEnvVars(&cfg.Keys[i], provider, i, newEnvKeys); err != nil {
-							config.cleanupEnvKeys(string(provider), "", newEnvKeys)
+							config.cleanupEnvKeys(provider, "", newEnvKeys)
 							logger.Warn("failed to process Azure key config env vars for %s: %v", provider, err)
 							continue
 						}
@@ -425,7 +425,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					// Process Vertex key config if present
 					if key.VertexKeyConfig != nil {
 						if err := config.processVertexKeyConfigEnvVars(&cfg.Keys[i], provider, i, newEnvKeys); err != nil {
-							config.cleanupEnvKeys(string(provider), "", newEnvKeys)
+							config.cleanupEnvKeys(provider, "", newEnvKeys)
 							logger.Warn("failed to process Vertex key config env vars for %s: %v", provider, err)
 							continue
 						}
@@ -434,7 +434,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					// Process Bedrock key config if present
 					if key.BedrockKeyConfig != nil {
 						if err := config.processBedrockKeyConfigEnvVars(&cfg.Keys[i], provider, i, newEnvKeys); err != nil {
-							config.cleanupEnvKeys(string(provider), "", newEnvKeys)
+							config.cleanupEnvKeys(provider, "", newEnvKeys)
 							logger.Warn("failed to process Bedrock key config env vars for %s: %v", provider, err)
 							continue
 						}
@@ -632,7 +632,7 @@ func (s *Config) GetProviderConfigRedacted(provider schemas.ModelProvider) (*con
 	envVarsByPath := make(map[string]string)
 	for envVar, infos := range s.EnvKeys {
 		for _, info := range infos {
-			if info.Provider == string(provider) {
+			if info.Provider == provider {
 				envVarsByPath[info.ConfigPath] = envVar
 			}
 		}
@@ -816,7 +816,7 @@ func (s *Config) AddProvider(provider schemas.ModelProvider, config configstore.
 		// Process API key value
 		processedValue, envVar, err := s.processEnvValue(key.Value)
 		if err != nil {
-			s.cleanupEnvKeys(string(provider), "", newEnvKeys)
+			s.cleanupEnvKeys(provider, "", newEnvKeys)
 			return fmt.Errorf("failed to process env var in key: %w", err)
 		}
 		config.Keys[i].Value = processedValue
@@ -826,7 +826,7 @@ func (s *Config) AddProvider(provider schemas.ModelProvider, config configstore.
 			newEnvKeys[envVar] = struct{}{}
 			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 				EnvVar:     envVar,
-				Provider:   string(provider),
+				Provider:   provider,
 				KeyType:    "api_key",
 				ConfigPath: fmt.Sprintf("providers.%s.keys[%s]", provider, key.ID),
 				KeyID:      key.ID,
@@ -836,7 +836,7 @@ func (s *Config) AddProvider(provider schemas.ModelProvider, config configstore.
 		// Process Azure key config if present
 		if key.AzureKeyConfig != nil {
 			if err := s.processAzureKeyConfigEnvVars(&config.Keys[i], provider, i, newEnvKeys); err != nil {
-				s.cleanupEnvKeys(string(provider), "", newEnvKeys)
+				s.cleanupEnvKeys(provider, "", newEnvKeys)
 				return fmt.Errorf("failed to process Azure key config env vars: %w", err)
 			}
 		}
@@ -844,7 +844,7 @@ func (s *Config) AddProvider(provider schemas.ModelProvider, config configstore.
 		// Process Vertex key config if present
 		if key.VertexKeyConfig != nil {
 			if err := s.processVertexKeyConfigEnvVars(&config.Keys[i], provider, i, newEnvKeys); err != nil {
-				s.cleanupEnvKeys(string(provider), "", newEnvKeys)
+				s.cleanupEnvKeys(provider, "", newEnvKeys)
 				return fmt.Errorf("failed to process Vertex key config env vars: %w", err)
 			}
 		}
@@ -852,7 +852,7 @@ func (s *Config) AddProvider(provider schemas.ModelProvider, config configstore.
 		// Process Bedrock key config if present
 		if key.BedrockKeyConfig != nil {
 			if err := s.processBedrockKeyConfigEnvVars(&config.Keys[i], provider, i, newEnvKeys); err != nil {
-				s.cleanupEnvKeys(string(provider), "", newEnvKeys)
+				s.cleanupEnvKeys(provider, "", newEnvKeys)
 				return fmt.Errorf("failed to process Bedrock key config env vars: %w", err)
 			}
 		}
@@ -905,7 +905,7 @@ func (s *Config) UpdateProviderConfig(provider schemas.ModelProvider, config con
 		// Process API key value
 		processedValue, envVar, err := s.processEnvValue(key.Value)
 		if err != nil {
-			s.cleanupEnvKeys(string(provider), "", newEnvKeys) // Clean up only new vars on failure
+			s.cleanupEnvKeys(provider, "", newEnvKeys) // Clean up only new vars on failure
 			return fmt.Errorf("failed to process env var in key: %w", err)
 		}
 		config.Keys[i].Value = processedValue
@@ -915,7 +915,7 @@ func (s *Config) UpdateProviderConfig(provider schemas.ModelProvider, config con
 			newEnvKeys[envVar] = struct{}{}
 			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 				EnvVar:     envVar,
-				Provider:   string(provider),
+				Provider:   provider,
 				KeyType:    "api_key",
 				ConfigPath: fmt.Sprintf("providers.%s.keys[%s]", provider, key.ID),
 				KeyID:      key.ID,
@@ -925,7 +925,7 @@ func (s *Config) UpdateProviderConfig(provider schemas.ModelProvider, config con
 		// Process Azure key config if present
 		if key.AzureKeyConfig != nil {
 			if err := s.processAzureKeyConfigEnvVars(&config.Keys[i], provider, i, newEnvKeys); err != nil {
-				s.cleanupEnvKeys(string(provider), "", newEnvKeys)
+				s.cleanupEnvKeys(provider, "", newEnvKeys)
 				return fmt.Errorf("failed to process Azure key config env vars: %w", err)
 			}
 		}
@@ -933,7 +933,7 @@ func (s *Config) UpdateProviderConfig(provider schemas.ModelProvider, config con
 		// Process Vertex key config if present
 		if key.VertexKeyConfig != nil {
 			if err := s.processVertexKeyConfigEnvVars(&config.Keys[i], provider, i, newEnvKeys); err != nil {
-				s.cleanupEnvKeys(string(provider), "", newEnvKeys)
+				s.cleanupEnvKeys(provider, "", newEnvKeys)
 				return fmt.Errorf("failed to process Vertex key config env vars: %w", err)
 			}
 		}
@@ -941,7 +941,7 @@ func (s *Config) UpdateProviderConfig(provider schemas.ModelProvider, config con
 		// Process Bedrock key config if present
 		if key.BedrockKeyConfig != nil {
 			if err := s.processBedrockKeyConfigEnvVars(&config.Keys[i], provider, i, newEnvKeys); err != nil {
-				s.cleanupEnvKeys(string(provider), "", newEnvKeys)
+				s.cleanupEnvKeys(provider, "", newEnvKeys)
 				return fmt.Errorf("failed to process Bedrock key config env vars: %w", err)
 			}
 		}
@@ -972,7 +972,7 @@ func (s *Config) RemoveProvider(provider schemas.ModelProvider) error {
 	}
 
 	delete(s.Providers, provider)
-	s.cleanupEnvKeys(string(provider), "", nil)
+	s.cleanupEnvKeys(provider, "", nil)
 
 	if s.ConfigStore != nil {
 		if err := s.ConfigStore.UpdateProvidersConfig(s.Providers); err != nil {
@@ -1294,7 +1294,7 @@ func IsRedacted(key string) bool {
 //   - provider: Provider name to clean up (empty string for MCP clients)
 //   - mcpClientName: MCP client name to clean up (empty string for providers)
 //   - envVarsToRemove: Optional map of specific env vars to remove (nil to remove all)
-func (s *Config) cleanupEnvKeys(provider string, mcpClientName string, envVarsToRemove map[string]struct{}) {
+func (s *Config) cleanupEnvKeys(provider schemas.ModelProvider, mcpClientName string, envVarsToRemove map[string]struct{}) {
 	// If envVarsToRemove is provided, only clean those specific vars
 	if envVarsToRemove != nil {
 		for envVar := range envVarsToRemove {
@@ -1311,7 +1311,7 @@ func (s *Config) cleanupEnvKeys(provider string, mcpClientName string, envVarsTo
 
 // cleanupEnvVar removes entries for a specific environment variable based on provider/client.
 // This is a helper function to avoid duplicating the filtering logic.
-func (s *Config) cleanupEnvVar(envVar, provider, mcpClientName string) {
+func (s *Config) cleanupEnvVar(envVar string, provider schemas.ModelProvider, mcpClientName string) {
 	infos := s.EnvKeys[envVar]
 	if len(infos) == 0 {
 		return
@@ -1344,7 +1344,7 @@ func (s *Config) cleanupEnvVar(envVar, provider, mcpClientName string) {
 // Parameters:
 //   - provider: Provider name the keys belong to
 //   - keysToDelete: List of keys being deleted (uses their IDs to identify env vars to clean up)
-func (s *Config) CleanupEnvKeysForKeys(provider string, keysToDelete []schemas.Key) {
+func (s *Config) CleanupEnvKeysForKeys(provider schemas.ModelProvider, keysToDelete []schemas.Key) {
 	// Create a set of key IDs to delete for efficient lookup
 	keyIDsToDelete := make(map[string]bool)
 	for _, key := range keysToDelete {
@@ -1384,7 +1384,7 @@ func (s *Config) CleanupEnvKeysForKeys(provider string, keysToDelete []schemas.K
 // Parameters:
 //   - provider: Provider name the keys belong to
 //   - keysToUpdate: List of keys being updated (uses their IDs to identify env vars to clean up)
-func (s *Config) CleanupEnvKeysForUpdatedKeys(provider string, keysToUpdate []schemas.Key) {
+func (s *Config) CleanupEnvKeysForUpdatedKeys(provider schemas.ModelProvider, keysToUpdate []schemas.Key) {
 	// Create a set of key IDs to update for efficient lookup
 	keyIDsToUpdate := make(map[string]bool)
 	for _, key := range keysToUpdate {
@@ -1467,7 +1467,7 @@ func (s *Config) autoDetectProviders() {
 				// Track the environment variable
 				s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 					EnvVar:     envVar,
-					Provider:   string(provider),
+					Provider:   provider,
 					KeyType:    "api_key",
 					ConfigPath: fmt.Sprintf("providers.%s.keys[%s]", provider, keyID),
 					KeyID:      keyID,
@@ -1507,7 +1507,7 @@ func (s *Config) processAzureKeyConfigEnvVars(key *schemas.Key, provider schemas
 		newEnvKeys[envVar] = struct{}{}
 		s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 			EnvVar:     envVar,
-			Provider:   string(provider),
+			Provider:   provider,
 			KeyType:    "azure_config",
 			ConfigPath: fmt.Sprintf("providers.%s.keys[%s].azure_key_config.endpoint", provider, key.ID),
 			KeyID:      key.ID,
@@ -1525,7 +1525,7 @@ func (s *Config) processAzureKeyConfigEnvVars(key *schemas.Key, provider schemas
 			newEnvKeys[envVar] = struct{}{}
 			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 				EnvVar:     envVar,
-				Provider:   string(provider),
+				Provider:   provider,
 				KeyType:    "azure_config",
 				ConfigPath: fmt.Sprintf("providers.%s.keys[%s].azure_key_config.api_version", provider, key.ID),
 				KeyID:      key.ID,
@@ -1554,7 +1554,7 @@ func (s *Config) processVertexKeyConfigEnvVars(key *schemas.Key, provider schema
 		newEnvKeys[envVar] = struct{}{}
 		s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 			EnvVar:     envVar,
-			Provider:   string(provider),
+			Provider:   provider,
 			KeyType:    "vertex_config",
 			ConfigPath: fmt.Sprintf("providers.%s.keys[%s].vertex_key_config.project_id", provider, key.ID),
 			KeyID:      key.ID,
@@ -1571,7 +1571,7 @@ func (s *Config) processVertexKeyConfigEnvVars(key *schemas.Key, provider schema
 		newEnvKeys[envVar] = struct{}{}
 		s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 			EnvVar:     envVar,
-			Provider:   string(provider),
+			Provider:   provider,
 			KeyType:    "vertex_config",
 			ConfigPath: fmt.Sprintf("providers.%s.keys[%s].vertex_key_config.region", provider, key.ID),
 			KeyID:      key.ID,
@@ -1588,7 +1588,7 @@ func (s *Config) processVertexKeyConfigEnvVars(key *schemas.Key, provider schema
 		newEnvKeys[envVar] = struct{}{}
 		s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 			EnvVar:     envVar,
-			Provider:   string(provider),
+			Provider:   provider,
 			KeyType:    "vertex_config",
 			ConfigPath: fmt.Sprintf("providers.%s.keys[%s].vertex_key_config.auth_credentials", provider, key.ID),
 			KeyID:      key.ID,
@@ -1616,7 +1616,7 @@ func (s *Config) processBedrockKeyConfigEnvVars(key *schemas.Key, provider schem
 		newEnvKeys[envVar] = struct{}{}
 		s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 			EnvVar:     envVar,
-			Provider:   string(provider),
+			Provider:   provider,
 			KeyType:    "bedrock_config",
 			ConfigPath: fmt.Sprintf("providers.%s.keys[%s].bedrock_key_config.access_key", provider, key.ID),
 			KeyID:      key.ID,
@@ -1633,7 +1633,7 @@ func (s *Config) processBedrockKeyConfigEnvVars(key *schemas.Key, provider schem
 		newEnvKeys[envVar] = struct{}{}
 		s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 			EnvVar:     envVar,
-			Provider:   string(provider),
+			Provider:   provider,
 			KeyType:    "bedrock_config",
 			ConfigPath: fmt.Sprintf("providers.%s.keys[%s].bedrock_key_config.secret_key", provider, key.ID),
 			KeyID:      key.ID,
@@ -1651,7 +1651,7 @@ func (s *Config) processBedrockKeyConfigEnvVars(key *schemas.Key, provider schem
 			newEnvKeys[envVar] = struct{}{}
 			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 				EnvVar:     envVar,
-				Provider:   string(provider),
+				Provider:   provider,
 				KeyType:    "bedrock_config",
 				ConfigPath: fmt.Sprintf("providers.%s.keys[%s].bedrock_key_config.session_token", provider, key.ID),
 				KeyID:      key.ID,
@@ -1670,7 +1670,7 @@ func (s *Config) processBedrockKeyConfigEnvVars(key *schemas.Key, provider schem
 			newEnvKeys[envVar] = struct{}{}
 			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 				EnvVar:     envVar,
-				Provider:   string(provider),
+				Provider:   provider,
 				KeyType:    "bedrock_config",
 				ConfigPath: fmt.Sprintf("providers.%s.keys[%s].bedrock_key_config.region", provider, key.ID),
 				KeyID:      key.ID,
@@ -1689,7 +1689,7 @@ func (s *Config) processBedrockKeyConfigEnvVars(key *schemas.Key, provider schem
 			newEnvKeys[envVar] = struct{}{}
 			s.EnvKeys[envVar] = append(s.EnvKeys[envVar], configstore.EnvKeyInfo{
 				EnvVar:     envVar,
-				Provider:   string(provider),
+				Provider:   provider,
 				KeyType:    "bedrock_config",
 				ConfigPath: fmt.Sprintf("providers.%s.keys[%s].bedrock_key_config.arn", provider, key.ID),
 				KeyID:      key.ID,
