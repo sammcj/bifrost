@@ -59,7 +59,7 @@ func SendSSEError(ctx *fasthttp.RequestCtx, bifrostErr *schemas.BifrostError, lo
 		"error": bifrostErr,
 	})
 	if err != nil {
-		logger.Error(fmt.Errorf("failed to marshal error for SSE: %w", err))
+		logger.Error("failed to marshal error for SSE: %v", err)
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 		return
 	}

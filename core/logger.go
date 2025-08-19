@@ -2,7 +2,6 @@
 package bifrost
 
 import (
-	"errors"
 	"os"
 	"time"
 
@@ -20,13 +19,7 @@ type DefaultLogger struct {
 	stdoutLogger zerolog.Logger
 }
 
-type LoggerOutputType string
-
-const (
-	LoggerOutputTypeJSON   LoggerOutputType = "json"
-	LoggerOutputTypePretty LoggerOutputType = "pretty"
-)
-
+// toZerologLevel converts a Bifrost log level to a Zerolog level.
 func toZerologLevel(l schemas.LogLevel) zerolog.Level {
 	switch l {
 	case schemas.LogLevelDebug:
@@ -57,40 +50,32 @@ func NewDefaultLogger(level schemas.LogLevel) *DefaultLogger {
 
 // Debug logs a debug level message to stdout.
 // Messages are only output if the logger's level is set to LogLevelDebug.
-func (logger *DefaultLogger) Debug(msg string) {
-	logger.stdoutLogger.Debug().Msg(msg)
+func (logger *DefaultLogger) Debug(msg string, args ...any) {
+	logger.stdoutLogger.Debug().Msgf(msg, args...)
 }
 
 // Info logs an info level message to stdout.
 // Messages are output if the logger's level is LogLevelDebug or LogLevelInfo.
-func (logger *DefaultLogger) Info(msg string) {
-	logger.stdoutLogger.Info().Msg(msg)
+func (logger *DefaultLogger) Info(msg string, args ...any) {
+	logger.stdoutLogger.Info().Msgf(msg, args...)
 }
 
 // Warn logs a warning level message to stdout.
 // Messages are output if the logger's level is LogLevelDebug, LogLevelInfo, or LogLevelWarn.
-func (logger *DefaultLogger) Warn(msg string) {
-	logger.stdoutLogger.Warn().Msg(msg)
+func (logger *DefaultLogger) Warn(msg string, args ...any) {
+	logger.stdoutLogger.Warn().Msgf(msg, args...)
 }
 
 // Error logs an error level message to stderr.
 // Error messages are always output regardless of the logger's level.
-func (logger *DefaultLogger) Error(err error) {
-	if err == nil {
-		logger.stderrLogger.Error().Msg("nil error")
-		return
-	}
-	logger.stderrLogger.Error().Msg(err.Error())
+func (logger *DefaultLogger) Error(msg string, args ...any) {
+	logger.stderrLogger.Error().Msgf(msg, args...)
 }
 
 // Fatal logs a fatal-level message to stderr.
 // Fatal messages are always output regardless of the logger's level.
-func (logger *DefaultLogger) Fatal(msg string, err error) {
-	if err == nil {
-		logger.stderrLogger.Fatal().Err(errors.New("nil error")).Msg(msg)
-		return
-	}
-	logger.stderrLogger.Fatal().Err(err).Msg(msg)
+func (logger *DefaultLogger) Fatal(msg string, args ...any) {
+	logger.stderrLogger.Fatal().Msgf(msg, args...)
 }
 
 // SetLevel sets the logging level for the logger.
@@ -102,12 +87,12 @@ func (logger *DefaultLogger) SetLevel(level schemas.LogLevel) {
 // SetOutputType sets the output type for the logger.
 // This determines the format of the log output.
 // If the output type is unknown, it defaults to JSON
-func (logger *DefaultLogger) SetOutputType(outputType LoggerOutputType) {
+func (logger *DefaultLogger) SetOutputType(outputType schemas.LoggerOutputType) {
 	switch outputType {
-	case LoggerOutputTypePretty:
+	case schemas.LoggerOutputTypePretty:
 		logger.stdoutLogger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).With().Timestamp().Logger()
 		logger.stderrLogger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
-	case LoggerOutputTypeJSON:
+	case schemas.LoggerOutputTypeJSON:
 		logger.stdoutLogger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 		logger.stderrLogger = zerolog.New(os.Stderr).With().Timestamp().Logger()
 	default:

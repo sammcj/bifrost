@@ -130,21 +130,34 @@ ui/
 
 ### API Integration
 
-The UI communicates with the Bifrost HTTP transport backend through a typed API service:
+The UI uses Redux Toolkit + RTK Query for state management and API communication with the Bifrost HTTP transport backend:
 
 ```typescript
-// Example API usage
-import { apiService } from '@/lib/api'
+// Example API usage with RTK Query
+import { 
+  useGetLogsQuery, 
+  useCreateProviderMutation,
+  getErrorMessage 
+} from '@/lib/store'
 
-// Get real-time logs
-const [logs, error] = await apiService.getLogs(filters, pagination)
+// Get real-time logs with automatic caching
+const { data: logs, error, isLoading } = useGetLogsQuery({ filters, pagination })
 
-// Configure provider
-const [result, error] = await apiService.createProvider({
-  provider: 'openai',
-  keys: [{ value: 'sk-...', models: ['gpt-4'], weight: 1 }],
-  // ... other config
-})
+// Configure provider with optimistic updates
+const [createProvider] = useCreateProviderMutation()
+
+const handleCreate = async () => {
+  try {
+    await createProvider({
+      provider: 'openai',
+      keys: [{ value: 'sk-...', models: ['gpt-4'], weight: 1 }],
+      // ... other config
+    }).unwrap()
+    // Success handling
+  } catch (error) {
+    console.error(getErrorMessage(error))
+  }
+}
 ```
 
 ### Component Guidelines

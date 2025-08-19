@@ -50,10 +50,8 @@ type PluginConfig struct {
 	MaxAge          time.Duration
 }
 
-// NewJsonParserPlugin creates a new JSON parser plugin instance
-
-// NewJsonParserPlugin creates a new JSON parser plugin instance with custom configuration
-func NewJsonParserPlugin(config PluginConfig) *JsonParserPlugin {
+// Init creates a new JSON parser plugin instance with custom configuration
+func Init(config PluginConfig) (*JsonParserPlugin, error) {
 	// Set defaults if not provided
 	if config.CleanupInterval <= 0 {
 		config.CleanupInterval = 5 * time.Minute
@@ -76,7 +74,7 @@ func NewJsonParserPlugin(config PluginConfig) *JsonParserPlugin {
 	// Start the cleanup goroutine
 	go plugin.startCleanupGoroutine()
 
-	return plugin
+	return plugin, nil
 }
 
 // GetName returns the plugin name

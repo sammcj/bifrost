@@ -65,11 +65,20 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Setup Python (for tests tooling)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            tests/integrations/requirements.txt
+            tests/governance/requirements.txt
+      
       - name: Install Python dependencies (tests tooling)
         run: |
-          pip install -r tests/transports-integrations/requirements.txt
-          pip install -r tests/transports-governance/requirements.txt
-
+          python -m pip install --disable-pip-version-check \
+            -r tests/integrations/requirements.txt \
+            -r tests/governance/requirements.txt
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -92,5 +101,3 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: snyk-code.sarif
-
-

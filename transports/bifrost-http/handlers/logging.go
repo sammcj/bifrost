@@ -10,7 +10,8 @@ import (
 
 	"github.com/fasthttp/router"
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/transports/bifrost-http/plugins/logging"
+	"github.com/maximhq/bifrost/framework/logstore"
+	"github.com/maximhq/bifrost/plugins/logging"
 	"github.com/valyala/fasthttp"
 )
 
@@ -39,8 +40,8 @@ func (h *LoggingHandler) RegisterRoutes(r *router.Router) {
 // GetLogs handles GET /api/logs - Get logs with filtering, search, and pagination via query parameters
 func (h *LoggingHandler) GetLogs(ctx *fasthttp.RequestCtx) {
 	// Parse query parameters into filters
-	filters := &logging.SearchFilters{}
-	pagination := &logging.PaginationOptions{}
+	filters := &logstore.SearchFilters{}
+	pagination := &logstore.PaginationOptions{}
 
 	// Extract filters from query parameters
 	if providers := string(ctx.QueryArgs().Peek("providers")); providers != "" {
@@ -133,7 +134,7 @@ func (h *LoggingHandler) GetLogs(ctx *fasthttp.RequestCtx) {
 
 	result, err := h.logManager.Search(filters, pagination)
 	if err != nil {
-		h.logger.Error(fmt.Errorf("failed to search logs: %w", err))
+		h.logger.Error("failed to search logs: %v", err)
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Search failed: %v", err), h.logger)
 		return
 	}

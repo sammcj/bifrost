@@ -227,7 +227,7 @@ func (m *MCPManager) removeClientUnsafe(name string) error {
 	// This handles cleanup for all transport types (HTTP, STDIO, SSE)
 	if client.Conn != nil {
 		if err := client.Conn.Close(); err != nil {
-			m.logger.Error(fmt.Errorf("%s Failed to close MCP client %s: %w", MCPLogPrefix, name, err))
+			m.logger.Error("%s Failed to close MCP client %s: %v", MCPLogPrefix, name, err)
 		}
 		client.Conn = nil
 	}
@@ -568,7 +568,7 @@ func (m *MCPManager) executeTool(ctx context.Context, toolCall schemas.ToolCall)
 
 	toolResponse, callErr := client.Conn.CallTool(ctx, callRequest)
 	if callErr != nil {
-		m.logger.Error(fmt.Errorf("%s Tool execution failed for %s via client %s: %v", MCPLogPrefix, toolName, client.Name, callErr))
+		m.logger.Error("%s Tool execution failed for %s via client %s: %v", MCPLogPrefix, toolName, client.Name, callErr)
 		return nil, fmt.Errorf("MCP tool call failed: %v", callErr)
 	}
 
@@ -1111,7 +1111,7 @@ func (m *MCPManager) cleanup() error {
 	// Disconnect all external MCP clients
 	for name := range m.clientMap {
 		if err := m.removeClientUnsafe(name); err != nil {
-			m.logger.Error(fmt.Errorf("%s Failed to remove MCP client %s: %w", MCPLogPrefix, name, err))
+			m.logger.Error("%s Failed to remove MCP client %s: %v", MCPLogPrefix, name, err)
 		}
 	}
 
