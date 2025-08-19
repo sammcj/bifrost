@@ -283,14 +283,14 @@ func (p *LoggerPlugin) cleanupOldStreamAccumulators() {
 				}
 				p.streamAccumulators.Delete(requestID)
 				cleanedCount++
-				p.logger.Debug(fmt.Sprintf("Cleaned up old stream accumulator for request %s", requestID))
+				p.logger.Debug("cleaned up old stream accumulator for request %s")
 			}
 		}
 		return true
 	})
 
 	if cleanedCount > 0 {
-		p.logger.Debug(fmt.Sprintf("Cleaned up %d old stream accumulators", cleanedCount))
+		p.logger.Debug("cleaned up %d old stream accumulators", cleanedCount)
 	}
 }
 

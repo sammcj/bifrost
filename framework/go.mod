@@ -5,13 +5,11 @@ go 1.24
 toolchain go1.24.3
 
 require (
-	github.com/maximhq/bifrost/core v1.1.21
+	github.com/maximhq/bifrost/core v1.1.23
 	github.com/redis/go-redis/v9 v9.12.1
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.30.1
 )
-
-replace github.com/maximhq/bifrost/core => ../core
 
 require (
 	cloud.google.com/go/compute/metadata v0.8.0 // indirect
