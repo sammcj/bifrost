@@ -8,12 +8,14 @@ on:
 # Prevent concurrent runs
 concurrency:
   group: release-pipeline
-  cancel-in-progress: true
+  cancel-in-progress: true  
 
 jobs:
   # Detect what needs to be released
   detect-changes:
     runs-on: ubuntu-latest
+    # Skip if commit message contains --skip-pipeline
+    if: "!contains(github.event.head_commit.message, '--skip-pipeline')"
     outputs:
       core-needs-release: ${{ steps.detect.outputs.core-needs-release }}
       framework-needs-release: ${{ steps.detect.outputs.framework-needs-release }}
@@ -75,7 +77,7 @@ jobs:
 
   framework-release:
     needs: [detect-changes, core-release]
-    if: always() && needs.detect-changes.outputs.framework-needs-release == 'true' && (needs.core-release.result == 'success' || needs.core-release.result == 'skipped')
+    if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.framework-needs-release == 'true' && (needs.core-release.result == 'success' || needs.core-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -123,7 +125,7 @@ jobs:
 
   plugins-release:
     needs: [detect-changes, core-release, framework-release]
-    if: always() && needs.detect-changes.outputs.plugins-need-release == 'true' && (needs.framework-release.result == 'success' || needs.framework-release.result == 'skipped')
+    if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.plugins-need-release == 'true' && (needs.framework-release.result == 'success' || needs.framework-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -178,7 +180,7 @@ jobs:
 
   bifrost-http-release:
     needs: [detect-changes, core-release, framework-release, plugins-release]
-    if: always() && needs.detect-changes.outputs.bifrost-http-needs-release == 'true' && (needs.plugins-release.result == 'success' || needs.plugins-release.result == 'skipped')
+    if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.bifrost-http-needs-release == 'true' && (needs.plugins-release.result == 'success' || needs.plugins-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -291,7 +293,7 @@ jobs:
   # Notification
   notify:
     needs: [detect-changes, core-release, framework-release, plugins-release, bifrost-http-release, docker-build]
-    if: always()
+    if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline')"
     runs-on: ubuntu-latest
     steps:
       - name: Install jq
@@ -333,8 +335,8 @@ jobs:
             BIFROST_STATUS="❌ Failed"
           fi
 
-          TITLE="🚀 **Release Pipeline Complete**"
-          MESSAGE="$TITLE\n**Core**: $CORE_STATUS\n**Framework**: $FRAMEWORK_STATUS\n**Plugins**: $PLUGINS_STATUS\n**Bifrost HTTP**: $BIFROST_STATUS\n**Branch**: \`main\`\n**Commit**: \`${{ github.sha }}\`\n**Author**: ${{ github.actor }}\n**[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})**"
+          # Build the message with proper formatting
+          MESSAGE=$(printf "🚀 **Release Pipeline Complete**\n\n**Components:**\n• Core: %s\n• Framework: %s\n• Plugins: %s\n• Bifrost HTTP: %s\n\n**Details:**\n• Branch: \`main\`\n• Commit: \`%.8s\`\n• Author: %s\n\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" "$CORE_STATUS" "$FRAMEWORK_STATUS" "$PLUGINS_STATUS" "$BIFROST_STATUS" "${{ github.sha }}" "${{ github.actor }}")
 
           payload="$(jq -n --arg content "$MESSAGE" '{content:$content}')"
           curl -sS -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK"

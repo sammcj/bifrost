@@ -5,12 +5,12 @@ go 1.24.1
 toolchain go1.24.3
 
 require (
-	github.com/maximhq/bifrost/core v1.1.23
+	github.com/maximhq/bifrost/core v1.1.24
 	github.com/maximhq/bifrost/transports v1.1.23
 	gorm.io/gorm v1.30.1
 )
 
-require github.com/maximhq/bifrost/framework v1.0.1
+require github.com/maximhq/bifrost/framework v1.0.2
 
 require (
 	cloud.google.com/go/compute/metadata v0.8.0 // indirect
