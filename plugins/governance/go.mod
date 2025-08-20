@@ -5,7 +5,7 @@ go 1.24.1
 toolchain go1.24.3
 
 require (
-	github.com/maximhq/bifrost/core v1.1.23
+	github.com/maximhq/bifrost/core v1.1.24
 	github.com/maximhq/bifrost/transports v1.1.23
 	gorm.io/gorm v1.30.1
 )
