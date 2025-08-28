@@ -40,8 +40,17 @@ docker run -p 8080:8080 maximhq/bifrost
 # For configuration persistence across restarts
 docker run -p 8080:8080 -v $(pwd)/data:/app/data maximhq/bifrost
 ```
+### 2. Configuration Flags
 
-### 2. Understanding App Directory
+| Flag | Default | NPX | Docker | Description |
+|------|---------|-----|--------|-------------|
+| port | 8080 | `-port 8080` | `-e APP_PORT=8080 -p 8080:8080` | HTTP server port |
+| host | localhost | `-host 0.0.0.0` | `-e APP_HOST=0.0.0.0` | Host to bind server to |
+| log-level | info | `-log-level info` | `-e LOG_LEVEL=info` | Log level (debug, info, warn, error) |
+| log-style | json | `-log-style json` | `-e LOG_STYLE=json` | Log style (pretty, json) |
+
+
+**Understanding App Directory**
 
 The `-app-dir` flag determines where Bifrost stores all its data:
 
@@ -179,16 +188,15 @@ Now that you have Bifrost running, explore these focused guides:
 ### Essential Topics
 
 - **[Provider Configuration](./provider-configuration)** - Multiple providers, automatic failovers & load balancing
-- **[Integrations](./integrations)** - Drop-in replacements for OpenAI, Anthropic, and GenAI SDKs
-- **[MCP Tools](./mcp-tools)** - Enable AI models to use external tools (filesystem, web search, databases)
-- **[Plugins](./plugins)** - Add semantic caching, governance, custom analytics
+- **[Integrations](../../integrations/what-is-an-integration)** - Drop-in replacements for OpenAI, Anthropic, and GenAI SDKs
+- **[Multimodal Support](./multimodal)** - Support for text, images, audio, and streaming, all behind a common interface.
 
 ### Advanced Topics
 
-- **[Monitoring](./monitoring)** - Prometheus metrics, request logging, and observability
-- **[Core Features](../../features/)** - Governance, fallbacks, and advanced capabilities
-- **[Architecture](../../architecture/)** - How Bifrost works internally
-- **[Deployment](../../deployment/)** - Production setup and scaling
+- **[Tracing](../../features/tracing)** - Logging requests for monitoring and debugging
+- **[MCP Tools](../../features/mcp)** - Enable AI models to use external tools (filesystem, web search, databases)
+- **[Governance](../../features/governance)** - Usage tracking, rate limiting, and cost control
+- **[Deployment](../../deployment/docker-setup)** - Production setup and scaling
 
 ---
 

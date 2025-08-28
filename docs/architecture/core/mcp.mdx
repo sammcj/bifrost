@@ -137,7 +137,7 @@ graph TB
 - **Security:** Similar to HTTP with streaming capabilities
 - **Benefits:** Real-time updates, persistent connections, event-driven
 
-> **MCP Configuration:** [MCP Setup Guide →](../usage/http-transport/configuration/mcp)
+> **MCP Configuration:** [MCP Setup Guide →](../../features/mcp)
 
 ---
 
@@ -272,7 +272,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 - **Audit Trail** - Track which tools are used by which requests
 - **Risk Mitigation** - Prevent access to dangerous operations
 
-> **📖 Tool Filtering:** [MCP Tool Control →](../usage/http-transport/configuration/mcp#tool-filtering)
+> **📖 Tool Filtering:** [MCP Tool Control →](../../features/mcp)
 
 ---
 
@@ -493,7 +493,7 @@ This flow ensures that while AI models can discover and request tool usage, all 
 - **Failover:** Use local fallbacks when remote services are unavailable
 - **Optimization:** Route tool calls to most appropriate execution environment
 
-> **📖 MCP Development:** [Tool Development Guide →](../usage/mcp#developing-mcp-tools)
+> **📖 MCP Development:** [Tool Development Guide →](../../features/mcp)
 
 ---
 
@@ -549,17 +549,16 @@ graph TB
 - **Monitoring** - Continuous security monitoring and alerting
 - **Incident Response** - Procedures for security incidents involving tools
 
-> **📖 MCP Security:** [Security Best Practices →](../usage/key-management#mcp-security)
+> **📖 MCP Security:** [Security Best Practices →](../../features/mcp)
 
 ---
 
 ## Related Architecture Documentation
 
-- **[System Overview](./system-overview)** - How MCP fits in the overall architecture
 - **[Request Flow](./request-flow)** - MCP integration in request processing
 - **[Concurrency Model](./concurrency)** - MCP concurrency and worker integration
 - **[Plugin System](./plugins)** - Integration between MCP and plugin systems
-- **[Benchmarks](../benchmarks)** - MCP performance impact and optimization
-- **[Design Decisions](./design-decisions)** - MCP architecture design rationale
+- **[Benchmarks](../../benchmarking/getting-started)** - MCP performance impact and optimization
+
 
 

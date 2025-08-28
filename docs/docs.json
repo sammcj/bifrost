@@ -90,7 +90,7 @@
               "features/keys-management",
               "features/mcp",
               "features/tracing",
-              "features/telemetry",              
+              "features/telemetry",
               "features/governance",
               "features/semantic-caching",
               {
