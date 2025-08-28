@@ -117,7 +117,7 @@ func (p *LoggerPlugin) updateLogEntry(ctx context.Context, requestID string, tim
 		} else {
 			updates["error_details"] = tempEntry.ErrorDetails
 		}
-	}	
+	}
 	return p.store.Update(requestID, updates)
 }
 
@@ -367,7 +367,7 @@ func (p *LoggerPlugin) SearchLogs(filters logstore.SearchFilters, pagination log
 
 // GetAvailableModels returns all unique models from logs
 func (p *LoggerPlugin) GetAvailableModels() []string {
-	var models []string
+	modelSet := make(map[string]bool)
 	// Query distinct models from logs
 	result, err := p.store.FindAll("model IS NOT NULL AND model != ''", "model")
 	if err != nil {
@@ -375,7 +375,11 @@ func (p *LoggerPlugin) GetAvailableModels() []string {
 		return []string{}
 	}
 	for _, model := range result {
-		models = append(models, model.Model)
+		modelSet[model.Model] = true
+	}
+	models := make([]string, 0, len(modelSet))
+	for model := range modelSet {
+		models = append(models, model)
 	}
 	return models
 }
