@@ -87,31 +87,6 @@ export default function LogsPage() {
 				});
 
 				setTotalItems((prev: number) => prev + 1);
-
-				setStats((prevStats) => {
-					if (!prevStats) return prevStats;
-
-					const newStats = { ...prevStats };
-					newStats.total_requests += 1;
-
-					// Update success rate
-					const successCount = (prevStats.success_rate / 100) * prevStats.total_requests;
-					const newSuccessCount = log.status === "success" ? successCount + 1 : successCount;
-					newStats.success_rate = (newSuccessCount / newStats.total_requests) * 100;
-
-					// Update average latency
-					if (log.latency) {
-						const totalLatency = prevStats.average_latency * prevStats.total_requests;
-						newStats.average_latency = (totalLatency + log.latency) / newStats.total_requests;
-					}
-
-					// Update total tokens
-					if (log.token_usage) {
-						newStats.total_tokens += log.token_usage.total_tokens;
-					}
-
-					return newStats;
-				});
 			}
 		} else if (operation === "update") {
 			// Handle log updates with debouncing for streaming
@@ -158,6 +133,34 @@ export default function LogsPage() {
 					// For non-streaming updates, update immediately
 					updateExistingLog(log);
 				}
+
+				// Update stats for completed requests
+				if (log.status == "success" || log.status == "error") {
+					setStats((prevStats) => {
+						if (!prevStats) return prevStats;
+
+						const newStats = { ...prevStats };
+						newStats.total_requests += 1;
+
+						// Update success rate
+						const successCount = (prevStats.success_rate / 100) * prevStats.total_requests;
+						const newSuccessCount = log.status === "success" ? successCount + 1 : successCount;
+						newStats.success_rate = (newSuccessCount / newStats.total_requests) * 100;
+
+						// Update average latency
+						if (log.latency) {
+							const totalLatency = prevStats.average_latency * prevStats.total_requests;
+							newStats.average_latency = (totalLatency + log.latency) / newStats.total_requests;
+						}
+
+						// Update total tokens
+						if (log.token_usage) {
+							newStats.total_tokens += log.token_usage.total_tokens;
+						}
+
+						return newStats;
+					});
+				}
 			}
 		}
 	}, []);
@@ -174,34 +177,6 @@ export default function LogsPage() {
 			}
 			return prevSelectedLog;
 		});
-
-		// Update stats for completed requests
-		if (updatedLog.status === "success" || updatedLog.status === "error") {
-			setStats((prevStats) => {
-				if (!prevStats) return prevStats;
-
-				const newStats = { ...prevStats };
-
-				// Recalculate success rate (this is an approximation)
-				const successCount = (prevStats.success_rate / 100) * prevStats.total_requests;
-				const newSuccessCount = updatedLog.status === "success" ? successCount + 1 : successCount;
-				newStats.success_rate = (newSuccessCount / newStats.total_requests) * 100;
-
-				// Update average latency
-				if (updatedLog.latency) {
-					// This is an approximation - for exact stats, we'd need to refetch
-					const totalLatency = prevStats.average_latency * prevStats.total_requests;
-					newStats.average_latency = (totalLatency + updatedLog.latency) / newStats.total_requests;
-				}
-
-				// Update total tokens
-				if (updatedLog.token_usage) {
-					newStats.total_tokens += updatedLog.token_usage.total_tokens;
-				}
-
-				return newStats;
-			});
-		}
 	}, []);
 
 	const { isConnected: isSocketConnected, setMessageHandler } = useWebSocket();
