@@ -118,3 +118,32 @@ func newBifrostMessageChan(message *schemas.BifrostResponse) chan *schemas.Bifro
 
 	return ch
 }
+
+var supportedBaseProvidersSet = func() map[schemas.ModelProvider]struct{} {
+	m := make(map[schemas.ModelProvider]struct{}, len(schemas.SupportedBaseProviders))
+	for _, p := range schemas.SupportedBaseProviders {
+		m[p] = struct{}{}
+	}
+	return m
+}()
+
+// IsSupportedBaseProvider reports whether providerKey is allowed as a base provider
+// for custom providers.
+func IsSupportedBaseProvider(providerKey schemas.ModelProvider) bool {
+	_, ok := supportedBaseProvidersSet[providerKey]
+	return ok
+}
+
+var standardProvidersSet = func() map[schemas.ModelProvider]struct{} {
+	m := make(map[schemas.ModelProvider]struct{}, len(schemas.StandardProviders))
+	for _, p := range schemas.StandardProviders {
+		m[p] = struct{}{}
+	}
+	return m
+}()
+
+// IsStandardProvider reports whether providerKey is a built-in (non-custom) provider.
+func IsStandardProvider(providerKey schemas.ModelProvider) bool {
+	_, ok := standardProvidersSet[providerKey]
+	return ok
+}

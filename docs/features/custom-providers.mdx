@@ -1,0 +1,293 @@
+---
+title: "Custom Providers"
+description: "Create custom provider configurations with specific request type restrictions, custom naming, and controlled access patterns."
+icon: "gears"
+---
+
+## What Are Custom Providers?
+
+Custom providers allow you to create multiple instances of the same base provider, each with different configurations and access patterns. The key feature is request type control, which enables you to restrict what operations each custom provider instance can perform.
+
+Think of custom providers as "multiple views" of the same underlying provider — you can create several custom configurations for OpenAI, Anthropic, or any other provider, each optimized for different use cases while sharing the same API keys and base infrastructure.
+
+## Key Benefits
+
+- **Multiple Provider Instances**: Create several configurations of the same base provider (e.g., multiple OpenAI configurations)
+- **Request Type Control**: Restrict which operations (chat, embeddings, speech, etc.) each custom provider can perform
+- **Custom Naming**: Use descriptive names like "openai-production" or "openai-staging"
+- **Provider Reuse**: Maximize the value of your existing provider accounts
+
+## How to Configure
+
+Custom providers are configured using the `custom_provider_config` field, which extends the standard provider configuration. The main purpose is to create multiple instances of the same base provider, each with different request type restrictions.
+
+**Important**: The `allowed_requests` field follows a specific behavior:
+- **Omitted entirely**: All operations are allowed (default behavior)
+- **Partially specified**: Only explicitly set fields are allowed, others default to `false`
+- **Fully specified**: Only the operations you explicitly enable are allowed
+- **Present but empty object (`{}`)**: All fields are set to false
+
+<Tabs group="custom-provider-config">
+
+<Tab title="Using Web UI">
+
+![Provider Configuration Interface](../media/ui-custom-provider.png)
+
+1. Go to **http://localhost:8080**
+2. Navigate to **"Providers"** in the sidebar
+3. Click **"Add New Provider"**
+4. Choose a unique provider name (e.g., "openai-custom")
+5. Select the base provider type (e.g., "openai")
+6. Configure which request types are allowed
+7. Save configuration
+
+</Tab>
+
+<Tab title="Using API">
+
+```bash
+# Create a chat-only custom provider
+curl --location 'http://localhost:8080/api/providers' \
+--header 'Content-Type: application/json' \
+--data '{
+    "provider": "openai-custom",
+    "keys": [
+        {
+            "value": "env.OPENAI_API_KEY",
+            "models": [],
+            "weight": 1.0
+        }
+    ],
+    "custom_provider_config": {
+        "base_provider_type": "openai",
+        "allowed_requests": {
+            "text_completion": false,
+            "chat_completion": true,
+            "chat_completion_stream": true,
+            "embedding": false,
+            "speech": false,
+            "speech_stream": false,
+            "transcription": false,
+            "transcription_stream": false
+        }
+    }
+}'
+```
+
+</Tab>
+
+<Tab title="Using config.json">
+
+```json
+{
+    "providers": {
+        "openai-custom": {
+            "keys": [
+                {
+                    "value": "env.OPENAI_API_KEY",
+                    "models": [],
+                    "weight": 1.0
+                }
+            ],
+            "custom_provider_config": {
+                "base_provider_type": "openai",
+                "allowed_requests": {
+                    "text_completion": false,
+                    "chat_completion": true,
+                    "chat_completion_stream": true,
+                    "embedding": false,
+                    "speech": false,
+                    "speech_stream": false,
+                    "transcription": false,
+                    "transcription_stream": false
+                }
+            }
+        }
+    }
+}
+```
+
+</Tab>
+
+</Tabs>
+
+## Configuration Options
+
+### Allowed Request Types
+
+Control which operations your custom provider can perform. The behavior is:
+
+- **If `allowed_requests` is not specified**: All operations are allowed by default
+- **If `allowed_requests` is specified**: Only the fields set to `true` are allowed, all others default to `false`
+
+Available operations:
+
+- **`text_completion`**: Legacy text completion requests
+- **`chat_completion`**: Standard chat completion requests
+- **`chat_completion_stream`**: Streaming chat responses
+- **`embedding`**: Text embedding generation
+- **`speech`**: Text-to-speech conversion
+- **`speech_stream`**: Streaming text-to-speech
+- **`transcription`**: Speech-to-text conversion
+- **`transcription_stream`**: Streaming speech-to-text
+
+### Base Provider Types
+
+Custom providers can be built on these supported providers:
+
+- `openai` - OpenAI API
+- `anthropic` - Anthropic Claude
+- `bedrock` - AWS bedrock
+- `cohere` - Cohere
+
+## Use Cases
+
+### 1. Environment-Specific Configurations
+
+Create different configurations for production, staging, and development environments:
+
+```json
+{
+    "openai-production": {
+        "keys": [{ "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "custom_provider_config": {
+            "base_provider_type": "openai",
+            "allowed_requests": {
+                "chat_completion": true,
+                "chat_completion_stream": true,
+                "embedding": true,
+                "speech": true,
+                "speech_stream": true
+            }
+        }
+    },
+    "openai-staging": {
+        "keys": [{ "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "custom_provider_config": {
+            "base_provider_type": "openai",
+            "allowed_requests": {
+                "chat_completion": true,
+                "chat_completion_stream": true,
+                "embedding": true,
+                "speech": false,
+                "speech_stream": false
+            }
+        }
+    },
+    "openai-dev": {
+        "keys": [{ "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "custom_provider_config": {
+            "base_provider_type": "openai",
+            "allowed_requests": {
+                "chat_completion": true,
+                "chat_completion_stream": false,
+                "embedding": false,
+                "speech": false,
+                "speech_stream": false
+            }
+        }
+    }
+}
+```
+
+### 2. Role-Based Access Control
+
+Restrict capabilities based on user roles or team permissions. You can then create virtual keys for better management of who can access which providers, providing granular control over team permissions and resource usage. This integrates seamlessly with Bifrost's **[governance](./governance)** features for comprehensive access control and monitoring:
+
+```json
+{
+    "openai-developers": {
+        "keys": [{ "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "custom_provider_config": {
+            "base_provider_type": "openai",
+            "allowed_requests": {
+                "chat_completion": true,
+                "chat_completion_stream": true,
+                "embedding": true,
+                "text_completion": true
+            }
+        }
+    },
+    "openai-analysts": {
+        "keys": [{ "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "custom_provider_config": {
+            "base_provider_type": "openai",
+            "allowed_requests": {
+                "chat_completion": true,
+                "embedding": true
+            }
+        }
+    },
+    "openai-support": {
+        "keys": [{ "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "custom_provider_config": {
+            "base_provider_type": "openai",
+            "allowed_requests": {
+                "chat_completion": true,
+                "chat_completion_stream": false
+            }
+        }
+    }
+}
+```
+
+### 3. Feature Testing and Rollouts
+
+Test new features with limited user groups:
+
+```json
+{
+    "openai-beta-streaming": {
+        "keys": [{ "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "custom_provider_config": {
+            "base_provider_type": "openai",
+            "allowed_requests": {
+                "chat_completion": true,
+                "chat_completion_stream": true,
+                "embedding": false
+            }
+        }
+    },
+    "openai-stable": {
+        "keys": [{ "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "custom_provider_config": {
+            "base_provider_type": "openai",
+            "allowed_requests": {
+                "chat_completion": true,
+                "chat_completion_stream": false,
+                "embedding": true
+            }
+        }
+    }
+}
+```
+
+## Making Requests
+
+Use your custom provider name in requests:
+
+```bash
+# Request to custom provider
+curl --location 'http://localhost:8080/v1/chat/completions' \
+--header 'Content-Type: application/json' \
+--data '{
+    "model": "openai-custom/gpt-4o-mini",
+    "messages": [
+        {"role": "user", "content": "Hello!"}
+    ]
+}'
+```
+
+## Relationship to Provider Configuration
+
+Custom providers extend the standard provider configuration system. They inherit all the capabilities of their base provider while adding request type restrictions.
+
+**Learn more about provider configuration:**
+- **[Gateway Provider Configuration](../quickstart/gateway/provider-configuration)**
+- **[Go SDK Provider Configuration](../quickstart/go-sdk/provider-configuration)**
+
+## Next Steps
+
+- **[Fallbacks](./fallbacks)** - Automatic failover between providers
+- **[Load Balancing](./keys-management)** - Intelligent API key management with weighted load balancing
+- **[Governance](./governance)** - Advanced access control and monitoring

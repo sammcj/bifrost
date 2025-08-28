@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
-import { PROVIDER_LABELS } from "@/lib/constants/logs";
+import { getProviderLabel } from "@/lib/constants/logs";
 import { getErrorMessage, openConfigureDialog, useAppDispatch, useDeleteProviderMutation } from "@/lib/store";
 import { ProviderResponse } from "@/lib/types/config";
 import { Key, Loader2, Settings, Trash2 } from "lucide-react";
@@ -36,6 +36,12 @@ export default function ProvidersList({ providers, onRefresh }: ProvidersListPro
 
 	// RTK Query mutation
 	const [deleteProvider] = useDeleteProviderMutation();
+
+	// Helper constant for keyless providers
+	const isKeyless = (baseType: string) => {
+		const t = baseType?.toLowerCase();
+		return t === "ollama" || t === "sgl";
+	};
 
 	const handleDelete = async (providerKey: string) => {
 		setDeletingProvider(providerKey);
@@ -92,79 +98,82 @@ export default function ProvidersList({ providers, onRefresh }: ProvidersListPro
 								</TableCell>
 							</TableRow>
 						)}
-						{providers.map((provider) => (
-							<TableRow
-								key={provider.name}
-								className="hover:bg-muted/50 cursor-pointer px-2 transition-colors"
-								onClick={() => handleEditProvider(provider)}
-							>
-								<TableCell>
-									<div className="flex items-center space-x-2">
-										<RenderProviderIcon provider={provider.name as ProviderIconType} size={16} />
-										<p className="font-medium">{PROVIDER_LABELS[provider.name] || provider.name}</p>
-									</div>
-								</TableCell>
-								<TableCell>
-									<div className="flex items-center space-x-2">
-										<Badge variant="outline">{provider.concurrency_and_buffer_size?.concurrency || 1}</Badge>
-									</div>
-								</TableCell>
-								<TableCell>
-									<div className="flex items-center space-x-2">
-										<Badge variant="outline">{provider.concurrency_and_buffer_size?.buffer_size || 10}</Badge>
-									</div>
-								</TableCell>
-								<TableCell>
-									<div className="flex items-center space-x-2">
-										<Badge variant="outline">{provider.network_config?.max_retries || 0}</Badge>
-									</div>
-								</TableCell>
-								<TableCell>
-									<div className="flex items-center space-x-2">
-										{provider.name !== "ollama" ? (
-											<>
-												<Key className="text-muted-foreground h-4 w-4" />
-												<span className="text-sm">{provider.keys?.length || 0} keys</span>
-											</>
-										) : (
-											<span className="text-sm">N/A</span>
-										)}
-									</div>
-								</TableCell>
-								<TableCell className="text-right">
-									<div className="flex items-center justify-end space-x-2">
-										<AlertDialog>
-											<AlertDialogTrigger asChild>
-												<Button
-													onClick={(e) => e.stopPropagation()}
-													variant="outline"
-													size="sm"
-													disabled={deletingProvider === provider.name}
-												>
-													{deletingProvider === provider.name ? (
-														<Loader2 className="h-4 w-4 animate-spin" />
-													) : (
-														<Trash2 className="h-4 w-4" />
-													)}
-												</Button>
-											</AlertDialogTrigger>
-											<AlertDialogContent onClick={(e) => e.stopPropagation()}>
-												<AlertDialogHeader>
-													<AlertDialogTitle>Delete Provider</AlertDialogTitle>
-													<AlertDialogDescription>
-														Are you sure you want to delete provider {provider.name}? This action cannot be undone.
-													</AlertDialogDescription>
-												</AlertDialogHeader>
-												<AlertDialogFooter>
-													<AlertDialogCancel>Cancel</AlertDialogCancel>
-													<AlertDialogAction onClick={() => handleDelete(provider.name)}>Delete</AlertDialogAction>
-												</AlertDialogFooter>
-											</AlertDialogContent>
-										</AlertDialog>
-									</div>
-								</TableCell>
-							</TableRow>
-						))}
+						{providers.map((provider) => {
+							const baseType = provider.custom_provider_config?.base_provider_type ?? provider.name;
+							return (
+								<TableRow
+									key={provider.name}
+									className="hover:bg-muted/50 cursor-pointer px-2 transition-colors"
+									onClick={() => handleEditProvider(provider)}
+								>
+									<TableCell>
+										<div className="flex items-center space-x-2">
+											<RenderProviderIcon provider={baseType as ProviderIconType} size={16} />
+											<p className="font-medium">{getProviderLabel(provider.name)}</p>
+										</div>
+									</TableCell>
+									<TableCell>
+										<div className="flex items-center space-x-2">
+											<Badge variant="outline">{provider.concurrency_and_buffer_size?.concurrency ?? 1}</Badge>
+										</div>
+									</TableCell>
+									<TableCell>
+										<div className="flex items-center space-x-2">
+											<Badge variant="outline">{provider.concurrency_and_buffer_size?.buffer_size ?? 10}</Badge>
+										</div>
+									</TableCell>
+									<TableCell>
+										<div className="flex items-center space-x-2">
+											<Badge variant="outline">{provider.network_config?.max_retries ?? 0}</Badge>
+										</div>
+									</TableCell>
+									<TableCell>
+										<div className="flex items-center space-x-2">
+											{!isKeyless(baseType) ? (
+												<>
+													<Key className="text-muted-foreground h-4 w-4" />
+													<span className="text-sm">{provider.keys?.length ?? 0} keys</span>
+												</>
+											) : (
+												<span className="text-sm">N/A</span>
+											)}
+										</div>
+									</TableCell>
+									<TableCell className="text-right">
+										<div className="flex items-center justify-end space-x-2">
+											<AlertDialog>
+												<AlertDialogTrigger asChild>
+													<Button
+														onClick={(e) => e.stopPropagation()}
+														variant="outline"
+														size="sm"
+														disabled={deletingProvider === provider.name}
+													>
+														{deletingProvider === provider.name ? (
+															<Loader2 className="h-4 w-4 animate-spin" />
+														) : (
+															<Trash2 className="h-4 w-4" />
+														)}
+													</Button>
+												</AlertDialogTrigger>
+												<AlertDialogContent onClick={(e) => e.stopPropagation()}>
+													<AlertDialogHeader>
+														<AlertDialogTitle>Delete Provider</AlertDialogTitle>
+														<AlertDialogDescription>
+															Are you sure you want to delete provider {provider.name}? This action cannot be undone.
+														</AlertDialogDescription>
+													</AlertDialogHeader>
+													<AlertDialogFooter>
+														<AlertDialogCancel>Cancel</AlertDialogCancel>
+														<AlertDialogAction onClick={() => handleDelete(provider.name)}>Delete</AlertDialogAction>
+													</AlertDialogFooter>
+												</AlertDialogContent>
+											</AlertDialog>
+										</div>
+									</TableCell>
+								</TableRow>
+							);
+						})}
 					</TableBody>
 				</Table>
 			</div>

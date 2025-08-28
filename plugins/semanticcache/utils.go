@@ -241,6 +241,7 @@ func (plugin *Plugin) buildUnifiedMetadata(provider schemas.ModelProvider, model
 	unifiedMetadata["model"] = model
 	unifiedMetadata["request_hash"] = requestHash
 	unifiedMetadata["cache_key"] = cacheKey
+	unifiedMetadata["from_bifrost_semantic_cache_plugin"] = true
 
 	// Calculate expiration timestamp (current time + TTL)
 	expiresAt := time.Now().Add(ttl).Unix()
@@ -266,7 +267,6 @@ func (plugin *Plugin) addSingleResponse(ctx context.Context, responseID string, 
 	// Add response field to metadata
 	metadata["response"] = string(responseData)
 	metadata["stream_chunks"] = []string{}
-	metadata["from_bifrost_semantic_cache_plugin"] = true
 
 	// Store unified entry using new VectorStore interface
 	if err := plugin.store.Add(ctx, responseID, embedding, metadata); err != nil {

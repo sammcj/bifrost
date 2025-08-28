@@ -4,6 +4,7 @@ package providers
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -105,11 +106,12 @@ type CohereEmbeddingResponse struct {
 
 // CohereProvider implements the Provider interface for Cohere.
 type CohereProvider struct {
-	logger              schemas.Logger        // Logger for provider operations
-	client              *fasthttp.Client      // HTTP client for API requests
-	streamClient        *http.Client          // HTTP client for streaming requests
-	networkConfig       schemas.NetworkConfig // Network configuration including extra headers
-	sendBackRawResponse bool                  // Whether to include raw response in BifrostResponse
+	logger               schemas.Logger                // Logger for provider operations
+	client               *fasthttp.Client              // HTTP client for API requests
+	streamClient         *http.Client                  // HTTP client for streaming requests
+	networkConfig        schemas.NetworkConfig         // Network configuration including extra headers
+	sendBackRawResponse  bool                          // Whether to include raw response in BifrostResponse
+	customProviderConfig *schemas.CustomProviderConfig // Custom provider config
 }
 
 // CohereStreamStartEvent represents the start of a stream event.
@@ -158,9 +160,8 @@ func NewCohereProvider(config *schemas.ProviderConfig, logger schemas.Logger) *C
 	}
 
 	// Pre-warm response pools
-	for range config.ConcurrencyAndBufferSize.Concurrency {
+	for i := 0; i < config.ConcurrencyAndBufferSize.Concurrency; i++ {
 		cohereResponsePool.Put(&CohereChatResponse{})
-
 	}
 
 	// Set default BaseURL if not provided
@@ -170,17 +171,18 @@ func NewCohereProvider(config *schemas.ProviderConfig, logger schemas.Logger) *C
 	config.NetworkConfig.BaseURL = strings.TrimRight(config.NetworkConfig.BaseURL, "/")
 
 	return &CohereProvider{
-		logger:              logger,
-		client:              client,
-		streamClient:        streamClient,
-		networkConfig:       config.NetworkConfig,
-		sendBackRawResponse: config.SendBackRawResponse,
+		logger:               logger,
+		client:               client,
+		streamClient:         streamClient,
+		networkConfig:        config.NetworkConfig,
+		customProviderConfig: config.CustomProviderConfig,
+		sendBackRawResponse:  config.SendBackRawResponse,
 	}
 }
 
 // GetProviderKey returns the provider identifier for Cohere.
 func (provider *CohereProvider) GetProviderKey() schemas.ModelProvider {
-	return schemas.Cohere
+	return getProviderName(schemas.Cohere, provider.customProviderConfig)
 }
 
 // TextCompletion is not supported by the Cohere provider.
@@ -193,13 +195,20 @@ func (provider *CohereProvider) TextCompletion(ctx context.Context, model string
 // It formats the request, sends it to Cohere, and processes the response.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
 func (provider *CohereProvider) ChatCompletion(ctx context.Context, model string, key schemas.Key, messages []schemas.BifrostMessage, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	// Check if chat completion is allowed
+	if err := checkOperationAllowed(schemas.Cohere, provider.customProviderConfig, schemas.OperationChatCompletion); err != nil {
+		return nil, err
+	}
+
+	providerName := provider.GetProviderKey()
+
 	// Prepare request body using shared function
 	requestBody, err := prepareCohereChatRequest(messages, params, model, false)
 	if err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: schemas.ErrorField{
-				Message: "failed to prepare Cohere chat request",
+				Message: fmt.Sprintf("failed to prepare %s chat request", providerName),
 				Error:   err,
 			},
 		}
@@ -241,7 +250,7 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model string
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
-		provider.logger.Debug(fmt.Sprintf("error from cohere provider: %s", string(resp.Body())))
+		provider.logger.Debug(fmt.Sprintf("error from %s provider: %s", providerName, string(resp.Body())))
 
 		var errorResp CohereError
 
@@ -323,7 +332,7 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model string
 		},
 		Model: model,
 		ExtraFields: schemas.BifrostResponseExtraFields{
-			Provider: schemas.Cohere,
+			Provider: providerName,
 			BilledUsage: &schemas.BilledLLMUsage{
 				PromptTokens:     float64Ptr(response.Meta.BilledUnits.InputTokens),
 				CompletionTokens: float64Ptr(response.Meta.BilledUnits.OutputTokens),
@@ -596,6 +605,13 @@ func convertChatHistory(history []struct {
 // Embedding generates embeddings for the given input text(s) using the Cohere API.
 // Supports Cohere's embedding models and returns a BifrostResponse containing the embedding(s).
 func (provider *CohereProvider) Embedding(ctx context.Context, model string, key schemas.Key, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	// Check if embedding is allowed
+	if err := checkOperationAllowed(schemas.Cohere, provider.customProviderConfig, schemas.OperationEmbedding); err != nil {
+		return nil, err
+	}
+
+	providerName := provider.GetProviderKey()
+
 	// Prepare request body with default values
 	requestBody := map[string]interface{}{
 		"texts":           input.Texts,
@@ -609,7 +625,7 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 		// Validate encoding format - Cohere API supports float, int8, uint8, binary, ubinary, but our provider only implements float
 		if params.EncodingFormat != nil {
 			if *params.EncodingFormat != "float" {
-				return nil, newConfigurationError(fmt.Sprintf("Cohere provider currently only supports 'float' encoding format, received: %s", *params.EncodingFormat), schemas.Cohere)
+				return nil, newConfigurationError(fmt.Sprintf("provider currently only supports 'float' encoding format, received: %s", *params.EncodingFormat), providerName)
 			}
 			// Override default with the specified format
 			requestBody["embedding_types"] = []string{*params.EncodingFormat}
@@ -626,7 +642,7 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 	// Marshal request body
 	jsonBody, err := sonic.Marshal(requestBody)
 	if err != nil {
-		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, schemas.Cohere)
+		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, providerName)
 	}
 
 	// Create request
@@ -653,7 +669,7 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
-		provider.logger.Debug(fmt.Sprintf("error from cohere embedding provider: %s", string(resp.Body())))
+		provider.logger.Debug(fmt.Sprintf("error from %s provider: %s", providerName, string(resp.Body())))
 
 		var errorResp CohereError
 		bifrostErr := handleProviderAPIError(resp, &errorResp)
@@ -665,13 +681,13 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 	// Parse response
 	var cohereResp CohereEmbeddingResponse
 	if err := sonic.Unmarshal(resp.Body(), &cohereResp); err != nil {
-		return nil, newBifrostOperationError("error parsing Cohere embedding response", err, schemas.Cohere)
+		return nil, newBifrostOperationError("error parsing embedding response", err, providerName)
 	}
 
 	// Parse raw response for consistent format
 	var rawResponse interface{}
 	if err := sonic.Unmarshal(resp.Body(), &rawResponse); err != nil {
-		return nil, newBifrostOperationError("error parsing raw response for Cohere embedding", err, schemas.Cohere)
+		return nil, newBifrostOperationError("error parsing raw response for embedding", err, providerName)
 	}
 
 	// Calculate token usage approximation (since Cohere doesn't provide this for embeddings)
@@ -696,9 +712,13 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 			TotalTokens:  totalInputTokens,
 		},
 		ExtraFields: schemas.BifrostResponseExtraFields{
-			Provider:    schemas.Cohere,
-			RawResponse: rawResponse,
+			Provider: providerName,
 		},
+	}
+
+	// Only include RawResponse if sendBackRawResponse is enabled
+	if provider.sendBackRawResponse {
+		bifrostResponse.ExtraFields.RawResponse = rawResponse
 	}
 
 	if params != nil {
@@ -712,21 +732,28 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 // It supports real-time streaming of responses using Server-Sent Events (SSE).
 // Returns a channel containing BifrostResponse objects representing the stream or an error if the request fails.
 func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, model string, key schemas.Key, messages []schemas.BifrostMessage, params *schemas.ModelParameters) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	// Check if chat completion stream is allowed
+	if err := checkOperationAllowed(schemas.Cohere, provider.customProviderConfig, schemas.OperationChatCompletionStream); err != nil {
+		return nil, err
+	}
+
+	providerName := provider.GetProviderKey()
+
 	// Prepare request body using shared function
 	requestBody, err := prepareCohereChatRequest(messages, params, model, true)
 	if err != nil {
-		return nil, newBifrostOperationError("failed to prepare Cohere chat request", err, schemas.Cohere)
+		return nil, newBifrostOperationError("failed to prepare chat request", err, providerName)
 	}
 
 	jsonBody, err := sonic.Marshal(requestBody)
 	if err != nil {
-		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, schemas.Cohere)
+		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, providerName)
 	}
 
 	// Create HTTP request for streaming
-	req, err := http.NewRequestWithContext(ctx, "POST", provider.networkConfig.BaseURL+"/v1/chat", strings.NewReader(string(jsonBody)))
+	req, err := http.NewRequestWithContext(ctx, "POST", provider.networkConfig.BaseURL+"/v1/chat", bytes.NewReader(jsonBody))
 	if err != nil {
-		return nil, newBifrostOperationError("failed to create HTTP request", err, schemas.Cohere)
+		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
 	}
 
 	// Set headers
@@ -754,7 +781,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, newProviderAPIError(fmt.Sprintf("HTTP error from Cohere: %d", resp.StatusCode), fmt.Errorf("%s", string(body)), resp.StatusCode, schemas.Cohere, nil, nil)
+		return nil, newProviderAPIError(fmt.Sprintf("HTTP error from %s: %d", providerName, resp.StatusCode), fmt.Errorf("%s", string(body)), resp.StatusCode, providerName, nil, nil)
 	}
 
 	// Create response channel
@@ -785,7 +812,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 				// Parse the streaming event
 				var streamEvent map[string]interface{}
 				if err := sonic.Unmarshal([]byte(jsonData), &streamEvent); err != nil {
-					provider.logger.Warn(fmt.Sprintf("Failed to parse Cohere stream event: %v", err))
+					provider.logger.Warn(fmt.Sprintf("Failed to parse stream event: %v", err))
 					continue
 				}
 
@@ -800,7 +827,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 				case "stream-start":
 					var startEvent CohereStreamStartEvent
 					if err := sonic.Unmarshal([]byte(jsonData), &startEvent); err != nil {
-						provider.logger.Warn(fmt.Sprintf("Failed to parse Cohere stream-start event: %v", err))
+						provider.logger.Warn(fmt.Sprintf("Failed to parse stream-start event: %v", err))
 						continue
 					}
 
@@ -823,7 +850,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 							},
 						},
 						ExtraFields: schemas.BifrostResponseExtraFields{
-							Provider:   schemas.Cohere,
+							Provider:   providerName,
 							ChunkIndex: chunkIndex,
 						},
 					}
@@ -838,7 +865,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 				case "text-generation":
 					var textEvent CohereStreamTextEvent
 					if err := sonic.Unmarshal([]byte(jsonData), &textEvent); err != nil {
-						provider.logger.Warn(fmt.Sprintf("Failed to parse Cohere text-generation event: %v", err))
+						provider.logger.Warn(fmt.Sprintf("Failed to parse text-generation event: %v", err))
 						continue
 					}
 
@@ -859,7 +886,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 						},
 						Model: model,
 						ExtraFields: schemas.BifrostResponseExtraFields{
-							Provider:   schemas.Cohere,
+							Provider:   providerName,
 							ChunkIndex: chunkIndex,
 						},
 					}
@@ -874,7 +901,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 				case "tool-calls-chunk":
 					var toolEvent CohereStreamToolCallEvent
 					if err := sonic.Unmarshal([]byte(jsonData), &toolEvent); err != nil {
-						provider.logger.Warn(fmt.Sprintf("Failed to parse Cohere tool-use event: %v", err))
+						provider.logger.Warn(fmt.Sprintf("Failed to parse tool-use event: %v", err))
 						continue
 					}
 
@@ -904,7 +931,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 						},
 						Model: model,
 						ExtraFields: schemas.BifrostResponseExtraFields{
-							Provider:   schemas.Cohere,
+							Provider:   providerName,
 							ChunkIndex: chunkIndex,
 						},
 					}
@@ -919,7 +946,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 				case "stream-end":
 					var stopEvent CohereStreamStopEvent
 					if err := sonic.Unmarshal([]byte(jsonData), &stopEvent); err != nil {
-						provider.logger.Warn(fmt.Sprintf("Failed to parse Cohere stream-end event: %v", err))
+						provider.logger.Warn(fmt.Sprintf("Failed to parse stream-end event: %v", err))
 						continue
 					}
 
@@ -961,7 +988,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 						},
 						Model: model,
 						ExtraFields: schemas.BifrostResponseExtraFields{
-							Provider:   schemas.Cohere,
+							Provider:   providerName,
 							ChunkIndex: chunkIndex,
 						},
 					}
@@ -977,13 +1004,13 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 
 				default:
 					// Unknown event type, log and continue
-					provider.logger.Debug(fmt.Sprintf("Unknown Cohere stream event type: %s", eventType))
+					provider.logger.Debug(fmt.Sprintf("Unknown stream event type: %s", eventType))
 				}
 			}
 		}
 
 		if err := scanner.Err(); err != nil {
-			provider.logger.Warn(fmt.Sprintf("Error reading Cohere stream: %v", err))
+			provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
 			processAndSendError(ctx, postHookRunner, err, responseChan, provider.logger)
 		}
 	}()

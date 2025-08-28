@@ -554,10 +554,29 @@ func isLikelyBase64(s string) bool {
 func newUnsupportedOperationError(operation string, providerName string) *schemas.BifrostError {
 	return &schemas.BifrostError{
 		IsBifrostError: false,
+		Provider:       schemas.ModelProvider(providerName),
 		Error: schemas.ErrorField{
 			Message: fmt.Sprintf("%s is not supported by %s provider", operation, providerName),
 		},
 	}
+}
+
+// checkOperationAllowed enforces per-op gating using schemas.Operation.
+// Behavior:
+// - If no gating is configured (config == nil or AllowedRequests == nil), the operation is allowed.
+// - If gating is configured, returns an error when the operation is not explicitly allowed.
+func checkOperationAllowed(defaultProvider schemas.ModelProvider, config *schemas.CustomProviderConfig, operation schemas.Operation) *schemas.BifrostError {
+	// No gating configured => allowed
+	if config == nil || config.AllowedRequests == nil {
+		return nil
+	}
+	// Explicitly allowed?
+	if config.IsOperationAllowed(operation) {
+		return nil
+	}
+	// Gated and not allowed
+	resolved := getProviderName(defaultProvider, config)
+	return newUnsupportedOperationError(string(operation), string(resolved))
 }
 
 // newConfigurationError creates a standardized error for configuration errors.
@@ -715,4 +734,16 @@ func handleStreamControlSkip(logger schemas.Logger, bifrostErr *schemas.BifrostE
 		return true
 	}
 	return false
+}
+
+// getProviderName extracts the provider name from custom provider configuration.
+// If a custom provider key is specified, it returns that; otherwise, it returns the default provider.
+// Note: CustomProviderKey is internally set by Bifrost and should always match the provider name.
+func getProviderName(defaultProvider schemas.ModelProvider, customConfig *schemas.CustomProviderConfig) schemas.ModelProvider {
+	if customConfig != nil {
+		if key := strings.TrimSpace(customConfig.CustomProviderKey); key != "" {
+			return schemas.ModelProvider(key)
+		}
+	}
+	return defaultProvider
 }

@@ -41,6 +41,7 @@ type AddProviderRequest struct {
 	ConcurrencyAndBufferSize *schemas.ConcurrencyAndBufferSize `json:"concurrency_and_buffer_size,omitempty"` // Concurrency settings
 	ProxyConfig              *schemas.ProxyConfig              `json:"proxy_config,omitempty"`                // Proxy configuration
 	SendBackRawResponse      *bool                             `json:"send_back_raw_response,omitempty"`      // Include raw response in BifrostResponse
+	CustomProviderConfig     *schemas.CustomProviderConfig     `json:"custom_provider_config,omitempty"`      // Custom provider configuration
 }
 
 // UpdateProviderRequest represents the request body for updating a provider
@@ -50,16 +51,18 @@ type UpdateProviderRequest struct {
 	ConcurrencyAndBufferSize schemas.ConcurrencyAndBufferSize `json:"concurrency_and_buffer_size"`      // Concurrency settings
 	ProxyConfig              *schemas.ProxyConfig             `json:"proxy_config,omitempty"`           // Proxy configuration
 	SendBackRawResponse      *bool                            `json:"send_back_raw_response,omitempty"` // Include raw response in BifrostResponse
+	CustomProviderConfig     *schemas.CustomProviderConfig    `json:"custom_provider_config,omitempty"` // Custom provider configuration
 }
 
 // ProviderResponse represents the response for provider operations
 type ProviderResponse struct {
 	Name                     schemas.ModelProvider            `json:"name"`
-	Keys                     []schemas.Key                    `json:"keys"`                        // API keys for the provider
-	NetworkConfig            schemas.NetworkConfig            `json:"network_config"`              // Network-related settings
-	ConcurrencyAndBufferSize schemas.ConcurrencyAndBufferSize `json:"concurrency_and_buffer_size"` // Concurrency settings
-	ProxyConfig              *schemas.ProxyConfig             `json:"proxy_config"`                // Proxy configuration
-	SendBackRawResponse      bool                             `json:"send_back_raw_response"`      // Include raw response in BifrostResponse
+	Keys                     []schemas.Key                    `json:"keys"`                             // API keys for the provider
+	NetworkConfig            schemas.NetworkConfig            `json:"network_config"`                   // Network-related settings
+	ConcurrencyAndBufferSize schemas.ConcurrencyAndBufferSize `json:"concurrency_and_buffer_size"`      // Concurrency settings
+	ProxyConfig              *schemas.ProxyConfig             `json:"proxy_config"`                     // Proxy configuration
+	SendBackRawResponse      bool                             `json:"send_back_raw_response"`           // Include raw response in BifrostResponse
+	CustomProviderConfig     *schemas.CustomProviderConfig    `json:"custom_provider_config,omitempty"` // Custom provider configuration
 }
 
 // ListProvidersResponse represents the response for listing all providers
@@ -155,8 +158,32 @@ func (h *ProviderHandler) AddProvider(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	// baseProvider tracks the effective base provider type for validations/keys
+	baseProvider := req.Provider
+	if req.CustomProviderConfig != nil {
+		// custom provider key should not be same as standard provider names
+		if bifrost.IsStandardProvider(baseProvider) {
+			SendError(ctx, fasthttp.StatusBadRequest, "Custom provider cannot be same as a standard provider", h.logger)
+			return
+		}
+
+		if req.CustomProviderConfig.BaseProviderType == "" {
+			SendError(ctx, fasthttp.StatusBadRequest, "BaseProviderType is required when CustomProviderConfig is provided", h.logger)
+			return
+		}
+
+		// check if base provider is a supported base provider
+		if !bifrost.IsSupportedBaseProvider(req.CustomProviderConfig.BaseProviderType) {
+			SendError(ctx, fasthttp.StatusBadRequest, "BaseProviderType must be a standard provider", h.logger)
+			return
+		}
+
+		// CustomProviderKey is internally set by Bifrost, no validation needed
+		baseProvider = req.CustomProviderConfig.BaseProviderType
+	}
+
 	// Validate required keys
-	if len(req.Keys) == 0 && req.Provider != schemas.Ollama && req.Provider != schemas.SGL {
+	if len(req.Keys) == 0 && baseProvider != schemas.Ollama && baseProvider != schemas.SGL {
 		SendError(ctx, fasthttp.StatusBadRequest, "At least one API key is required", h.logger)
 		return
 	}
@@ -168,6 +195,11 @@ func (h *ProviderHandler) AddProvider(ctx *fasthttp.RequestCtx) {
 		}
 		if req.ConcurrencyAndBufferSize.BufferSize == 0 {
 			SendError(ctx, fasthttp.StatusBadRequest, "Buffer size must be greater than 0", h.logger)
+			return
+		}
+
+		if req.ConcurrencyAndBufferSize.Concurrency > req.ConcurrencyAndBufferSize.BufferSize {
+			SendError(ctx, fasthttp.StatusBadRequest, "Concurrency must be less than or equal to buffer size", h.logger)
 			return
 		}
 	}
@@ -184,6 +216,7 @@ func (h *ProviderHandler) AddProvider(ctx *fasthttp.RequestCtx) {
 		NetworkConfig:            req.NetworkConfig,
 		ConcurrencyAndBufferSize: req.ConcurrencyAndBufferSize,
 		SendBackRawResponse:      req.SendBackRawResponse != nil && *req.SendBackRawResponse,
+		CustomProviderConfig:     req.CustomProviderConfig,
 	}
 
 	// Add provider to store (env vars will be processed by store)
@@ -195,7 +228,23 @@ func (h *ProviderHandler) AddProvider(ctx *fasthttp.RequestCtx) {
 
 	h.logger.Info(fmt.Sprintf("Provider %s added successfully", req.Provider))
 
-	response := h.getProviderResponseFromConfig(req.Provider, config)
+	// Get redacted config for response
+	redactedConfig, err := h.store.GetProviderConfigRedacted(req.Provider)
+	if err != nil {
+		h.logger.Warn(fmt.Sprintf("Failed to get redacted config for provider %s: %v", req.Provider, err))
+		// Fall back to the raw config (no keys)
+		response := h.getProviderResponseFromConfig(req.Provider, configstore.ProviderConfig{
+			NetworkConfig:            config.NetworkConfig,
+			ConcurrencyAndBufferSize: config.ConcurrencyAndBufferSize,
+			ProxyConfig:              config.ProxyConfig,
+			SendBackRawResponse:      config.SendBackRawResponse,
+			CustomProviderConfig:     config.CustomProviderConfig,
+		})
+		SendJSON(ctx, response, h.logger)
+		return
+	}
+
+	response := h.getProviderResponseFromConfig(req.Provider, *redactedConfig)
 
 	SendJSON(ctx, response, h.logger)
 }
@@ -236,6 +285,7 @@ func (h *ProviderHandler) UpdateProvider(ctx *fasthttp.RequestCtx) {
 		NetworkConfig:            oldConfigRaw.NetworkConfig,
 		ConcurrencyAndBufferSize: oldConfigRaw.ConcurrencyAndBufferSize,
 		ProxyConfig:              oldConfigRaw.ProxyConfig,
+		CustomProviderConfig:     oldConfigRaw.CustomProviderConfig,
 	}
 
 	// Environment variable cleanup is now handled automatically by mergeKeys function
@@ -283,9 +333,18 @@ func (h *ProviderHandler) UpdateProvider(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	// Build a prospective config with the requested CustomProviderConfig (including nil)
+	prospective := config
+	prospective.CustomProviderConfig = req.CustomProviderConfig
+	if err := lib.ValidateCustomProviderUpdate(prospective, *oldConfigRaw, provider); err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid custom provider config: %v", err), h.logger)
+		return
+	}
+
 	config.ConcurrencyAndBufferSize = &req.ConcurrencyAndBufferSize
 	config.NetworkConfig = &req.NetworkConfig
 	config.ProxyConfig = req.ProxyConfig
+	config.CustomProviderConfig = req.CustomProviderConfig
 	if req.SendBackRawResponse != nil {
 		config.SendBackRawResponse = *req.SendBackRawResponse
 	}
@@ -306,7 +365,23 @@ func (h *ProviderHandler) UpdateProvider(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	response := h.getProviderResponseFromConfig(provider, config)
+	// Get redacted config for response
+	redactedConfig, err := h.store.GetProviderConfigRedacted(provider)
+	if err != nil {
+		h.logger.Warn(fmt.Sprintf("Failed to get redacted config for provider %s: %v", provider, err))
+		// Fall back to sanitized config (no keys)
+		response := h.getProviderResponseFromConfig(provider, configstore.ProviderConfig{
+			NetworkConfig:            config.NetworkConfig,
+			ConcurrencyAndBufferSize: config.ConcurrencyAndBufferSize,
+			ProxyConfig:              config.ProxyConfig,
+			SendBackRawResponse:      config.SendBackRawResponse,
+			CustomProviderConfig:     config.CustomProviderConfig,
+		})
+		SendJSON(ctx, response, h.logger)
+		return
+	}
+
+	response := h.getProviderResponseFromConfig(provider, *redactedConfig)
 
 	SendJSON(ctx, response, h.logger)
 }
@@ -456,6 +531,7 @@ func (h *ProviderHandler) getProviderResponseFromConfig(provider schemas.ModelPr
 		ConcurrencyAndBufferSize: *config.ConcurrencyAndBufferSize,
 		ProxyConfig:              config.ProxyConfig,
 		SendBackRawResponse:      config.SendBackRawResponse,
+		CustomProviderConfig:     config.CustomProviderConfig,
 	}
 }
 
