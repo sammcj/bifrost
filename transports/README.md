@@ -1,33 +1,18 @@
-# 🌐 Bifrost Transports
+# Bifrost Gateway
 
-Bifrost Transports let you run Bifrost as a blazing-fast HTTP API or integrate it directly as a Go package. Connect to any AI provider (OpenAI, Anthropic, Bedrock, and more) in seconds with automatic fallbacks and advanced features.
+Bifrost Gateway is a blazing-fast HTTP API that unifies access to 12+ AI providers (OpenAI, Anthropic, AWS Bedrock, Google Vertex, and more) through a single OpenAI-compatible interface. Deploy in seconds with zero configuration and get automatic fallbacks, semantic caching, tool calling, and enterprise-grade features.
 
-📖 **Complete documentation**: [docs/usage/http-transport/](../docs/usage/http-transport/)
+**Complete Documentation**: [https://docs.getbifrost.ai](https://docs.getbifrost.ai)
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### Docker
+### Installation
 
-```bash
-# Pull and run Bifrost HTTP API
-docker pull maximhq/bifrost
-docker run -p 8080:8080 maximhq/bifrost
+Choose your preferred method:
 
-# 🖥️ Open web interface for visual configuration
-# macOS:
-open http://localhost:8080
-# Linux:
-xdg-open http://localhost:8080
-# Windows:
-start http://localhost:8080
-# Or simply open http://localhost:8080 manually in your browser
-```
-
-**🎉 That's it!** No config files needed. Configure providers, monitor requests, and manage everything through the **built-in web interface**.
-
-### Binary
+#### NPX (Recommended)
 
 ```bash
 # Install and run locally
@@ -36,286 +21,146 @@ npx -y @maximhq/bifrost
 # Open web interface at http://localhost:8080
 ```
 
-### Volume Mount (Optional)
+#### Docker
 
 ```bash
-# For configuration persistence across restarts
+# Pull and run Bifrost Gateway
+docker pull maximhq/bifrost
+docker run -p 8080:8080 maximhq/bifrost
+
+# For persistent configuration
 docker run -p 8080:8080 -v $(pwd)/data:/app/data maximhq/bifrost
 ```
 
-**Ready in 30 seconds!** See [HTTP Transport Quickstart](../docs/quickstart/http-transport.md) for detailed setup.
+### Configuration
 
----
-
-## 🌟 Key Features
-
-| Feature                       | Description                                                         | Learn More                                                 |
-| ----------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
-| **🖥️ Built-in Web UI**        | Visual configuration, live monitoring, request logs, and analytics  | Open `http://localhost:8080` after startup                 |
-| **🔄 Multi-Provider Support** | OpenAI, Anthropic, Azure, Bedrock, Vertex, Cohere, Mistral, Ollama, Groq, Parasail, SGLang, Cerebras | [Provider Setup](../docs/usage/providers.md)               |
-| **🔌 Drop-in Compatibility**  | Replace OpenAI/Anthropic/GenAI APIs with zero code changes          | [Integrations](../docs/usage/http-transport/integrations/) |
-| **🛠️ MCP Tool Calling**       | Enable AI models to use external tools (filesystem, web, databases) | [MCP Guide](../docs/mcp.md)                                |
-| **⚡ Plugin System**          | Add analytics, caching, rate limiting, custom logic                 | [Plugin System](../docs/plugins.md)                        |
-| **📊 Built-in Monitoring**    | Prometheus metrics at `/metrics` endpoint                           | [Monitoring](../docs/usage/http-transport/endpoints.md)    |
-| **🔀 Automatic Fallbacks**    | Seamless failover between providers and models                      | [Fallback Config](../docs/usage/providers.md)              |
-
----
-
-## 🎯 Usage Examples
-
-### Basic Chat Completion
+Bifrost starts with zero configuration needed. Configure providers through the **built-in web UI** at `http://localhost:8080` or via API:
 
 ```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "openai/gpt-4o-mini",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-```
-
-### Drop-in OpenAI Replacement
-
-```python
-import openai
-
-# Just change the base_url - everything else stays the same!
-client = openai.OpenAI(
-    base_url="http://localhost:8080/openai",
-    api_key="dummy-key"  # Handled by Bifrost
-)
-
-response = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=[{"role": "user", "content": "Hello from Bifrost!"}]
-)
-```
-
-### Multi-Provider Fallbacks
-
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "openai/gpt-4o-mini",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "fallbacks": [
-      {"provider": "anthropic", "model": "claude-3-5-sonnet-20241022"},
-      {"provider": "bedrock", "model": "anthropic.claude-3-sonnet-20240229-v1:0"}
-    ]
-  }'
-```
-
-**More examples**: [HTTP Transport Endpoints](../docs/usage/http-transport/endpoints.md)
-
----
-
-## ⚙️ Configuration
-
-Bifrost supports **two configuration modes**:
-
-### 1. 🚀 Dynamic Configuration (Recommended)
-
-**No config file needed!** Start the container and configure via **Web UI** or **API**:
-
-```bash
-# Start with zero configuration
-docker run -p 8080:8080 maximhq/bifrost
-
-# Open web interface for easy configuration
-# macOS: open http://localhost:8080
-# Linux: xdg-open http://localhost:8080
-# Windows: start http://localhost:8080
-# Or simply open http://localhost:8080 manually in your browser
-```
-
-🖥️ **Web UI Features:**
-
-- **Visual provider setup** - Add OpenAI, Anthropic, Bedrock, etc.
-- **Real-time configuration** - Changes apply immediately
-- **Live monitoring** - Request logs, metrics, and analytics
-- **Export/Import** - Save configurations as JSON
-
-📡 **Or configure via API:**
-
-```bash
-# Add providers programmatically
+# Add OpenAI provider via API
 curl -X POST http://localhost:8080/api/providers \
   -H "Content-Type: application/json" \
   -d '{
     "provider": "openai",
-    "keys": [{"value": "env.OPENAI_API_KEY", "models": ["gpt-4o-mini"], "weight": 1.0}],
-    "network_config": {"default_request_timeout_in_seconds": 30},
-    "concurrency_and_buffer_size": {"concurrency": 3, "buffer_size": 10}
+    "keys": [{"value": "sk-your-openai-key", "models": ["gpt-4o-mini"], "weight": 1.0}]
   }'
-
-# Save configuration to file for persistence
-curl -X POST http://localhost:8080/config/save
 ```
 
-**Benefits**: Perfect for containerized deployments, GitOps workflows, and both visual and API-first configuration management.
-
-### 2. 📄 File-based Configuration
-
-Traditional config file approach _(Volume mount needed when using docker)_:
+For file-based configuration, create `config.json` in your app directory:
 
 ```json
 {
-  "client": {
-    "drop_excess_requests": false,
-    "prometheus_labels": ["model", "provider"]
-  },
   "providers": {
     "openai": {
-      "keys": [
-        {
-          "value": "env.OPENAI_API_KEY",
-          "models": ["gpt-4o-mini"],
-          "weight": 1.0
-        }
-      ],
-      "concurrency_and_buffer_size": {
-        "concurrency": 3,
-        "buffer_size": 10
-      }
+      "keys": [{"value": "env.OPENAI_API_KEY", "models": ["gpt-4o-mini"], "weight": 1.0}]
     }
   }
 }
 ```
 
-**Client Configuration Options:**
-
-- `drop_excess_requests`: Whether to drop requests when queues are full (default: `false`)
-- `initial_pool_size`: Initial connection pool size (default: `300`)
-- `prometheus_labels`: Custom labels for Prometheus metrics
-
-**Learn More:**
-
-- [Provider Setup Guide](../docs/usage/http-transport/configuration/providers.md)
-- [MCP Configuration](../docs/usage/http-transport/configuration/mcp.md)
-- [Plugin Configuration](../docs/usage/http-transport/configuration/plugins.md)
-- [Complete Examples](config.example.json)
-
----
-
-## 🛠️ Advanced Features
-
-### MCP Tool Integration
-
-Enable AI models to use external tools like filesystem operations, web search, and databases:
+### Your First API Call
 
 ```bash
-# AI automatically uses configured tools
 curl -X POST http://localhost:8080/v1/chat/completions \
-  -d '{"model": "openai/gpt-4o-mini",
-       "messages": [{"role": "user", "content": "List files in /tmp"}]}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "openai/gpt-4o-mini",
+    "messages": [{"role": "user", "content": "Hello, Bifrost!"}]
+  }'
 ```
 
-**Learn more**: [MCP Integration Guide](../docs/mcp.md)
-
-### Plugin System
-
-Add custom middleware for analytics, caching, rate limiting:
-
-```bash
-# Run with plugins
-npx -y @maximhq/bifrost -plugins "maxim,redis"
-```
-
-**Available plugins**: [Plugin Repository](https://github.com/maximhq/bifrost/tree/main/plugins) | [Plugin Guide](../docs/plugins.md)
-
-### Prometheus Monitoring
-
-Built-in metrics collection at `/metrics`:
-
-```bash
-curl http://localhost:8080/metrics
-```
-
-**Custom labels**: Configure via `prometheus_labels` in config file or web UI
+**That's it!** You now have a unified AI gateway running locally.
 
 ---
 
-## 🔧 Runtime Configuration
+## Key Features
 
-### For Binary
+Bifrost Gateway provides enterprise-grade AI infrastructure with these core capabilities:
 
-| Flag       | Default   | Description                              |
-| ---------- | --------- | ---------------------------------------- |
-| `-app-dir` | .         | Application data directory (config+logs) |
-| `-port`    | 8080      | HTTP server port                         |
-| `-host`    | localhost | Host to bind server to                   |
-| `-plugins` | -         | Comma-separated plugin list              |
+### Core Features
 
-### Understanding App Directory & Docker Volumes
+- **[Unified Interface](https://docs.getbifrost.ai/features/unified-interface)** - Single OpenAI-compatible API for all providers
+- **[Multi-Provider Support](https://docs.getbifrost.ai/quickstart/gateway/provider-configuration)** - OpenAI, Anthropic, AWS Bedrock, Google Vertex, Azure, Cohere, Mistral, Ollama, Groq, and more
+- **[Drop-in Replacement](https://docs.getbifrost.ai/features/drop-in-replacement)** - Replace OpenAI/Anthropic/GenAI SDKs with zero code changes
+- **[Automatic Fallbacks](https://docs.getbifrost.ai/features/fallbacks)** - Seamless failover between providers and models
+- **[Streaming Support](https://docs.getbifrost.ai/quickstart/gateway/streaming)** - Real-time response streaming for all providers
 
-> **📖 Detailed Guide:** See [Understanding App Directory & Docker Volumes](../docs/quickstart/http-transport.md#understanding-app-directory--docker-volumes) for complete details on data persistence and Docker deployment.
+### Advanced Features
 
-**Quick Reference:**
+- **[Model Context Protocol (MCP)](https://docs.getbifrost.ai/features/mcp)** - Enable AI models to use external tools (filesystem, web search, databases)
+- **[Semantic Caching](https://docs.getbifrost.ai/features/semantic-caching)** - Intelligent response caching based on semantic similarity
+- **[Load Balancing](https://docs.getbifrost.ai/features/fallbacks)** - Distribute requests across multiple API keys and providers
+- **[Governance & Budget Management](https://docs.getbifrost.ai/features/governance)** - Usage tracking, rate limiting, and cost control
+- **[Custom Plugins](https://docs.getbifrost.ai/enterprise/custom-plugins)** - Extensible middleware for analytics, monitoring, and custom logic
 
-- Default app directory: Current working directory (`.`)
-- Docker volume mount: `-v $(pwd)/data:/app/data`
-- Key files: `config.json`, `logs/`
+### Enterprise Features
 
-For complete setup instructions, deployment scenarios, and best practices, see the [detailed guide](../docs/quickstart/http-transport.md#understanding-app-directory--docker-volumes).
+- **[Clustering](https://docs.getbifrost.ai/enterprise/clustering)** - Multi-node deployment with shared state
+- **[SSO Integration](https://docs.getbifrost.ai/features/sso-with-google-github)** - Google, GitHub authentication
+- **[Vault Support](https://docs.getbifrost.ai/enterprise/vault-support)** - Secure API key management
+- **[Custom Analytics](https://docs.getbifrost.ai/features/observability)** - Detailed usage insights and monitoring
+- **[In-VPC Deployments](https://docs.getbifrost.ai/enterprise/invpc-deployments)** - Private cloud deployment options
 
-### For Docker
+**Learn More**: [Complete Feature Documentation](https://docs.getbifrost.ai/features/unified-interface)
 
-| Variable      | Default   | Description                    |
-| ------------- | --------- | ------------------------------ |
-| `APP_PORT`    | 8080      | Server port override           |
-| `APP_HOST`    | 0.0.0.0   | Host to bind server to         |
-| `APP_PLUGINS` | -         | Plugin list override           |
+---
 
-**Network Configuration Examples:**
+## SDK Integrations
 
-```bash
-# Listen on all interfaces (for container access)
-docker run -p 8080:8080 -e APP_HOST=0.0.0.0 maximhq/bifrost
+Replace your existing SDK base URLs to unlock Bifrost's features instantly:
 
-# IPv6 support - listen on all IPv6 interfaces
-docker run -p 8080:8080 -e APP_HOST=:: maximhq/bifrost
+### OpenAI SDK
 
-# Specific interface binding
-docker run -p 8080:8080 -e APP_HOST=192.168.1.100 maximhq/bifrost
+```python
+import openai
+client = openai.OpenAI(
+    base_url="http://localhost:8080/openai",
+    api_key="dummy"  # Handled by Bifrost
+)
 ```
 
----
+### Anthropic SDK
 
-## 📚 Documentation
+```python
+import anthropic
+client = anthropic.Anthropic(
+    base_url="http://localhost:8080/anthropic",
+    api_key="dummy"  # Handled by Bifrost
+)
+```
 
-### 🎯 Getting Started
+### Google GenAI SDK
 
-- **[⚡ 30-Second Quickstart](../docs/quickstart/http-transport.md)** - Get running immediately
-- **[🔧 Configuration Guide](../docs/usage/http-transport/configuration/)** - Providers, MCP, plugins
-- **[🔄 Migration Guide](../docs/usage/http-transport/integrations/migration-guide.md)** - Migrate from existing providers
+```python
+import google.generativeai as genai
+genai.configure(
+    transport="rest",
+    api_endpoint="http://localhost:8080/genai",
+    api_key="dummy"  # Handled by Bifrost
+)
+```
 
-### 🚀 Core Features
-
-- **[🔗 Multi-Provider Support](../docs/usage/providers.md)** - 12+ AI providers with fallbacks
-- **[🛠️ MCP Integration](../docs/mcp.md)** - External tool calling for AI models
-- **[🔌 Plugin System](../docs/plugins.md)** - Extensible middleware architecture
-
-### 🌐 API Integrations
-
-- **[🤖 OpenAI Compatible](../docs/usage/http-transport/integrations/openai-compatible.md)** - Drop-in OpenAI replacement
-- **[🧠 Anthropic Compatible](../docs/usage/http-transport/integrations/anthropic-compatible.md)** - Drop-in Anthropic replacement
-- **[🔍 GenAI Compatible](../docs/usage/http-transport/integrations/genai-compatible.md)** - Drop-in Google GenAI replacement
-
-### 🏛️ Architecture & Performance
-
-- **[📊 Benchmarks](../docs/benchmarks.md)** - Performance metrics and optimization
-- **[🏗️ Architecture](../docs/architecture/)** - System design and internals
-- **[💡 Examples](../docs/examples/)** - Real-world usage patterns
+**Complete Integration Guides**: [SDK Integrations](https://docs.getbifrost.ai/integrations/what-is-an-integration)
 
 ---
 
-## 🎉 Ready to Scale?
+## Documentation
 
-🚀 **Production Deployment**: [Production Guide](../docs/usage/http-transport/configuration/)
-📈 **Performance Tuning**: [Benchmarks & Optimization](../docs/benchmarks.md)
-🔍 **Troubleshooting**: [Common Issues](../docs/usage/errors.md)
+### Getting Started
+
+- [Quick Setup Guide](https://docs.getbifrost.ai/quickstart/gateway/setting-up) - Detailed installation and configuration
+- [Provider Configuration](https://docs.getbifrost.ai/quickstart/gateway/provider-configuration) - Connect multiple AI providers
+- [Integration Guide](https://docs.getbifrost.ai/quickstart/gateway/integrations) - SDK replacements
+
+### Advanced Topics
+
+- [MCP Tool Calling](https://docs.getbifrost.ai/features/mcp) - External tool integration
+- [Semantic Caching](https://docs.getbifrost.ai/features/semantic-caching) - Intelligent response caching
+- [Fallbacks & Load Balancing](https://docs.getbifrost.ai/features/fallbacks) - Reliability and scaling
+- [Budget Management](https://docs.getbifrost.ai/features/governance) - Cost control and governance
+
+**Browse All Documentation**: [https://docs.getbifrost.ai](https://docs.getbifrost.ai)
 
 ---
 
-_Built with ❤️ by [Maxim](https://github.com/maximhq)_
+*Built with ❤️ by [Maxim](https://getmaxim.ai)*

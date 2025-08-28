@@ -127,7 +127,7 @@ stateDiagram-v2
 - **Recovery:** Automatic error recovery and degraded mode handling
 - **Metrics:** Real-time performance and health metrics collection
 
-> **Plugin Lifecycle:** [Plugin Management →](../usage/go-package/plugins)
+> **Plugin Lifecycle:** [Plugin Management →](../../enterprise/custom-plugins)
 
 ---
 
@@ -256,7 +256,7 @@ sequenceDiagram
    - Non-blocking operations for logging and metrics
    - Efficient memory management for stream processing
 
-> **Streaming Details:** [HTTP Transport →](../usage/http-transport/endpoints#streaming-responses)
+> **Streaming Details:** [Streaming Guide →](../../quickstart/gateway/streaming)
 
 **Short-Circuit Rules:**
 
@@ -414,7 +414,7 @@ npx -y @maximhq/bifrost -plugins "maxim"
 }
 ```
 
-> **Plugin Configuration:** [Plugin Setup →](../usage/http-transport/configuration/plugins)
+> **Plugin Configuration:** [Plugin Setup →](../../enterprise/custom-plugins)
 
 ---
 
@@ -528,8 +528,6 @@ graph TB
 - **Network Impact:** Configurable external service calls
 - **Storage Overhead:** Minimal for stateless plugins
 
-> **📖 Performance Monitoring:** [Plugin Metrics →](../usage/monitoring#plugin-metrics)
-
 ---
 
 ## Plugin Integration Patterns
@@ -579,16 +577,14 @@ graph TB
 - **Message Queues:** Integration with message queue systems
 - **Caching Systems:** Redis, Memcached integration for state storage
 
-> **📖 Integration Examples:** [Plugin Development Guide →](../usage/go-package/plugins)
+> **📖 Integration Examples:** [Plugin Development Guide →](../../enterprise/custom-plugins)
 
 ---
 
 ## Related Architecture Documentation
 
-- **[System Overview](./system-overview)** - How plugins fit in the overall architecture
 - **[Request Flow](./request-flow)** - Plugin execution in request processing pipeline
 - **[Concurrency Model](./concurrency)** - Plugin concurrency and threading considerations
-- **[Benchmarks](../benchmarks)** - Plugin performance characteristics and optimization
-- **[Design Decisions](./design-decisions)** - Why this plugin architecture was chosen
+- **[Benchmarks](../../benchmarking/getting-started)** - Plugin performance characteristics and optimization
 - **[MCP System](./mcp)** - Integration between plugins and MCP system
 

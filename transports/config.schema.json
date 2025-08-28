@@ -72,16 +72,16 @@
           "$ref": "#/$defs/provider"
         },
         "bedrock": {
-          "$ref": "#/$defs/providerWithBedrockConfig"
+          "$ref": "#/$defs/provider_with_bedrock_config"
         },
         "cohere": {
           "$ref": "#/$defs/provider"
         },
         "azure": {
-          "$ref": "#/$defs/providerWithAzureConfig"
+          "$ref": "#/$defs/provider_with_azure_config"
         },
         "vertex": {
-          "$ref": "#/$defs/providerWithVertexConfig"
+          "$ref": "#/$defs/provider_with_vertex_config"
         },
         "mistral": {
           "$ref": "#/$defs/provider"
@@ -111,7 +111,7 @@
         "client_configs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/mcpClientConfig"
+            "$ref": "#/$defs/mcp_client_config"
           },
           "description": "MCP client configurations"
         }
@@ -129,8 +129,7 @@
         "type": {
           "type": "string",
           "enum": [
-            "redis",
-            "redis_cluster"
+            "weaviate"
           ],
           "description": "Vector store type"
         },
@@ -140,24 +139,12 @@
               "if": {
                 "properties": {
                   "type": {
-                    "const": "redis"
+                    "const": "weaviate"
                   }
                 }
               },
               "then": {
-                "$ref": "#/$defs/redisConfig"
-              }
-            },
-            {
-              "if": {
-                "properties": {
-                  "type": {
-                    "const": "redis_cluster"
-                  }
-                }
-              },
-              "then": {
-                "$ref": "#/$defs/redisClusterConfig"
+                "$ref": "#/$defs/weaviate_config"
               }
             }
           ]
@@ -244,7 +231,7 @@
   },
   "additionalProperties": false,
   "$defs": {
-    "networkConfig": {
+    "network_config": {
       "type": "object",
       "properties": {
         "base_url": {
@@ -282,7 +269,7 @@
       },
       "additionalProperties": false
     },
-    "concurrencyConfig": {
+    "concurrency_config": {
       "type": "object",
       "properties": {
         "concurrency": {
@@ -302,7 +289,7 @@
       ],
       "additionalProperties": false
     },
-    "baseKey": {
+    "base_key": {
       "type": "object",
       "properties": {
         "value": {
@@ -327,10 +314,10 @@
       ],
       "additionalProperties": false
     },
-    "bedrockKey": {
+    "bedrock_key": {
       "allOf": [
         {
-          "$ref": "#/$defs/baseKey"
+          "$ref": "#/$defs/base_key"
         },
         {
           "type": "object",
@@ -378,10 +365,10 @@
         }
       ]
     },
-    "azureKey": {
+    "azure_key": {
       "allOf": [
         {
-          "$ref": "#/$defs/baseKey"
+          "$ref": "#/$defs/base_key"
         },
         {
           "type": "object",
@@ -418,10 +405,10 @@
         }
       ]
     },
-    "vertexKey": {
+    "vertex_key": {
       "allOf": [
         {
-          "$ref": "#/$defs/baseKey"
+          "$ref": "#/$defs/base_key"
         },
         {
           "type": "object",
@@ -461,19 +448,19 @@
         "keys": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/baseKey"
+            "$ref": "#/$defs/base_key"
           },
           "minItems": 1,
           "description": "API keys for this provider"
         },
         "network_config": {
-          "$ref": "#/$defs/networkConfig"
+          "$ref": "#/$defs/network_config"
         },
         "concurrency_and_buffer_size": {
-          "$ref": "#/$defs/concurrencyConfig"
+          "$ref": "#/$defs/concurrency_config"
         },
         "proxy_config": {
-          "$ref": "#/$defs/proxyConfig"
+          "$ref": "#/$defs/proxy_config"
         },
         "send_back_raw_response": {
           "type": "boolean",
@@ -485,25 +472,25 @@
       ],
       "additionalProperties": false
     },
-    "providerWithBedrockConfig": {
+    "provider_with_bedrock_config": {
       "type": "object",
       "properties": {
         "keys": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/bedrockKey"
+            "$ref": "#/$defs/bedrock_key"
           },
           "minItems": 1,
           "description": "API keys for this provider"
         },
         "network_config": {
-          "$ref": "#/$defs/networkConfig"
+          "$ref": "#/$defs/network_config"
         },
         "concurrency_and_buffer_size": {
-          "$ref": "#/$defs/concurrencyConfig"
+          "$ref": "#/$defs/concurrency_config"
         },
         "proxy_config": {
-          "$ref": "#/$defs/proxyConfig"
+          "$ref": "#/$defs/proxy_config"
         },
         "send_back_raw_response": {
           "type": "boolean",
@@ -515,25 +502,25 @@
       ],
       "additionalProperties": false
     },
-    "providerWithAzureConfig": {
+    "provider_with_azure_config": {
       "type": "object",
       "properties": {
         "keys": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/azureKey"
+            "$ref": "#/$defs/azure_key"
           },
           "minItems": 1,
           "description": "API keys for this provider"
         },
         "network_config": {
-          "$ref": "#/$defs/networkConfig"
+          "$ref": "#/$defs/network_config"
         },
         "concurrency_and_buffer_size": {
-          "$ref": "#/$defs/concurrencyConfig"
+          "$ref": "#/$defs/concurrency_config"
         },
         "proxy_config": {
-          "$ref": "#/$defs/proxyConfig"
+          "$ref": "#/$defs/proxy_config"
         },
         "send_back_raw_response": {
           "type": "boolean",
@@ -545,25 +532,25 @@
       ],
       "additionalProperties": false
     },
-    "providerWithVertexConfig": {
+    "provider_with_vertex_config": {
       "type": "object",
       "properties": {
         "keys": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/vertexKey"
+            "$ref": "#/$defs/vertex_key"
           },
           "minItems": 1,
           "description": "API keys for this provider"
         },
         "network_config": {
-          "$ref": "#/$defs/networkConfig"
+          "$ref": "#/$defs/network_config"
         },
         "concurrency_and_buffer_size": {
-          "$ref": "#/$defs/concurrencyConfig"
+          "$ref": "#/$defs/concurrency_config"
         },
         "proxy_config": {
-          "$ref": "#/$defs/proxyConfig"
+          "$ref": "#/$defs/proxy_config"
         },
         "send_back_raw_response": {
           "type": "boolean",
@@ -575,7 +562,7 @@
       ],
       "additionalProperties": false
     },
-    "mcpClientConfig": {
+    "mcp_client_config": {
       "type": "object",
       "properties": {
         "name": {
@@ -685,175 +672,50 @@
         }
       ]
     },
-    "redisConfig": {
+    "weaviate_config": {
       "type": "object",
-      "description": "Redis configuration for single instance",
+      "description": "Weaviate configuration for vector store",
       "properties": {
-        "addr": {
+        "scheme": {
           "type": "string",
-          "description": "Redis server address (host:port) - REQUIRED"
+          "description": "Weaviate server scheme (http or https) - REQUIRED"
         },
-        "username": {
+        "host": {
           "type": "string",
-          "description": "Username for Redis AUTH (optional)"
+          "description": "Weaviate server host (host:port) - REQUIRED"
         },
-        "password": {
+        "api_key": {
           "type": "string",
-          "description": "Password for Redis AUTH (can use env. prefix)"
+          "description": "API key for Weaviate authentication (optional)"
         },
-        "db": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Redis database number (default: 0)"
+        "headers": {
+          "type": "object",
+          "description": "Additional headers to send with requests"
         },
-        "prefix": {
-          "type": "string",
-          "description": "Key prefix for Redis keys"
-        },
-        "pool_size": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Maximum number of socket connections (optional)"
-        },
-        "min_idle_conns": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Minimum number of idle connections (optional)"
-        },
-        "max_idle_conns": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Maximum number of idle connections (optional)"
-        },
-        "conn_max_lifetime": {
+        "timeout": {
           "type": "string",
           "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Connection maximum lifetime (e.g., '1h', '30m', '5s')"
+          "description": "Timeout for Weaviate operations (e.g., '5s')"
         },
-        "conn_max_idle_time": {
+        "class_name": {
           "type": "string",
-          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Connection maximum idle time (e.g., '5m', '30s')"
+          "description": "Class name for Weaviate vector store"
         },
-        "dial_timeout": {
-          "type": "string",
-          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Timeout for socket connection (e.g., '5s')"
-        },
-        "read_timeout": {
-          "type": "string",
-          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Timeout for socket reads (e.g., '3s')"
-        },
-        "write_timeout": {
-          "type": "string",
-          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Timeout for socket writes (e.g., '3s')"
-        },
-        "context_timeout": {
-          "type": "string",
-          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Timeout for Redis operations (e.g., '5s')"
-        }
-      },
-      "required": [
-        "addr"
-      ],
-      "additionalProperties": false
-    },
-    "redisClusterConfig": {
-      "type": "object",
-      "description": "Redis Cluster configuration for cluster deployment",
-      "properties": {
-        "addrs": {
+        "properties": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "object"
           },
-          "minItems": 1,
-          "description": "Redis cluster node addresses (host:port) - REQUIRED"
-        },
-        "username": {
-          "type": "string",
-          "description": "Username for Redis AUTH (optional)"
-        },
-        "password": {
-          "type": "string",
-          "description": "Password for Redis AUTH (can use env. prefix)"
-        },
-        "prefix": {
-          "type": "string",
-          "description": "Key prefix for Redis keys"
-        },
-        "max_redirects": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Maximum number of retries for cluster redirects (optional)"
-        },
-        "read_only": {
-          "type": "boolean",
-          "description": "Enable read-only mode (optional)"
-        },
-        "route_by_latency": {
-          "type": "boolean",
-          "description": "Route read-only commands by latency (optional)"
-        },
-        "route_randomly": {
-          "type": "boolean",
-          "description": "Route read-only commands randomly (optional)"
-        },
-        "pool_size": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Maximum number of socket connections (optional)"
-        },
-        "min_idle_conns": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Minimum number of idle connections (optional)"
-        },
-        "max_idle_conns": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Maximum number of idle connections (optional)"
-        },
-        "conn_max_lifetime": {
-          "type": "string",
-          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Connection maximum lifetime (e.g., '1h', '30m', '5s')"
-        },
-        "conn_max_idle_time": {
-          "type": "string",
-          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Connection maximum idle time (e.g., '5m', '30s')"
-        },
-        "dial_timeout": {
-          "type": "string",
-          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Timeout for socket connection (e.g., '5s')"
-        },
-        "read_timeout": {
-          "type": "string",
-          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Timeout for socket reads (e.g., '3s')"
-        },
-        "write_timeout": {
-          "type": "string",
-          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Timeout for socket writes (e.g., '3s')"
-        },
-        "context_timeout": {
-          "type": "string",
-          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
-          "description": "Timeout for Redis operations (e.g., '5s')"
+          "description": "Properties for Weaviate vector store"
         }
       },
       "required": [
-        "addrs"
+        "scheme",
+        "host"
       ],
       "additionalProperties": false
     },
-    "proxyConfig": {
+    "proxy_config": {
       "type": "object",
       "description": "Proxy configuration for provider connections",
       "properties": {
