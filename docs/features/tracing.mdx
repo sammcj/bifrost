@@ -10,13 +10,13 @@ icon: "paw"
 
 Unlike basic logging, Bifrost's tracing system provides structured, searchable data with real-time monitoring capabilities, making it easy to debug issues, analyze performance patterns, and understand your AI application's behavior at scale.
 
-![Live Log Stream Interface](../media/live-log-stream.png)
+![Live Log Stream Interface](../media/live-log-stream.gif)
 
 ## How It Works
 
 Bifrost traces comprehensive information for every request:
 
-![Complete Request Tracing Overview](../media/request-tracing-overview.png)
+![Complete Request Tracing Overview](../media/ui-request-tracing-overview.png)
 
 ### **Request Data**
 - **Input Messages**: Complete conversation history and user prompts
@@ -47,17 +47,11 @@ Configure request tracing to control what gets logged and where it's stored:
 
 <Tab title="Using Web UI">
 
-![Tracing Configuration Interface](../media/tracing-config-ui.png)
+![Tracing Configuration Interface](../media/ui-tracing-config.png)
 
 1. Navigate to **http://localhost:8080**
-2. Go to **"Settings"** → **"Tracing"**
-3. Toggle **"Enable Request Tracing"** 
-4. Configure **"Log Store"** settings:
-   - **Type**: Currently SQLite (Postgres, MySQL, ClickHouse planned)
-   - **Path**: Database file location
-5. Save configuration
-
-The UI shows real-time connection status and storage usage.
+2. Go to **"Settings"
+3. Toggle **"Enable Logs"** 
 
 </Tab>
 
@@ -137,7 +131,7 @@ curl --location 'http://localhost:8080/api/config'
 
 Retrieve and analyze logs with powerful filtering capabilities:
 
-![Advanced Log Filtering Interface](../media/log-filtering-ui.png)
+![Advanced Log Filtering Interface](../media/ui-log-filtering.gif)
 
 ### **API Filtering Options**
 
@@ -193,8 +187,6 @@ Perfect for analytics, debugging specific issues, or building custom monitoring 
 
 Choose the right storage backend for your scale and requirements:
 
-![Log Store Configuration Interface](../media/log-store-config.png)
-
 ### **Current Support**
 
 **SQLite** (Default)
@@ -232,13 +224,13 @@ Choose the right storage backend for your scale and requirements:
 - **Performance**: Exceptional for large-scale log analysis
 - **Features**: Columnar storage, compression, real-time analytics
 
-**To understand how the tracing plugin handles everything concurrently without increasing latency while maintaining best performance, check the [Tracing Architecture Guide](../architecture/plugins/tracing).**
+{/* **To understand how the tracing plugin handles everything concurrently without increasing latency while maintaining best performance, check the [Tracing Architecture Guide](../architecture/plugins/tracing).** */}
 
 ---
 
 ## Next Steps
 
-- **[Architecture Deep Dive](../architecture/plugins/tracing)** - Internal implementation and performance tuning
+{/* - **[Architecture Deep Dive](../architecture/plugins/tracing)** - Internal implementation and performance tuning */}
 - **[Observability](./observability)** - Metrics, monitoring, and alerting setup
 - **[Gateway Setup](../quickstart/gateway/setting-up)** - Get Bifrost running with tracing enabled
 - **[Provider Configuration](../quickstart/gateway/provider-configuration)** - Configure multiple providers for better insights
