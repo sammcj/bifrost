@@ -1,4 +1,5 @@
-export const PROVIDERS = [
+// Known provider names array - centralized definition
+export const KNOWN_PROVIDERS = [
 	"openai",
 	"anthropic",
 	"azure",
@@ -12,6 +13,11 @@ export const PROVIDERS = [
 	"sgl",
 	"cerebras",
 ] as const;
+
+// Local Provider type derived from KNOWN_PROVIDERS constant
+export type Provider = (typeof KNOWN_PROVIDERS)[number];
+
+export const PROVIDERS: readonly Provider[] = KNOWN_PROVIDERS;
 
 export const STATUSES = ["success", "error", "processing", "cancelled"] as const;
 
@@ -27,7 +33,7 @@ export const REQUEST_TYPES = [
 	"audio.transcription.chunk",
 ] as const;
 
-export const PROVIDER_LABELS = {
+export const PROVIDER_LABELS: Record<Provider, string> = {
 	openai: "OpenAI",
 	anthropic: "Anthropic",
 	azure: "Azure OpenAI",
@@ -41,6 +47,17 @@ export const PROVIDER_LABELS = {
 	sgl: "SGLang",
 	cerebras: "Cerebras",
 } as const;
+
+// Helper function to get provider label, supporting custom providers
+export const getProviderLabel = (provider: string): string => {
+	// Use hasOwnProperty for safe lookup without checking prototype chain
+	if (Object.prototype.hasOwnProperty.call(PROVIDER_LABELS, provider.toLowerCase().trim() as Provider)) {
+		return PROVIDER_LABELS[provider.toLowerCase().trim() as Provider];
+	}
+
+	// For custom providers, return the original provider name as is
+	return provider;
+};
 
 export const STATUS_COLORS = {
 	success: "bg-green-100 text-green-800",
@@ -73,5 +90,4 @@ export const REQUEST_TYPE_COLORS = {
 	"audio.transcription.chunk": "bg-lime-100 text-lime-800",
 } as const;
 
-export type Provider = (typeof PROVIDERS)[number];
 export type Status = (typeof STATUSES)[number];

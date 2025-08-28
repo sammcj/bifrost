@@ -262,6 +262,11 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 						ConcurrencyAndBufferSize: dbProvider.ConcurrencyAndBufferSize,
 						ProxyConfig:              dbProvider.ProxyConfig,
 						SendBackRawResponse:      dbProvider.SendBackRawResponse,
+						CustomProviderConfig:     dbProvider.CustomProviderConfig,
+					}
+					if err := ValidateCustomProvider(providerConfig, provider); err != nil {
+						logger.Warn("invalid custom provider config for %s: %v", provider, err)
+						continue
 					}
 					processedProviders[provider] = providerConfig
 				}
@@ -708,6 +713,7 @@ func (s *Config) GetProviderConfigRedacted(provider schemas.ModelProvider) (*con
 		ConcurrencyAndBufferSize: config.ConcurrencyAndBufferSize,
 		ProxyConfig:              config.ProxyConfig,
 		SendBackRawResponse:      config.SendBackRawResponse,
+		CustomProviderConfig:     config.CustomProviderConfig,
 	}
 
 	// Create redacted keys
@@ -869,6 +875,10 @@ func (s *Config) AddProvider(provider schemas.ModelProvider, config configstore.
 		return fmt.Errorf("provider %s already exists", provider)
 	}
 
+	// Validate CustomProviderConfig if present
+	if err := ValidateCustomProvider(config, provider); err != nil {
+		return err
+	}
 	newEnvKeys := make(map[string]struct{})
 
 	// Process environment variables in keys (including key-level configs)
@@ -957,6 +967,16 @@ func (s *Config) UpdateProviderConfig(provider schemas.ModelProvider, config con
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Get existing configuration for validation
+	existingConfig, exists := s.Providers[provider]
+	if !exists {
+		return fmt.Errorf("provider %s not found", provider)
+	}
+
+	// Validate CustomProviderConfig if present, ensuring immutable fields are not changed
+	if err := ValidateCustomProviderUpdate(config, existingConfig, provider); err != nil {
+		return err
+	}
 	// Track new environment variables being added
 	newEnvKeys := make(map[string]struct{})
 
@@ -1798,6 +1818,62 @@ func (s *Config) GetVectorStoreConfigRedacted() (*vectorstore.Config, error) {
 		return &redactedVectorStoreConfig, nil
 	}
 	return nil, nil
+}
+
+// ValidateCustomProvider validates the custom provider configuration
+func ValidateCustomProvider(config configstore.ProviderConfig, provider schemas.ModelProvider) error {
+	if config.CustomProviderConfig == nil {
+		return nil
+	}
+
+	if bifrost.IsStandardProvider(provider) {
+		return fmt.Errorf("custom provider validation failed: cannot be created on standard providers: %s", provider)
+	}
+
+	cpc := config.CustomProviderConfig
+
+	// Validate base provider type
+	if cpc.BaseProviderType == "" {
+		return fmt.Errorf("custom provider validation failed: base_provider_type is required")
+	}
+
+	// Check if base provider is a supported base provider
+	if !bifrost.IsSupportedBaseProvider(cpc.BaseProviderType) {
+		return fmt.Errorf("custom provider validation failed: unsupported base_provider_type: %s", cpc.BaseProviderType)
+	}
+	return nil
+}
+
+// ValidateCustomProviderUpdate validates that immutable fields in CustomProviderConfig are not changed during updates
+func ValidateCustomProviderUpdate(newConfig, existingConfig configstore.ProviderConfig, provider schemas.ModelProvider) error {
+	// If neither config has CustomProviderConfig, no validation needed
+	if newConfig.CustomProviderConfig == nil && existingConfig.CustomProviderConfig == nil {
+		return nil
+	}
+
+	// If new config doesn't have CustomProviderConfig but existing does, return an error
+	if newConfig.CustomProviderConfig == nil {
+		return fmt.Errorf("custom_provider_config cannot be removed after creation for provider %s", provider)
+	}
+
+	// If existing config doesn't have CustomProviderConfig but new one does, that's fine (adding it)
+	if existingConfig.CustomProviderConfig == nil {
+		return ValidateCustomProvider(newConfig, provider)
+	}
+
+	// Both configs have CustomProviderConfig, validate immutable fields
+	newCPC := newConfig.CustomProviderConfig
+	existingCPC := existingConfig.CustomProviderConfig
+
+	// CustomProviderKey is internally set and immutable, no validation needed
+
+	// Check if BaseProviderType is being changed
+	if newCPC.BaseProviderType != existingCPC.BaseProviderType {
+		return fmt.Errorf("provider %s: base_provider_type cannot be changed from %s to %s after creation",
+			provider, existingCPC.BaseProviderType, newCPC.BaseProviderType)
+	}
+
+	return nil
 }
 
 func (s *Config) AddProviderKeysToSemanticCacheConfig(config *schemas.PluginConfig) error {
