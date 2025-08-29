@@ -43,6 +43,41 @@ if err != nil {
 fmt.Println("Response:", *response.Choices[0].Message.Content.ContentStr)
 ```
 
+## Audio Understanding: Analyzing Audio with AI
+
+If your chat application supports text input, you can add audio input and output—just include audio in the modalities array and use an audio model, like gpt-4o-audio-preview.
+
+### Audio Input to Model
+
+```go
+response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+	Provider: schemas.OpenAI,
+	Model:    "gpt-4o-audio-preview",
+	Input: schemas.RequestInput{
+		ChatCompletionInput: &[]schemas.BifrostMessage{
+			{
+				Role: schemas.ModelChatMessageRoleUser,
+				Content: schemas.MessageContent{
+					ContentBlocks: &[]schemas.ContentBlock{
+						{
+							Type: schemas.ContentBlockTypeText,
+							Text: bifrost.Ptr("Please analyze this audio recording and summarize what was discussed."),
+						},
+						{
+							Type: schemas.ContentBlockTypeInputAudio,
+							InputAudio: &schemas.InputAudioStruct{
+								Data:   <"base64-encoded audio data containing the word 'Affirmative'>",
+								Format: "wav",
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+})
+```
+
 ## Text-to-Speech: Converting Text to Audio
 
 Convert text into natural-sounding speech using AI voice models. This example demonstrates generating an MP3 audio file from text using the "alloy" voice. The result is saved to a local file for playback.

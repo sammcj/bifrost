@@ -237,6 +237,10 @@ func (provider *OpenAIProvider) Embedding(ctx context.Context, model string, key
 	}
 
 	providerName := provider.GetProviderKey()
+	
+	if input == nil || len(input.Texts) == 0 {
+		return nil, newBifrostOperationError("invalid embedding input: at least one text is required", nil, providerName)
+	}
 
 	// Prepare request body with base parameters
 	requestBody := map[string]interface{}{
@@ -261,6 +265,22 @@ func (provider *OpenAIProvider) Embedding(ctx context.Context, model string, key
 		requestBody = mergeConfig(requestBody, params.ExtraParams)
 	}
 
+	// Use the shared embedding request handler
+	return handleOpenAIEmbeddingRequest(
+		ctx,
+		provider.client,
+		provider.networkConfig.BaseURL+"/v1/embeddings",
+		requestBody,
+		key,
+		params,
+		provider.networkConfig.ExtraHeaders,
+		providerName,
+		provider.sendBackRawResponse,
+		provider.logger,
+	)
+}
+
+func handleOpenAIEmbeddingRequest(ctx context.Context, client *fasthttp.Client, url string, requestBody map[string]interface{}, key schemas.Key, params *schemas.ModelParameters, extraHeaders map[string]string, providerName schemas.ModelProvider, sendBackRawResponse bool, logger schemas.Logger) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	jsonBody, err := sonic.Marshal(requestBody)
 	if err != nil {
 		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, providerName)
@@ -273,9 +293,9 @@ func (provider *OpenAIProvider) Embedding(ctx context.Context, model string, key
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeaders(req, extraHeaders, nil)
 
-	req.SetRequestURI(provider.networkConfig.BaseURL + "/v1/embeddings")
+	req.SetRequestURI(url)
 	req.Header.SetMethod("POST")
 	req.Header.SetContentType("application/json")
 	req.Header.Set("Authorization", "Bearer "+key.Value)
@@ -283,26 +303,24 @@ func (provider *OpenAIProvider) Embedding(ctx context.Context, model string, key
 	req.SetBody(jsonBody)
 
 	// Make request
-	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	bifrostErr := makeRequestWithContext(ctx, client, req, resp)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
-		provider.logger.Debug(fmt.Sprintf("error from %s provider: %s", providerName, string(resp.Body())))
+		logger.Debug(fmt.Sprintf("error from %s provider: %s", providerName, string(resp.Body())))
 		return nil, parseOpenAIError(resp)
 	}
 
 	responseBody := resp.Body()
 
-	// Pre-allocate response structs from pools
-	// response := acquireOpenAIResponse()
-	// defer releaseOpenAIResponse(response)
+	// Pre-allocate response structs
 	response := &schemas.BifrostResponse{}
 
 	// Use enhanced response handler with pre-allocated response
-	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)
+	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, sendBackRawResponse)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -313,7 +331,7 @@ func (provider *OpenAIProvider) Embedding(ctx context.Context, model string, key
 		response.ExtraFields.Params = *params
 	}
 
-	if provider.sendBackRawResponse {
+	if sendBackRawResponse {
 		response.ExtraFields.RawResponse = rawResponse
 	}
 
@@ -388,13 +406,13 @@ func handleOpenAIStreaming(
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
 	}
 
+	// Set any extra headers from network config
+	setExtraHeadersHTTP(req, extraHeaders, nil)
+
 	// Set headers
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-
-	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, extraHeaders, nil)
 
 	// Make the request
 	resp, err := httpClient.Do(req)
@@ -664,13 +682,14 @@ func (provider *OpenAIProvider) SpeechStream(ctx context.Context, postHookRunner
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
 	}
 
+	
+	// Set any extra headers from network config
+	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
+
 	// Set headers
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-
-	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
 
 	// Make the request
 	resp, err := provider.streamClient.Do(req)
@@ -899,13 +918,13 @@ func (provider *OpenAIProvider) TranscriptionStream(ctx context.Context, postHoo
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
 	}
 
+	// Set any extra headers from network config
+	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
+
 	// Set headers
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-
-	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
 
 	// Make the request
 	resp, err := provider.streamClient.Do(req)

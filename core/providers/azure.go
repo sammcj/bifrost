@@ -163,7 +163,7 @@ func (provider *AzureProvider) completeRequest(ctx context.Context, requestBody 
 
 		apiVersion := key.AzureKeyConfig.APIVersion
 		if apiVersion == nil {
-			apiVersion = StrPtr("2024-02-01")
+			apiVersion = Ptr("2024-02-01")
 		}
 
 		url = fmt.Sprintf("%s/openai/deployments/%s/%s?api-version=%s", url, deployment, path, *apiVersion)
@@ -419,7 +419,7 @@ func (provider *AzureProvider) ChatCompletionStream(ctx context.Context, postHoo
 
 		apiVersion := key.AzureKeyConfig.APIVersion
 		if apiVersion == nil {
-			apiVersion = StrPtr("2024-02-01")
+			apiVersion = Ptr("2024-02-01")
 		}
 
 		fullURL = fmt.Sprintf("%s/openai/deployments/%s/chat/completions?api-version=%s", baseURL, deployment, *apiVersion)

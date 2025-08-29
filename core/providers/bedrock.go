@@ -271,7 +271,7 @@ func (provider *BedrockProvider) completeRequest(ctx context.Context, requestBod
 			return nil, &schemas.BifrostError{
 				IsBifrostError: false,
 				Error: schemas.ErrorField{
-					Type:    StrPtr(schemas.RequestCancelled),
+					Type:    Ptr(schemas.RequestCancelled),
 					Message: fmt.Sprintf("Request cancelled or timed out by context: %v", ctx.Err()),
 					Error:   err,
 				},
@@ -1068,7 +1068,7 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, model strin
 			}
 
 			toolCalls = append(toolCalls, schemas.ToolCall{
-				Type: StrPtr("function"),
+				Type: Ptr("function"),
 				ID:   &choice.ToolUse.ToolUseID,
 				Function: schemas.FunctionCall{
 					Name:      &choice.ToolUse.Name,

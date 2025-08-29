@@ -46,6 +46,56 @@ curl --location 'http://localhost:8080/v1/chat/completions' \
 }
 ```
 
+## Audio Understanding: Analyzing Audio with AI
+
+If your chat application supports text input, you can add audio input and output—just include audio in the modalities array and use an audio model, like gpt-4o-audio-preview.
+
+### Audio Input to Model
+
+```bash
+curl --location 'http://localhost:8080/v1/chat/completions' \
+--header 'Content-Type: application/json' \
+--data '{
+    "model": "openai/gpt-4o-audio-preview",
+    "modalities": ["text"],
+    "messages": [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Please analyze this audio recording and summarize what was discussed."
+                },
+                {
+                    "type": "input_audio",
+                    "input_audio": {
+                        "data": "<base64-encoded audio data containing the word 'Affirmative'>",
+                        "format": "wav"
+                    }
+                }
+            ]
+        }
+    ]
+}'
+```
+
+### Audio Output from Model
+
+```bash
+{
+    "choices": [
+        {
+            "index": 0,
+            "finish_reason": "stop",
+            "message": {
+                "role": "assistant",
+                "content": "The audio recording captured a brief segment where a speaker simply said \"Affirmative\" in response. There wasn't any detailed discussion or context provided beyond that one-word affirmation. If you have more audio or specific questions, feel free to share!"
+            }
+        }
+    ]
+}
+```
+
 ## Text-to-Speech: Converting Text to Audio
 
 Convert text into natural-sounding speech using AI voice models. This example demonstrates generating an MP3 audio file from text using the "alloy" voice. The result is returned as binary audio data.

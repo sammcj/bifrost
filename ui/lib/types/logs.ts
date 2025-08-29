@@ -14,10 +14,11 @@ export interface SpeechInput {
 }
 
 export interface TranscriptionInput {
-	file: string; // base64 encoded
+	file: string; // base64 encoded (send empty string when using input_audio)
 	language?: string;
 	prompt?: string;
 	response_format?: string; // Default is "json"
+	format?: string;
 }
 
 export interface AudioTokenDetails {
@@ -84,7 +85,7 @@ export interface BifrostTranscribe {
 }
 
 // Message content types
-export type MessageContentType = "text" | "image_url";
+export type MessageContentType = "text" | "image_url" | "input_audio";
 
 export interface ContentBlock {
 	type: MessageContentType;
@@ -92,6 +93,10 @@ export interface ContentBlock {
 	image_url?: {
 		url: string;
 		detail?: string;
+	};
+	input_audio?: {
+		data: string;
+		format?: string;
 	};
 }
 

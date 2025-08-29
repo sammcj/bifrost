@@ -50,30 +50,33 @@ const (
 	SGL       ModelProvider = "sgl"
 	Parasail  ModelProvider = "parasail"
 	Cerebras  ModelProvider = "cerebras"
+	Gemini    ModelProvider = "gemini"
 )
 
 // SupportedBaseProviders is the list of base providers allowed for custom providers.
 var SupportedBaseProviders = []ModelProvider{
-	OpenAI,
 	Anthropic,
 	Bedrock,
 	Cohere,
+	Gemini,
+	OpenAI,
 }
 
 // StandardProviders is the list of all built-in (non-custom) providers.
 var StandardProviders = []ModelProvider{
-	OpenAI,
-	Azure,
 	Anthropic,
+	Azure,
 	Bedrock,
-	Cohere,
-	Vertex,
-	Groq,
-	SGL,
-	Parasail,
 	Cerebras,
-	Ollama,
+	Cohere,
+	Gemini,
+	Groq,
 	Mistral,
+	Ollama,
+	OpenAI,
+	Parasail,
+	SGL,
+	Vertex,
 }
 
 //* Request Structs
@@ -161,6 +164,7 @@ type TranscriptionInput struct {
 	Language       *string `json:"language,omitempty"`
 	Prompt         *string `json:"prompt,omitempty"`
 	ResponseFormat *string `json:"response_format,omitempty"` // Default is "json"
+	Format     *string `json:"file_format,omitempty"`// Type of file, not required in openai, but required in gemini
 }
 
 // BifrostRequest represents a request to be processed by Bifrost.
@@ -367,12 +371,15 @@ type ContentBlockType string
 const (
 	ContentBlockTypeText  ContentBlockType = "text"
 	ContentBlockTypeImage ContentBlockType = "image_url"
+	ContentBlockTypeInputAudio ContentBlockType = "input_audio"
 )
 
 type ContentBlock struct {
 	Type     ContentBlockType `json:"type"`
 	Text     *string          `json:"text,omitempty"`
 	ImageURL *ImageURLStruct  `json:"image_url,omitempty"`
+	InputAudio *InputAudioStruct  `json:"input_audio,omitempty"`
+
 }
 
 // ToolMessage represents a message from a tool
@@ -392,6 +399,14 @@ type AssistantMessage struct {
 type ImageURLStruct struct {
 	URL    string  `json:"url"`
 	Detail *string `json:"detail,omitempty"`
+}
+
+// InputAudioStruct represents audio data in a message.
+// Data carries the audio payload as a string (e.g., data URL or provider-accepted encoded content).
+// Format is optional (e.g., "wav", "mp3"); when nil, providers may attempt auto-detection.
+type InputAudioStruct struct {
+	Data string `json:"data"`
+	Format *string `json:"format,omitempty"`
 }
 
 //* Response Structs
