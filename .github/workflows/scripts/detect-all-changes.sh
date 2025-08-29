@@ -42,7 +42,8 @@ else
   else
     PREVIOUS_CORE_VERSION=${LATEST_CORE_TAG#core/v}
     echo "   📋 Previous: $PREVIOUS_CORE_VERSION, Current: $CORE_VERSION"
-    if [ "$(printf '%s\n' "$PREVIOUS_CORE_VERSION" "$CORE_VERSION" | sort -V | tail -1)" = "$CORE_VERSION" ] && [ "$PREVIOUS_CORE_VERSION" != "$CORE_VERSION" ]; then
+    # Fixed: Use head -1 instead of tail -1 for your sort -V behavior, and check against current version
+    if [ "$(printf '%s\n' "$PREVIOUS_CORE_VERSION" "$CORE_VERSION" | sort -V | head -1)" = "$CORE_VERSION" ] && [ "$PREVIOUS_CORE_VERSION" != "$CORE_VERSION" ]; then
       echo "   ✅ Core version incremented: $PREVIOUS_CORE_VERSION → $CORE_VERSION"
       CORE_NEEDS_RELEASE="true"
     else
@@ -65,7 +66,8 @@ else
   else
     PREVIOUS_FRAMEWORK_VERSION=${LATEST_FRAMEWORK_TAG#framework/v}
     echo "   📋 Previous: $PREVIOUS_FRAMEWORK_VERSION, Current: $FRAMEWORK_VERSION"
-    if [ "$(printf '%s\n' "$PREVIOUS_FRAMEWORK_VERSION" "$FRAMEWORK_VERSION" | sort -V | tail -1)" = "$FRAMEWORK_VERSION" ] && [ "$PREVIOUS_FRAMEWORK_VERSION" != "$FRAMEWORK_VERSION" ]; then
+    # Fixed: Use head -1 instead of tail -1 for your sort -V behavior, and check against current version
+    if [ "$(printf '%s\n' "$PREVIOUS_FRAMEWORK_VERSION" "$FRAMEWORK_VERSION" | sort -V | head -1)" = "$FRAMEWORK_VERSION" ] && [ "$PREVIOUS_FRAMEWORK_VERSION" != "$FRAMEWORK_VERSION" ]; then
       echo "   ✅ Framework version incremented: $PREVIOUS_FRAMEWORK_VERSION → $FRAMEWORK_VERSION"
       FRAMEWORK_NEEDS_RELEASE="true"
     else
@@ -112,7 +114,10 @@ for plugin_dir in plugins/*/; do
     PLUGIN_CHANGES+=("$plugin_name")
   else
     previous_version=${latest_tag#plugins/${plugin_name}/v}
-    if [ "$(printf '%s\n' "$previous_version" "$current_version" | sort -V | tail -1)" = "$current_version" ] && [ "$previous_version" != "$current_version" ]; then
+    echo "previous version: $previous_version"
+    echo "current version: $current_version"
+    echo "latest tag: $latest_tag"
+    if [ "$(printf '%s\n' "$previous_version" "$current_version" | sort -V | head -1)" = "$current_version" ] && [ "$previous_version" != "$current_version" ]; then
       echo "      ✅ Version incremented: $previous_version → $current_version"
       PLUGIN_CHANGES+=("$plugin_name")
     else
@@ -166,7 +171,13 @@ else
   else
     PREVIOUS_TRANSPORT_VERSION=${LATEST_TRANSPORT_TAG#transports/v}
     echo "   📋 Previous: $PREVIOUS_TRANSPORT_VERSION, Current: $TRANSPORT_VERSION"
-    if [ "$(printf '%s\n' "$PREVIOUS_TRANSPORT_VERSION" "$TRANSPORT_VERSION" | sort -V | tail -1)" = "$TRANSPORT_VERSION" ] && [ "$PREVIOUS_TRANSPORT_VERSION" != "$TRANSPORT_VERSION" ]; then
+    # Debug the sort behavior
+    sorted_first=$(printf '%s\n' "$PREVIOUS_TRANSPORT_VERSION" "$TRANSPORT_VERSION" | sort -V | head -1)
+    echo "   🔍 DEBUG: sort -V | head -1 returns: '$sorted_first'"
+    echo "   🔍 DEBUG: Current version: '$TRANSPORT_VERSION'"
+    echo "   🔍 DEBUG: Versions different? $([ "$PREVIOUS_TRANSPORT_VERSION" != "$TRANSPORT_VERSION" ] && echo "YES" || echo "NO")"
+    # Fixed: Use head -1 instead of tail -1 for your sort -V behavior, and check against current version
+    if [ "$sorted_first" = "$TRANSPORT_VERSION" ] && [ "$PREVIOUS_TRANSPORT_VERSION" != "$TRANSPORT_VERSION" ]; then
       echo "   ✅ Transport version incremented: $PREVIOUS_TRANSPORT_VERSION → $TRANSPORT_VERSION"
       if [ "$GIT_TAG_EXISTS" = "false" ]; then
         echo "   🏷️  Git tag missing - transport release needed"
@@ -183,9 +194,6 @@ else
     DOCKER_NEEDS_RELEASE="true"
   fi
 fi
-
-
-
 
 # Convert plugin array to JSON (compact format)
 if [ ${#PLUGIN_CHANGES[@]} -eq 0 ]; then
