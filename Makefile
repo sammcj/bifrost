@@ -45,7 +45,7 @@ install-air: ## Install air for hot reloading (if not already installed)
 	@which air > /dev/null || (echo "$(YELLOW)Installing air for hot reloading...$(NC)" && go install github.com/air-verse/air@latest)
 	@echo "$(GREEN)Air is ready$(NC)"
 
-dev: install-ui install-air ## Start complete development environment (UI + API with proxy)
+dev: install-ui install-air setup-workspace ## Start complete development environment (UI + API with proxy)
 	@echo "$(GREEN)Starting Bifrost complete development environment...$(NC)"
 	@echo "$(YELLOW)This will start:$(NC)"
 	@echo "  1. UI development server (localhost:3000)"
@@ -145,8 +145,12 @@ setup-workspace: ## Set up Go workspace with all local modules for development
 	@echo "$(YELLOW)Initializing new workspace...$(NC)"
 	@go work init ./core ./framework ./transports
 	@echo "$(YELLOW)Adding plugin modules...$(NC)"
-	@go work use ./plugins/governance ./plugins/jsonparser ./plugins/logging
-	@go work use ./plugins/maxim ./plugins/mocker ./plugins/semanticcache ./plugins/telemetry
+	@for plugin_dir in ./plugins/*/; do \
+		if [ -d "$$plugin_dir" ] && [ -f "$$plugin_dir/go.mod" ]; then \
+			echo "  Adding plugin: $$(basename $$plugin_dir)"; \
+			go work use "$$plugin_dir"; \
+		fi; \
+	done
 	@echo "$(YELLOW)Syncing workspace...$(NC)"
 	@go work sync
 	@echo "$(GREEN)✓ Go workspace ready with all local modules$(NC)"
