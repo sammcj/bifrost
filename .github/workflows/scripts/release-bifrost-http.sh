@@ -102,10 +102,12 @@ for plugin_name in "${!PLUGIN_VERSIONS[@]}"; do
 done
 
 # Also ensure core and framework are up to date
-echo "  🔧 Updating core to $CORE_VERSION"
-go get "github.com/maximhq/bifrost/core@$CORE_VERSION"
 echo "  📦 Updating framework to $FRAMEWORK_VERSION" 
 go get "github.com/maximhq/bifrost/framework@$FRAMEWORK_VERSION"
+
+# Upgrade core at the end
+echo "  🔧 Updating core to $CORE_VERSION"
+go get "github.com/maximhq/bifrost/core@$CORE_VERSION"
 
 go mod tidy
 
