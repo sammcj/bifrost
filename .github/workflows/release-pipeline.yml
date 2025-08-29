@@ -249,7 +249,7 @@ jobs:
       IMAGE_NAME: bifrost
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4          
+        uses: actions/checkout@v4             
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -263,6 +263,8 @@ jobs:
       - name: Determine Docker tags
         id: tags
         run: |
+          # Make sure we refetch the current branch
+          git pull origin ${{ github.ref_name }}"
           # Checking docker image tag
           VERSION="${{ needs.detect-changes.outputs.transport-version }}"
           BASE_TAG="${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:v${VERSION}"
