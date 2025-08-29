@@ -3,6 +3,9 @@ set -euo pipefail
 
 # Release a single plugin
 # Usage: ./release-single-plugin.sh <plugin-name> [core-version] [framework-version]
+
+# Source Go utilities for exponential backoff
+source "$(dirname "$0")/go-utils.sh"
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <plugin-name> [core-version] [framework-version]"
   exit 1
@@ -66,8 +69,8 @@ cd "$PLUGIN_DIR"
 
 # Update core dependency
 if [ -f "go.mod" ]; then
-  go get "github.com/maximhq/bifrost/core@${CORE_VERSION}"
-  go get "github.com/maximhq/bifrost/framework@${FRAMEWORK_VERSION}"
+  go_get_with_backoff "github.com/maximhq/bifrost/core@${CORE_VERSION}"
+  go_get_with_backoff "github.com/maximhq/bifrost/framework@${FRAMEWORK_VERSION}"
   go mod tidy
   git add go.mod go.sum || true
 

@@ -4,6 +4,9 @@ set -euo pipefail
 # Release framework component
 # Usage: ./release-framework.sh <version>
 
+# Source Go utilities for exponential backoff
+source "$(dirname "$0")/go-utils.sh"
+
 # Making sure version is provided
 if [ $# -ne 1 ]; then
   echo "Usage: $0 <version>" >&2
@@ -40,7 +43,7 @@ echo "🔧 Using core version: $CORE_VERSION"
 # Update framework dependencies
 echo "🔧 Updating framework dependencies..."
 cd framework
-go get "github.com/maximhq/bifrost/core@$CORE_VERSION"
+go_get_with_backoff "github.com/maximhq/bifrost/core@$CORE_VERSION"
 go mod tidy
 git add go.mod go.sum
 
