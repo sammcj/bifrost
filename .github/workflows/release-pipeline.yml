@@ -242,16 +242,14 @@ jobs:
     if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     env:
       REGISTRY: docker.io
       ACCOUNT: maximhq
       IMAGE_NAME: bifrost
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: 'main'
+        uses: actions/checkout@v4          
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -265,6 +263,7 @@ jobs:
       - name: Determine Docker tags
         id: tags
         run: |
+          # Checking docker image tag
           VERSION="${{ needs.detect-changes.outputs.transport-version }}"
           BASE_TAG="${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:v${VERSION}"
           
