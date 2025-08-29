@@ -25,6 +25,8 @@ RUN apk add --no-cache upx gcc musl-dev sqlite-dev
 ENV CGO_ENABLED=1 GOOS=linux
 
 COPY transports/go.mod transports/go.sum ./
+RUN ls
+RUN cat go.mod
 RUN go mod download
 
 # Copy source code and dependencies
