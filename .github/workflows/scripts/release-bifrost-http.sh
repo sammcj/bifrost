@@ -75,8 +75,6 @@ while IFS= read -r plugin_line; do
 done < <(grep "github.com/maximhq/bifrost/plugins/" go.mod)
 cd ..
 
-
-
 echo "🔧 Using versions:"
 echo "   Core: $CORE_VERSION"
 echo "   Framework: $FRAMEWORK_VERSION"
@@ -103,13 +101,15 @@ for plugin_name in "${!PLUGIN_VERSIONS[@]}"; do
 done
 
 # Also ensure core and framework are up to date
+
+echo "  🔧 Updating core to $CORE_VERSION"
+go_get_with_backoff "github.com/maximhq/bifrost/core@$CORE_VERSION"
+
 echo "  📦 Updating framework to $FRAMEWORK_VERSION" 
 go_get_with_backoff "github.com/maximhq/bifrost/framework@$FRAMEWORK_VERSION"
 
-# Upgrade core at the end
-echo "  🔧 Updating core to $CORE_VERSION"
-go_get_with_backoff "github.com/maximhq/bifrost/core@$CORE_VERSION"
 go mod tidy
+
 cd ..
 
 # We need to build UI first before we can validate the transport build
@@ -124,11 +124,13 @@ cd ..
 echo "✅ Transport build validation successful"
 
 # Commit and push changes if any
+# First, stage any changes made to transports/
+git add transports/
 if ! git diff --cached --quiet; then
   git config user.name "github-actions[bot]"
   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
   echo "🔧 Committing and pushing changes..."
-  git commit -m "${commit_msg:-"transports: update dependencies"} --skip-pipeline"
+  git commit -m "transports: update dependencies --skip-pipeline"
   git push -u origin HEAD
 else
   echo "ℹ️ No staged changes to commit"
