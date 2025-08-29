@@ -752,7 +752,7 @@ func parseAnthropicResponse(response *AnthropicChatResponse, bifrostResponse *sc
 			}
 
 			toolCalls = append(toolCalls, schemas.ToolCall{
-				Type:     StrPtr("function"),
+				Type:     Ptr("function"),
 				ID:       &c.ID,
 				Function: function,
 			})

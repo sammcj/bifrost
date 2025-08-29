@@ -16,6 +16,7 @@ This directory contains comprehensive tests for all Bifrost AI providers, ensuri
 - **SGLang** - OSS models
 - **Parasail** - OSS models
 - **Cerebras** - Llama, Qwen and GPT-OSS models
+- **Gemini** - Gemini models
 
 ## 🏃‍♂️ Running Tests
 
@@ -75,6 +76,9 @@ export GOOGLE_PROJECT_ID="your-project-id"
 # Mistral AI
 export MISTRAL_API_KEY="your-mistral-key"
 
+# Gemini
+export GEMINI_API_KEY="your-gemini-key"
+
 # Ollama (local installation)
 # No API key required - ensure Ollama is running locally
 # Default endpoint: http://localhost:11434
@@ -113,6 +117,9 @@ go test -v ./tests/core-providers/ -run TestVertex
 
 # Test only Mistral
 go test -v ./tests/core-providers/ -run TestMistral
+
+# Test only Gemini
+go test -v ./tests/core-providers/ -run TestGemini
 
 # Test only Ollama
 go test -v ./tests/core-providers/ -run TestOllama
@@ -156,6 +163,9 @@ go test -v ./tests/core-providers/ -run "TestVertex/AutomaticFunctionCalling"
 # Test only Mistral image processing
 go test -v ./tests/core-providers/ -run "TestMistral/ImageURL"
 
+# Test only Gemini simple chat
+go test -v ./tests/core-providers/ -run "TestGemini/SimpleChat"
+
 # Test only Ollama simple chat
 go test -v ./tests/core-providers/ -run "TestOllama/SimpleChat"
 ```
@@ -174,6 +184,7 @@ go test -v ./tests/core-providers/ -run "TestOllama/SimpleChat"
 - `MultipleImages` - Multiple image processing
 - `CompleteEnd2End` - Full end-to-end test
 - `ProviderSpecific` - Provider-specific features
+- `Embedding` - Basic embedding request
 
 ## 🧪 Test Scenarios
 
@@ -193,8 +204,8 @@ Each provider is tested against these scenarios when supported:
 
 ❌ **Provider-Specific Support:**
 
-- **Automatic Function Calling**: OpenAI, Anthropic, Bedrock, Azure, Vertex, Mistral, Ollama
-- **Vision/Image Analysis**: OpenAI, Anthropic, Bedrock, Azure, Vertex, Mistral (limited support for Cohere and Ollama)
+- **Automatic Function Calling**: OpenAI, Anthropic, Bedrock, Azure, Vertex, Mistral, Ollama, Gemini
+- **Vision/Image Analysis**: OpenAI, Anthropic, Bedrock, Azure, Vertex, Mistral, Gemini (limited support for Cohere and Ollama)
 - **Text Completion**: Legacy models only (most providers now focus on chat completion)
 
 ## 📊 Understanding Test Output
@@ -332,6 +343,13 @@ go test -v ./tests/core-providers/ -debug
 - **Capabilities**: Full support for chat, tools, and vision
 - **API Key**: Required via `MISTRAL_API_KEY` environment variable
 
+#### Gemini
+
+- **Models**: Uses `gemini-2.0-flash` for chat and `text-embedding-004` for embeddings
+- **Capabilities**: Full support for chat, tools, vision (base64), speech synthesis, and transcription
+- **API Key**: Required via `GEMINI_API_KEY` environment variable
+- **Limitations**: No text completion support, limited image URL support (base64 preferred)
+
 #### Ollama
 
 - **Local Setup**: Requires Ollama to be running locally (default: `http://localhost:11434`)
@@ -379,6 +397,7 @@ The comprehensive test suite covers:
 | Cohere    | ✅   | ✅    | ❌     | ❌              | ❌             |
 | Mistral   | ✅   | ✅    | ✅     | ❌              | ✅             |
 | Ollama    | ✅   | ✅    | ❌     | ❌              | ✅             |
+| Gemini    | ✅   | ✅    | ✅     | ❌              | ✅             |
 
 ## 🤝 Contributing
 

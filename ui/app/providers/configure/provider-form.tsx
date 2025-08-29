@@ -834,6 +834,7 @@ export default function ProviderForm({ provider, onSave, onCancel, existingProvi
 														<SelectItem value="anthropic">Anthropic</SelectItem>
 														<SelectItem value="bedrock">AWS Bedrock</SelectItem>
 														<SelectItem value="cohere">Cohere</SelectItem>
+														<SelectItem value="gemini">Gemini</SelectItem>
 													</SelectContent>
 												</Select>
 												<p className="text-muted-foreground mt-1 text-xs">The underlying provider this custom provider will use</p>
