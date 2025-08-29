@@ -152,7 +152,7 @@ func NewRedisClusterTestSetup(t *testing.T) *TestSetup {
 	config := Config{
 		CacheKey:       TestCacheKey,
 		Provider:       schemas.OpenAI,
-		EmbeddingModel: "text-embedding-3-small",
+		EmbeddingModel: "text-embedding-3-large",
 		Threshold:      0.8,
 		Keys: []schemas.Key{
 			{
