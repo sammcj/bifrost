@@ -4,6 +4,9 @@ set -euo pipefail
 # Release bifrost-http component
 # Usage: ./release-bifrost-http.sh <version>
 
+# Source Go utilities for exponential backoff
+source "$(dirname "$0")/go-utils.sh"
+
 # Validate input argument
 if [ "${1:-}" = "" ]; then
   echo "Usage: $0 <version>" >&2
@@ -94,18 +97,18 @@ for plugin_name in "${!PLUGIN_VERSIONS[@]}"; do
   # Check if transport depends on this plugin
   if grep -q "github.com/maximhq/bifrost/plugins/$plugin_name" go.mod; then
     echo "  📦 Using $plugin_name plugin $plugin_version"
-    go get "github.com/maximhq/bifrost/plugins/$plugin_name@$plugin_version"
+    go_get_with_backoff "github.com/maximhq/bifrost/plugins/$plugin_name@$plugin_version"
     PLUGINS_USED+=("$plugin_name:$plugin_version")
   fi
 done
 
 # Also ensure core and framework are up to date
 echo "  📦 Updating framework to $FRAMEWORK_VERSION" 
-go get "github.com/maximhq/bifrost/framework@$FRAMEWORK_VERSION"
+go_get_with_backoff "github.com/maximhq/bifrost/framework@$FRAMEWORK_VERSION"
 
 # Upgrade core at the end
 echo "  🔧 Updating core to $CORE_VERSION"
-go get "github.com/maximhq/bifrost/core@$CORE_VERSION"
+go_get_with_backoff "github.com/maximhq/bifrost/core@$CORE_VERSION"
 go mod tidy
 cd ..
 
