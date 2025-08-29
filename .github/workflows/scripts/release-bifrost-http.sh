@@ -107,7 +107,6 @@ go get "github.com/maximhq/bifrost/framework@$FRAMEWORK_VERSION"
 echo "  🔧 Updating core to $CORE_VERSION"
 go get "github.com/maximhq/bifrost/core@$CORE_VERSION"
 go mod tidy
-
 cd ..
 
 # We need to build UI first before we can validate the transport build
