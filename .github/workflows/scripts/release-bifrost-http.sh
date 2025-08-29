@@ -108,20 +108,8 @@ go get "github.com/maximhq/bifrost/framework@$FRAMEWORK_VERSION"
 # Upgrade core at the end
 echo "  🔧 Updating core to $CORE_VERSION"
 go get "github.com/maximhq/bifrost/core@$CORE_VERSION"
-
 go mod tidy
 
-# Only commit if there are changes
-if ! git diff --quiet go.mod go.sum; then
-  git add go.mod go.sum
-  commit_msg="transports: update to core $CORE_VERSION, framework $FRAMEWORK_VERSION"
-  if [ ${#PLUGINS_USED[@]} -gt 0 ]; then
-    commit_msg="$commit_msg, plugins: ${PLUGINS_USED[*]}"
-  fi
-  echo "✅ Transport dependencies updated"
-else
-  echo "ℹ️  No dependency changes detected in transports"
-fi
 cd ..
 
 # We need to build UI first before we can validate the transport build
