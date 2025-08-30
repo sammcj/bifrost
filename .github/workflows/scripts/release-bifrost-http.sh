@@ -35,6 +35,12 @@ else
   FRAMEWORK_VERSION=${LATEST_FRAMEWORK_TAG#framework/}
 fi
 
+echo "🔍 DEBUG: LATEST_CORE_TAG: $LATEST_CORE_TAG"
+echo "🔍 DEBUG: CORE_VERSION: $CORE_VERSION"
+echo "🔍 DEBUG: LATEST_FRAMEWORK_TAG: $LATEST_FRAMEWORK_TAG"
+echo "🔍 DEBUG: FRAMEWORK_VERSION: $FRAMEWORK_VERSION"
+
+
 # Get latest plugin versions
 echo "🔌 Getting latest plugin release versions..."
 declare -A PLUGIN_VERSIONS
@@ -44,7 +50,7 @@ for plugin_dir in plugins/*/; do
   if [ -d "$plugin_dir" ]; then
     plugin_name=$(basename "$plugin_dir")
     # Get the latest released version for this plugin
-    LATEST_PLUGIN_TAG=$(git tag -l "plugins/${plugin_name}/v*" | sort -V | tail -1)
+    LATEST_PLUGIN_TAG=$(git tag -l "plugins/${plugin_name}/v*" | sort -V | head -1)
     
     if [ -z "$LATEST_PLUGIN_TAG" ]; then
       # No release yet, use version from file
