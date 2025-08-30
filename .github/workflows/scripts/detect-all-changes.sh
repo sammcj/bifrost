@@ -218,12 +218,12 @@ else
   fi
 fi
   
-  # Check if Docker image needs to be built (independent of transport release)
-  if [ "$DOCKER_TAG_EXISTS" = "false" ]; then
-    echo "   🐳 Docker image missing - docker release needed"
-    DOCKER_NEEDS_RELEASE="true"
-  fi
+# Check if Docker image needs to be built (independent of transport release)
+if [ "$DOCKER_TAG_EXISTS" = "false" ]; then
+  echo "   🐳 Docker image missing - docker release needed"
+  DOCKER_NEEDS_RELEASE="true"
 fi
+
 
 # Convert plugin array to JSON (compact format)
 if [ ${#PLUGIN_CHANGES[@]} -eq 0 ]; then
