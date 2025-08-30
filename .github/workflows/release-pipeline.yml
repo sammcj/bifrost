@@ -236,7 +236,7 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: ./.github/workflows/scripts/release-bifrost-http.sh "${{ needs.detect-changes.outputs.transport-version }}"
 
-  # Docker build and push
+  # Docker build amd64
   docker-build-amd64:
     needs: [detect-changes, bifrost-http-release]
     if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
@@ -279,6 +279,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # Docker build arm64
   docker-build-arm64:
       needs: [detect-changes, bifrost-http-release]
       if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
@@ -320,7 +321,8 @@ jobs:
             platforms: linux/arm64
             cache-from: type=gha
             cache-to: type=gha,mode=max
-   
+
+  # Docker manifest   
   docker-manifest:
       needs: [docker-build-amd64, docker-build-arm64]
       if: "always() && needs.docker-build-amd64.result == 'success' && needs.docker-build-arm64.result == 'success'"
@@ -360,7 +362,7 @@ jobs:
 
   # Notification
   notify:
-    needs: [detect-changes, core-release, framework-release, plugins-release, bifrost-http-release, docker-build]
+    needs: [detect-changes, core-release, framework-release, plugins-release, bifrost-http-release, docker-manifest]
     if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline')"
     runs-on: ubuntu-latest
     steps:
