@@ -324,7 +324,7 @@ jobs:
 
   # Docker manifest   
   docker-manifest:
-      needs: [docker-build-amd64, docker-build-arm64]
+      needs: [detect-changes, docker-build-amd64, docker-build-arm64]
       if: "always() && needs.docker-build-amd64.result == 'success' && needs.docker-build-arm64.result == 'success'"
       runs-on: ubuntu-latest
       env:
