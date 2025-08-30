@@ -6,14 +6,17 @@ set -euo pipefail
 
 echo "📦 Installing cross-compilation toolchains for Go + CGO..."
 
+# Install all required packages
 sudo apt-get update
 sudo apt-get install -y \
   gcc-x86-64-linux-gnu \
   gcc-aarch64-linux-gnu \
   gcc-mingw-w64-x86-64 \
-  gcc-mingw-w64-aarch64 \
   musl-tools \
-  clang
+  clang \
+  lld \
+  xz-utils \
+  curl
 
 # Create symbolic links for musl compilers
 sudo ln -sf /usr/bin/x86_64-linux-gnu-gcc /usr/local/bin/x86_64-linux-musl-gcc
@@ -21,36 +24,46 @@ sudo ln -sf /usr/bin/x86_64-linux-gnu-g++ /usr/local/bin/x86_64-linux-musl-g++
 sudo ln -sf /usr/bin/aarch64-linux-gnu-gcc /usr/local/bin/aarch64-linux-musl-gcc
 sudo ln -sf /usr/bin/aarch64-linux-gnu-g++ /usr/local/bin/aarch64-linux-musl-g++
 
-# For Darwin, we can use the system clang with appropriate flags
-# No need for osxcross for simple CGO cross-compilation
 echo "🍎 Setting up Darwin cross-compilation..."
 
-# Create wrapper scripts for Darwin cross-compilation
-sudo tee /usr/local/bin/o64-clang > /dev/null << 'EOF'
-#!/bin/bash
-exec clang -target x86_64-apple-darwin "$@"
-EOF
+# Where to install SDK
+SDK_DIR="/opt/MacOSX11.3.sdk"
+SDK_URL="https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz"
 
-sudo tee /usr/local/bin/o64-clang++ > /dev/null << 'EOF'
-#!/bin/bash
-exec clang++ -target x86_64-apple-darwin "$@"
-EOF
+# Download and extract macOS SDK if not already installed
+if [ ! -d "$SDK_DIR" ]; then
+  echo "📦 Downloading macOS SDK..."
+  curl -L "$SDK_URL" -o /tmp/MacOSX11.3.sdk.tar.xz
+  sudo mkdir -p /opt
+  sudo tar -xf /tmp/MacOSX11.3.sdk.tar.xz -C /opt
+  rm -f /tmp/MacOSX11.3.sdk.tar.xz
+fi
 
-sudo tee /usr/local/bin/oa64-clang > /dev/null << 'EOF'
+# Create wrapper scripts with proper shebang and linker configuration
+sudo tee /usr/local/bin/o64-clang > /dev/null << 'WRAPPER_EOF'
 #!/bin/bash
-exec clang -target arm64-apple-darwin "$@"
-EOF
+exec clang -target x86_64-apple-darwin --sysroot=/opt/MacOSX11.3.sdk -fuse-ld=lld -Wno-unused-command-line-argument "$@"
+WRAPPER_EOF
 
-sudo tee /usr/local/bin/oa64-clang++ > /dev/null << 'EOF'
+sudo tee /usr/local/bin/o64-clang++ > /dev/null << 'WRAPPER_EOF'
 #!/bin/bash
-exec clang++ -target arm64-apple-darwin "$@"
-EOF
+exec clang++ -target x86_64-apple-darwin --sysroot=/opt/MacOSX11.3.sdk -fuse-ld=lld -Wno-unused-command-line-argument "$@"
+WRAPPER_EOF
 
-# Make wrapper scripts executable
-sudo chmod +x /usr/local/bin/o64-clang
-sudo chmod +x /usr/local/bin/o64-clang++
-sudo chmod +x /usr/local/bin/oa64-clang
-sudo chmod +x /usr/local/bin/oa64-clang++
+sudo tee /usr/local/bin/oa64-clang > /dev/null << 'WRAPPER_EOF'
+#!/bin/bash
+exec clang -target arm64-apple-darwin --sysroot=/opt/MacOSX11.3.sdk -fuse-ld=lld -Wno-unused-command-line-argument "$@"
+WRAPPER_EOF
+
+sudo tee /usr/local/bin/oa64-clang++ > /dev/null << 'WRAPPER_EOF'
+#!/bin/bash
+exec clang++ -target arm64-apple-darwin --sysroot=/opt/MacOSX11.3.sdk -fuse-ld=lld -Wno-unused-command-line-argument "$@"
+WRAPPER_EOF
+
+sudo chmod +x /usr/local/bin/o64-clang /usr/local/bin/o64-clang++ \
+               /usr/local/bin/oa64-clang /usr/local/bin/oa64-clang++
+
+echo "✅ Darwin cross-compilation environment ready!"
 
 echo "✅ Cross-compilation toolchains installed"
 echo ""
