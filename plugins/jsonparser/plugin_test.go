@@ -52,6 +52,7 @@ func (baseAccount *BaseAccount) GetConfigForProvider(providerKey schemas.ModelPr
 // Required environment variables:
 //   - OPENAI_API_KEY: Your OpenAI API key for the test request
 func TestJsonParserPluginEndToEnd(t *testing.T) {
+	ctx := context.Background()
 	// Check if OpenAI API key is set
 	if os.Getenv("OPENAI_API_KEY") == "" {
 		t.Skip("OPENAI_API_KEY is not set, skipping end-to-end test")
@@ -70,7 +71,7 @@ func TestJsonParserPluginEndToEnd(t *testing.T) {
 	account := BaseAccount{}
 
 	// Initialize Bifrost with the plugin
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: &account,
 		Plugins: []schemas.Plugin{plugin},
 		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelDebug),
@@ -78,7 +79,7 @@ func TestJsonParserPluginEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error initializing Bifrost: %v", err)
 	}
-	defer client.Cleanup()
+	defer client.Shutdown()
 
 	// Make a test chat completion request with streaming enabled
 	// Request JSON output to test the parser
@@ -105,10 +106,6 @@ func TestJsonParserPluginEndToEnd(t *testing.T) {
 			},
 		},
 	}
-
-	// Create context for the request
-	ctx := context.Background()
-
 	// Make the streaming request
 	responseChan, bifrostErr := client.ChatCompletionStreamRequest(ctx, request)
 
@@ -156,6 +153,7 @@ func TestJsonParserPluginEndToEnd(t *testing.T) {
 // Required environment variables:
 //   - OPENAI_API_KEY: Your OpenAI API key for the test request
 func TestJsonParserPluginPerRequest(t *testing.T) {
+	ctx := context.Background()
 	// Check if OpenAI API key is set
 	if os.Getenv("OPENAI_API_KEY") == "" {
 		t.Skip("OPENAI_API_KEY is not set, skipping per-request test")
@@ -174,7 +172,7 @@ func TestJsonParserPluginPerRequest(t *testing.T) {
 	account := BaseAccount{}
 
 	// Initialize Bifrost with the plugin
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: &account,
 		Plugins: []schemas.Plugin{plugin},
 		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelDebug),
@@ -182,7 +180,7 @@ func TestJsonParserPluginPerRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error initializing Bifrost: %v", err)
 	}
-	defer client.Cleanup()
+	defer client.Shutdown()
 
 	// Test request with plugin enabled via context
 	request := &schemas.BifrostRequest{
@@ -209,10 +207,10 @@ func TestJsonParserPluginPerRequest(t *testing.T) {
 	}
 
 	// Create context with plugin enabled
-	ctx := context.WithValue(context.Background(), EnableStreamingJSONParser, true)
+	newContext := context.WithValue(ctx, EnableStreamingJSONParser, true)
 
 	// Make the streaming request
-	responseChan, bifrostErr := client.ChatCompletionStreamRequest(ctx, request)
+	responseChan, bifrostErr := client.ChatCompletionStreamRequest(newContext, request)
 
 	if bifrostErr != nil {
 		t.Logf("Error in Bifrost request: %v", bifrostErr)

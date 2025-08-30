@@ -42,9 +42,10 @@ type ChannelMessage struct {
 	Type           RequestType
 }
 
-// Bifrost manages providers and maintains sepcified open channels for concurrent processing.
+// Bifrost manages providers and maintains specified open channels for concurrent processing.
 // It handles request routing, provider management, and response processing.
 type Bifrost struct {
+	ctx                 context.Context
 	account             schemas.Account  // account interface
 	plugins             []schemas.Plugin // list of plugins
 	requestQueues       sync.Map         // provider request queues (thread-safe)
@@ -56,7 +57,6 @@ type Bifrost struct {
 	responseStreamPool  sync.Pool        // Pool for response stream channels, initial pool size is set in Init
 	pluginPipelinePool  sync.Pool        // Pool for PluginPipeline objects
 	logger              schemas.Logger   // logger instance, default logger is used if not provided
-	backgroundCtx       context.Context  // Shared background context for nil context handling
 	mcpManager          *MCPManager      // MCP integration manager (nil if MCP not configured)
 	dropExcessRequests  atomic.Bool      // If true, in cases where the queue is full, requests will not wait for the queue to be empty and will be dropped instead.
 }
@@ -94,17 +94,17 @@ const BifrostContextKeyRequestType BifrostContextKey = "bifrost-request-type"
 // It sets up the account, plugins, object pools, and initializes providers.
 // Returns an error if initialization fails.
 // Initial Memory Allocations happens here as per the initial pool size.
-func Init(config schemas.BifrostConfig) (*Bifrost, error) {
+func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 	if config.Account == nil {
 		return nil, fmt.Errorf("account is required to initialize Bifrost")
 	}
 
 	bifrost := &Bifrost{
+		ctx:           ctx,
 		account:       config.Account,
 		plugins:       config.Plugins,
 		requestQueues: sync.Map{},
 		waitGroups:    sync.Map{},
-		backgroundCtx: context.Background(),
 	}
 	bifrost.dropExcessRequests.Store(config.DropExcessRequests)
 
@@ -163,7 +163,7 @@ func Init(config schemas.BifrostConfig) (*Bifrost, error) {
 
 	// Initialize MCP manager if configured
 	if config.MCPConfig != nil {
-		mcpManager, err := newMCPManager(*config.MCPConfig, bifrost.logger)
+		mcpManager, err := newMCPManager(ctx, *config.MCPConfig, bifrost.logger)
 		if err != nil {
 			bifrost.logger.Warn(fmt.Sprintf("failed to initialize MCP manager: %v", err))
 		} else {
@@ -872,7 +872,7 @@ func (bifrost *Bifrost) handleRequest(ctx context.Context, req *schemas.BifrostR
 
 	// Handle nil context early to prevent blocking
 	if ctx == nil {
-		ctx = bifrost.backgroundCtx
+		ctx = bifrost.ctx
 	}
 
 	// Add request type to context
@@ -924,7 +924,7 @@ func (bifrost *Bifrost) handleStreamRequest(ctx context.Context, req *schemas.Bi
 
 	// Handle nil context early to prevent blocking
 	if ctx == nil {
-		ctx = bifrost.backgroundCtx
+		ctx = bifrost.ctx
 	}
 
 	// Add request type to context
@@ -1553,12 +1553,10 @@ func (bifrost *Bifrost) selectKeyFromProviderForModel(ctx *context.Context, prov
 	return supportedKeys[0], nil
 }
 
-// CLEANUP
-
-// Cleanup gracefully stops all workers when triggered.
+// Shutdown gracefully stops all workers when triggered.
 // It closes all request channels and waits for workers to exit.
-func (bifrost *Bifrost) Cleanup() {
-	bifrost.logger.Info("Graceful Cleanup Initiated - Closing all request channels...")
+func (bifrost *Bifrost) Shutdown() {
+	bifrost.logger.Info("closing all request channels...")
 
 	// Close all provider queues to signal workers to stop
 	bifrost.requestQueues.Range(func(key, value interface{}) bool {
@@ -1588,6 +1586,4 @@ func (bifrost *Bifrost) Cleanup() {
 			bifrost.logger.Warn(fmt.Sprintf("Error cleaning up plugin: %s", err.Error()))
 		}
 	}
-
-	bifrost.logger.Info("Graceful Cleanup Completed")
 }
