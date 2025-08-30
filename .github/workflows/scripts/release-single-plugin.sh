@@ -121,6 +121,13 @@ if [[ "$PLUGIN_VERSION" == *-* ]]; then
   PRERELEASE_FLAG="--prerelease"
 fi
 
+# Mark as latest if not a prerelease
+LATEST_FLAG=""
+if [[ "$PLUGIN_VERSION" != *-* ]]; then
+  LATEST_FLAG="--latest"
+fi
+
+
 BODY="## Plugin Release: $PLUGIN_NAME v$PLUGIN_VERSION
 
 ### 🔌 Plugin: $PLUGIN_NAME v$PLUGIN_VERSION
@@ -155,7 +162,7 @@ else
   gh release create "$TAG_NAME" \
     --title "$TITLE" \
     --notes "$BODY" \
-    ${PRERELEASE_FLAG}
+    ${PRERELEASE_FLAG} ${LATEST_FLAG}    
 fi
 
 echo "✅ Plugin $PLUGIN_NAME released successfully"
