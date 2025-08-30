@@ -74,7 +74,7 @@ func RunMultiTurnConversationTest(t *testing.T, client *bifrost.Bifrost, ctx con
 		// Add all choice messages from the first response
 		if response1.Choices != nil {
 			for _, choice := range response1.Choices {
-				messages2 = append(messages2, choice.Message)
+				messages2 = append(messages2, *choice.Message)
 			}
 		}
 

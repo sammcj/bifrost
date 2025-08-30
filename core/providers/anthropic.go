@@ -124,11 +124,11 @@ func (provider *AnthropicProvider) GetProviderKey() schemas.ModelProvider {
 // completeRequest sends a request to Anthropic's API and handles the response.
 // It constructs the API URL, sets up authentication, and processes the response.
 // Returns the response body or an error if the request fails.
-func (provider *AnthropicProvider) completeRequest(ctx context.Context, requestBody interface{}, url string, key string) ([]byte, *schemas.BifrostError) {
+func (provider *AnthropicProvider) completeRequest(ctx context.Context, requestBody interface{}, url string, key string) ([]byte, time.Duration, *schemas.BifrostError) {
 	// Marshal the request body
 	jsonData, err := sonic.Marshal(requestBody)
 	if err != nil {
-		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, provider.GetProviderKey())
+		return nil, 0, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, provider.GetProviderKey())
 	}
 
 	// Create the request with the JSON body
@@ -149,9 +149,9 @@ func (provider *AnthropicProvider) completeRequest(ctx context.Context, requestB
 	req.SetBody(jsonData)
 
 	// Send the request
-	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	latency, bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
-		return nil, bifrostErr
+		return nil, latency, bifrostErr
 	}
 
 	// Handle error response
@@ -164,13 +164,14 @@ func (provider *AnthropicProvider) completeRequest(ctx context.Context, requestB
 		bifrostErr.Error.Type = &errorResp.Error.Type
 		bifrostErr.Error.Message = errorResp.Error.Message
 
-		return nil, bifrostErr
+		return nil, latency, bifrostErr
 	}
 
-	// Read the response body
-	body := resp.Body()
+	// Read the response body and copy it before releasing the response
+	// to avoid use-after-free since resp.Body() references fasthttp's internal buffer
+	bodyCopy := append([]byte(nil), resp.Body()...)
 
-	return body, nil
+	return bodyCopy, latency, nil
 }
 
 // TextCompletion performs a text completion request to Anthropic's API.
@@ -188,7 +189,7 @@ func (provider *AnthropicProvider) TextCompletion(ctx context.Context, key schem
 	}
 
 	// Use struct directly for JSON marshaling
-	responseBody, err := provider.completeRequest(ctx, reqBody, provider.networkConfig.BaseURL+"/v1/complete", key.Value)
+	responseBody, latency, err := provider.completeRequest(ctx, reqBody, provider.networkConfig.BaseURL+"/v1/complete", key.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +209,7 @@ func (provider *AnthropicProvider) TextCompletion(ctx context.Context, key schem
 	bifrostResponse.ExtraFields.Provider = provider.GetProviderKey()
 	bifrostResponse.ExtraFields.ModelRequested = request.Model
 	bifrostResponse.ExtraFields.RequestType = schemas.TextCompletionRequest
+	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
 
 	// Set raw response if enabled
 	if provider.sendBackRawResponse {
@@ -239,7 +241,7 @@ func (provider *AnthropicProvider) ChatCompletion(ctx context.Context, key schem
 	}
 
 	// Use struct directly for JSON marshaling
-	responseBody, err := provider.completeRequest(ctx, reqBody, provider.networkConfig.BaseURL+"/v1/messages", key.Value)
+	responseBody, latency, err := provider.completeRequest(ctx, reqBody, provider.networkConfig.BaseURL+"/v1/messages", key.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -260,6 +262,7 @@ func (provider *AnthropicProvider) ChatCompletion(ctx context.Context, key schem
 	bifrostResponse.ExtraFields.Provider = provider.GetProviderKey()
 	bifrostResponse.ExtraFields.ModelRequested = request.Model
 	bifrostResponse.ExtraFields.RequestType = schemas.ChatCompletionRequest
+	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
 
 	// Set raw response if enabled
 	if provider.sendBackRawResponse {
@@ -284,7 +287,7 @@ func (provider *AnthropicProvider) Responses(ctx context.Context, key schemas.Ke
 	}
 
 	// Use struct directly for JSON marshaling
-	responseBody, err := provider.completeRequest(ctx, reqBody, provider.networkConfig.BaseURL+"/v1/messages", key.Value)
+	responseBody, latency, err := provider.completeRequest(ctx, reqBody, provider.networkConfig.BaseURL+"/v1/messages", key.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -305,6 +308,7 @@ func (provider *AnthropicProvider) Responses(ctx context.Context, key schemas.Ke
 	bifrostResponse.ExtraFields.Provider = provider.GetProviderKey()
 	bifrostResponse.ExtraFields.ModelRequested = request.Model
 	bifrostResponse.ExtraFields.RequestType = schemas.ResponsesRequest
+	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
 
 	// Set raw response if enabled
 	if provider.sendBackRawResponse {

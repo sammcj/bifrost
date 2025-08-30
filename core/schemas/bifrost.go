@@ -2,6 +2,7 @@
 package schemas
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/bytedance/sonic"
@@ -10,6 +11,8 @@ import (
 const (
 	DefaultInitialPoolSize = 5000
 )
+
+type KeySelector func(ctx *context.Context, keys []Key, providerKey ModelProvider, model string) (Key, error)
 
 // only ONE of the following fields should be set:
 type BifrostRequest struct {
@@ -33,9 +36,10 @@ type BifrostConfig struct {
 	Account            Account
 	Plugins            []Plugin
 	Logger             Logger
-	InitialPoolSize    int        // Initial pool size for sync pools in Bifrost. Higher values will reduce memory allocations but will increase memory usage.
-	DropExcessRequests bool       // If true, in cases where the queue is full, requests will not wait for the queue to be empty and will be dropped instead.
-	MCPConfig          *MCPConfig // MCP (Model Context Protocol) configuration for tool integration
+	InitialPoolSize    int         // Initial pool size for sync pools in Bifrost. Higher values will reduce memory allocations but will increase memory usage.
+	DropExcessRequests bool        // If true, in cases where the queue is full, requests will not wait for the queue to be empty and will be dropped instead.
+	MCPConfig          *MCPConfig  // MCP (Model Context Protocol) configuration for tool integration
+	KeySelector        KeySelector // Custom key selector function
 }
 
 // ModelProvider represents the different AI model providers supported by Bifrost.
@@ -111,6 +115,7 @@ const (
 	BifrostContextKeyFallbackRequestID  BifrostContextKey = "fallback-request-id"
 	BifrostContextKeyVirtualKeyHeader   BifrostContextKey = "x-bf-vk"
 	BifrostContextKeyDirectKey          BifrostContextKey = "bifrost-direct-key"
+	BifrostContextKeySelectedKey        BifrostContextKey = "bifrost-key-selected" // To store the selected key ID (set by bifrost)
 	BifrostContextKeyStreamEndIndicator BifrostContextKey = "bifrost-stream-end-indicator"
 )
 
@@ -487,7 +492,7 @@ type BifrostResponseExtraFields struct {
 	RequestType    RequestType        `json:"request_type"`
 	Provider       ModelProvider      `json:"provider"`
 	ModelRequested string             `json:"model_requested"`
-	Latency        *float64           `json:"latency,omitempty"`
+	Latency        int64              `json:"latency,omitempty"` // in milliseconds
 	BilledUsage    *BilledLLMUsage    `json:"billed_usage,omitempty"`
 	ChunkIndex     int                `json:"chunk_index"` // used for streaming responses to identify the chunk index, will be 0 for non-streaming responses
 	RawResponse    interface{}        `json:"raw_response,omitempty"`

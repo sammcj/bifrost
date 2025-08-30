@@ -105,7 +105,7 @@ func TestCustomProvider_MismatchedIdentity(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Hello! What's the capital of France?"),
 				},
 			},

@@ -28,7 +28,7 @@ func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx context.Co
 		messages := []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentBlocks: []schemas.ChatContentBlock{
 						{
 							Type: schemas.ChatContentBlockTypeText,
