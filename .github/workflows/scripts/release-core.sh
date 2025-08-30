@@ -49,6 +49,11 @@ if [[ "$VERSION" == *-* ]]; then
   PRERELEASE_FLAG="--prerelease"
 fi
 
+LATEST_FLAG=""
+if [[ "$PLUGIN_VERSION" != *-* ]]; then
+  LATEST_FLAG="--latest"
+fi
+
 BODY="## Core Release v$VERSION
 
 ### 🔧 Core Library v$VERSION
@@ -73,7 +78,7 @@ echo "🎉 Creating GitHub release for $TITLE..."
 gh release create "$TAG_NAME" \
   --title "$TITLE" \
   --notes "$BODY" \
-  ${PRERELEASE_FLAG}
+  ${PRERELEASE_FLAG} ${LATEST_FLAG}  
 
 echo "✅ Core released successfully"
 echo "success=true" >> "$GITHUB_OUTPUT"

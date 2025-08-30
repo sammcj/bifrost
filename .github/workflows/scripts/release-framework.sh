@@ -113,6 +113,11 @@ if [[ "$VERSION" == *-* ]]; then
   PRERELEASE_FLAG="--prerelease"
 fi
 
+LATEST_FLAG=""
+if [[ "$PLUGIN_VERSION" != *-* ]]; then
+  LATEST_FLAG="--latest"
+fi
+
 BODY="## Framework Release $VERSION
 
 ### 📦 Framework Library $VERSION
@@ -138,7 +143,8 @@ else
   gh release create "$TAG_NAME" \
     --title "$TITLE" \
     --notes "$BODY" \
-    ${PRERELEASE_FLAG}
+    ${PRERELEASE_FLAG} ${LATEST_FLAG}
+    
 fi
 
 echo "✅ Framework released successfully"

@@ -49,11 +49,31 @@ declare -A PLUGIN_VERSIONS
 for plugin_dir in plugins/*/; do
   if [ -d "$plugin_dir" ]; then
     plugin_name=$(basename "$plugin_dir")
-    # Get the latest released version for this plugin
-    LATEST_PLUGIN_TAG=$(git tag -l "plugins/${plugin_name}/v*" | sort -V | head -1)
+    
+    # Check if VERSION parameter contains prerelease suffix
+    if [[ "$VERSION" == *"-"* ]]; then
+      # VERSION has prerelease, so include all versions but prefer stable
+      ALL_TAGS=$(git tag -l "plugins/${plugin_name}/v*" | sort -V)
+      STABLE_TAGS=$(echo "$ALL_TAGS" | grep -v '\-')
+      PRERELEASE_TAGS=$(echo "$ALL_TAGS" | grep '\-')
+      
+      if [ -n "$STABLE_TAGS" ]; then
+        # Get the highest stable version
+        LATEST_PLUGIN_TAG=$(echo "$STABLE_TAGS" | tail -1)
+        echo "latest plugin tag (stable preferred): $LATEST_PLUGIN_TAG"
+      else
+        # No stable versions, get highest prerelease
+        LATEST_PLUGIN_TAG=$(echo "$PRERELEASE_TAGS" | tail -1)
+        echo "latest plugin tag (prerelease only): $LATEST_PLUGIN_TAG"
+      fi
+    else
+      # VERSION has no prerelease, so only consider stable releases
+      LATEST_PLUGIN_TAG=$(git tag -l "plugins/${plugin_name}/v*" | grep -v '\-' | sort -V | tail -1)
+      echo "latest plugin tag (stable only): $LATEST_PLUGIN_TAG"
+    fi
     
     if [ -z "$LATEST_PLUGIN_TAG" ]; then
-      # No release yet, use version from file
+      # No matching release found, use version from file
       PLUGIN_VERSION="v$(tr -d '\n\r' < "${plugin_dir}version")"
       echo "   📦 $plugin_name: $PLUGIN_VERSION (from version file - not yet released)"
     else
@@ -169,6 +189,11 @@ if [[ "$VERSION" == *-* ]]; then
   PRERELEASE_FLAG="--prerelease"
 fi
 
+LATEST_FLAG=""
+if [[ "$PLUGIN_VERSION" != *-* ]]; then
+  LATEST_FLAG="--latest"
+fi
+
 # Generate plugin version summary
 PLUGIN_UPDATES=""
 if [ ${#PLUGINS_USED[@]} -gt 0 ]; then
@@ -235,7 +260,7 @@ echo "🎉 Creating GitHub release for $TITLE..."
 gh release create "$TAG_NAME" \
   --title "$TITLE" \
   --notes "$BODY" \
-  ${PRERELEASE_FLAG}
+  ${PRERELEASE_FLAG} ${LATEST_FLAG}
 
 echo "✅ Bifrost HTTP released successfully"
 
