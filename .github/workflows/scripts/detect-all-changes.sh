@@ -4,7 +4,6 @@ shopt -s nullglob
 
 # Detect what components need to be released based on version changes
 # Usage: ./detect-all-changes.sh
-
 echo "🔍 Auto-detecting version changes across all components..."
 
 # Initialize outputs
@@ -160,8 +159,38 @@ fi
 if [ "$GIT_TAG_EXISTS" = "true" ] && [ "$DOCKER_TAG_EXISTS" = "true" ]; then
   echo "   ⏭️ Both Git tag and Docker image exist - no release needed"
 else
-  # Check version increment logic for transport release
-  LATEST_TRANSPORT_TAG=$(git tag -l "transports/v*" | sort -V | tail -1)
+  # Get all transport tags, prioritize stable over prerelease for same base version
+  ALL_TRANSPORT_TAGS=$(git tag -l "transports/v*" | sort -V)
+  
+  # Function to get base version (remove prerelease suffix)
+  get_base_version() {
+    echo "$1" | sed 's/-.*$//'
+  }
+  
+  # Find the latest version, prioritizing stable over prerelease
+  LATEST_TRANSPORT_TAG=""
+  LATEST_BASE_VERSION=""
+  
+  for tag in $ALL_TRANSPORT_TAGS; do
+    version=${tag#transports/v}
+    base_version=$(get_base_version "$version")
+    
+    # If this base version is newer, or same base version but current is stable and we had prerelease
+    if [ -z "$LATEST_BASE_VERSION" ] || \
+       [ "$(printf '%s\n' "$LATEST_BASE_VERSION" "$base_version" | sort -V | tail -1)" = "$base_version" ]; then
+      
+      if [ "$base_version" = "$LATEST_BASE_VERSION" ]; then
+        # Same base version - prefer stable (no hyphen) over prerelease
+        if [[ "$version" != *"-"* ]] && [[ "${LATEST_TRANSPORT_TAG#transports/v}" == *"-"* ]]; then
+          LATEST_TRANSPORT_TAG="$tag"
+        fi
+      else
+        # New base version is higher
+        LATEST_TRANSPORT_TAG="$tag"
+        LATEST_BASE_VERSION="$base_version"
+      fi
+    fi
+  done
   if [ -z "$LATEST_TRANSPORT_TAG" ]; then
     echo "   ✅ First transport release: $TRANSPORT_VERSION"
     if [ "$GIT_TAG_EXISTS" = "false" ]; then
@@ -176,8 +205,8 @@ else
     echo "   🔍 DEBUG: sort -V | head -1 returns: '$sorted_first'"
     echo "   🔍 DEBUG: Current version: '$TRANSPORT_VERSION'"
     echo "   🔍 DEBUG: Versions different? $([ "$PREVIOUS_TRANSPORT_VERSION" != "$TRANSPORT_VERSION" ] && echo "YES" || echo "NO")"
-    # Fixed: Use head -1 instead of tail -1 for your sort -V behavior, and check against current version
-    if [ "$sorted_first" = "$TRANSPORT_VERSION" ] && [ "$PREVIOUS_TRANSPORT_VERSION" != "$TRANSPORT_VERSION" ]; then
+    # Fixed: Check if previous version sorts first (meaning current is greater)
+    if [ "$sorted_first" = "$PREVIOUS_TRANSPORT_VERSION" ] && [ "$PREVIOUS_TRANSPORT_VERSION" != "$TRANSPORT_VERSION" ]; then
       echo "   ✅ Transport version incremented: $PREVIOUS_TRANSPORT_VERSION → $TRANSPORT_VERSION"
       if [ "$GIT_TAG_EXISTS" = "false" ]; then
         echo "   🏷️  Git tag missing - transport release needed"
@@ -187,6 +216,7 @@ else
       echo "   ⏭️ No transport version increment"
     fi
   fi
+fi
   
   # Check if Docker image needs to be built (independent of transport release)
   if [ "$DOCKER_TAG_EXISTS" = "false" ]; then
