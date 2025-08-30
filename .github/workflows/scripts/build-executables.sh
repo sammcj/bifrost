@@ -69,10 +69,16 @@ for platform in "${platforms[@]}"; do
       go build -trimpath -ldflags "-s -w -buildid=" \
       -o "$PROJECT_ROOT/dist/$PLATFORM_DIR/$GOARCH/$output_name" .
 
-  else # Darwin (macOS)
-    # Disable CGO for Darwin cross-compilation to avoid toolchain complexity
-    # This will require using alternative drivers for database functionality
-    env GOWORK=off CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+   else # Darwin (macOS)
+    if [[ "$GOARCH" = "amd64" ]]; then
+      CC_COMPILER="o64-clang"
+      CXX_COMPILER="o64-clang++"
+    elif [[ "$GOARCH" = "arm64" ]]; then
+      CC_COMPILER="oa64-clang"
+      CXX_COMPILER="oa64-clang++"
+    fi
+
+    env GOWORK=off CGO_ENABLED=1 GOOS="$GOOS" GOARCH="$GOARCH" CC="$CC_COMPILER" CXX="$CXX_COMPILER" \
       go build -trimpath -ldflags "-s -w -buildid=" \
       -o "$PROJECT_ROOT/dist/$PLATFORM_DIR/$GOARCH/$output_name" .
   fi
