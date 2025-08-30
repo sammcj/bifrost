@@ -340,26 +340,8 @@ jobs:
 
         - name: Create and push multi-arch manifest
           run: |
-            VERSION="${{ needs.detect-changes.outputs.transport-version }}"
+            ./.github/workflows/scripts/create-docker-manifest.sh "${{ needs.detect-changes.outputs.transport-version }}"                        
             
-            # Create manifest for versioned tag
-            docker manifest create \
-              ${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:v${VERSION} \
-              ${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:v${VERSION}-amd64 \
-              ${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:v${VERSION}-arm64
-            
-            docker manifest push ${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:v${VERSION}
-            
-            # Create latest manifest only for stable versions
-            if [[ "$VERSION" != *-* ]]; then
-              docker manifest create \
-                ${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:latest \
-                ${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:v${VERSION}-amd64 \
-                ${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:v${VERSION}-arm64
-              
-              docker manifest push ${{ env.REGISTRY }}/${{ env.ACCOUNT }}/${{ env.IMAGE_NAME }}:latest
-            fi
-
   # Notification
   notify:
     needs: [detect-changes, core-release, framework-release, plugins-release, bifrost-http-release, docker-manifest]
