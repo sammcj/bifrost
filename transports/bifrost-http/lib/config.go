@@ -590,6 +590,15 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 	return config, nil
 }
 
+// GetRawConfigString returns the raw configuration string.
+func (s *Config) GetRawConfigString() string {
+	data, err := os.ReadFile(s.configPath)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
 // processEnvValue checks and replaces environment variable references in configuration values.
 // Returns the processed value and the environment variable name if it was an env reference.
 // Supports the "env.VARIABLE_NAME" syntax for referencing environment variables.

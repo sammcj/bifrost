@@ -443,7 +443,7 @@ func main() {
 
 	loadedPlugins = append(loadedPlugins, promPlugin)
 
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account:            account,
 		InitialPoolSize:    config.ClientConfig.InitialPoolSize,
 		DropExcessRequests: config.ClientConfig.DropExcessRequests,
@@ -539,11 +539,9 @@ func main() {
 	select {
 	case sig := <-sigChan:
 		logger.Info("received signal %v, initiating graceful shutdown...", sig)
-
 		// Create shutdown context with timeout
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
-
 		// Perform graceful shutdown
 		if err := server.Shutdown(); err != nil {
 			logger.Error("error during graceful shutdown: %v", err)
@@ -559,7 +557,7 @@ func main() {
 			if wsHandler != nil {
 				wsHandler.Stop()
 			}
-			client.Cleanup()
+			client.Shutdown()
 		}()
 
 		select {

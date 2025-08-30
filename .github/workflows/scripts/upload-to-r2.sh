@@ -64,7 +64,7 @@ if [[ "$CLI_VERSION" == *-* ]]; then
   echo "⏭️ Skipping upload to latest/ for prerelease"
 else
   echo "🔍 Detected stable release: $CLI_VERSION"
-  
+
   # Small delay between uploads (configurable; default 2s)
   sleep "${INTER_UPLOAD_SLEEP_SECONDS:-2}"
 

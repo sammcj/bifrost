@@ -216,7 +216,7 @@ func Init(ctx context.Context, config Config, logger schemas.Logger, store vecto
 		return nil, fmt.Errorf("provider and keys are required for semantic cache")
 	}
 
-	bifrost, err := bifrost.Init(schemas.BifrostConfig{
+	bifrost, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Logger: logger,
 		Account: &PluginAccount{
 			provider: config.Provider,
@@ -517,9 +517,6 @@ func (plugin *Plugin) Cleanup() error {
 	}
 
 	plugin.logger.Info(fmt.Sprintf("%s Cleanup completed - deleted all cache entries", PluginLoggerPrefix))
-
-	plugin.client.Cleanup()
-
 	return nil
 }
 
