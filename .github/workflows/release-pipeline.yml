@@ -283,7 +283,7 @@ jobs:
   docker-build-arm64:
       needs: [detect-changes, bifrost-http-release]
       if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
-      runs-on: ubuntu-24.04-arm64
+      runs-on: ubuntu-24.04-arm
       permissions:
         contents: write
       env:
