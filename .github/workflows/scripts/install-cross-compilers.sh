@@ -10,8 +10,7 @@ sudo apt-get update
 sudo apt-get install -y \
   gcc-x86-64-linux-gnu \
   gcc-aarch64-linux-gnu \
-  gcc-mingw-w64-x86-64 \
-  gcc-mingw-w64-aarch64 \
+  gcc-mingw-w64-x86-64 \  
   musl-tools \
   clang
 
