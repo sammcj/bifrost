@@ -218,7 +218,7 @@ func CreateTranscriptionInput(audioData []byte, language, responseFormat *string
 func CreateBasicChatMessage(content string) schemas.ChatMessage {
 	return schemas.ChatMessage{
 		Role: schemas.ChatMessageRoleUser,
-		Content: schemas.ChatMessageContent{
+		Content: &schemas.ChatMessageContent{
 			ContentStr: bifrost.Ptr(content),
 		},
 	}
@@ -237,7 +237,7 @@ func CreateBasicResponsesMessage(content string) schemas.ResponsesMessage {
 func CreateImageChatMessage(text, imageURL string) schemas.ChatMessage {
 	return schemas.ChatMessage{
 		Role: schemas.ChatMessageRoleUser,
-		Content: schemas.ChatMessageContent{
+		Content: &schemas.ChatMessageContent{
 			ContentBlocks: []schemas.ChatContentBlock{
 				{Type: schemas.ChatContentBlockTypeText, Text: bifrost.Ptr(text)},
 				{Type: schemas.ChatContentBlockTypeImage, ImageURLStruct: &schemas.ChatInputImage{URL: imageURL}},
@@ -266,7 +266,7 @@ func CreateImageResponsesMessage(text, imageURL string) schemas.ResponsesMessage
 func CreateToolChatMessage(content string, toolCallID string) schemas.ChatMessage {
 	return schemas.ChatMessage{
 		Role: schemas.ChatMessageRoleTool,
-		Content: schemas.ChatMessageContent{
+		Content: &schemas.ChatMessageContent{
 			ContentStr: bifrost.Ptr(content),
 		},
 		ChatToolMessage: &schemas.ChatToolMessage{
@@ -303,20 +303,22 @@ func GetResultContent(result *schemas.BifrostResponse) string {
 				return *choice.Text
 			}
 
-			// Check if content has any data (either ContentStr or ContentBlocks)
-			if choice.Message.Content.ContentStr != nil || choice.Message.Content.ContentBlocks != nil {
-				if choice.Message.Content.ContentStr != nil && *choice.Message.Content.ContentStr != "" {
-					return *choice.Message.Content.ContentStr
-				} else if choice.Message.Content.ContentBlocks != nil {
-					var builder strings.Builder
-					for _, block := range choice.Message.Content.ContentBlocks {
-						if block.Text != nil {
-							builder.WriteString(*block.Text)
+			if choice.Message.Content != nil {
+				// Check if content has any data (either ContentStr or ContentBlocks)
+				if choice.Message.Content.ContentStr != nil || choice.Message.Content.ContentBlocks != nil {
+					if choice.Message.Content.ContentStr != nil && *choice.Message.Content.ContentStr != "" {
+						return *choice.Message.Content.ContentStr
+					} else if choice.Message.Content.ContentBlocks != nil {
+						var builder strings.Builder
+						for _, block := range choice.Message.Content.ContentBlocks {
+							if block.Text != nil {
+								builder.WriteString(*block.Text)
+							}
 						}
-					}
-					content := builder.String()
-					if content != "" {
-						return content
+						content := builder.String()
+						if content != "" {
+							return content
+						}
 					}
 				}
 			}
@@ -325,17 +327,19 @@ func GetResultContent(result *schemas.BifrostResponse) string {
 		// Fallback to first choice if no content found
 		if len(result.Choices) > 0 {
 			choice := result.Choices[0]
-			if choice.Message.Content.ContentStr != nil || choice.Message.Content.ContentBlocks != nil {
-				if choice.Message.Content.ContentStr != nil {
-					return *choice.Message.Content.ContentStr
-				} else if choice.Message.Content.ContentBlocks != nil {
-					var builder strings.Builder
-					for _, block := range choice.Message.Content.ContentBlocks {
-						if block.Text != nil {
-							builder.WriteString(*block.Text)
+			if choice.Message.Content != nil {
+				if choice.Message.Content.ContentStr != nil || choice.Message.Content.ContentBlocks != nil {
+					if choice.Message.Content.ContentStr != nil {
+						return *choice.Message.Content.ContentStr
+					} else if choice.Message.Content.ContentBlocks != nil {
+						var builder strings.Builder
+						for _, block := range choice.Message.Content.ContentBlocks {
+							if block.Text != nil {
+								builder.WriteString(*block.Text)
+							}
 						}
+						return builder.String()
 					}
-					return builder.String()
 				}
 			}
 		}

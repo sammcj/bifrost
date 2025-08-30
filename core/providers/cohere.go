@@ -125,7 +125,7 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, key schemas.
 		return nil, newBifrostOperationError("chat completion input is not provided", nil, providerName)
 	}
 
-	cohereResponse, rawResponse, err := provider.handleCohereChatCompletionRequest(ctx, reqBody, key)
+	cohereResponse, rawResponse, latency, err := provider.handleCohereChatCompletionRequest(ctx, reqBody, key)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +137,7 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, key schemas.
 	bifrostResponse.ExtraFields.Provider = providerName
 	bifrostResponse.ExtraFields.ModelRequested = request.Model
 	bifrostResponse.ExtraFields.RequestType = schemas.ChatCompletionRequest
+	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
 
 	if provider.sendBackRawResponse {
 		bifrostResponse.ExtraFields.RawResponse = rawResponse
@@ -145,13 +146,13 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, key schemas.
 	return bifrostResponse, nil
 }
 
-func (provider *CohereProvider) handleCohereChatCompletionRequest(ctx context.Context, reqBody *cohere.CohereChatRequest, key schemas.Key) (*cohere.CohereChatResponse, interface{}, *schemas.BifrostError) {
+func (provider *CohereProvider) handleCohereChatCompletionRequest(ctx context.Context, reqBody *cohere.CohereChatRequest, key schemas.Key) (*cohere.CohereChatResponse, interface{}, time.Duration, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Marshal request body
 	jsonBody, err := sonic.Marshal(reqBody)
 	if err != nil {
-		return nil, nil, &schemas.BifrostError{
+		return nil, nil, time.Duration(0), &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: &schemas.ErrorField{
 				Message: schemas.ErrProviderJSONMarshaling,
@@ -177,9 +178,9 @@ func (provider *CohereProvider) handleCohereChatCompletionRequest(ctx context.Co
 	req.SetBody(jsonBody)
 
 	// Make request
-	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	latency, bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
-		return nil, nil, bifrostErr
+		return nil, nil, latency, bifrostErr
 	}
 
 	// Handle error response
@@ -190,13 +191,13 @@ func (provider *CohereProvider) handleCohereChatCompletionRequest(ctx context.Co
 		bifrostErr := handleProviderAPIError(resp, &errorResp)
 		bifrostErr.Error.Message = errorResp.Message
 
-		return nil, nil, bifrostErr
+		return nil, nil, latency, bifrostErr
 	}
 
 	// Parse Cohere v2 response
 	var cohereResponse cohere.CohereChatResponse
 	if err := sonic.Unmarshal(resp.Body(), &cohereResponse); err != nil {
-		return nil, nil, &schemas.BifrostError{
+		return nil, nil, latency, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: &schemas.ErrorField{
 				Message: "error parsing Cohere v2 response",
@@ -209,7 +210,7 @@ func (provider *CohereProvider) handleCohereChatCompletionRequest(ctx context.Co
 	var rawResponse interface{}
 	if provider.sendBackRawResponse {
 		if err := sonic.Unmarshal(resp.Body(), &rawResponse); err != nil {
-			return nil, nil, &schemas.BifrostError{
+			return nil, nil, latency, &schemas.BifrostError{
 				IsBifrostError: true,
 				Error: &schemas.ErrorField{
 					Message: "error parsing raw response",
@@ -219,7 +220,7 @@ func (provider *CohereProvider) handleCohereChatCompletionRequest(ctx context.Co
 		}
 	}
 
-	return &cohereResponse, rawResponse, nil
+	return &cohereResponse, rawResponse, latency, nil
 }
 
 func (provider *CohereProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
@@ -236,7 +237,7 @@ func (provider *CohereProvider) Responses(ctx context.Context, key schemas.Key, 
 		return nil, newBifrostOperationError("responses input is not provided", nil, providerName)
 	}
 
-	cohereResponse, rawResponse, err := provider.handleCohereChatCompletionRequest(ctx, reqBody, key)
+	cohereResponse, rawResponse, latency, err := provider.handleCohereChatCompletionRequest(ctx, reqBody, key)
 	if err != nil {
 		return nil, err
 	}
@@ -248,6 +249,7 @@ func (provider *CohereProvider) Responses(ctx context.Context, key schemas.Key, 
 	bifrostResponse.ExtraFields.Provider = providerName
 	bifrostResponse.ExtraFields.ModelRequested = request.Model
 	bifrostResponse.ExtraFields.RequestType = schemas.ResponsesRequest
+	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
 
 	if provider.sendBackRawResponse {
 		bifrostResponse.ExtraFields.RawResponse = rawResponse
@@ -295,7 +297,7 @@ func (provider *CohereProvider) Embedding(ctx context.Context, key schemas.Key, 
 	req.SetBody(jsonBody)
 
 	// Make request
-	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	latency, bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -325,10 +327,12 @@ func (provider *CohereProvider) Embedding(ctx context.Context, key schemas.Key, 
 
 	// Create BifrostResponse
 	bifrostResponse := cohereResp.ToBifrostResponse()
+
 	bifrostResponse.Model = request.Model
 	bifrostResponse.ExtraFields.Provider = providerName
 	bifrostResponse.ExtraFields.ModelRequested = request.Model
 	bifrostResponse.ExtraFields.RequestType = schemas.EmbeddingRequest
+	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
 
 	// Only include RawResponse if sendBackRawResponse is enabled
 	if provider.sendBackRawResponse {

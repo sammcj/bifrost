@@ -133,7 +133,7 @@ func handleOpenAITextCompletionRequest(
 	req.SetBody(jsonBody)
 
 	// Make request
-	bifrostErr := makeRequestWithContext(ctx, client, req, resp)
+	latency, bifrostErr := makeRequestWithContext(ctx, client, req, resp)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -160,6 +160,7 @@ func handleOpenAITextCompletionRequest(
 	response.ExtraFields.Provider = providerName
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.TextCompletionRequest
+	response.ExtraFields.Latency = latency.Milliseconds()
 
 	// Set raw response if enabled
 	if sendBackRawResponse {
@@ -459,7 +460,7 @@ func handleOpenAIChatCompletionRequest(
 	req.SetBody(jsonBody)
 
 	// Make request
-	bifrostErr := makeRequestWithContext(ctx, client, req, resp)
+	latency, bifrostErr := makeRequestWithContext(ctx, client, req, resp)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -491,6 +492,7 @@ func handleOpenAIChatCompletionRequest(
 	response.ExtraFields.Provider = providerName
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.ChatCompletionRequest
+	response.ExtraFields.Latency = latency.Milliseconds()
 
 	return response, nil
 }
@@ -553,7 +555,7 @@ func handleOpenAIResponsesRequest(
 	req.SetBody(jsonBody)
 
 	// Make request
-	bifrostErr := makeRequestWithContext(ctx, client, req, resp)
+	latency, bifrostErr := makeRequestWithContext(ctx, client, req, resp)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -585,6 +587,7 @@ func handleOpenAIResponsesRequest(
 	response.ExtraFields.Provider = providerName
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.ResponsesRequest
+	response.ExtraFields.Latency = latency.Milliseconds()
 
 	return response, nil
 }
@@ -653,7 +656,7 @@ func handleOpenAIEmbeddingRequest(
 	req.SetBody(jsonBody)
 
 	// Make request
-	bifrostErr := makeRequestWithContext(ctx, client, req, resp)
+	latency, bifrostErr := makeRequestWithContext(ctx, client, req, resp)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -678,6 +681,7 @@ func handleOpenAIEmbeddingRequest(
 	response.ExtraFields.Provider = providerName
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.EmbeddingRequest
+	response.ExtraFields.Latency = latency.Milliseconds()
 
 	if sendBackRawResponse {
 		response.ExtraFields.RawResponse = rawResponse
@@ -969,7 +973,7 @@ func (provider *OpenAIProvider) Speech(ctx context.Context, key schemas.Key, req
 	req.SetBody(jsonBody)
 
 	// Make request
-	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	latency, bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -996,6 +1000,7 @@ func (provider *OpenAIProvider) Speech(ctx context.Context, key schemas.Key, req
 			RequestType:    schemas.SpeechRequest,
 			Provider:       providerName,
 			ModelRequested: request.Model,
+			Latency:        latency.Milliseconds(),
 		},
 	}
 
@@ -1223,7 +1228,7 @@ func (provider *OpenAIProvider) Transcription(ctx context.Context, key schemas.K
 	req.SetBody(body.Bytes())
 
 	// Make request
-	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	latency, bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -1260,6 +1265,7 @@ func (provider *OpenAIProvider) Transcription(ctx context.Context, key schemas.K
 			RequestType:    schemas.TranscriptionRequest,
 			Provider:       providerName,
 			ModelRequested: request.Model,
+			Latency:        latency.Milliseconds(),
 		},
 	}
 
