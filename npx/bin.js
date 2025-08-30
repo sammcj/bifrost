@@ -45,13 +45,13 @@ function validateTransportVersion(version) {
   }
   
   // Check if version matches v{x.x.x} format
-  const versionRegex = /^v\d+\.\d+\.\d+$/;
+  const versionRegex = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
   if (versionRegex.test(version)) {
     return version;
   }
   
   console.error(`Invalid transport version format: ${version}`);
-  console.error(`Transport version must be either "latest" or in format v1.2.3`);
+  console.error(`Transport version must be either "latest", "v1.2.3", or "v1.2.3-prerelease1"`);
   process.exit(1);
 }
 
