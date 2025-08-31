@@ -52,6 +52,7 @@ func TestMockerPlugin_GetName(t *testing.T) {
 
 // TestMockerPlugin_Disabled tests that disabled plugin doesn't interfere
 func TestMockerPlugin_Disabled(t *testing.T) {
+	ctx := context.Background()
 	config := MockerConfig{
 		Enabled: false,
 	}
@@ -61,7 +62,7 @@ func TestMockerPlugin_Disabled(t *testing.T) {
 	}
 
 	account := BaseAccount{}
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: &account,
 		Plugins: []schemas.Plugin{plugin},
 		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelError),
@@ -69,10 +70,10 @@ func TestMockerPlugin_Disabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error initializing Bifrost: %v", err)
 	}
-	defer client.Cleanup()
+	defer client.Shutdown()
 
 	// This should pass through to the real provider (but will fail due to dummy key)
-	_, bifrostErr := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+	_, bifrostErr := client.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
 		Provider: schemas.OpenAI,
 		Model:    "gpt-4",
 		Input: schemas.RequestInput{
@@ -96,6 +97,7 @@ func TestMockerPlugin_Disabled(t *testing.T) {
 
 // TestMockerPlugin_DefaultMockRule tests the default catch-all rule
 func TestMockerPlugin_DefaultMockRule(t *testing.T) {
+	ctx := context.Background()
 	config := MockerConfig{
 		Enabled: true, // No rules provided, should create default rule
 	}
@@ -105,7 +107,7 @@ func TestMockerPlugin_DefaultMockRule(t *testing.T) {
 	}
 
 	account := BaseAccount{}
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: &account,
 		Plugins: []schemas.Plugin{plugin},
 		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelError),
@@ -113,9 +115,9 @@ func TestMockerPlugin_DefaultMockRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error initializing Bifrost: %v", err)
 	}
-	defer client.Cleanup()
+	defer client.Shutdown()
 
-	response, bifrostErr := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+	response, bifrostErr := client.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
 		Provider: schemas.OpenAI,
 		Model:    "gpt-4",
 		Input: schemas.RequestInput{
@@ -149,6 +151,7 @@ func TestMockerPlugin_DefaultMockRule(t *testing.T) {
 
 // TestMockerPlugin_CustomSuccessRule tests custom success response
 func TestMockerPlugin_CustomSuccessRule(t *testing.T) {
+	ctx := context.Background()
 	config := MockerConfig{
 		Enabled: true,
 		Rules: []MockRule{
@@ -182,7 +185,7 @@ func TestMockerPlugin_CustomSuccessRule(t *testing.T) {
 	}
 
 	account := BaseAccount{}
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: &account,
 		Plugins: []schemas.Plugin{plugin},
 		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelError),
@@ -190,9 +193,9 @@ func TestMockerPlugin_CustomSuccessRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error initializing Bifrost: %v", err)
 	}
-	defer client.Cleanup()
+	defer client.Shutdown()
 
-	response, bifrostErr := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+	response, bifrostErr := client.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
 		Provider: schemas.OpenAI,
 		Model:    "gpt-4",
 		Input: schemas.RequestInput{
@@ -229,6 +232,7 @@ func TestMockerPlugin_CustomSuccessRule(t *testing.T) {
 
 // TestMockerPlugin_ErrorResponse tests error response generation
 func TestMockerPlugin_ErrorResponse(t *testing.T) {
+	ctx := context.Background()
 	allowFallbacks := false
 	config := MockerConfig{
 		Enabled: true,
@@ -262,7 +266,7 @@ func TestMockerPlugin_ErrorResponse(t *testing.T) {
 	}
 
 	account := BaseAccount{}
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: &account,
 		Plugins: []schemas.Plugin{plugin},
 		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelError),
@@ -270,9 +274,9 @@ func TestMockerPlugin_ErrorResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error initializing Bifrost: %v", err)
 	}
-	defer client.Cleanup()
+	defer client.Shutdown()
 
-	_, bifrostErr := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+	_, bifrostErr := client.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
 		Provider: schemas.OpenAI,
 		Model:    "gpt-4",
 		Input: schemas.RequestInput{
@@ -300,6 +304,7 @@ func TestMockerPlugin_ErrorResponse(t *testing.T) {
 
 // TestMockerPlugin_MessageTemplate tests template variable substitution
 func TestMockerPlugin_MessageTemplate(t *testing.T) {
+	ctx := context.Background()
 	config := MockerConfig{
 		Enabled: true,
 		Rules: []MockRule{
@@ -326,7 +331,7 @@ func TestMockerPlugin_MessageTemplate(t *testing.T) {
 	}
 
 	account := BaseAccount{}
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: &account,
 		Plugins: []schemas.Plugin{plugin},
 		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelError),
@@ -334,9 +339,9 @@ func TestMockerPlugin_MessageTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error initializing Bifrost: %v", err)
 	}
-	defer client.Cleanup()
+	defer client.Shutdown()
 
-	response, bifrostErr := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+	response, bifrostErr := client.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
 		Provider: schemas.Anthropic,
 		Model:    "claude-3",
 		Input: schemas.RequestInput{
@@ -371,6 +376,7 @@ func TestMockerPlugin_MessageTemplate(t *testing.T) {
 
 // TestMockerPlugin_Statistics tests plugin statistics tracking
 func TestMockerPlugin_Statistics(t *testing.T) {
+	ctx := context.Background()
 	config := MockerConfig{
 		Enabled: true,
 		Rules: []MockRule{
@@ -397,7 +403,7 @@ func TestMockerPlugin_Statistics(t *testing.T) {
 	}
 
 	account := BaseAccount{}
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: &account,
 		Plugins: []schemas.Plugin{plugin},
 		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelError),
@@ -405,11 +411,11 @@ func TestMockerPlugin_Statistics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error initializing Bifrost: %v", err)
 	}
-	defer client.Cleanup()
+	defer client.Shutdown()
 
 	// Make multiple requests
 	for i := 0; i < 3; i++ {
-		_, _ = client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+		_, _ = client.ChatCompletionRequest(ctx, &schemas.BifrostRequest{
 			Provider: schemas.OpenAI,
 			Model:    "gpt-4",
 			Input: schemas.RequestInput{

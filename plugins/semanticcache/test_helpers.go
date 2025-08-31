@@ -104,6 +104,7 @@ func NewTestSetup(t *testing.T) *TestSetup {
 
 // NewTestSetupWithConfig creates a new test setup with custom configuration
 func NewTestSetupWithConfig(t *testing.T, config Config) *TestSetup {
+	ctx := context.Background()
 	logger := bifrost.NewDefaultLogger(schemas.LogLevelDebug)
 
 	store, err := vectorstore.NewVectorStore(context.Background(), &vectorstore.Config{
@@ -125,7 +126,7 @@ func NewTestSetupWithConfig(t *testing.T, config Config) *TestSetup {
 	clearTestKeysWithStore(t, pluginImpl.store)
 
 	account := &BaseAccount{}
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: account,
 		Plugins: []schemas.Plugin{plugin},
 		Logger:  logger,
@@ -145,6 +146,8 @@ func NewTestSetupWithConfig(t *testing.T, config Config) *TestSetup {
 
 // NewRedisClusterTestSetup creates a test setup for Redis Cluster testing
 func NewRedisClusterTestSetup(t *testing.T) *TestSetup {
+	ctx := context.Background()
+
 	if os.Getenv("OPENAI_API_KEY") == "" {
 		t.Skip("OPENAI_API_KEY is not set, skipping Redis Cluster test")
 	}
@@ -165,7 +168,7 @@ func NewRedisClusterTestSetup(t *testing.T) *TestSetup {
 
 	logger := bifrost.NewDefaultLogger(schemas.LogLevelDebug)
 
-	store, err := vectorstore.NewVectorStore(context.Background(), &vectorstore.Config{
+	store, err := vectorstore.NewVectorStore(ctx, &vectorstore.Config{
 		Type:   vectorstore.VectorStoreTypeWeaviate,
 		Config: getWeaviateConfigFromEnv(),
 	}, logger)
@@ -173,7 +176,7 @@ func NewRedisClusterTestSetup(t *testing.T) *TestSetup {
 		t.Fatalf("Vector store not available or failed to connect: %v", err)
 	}
 
-	plugin, err := Init(context.Background(), config, logger, store)
+	plugin, err := Init(ctx, config, logger, store)
 	if err != nil {
 		t.Fatalf("Failed to initialize plugin with vector store: %v", err)
 	}
@@ -183,7 +186,7 @@ func NewRedisClusterTestSetup(t *testing.T) *TestSetup {
 	clearTestKeysWithStore(t, pluginImpl.store)
 
 	account := &BaseAccount{}
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: account,
 		Plugins: []schemas.Plugin{plugin},
 		Logger:  logger,
@@ -204,7 +207,7 @@ func NewRedisClusterTestSetup(t *testing.T) *TestSetup {
 // Cleanup cleans up test resources
 func (ts *TestSetup) Cleanup() {
 	if ts.Client != nil {
-		ts.Client.Cleanup()
+		ts.Client.Shutdown()
 	}
 	if ts.Store != nil {
 		ts.Store.Close(context.Background())

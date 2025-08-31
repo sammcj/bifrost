@@ -46,6 +46,7 @@ const (
 // It provides a bridge between Bifrost and various MCP servers, supporting
 // both local tool hosting and external MCP server connections.
 type MCPManager struct {
+	ctx           context.Context
 	server        *server.MCPServer     // Local MCP server instance for hosting tools (STDIO-based)
 	clientMap     map[string]*MCPClient // Map of MCP client names to their configurations
 	mu            sync.RWMutex          // Read-write mutex for thread-safe operations
@@ -87,26 +88,20 @@ type MCPToolHandler[T any] func(args T) (string, error)
 // Returns:
 //   - *MCPManager: Initialized manager instance
 //   - error: Any initialization error
-func newMCPManager(config schemas.MCPConfig, logger schemas.Logger) (*MCPManager, error) {
-	// Use provided logger or create default logger with info level
-	if logger == nil {
-		logger = NewDefaultLogger(schemas.LogLevelInfo)
-	}
-
+func newMCPManager(ctx context.Context, config schemas.MCPConfig, logger schemas.Logger) (*MCPManager, error) {
+	// Creating new instance
 	manager := &MCPManager{
+		ctx:       ctx,
 		clientMap: make(map[string]*MCPClient),
 		logger:    logger,
 	}
-
 	// Process client configs: create client map entries and establish connections
 	for _, clientConfig := range config.ClientConfigs {
 		if err := manager.AddClient(clientConfig); err != nil {
 			manager.logger.Warn(fmt.Sprintf("%s Failed to add MCP client %s: %v", MCPLogPrefix, clientConfig.Name, err))
 		}
 	}
-
 	manager.logger.Info(MCPLogPrefix + " MCP Manager initialized")
-
 	return manager, nil
 }
 
@@ -267,7 +262,7 @@ func (m *MCPManager) EditClientTools(name string, toolsToAdd []string, toolsToRe
 	m.mu.Unlock()
 
 	// Retrieve tools with updated configuration
-	tools, err := m.retrieveExternalTools(context.Background(), client.Conn, config)
+	tools, err := m.retrieveExternalTools(m.ctx, client.Conn, config)
 
 	// Re-lock to update the tool map
 	m.mu.Lock()
@@ -496,7 +491,7 @@ func (m *MCPManager) startLocalMCPServer() error {
 	clientEntry.Conn = inProcessClient
 
 	// Initialize the in-process client
-	ctx, cancel := context.WithTimeout(context.Background(), MCPClientConnectionEstablishTimeout)
+	ctx, cancel := context.WithTimeout(m.ctx, MCPClientConnectionEstablishTimeout)
 	defer cancel()
 
 	// Create proper initialize request with correct structure
@@ -643,11 +638,11 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 
 	if config.ConnectionType == schemas.MCPConnectionTypeSSE {
 		// SSE connections need a long-lived context for the persistent stream
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(m.ctx)
 		// Don't defer cancel here - SSE needs the context to remain active
 	} else {
 		// Other connection types can use timeout context
-		ctx, cancel = context.WithTimeout(context.Background(), MCPClientConnectionEstablishTimeout)
+		ctx, cancel = context.WithTimeout(m.ctx, MCPClientConnectionEstablishTimeout)
 		defer cancel()
 	}
 
