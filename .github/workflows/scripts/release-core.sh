@@ -50,7 +50,7 @@ if [[ "$VERSION" == *-* ]]; then
 fi
 
 LATEST_FLAG=""
-if [[ "$PLUGIN_VERSION" != *-* ]]; then
+if [[ "$VERSION" != *-* ]]; then
   LATEST_FLAG="--latest"
 fi
 
