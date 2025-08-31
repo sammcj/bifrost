@@ -84,6 +84,7 @@ func (baseAccount *BaseAccount) GetConfigForProvider(providerKey schemas.ModelPr
 //   - MAXIM_LOGGER_ID: Your Maxim logger repository ID
 //   - OPENAI_API_KEY: Your OpenAI API key for the test request
 func TestMaximLoggerPlugin(t *testing.T) {
+	ctx := context.Background()
 	// Initialize the Maxim plugin
 	plugin, err := getPlugin()
 	if err != nil {
@@ -93,7 +94,7 @@ func TestMaximLoggerPlugin(t *testing.T) {
 	account := BaseAccount{}
 
 	// Initialize Bifrost with the plugin
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: &account,
 		Plugins: []schemas.Plugin{plugin},
 		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelDebug),
@@ -124,5 +125,5 @@ func TestMaximLoggerPlugin(t *testing.T) {
 
 	log.Println("Bifrost request completed, check your Maxim Dashboard for the trace")
 
-	client.Cleanup()
+	client.Shutdown()
 }

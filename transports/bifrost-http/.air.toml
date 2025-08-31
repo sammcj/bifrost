@@ -7,7 +7,19 @@ args_bin = []
 bin = "tmp/main"
 cmd = "go build -o ./tmp/main ."
 delay = 1000
-exclude_dir = ["assets", "tmp", "vendor", "testdata", "ui", "node_modules", "transports/bifrost-http/ui", "core/tests", "tests", "docs", "npx"]
+exclude_dir = [
+    "assets",
+    "tmp",
+    "vendor",
+    "testdata",
+    "ui",
+    "node_modules",
+    "transports/bifrost-http/ui",
+    "core/tests",
+    "tests",
+    "docs",
+    "npx",
+]
 exclude_file = []
 exclude_regex = ["_test.go"]
 exclude_unchanged = false
@@ -24,7 +36,7 @@ stop_on_error = true
 poll_interval = 0
 rerun = false
 rerun_delay = 500
-send_interrupt = false
+send_interrupt = true
 stop_on_root = false
 
 [color]
