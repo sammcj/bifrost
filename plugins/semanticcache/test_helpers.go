@@ -40,11 +40,10 @@ func getWeaviateConfigFromEnv() vectorstore.WeaviateConfig {
 	}
 
 	return vectorstore.WeaviateConfig{
-		Scheme:    scheme,
-		Host:      host,
-		ApiKey:    apiKey,
-		Timeout:   time.Duration(timeout) * time.Second,
-		ClassName: "TestWeaviateSemanticCache",
+		Scheme:  scheme,
+		Host:    host,
+		ApiKey:  apiKey,
+		Timeout: time.Duration(timeout) * time.Second,
 	}
 }
 
@@ -208,9 +207,6 @@ func NewRedisClusterTestSetup(t *testing.T) *TestSetup {
 func (ts *TestSetup) Cleanup() {
 	if ts.Client != nil {
 		ts.Client.Shutdown()
-	}
-	if ts.Store != nil {
-		ts.Store.Close(context.Background())
 	}
 }
 

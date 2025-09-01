@@ -32,68 +32,37 @@ type WeaviateConfig struct {
 
 	// Connection settings
 	Timeout time.Duration `json:"timeout,omitempty"` // Request timeout (optional)
-
-	// Class name
-	ClassName string `json:"class_name,omitempty"`
-
-	// Select fields
-	Properties []WeaviateProperties `json:"properties,omitempty"`
-}
-
-type WeaviateProperties struct {
-	Name     string   `json:"name"`
-	DataType []string `json:"data_type"`
 }
 
 // WeaviateStore represents the Weaviate vector store.
 type WeaviateStore struct {
-	client    *weaviate.Client
-	config    *WeaviateConfig
-	logger    schemas.Logger
-	className string
+	client *weaviate.Client
+	config *WeaviateConfig
+	logger schemas.Logger
 }
 
 // Add stores a new object (with or without embedding)
-func (s *WeaviateStore) Add(ctx context.Context, id string, embedding []float32, metadata map[string]interface{}) error {
+func (s *WeaviateStore) Add(ctx context.Context, className string, id string, embedding []float32, metadata map[string]interface{}) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("id is required")
 	}
 
-	// Store metadata fields at top level for easier querying
-	properties := make(map[string]interface{})
-
-	// Add all metadata fields as top-level properties
-	for k, v := range metadata {
-		if k == "params" && v != nil {
-			// Only store individual param fields as top-level properties for querying
-			// Don't store the JSON params field to avoid duplication
-			if paramsMap, ok := v.(map[string]interface{}); ok {
-				for paramKey, paramValue := range paramsMap {
-					// Use underscores since dots aren't allowed in Weaviate property names
-					properties["params_"+paramKey] = paramValue
-				}
-			}
-		} else {
-			properties[k] = v
-		}
-	}
-
 	obj := &models.Object{
-		Class:      s.className,
-		Properties: properties,
+		Class:      className,
+		Properties: metadata,
 	}
 
 	var err error
 	if len(embedding) > 0 {
 		_, err = s.client.Data().Creator().
-			WithClassName(s.className).
+			WithClassName(className).
 			WithID(id).
 			WithProperties(obj.Properties).
 			WithVector(embedding).
 			Do(ctx)
 	} else {
 		_, err = s.client.Data().Creator().
-			WithClassName(s.className).
+			WithClassName(className).
 			WithID(id).
 			WithProperties(obj.Properties).
 			Do(ctx)
@@ -103,9 +72,9 @@ func (s *WeaviateStore) Add(ctx context.Context, id string, embedding []float32,
 }
 
 // GetChunk returns the "metadata" for a single key
-func (s *WeaviateStore) GetChunk(ctx context.Context, id string) (SearchResult, error) {
+func (s *WeaviateStore) GetChunk(ctx context.Context, className string, id string) (SearchResult, error) {
 	obj, err := s.client.Data().ObjectsGetter().
-		WithClassName(s.className).
+		WithClassName(className).
 		WithID(id).
 		Do(ctx)
 	if err != nil {
@@ -128,11 +97,11 @@ func (s *WeaviateStore) GetChunk(ctx context.Context, id string) (SearchResult, 
 }
 
 // GetChunks returns multiple objects by ID
-func (s *WeaviateStore) GetChunks(ctx context.Context, ids []string) ([]SearchResult, error) {
+func (s *WeaviateStore) GetChunks(ctx context.Context, className string, ids []string) ([]SearchResult, error) {
 	out := make([]SearchResult, 0, len(ids))
 	for _, id := range ids {
 		obj, err := s.client.Data().ObjectsGetter().
-			WithClassName(s.className).
+			WithClassName(className).
 			WithID(id).
 			Do(ctx)
 		if err != nil {
@@ -154,7 +123,7 @@ func (s *WeaviateStore) GetChunks(ctx context.Context, ids []string) ([]SearchRe
 }
 
 // GetAll with filtering + pagination
-func (s *WeaviateStore) GetAll(ctx context.Context, queries []Query, selectFields []string, cursor *string, count int64) ([]SearchResult, *string, error) {
+func (s *WeaviateStore) GetAll(ctx context.Context, className string, queries []Query, selectFields []string, cursor *string, limit int64) ([]SearchResult, *string, error) {
 	where := buildWeaviateFilter(queries)
 
 	fields := []graphql.Field{
@@ -167,8 +136,8 @@ func (s *WeaviateStore) GetAll(ctx context.Context, queries []Query, selectField
 	}
 
 	search := s.client.GraphQL().Get().
-		WithClassName(s.className).
-		WithLimit(int(count)).
+		WithClassName(className).
+		WithLimit(int(limit)).
 		WithFields(fields...)
 
 	if where != nil {
@@ -197,16 +166,16 @@ func (s *WeaviateStore) GetAll(ctx context.Context, queries []Query, selectField
 		return nil, nil, fmt.Errorf("invalid graphql response: missing 'Get' key, got: %+v", resp.Data)
 	}
 
-	objsRaw, exists := data[s.className]
+	objsRaw, exists := data[className]
 	if !exists {
 		// No results for this class - this is normal, not an error
-		s.logger.Debug(fmt.Sprintf("No results found for class '%s', available classes: %+v", s.className, data))
+		s.logger.Debug(fmt.Sprintf("No results found for class '%s', available classes: %+v", className, data))
 		return nil, nil, nil
 	}
 
 	objs, ok := objsRaw.([]interface{})
 	if !ok {
-		s.logger.Debug(fmt.Sprintf("Class '%s' exists but data is not an array: %+v", s.className, objsRaw))
+		s.logger.Debug(fmt.Sprintf("Class '%s' exists but data is not an array: %+v", className, objsRaw))
 		return nil, nil, nil
 	}
 
@@ -239,6 +208,7 @@ func (s *WeaviateStore) GetAll(ctx context.Context, queries []Query, selectField
 // GetNearest with explicit filters only
 func (s *WeaviateStore) GetNearest(
 	ctx context.Context,
+	className string,
 	vector []float32,
 	queries []Query,
 	selectFields []string,
@@ -263,7 +233,7 @@ func (s *WeaviateStore) GetNearest(
 		WithCertainty(float32(threshold))
 
 	search := s.client.GraphQL().Get().
-		WithClassName(s.className).
+		WithClassName(className).
 		WithNearVector(nearVector).
 		WithLimit(int(limit)).
 		WithFields(fields...)
@@ -291,16 +261,16 @@ func (s *WeaviateStore) GetNearest(
 		return nil, fmt.Errorf("invalid graphql response: missing 'Get' key, got: %+v", resp.Data)
 	}
 
-	objsRaw, exists := data[s.className]
+	objsRaw, exists := data[className]
 	if !exists {
 		// No results for this class - this is normal, not an error
-		s.logger.Debug(fmt.Sprintf("No results found for class '%s', available classes: %+v", s.className, data))
+		s.logger.Debug(fmt.Sprintf("No results found for class '%s', available classes: %+v", className, data))
 		return nil, nil
 	}
 
 	objs, ok := objsRaw.([]interface{})
 	if !ok {
-		s.logger.Debug(fmt.Sprintf("Class '%s' exists but data is not an array: %+v", s.className, objsRaw))
+		s.logger.Debug(fmt.Sprintf("Class '%s' exists but data is not an array: %+v", className, objsRaw))
 		return nil, nil
 	}
 
@@ -354,18 +324,18 @@ func (s *WeaviateStore) GetNearest(
 }
 
 // Delete removes multiple objects by ID
-func (s *WeaviateStore) Delete(ctx context.Context, id string) error {
+func (s *WeaviateStore) Delete(ctx context.Context, className string, id string) error {
 	return s.client.Data().Deleter().
-		WithClassName(s.className).
+		WithClassName(className).
 		WithID(id).
 		Do(ctx)
 }
 
-func (s *WeaviateStore) DeleteAll(ctx context.Context, queries []Query) ([]DeleteResult, error) {
+func (s *WeaviateStore) DeleteAll(ctx context.Context, className string, queries []Query) ([]DeleteResult, error) {
 	where := buildWeaviateFilter(queries)
 
 	res, err := s.client.Batch().ObjectsBatchDeleter().
-		WithClassName(s.className).
+		WithClassName(className).
 		WithWhere(where).
 		Do(ctx)
 	if err != nil {
@@ -404,7 +374,7 @@ func (s *WeaviateStore) DeleteAll(ctx context.Context, queries []Query) ([]Delet
 	return results, nil
 }
 
-func (s *WeaviateStore) Close(ctx context.Context) error {
+func (s *WeaviateStore) Close(ctx context.Context, className string) error {
 	// nothing to close
 	return nil
 }
@@ -425,10 +395,6 @@ func newWeaviateStore(ctx context.Context, config *WeaviateConfig, logger schema
 	// Add authentication if provided
 	if config.ApiKey != "" {
 		cfg.AuthConfig = auth.ApiKey{Value: config.ApiKey}
-	}
-
-	if config.ClassName == "" {
-		config.ClassName = DefaultClassName
 	}
 
 	// Add custom headers if provided
@@ -456,50 +422,65 @@ func newWeaviateStore(ctx context.Context, config *WeaviateConfig, logger schema
 	}
 
 	store := &WeaviateStore{
-		client:    client,
-		config:    config,
-		logger:    logger,
-		className: config.ClassName,
+		client: client,
+		config: config,
+		logger: logger,
 	}
 
-	// Ensure schema exists with all required fields
+	return store, nil
+}
+
+func (s *WeaviateStore) CreateNamespace(ctx context.Context, className string, properties map[string]VectorStoreProperties) error {
 	// Check if class exists
-	exists, err := client.Schema().ClassExistenceChecker().
-		WithClassName(config.ClassName).
+	exists, err := s.client.Schema().ClassExistenceChecker().
+		WithClassName(className).
 		Do(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check class existence: %w", err)
+		return fmt.Errorf("failed to check class existence: %w", err)
 	}
 
 	if exists {
-		return store, nil // Schema already exists
+		return nil // Schema already exists
 	}
 
 	// Create properties
-	properties := []*models.Property{}
-	for _, prop := range config.Properties {
-		properties = append(properties, &models.Property{
-			Name:     prop.Name,
-			DataType: prop.DataType,
+	weaviateProperties := []*models.Property{}
+	for name, prop := range properties {
+		var dataType []string
+		switch prop.DataType {
+		case VectorStorePropertyTypeString:
+			dataType = []string{"string"}
+		case VectorStorePropertyTypeInteger:
+			dataType = []string{"int"}
+		case VectorStorePropertyTypeBoolean:
+			dataType = []string{"boolean"}
+		case VectorStorePropertyTypeStringArray:
+			dataType = []string{"string[]"}
+		}
+
+		weaviateProperties = append(weaviateProperties, &models.Property{
+			Name:        name,
+			DataType:    dataType,
+			Description: prop.Description,
 		})
 	}
 
 	// Create class schema with all fields we need
 	classSchema := &models.Class{
-		Class:           config.ClassName,
-		Properties:      properties,
+		Class:           className,
+		Properties:      weaviateProperties,
 		VectorIndexType: "hnsw",
 		Vectorizer:      "none", // We provide our own vectors
 	}
 
-	err = client.Schema().ClassCreator().
+	err = s.client.Schema().ClassCreator().
 		WithClass(classSchema).
 		Do(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create class schema: %w", err)
+		return fmt.Errorf("failed to create class schema: %w", err)
 	}
 
-	return store, nil
+	return nil
 }
 
 // buildWeaviateFilter converts []Query → Weaviate WhereFilter
@@ -513,16 +494,7 @@ func buildWeaviateFilter(queries []Query) *filters.WhereBuilder {
 		// Convert string operator to filters operator
 		operator := convertOperator(q.Operator)
 
-		// Handle nested params fields: "params.user" → "params_user"
-		var fieldPath []string
-		if strings.HasPrefix(q.Field, "params.") {
-			// Convert params.user to params_user for Weaviate compatibility
-			fieldName := strings.Replace(q.Field, "params.", "params_", 1)
-			fieldPath = []string{fieldName}
-		} else {
-			// For other fields, split normally
-			fieldPath = strings.Split(q.Field, ".")
-		}
+		fieldPath := strings.Split(q.Field, ".")
 
 		whereClause := filters.Where().
 			WithPath(fieldPath).
@@ -540,9 +512,9 @@ func buildWeaviateFilter(queries []Query) *filters.WhereBuilder {
 			case string:
 				whereClause = whereClause.WithValueString(v)
 			case int:
-				whereClause = whereClause.WithValueNumber(float64(v))
+				whereClause = whereClause.WithValueInt(int64(v))
 			case int64:
-				whereClause = whereClause.WithValueNumber(float64(v))
+				whereClause = whereClause.WithValueInt(v)
 			case float32:
 				whereClause = whereClause.WithValueNumber(float64(v))
 			case float64:
