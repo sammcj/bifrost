@@ -101,7 +101,7 @@ func (plugin *Plugin) generateRequestHash(req *schemas.BifrostRequest, requestTy
 
 // extractTextForEmbedding extracts meaningful text from different input types for embedding generation.
 // Returns the text to embed and metadata for storage.
-func (plugin *Plugin) extractTextForEmbedding(req *schemas.BifrostRequest, requestType bifrost.RequestType) (string, map[string]interface{}, error) {
+func (plugin *Plugin) extractTextForEmbedding(req *schemas.BifrostRequest, requestType bifrost.RequestType) (string, string, error) {
 	metadata := map[string]interface{}{}
 
 	attachments := []string{}
@@ -161,7 +161,12 @@ func (plugin *Plugin) extractTextForEmbedding(req *schemas.BifrostRequest, reque
 
 	switch {
 	case req.Input.TextCompletionInput != nil:
-		return *req.Input.TextCompletionInput, metadata, nil
+		metadataHash, err := getMetadataHash(metadata)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to marshal metadata for metadata hash: %w", err)
+		}
+
+		return *req.Input.TextCompletionInput, metadataHash, nil
 
 	case req.Input.ChatCompletionInput != nil:
 
@@ -194,35 +199,54 @@ func (plugin *Plugin) extractTextForEmbedding(req *schemas.BifrostRequest, reque
 		}
 
 		if len(textParts) == 0 {
-			return "", nil, fmt.Errorf("no text content found in chat messages")
+			return "", "", fmt.Errorf("no text content found in chat messages")
 		}
 
 		if len(attachments) > 0 {
 			metadata["attachments"] = attachments
 		}
 
-		return strings.Join(textParts, "\n"), metadata, nil
+		metadataHash, err := getMetadataHash(metadata)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to marshal metadata for metadata hash: %w", err)
+		}
+
+		return strings.Join(textParts, "\n"), metadataHash, nil
 
 	case req.Input.SpeechInput != nil:
 		if req.Input.SpeechInput.Input != "" {
 			if req.Input.SpeechInput.VoiceConfig.Voice != nil {
 				metadata["voice"] = *req.Input.SpeechInput.VoiceConfig.Voice
 			}
-			return req.Input.SpeechInput.Input, metadata, nil
+
+			metadataHash, err := getMetadataHash(metadata)
+			if err != nil {
+				return "", "", fmt.Errorf("failed to marshal metadata for metadata hash: %w", err)
+			}
+
+			return req.Input.SpeechInput.Input, metadataHash, nil
 		}
-		return "", nil, fmt.Errorf("no input text found in speech request")
+		return "", "", fmt.Errorf("no input text found in speech request")
 
 	case req.Input.EmbeddingInput != nil:
 		// Skip semantic caching for embedding requests
-		return "", nil, fmt.Errorf("embedding requests are not supported for semantic caching")
+		return "", "", fmt.Errorf("embedding requests are not supported for semantic caching")
 
 	case req.Input.TranscriptionInput != nil:
 		// Skip semantic caching for transcription requests
-		return "", nil, fmt.Errorf("transcription requests are not supported for semantic caching")
+		return "", "", fmt.Errorf("transcription requests are not supported for semantic caching")
 
 	default:
-		return "", nil, fmt.Errorf("unsupported input type for semantic caching")
+		return "", "", fmt.Errorf("unsupported input type for semantic caching")
 	}
+}
+
+func getMetadataHash(metadata map[string]interface{}) (string, error) {
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal metadata for metadata hash: %w", err)
+	}
+	return fmt.Sprintf("%x", xxhash.Sum64(metadataJSON)), nil
 }
 
 // isStreamingRequest checks if the request is a streaming request
@@ -233,7 +257,7 @@ func (plugin *Plugin) isStreamingRequest(requestType bifrost.RequestType) bool {
 }
 
 // buildUnifiedMetadata constructs the unified metadata structure for VectorEntry
-func (plugin *Plugin) buildUnifiedMetadata(provider schemas.ModelProvider, model string, params map[string]interface{}, requestHash string, cacheKey string, ttl time.Duration) map[string]interface{} {
+func (plugin *Plugin) buildUnifiedMetadata(provider schemas.ModelProvider, model string, paramsHash string, requestHash string, cacheKey string, ttl time.Duration) map[string]interface{} {
 	unifiedMetadata := make(map[string]interface{})
 
 	// Top-level fields (outside params)
@@ -249,8 +273,8 @@ func (plugin *Plugin) buildUnifiedMetadata(provider schemas.ModelProvider, model
 
 	// Individual param fields will be stored as params_* by the vectorstore
 	// We pass the params map to the vectorstore, and it handles the individual field storage
-	if len(params) > 0 {
-		unifiedMetadata["params"] = params
+	if paramsHash != "" {
+		unifiedMetadata["params_hash"] = paramsHash
 	}
 
 	return unifiedMetadata
@@ -269,7 +293,7 @@ func (plugin *Plugin) addSingleResponse(ctx context.Context, responseID string, 
 	metadata["stream_chunks"] = []string{}
 
 	// Store unified entry using new VectorStore interface
-	if err := plugin.store.Add(ctx, responseID, embedding, metadata); err != nil {
+	if err := plugin.store.Add(ctx, VectorStoreClassName, responseID, embedding, metadata); err != nil {
 		return fmt.Errorf("failed to store unified cache entry: %w", err)
 	}
 

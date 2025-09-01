@@ -25,7 +25,7 @@ func (plugin *Plugin) performDirectSearch(ctx *context.Context, req *schemas.Bif
 	*ctx = context.WithValue(*ctx, requestHashKey, hash)
 
 	// Extract metadata for strict filtering
-	_, metadata, err := plugin.extractTextForEmbedding(req, requestType)
+	_, paramsHash, err := plugin.extractTextForEmbedding(req, requestType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract metadata for filtering: %w", err)
 	}
@@ -34,6 +34,8 @@ func (plugin *Plugin) performDirectSearch(ctx *context.Context, req *schemas.Bif
 	filters := []vectorstore.Query{
 		{Field: "request_hash", Operator: vectorstore.QueryOperatorEqual, Value: hash},
 		{Field: "cache_key", Operator: vectorstore.QueryOperatorEqual, Value: cacheKey},
+		{Field: "params_hash", Operator: vectorstore.QueryOperatorEqual, Value: paramsHash},
+		{Field: "from_bifrost_semantic_cache_plugin", Operator: vectorstore.QueryOperatorEqual, Value: true},
 	}
 
 	if plugin.config.CacheByProvider != nil && *plugin.config.CacheByProvider {
@@ -41,15 +43,6 @@ func (plugin *Plugin) performDirectSearch(ctx *context.Context, req *schemas.Bif
 	}
 	if plugin.config.CacheByModel != nil && *plugin.config.CacheByModel {
 		filters = append(filters, vectorstore.Query{Field: "model", Operator: vectorstore.QueryOperatorEqual, Value: req.Model})
-	}
-
-	// Add strict filters for ALL params
-	for key, value := range metadata {
-		filters = append(filters, vectorstore.Query{
-			Field:    "params." + key,
-			Operator: vectorstore.QueryOperatorEqual,
-			Value:    value,
-		})
 	}
 
 	plugin.logger.Debug(fmt.Sprintf("%s Searching for direct hash match with %d filters", PluginLoggerPrefix, len(filters)))
@@ -64,7 +57,7 @@ func (plugin *Plugin) performDirectSearch(ctx *context.Context, req *schemas.Bif
 
 	// Search for entries with matching hash and all params
 	var cursor *string
-	results, _, err := plugin.store.GetAll(*ctx, filters, selectFields, cursor, 1)
+	results, _, err := plugin.store.GetAll(*ctx, VectorStoreClassName, filters, selectFields, cursor, 1)
 	if err != nil {
 		if errors.Is(err, vectorstore.ErrNotFound) {
 			return nil, nil
@@ -88,7 +81,7 @@ func (plugin *Plugin) performDirectSearch(ctx *context.Context, req *schemas.Bif
 // performSemanticSearch performs semantic similarity search and returns matching response if found.
 func (plugin *Plugin) performSemanticSearch(ctx *context.Context, req *schemas.BifrostRequest, requestType bifrost.RequestType, cacheKey string) (*schemas.PluginShortCircuit, error) {
 	// Extract text and metadata for embedding
-	text, metadata, err := plugin.extractTextForEmbedding(req, requestType)
+	text, paramsHash, err := plugin.extractTextForEmbedding(req, requestType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract text for embedding: %w", err)
 	}
@@ -101,7 +94,7 @@ func (plugin *Plugin) performSemanticSearch(ctx *context.Context, req *schemas.B
 
 	// Store embedding and metadata in context for PostHook
 	*ctx = context.WithValue(*ctx, requestEmbeddingKey, embedding)
-	*ctx = context.WithValue(*ctx, requestMetadataKey, metadata)
+	*ctx = context.WithValue(*ctx, requestParamsHashKey, paramsHash)
 
 	cacheThreshold := plugin.config.Threshold
 
@@ -120,6 +113,8 @@ func (plugin *Plugin) performSemanticSearch(ctx *context.Context, req *schemas.B
 	// Build strict metadata filters as Query slices (provider, model, and all params)
 	strictFilters := []vectorstore.Query{
 		{Field: "cache_key", Operator: vectorstore.QueryOperatorEqual, Value: cacheKey},
+		{Field: "params_hash", Operator: vectorstore.QueryOperatorEqual, Value: paramsHash},
+		{Field: "from_bifrost_semantic_cache_plugin", Operator: vectorstore.QueryOperatorEqual, Value: true},
 	}
 
 	if plugin.config.CacheByProvider != nil && *plugin.config.CacheByProvider {
@@ -127,15 +122,6 @@ func (plugin *Plugin) performSemanticSearch(ctx *context.Context, req *schemas.B
 	}
 	if plugin.config.CacheByModel != nil && *plugin.config.CacheByModel {
 		strictFilters = append(strictFilters, vectorstore.Query{Field: "model", Operator: vectorstore.QueryOperatorEqual, Value: req.Model})
-	}
-
-	// Add all params as strict filters
-	for key, value := range metadata {
-		strictFilters = append(strictFilters, vectorstore.Query{
-			Field:    "params." + key,
-			Operator: vectorstore.QueryOperatorEqual,
-			Value:    value,
-		})
 	}
 
 	plugin.logger.Debug(fmt.Sprintf("%s Performing semantic search with %d metadata filters", PluginLoggerPrefix, len(strictFilters)))
@@ -149,7 +135,7 @@ func (plugin *Plugin) performSemanticSearch(ctx *context.Context, req *schemas.B
 	}
 
 	// For semantic search, we want semantic similarity in content but exact parameter matching
-	results, err := plugin.store.GetNearest(*ctx, embedding, strictFilters, selectFields, cacheThreshold, 1)
+	results, err := plugin.store.GetNearest(*ctx, VectorStoreClassName, embedding, strictFilters, selectFields, cacheThreshold, 1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search semantic cache: %w", err)
 	}
@@ -197,7 +183,7 @@ func (plugin *Plugin) buildResponseFromResult(ctx *context.Context, req *schemas
 				go func() {
 					deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
-					err := plugin.store.Delete(deleteCtx, result.ID)
+					err := plugin.store.Delete(deleteCtx, VectorStoreClassName, result.ID)
 					if err != nil {
 						plugin.logger.Warn(fmt.Sprintf("%s Failed to delete expired entry %s: %v", PluginLoggerPrefix, result.ID, err))
 					}
