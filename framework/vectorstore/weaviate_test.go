@@ -19,7 +19,7 @@ import (
 // Test constants
 const (
 	TestTimeout        = 30 * time.Second
-	TestClassPrefix    = "Test_weaviate_"
+	TestClassName      = "TestWeaviate"
 	TestEmbeddingDim   = 384
 	DefaultTestScheme  = "http"
 	DefaultTestHost    = "localhost:9000"
@@ -28,12 +28,11 @@ const (
 
 // TestSetup provides common test infrastructure
 type TestSetup struct {
-	Store     *WeaviateStore
-	Logger    schemas.Logger
-	Config    WeaviateConfig
-	ClassName string
-	ctx       context.Context
-	cancel    context.CancelFunc
+	Store  *WeaviateStore
+	Logger schemas.Logger
+	Config WeaviateConfig
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewTestSetup creates a test setup with environment-driven configuration
@@ -50,11 +49,10 @@ func NewTestSetup(t *testing.T) *TestSetup {
 	}
 
 	config := WeaviateConfig{
-		Scheme:    scheme,
-		Host:      host,
-		ApiKey:    apiKey,
-		Timeout:   timeout,
-		ClassName: TestClassPrefix,
+		Scheme:  scheme,
+		Host:    host,
+		ApiKey:  apiKey,
+		Timeout: timeout,
 	}
 
 	logger := bifrost.NewDefaultLogger(schemas.LogLevelInfo)
@@ -67,12 +65,11 @@ func NewTestSetup(t *testing.T) *TestSetup {
 	}
 
 	setup := &TestSetup{
-		Store:     store,
-		Logger:    logger,
-		Config:    config,
-		ctx:       ctx,
-		cancel:    cancel,
-		ClassName: config.ClassName,
+		Store:  store,
+		Logger: logger,
+		Config: config,
+		ctx:    ctx,
+		cancel: cancel,
 	}
 
 	// Ensure class exists for integration tests
@@ -92,7 +89,7 @@ func (ts *TestSetup) Cleanup(t *testing.T) {
 		ts.cleanupTestData(t)
 	}
 
-	if err := ts.Store.Close(ts.ctx); err != nil {
+	if err := ts.Store.Close(ts.ctx, TestClassName); err != nil {
 		t.Logf("Warning: Failed to close store: %v", err)
 	}
 }
@@ -101,17 +98,17 @@ func (ts *TestSetup) Cleanup(t *testing.T) {
 func (ts *TestSetup) ensureClassExists(t *testing.T) {
 	// Try to get class schema first
 	exists, err := ts.Store.client.Schema().ClassGetter().
-		WithClassName(ts.ClassName).
+		WithClassName(TestClassName).
 		Do(ts.ctx)
 
 	if err == nil && exists != nil {
-		t.Logf("Class %s already exists", ts.ClassName)
+		t.Logf("Class %s already exists", TestClassName)
 		return
 	}
 
 	// Create class with minimal schema - let Weaviate auto-create properties
 	class := &models.Class{
-		Class: ts.ClassName,
+		Class: TestClassName,
 		Properties: []*models.Property{
 			{
 				Name:     "key",
@@ -140,30 +137,30 @@ func (ts *TestSetup) ensureClassExists(t *testing.T) {
 		Do(ts.ctx)
 
 	if err != nil {
-		t.Logf("Warning: Failed to create test class %s: %v", ts.ClassName, err)
+		t.Logf("Warning: Failed to create test class %s: %v", TestClassName, err)
 		t.Logf("This might be due to auto-schema creation. Continuing...")
 	} else {
-		t.Logf("Created test class: %s", ts.ClassName)
+		t.Logf("Created test class: %s", TestClassName)
 	}
 }
 
 // cleanupTestData removes all test objects from the class
 func (ts *TestSetup) cleanupTestData(t *testing.T) {
 	// Delete all objects in the test class
-	allTestKeys, _, err := ts.Store.GetAll(ts.ctx, []Query{}, []string{}, nil, 1000)
+	allTestKeys, _, err := ts.Store.GetAll(ts.ctx, TestClassName, []Query{}, []string{}, nil, 1000)
 	if err != nil {
 		t.Logf("Warning: Failed to get all test keys: %v", err)
 		return
 	}
 
 	for _, key := range allTestKeys {
-		err := ts.Store.Delete(ts.ctx, key.ID)
+		err := ts.Store.Delete(ts.ctx, TestClassName, key.ID)
 		if err != nil {
 			t.Logf("Warning: Failed to delete test key %s: %v", key.ID, err)
 		}
 	}
 
-	t.Logf("Cleaned up test class: %s", ts.ClassName)
+	t.Logf("Cleaned up test class: %s", TestClassName)
 }
 
 // Helper functions
@@ -401,14 +398,14 @@ func TestWeaviateStore_Integration(t *testing.T) {
 		}
 
 		// Add object
-		err := setup.Store.Add(setup.ctx, testKey, embedding, metadata)
+		err := setup.Store.Add(setup.ctx, TestClassName, testKey, embedding, metadata)
 		require.NoError(t, err)
 
 		// Small delay to ensure consistency
 		time.Sleep(100 * time.Millisecond)
 
 		// Get single chunk
-		result, err := setup.Store.GetChunk(setup.ctx, testKey)
+		result, err := setup.Store.GetChunk(setup.ctx, TestClassName, testKey)
 		require.NoError(t, err)
 		assert.NotEmpty(t, result)
 		assert.Equal(t, "document", result.Properties["type"]) // Should contain metadata
@@ -421,13 +418,13 @@ func TestWeaviateStore_Integration(t *testing.T) {
 		}
 
 		// Add object without embedding
-		err := setup.Store.Add(setup.ctx, testKey, nil, metadata)
+		err := setup.Store.Add(setup.ctx, TestClassName, testKey, nil, metadata)
 		require.NoError(t, err)
 
 		time.Sleep(100 * time.Millisecond)
 
 		// Retrieve it
-		result, err := setup.Store.GetChunk(setup.ctx, testKey)
+		result, err := setup.Store.GetChunk(setup.ctx, TestClassName, testKey)
 		require.NoError(t, err)
 		assert.Equal(t, "metadata-only", result.Properties["type"])
 	})
@@ -489,7 +486,7 @@ func TestWeaviateStore_FilteringScenarios(t *testing.T) {
 	// Add all test data
 	for _, item := range testData {
 		embedding := generateTestEmbedding(TestEmbeddingDim)
-		err := setup.Store.Add(setup.ctx, item.key, embedding, item.metadata)
+		err := setup.Store.Add(setup.ctx, TestClassName, item.key, embedding, item.metadata)
 		require.NoError(t, err)
 	}
 
@@ -500,7 +497,7 @@ func TestWeaviateStore_FilteringScenarios(t *testing.T) {
 			{Field: "size", Operator: "GreaterThan", Value: 1000},
 		}
 
-		results, _, err := setup.Store.GetAll(setup.ctx, queries, filterFields, nil, 10)
+		results, _, err := setup.Store.GetAll(setup.ctx, TestClassName, queries, filterFields, nil, 10)
 		require.NoError(t, err)
 		assert.Len(t, results, 2) // doc1 (1024) and doc2 (2048)
 	})
@@ -510,7 +507,7 @@ func TestWeaviateStore_FilteringScenarios(t *testing.T) {
 			{Field: "public", Operator: "Equal", Value: true},
 		}
 
-		results, _, err := setup.Store.GetAll(setup.ctx, queries, filterFields, nil, 10)
+		results, _, err := setup.Store.GetAll(setup.ctx, TestClassName, queries, filterFields, nil, 10)
 		require.NoError(t, err)
 		assert.Len(t, results, 3) // doc1, doc3, doc4
 	})
@@ -521,7 +518,7 @@ func TestWeaviateStore_FilteringScenarios(t *testing.T) {
 			{Field: "public", Operator: "Equal", Value: true},
 		}
 
-		results, _, err := setup.Store.GetAll(setup.ctx, queries, filterFields, nil, 10)
+		results, _, err := setup.Store.GetAll(setup.ctx, TestClassName, queries, filterFields, nil, 10)
 		require.NoError(t, err)
 		assert.Len(t, results, 2) // doc1 and doc3
 	})
@@ -533,20 +530,20 @@ func TestWeaviateStore_FilteringScenarios(t *testing.T) {
 			{Field: "public", Operator: "Equal", Value: true},
 		}
 
-		results, _, err := setup.Store.GetAll(setup.ctx, queries, filterFields, nil, 10)
+		results, _, err := setup.Store.GetAll(setup.ctx, TestClassName, queries, filterFields, nil, 10)
 		require.NoError(t, err)
 		assert.Len(t, results, 2) // doc1 and doc3 (both by alice, < 2000 size, public)
 	})
 
 	t.Run("Pagination test", func(t *testing.T) {
 		// Test with limit of 2
-		results, cursor, err := setup.Store.GetAll(setup.ctx, nil, filterFields, nil, 2)
+		results, cursor, err := setup.Store.GetAll(setup.ctx, TestClassName, nil, filterFields, nil, 2)
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 
 		if cursor != nil {
 			// Get next page
-			nextResults, _, err := setup.Store.GetAll(setup.ctx, nil, filterFields, cursor, 2)
+			nextResults, _, err := setup.Store.GetAll(setup.ctx, TestClassName, nil, filterFields, cursor, 2)
 			require.NoError(t, err)
 			assert.LessOrEqual(t, len(nextResults), 2)
 			t.Logf("First page: %d results, Next page: %d results", len(results), len(nextResults))
@@ -589,7 +586,7 @@ func TestWeaviateStore_CompleteUseCases(t *testing.T) {
 		filterFields := []string{"type", "size", "public", "author"}
 
 		for _, doc := range documents {
-			err := setup.Store.Add(setup.ctx, doc.key, doc.embedding, doc.metadata)
+			err := setup.Store.Add(setup.ctx, TestClassName, doc.key, doc.embedding, doc.metadata)
 			require.NoError(t, err)
 		}
 
@@ -599,13 +596,13 @@ func TestWeaviateStore_CompleteUseCases(t *testing.T) {
 
 		// Get PDF documents
 		pdfQuery := []Query{{Field: "type", Operator: "Equal", Value: "pdf"}}
-		results, _, err := setup.Store.GetAll(setup.ctx, pdfQuery, filterFields, nil, 10)
+		results, _, err := setup.Store.GetAll(setup.ctx, TestClassName, pdfQuery, filterFields, nil, 10)
 		require.NoError(t, err)
 		assert.Len(t, results, 2) // doc1, doc3
 
 		// Get large documents (size > 1000)
 		sizeQuery := []Query{{Field: "size", Operator: "GreaterThan", Value: 1000}}
-		results, _, err = setup.Store.GetAll(setup.ctx, sizeQuery, filterFields, nil, 10)
+		results, _, err = setup.Store.GetAll(setup.ctx, TestClassName, sizeQuery, filterFields, nil, 10)
 		require.NoError(t, err)
 		assert.Len(t, results, 2) // doc1, doc2
 
@@ -614,13 +611,13 @@ func TestWeaviateStore_CompleteUseCases(t *testing.T) {
 			{Field: "public", Operator: "Equal", Value: true},
 			{Field: "type", Operator: "Equal", Value: "pdf"},
 		}
-		results, _, err = setup.Store.GetAll(setup.ctx, combinedQuery, filterFields, nil, 10)
+		results, _, err = setup.Store.GetAll(setup.ctx, TestClassName, combinedQuery, filterFields, nil, 10)
 		require.NoError(t, err)
 		assert.Len(t, results, 2) // doc1, doc3
 
 		// Vector similarity search
 		queryEmbedding := documents[0].embedding // Similar to doc1
-		vectorResults, err := setup.Store.GetNearest(setup.ctx, queryEmbedding, nil, filterFields, 0.8, 10)
+		vectorResults, err := setup.Store.GetNearest(setup.ctx, TestClassName, queryEmbedding, nil, filterFields, 0.8, 10)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(vectorResults), 1)
 	})
@@ -652,7 +649,7 @@ func TestWeaviateStore_CompleteUseCases(t *testing.T) {
 		filterFields := []string{"user", "lang", "category"}
 
 		for _, content := range userContent {
-			err := setup.Store.Add(setup.ctx, content.key, content.embedding, content.metadata)
+			err := setup.Store.Add(setup.ctx, TestClassName, content.key, content.embedding, content.metadata)
 			require.NoError(t, err)
 		}
 
@@ -660,7 +657,7 @@ func TestWeaviateStore_CompleteUseCases(t *testing.T) {
 
 		// Test user-specific filtering
 		aliceQuery := []Query{{Field: "user", Operator: "Equal", Value: "alice"}}
-		results, _, err := setup.Store.GetAll(setup.ctx, aliceQuery, filterFields, nil, 10)
+		results, _, err := setup.Store.GetAll(setup.ctx, TestClassName, aliceQuery, filterFields, nil, 10)
 		require.NoError(t, err)
 		assert.Len(t, results, 2) // Alice's content
 
@@ -669,14 +666,14 @@ func TestWeaviateStore_CompleteUseCases(t *testing.T) {
 			{Field: "lang", Operator: "Equal", Value: "en"},
 			{Field: "category", Operator: "Equal", Value: "tech"},
 		}
-		results, _, err = setup.Store.GetAll(setup.ctx, techEnQuery, filterFields, nil, 10)
+		results, _, err = setup.Store.GetAll(setup.ctx, TestClassName, techEnQuery, filterFields, nil, 10)
 		require.NoError(t, err)
 		assert.Len(t, results, 1) // user1_content
 
 		// Alice's similar content (semantic search with user filter)
 		aliceFilter := []Query{{Field: "user", Operator: "Equal", Value: "alice"}}
 		queryEmbedding := userContent[0].embedding
-		vectorResults, err := setup.Store.GetNearest(setup.ctx, queryEmbedding, aliceFilter, filterFields, 0.1, 10)
+		vectorResults, err := setup.Store.GetNearest(setup.ctx, TestClassName, queryEmbedding, aliceFilter, filterFields, 0.1, 10)
 		require.NoError(t, err)
 		assert.Len(t, vectorResults, 2) // Both of Alice's content
 	})
@@ -713,7 +710,7 @@ func TestWeaviateStore_CompleteUseCases(t *testing.T) {
 		filterFields := []string{"request_hash", "user", "lang", "response"}
 
 		for _, entry := range cacheEntries {
-			err := setup.Store.Add(setup.ctx, entry.key, entry.embedding, entry.metadata)
+			err := setup.Store.Add(setup.ctx, TestClassName, entry.key, entry.embedding, entry.metadata)
 			require.NoError(t, err)
 		}
 
@@ -721,7 +718,7 @@ func TestWeaviateStore_CompleteUseCases(t *testing.T) {
 
 		// Test hash-based direct retrieval (exact match)
 		hashQuery := []Query{{Field: "request_hash", Operator: "Equal", Value: "abc123"}}
-		results, _, err := setup.Store.GetAll(setup.ctx, hashQuery, filterFields, nil, 10)
+		results, _, err := setup.Store.GetAll(setup.ctx, TestClassName, hashQuery, filterFields, nil, 10)
 		require.NoError(t, err)
 		assert.Len(t, results, 1)
 
@@ -731,7 +728,7 @@ func TestWeaviateStore_CompleteUseCases(t *testing.T) {
 			{Field: "lang", Operator: "Equal", Value: "en"},
 		}
 		similarEmbedding := generateSimilarEmbedding(cacheEntries[0].embedding, 0.9)
-		vectorResults, err := setup.Store.GetNearest(setup.ctx, similarEmbedding, userLangFilter, filterFields, 0.7, 10)
+		vectorResults, err := setup.Store.GetNearest(setup.ctx, TestClassName, similarEmbedding, userLangFilter, filterFields, 0.7, 10)
 		require.NoError(t, err)
 		assert.Len(t, vectorResults, 1) // Should find English content for u1
 	})
@@ -766,7 +763,7 @@ func TestVectorStoreFactory_Weaviate(t *testing.T) {
 	if err != nil {
 		t.Skipf("Could not create Weaviate store: %v", err)
 	}
-	defer store.Close(context.Background())
+	defer store.Close(context.Background(), TestClassName)
 
 	// Verify it's actually a WeaviateStore
 	weaviateStore, ok := store.(*WeaviateStore)
