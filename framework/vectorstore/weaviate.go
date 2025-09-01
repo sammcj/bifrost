@@ -11,6 +11,7 @@ import (
 	"github.com/weaviate/weaviate-go-client/v5/weaviate/auth"
 	"github.com/weaviate/weaviate-go-client/v5/weaviate/filters"
 	"github.com/weaviate/weaviate-go-client/v5/weaviate/graphql"
+	"github.com/weaviate/weaviate-go-client/v5/weaviate/grpc"
 	"github.com/weaviate/weaviate/entities/models"
 )
 
@@ -23,8 +24,9 @@ const (
 // WeaviateConfig represents the configuration for the Weaviate vector store.
 type WeaviateConfig struct {
 	// Connection settings
-	Scheme string `json:"scheme"` // "http" or "https" - REQUIRED
-	Host   string `json:"host"`   // "localhost:8080" - REQUIRED
+	Scheme     string              `json:"scheme"`                // "http" or "https" - REQUIRED
+	Host       string              `json:"host"`                  // "localhost:8080" - REQUIRED
+	GrpcConfig *WeaviateGrpcConfig `json:"grpc_config,omitempty"` // grpc config for weaviate (optional)
 
 	// Authentication settings (optional)
 	ApiKey  string            `json:"api_key,omitempty"` // API key for authentication
@@ -32,6 +34,14 @@ type WeaviateConfig struct {
 
 	// Connection settings
 	Timeout time.Duration `json:"timeout,omitempty"` // Request timeout (optional)
+}
+
+type WeaviateGrpcConfig struct {
+	// Host is the host of the weaviate server (host:port).
+	// If host is without a port number then the 80 port for insecured and 443 port for secured connections will be used.
+	Host string `json:"host"`
+	// Secured is a boolean flag indicating if the connection is secured
+	Secured bool `json:"secured"`
 }
 
 // WeaviateStore represents the Weaviate vector store.
@@ -395,6 +405,14 @@ func newWeaviateStore(ctx context.Context, config *WeaviateConfig, logger schema
 	// Add authentication if provided
 	if config.ApiKey != "" {
 		cfg.AuthConfig = auth.ApiKey{Value: config.ApiKey}
+	}
+
+	// Add grpc config if provided
+	if config.GrpcConfig != nil {
+		cfg.GrpcConfig = &grpc.Config{
+			Host:    config.GrpcConfig.Host,
+			Secured: config.GrpcConfig.Secured,
+		}
 	}
 
 	// Add custom headers if provided
