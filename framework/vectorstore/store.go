@@ -59,16 +59,31 @@ const (
 	DeleteStatusError   DeleteStatus = "error"
 )
 
+type VectorStoreProperties struct {
+	DataType    VectorStorePropertyType `json:"data_type"`
+	Description string                  `json:"description"`
+}
+
+type VectorStorePropertyType string
+
+const (
+	VectorStorePropertyTypeString      VectorStorePropertyType = "string"
+	VectorStorePropertyTypeInteger     VectorStorePropertyType = "integer"
+	VectorStorePropertyTypeBoolean     VectorStorePropertyType = "boolean"
+	VectorStorePropertyTypeStringArray VectorStorePropertyType = "string[]"
+)
+
 // VectorStore represents the interface for the vector store.
 type VectorStore interface {
-	GetChunk(ctx context.Context, id string) (SearchResult, error)
-	GetChunks(ctx context.Context, ids []string) ([]SearchResult, error)
-	GetAll(ctx context.Context, queries []Query, selectFields []string, cursor *string, count int64) ([]SearchResult, *string, error)
-	GetNearest(ctx context.Context, vector []float32, queries []Query, selectFields []string, threshold float64, limit int64) ([]SearchResult, error)
-	Add(ctx context.Context, id string, embedding []float32, metadata map[string]interface{}) error
-	Delete(ctx context.Context, id string) error
-	DeleteAll(ctx context.Context, queries []Query) ([]DeleteResult, error)
-	Close(ctx context.Context) error
+	CreateNamespace(ctx context.Context, namespace string, properties map[string]VectorStoreProperties) error
+	GetChunk(ctx context.Context, namespace string, id string) (SearchResult, error)
+	GetChunks(ctx context.Context, namespace string, ids []string) ([]SearchResult, error)
+	GetAll(ctx context.Context, namespace string, queries []Query, selectFields []string, cursor *string, limit int64) ([]SearchResult, *string, error)
+	GetNearest(ctx context.Context, namespace string, vector []float32, queries []Query, selectFields []string, threshold float64, limit int64) ([]SearchResult, error)
+	Add(ctx context.Context, namespace string, id string, embedding []float32, metadata map[string]interface{}) error
+	Delete(ctx context.Context, namespace string, id string) error
+	DeleteAll(ctx context.Context, namespace string, queries []Query) ([]DeleteResult, error)
+	Close(ctx context.Context, namespace string) error
 }
 
 // Config represents the configuration for the vector store.

@@ -143,6 +143,7 @@ type Plugin struct {
 // Plugin constants
 const (
 	PluginName             string        = "semantic_cache"
+	VectorStoreClassName   string        = "BifrostSemanticCachePlugin"
 	PluginLoggerPrefix     string        = "[Semantic Cache]"
 	CacheConnectionTimeout time.Duration = 5 * time.Second
 	CacheSetTimeout        time.Duration = 30 * time.Second
@@ -151,6 +152,45 @@ const (
 )
 
 var SelectFields = []string{"request_hash", "response", "stream_chunks", "expires_at", "cache_key", "provider", "model"}
+
+var VectorStoreProperties = map[string]vectorstore.VectorStoreProperties{
+	"request_hash": {
+		DataType:    vectorstore.VectorStorePropertyTypeString,
+		Description: "The hash of the request",
+	},
+	"response": {
+		DataType:    vectorstore.VectorStorePropertyTypeString,
+		Description: "The response from the provider",
+	},
+	"stream_chunks": {
+		DataType:    vectorstore.VectorStorePropertyTypeStringArray,
+		Description: "The stream chunks from the provider",
+	},
+	"expires_at": {
+		DataType:    vectorstore.VectorStorePropertyTypeInteger,
+		Description: "The expiration time of the cache entry",
+	},
+	"cache_key": {
+		DataType:    vectorstore.VectorStorePropertyTypeString,
+		Description: "The cache key from the request",
+	},
+	"provider": {
+		DataType:    vectorstore.VectorStorePropertyTypeString,
+		Description: "The provider used for the request",
+	},
+	"model": {
+		DataType:    vectorstore.VectorStorePropertyTypeString,
+		Description: "The model used for the request",
+	},
+	"params_hash": {
+		DataType:    vectorstore.VectorStorePropertyTypeString,
+		Description: "The hash of the parameters used for the request",
+	},
+	"from_bifrost_semantic_cache_plugin": {
+		DataType:    vectorstore.VectorStorePropertyTypeBoolean,
+		Description: "Whether the cache entry was created by the BifrostSemanticCachePlugin",
+	},
+}
 
 type PluginAccount struct {
 	provider schemas.ModelProvider
@@ -227,6 +267,10 @@ func Init(ctx context.Context, config Config, logger schemas.Logger, store vecto
 		return nil, fmt.Errorf("failed to initialize bifrost for semantic cache: %w", err)
 	}
 
+	if err := store.CreateNamespace(ctx, VectorStoreClassName, VectorStoreProperties); err != nil {
+		return nil, fmt.Errorf("failed to create namespace for semantic cache: %w", err)
+	}
+
 	return &Plugin{
 		store:  store,
 		config: config,
@@ -239,14 +283,14 @@ func Init(ctx context.Context, config Config, logger schemas.Logger, store vecto
 type ContextKey string
 
 const (
-	requestIDKey        ContextKey = "semantic_cache_request_id"
-	requestHashKey      ContextKey = "semantic_cache_request_hash"
-	requestEmbeddingKey ContextKey = "semantic_cache_embedding"
-	requestMetadataKey  ContextKey = "semantic_cache_metadata"
-	requestModelKey     ContextKey = "semantic_cache_model"
-	requestProviderKey  ContextKey = "semantic_cache_provider"
-	isCacheHitKey       ContextKey = "semantic_cache_is_cache_hit"
-	CacheHitTypeKey     ContextKey = "semantic_cache_cache_hit_type"
+	requestIDKey         ContextKey = "semantic_cache_request_id"
+	requestHashKey       ContextKey = "semantic_cache_request_hash"
+	requestEmbeddingKey  ContextKey = "semantic_cache_embedding"
+	requestParamsHashKey ContextKey = "semantic_cache_params_hash"
+	requestModelKey      ContextKey = "semantic_cache_model"
+	requestProviderKey   ContextKey = "semantic_cache_provider"
+	isCacheHitKey        ContextKey = "semantic_cache_is_cache_hit"
+	CacheHitTypeKey      ContextKey = "semantic_cache_cache_hit_type"
 )
 
 type CacheType string
@@ -448,14 +492,10 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 		defer cancel()
 
 		// Get metadata from context
-		metadata, _ := (*ctx).Value(requestMetadataKey).(map[string]interface{})
-		if metadata == nil {
-			// Default to empty metadata if not provided in context (common for non-parameterized requests)
-			metadata = make(map[string]interface{})
-		}
+		paramsHash, _ := (*ctx).Value(requestParamsHashKey).(string)
 
 		// Build unified metadata with provider, model, and all params
-		unifiedMetadata := plugin.buildUnifiedMetadata(provider, model, metadata, hash, cacheKey, cacheTTL)
+		unifiedMetadata := plugin.buildUnifiedMetadata(provider, model, paramsHash, hash, cacheKey, cacheTTL)
 
 		// Handle streaming vs non-streaming responses
 		if plugin.isStreamingRequest(requestType) {
@@ -504,7 +544,7 @@ func (plugin *Plugin) Cleanup() error {
 		},
 	}
 
-	results, err := plugin.store.DeleteAll(ctx, queries)
+	results, err := plugin.store.DeleteAll(ctx, VectorStoreClassName, queries)
 	if err != nil {
 		plugin.logger.Warn(fmt.Sprintf("%s Failed to delete cache entries: %v", PluginLoggerPrefix, err))
 		return err
@@ -548,7 +588,7 @@ func (plugin *Plugin) ClearCacheForKey(cacheKey string) error {
 		},
 	}
 
-	results, err := plugin.store.DeleteAll(context.Background(), queries)
+	results, err := plugin.store.DeleteAll(context.Background(), VectorStoreClassName, queries)
 	if err != nil {
 		plugin.logger.Warn(fmt.Sprintf("%s Failed to delete cache entries for key '%s': %v", PluginLoggerPrefix, cacheKey, err))
 		return err
@@ -575,7 +615,7 @@ func (plugin *Plugin) ClearCacheForKey(cacheKey string) error {
 //   - error: Any error that occurred during cache key deletion
 func (plugin *Plugin) ClearCacheForRequestID(requestID string) error {
 	// With the unified VectorStore interface, we delete the single entry by its UUID
-	if err := plugin.store.Delete(context.Background(), requestID); err != nil {
+	if err := plugin.store.Delete(context.Background(), VectorStoreClassName, requestID); err != nil {
 		plugin.logger.Warn(fmt.Sprintf("%s Failed to delete cache entry: %v", PluginLoggerPrefix, err))
 		return err
 	}
