@@ -78,7 +78,7 @@ jobs:
 
   framework-release:
     needs: [detect-changes, core-release]
-    if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.framework-needs-release == 'true' && (needs.core-release.result == 'success' || needs.core-release.result == 'skipped')"
+    if: "!contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.framework-needs-release == 'true' && (needs.core-release.result == 'success' || needs.core-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -126,7 +126,7 @@ jobs:
 
   plugins-release:
     needs: [detect-changes, core-release, framework-release]
-    if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.plugins-need-release == 'true' && (needs.framework-release.result == 'success' || needs.framework-release.result == 'skipped')"
+    if: "!contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.plugins-need-release == 'true' && (needs.core-release.result == 'success' || needs.core-release.result == 'skipped') && (needs.framework-release.result == 'success' || needs.framework-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -181,7 +181,7 @@ jobs:
 
   bifrost-http-release:
     needs: [detect-changes, core-release, framework-release, plugins-release]
-    if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.bifrost-http-needs-release == 'true' && (needs.plugins-release.result == 'success' || needs.plugins-release.result == 'skipped')"
+    if: "!contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.bifrost-http-needs-release == 'true' && (needs.core-release.result == 'success' || needs.core-release.result == 'skipped') && (needs.framework-release.result == 'success' || needs.framework-release.result == 'skipped') && (needs.plugins-release.result == 'success' || needs.plugins-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -239,7 +239,7 @@ jobs:
   # Docker build amd64
   docker-build-amd64:
     needs: [detect-changes, bifrost-http-release]
-    if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
+    if: "!contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -282,7 +282,7 @@ jobs:
   # Docker build arm64
   docker-build-arm64:
       needs: [detect-changes, bifrost-http-release]
-      if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
+      if: "!contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
       runs-on: ubuntu-24.04-arm
       permissions:
         contents: write
@@ -325,7 +325,7 @@ jobs:
   # Docker manifest   
   docker-manifest:
       needs: [detect-changes, docker-build-amd64, docker-build-arm64]
-      if: "always() && needs.docker-build-amd64.result == 'success' && needs.docker-build-arm64.result == 'success'"
+      if: "needs.docker-build-amd64.result == 'success' && needs.docker-build-arm64.result == 'success'"
       runs-on: ubuntu-latest
       env:
         REGISTRY: docker.io
