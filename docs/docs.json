@@ -69,7 +69,7 @@
             ]
           },
           {
-            "group": "Integrations",
+            "group": "Provider Integrations",
             "icon": "plug",
             "pages": [
               "integrations/what-is-an-integration",
@@ -99,7 +99,8 @@
                 "icon": "puzzle-piece",
                 "pages": [
                   "features/plugins/mocker",
-                  "features/plugins/jsonparser"
+                  "features/plugins/jsonparser",
+                  "features/plugins/weaviate"
                 ]
               }
             ]
