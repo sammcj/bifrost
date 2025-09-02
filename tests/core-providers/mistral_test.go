@@ -20,6 +20,7 @@ func TestMistral(t *testing.T) {
 		Provider:  schemas.Mistral,
 		ChatModel: "pixtral-12b-latest",
 		TextModel: "", // Mistral doesn't support text completion in newer models
+		EmbeddingModel: "mistral-embed",
 		Scenarios: config.TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,
@@ -34,6 +35,7 @@ func TestMistral(t *testing.T) {
 			MultipleImages:        true,
 			CompleteEnd2End:       true,
 			ProviderSpecific:      true,
+			Embedding:             true,
 		},
 	}
 

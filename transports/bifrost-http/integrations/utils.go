@@ -52,6 +52,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -385,6 +386,10 @@ func buildProviderSchemas() map[schemas.ModelProvider]ProviderParameterSchema {
 		"vocab_only":       true,
 	}
 
+	geminiParams := mergeWithDefaults(openAIParams)
+	geminiParams["top_k"] = true
+	geminiParams["stop_sequences"] = true
+
 	return map[schemas.ModelProvider]ProviderParameterSchema{
 		schemas.OpenAI:    {ValidParams: mergeWithDefaults(openAIParams)},
 		schemas.Azure:     {ValidParams: mergeWithDefaults(openAIParams)},
@@ -398,6 +403,7 @@ func buildProviderSchemas() map[schemas.ModelProvider]ProviderParameterSchema {
 		schemas.Cerebras:  {ValidParams: mergeWithDefaults(openAIParams)},
 		schemas.SGL:       {ValidParams: mergeWithDefaults(openAIParams)},
 		schemas.Parasail:  {ValidParams: mergeWithDefaults(openAIParams)},
+		schemas.Gemini:    {ValidParams: geminiParams},
 	}
 }
 
@@ -931,6 +937,7 @@ var ValidProviders = map[schemas.ModelProvider]bool{
 	schemas.SGL:       true,
 	schemas.Parasail:  true,
 	schemas.Cerebras:  true,
+	schemas.Gemini:    true,
 }
 
 // ParseModelString extracts provider and model from a model string.
@@ -1010,6 +1017,11 @@ func GetProviderFromModel(model string) schemas.ModelProvider {
 		return schemas.Cohere
 	}
 
+	// Google GenAI Models - Gemini and Palm family
+	if isGeminiModel(modelLower) {
+		return schemas.Gemini
+	}
+
 	// Default to OpenAI for unknown models (most LiteLLM compatible)
 	return schemas.OpenAI
 }
@@ -1045,6 +1057,13 @@ func isAnthropicModel(model string) bool {
 	}
 
 	return matchesAnyPattern(model, anthropicPatterns)
+}
+
+var geminiRegexp = regexp.MustCompile(`\b(gemini|gemini-embedding|palm|bison|gecko)\b`)
+
+// isGeminiModel checks for Google Gemini model patterns using strict regex matching
+func isGeminiModel(model string) bool {
+	return geminiRegexp.MatchString(model)
 }
 
 // isVertexModel checks for Google Vertex AI model patterns

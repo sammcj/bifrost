@@ -155,7 +155,7 @@ type GeminiChatRequestErrorStruct struct {
 }
 
 func (r *GeminiChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
-	provider, model := integrations.ParseModelString(r.Model, schemas.Vertex, false)
+	provider, model := integrations.ParseModelString(r.Model, schemas.Gemini, false)
 
 	bifrostReq := &schemas.BifrostRequest{
 		Provider: provider,
