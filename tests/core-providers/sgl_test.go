@@ -14,7 +14,7 @@ func TestSGL(t *testing.T) {
 		t.Fatalf("Error initializing test setup: %v", err)
 	}
 	defer cancel()
-	defer client.Cleanup()
+	defer client.Shutdown()
 
 	testConfig := config.ComprehensiveTestConfig{
 		Provider:  schemas.SGL,
