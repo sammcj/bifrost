@@ -213,7 +213,7 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, model string
 			return nil, &schemas.BifrostError{
 				IsBifrostError: false,
 				Error: schemas.ErrorField{
-					Type:    StrPtr(schemas.RequestCancelled),
+					Type:    Ptr(schemas.RequestCancelled),
 					Message: fmt.Sprintf("Request cancelled or timed out by context: %v", ctx.Err()),
 					Error:   err,
 				},

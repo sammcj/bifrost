@@ -3,6 +3,7 @@
 package providers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -148,7 +149,7 @@ func makeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *f
 		return &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: schemas.ErrorField{
-				Type:    StrPtr(schemas.RequestCancelled),
+				Type:    Ptr(schemas.RequestCancelled),
 				Message: fmt.Sprintf("Request cancelled or timed out by context: %v", ctx.Err()),
 				Error:   ctx.Err(),
 			},
@@ -377,16 +378,10 @@ func getRoleFromMessage(msg map[string]interface{}) (schemas.ModelChatMessageRol
 	return "", false // Role is of an unexpected or invalid type
 }
 
-// float64Ptr creates a pointer to a float64 value.
-// This is a helper function for creating pointers to float64 values.
-func float64Ptr(f float64) *float64 {
-	return &f
-}
-
-// StrPtr creates a pointer to a string value.
-// This is a helper function for creating pointers to string values.
-func StrPtr(s string) *string {
-	return &s
+// Ptr creates a pointer to any value.
+// This is a helper function for creating pointers to values.
+func Ptr[T any](v T) *T {
+	return &v
 }
 
 //* IMAGE UTILS *//
@@ -547,6 +542,63 @@ func isLikelyBase64(s string) bool {
 
 	// Check if it contains only base64 characters using pre-compiled regex
 	return base64Regex.MatchString(cleanData)
+}
+
+var (
+	riff = []byte("RIFF")
+	wave = []byte("WAVE")
+	id3  = []byte("ID3")
+	form = []byte("FORM")
+	aiff = []byte("AIFF")
+	aifc = []byte("AIFC")
+	flac = []byte("fLaC")
+	oggs = []byte("OggS")
+	adif = []byte("ADIF")
+)
+
+// detectAudioMimeType attempts to detect the MIME type from audio file headers
+// Gemini supports: WAV, MP3, AIFF, AAC, OGG Vorbis, FLAC
+func detectAudioMimeType(audioData []byte) string {
+	if len(audioData) < 4 {
+		return "audio/mp3"
+	}
+	// WAV (RIFF/WAVE)
+	if len(audioData) >= 12 &&
+		bytes.Equal(audioData[:4], riff) &&
+		bytes.Equal(audioData[8:12], wave) {
+		return "audio/wav"
+	}
+	// MP3: ID3v2 tag (keep this check for MP3)
+	if len(audioData) >= 3 && bytes.Equal(audioData[:3], id3) {
+		return "audio/mp3"
+	}
+	// AAC: ADIF or ADTS (0xFFF sync) - check before MP3 frame sync to avoid misclassification
+	if bytes.HasPrefix(audioData, adif) {
+		return "audio/aac"
+	}
+	if len(audioData) >= 2 && audioData[0] == 0xFF && (audioData[1]&0xF6) == 0xF0 {
+		return "audio/aac"
+	}
+	// AIFF / AIFC (map both to audio/aiff)
+	if len(audioData) >= 12 && bytes.Equal(audioData[:4], form) &&
+		(bytes.Equal(audioData[8:12], aiff) || bytes.Equal(audioData[8:12], aifc)) {
+		return "audio/aiff"
+	}
+	// FLAC
+	if bytes.HasPrefix(audioData, flac) {
+		return "audio/flac"
+	}
+	// OGG container
+	if bytes.HasPrefix(audioData, oggs) {
+		return "audio/ogg"
+	}
+	// MP3: MPEG frame sync (cover common variants) - check after AAC to avoid misclassification
+	if len(audioData) >= 2 && audioData[0] == 0xFF &&
+		(audioData[1] == 0xFB || audioData[1] == 0xF3 || audioData[1] == 0xF2 || audioData[1] == 0xFA) {
+		return "audio/mp3"
+	}
+	// Fallback within supported set
+	return "audio/mp3"
 }
 
 // newUnsupportedOperationError creates a standardized error for unsupported operations.

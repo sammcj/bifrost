@@ -18,7 +18,7 @@ require (
 	github.com/maximhq/bifrost/plugins/telemetry v1.2.0
 	github.com/prometheus/client_golang v1.23.0
 	github.com/valyala/fasthttp v1.65.0
-	google.golang.org/genai v1.20.0
+	google.golang.org/genai v1.22.0
 	gorm.io/gorm v1.30.1
 )
 

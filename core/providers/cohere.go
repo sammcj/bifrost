@@ -334,8 +334,8 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model string
 		ExtraFields: schemas.BifrostResponseExtraFields{
 			Provider: providerName,
 			BilledUsage: &schemas.BilledLLMUsage{
-				PromptTokens:     float64Ptr(response.Meta.BilledUnits.InputTokens),
-				CompletionTokens: float64Ptr(response.Meta.BilledUnits.OutputTokens),
+				PromptTokens:     Ptr(response.Meta.BilledUnits.InputTokens),
+				CompletionTokens: Ptr(response.Meta.BilledUnits.OutputTokens),
 			},
 			ChatHistory: convertChatHistory(response.ChatHistory),
 		},
@@ -844,7 +844,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 
 								BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
 									Delta: schemas.BifrostStreamDelta{
-										Role: StrPtr(string(schemas.ModelChatMessageRoleAssistant)),
+										Role: Ptr(string(schemas.ModelChatMessageRoleAssistant)),
 									},
 								},
 							},
@@ -978,7 +978,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 								Index: 0,
 								BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
 									Delta: schemas.BifrostStreamDelta{
-										Role:      StrPtr(string(schemas.ModelChatMessageRoleAssistant)),
+										Role:      Ptr(string(schemas.ModelChatMessageRoleAssistant)),
 										Content:   &stopEvent.Response.Text,
 										ToolCalls: toolCalls,
 									},
