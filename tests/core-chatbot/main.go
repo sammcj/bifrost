@@ -14,6 +14,8 @@ import (
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	// "github.com/maximhq/bifrost/core/schemas/meta" // FIXME: meta package doesn't exist
 )
 
@@ -270,7 +272,7 @@ func NewChatSession(config ChatbotConfig) (*ChatSession, error) {
 
 	}
 
-	client, err := bifrost.Init(schemas.BifrostConfig{
+	client, err := bifrost.Init(context.Background(), schemas.BifrostConfig{
 		Account:   account,
 		Plugins:   []schemas.Plugin{}, // No separate plugins needed - MCP is integrated
 		Logger:    bifrost.NewDefaultLogger(schemas.LogLevelInfo),
@@ -727,7 +729,7 @@ func (s *ChatSession) PrintHistory() {
 			content = strings.Join(textParts, "\n")
 		}
 
-		role := strings.Title(string(msg.Role))
+		role := cases.Title(language.English).String(string(msg.Role))
 		timestamp := fmt.Sprintf("[%d]", i)
 
 		fmt.Printf("%s %s: %s\n\n", timestamp, role, content)
@@ -737,7 +739,7 @@ func (s *ChatSession) PrintHistory() {
 // Cleanup closes the chat session and cleans up resources
 func (s *ChatSession) Cleanup() {
 	if s.client != nil {
-		s.client.Cleanup()
+		s.client.Shutdown()
 	}
 }
 
