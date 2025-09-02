@@ -18,7 +18,7 @@ func TestCustomProvider(t *testing.T) {
 		t.Fatalf("Error initializing test setup: %v", err)
 	}
 	defer cancel()
-	defer client.Cleanup()
+	defer client.Shutdown()
 
 	testConfig := config.ComprehensiveTestConfig{
 		Provider:  config.ProviderOpenAICustom,
@@ -60,7 +60,7 @@ func TestCustomProvider_DisallowedOperation(t *testing.T) {
 		t.Fatalf("Error initializing test setup: %v", err)
 	}
 	defer cancel()
-	defer client.Cleanup()
+	defer client.Shutdown()
 
 
 	// Create a speech request to the custom provider
@@ -98,7 +98,7 @@ func TestCustomProvider_MismatchedIdentity(t *testing.T) {
 		t.Fatalf("Error initializing test setup: %v", err)
 	}
 	defer cancel()
-	defer client.Cleanup()
+	defer client.Shutdown()
 
 	// Use a provider that doesn't exist
 	wrongProvider := schemas.ModelProvider("wrong-provider")

@@ -31,11 +31,11 @@ const (
 // The function:
 //  1. Creates a comprehensive test account instance
 //  2. Configures Bifrost with the account and default logger
-func getBifrost() (*bifrost.Bifrost, error) {
+func getBifrost(ctx context.Context) (*bifrost.Bifrost, error) {
 	account := ComprehensiveTestAccount{}
 
 	// Initialize Bifrost
-	b, err := bifrost.Init(schemas.BifrostConfig{
+	b, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account: &account,
 		Plugins: nil,
 		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelDebug),
@@ -49,11 +49,12 @@ func getBifrost() (*bifrost.Bifrost, error) {
 
 // SetupTest initializes a test environment with timeout context
 func SetupTest() (*bifrost.Bifrost, context.Context, context.CancelFunc, error) {
-	client, err := getBifrost()
+	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	client, err := getBifrost(ctx)
 	if err != nil {
+		cancel()
 		return nil, nil, nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
 	return client, ctx, cancel, nil
 }
