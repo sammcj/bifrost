@@ -14,6 +14,15 @@ import (
 
 var fnTypePtr = bifrost.Ptr(string(schemas.ToolChoiceTypeFunction))
 
+// EmbeddingRequest represents a single embedding request in a batch
+type EmbeddingRequest struct {
+	Content              *CustomContent `json:"content,omitempty"`
+	TaskType             *string        `json:"taskType,omitempty"`
+	Title                *string        `json:"title,omitempty"`
+	OutputDimensionality *int           `json:"outputDimensionality,omitempty"`
+	Model                string         `json:"model,omitempty"`
+}
+
 // CustomBlob handles URL-safe base64 decoding for Google GenAI requests
 type CustomBlob struct {
 	Data     []byte `json:"data,omitempty"`
@@ -124,8 +133,9 @@ func ensureExtraParams(bifrostReq *schemas.BifrostRequest) {
 }
 
 type GeminiChatRequest struct {
-	Model              string                     `json:"model,omitempty"` // Model field for explicit model specification
-	Contents           []CustomContent            `json:"contents"`
+	Model              string                     `json:"model,omitempty"`    // Model field for explicit model specification
+	Contents           []CustomContent            `json:"contents,omitempty"` // For chat completion requests
+	Requests           []EmbeddingRequest         `json:"requests,omitempty"` // For batch embedding requests
 	SystemInstruction  *CustomContent             `json:"systemInstruction,omitempty"`
 	GenerationConfig   genai_sdk.GenerationConfig `json:"generationConfig,omitempty"`
 	SafetySettings     []genai_sdk.SafetySetting  `json:"safetySettings,omitempty"`
@@ -135,11 +145,17 @@ type GeminiChatRequest struct {
 	CachedContent      string                     `json:"cachedContent,omitempty"`
 	ResponseModalities []string                   `json:"responseModalities,omitempty"`
 	Stream             bool                       `json:"-"` // Internal field to track streaming requests
+	IsEmbedding        bool                       `json:"-"` // Internal field to track if this is an embedding request
+
+	// Embedding-specific parameters
+	TaskType             *string `json:"taskType,omitempty"`
+	Title                *string `json:"title,omitempty"`
+	OutputDimensionality *int    `json:"outputDimensionality,omitempty"`
 }
 
 // IsStreamingRequested implements the StreamingRequest interface
 func (r *GeminiChatRequest) IsStreamingRequested() bool {
-	return r.Stream
+	return r.Stream && !r.IsEmbedding
 }
 
 // GeminiChatRequestError represents a Gemini chat completion error response
@@ -157,6 +173,65 @@ type GeminiChatRequestErrorStruct struct {
 func (r *GeminiChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
 	provider, model := integrations.ParseModelString(r.Model, schemas.Gemini, false)
 
+	if provider == schemas.Vertex {
+		// Add google/ prefix for Bifrost if not already present
+		if !strings.HasPrefix(model, "google/") {
+			model = "google/" + model
+		}
+	}
+
+	// Handle embedding requests
+	if r.IsEmbedding {
+		// Extract texts from content (embedding requests) or contents (chat completion requests)
+		var texts []string
+
+		// Check for batch embedding requests first
+		if len(r.Requests) > 0 {
+			for _, req := range r.Requests {
+				if req.Content != nil {
+					for _, part := range req.Content.Parts {
+						if part.Text != "" {
+							texts = append(texts, part.Text)
+						}
+					}
+				}
+			}
+		}
+
+		// Fallback to contents (plural) for backward compatibility
+		if len(texts) == 0 {
+			for _, content := range r.Contents {
+				for _, part := range content.Parts {
+					if part.Text != "" {
+						texts = append(texts, part.Text)
+					}
+				}
+			}
+		}
+
+		// Create embedding input
+		embeddingInput := &schemas.EmbeddingInput{
+			Texts: texts,
+		}
+
+		bifrostReq := &schemas.BifrostRequest{
+			Provider: provider,
+			Model:    model,
+			Input: schemas.RequestInput{
+				EmbeddingInput: embeddingInput,
+			},
+		}
+
+		// Convert embedding parameters
+		params := r.convertEmbeddingParameters()
+		if params != nil {
+			bifrostReq.Params = params
+		}
+
+		return bifrostReq
+	}
+
+	// Handle chat completion requests
 	bifrostReq := &schemas.BifrostRequest{
 		Provider: provider,
 		Model:    model,
@@ -393,6 +468,41 @@ func (r *GeminiChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
 	return bifrostReq
 }
 
+// convertEmbeddingParameters converts Gemini embedding request parameters to ModelParameters
+func (r *GeminiChatRequest) convertEmbeddingParameters() *schemas.ModelParameters {
+	params := &schemas.ModelParameters{
+		ExtraParams: make(map[string]interface{}),
+	}
+
+	// Check for parameters from batch embedding requests first
+	if len(r.Requests) > 0 {
+		// Use parameters from the first request in the batch
+		firstReq := r.Requests[0]
+		if firstReq.TaskType != nil {
+			params.ExtraParams["taskType"] = *firstReq.TaskType
+		}
+		if firstReq.Title != nil {
+			params.ExtraParams["title"] = *firstReq.Title
+		}
+		if firstReq.OutputDimensionality != nil {
+			params.Dimensions = firstReq.OutputDimensionality
+		}
+	} else {
+		// Fallback to top-level embedding parameters for single requests
+		if r.TaskType != nil {
+			params.ExtraParams["taskType"] = *r.TaskType
+		}
+		if r.Title != nil {
+			params.ExtraParams["title"] = *r.Title
+		}
+		if r.OutputDimensionality != nil {
+			params.Dimensions = r.OutputDimensionality
+		}
+	}
+
+	return params
+}
+
 // convertGenerationConfigToParams converts Gemini GenerationConfig to ModelParameters
 func (r *GeminiChatRequest) convertGenerationConfigToParams() *schemas.ModelParameters {
 	params := &schemas.ModelParameters{
@@ -472,11 +582,18 @@ func (r *GeminiChatRequest) convertSchemaToFunctionParameters(schema *genai_sdk.
 	return params
 }
 
-func DeriveGenAIFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *genai_sdk.GenerateContentResponse {
+func DeriveGenAIFromBifrostResponse(bifrostResp *schemas.BifrostResponse) interface{} {
 	if bifrostResp == nil {
 		return nil
 	}
 
+	// Check if this is an embedding response by looking for embedding data
+	if len(bifrostResp.Data) > 0 {
+		// This is an embedding response
+		return DeriveGeminiEmbeddingFromBifrostResponse(bifrostResp)
+	}
+
+	// This is a chat completion response
 	genaiResp := &genai_sdk.GenerateContentResponse{
 		Candidates: make([]*genai_sdk.Candidate, len(bifrostResp.Choices)),
 	}
@@ -686,6 +803,86 @@ func DeriveGeminiStreamFromBifrostResponse(bifrostResp *schemas.BifrostResponse)
 	}
 	if bifrostResp.Model != "" {
 		genaiResp.ModelVersion = bifrostResp.Model
+	}
+
+	return genaiResp
+}
+
+// GeminiEmbeddingResponse represents a Google GenAI embedding response
+type GeminiEmbeddingResponse struct {
+	Embeddings []GeminiEmbedding     `json:"embeddings"`
+	Metadata   *EmbedContentMetadata `json:"metadata,omitempty"`
+}
+
+// GeminiEmbedding represents a single embedding in the response
+type GeminiEmbedding struct {
+	Values     []float32                   `json:"values"`
+	Statistics *ContentEmbeddingStatistics `json:"statistics,omitempty"`
+}
+
+// EmbedContentMetadata represents request-level metadata for Vertex API
+type EmbedContentMetadata struct {
+	BillableCharacterCount int32 `json:"billableCharacterCount,omitempty"`
+}
+
+// ContentEmbeddingStatistics represents statistics of the input text
+type ContentEmbeddingStatistics struct {
+	TokenCount int32 `json:"tokenCount,omitempty"`
+}
+
+// DeriveGeminiEmbeddingFromBifrostResponse converts a Bifrost embedding response to Google GenAI format
+func DeriveGeminiEmbeddingFromBifrostResponse(bifrostResp *schemas.BifrostResponse) *GeminiEmbeddingResponse {
+	if bifrostResp == nil || len(bifrostResp.Data) == 0 {
+		return nil
+	}
+
+	genaiResp := &GeminiEmbeddingResponse{
+		Embeddings: make([]GeminiEmbedding, len(bifrostResp.Data)),
+	}
+
+	// Convert embeddings
+	for i, embedding := range bifrostResp.Data {
+		var values []float32
+		if embedding.Embedding.EmbeddingArray != nil {
+			values = *embedding.Embedding.EmbeddingArray
+		}
+
+		geminiEmbedding := GeminiEmbedding{
+			Values: values,
+		}
+
+		// Check for Vertex-specific statistics in response extra fields
+		if bifrostResp.ExtraFields.RawResponse != nil {
+			if rawMap, ok := bifrostResp.ExtraFields.RawResponse.(map[string]interface{}); ok {
+				// Check if this is an array of embeddings with individual statistics
+				if embeddings, ok := rawMap["embeddings"].([]interface{}); ok && len(embeddings) > i {
+					if embeddingMap, ok := embeddings[i].(map[string]interface{}); ok {
+						if statistics, ok := embeddingMap["statistics"].(map[string]interface{}); ok {
+							if tokenCount, ok := statistics["tokenCount"].(float64); ok {
+								geminiEmbedding.Statistics = &ContentEmbeddingStatistics{
+									TokenCount: int32(tokenCount),
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		genaiResp.Embeddings[i] = geminiEmbedding
+	}
+
+	// Check for Vertex-specific metadata in response extra fields
+	if bifrostResp.ExtraFields.RawResponse != nil {
+		if rawMap, ok := bifrostResp.ExtraFields.RawResponse.(map[string]interface{}); ok {
+			if metadata, ok := rawMap["metadata"].(map[string]interface{}); ok {
+				if billableCharCount, ok := metadata["billableCharacterCount"].(float64); ok {
+					genaiResp.Metadata = &EmbedContentMetadata{
+						BillableCharacterCount: int32(billableCharCount),
+					}
+				}
+			}
+		}
 	}
 
 	return genaiResp
