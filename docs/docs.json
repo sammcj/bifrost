@@ -99,8 +99,7 @@
                 "icon": "puzzle-piece",
                 "pages": [
                   "features/plugins/mocker",
-                  "features/plugins/jsonparser",
-                  "features/plugins/weaviate"
+                  "features/plugins/jsonparser"
                 ]
               }
             ]
@@ -143,6 +142,20 @@
               "architecture/core/request-flow",
               "architecture/core/mcp",
               "architecture/core/plugins"
+              
+            ]
+          },
+          {
+            "group" : "Framework",
+            "icon" : "screwdriver-wrench",
+            "pages" : [
+              {
+                "group" : "Vector Store",
+                "icon": "hexagon-nodes",
+                "pages" : [
+                  "architecture/framework/vector-store/weaviate"
+                ]
+              }
             ]
           }
         ]

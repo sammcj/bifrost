@@ -201,14 +201,14 @@ bifrostConfig := schemas.BifrostConfig{
 
 ## Related Documentation
 
-For detailed information about semantic caching functionality, refer to the following sections in the [Semantic Caching](../semantic-caching) documentation:
+For detailed information about semantic caching functionality, refer to the following sections in the [Semantic Caching](../../../features/semantic-caching) documentation:
 
 | Topic | Section | Description |
 |-------|---------|-------------|
-| **Cache Triggering** | [Cache Triggering](../semantic-caching#cache-triggering) | How to enable caching with cache keys in Go SDK and HTTP API |
-| **Per-Request Overrides** | [Per-Request Overrides](../semantic-caching#per-request-overrides) | Override TTL and similarity threshold per request |
-| **Cache Management** | [Cache Management](../semantic-caching#cache-management) | Clear cache entries and manage cached responses |
-| **Cache Metadata** | [Cache Metadata](../semantic-caching#cache-management) | Understand cache hit information and debug data |
+| **Cache Triggering** | [Cache Triggering](../../../features/semantic-caching#cache-triggering) | How to enable caching with cache keys in Go SDK and HTTP API |
+| **Per-Request Overrides** | [Per-Request Overrides](../../../features/semantic-caching#per-request-overrides) | Override TTL and similarity threshold per request |
+| **Cache Management** | [Cache Management](../../../features/semantic-caching#cache-management) | Clear cache entries and manage cached responses |
+| **Cache Metadata** | [Cache Metadata](../../../features/semantic-caching#cache-management) | Understand cache hit information and debug data |
 
 ---
 
@@ -243,7 +243,3 @@ Cache responses for similar analytical queries about datasets, dashboards, or re
 <Info>
 **Vector Store Requirement**: Weaviate integration requires a configured vector store before the semantic cache plugin can function. Ensure Weaviate is running and accessible before enabling semantic caching.
 </Info>
-
-<Warning>
-**Production Readiness**: For production deployments, use Weaviate Cloud or a properly secured self-hosted instance with authentication enabled.
-</Warning>
