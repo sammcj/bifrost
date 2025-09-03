@@ -19,36 +19,39 @@ type GenAIRouter struct {
 
 // CreateGenAIRouteConfigs creates a route configurations for GenAI endpoints.
 func CreateGenAIRouteConfigs(pathPrefix string) []integrations.RouteConfig {
-	return []integrations.RouteConfig{
-		{
-			Path:   pathPrefix + "/v1beta/models/{model}",
-			Method: "POST",
-			GetRequestTypeInstance: func() interface{} {
-				return &GeminiChatRequest{}
-			},
-			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
-				if geminiReq, ok := req.(*GeminiChatRequest); ok {
-					return geminiReq.ConvertToBifrostRequest(), nil
-				}
-				return nil, errors.New("invalid request type")
-			},
+	var routes []integrations.RouteConfig
+
+	// Chat completions endpoint
+	routes = append(routes, integrations.RouteConfig{
+		Path:   pathPrefix + "/v1beta/models/{model}",
+		Method: "POST",
+		GetRequestTypeInstance: func() interface{} {
+			return &GeminiChatRequest{}
+		},
+		RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
+			if geminiReq, ok := req.(*GeminiChatRequest); ok {
+				return geminiReq.ConvertToBifrostRequest(), nil
+			}
+			return nil, errors.New("invalid request type")
+		},
+		ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
+			return DeriveGenAIFromBifrostResponse(resp), nil
+		},
+		ErrorConverter: func(err *schemas.BifrostError) interface{} {
+			return DeriveGeminiErrorFromBifrostError(err)
+		},
+		StreamConfig: &integrations.StreamConfig{
 			ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
-				return DeriveGenAIFromBifrostResponse(resp), nil
+				return DeriveGeminiStreamFromBifrostResponse(resp), nil
 			},
 			ErrorConverter: func(err *schemas.BifrostError) interface{} {
-				return DeriveGeminiErrorFromBifrostError(err)
+				return DeriveGeminiStreamFromBifrostError(err)
 			},
-			StreamConfig: &integrations.StreamConfig{
-				ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
-					return DeriveGeminiStreamFromBifrostResponse(resp), nil
-				},
-				ErrorConverter: func(err *schemas.BifrostError) interface{} {
-					return DeriveGeminiStreamFromBifrostError(err)
-				},
-			},
-			PreCallback: extractAndSetModelFromURL,
 		},
-	}
+		PreCallback: extractAndSetModelFromURL,
+	})
+
+	return routes
 }
 
 // NewGenAIRouter creates a new GenAIRouter with the given bifrost client.
@@ -56,6 +59,12 @@ func NewGenAIRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore) *Gen
 	return &GenAIRouter{
 		GenericRouter: integrations.NewGenericRouter(client, handlerStore, CreateGenAIRouteConfigs("/genai")),
 	}
+}
+
+var embeddingPaths = []string{
+	":embedContent",
+	":batchEmbedContents",
+	":predict",
 }
 
 // extractAndSetModelFromURL extracts model from URL and sets it in the request
@@ -67,6 +76,15 @@ func extractAndSetModelFromURL(ctx *fasthttp.RequestCtx, req interface{}) error 
 
 	modelStr := model.(string)
 
+	// Check if this is an embedding request
+	isEmbedding := false
+	for _, path := range embeddingPaths {
+		if strings.HasSuffix(modelStr, path) {
+			isEmbedding = true
+			break
+		}
+	}
+
 	// Check if this is a streaming request
 	isStreaming := strings.HasSuffix(modelStr, ":streamGenerateContent")
 
@@ -75,6 +93,9 @@ func extractAndSetModelFromURL(ctx *fasthttp.RequestCtx, req interface{}) error 
 		":streamGenerateContent",
 		":generateContent",
 		":countTokens",
+		":embedContent",
+		":batchEmbedContents",
+		":predict",
 	} {
 		modelStr = strings.TrimSuffix(modelStr, sfx)
 	}
@@ -84,16 +105,11 @@ func extractAndSetModelFromURL(ctx *fasthttp.RequestCtx, req interface{}) error 
 		modelStr = modelStr[:len(modelStr)-1]
 	}
 
-	// Add google/ prefix for Bifrost if not already present
-	processedModel := modelStr
-	if !strings.HasPrefix(modelStr, "google/") {
-		processedModel = "google/" + modelStr
-	}
-
-	// Set the model and streaming flag in the request
+	// Set the model and flags in the request
 	if geminiReq, ok := req.(*GeminiChatRequest); ok {
-		geminiReq.Model = processedModel
+		geminiReq.Model = modelStr
 		geminiReq.Stream = isStreaming
+		geminiReq.IsEmbedding = isEmbedding
 		return nil
 	}
 
