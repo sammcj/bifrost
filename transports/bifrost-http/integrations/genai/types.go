@@ -173,7 +173,7 @@ type GeminiChatRequestErrorStruct struct {
 func (r *GeminiChatRequest) ConvertToBifrostRequest() *schemas.BifrostRequest {
 	provider, model := integrations.ParseModelString(r.Model, schemas.Gemini, false)
 
-	if provider == schemas.Vertex {
+	if provider == schemas.Vertex && !r.IsEmbedding {
 		// Add google/ prefix for Bifrost if not already present
 		if !strings.HasPrefix(model, "google/") {
 			model = "google/" + model
