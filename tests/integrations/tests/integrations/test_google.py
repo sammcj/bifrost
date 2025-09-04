@@ -493,7 +493,7 @@ class TestGoogleIntegration:
     def test_14_single_text_embedding(self, google_client, test_config):
         """Test Case 21: Single text embedding generation"""
         response = google_client.models.embed_content(
-            model="google/gemini-embedding-001", contents=EMBEDDINGS_SINGLE_TEXT,
+            model="gemini-embedding-001", contents=EMBEDDINGS_SINGLE_TEXT,
             config=types.EmbedContentConfig(output_dimensionality=1536)
         )
 
