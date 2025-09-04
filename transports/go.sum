@@ -204,8 +204,8 @@ github.com/maximhq/bifrost/core v1.1.30 h1:RojaNGmv66e4oe7dkuDFtS/TiiIbs1RNwqh9J
 github.com/maximhq/bifrost/core v1.1.30/go.mod h1:tf2pFTpoM53UGXXMFYxsaUjMqnCqYDOd9glFgMJvA0c=
 github.com/maximhq/bifrost/framework v1.0.9 h1:/R8tlc5FLtIbSfjmVxE7nvRJzWBlm6sCGVYs1mp1Udg=
 github.com/maximhq/bifrost/framework v1.0.9/go.mod h1:Uq2ZKd+XVOQ8Nj1kxB4tLdEQDUQdJCuwyFFQQA+MxHA=
-github.com/maximhq/bifrost/plugins/governance v1.2.3 h1:vSG+GG2jEzRwIY3yqGKuqG3/k3T6MXUAgLFzA5UuX7I=
-github.com/maximhq/bifrost/plugins/governance v1.2.3/go.mod h1:kKzjdrIKezHP4b2yBUdueHiktp4MXvpgqaWxsQK/e/0=
+github.com/maximhq/bifrost/plugins/governance v1.2.4 h1:Eky/2bcJa78phrwDXErHrCrNZzzs99uX4pjFULBiS4k=
+github.com/maximhq/bifrost/plugins/governance v1.2.4/go.mod h1:kKzjdrIKezHP4b2yBUdueHiktp4MXvpgqaWxsQK/e/0=
 github.com/maximhq/bifrost/plugins/logging v1.2.3 h1:viPsxhcwE6nqAWSpkbmS8QE0EW5y2nFTyIL8r9qaOLU=
 github.com/maximhq/bifrost/plugins/logging v1.2.3/go.mod h1:WyNlLWbPOEmwsDvJDSbmyVuO5Hcdn3SZuPubr2qokvk=
 github.com/maximhq/bifrost/plugins/maxim v1.2.3 h1:6cm1QrGa9fWlrKhIvsZ7p45ibUQI+xomxiZ3x/LRSsI=
