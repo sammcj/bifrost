@@ -258,7 +258,7 @@ jobs:
   # Docker build amd64
   docker-build-amd64:
     needs: [check-skip, detect-changes, bifrost-http-release]
-    if: "needs.check-skip.outputs.should-skip != 'true' && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.detect-changes.outputs.bifrost-http-needs-release == 'false' || needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
+    if: "always() && needs.check-skip.outputs.should-skip != 'true' && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.detect-changes.outputs.bifrost-http-needs-release == 'false' || needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -301,7 +301,7 @@ jobs:
   # Docker build arm64
   docker-build-arm64:
       needs: [check-skip, detect-changes, bifrost-http-release]
-      if: "needs.check-skip.outputs.should-skip != 'true' && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.detect-changes.outputs.bifrost-http-needs-release == 'false' || needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
+      if: "always() && needs.check-skip.outputs.should-skip != 'true' && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.detect-changes.outputs.bifrost-http-needs-release == 'false' || needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
       runs-on: ubuntu-24.04-arm
       permissions:
         contents: write
@@ -344,7 +344,7 @@ jobs:
   # Docker manifest   
   docker-manifest:
       needs: [check-skip, detect-changes, docker-build-amd64, docker-build-arm64]
-      if: "needs.check-skip.outputs.should-skip != 'true' && needs.docker-build-amd64.result == 'success' && needs.docker-build-arm64.result == 'success'"
+      if: "always() && needs.check-skip.outputs.should-skip != 'true' && needs.docker-build-amd64.result == 'success' && needs.docker-build-arm64.result == 'success'"
       runs-on: ubuntu-latest
       env:
         REGISTRY: docker.io
