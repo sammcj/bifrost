@@ -77,10 +77,10 @@ github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWE
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mattn/go-sqlite3 v1.14.32 h1:JD12Ag3oLy1zQA+BNn74xRgaBbdhbNIDYvQUEuuErjs=
 github.com/mattn/go-sqlite3 v1.14.32/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
-github.com/maximhq/bifrost/core v1.1.29 h1:uFsdIQYDCLvujQVriilEvuCjk1eou7Fmk7jFazc2bJI=
-github.com/maximhq/bifrost/core v1.1.29/go.mod h1:tf2pFTpoM53UGXXMFYxsaUjMqnCqYDOd9glFgMJvA0c=
-github.com/maximhq/bifrost/framework v1.0.8 h1:kQJ7N+WT7jgKOuoqoW7a7GKsBy4NwKlggaPXzQUBQz4=
-github.com/maximhq/bifrost/framework v1.0.8/go.mod h1:UyDF8uOUvUthREVIbkZQD+mLOFUmOxehLbKQPXLPpcU=
+github.com/maximhq/bifrost/core v1.1.30 h1:RojaNGmv66e4oe7dkuDFtS/TiiIbs1RNwqh9J+K8pV4=
+github.com/maximhq/bifrost/core v1.1.30/go.mod h1:tf2pFTpoM53UGXXMFYxsaUjMqnCqYDOd9glFgMJvA0c=
+github.com/maximhq/bifrost/framework v1.0.9 h1:/R8tlc5FLtIbSfjmVxE7nvRJzWBlm6sCGVYs1mp1Udg=
+github.com/maximhq/bifrost/framework v1.0.9/go.mod h1:Uq2ZKd+XVOQ8Nj1kxB4tLdEQDUQdJCuwyFFQQA+MxHA=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
