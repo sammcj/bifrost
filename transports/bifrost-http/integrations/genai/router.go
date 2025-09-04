@@ -23,7 +23,7 @@ func CreateGenAIRouteConfigs(pathPrefix string) []integrations.RouteConfig {
 
 	// Chat completions endpoint
 	routes = append(routes, integrations.RouteConfig{
-		Path:   pathPrefix + "/v1beta/models/{model}",
+		Path:   pathPrefix + "/v1beta/models/{model:*}",
 		Method: "POST",
 		GetRequestTypeInstance: func() interface{} {
 			return &GeminiChatRequest{}
