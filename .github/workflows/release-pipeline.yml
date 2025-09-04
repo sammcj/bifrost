@@ -19,8 +19,9 @@ jobs:
     steps:
       - name: Check if pipeline should be skipped
         id: check
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
           FIRST_LINE=$(echo "$COMMIT_MESSAGE" | head -n 1)
           if [[ "$FIRST_LINE" == *"--skip-pipeline"* ]]; then
             echo "should-skip=true" >> $GITHUB_OUTPUT
