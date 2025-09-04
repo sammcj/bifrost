@@ -237,7 +237,7 @@ func (provider *OpenAIProvider) Embedding(ctx context.Context, model string, key
 	}
 
 	providerName := provider.GetProviderKey()
-	
+
 	if input == nil || len(input.Texts) == 0 {
 		return nil, newBifrostOperationError("invalid embedding input: at least one text is required", nil, providerName)
 	}
@@ -682,7 +682,6 @@ func (provider *OpenAIProvider) SpeechStream(ctx context.Context, postHookRunner
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
 	}
 
-	
 	// Set any extra headers from network config
 	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
 

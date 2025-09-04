@@ -22,6 +22,7 @@ from PIL import Image
 import io
 from google import genai
 from google.genai.types import HttpOptions
+from google.genai import types
 from typing import List, Dict, Any
 
 from ..utils.common import (
@@ -37,6 +38,7 @@ from ..utils.common import (
     WEATHER_TOOL,
     CALCULATOR_TOOL,
     assert_valid_chat_response,
+    assert_valid_embedding_response,
     assert_valid_image_response,
     assert_valid_error_response,
     assert_error_propagation,
@@ -48,6 +50,7 @@ from ..utils.common import (
     WEATHER_KEYWORDS,
     LOCATION_KEYWORDS,
     GENAI_INVALID_ROLE_CONTENT,
+    EMBEDDINGS_SINGLE_TEXT,
 )
 from ..utils.config_loader import get_model
 
@@ -485,6 +488,19 @@ class TestGoogleIntegration:
         print(
             f"✅ Streaming test passed: {chunk_count} chunks, {len(content)} characters"
         )
+    
+    @skip_if_no_api_key("google")
+    def test_14_single_text_embedding(self, google_client, test_config):
+        """Test Case 21: Single text embedding generation"""
+        response = google_client.models.embed_content(
+            model="google/gemini-embedding-001", contents=EMBEDDINGS_SINGLE_TEXT,
+            config=types.EmbedContentConfig(output_dimensionality=1536)
+        )
+
+        assert_valid_embedding_response(response, expected_dimensions=1536)
+
+        # Verify response structure
+        assert len(response.embeddings) == 1, "Should have exactly one embedding"
 
 
 # Additional helper functions specific to Google GenAI
