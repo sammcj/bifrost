@@ -1063,6 +1063,19 @@ def assert_valid_embedding_response(
                 response.usage.total_tokens > 0
             ), "Token usage should be greater than 0"
 
+    elif hasattr(response, "embeddings"):
+        assert len(response.embeddings) > 0, "Embedding should not be empty"
+        embedding = response.embeddings[0].values
+        assert isinstance(embedding, list), "Embedding should be a list"
+        assert len(embedding) > 0, "Embedding should not be empty"
+        assert all(
+            isinstance(x, (int, float)) for x in embedding
+        ), "All embedding values should be numeric"
+        if expected_dimensions:
+            assert (
+                len(embedding) == expected_dimensions
+            ), f"Expected {expected_dimensions} dimensions, got {len(embedding)}"
+
     # Check if it's a direct list (embedding vector)
     elif isinstance(response, list):
         assert len(response) > 0, "Embedding should not be empty"

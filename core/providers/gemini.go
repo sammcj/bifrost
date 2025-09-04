@@ -196,6 +196,18 @@ func (provider *GeminiProvider) ChatCompletion(ctx context.Context, model string
 		return nil, bifrostErr
 	}
 
+	for _, choice := range response.Choices {
+		if choice.Message.AssistantMessage == nil || choice.Message.AssistantMessage.ToolCalls == nil {
+			continue
+		}
+		for i, toolCall := range *choice.Message.AssistantMessage.ToolCalls {
+			if (toolCall.ID == nil || *toolCall.ID == "") && toolCall.Function.Name != nil && *toolCall.Function.Name != "" {
+				id := *toolCall.Function.Name
+				(*choice.Message.AssistantMessage.ToolCalls)[i].ID = &id
+			}
+		}
+	}
+
 	response.ExtraFields.Provider = providerName
 
 	if provider.sendBackRawResponse {

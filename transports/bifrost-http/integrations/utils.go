@@ -386,6 +386,39 @@ func buildProviderSchemas() map[schemas.ModelProvider]ProviderParameterSchema {
 		"vocab_only":       true,
 	}
 
+	// Vertex supports both OpenAI and Anthropic models, plus its own specific parameters
+	vertexParams := mergeWithDefaults(openAIParams)
+	// Add Anthropic-specific parameters for Claude models on Vertex
+	for k, v := range anthropicParams {
+		vertexParams[k] = v
+	}
+	// Add Vertex-specific parameters
+	vertexSpecificParams := map[string]bool{
+		"task_type":            true, // For embeddings
+		"title":                true, // For embeddings
+		"autoTruncate":         true, // For embeddings
+		"outputDimensionality": true, // For embeddings (maps to dimensions)
+	}
+	for k, v := range vertexSpecificParams {
+		vertexParams[k] = v
+	}
+
+	// Bedrock supports both Anthropic and Mistral models, plus its own specific parameters
+	bedrockParams := mergeWithDefaults(anthropicParams)
+	// Add Mistral-specific parameters for Mistral models on Bedrock
+	for k, v := range mistralParams {
+		bedrockParams[k] = v
+	}
+	// Add Bedrock-specific parameters
+	bedrockSpecificParams := map[string]bool{
+		"max_tokens_to_sample": true, // Anthropic models use this instead of max_tokens
+		"toolConfig":           true, // Bedrock-specific tool configuration
+		"input_type":           true, // For Cohere embeddings
+	}
+	for k, v := range bedrockSpecificParams {
+		bedrockParams[k] = v
+	}
+
 	geminiParams := mergeWithDefaults(openAIParams)
 	geminiParams["top_k"] = true
 	geminiParams["stop_sequences"] = true
@@ -397,8 +430,8 @@ func buildProviderSchemas() map[schemas.ModelProvider]ProviderParameterSchema {
 		schemas.Cohere:    {ValidParams: mergeWithDefaults(cohereParams)},
 		schemas.Mistral:   {ValidParams: mergeWithDefaults(mistralParams)},
 		schemas.Groq:      {ValidParams: mergeWithDefaults(groqParams)},
-		schemas.Bedrock:   {ValidParams: DefaultParameters},
-		schemas.Vertex:    {ValidParams: DefaultParameters},
+		schemas.Bedrock:   {ValidParams: bedrockParams},
+		schemas.Vertex:    {ValidParams: vertexParams},
 		schemas.Ollama:    {ValidParams: mergeWithDefaults(ollamaParams)},
 		schemas.Cerebras:  {ValidParams: mergeWithDefaults(openAIParams)},
 		schemas.SGL:       {ValidParams: mergeWithDefaults(openAIParams)},
