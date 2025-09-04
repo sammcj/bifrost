@@ -11,11 +11,29 @@ concurrency:
   cancel-in-progress: false  
 
 jobs:
+  # Check if pipeline should be skipped based on first line of commit message
+  check-skip:
+    runs-on: ubuntu-latest
+    outputs:
+      should-skip: ${{ steps.check.outputs.should-skip }}
+    steps:
+      - name: Check if pipeline should be skipped
+        id: check
+        run: |
+          COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
+          FIRST_LINE=$(echo "$COMMIT_MESSAGE" | head -n 1)
+          if [[ "$FIRST_LINE" == *"--skip-pipeline"* ]]; then
+            echo "should-skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "should-skip=false" >> $GITHUB_OUTPUT
+          fi
+
   # Detect what needs to be released
   detect-changes:
+    needs: [check-skip]
     runs-on: ubuntu-latest
-    # Skip if commit message contains --skip-pipeline
-    if: "!contains(github.event.head_commit.message, '--skip-pipeline')"
+    # Skip if first line of commit message contains --skip-pipeline
+    if: needs.check-skip.outputs.should-skip != 'true'
     outputs:
       core-needs-release: ${{ steps.detect.outputs.core-needs-release }}
       framework-needs-release: ${{ steps.detect.outputs.framework-needs-release }}
@@ -44,8 +62,8 @@ jobs:
         run: ./.github/workflows/scripts/detect-all-changes.sh "auto"
 
   core-release:
-    needs: [detect-changes]
-    if: needs.detect-changes.outputs.core-needs-release == 'true'
+    needs: [check-skip, detect-changes]
+    if: needs.check-skip.outputs.should-skip != 'true' && needs.detect-changes.outputs.core-needs-release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -77,8 +95,8 @@ jobs:
         run: ./.github/workflows/scripts/release-core.sh "${{ needs.detect-changes.outputs.core-version }}"
 
   framework-release:
-    needs: [detect-changes, core-release]
-    if: "!contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.framework-needs-release == 'true' && (needs.detect-changes.outputs.core-needs-release == 'false' || needs.core-release.result == 'success' || needs.core-release.result == 'skipped')"
+    needs: [check-skip, detect-changes, core-release]
+    if: "needs.check-skip.outputs.should-skip != 'true' && needs.detect-changes.outputs.framework-needs-release == 'true' && (needs.detect-changes.outputs.core-needs-release == 'false' || needs.core-release.result == 'success' || needs.core-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -125,8 +143,8 @@ jobs:
         run: ./.github/workflows/scripts/release-framework.sh "${{ needs.detect-changes.outputs.framework-version }}"
 
   plugins-release:
-    needs: [detect-changes, core-release, framework-release]
-    if: "!contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.plugins-need-release == 'true' && (needs.detect-changes.outputs.core-needs-release == 'false' || needs.core-release.result == 'success' || needs.core-release.result == 'skipped') && (needs.detect-changes.outputs.framework-needs-release == 'false' || needs.framework-release.result == 'success' || needs.framework-release.result == 'skipped')"
+    needs: [check-skip, detect-changes, core-release, framework-release]
+    if: "needs.check-skip.outputs.should-skip != 'true' && needs.detect-changes.outputs.plugins-need-release == 'true' && (needs.detect-changes.outputs.core-needs-release == 'false' || needs.core-release.result == 'success' || needs.core-release.result == 'skipped') && (needs.detect-changes.outputs.framework-needs-release == 'false' || needs.framework-release.result == 'success' || needs.framework-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -180,8 +198,8 @@ jobs:
         run: ./.github/workflows/scripts/release-all-plugins.sh '${{ needs.detect-changes.outputs.changed-plugins }}'
 
   bifrost-http-release:
-    needs: [detect-changes, core-release, framework-release, plugins-release]
-    if: "!contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.bifrost-http-needs-release == 'true' && (needs.detect-changes.outputs.core-needs-release == 'false' || needs.core-release.result == 'success' || needs.core-release.result == 'skipped') && (needs.detect-changes.outputs.framework-needs-release == 'false' || needs.framework-release.result == 'success' || needs.framework-release.result == 'skipped') && (needs.detect-changes.outputs.plugins-need-release == 'false' || needs.plugins-release.result == 'success' || needs.plugins-release.result == 'skipped')"
+    needs: [check-skip, detect-changes, core-release, framework-release, plugins-release]
+    if: "needs.check-skip.outputs.should-skip != 'true' && needs.detect-changes.outputs.bifrost-http-needs-release == 'true' && (needs.detect-changes.outputs.core-needs-release == 'false' || needs.core-release.result == 'success' || needs.core-release.result == 'skipped') && (needs.detect-changes.outputs.framework-needs-release == 'false' || needs.framework-release.result == 'success' || needs.framework-release.result == 'skipped') && (needs.detect-changes.outputs.plugins-need-release == 'false' || needs.plugins-release.result == 'success' || needs.plugins-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -238,8 +256,8 @@ jobs:
 
   # Docker build amd64
   docker-build-amd64:
-    needs: [detect-changes, bifrost-http-release]
-    if: "!contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.detect-changes.outputs.bifrost-http-needs-release == 'false' || needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
+    needs: [check-skip, detect-changes, bifrost-http-release]
+    if: "needs.check-skip.outputs.should-skip != 'true' && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.detect-changes.outputs.bifrost-http-needs-release == 'false' || needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -281,8 +299,8 @@ jobs:
 
   # Docker build arm64
   docker-build-arm64:
-      needs: [detect-changes, bifrost-http-release]
-      if: "!contains(github.event.head_commit.message, '--skip-pipeline') && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.detect-changes.outputs.bifrost-http-needs-release == 'false' || needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
+      needs: [check-skip, detect-changes, bifrost-http-release]
+      if: "needs.check-skip.outputs.should-skip != 'true' && needs.detect-changes.outputs.docker-needs-release == 'true' && (needs.detect-changes.outputs.bifrost-http-needs-release == 'false' || needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
       runs-on: ubuntu-24.04-arm
       permissions:
         contents: write
@@ -324,8 +342,8 @@ jobs:
 
   # Docker manifest   
   docker-manifest:
-      needs: [detect-changes, docker-build-amd64, docker-build-arm64]
-      if: "needs.docker-build-amd64.result == 'success' && needs.docker-build-arm64.result == 'success'"
+      needs: [check-skip, detect-changes, docker-build-amd64, docker-build-arm64]
+      if: "needs.check-skip.outputs.should-skip != 'true' && needs.docker-build-amd64.result == 'success' && needs.docker-build-arm64.result == 'success'"
       runs-on: ubuntu-latest
       env:
         REGISTRY: docker.io
@@ -347,8 +365,8 @@ jobs:
             
   # Notification
   notify:
-    needs: [detect-changes, core-release, framework-release, plugins-release, bifrost-http-release, docker-manifest]
-    if: "always() && !contains(github.event.head_commit.message, '--skip-pipeline')"
+    needs: [check-skip, detect-changes, core-release, framework-release, plugins-release, bifrost-http-release, docker-manifest]
+    if: "always() && needs.check-skip.outputs.should-skip != 'true'"
     runs-on: ubuntu-latest
     steps:
       - name: Install jq
