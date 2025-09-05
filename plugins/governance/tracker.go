@@ -205,7 +205,7 @@ func (t *UsageTracker) PerformStartupResets() error {
 			resetRateLimits = append(resetRateLimits, rateLimit)
 		}
 	}
-	
+
 	// DB reset is also handled by this function
 	if err := t.store.ResetExpiredBudgets(); err != nil {
 		errs = append(errs, fmt.Sprintf("failed to reset expired budgets: %s", err.Error()))
