@@ -1,6 +1,6 @@
 "use client";
 
-import ClientForm from "@/app/config/views/mcp-client-form";
+import ClientForm from "@/app/config/views/mcpClientForm";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -11,7 +11,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 	AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/components/ui/alertDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

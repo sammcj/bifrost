@@ -49,14 +49,14 @@ declare -A PLUGIN_VERSIONS
 for plugin_dir in plugins/*/; do
   if [ -d "$plugin_dir" ]; then
     plugin_name=$(basename "$plugin_dir")
-    
+
     # Check if VERSION parameter contains prerelease suffix
     if [[ "$VERSION" == *"-"* ]]; then
       # VERSION has prerelease, so include all versions but prefer stable
       ALL_TAGS=$(git tag -l "plugins/${plugin_name}/v*" | sort -V)
       STABLE_TAGS=$(echo "$ALL_TAGS" | grep -v '\-')
       PRERELEASE_TAGS=$(echo "$ALL_TAGS" | grep '\-')
-      
+
       if [ -n "$STABLE_TAGS" ]; then
         # Get the highest stable version
         LATEST_PLUGIN_TAG=$(echo "$STABLE_TAGS" | tail -1)
@@ -71,7 +71,7 @@ for plugin_dir in plugins/*/; do
       LATEST_PLUGIN_TAG=$(git tag -l "plugins/${plugin_name}/v*" | grep -v '\-' | sort -V | tail -1)
       echo "latest plugin tag (stable only): $LATEST_PLUGIN_TAG"
     fi
-    
+
     if [ -z "$LATEST_PLUGIN_TAG" ]; then
       # No matching release found, use version from file
       PLUGIN_VERSION="v$(tr -d '\n\r' < "${plugin_dir}version")"
@@ -80,7 +80,7 @@ for plugin_dir in plugins/*/; do
       PLUGIN_VERSION=${LATEST_PLUGIN_TAG#plugins/${plugin_name}/}
       echo "   📦 $plugin_name: $PLUGIN_VERSION (latest release)"
     fi
-    
+
     PLUGIN_VERSIONS["$plugin_name"]="$PLUGIN_VERSION"
   fi
 done
@@ -92,7 +92,7 @@ echo "🔍 Checking for additional plugins in transport go.mod..."
 while IFS= read -r plugin_line; do
   plugin_name=$(echo "$plugin_line" | awk -F'/' '{print $NF}' | awk '{print $1}')
   current_version=$(echo "$plugin_line" | awk '{print $NF}')
-  
+
   # Only add if we don't already have this plugin
   if [[ -z "${PLUGIN_VERSIONS[$plugin_name]:-}" ]]; then
     echo "   📦 $plugin_name: $current_version (from transport go.mod)"
@@ -117,7 +117,7 @@ PLUGINS_USED=()
 cd transports
 for plugin_name in "${!PLUGIN_VERSIONS[@]}"; do
   plugin_version="${PLUGIN_VERSIONS[$plugin_name]}"
-  
+
   # Check if transport depends on this plugin
   if grep -q "github.com/maximhq/bifrost/plugins/$plugin_name" go.mod; then
     echo "  📦 Using $plugin_name plugin $plugin_version"
@@ -131,7 +131,7 @@ done
 echo "  🔧 Updating core to $CORE_VERSION"
 go_get_with_backoff "github.com/maximhq/bifrost/core@$CORE_VERSION"
 
-echo "  📦 Updating framework to $FRAMEWORK_VERSION" 
+echo "  📦 Updating framework to $FRAMEWORK_VERSION"
 go_get_with_backoff "github.com/maximhq/bifrost/framework@$FRAMEWORK_VERSION"
 
 go mod tidy
@@ -157,7 +157,7 @@ if ! git diff --cached --quiet; then
   git config user.name "github-actions[bot]"
   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
   echo "🔧 Committing and pushing changes..."
-  git commit -m "transports: update dependencies --skip-pipeline"  
+  git commit -m "transports: update dependencies --skip-pipeline"
   git push -u origin HEAD
 else
   echo "ℹ️ No staged changes to commit"
@@ -169,7 +169,7 @@ bash ./.github/workflows/scripts/install-cross-compilers.sh
 
 # Build Go executables
 echo "🔨 Building executables..."
-bash ./.github/workflows/scripts/build-executables.sh
+bash ./.github/workflows/scripts/build-executables.sh $VERSION
 
 # Configure and upload to R2
 echo "📤 Uploading binaries..."
