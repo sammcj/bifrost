@@ -71,6 +71,7 @@ import (
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
 	schemas "github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/framework/pricing"
 	"github.com/maximhq/bifrost/plugins/governance"
 	"github.com/maximhq/bifrost/plugins/logging"
 	"github.com/maximhq/bifrost/plugins/maxim"
@@ -332,6 +333,12 @@ func main() {
 		logger.Fatal("failed to load config %v", err)
 	}
 
+	// Initialize pricing manager
+	pricingManager, err := pricing.Init(config.ConfigStore, logger)
+	if err != nil {
+		logger.Fatal("failed to initialize pricing manager: %v", err)
+	}
+
 	// Create account backed by the high-performance store (all processing is done in LoadFromDatabase)
 	// The account interface now benefits from ultra-fast config access times via in-memory storage
 	account := lib.NewBaseAccount(config)
@@ -367,7 +374,7 @@ func main() {
 		// Initialize governance plugin
 		governancePlugin, err = governance.Init(ctx, &governance.Config{
 			IsVkMandatory: &config.ClientConfig.EnforceGovernanceHeader,
-		}, logger, config.ConfigStore, config.GovernanceConfig)
+		}, logger, config.ConfigStore, config.GovernanceConfig, pricingManager)
 		if err != nil {
 			logger.Error("failed to initialize governance plugin: %s", err.Error())
 		} else {
