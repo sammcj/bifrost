@@ -49,6 +49,9 @@ func Init(ctx context.Context, config *Config, logger schemas.Logger, store conf
 	if store == nil {
 		logger.Warn("governance plugin requires config store to persist data, running in memory only mode")
 	}
+	if pricingManager == nil {
+		logger.Warn("governance plugin requires pricing manager to calculate cost, running in cost-free mode")
+	}
 
 	governanceStore, err := NewGovernanceStore(logger, store, governanceConfig)
 	if err != nil {
@@ -294,8 +297,6 @@ func (p *GovernancePlugin) postHookWorker(result *schemas.BifrostResponse, provi
 	if !isStreaming || (isStreaming && isFinalChunk) {
 		if p.pricingManager != nil {
 			cost = p.pricingManager.CalculateCost(result, provider, model, requestType)
-		} else {
-			p.logger.Warn("pricing manager is not set, skipping cost calculation")
 		}
 	}
 

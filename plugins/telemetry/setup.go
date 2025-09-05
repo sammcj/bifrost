@@ -30,6 +30,9 @@ var (
 
 	bifrostUpstreamLatencySeconds *prometheus.HistogramVec
 
+	// bifrostCostTotal tracks the total cost in USD for requests to upstream providers
+	bifrostCostTotal *prometheus.CounterVec
+
 	// customLabels stores the expected label names in order
 	customLabels  []string
 	isInitialized bool
@@ -43,7 +46,7 @@ func InitPrometheusMetrics(labels []string) {
 	customLabels = labels
 
 	httpDefaultLabels := []string{"path", "method", "status"}
-	bifrostDefaultLabels := []string{"target", "method"}
+	bifrostDefaultLabels := []string{"provider", "model", "method"}
 
 	httpRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -101,6 +104,14 @@ func InitPrometheusMetrics(labels []string) {
 		append(bifrostDefaultLabels, labels...),
 	)
 
+	bifrostCostTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "bifrost_cost_total",
+			Help: "Total cost in USD for requests to upstream providers.",
+		},
+		append(bifrostDefaultLabels, labels...),
+	)
+
 	isInitialized = true
 }
 
@@ -133,13 +144,14 @@ func collectPrometheusKeyValues(ctx *fasthttp.RequestCtx) map[string]string {
 	}
 
 	// Collect custom prometheus headers
-	ctx.Request.Header.VisitAll(func(key, value []byte) {
+	ctx.Request.Header.All()(func(key, value []byte) bool {
 		keyStr := strings.ToLower(string(key))
 		if strings.HasPrefix(keyStr, "x-bf-prom-") {
 			labelName := strings.TrimPrefix(keyStr, "x-bf-prom-")
 			labelValues[labelName] = string(value)
 			ctx.SetUserValue(keyStr, string(value))
 		}
+		return true
 	})
 
 	return labelValues
