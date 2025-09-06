@@ -105,6 +105,9 @@ const (
 	BifrostContextKeyRequestModel       BifrostContextKey = "bifrost-request-model"
 )
 
+// NOTE: for custom plugin implementation dealing with streaming short circuit,
+// make sure to mark BifrostContextKeyStreamEndIndicator as true at the end of the stream.
+
 //* Request Structs
 
 // RequestInput represents the input for a model request, which can be either
@@ -722,17 +725,25 @@ type BifrostResponseExtraFields struct {
 	ChatHistory *[]BifrostMessage  `json:"chat_history,omitempty"`
 	BilledUsage *BilledLLMUsage    `json:"billed_usage,omitempty"`
 	ChunkIndex  int                `json:"chunk_index"` // used for streaming responses to identify the chunk index, will be 0 for non-streaming responses
-	RawResponse interface{}        `json:"raw_response"`
+	RawResponse interface{}        `json:"raw_response,omitempty"`
 	CacheDebug  *BifrostCacheDebug `json:"cache_debug,omitempty"`
 }
 
 // BifrostCacheDebug represents debug information about the cache.
 type BifrostCacheDebug struct {
-	CacheHit        bool     `json:"cache_hit"`
-	CacheHitType    string   `json:"cache_hit_type"`
-	CacheID         string   `json:"cache_id"`
-	CacheThreshold  *float64 `json:"cache_threshold,omitempty"`
-	CacheSimilarity *float64 `json:"cache_similarity,omitempty"`
+	CacheHit bool `json:"cache_hit"`
+
+	CacheID *string `json:"cache_id,omitempty"`
+	HitType *string `json:"hit_type,omitempty"`
+
+	// Semantic cache only (provider, model, and input tokens will be present for semantic cache, even if cache is not hit)
+	ProviderUsed *string `json:"provider_used,omitempty"`
+	ModelUsed    *string `json:"model_used,omitempty"`
+	InputTokens  *int    `json:"input_tokens,omitempty"`
+
+	// Semantic cache only (only when cache is hit)
+	Threshold  *float64 `json:"threshold,omitempty"`
+	Similarity *float64 `json:"similarity,omitempty"`
 }
 
 const (

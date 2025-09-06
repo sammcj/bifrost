@@ -4,8 +4,48 @@ package logging
 import (
 	"fmt"
 
+	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/logstore"
 )
+
+func (p *LoggerPlugin) calculateRequestTotalCost(result *schemas.BifrostResponse, provider schemas.ModelProvider, model string, requestType schemas.RequestType) float64 {
+	if result == nil {
+		return 0
+	}
+
+	cacheDebug := result.ExtraFields.CacheDebug
+
+	if cacheDebug != nil {
+		if cacheDebug.CacheHit {
+			if cacheDebug.HitType != nil && *cacheDebug.HitType == "direct" {
+				return 0
+			} else if cacheDebug.ProviderUsed != nil && cacheDebug.ModelUsed != nil && cacheDebug.InputTokens != nil {
+				return p.getSemanticCacheCost(*cacheDebug.ProviderUsed, *cacheDebug.ModelUsed, *cacheDebug.InputTokens)
+			}
+
+			// Don't over-bill cache hits if fields are missing.
+			return 0
+		} else {
+			baseCost := p.pricingManager.CalculateCost(result, provider, model, requestType)
+			var semanticCacheCost float64
+			if cacheDebug.ProviderUsed != nil && cacheDebug.ModelUsed != nil && cacheDebug.InputTokens != nil {
+				semanticCacheCost = p.getSemanticCacheCost(*cacheDebug.ProviderUsed, *cacheDebug.ModelUsed, *cacheDebug.InputTokens)
+			}
+
+			return baseCost + semanticCacheCost
+		}
+	}
+
+	return p.pricingManager.CalculateCost(result, provider, model, requestType)
+}
+
+func (p *LoggerPlugin) getSemanticCacheCost(provider string, model string, inputTokens int) float64 {
+	return p.pricingManager.CalculateCostFromUsage(provider, model, &schemas.LLMUsage{
+		PromptTokens:     inputTokens,
+		CompletionTokens: 0,
+		TotalTokens:      inputTokens,
+	}, schemas.EmbeddingRequest, false, false, nil, nil)
+}
 
 // LogManager defines the main interface that combines all logging functionality
 type LogManager interface {
