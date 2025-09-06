@@ -23,11 +23,7 @@ import (
 // The VectorStore abstraction handles the underlying storage implementation and its defaults.
 // Only specify values you want to override from the semantic cache defaults.
 type Config struct {
-	CacheKey          string `json:"cache_key"`           // Cache key for context lookup - REQUIRED
-	CacheTTLKey       string `json:"cache_ttl_key"`       // Cache TTL key for context lookup (optional)
-	CacheThresholdKey string `json:"cache_threshold_key"` // Cache threshold for context lookup (optional)
-
-	// Embedding Model settings
+	// Embedding Model settings - REQUIRED for semantic caching
 	Provider       schemas.ModelProvider `json:"provider"`
 	Keys           []schemas.Key         `json:"keys"`
 	EmbeddingModel string                `json:"embedding_model,omitempty"` // Model to use for generating embeddings (optional)
@@ -37,9 +33,10 @@ type Config struct {
 	Threshold float64       `json:"threshold,omitempty"` // Cosine similarity threshold for semantic matching (default: 0.8)
 
 	// Advanced caching behavior
-	CacheByModel        *bool `json:"cache_by_model,omitempty"`        // Include model in cache key (default: true)
-	CacheByProvider     *bool `json:"cache_by_provider,omitempty"`     // Include provider in cache key (default: true)
-	ExcludeSystemPrompt *bool `json:"exclude_system_prompt,omitempty"` // Exclude system prompt in cache key (default: false)
+	ConversationHistoryThreshold int   `json:"conversation_history_threshold,omitempty"` // Skip caching for requests with more than this number of messages in the conversation history (default: 3)
+	CacheByModel                 *bool `json:"cache_by_model,omitempty"`                 // Include model in cache key (default: true)
+	CacheByProvider              *bool `json:"cache_by_provider,omitempty"`              // Include provider in cache key (default: true)
+	ExcludeSystemPrompt          *bool `json:"exclude_system_prompt,omitempty"`          // Exclude system prompt in cache key (default: false)
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for semantic cache Config.
@@ -47,17 +44,15 @@ type Config struct {
 func (c *Config) UnmarshalJSON(data []byte) error {
 	// Define a temporary struct to avoid infinite recursion
 	type TempConfig struct {
-		CacheKey            string        `json:"cache_key"`
-		CacheTTLKey         string        `json:"cache_ttl_key"`
-		CacheThresholdKey   string        `json:"cache_threshold_key"`
-		Provider            string        `json:"provider"`
-		Keys                []schemas.Key `json:"keys"`
-		EmbeddingModel      string        `json:"embedding_model,omitempty"`
-		TTL                 interface{}   `json:"ttl,omitempty"`
-		Threshold           float64       `json:"threshold,omitempty"`
-		CacheByModel        *bool         `json:"cache_by_model,omitempty"`
-		CacheByProvider     *bool         `json:"cache_by_provider,omitempty"`
-		ExcludeSystemPrompt *bool         `json:"exclude_system_prompt,omitempty"`
+		Provider                     string        `json:"provider"`
+		Keys                         []schemas.Key `json:"keys"`
+		EmbeddingModel               string        `json:"embedding_model,omitempty"`
+		TTL                          interface{}   `json:"ttl,omitempty"`
+		Threshold                    float64       `json:"threshold,omitempty"`
+		ConversationHistoryThreshold int           `json:"conversation_history_threshold,omitempty"`
+		CacheByModel                 *bool         `json:"cache_by_model,omitempty"`
+		CacheByProvider              *bool         `json:"cache_by_provider,omitempty"`
+		ExcludeSystemPrompt          *bool         `json:"exclude_system_prompt,omitempty"`
 	}
 
 	var temp TempConfig
@@ -66,14 +61,12 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	}
 
 	// Set simple fields
-	c.CacheKey = temp.CacheKey
-	c.CacheTTLKey = temp.CacheTTLKey
-	c.CacheThresholdKey = temp.CacheThresholdKey
 	c.Provider = schemas.ModelProvider(temp.Provider)
 	c.Keys = temp.Keys
 	c.EmbeddingModel = temp.EmbeddingModel
 	c.CacheByModel = temp.CacheByModel
 	c.CacheByProvider = temp.CacheByProvider
+	c.ConversationHistoryThreshold = temp.ConversationHistoryThreshold
 	c.Threshold = temp.Threshold
 	c.ExcludeSystemPrompt = temp.ExcludeSystemPrompt
 	// Handle TTL field with custom parsing for VectorStore-backed cache behavior
@@ -142,13 +135,14 @@ type Plugin struct {
 
 // Plugin constants
 const (
-	PluginName             string        = "semantic_cache"
-	VectorStoreClassName   string        = "BifrostSemanticCachePlugin"
-	PluginLoggerPrefix     string        = "[Semantic Cache]"
-	CacheConnectionTimeout time.Duration = 5 * time.Second
-	CacheSetTimeout        time.Duration = 30 * time.Second
-	DefaultCacheTTL        time.Duration = 5 * time.Minute
-	DefaultCacheThreshold  float64       = 0.8
+	PluginName                          string        = "semantic_cache"
+	VectorStoreClassName                string        = "BifrostSemanticCachePlugin"
+	PluginLoggerPrefix                  string        = "[Semantic Cache]"
+	CacheConnectionTimeout              time.Duration = 5 * time.Second
+	CacheSetTimeout                     time.Duration = 30 * time.Second
+	DefaultCacheTTL                     time.Duration = 5 * time.Minute
+	DefaultCacheThreshold               float64       = 0.8
+	DefaultConversationHistoryThreshold int           = 3
 )
 
 var SelectFields = []string{"request_hash", "response", "stream_chunks", "expires_at", "cache_key", "provider", "model"}
@@ -215,6 +209,34 @@ func (pa *PluginAccount) GetConfigForProvider(providerKey schemas.ModelProvider)
 // Dependencies is a list of dependencies that the plugin requires.
 var Dependencies []framework.FrameworkDependency = []framework.FrameworkDependency{framework.FrameworkDependencyVectorStore}
 
+// ContextKey is a custom type for context keys to prevent key collisions
+type ContextKey string
+
+const (
+	CacheKey          ContextKey = "semantic_cache_key"        // To set the cache key for a request - REQUIRED for all requests
+	CacheTTLKey       ContextKey = "semantic_cache_ttl"        // To explicitly set the TTL for a request
+	CacheThresholdKey ContextKey = "semantic_cache_threshold"  // To explicitly set the threshold for a request
+	CacheTypeKey      ContextKey = "semantic_cache_cache_type" // To explicitly set the cache type for a request
+	CacheNoStoreKey   ContextKey = "semantic_cache_no_store"   // To explicitly disable storing the response in the cache
+
+	// context keys for internal usage
+	requestIDKey         ContextKey = "semantic_cache_request_id"
+	requestHashKey       ContextKey = "semantic_cache_request_hash"
+	requestEmbeddingKey  ContextKey = "semantic_cache_embedding"
+	requestParamsHashKey ContextKey = "semantic_cache_params_hash"
+	requestModelKey      ContextKey = "semantic_cache_model"
+	requestProviderKey   ContextKey = "semantic_cache_provider"
+	isCacheHitKey        ContextKey = "semantic_cache_is_cache_hit"
+	cacheHitTypeKey      ContextKey = "semantic_cache_cache_hit_type"
+)
+
+type CacheType string
+
+const (
+	CacheTypeDirect   CacheType = "direct"
+	CacheTypeSemantic CacheType = "semantic"
+)
+
 // Init creates a new semantic cache plugin instance with the provided configuration.
 // It uses the VectorStore abstraction for cache operations and returns a configured plugin.
 //
@@ -230,11 +252,7 @@ var Dependencies []framework.FrameworkDependency = []framework.FrameworkDependen
 //   - schemas.Plugin: A configured semantic cache plugin instance
 //   - error: Any error that occurred during plugin initialization
 func Init(ctx context.Context, config Config, logger schemas.Logger, store vectorstore.VectorStore) (schemas.Plugin, error) {
-	if config.CacheKey == "" {
-		return nil, fmt.Errorf("cache key is required")
-	}
-
-	// Set plugin-specific defaults (not VectorStore defaults)
+	// Set plugin-specific defaults
 	if config.TTL == 0 {
 		logger.Debug(PluginLoggerPrefix + " TTL is not set, using default of 5 minutes")
 		config.TTL = DefaultCacheTTL
@@ -242,6 +260,10 @@ func Init(ctx context.Context, config Config, logger schemas.Logger, store vecto
 	if config.Threshold == 0 {
 		logger.Debug(PluginLoggerPrefix + " Threshold is not set, using default of " + strconv.FormatFloat(DefaultCacheThreshold, 'f', -1, 64))
 		config.Threshold = DefaultCacheThreshold
+	}
+	if config.ConversationHistoryThreshold == 0 {
+		logger.Debug(PluginLoggerPrefix + " Conversation history threshold is not set, using default of " + strconv.Itoa(DefaultConversationHistoryThreshold))
+		config.ConversationHistoryThreshold = DefaultConversationHistoryThreshold
 	}
 
 	// Set cache behavior defaults
@@ -252,53 +274,35 @@ func Init(ctx context.Context, config Config, logger schemas.Logger, store vecto
 		config.CacheByProvider = bifrost.Ptr(true)
 	}
 
-	if config.Provider == "" || config.Keys == nil {
-		return nil, fmt.Errorf("provider and keys are required for semantic cache")
+	plugin := &Plugin{
+		store:  store,
+		config: config,
+		logger: logger,
 	}
 
-	bifrost, err := bifrost.Init(ctx, schemas.BifrostConfig{
-		Logger: logger,
-		Account: &PluginAccount{
-			provider: config.Provider,
-			keys:     config.Keys,
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize bifrost for semantic cache: %w", err)
+	if config.Provider == "" || len(config.Keys) == 0 {
+		logger.Warn(PluginLoggerPrefix + " Provider and keys are required for semantic cache, falling back to direct search only")
+	} else {
+		bifrost, err := bifrost.Init(ctx, schemas.BifrostConfig{
+			Logger: logger,
+			Account: &PluginAccount{
+				provider: config.Provider,
+				keys:     config.Keys,
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize bifrost for semantic cache: %w", err)
+		}
+
+		plugin.client = bifrost
 	}
 
 	if err := store.CreateNamespace(ctx, VectorStoreClassName, VectorStoreProperties); err != nil {
 		return nil, fmt.Errorf("failed to create namespace for semantic cache: %w", err)
 	}
 
-	return &Plugin{
-		store:  store,
-		config: config,
-		logger: logger,
-		client: bifrost,
-	}, nil
+	return plugin, nil
 }
-
-// ContextKey is a custom type for context keys to prevent key collisions
-type ContextKey string
-
-const (
-	requestIDKey         ContextKey = "semantic_cache_request_id"
-	requestHashKey       ContextKey = "semantic_cache_request_hash"
-	requestEmbeddingKey  ContextKey = "semantic_cache_embedding"
-	requestParamsHashKey ContextKey = "semantic_cache_params_hash"
-	requestModelKey      ContextKey = "semantic_cache_model"
-	requestProviderKey   ContextKey = "semantic_cache_provider"
-	isCacheHitKey        ContextKey = "semantic_cache_is_cache_hit"
-	CacheHitTypeKey      ContextKey = "semantic_cache_cache_hit_type"
-)
-
-type CacheType string
-
-const (
-	CacheTypeDirect   CacheType = "direct"
-	CacheTypeSemantic CacheType = "semantic"
-)
 
 // GetName returns the canonical name of the semantic cache plugin.
 // This name is used for plugin identification and logging purposes.
@@ -325,13 +329,15 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	// Get the cache key from the context
 	var cacheKey string
 	var ok bool
-	if ctx != nil {
-		cacheKey, ok = (*ctx).Value(ContextKey(plugin.config.CacheKey)).(string)
-		if !ok || cacheKey == "" {
-			plugin.logger.Debug(PluginLoggerPrefix + " No cache key found in context key: " + plugin.config.CacheKey + ", continuing without caching")
-			return req, nil, nil
-		}
-	} else {
+
+	cacheKey, ok = (*ctx).Value(CacheKey).(string)
+	if !ok || cacheKey == "" {
+		plugin.logger.Debug(PluginLoggerPrefix + " No cache key found in context, continuing without caching")
+		return req, nil, nil
+	}
+
+	if plugin.isConversationHistoryThresholdExceeded(req) {
+		plugin.logger.Debug(PluginLoggerPrefix + " Skipping caching for request with conversation history threshold exceeded")
 		return req, nil, nil
 	}
 
@@ -348,30 +354,45 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 		return req, nil, nil
 	}
 
-	shortCircuit, err := plugin.performDirectSearch(ctx, req, requestType, cacheKey)
-	if err != nil {
-		plugin.logger.Warn(PluginLoggerPrefix + " Direct search failed: " + err.Error())
-		// Don't return - continue to semantic search fallback
-		shortCircuit = nil // Ensure we don't use an invalid shortCircuit
+	performDirectSearch, performSemanticSearch := true, true
+	if (*ctx).Value(CacheTypeKey) != nil {
+		cacheTypeVal, ok := (*ctx).Value(CacheTypeKey).(CacheType)
+		if !ok {
+			plugin.logger.Warn(PluginLoggerPrefix + " Cache type is not a CacheType, using all available cache types")
+		} else {
+			performDirectSearch = cacheTypeVal == CacheTypeDirect
+			performSemanticSearch = cacheTypeVal == CacheTypeSemantic
+		}
 	}
 
-	if shortCircuit != nil {
-		return req, shortCircuit, nil
+	if performDirectSearch {
+		shortCircuit, err := plugin.performDirectSearch(ctx, req, requestType, cacheKey)
+		if err != nil {
+			plugin.logger.Warn(PluginLoggerPrefix + " Direct search failed: " + err.Error())
+			// Don't return - continue to semantic search fallback
+			shortCircuit = nil // Ensure we don't use an invalid shortCircuit
+		}
+
+		if shortCircuit != nil {
+			return req, shortCircuit, nil
+		}
 	}
 
-	if req.Input.EmbeddingInput != nil || req.Input.TranscriptionInput != nil {
-		plugin.logger.Debug(PluginLoggerPrefix + " Skipping semantic search for embedding/transcription input")
-		return req, nil, nil
-	}
+	if performSemanticSearch && plugin.client != nil {
+		if req.Input.EmbeddingInput != nil || req.Input.TranscriptionInput != nil {
+			plugin.logger.Debug(PluginLoggerPrefix + " Skipping semantic search for embedding/transcription input")
+			return req, nil, nil
+		}
 
-	// Try semantic search as fallback
-	shortCircuit, err = plugin.performSemanticSearch(ctx, req, requestType, cacheKey)
-	if err != nil {
-		return req, nil, nil
-	}
+		// Try semantic search as fallback
+		shortCircuit, err := plugin.performSemanticSearch(ctx, req, requestType, cacheKey)
+		if err != nil {
+			return req, nil, nil
+		}
 
-	if shortCircuit != nil {
-		return req, shortCircuit, nil
+		if shortCircuit != nil {
+			return req, shortCircuit, nil
+		}
 	}
 
 	return req, nil, nil
@@ -413,8 +434,24 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 		}
 	}
 
+	// Check if caching is explicitly disabled
+	noStore := (*ctx).Value(CacheNoStoreKey)
+	if noStore != nil {
+		noStoreValue, ok := noStore.(bool)
+		if ok && noStoreValue {
+			plugin.logger.Debug(PluginLoggerPrefix + " Caching is explicitly disabled for this request, continuing without caching")
+			return res, nil, nil
+		}
+	}
+
 	// Get the request type from context
 	requestType, ok := (*ctx).Value(bifrost.BifrostContextKeyRequestType).(bifrost.RequestType)
+	if !ok {
+		return res, nil, nil
+	}
+
+	// Get the cache key from context
+	cacheKey, ok := (*ctx).Value(CacheKey).(string)
 	if !ok {
 		return res, nil, nil
 	}
@@ -422,7 +459,6 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 	// Get the request ID from context
 	requestID, ok := (*ctx).Value(requestIDKey).(string)
 	if !ok {
-		plugin.logger.Warn(PluginLoggerPrefix + " Request ID is not a string, continuing without caching")
 		return res, nil, nil
 	}
 
@@ -433,9 +469,21 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 		return res, nil, nil
 	}
 
-	// Get embedding from context if available (only generated during semantic search)
+	// Check cache type to optimize embedding handling
 	var embedding []float32
-	if requestType != bifrost.EmbeddingRequest && requestType != bifrost.TranscriptionRequest {
+	var shouldStoreEmbeddings = true
+
+	if (*ctx).Value(CacheTypeKey) != nil {
+		cacheTypeVal, ok := (*ctx).Value(CacheTypeKey).(CacheType)
+		if ok && cacheTypeVal == CacheTypeDirect {
+			// For direct-only caching, skip embedding operations entirely
+			shouldStoreEmbeddings = false
+			plugin.logger.Debug(PluginLoggerPrefix + " Skipping embedding operations for direct-only cache type")
+		}
+	}
+
+	// Get embedding from context if available and needed
+	if shouldStoreEmbeddings && requestType != bifrost.EmbeddingRequest && requestType != bifrost.TranscriptionRequest {
 		embeddingValue := (*ctx).Value(requestEmbeddingKey)
 		if embeddingValue != nil {
 			embedding, ok = embeddingValue.([]float32)
@@ -443,11 +491,9 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 				plugin.logger.Warn(PluginLoggerPrefix + " Embedding is not a []float32, continuing without caching")
 				return res, nil, nil
 			}
-		} else {
-			// There was no embedding generated, so we can't cache this request
-			plugin.logger.Debug(PluginLoggerPrefix + " No embedding generated, continuing without caching")
-			return res, nil, nil
 		}
+		// Note: embedding can be nil for direct cache hits or when semantic search is disabled
+		// This is fine - we can still cache using direct hash matching
 	}
 
 	// Get the provider from context
@@ -464,24 +510,16 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 		return res, nil, nil
 	}
 
-	cacheKey, ok := (*ctx).Value(ContextKey(plugin.config.CacheKey)).(string)
-	if !ok {
-		plugin.logger.Warn(PluginLoggerPrefix + " Cache key is not a string, continuing without caching")
-		return res, nil, nil
-	}
-
 	cacheTTL := plugin.config.TTL
 
-	if plugin.config.CacheTTLKey != "" {
-		ttlValue := (*ctx).Value(ContextKey(plugin.config.CacheTTLKey))
-		if ttlValue != nil {
-			// Get the request TTL from the context
-			ttl, ok := ttlValue.(time.Duration)
-			if !ok {
-				plugin.logger.Warn(PluginLoggerPrefix + " TTL is not a time.Duration, using default TTL")
-			} else {
-				cacheTTL = ttl
-			}
+	ttlValue := (*ctx).Value(CacheTTLKey)
+	if ttlValue != nil {
+		// Get the request TTL from the context
+		ttl, ok := ttlValue.(time.Duration)
+		if !ok {
+			plugin.logger.Warn(PluginLoggerPrefix + " TTL is not a time.Duration, using default TTL")
+		} else {
+			cacheTTL = ttl
 		}
 	}
 
@@ -498,12 +536,18 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 		unifiedMetadata := plugin.buildUnifiedMetadata(provider, model, paramsHash, hash, cacheKey, cacheTTL)
 
 		// Handle streaming vs non-streaming responses
+		// Pass nil for embedding if we're in direct-only mode to optimize storage
+		embeddingToStore := embedding
+		if !shouldStoreEmbeddings {
+			embeddingToStore = nil
+		}
+
 		if plugin.isStreamingRequest(requestType) {
-			if err := plugin.addStreamingResponse(cacheCtx, requestID, res, bifrostErr, embedding, unifiedMetadata, cacheTTL); err != nil {
+			if err := plugin.addStreamingResponse(cacheCtx, requestID, res, bifrostErr, embeddingToStore, unifiedMetadata, cacheTTL); err != nil {
 				plugin.logger.Warn(fmt.Sprintf("%s Failed to cache streaming response: %v", PluginLoggerPrefix, err))
 			}
 		} else {
-			if err := plugin.addSingleResponse(cacheCtx, requestID, res, embedding, unifiedMetadata, cacheTTL); err != nil {
+			if err := plugin.addSingleResponse(cacheCtx, requestID, res, embeddingToStore, unifiedMetadata, cacheTTL); err != nil {
 				plugin.logger.Warn(fmt.Sprintf("%s Failed to cache single response: %v", PluginLoggerPrefix, err))
 			}
 		}

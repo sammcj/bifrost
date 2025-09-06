@@ -19,7 +19,7 @@ func TestSemanticCacheBasicFlow(t *testing.T) {
 	ctx := context.Background()
 
 	// Add cache key to context
-	ctx = context.WithValue(ctx, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
+	ctx = context.WithValue(ctx, CacheKey, "test-cache-enabled")
 	ctx = context.WithValue(ctx, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionRequest)
 
 	// Test request
@@ -106,7 +106,7 @@ func TestSemanticCacheBasicFlow(t *testing.T) {
 
 	// Reset context for second request
 	ctx2 := context.Background()
-	ctx2 = context.WithValue(ctx2, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
+	ctx2 = context.WithValue(ctx2, CacheKey, "test-cache-enabled")
 	ctx2 = context.WithValue(ctx2, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionRequest)
 
 	modifiedReq2, shortCircuit2, err := setup.Plugin.PreHook(&ctx2, request)
@@ -161,7 +161,7 @@ func TestSemanticCacheStrictFiltering(t *testing.T) {
 	defer setup.Cleanup()
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
+	ctx = context.WithValue(ctx, CacheKey, "test-cache-enabled")
 	ctx = context.WithValue(ctx, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionRequest)
 
 	// Base request
@@ -228,7 +228,7 @@ func TestSemanticCacheStrictFiltering(t *testing.T) {
 	t.Log("Testing second request with temperature=0.5 (expecting cache miss)...")
 
 	ctx2 := context.Background()
-	ctx2 = context.WithValue(ctx2, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
+	ctx2 = context.WithValue(ctx2, CacheKey, "test-cache-enabled")
 	ctx2 = context.WithValue(ctx2, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionRequest)
 
 	modifiedRequest := *baseRequest
@@ -252,7 +252,7 @@ func TestSemanticCacheStrictFiltering(t *testing.T) {
 	t.Log("Testing third request with different model (expecting cache miss)...")
 
 	ctx3 := context.Background()
-	ctx3 = context.WithValue(ctx3, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
+	ctx3 = context.WithValue(ctx3, CacheKey, "test-cache-enabled")
 	ctx3 = context.WithValue(ctx3, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionRequest)
 
 	modifiedRequest2 := *baseRequest
@@ -277,7 +277,7 @@ func TestSemanticCacheStreamingFlow(t *testing.T) {
 	defer setup.Cleanup()
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
+	ctx = context.WithValue(ctx, CacheKey, "test-cache-enabled")
 	ctx = context.WithValue(ctx, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionStreamRequest)
 
 	request := &schemas.BifrostRequest{
@@ -359,7 +359,7 @@ func TestSemanticCacheStreamingFlow(t *testing.T) {
 	t.Log("Testing streaming cache retrieval...")
 
 	ctx2 := context.Background()
-	ctx2 = context.WithValue(ctx2, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
+	ctx2 = context.WithValue(ctx2, CacheKey, "test-cache-enabled")
 	ctx2 = context.WithValue(ctx2, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionStreamRequest)
 
 	_, shortCircuit2, err := setup.Plugin.PreHook(&ctx2, request)
@@ -441,11 +441,9 @@ func TestSemanticCache_CustomTTLHandling(t *testing.T) {
 	defer setup.Cleanup()
 
 	// Configure plugin with custom TTL key
-	setup.Config.CacheTTLKey = "custom_ttl"
-
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
-	ctx = context.WithValue(ctx, ContextKey(setup.Config.CacheTTLKey), 1*time.Minute) // Custom TTL
+	ctx = context.WithValue(ctx, CacheKey, "test-cache-enabled")
+	ctx = context.WithValue(ctx, CacheTTLKey, 1*time.Minute) // Custom TTL
 	ctx = context.WithValue(ctx, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionRequest)
 
 	request := &schemas.BifrostRequest{
@@ -509,11 +507,9 @@ func TestSemanticCache_CustomThresholdHandling(t *testing.T) {
 	defer setup.Cleanup()
 
 	// Configure plugin with custom threshold key
-	setup.Config.CacheThresholdKey = "custom_threshold"
-
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
-	ctx = context.WithValue(ctx, ContextKey(setup.Config.CacheThresholdKey), 0.95) // Very high threshold
+	ctx = context.WithValue(ctx, CacheKey, "test-cache-enabled")
+	ctx = context.WithValue(ctx, CacheThresholdKey, 0.95) // Very high threshold
 	ctx = context.WithValue(ctx, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionRequest)
 
 	request := &schemas.BifrostRequest{
@@ -554,7 +550,7 @@ func TestSemanticCache_ProviderModelCachingFlags(t *testing.T) {
 	setup.Config.CacheByModel = bifrost.Ptr(false)
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
+	ctx = context.WithValue(ctx, CacheKey, "test-cache-enabled")
 	ctx = context.WithValue(ctx, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionRequest)
 
 	request1 := &schemas.BifrostRequest{
@@ -626,7 +622,7 @@ func TestSemanticCache_ProviderModelCachingFlags(t *testing.T) {
 	}
 
 	ctx2 := context.Background()
-	ctx2 = context.WithValue(ctx2, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
+	ctx2 = context.WithValue(ctx2, CacheKey, "test-cache-enabled")
 	ctx2 = context.WithValue(ctx2, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionRequest)
 
 	_, shortCircuit2, err := setup.Plugin.PreHook(&ctx2, request2)
@@ -648,8 +644,8 @@ func TestSemanticCache_ConfigurationEdgeCases(t *testing.T) {
 
 	// Test with invalid TTL type in context
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
-	ctx = context.WithValue(ctx, ContextKey("invalid_ttl"), "not-a-duration") // Invalid TTL type
+	ctx = context.WithValue(ctx, CacheKey, "test-cache-enabled")
+	ctx = context.WithValue(ctx, CacheTTLKey, "not-a-duration") // Invalid TTL type
 	ctx = context.WithValue(ctx, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionRequest)
 
 	request := &schemas.BifrostRequest{
@@ -679,8 +675,8 @@ func TestSemanticCache_ConfigurationEdgeCases(t *testing.T) {
 
 	// Test with invalid threshold type
 	ctx2 := context.Background()
-	ctx2 = context.WithValue(ctx2, ContextKey(setup.Config.CacheKey), "test-cache-enabled")
-	ctx2 = context.WithValue(ctx2, ContextKey("invalid_threshold"), "not-a-float") // Invalid threshold type
+	ctx2 = context.WithValue(ctx2, CacheKey, "test-cache-enabled")
+	ctx2 = context.WithValue(ctx2, CacheThresholdKey, "not-a-float") // Invalid threshold type
 	ctx2 = context.WithValue(ctx2, bifrost.BifrostContextKeyRequestType, bifrost.ChatCompletionRequest)
 
 	// Should handle invalid threshold gracefully
