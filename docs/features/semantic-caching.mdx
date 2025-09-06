@@ -107,10 +107,6 @@ import (
 
 // Configure semantic cache plugin
 cacheConfig := semanticcache.Config{
-    CacheKey:    "request-cache-key",     // Required: bifrost will look for this key in ctx for cache triggering
-    CacheTTLKey: "request-cache-ttl",     // Optional: bifrost will look for this key in ctx for TTL override
-    CacheThresholdKey: "request-cache-threshold", // Optional: bifrost will look for this key in ctx for threshold override
-    
     // Embedding model configuration (Required)
     Provider:       schemas.OpenAI,
     Keys:          []schemas.Key{{Value: "sk-..."}},
@@ -120,10 +116,13 @@ cacheConfig := semanticcache.Config{
     TTL:       5 * time.Minute,  // Time to live for cached responses (default: 5 minutes)
     Threshold: 0.8,              // Similarity threshold for cache lookup (default: 0.8)
     
+    // Conversation behavior
+    ConversationHistoryThreshold: 5,    // Skip caching if conversation has > N messages (default: 3)
+    ExcludeSystemPrompt: bifrost.Ptr(false), // Exclude system messages from cache key (default: false)
+    
     // Advanced options
     CacheByModel:    bifrost.Ptr(true),  // Include model in cache key (default: true)
     CacheByProvider: bifrost.Ptr(true),  // Include provider in cache key (default: true)
-    ExcludeSystemPrompt: bifrost.Ptr(false), // Exclude system messages in cache key (default: false)
 }
 
 // Create plugin
@@ -178,9 +177,11 @@ bifrostConfig := schemas.BifrostConfig{
         "ttl": "5m",
         "threshold": 0.8,
         
+        "conversation_history_threshold": 3,
+        "exclude_system_prompt": false,
+        
         "cache_by_model": true,
-        "cache_by_provider": true,
-        "exclude_system_prompt": false
+        "cache_by_provider": true
       }
     }
   ]
@@ -212,7 +213,7 @@ Must set cache key in request context:
 
 ```go
 // This request WILL be cached
-ctx = context.WithValue(ctx, semanticcache.ContextKey("request-cache-key"), "session-123")
+ctx = context.WithValue(ctx, semanticcache.CacheKey, "session-123")
 response, err := client.ChatCompletionRequest(ctx, request)
 
 // This request will NOT be cached (no context value)
@@ -248,9 +249,9 @@ You can set TTL and threshold in the request context, in the keys you configured
 
 ```go
 // Go SDK: Custom TTL and threshold
-ctx = context.WithValue(ctx, semanticcache.ContextKey("request-cache-key"), "session-123")
-ctx = context.WithValue(ctx, semanticcache.ContextKey("request-cache-ttl"), 30*time.Second)
-ctx = context.WithValue(ctx, semanticcache.ContextKey("request-cache-threshold"), 0.9)
+ctx = context.WithValue(ctx, semanticcache.CacheKey, "session-123")
+ctx = context.WithValue(ctx, semanticcache.CacheTTLKey, 30*time.Second)
+ctx = context.WithValue(ctx, semanticcache.CacheThresholdKey, 0.9)
 ```
 
 </Tab>
@@ -269,6 +270,124 @@ curl -H "x-bf-cache-key: session-123" \
 </Tab>
 
 </Tabs>
+
+---
+
+## Advanced Cache Control
+
+### Cache Type Control
+
+Control which caching mechanism to use per request:
+
+<Tabs group="cache-type-control">
+
+<Tab title="Go SDK">
+
+```go
+// Use only direct hash matching (fastest)
+ctx = context.WithValue(ctx, semanticcache.CacheKey, "session-123")
+ctx = context.WithValue(ctx, semanticcache.CacheTypeKey, semanticcache.CacheTypeDirect)
+
+// Use only semantic similarity search
+ctx = context.WithValue(ctx, semanticcache.CacheKey, "session-123")  
+ctx = context.WithValue(ctx, semanticcache.CacheTypeKey, semanticcache.CacheTypeSemantic)
+
+// Default behavior: Direct + semantic fallback (if not specified)
+ctx = context.WithValue(ctx, semanticcache.CacheKey, "session-123")
+```
+
+</Tab>
+
+<Tab title="HTTP API">
+
+```bash
+# Direct hash matching only
+curl -H "x-bf-cache-key: session-123" \
+     -H "x-bf-cache-type: direct" ...
+
+# Semantic similarity search only  
+curl -H "x-bf-cache-key: session-123" \
+     -H "x-bf-cache-type: semantic" ...
+
+# Default: Both (if header not specified)
+curl -H "x-bf-cache-key: session-123" ...
+```
+
+</Tab>
+
+</Tabs>
+
+### No-Store Control
+
+Disable response caching while still allowing cache reads:
+
+<Tabs group="no-store-control">
+
+<Tab title="Go SDK">
+
+```go
+// Read from cache but don't store the response
+ctx = context.WithValue(ctx, semanticcache.CacheKey, "session-123")
+ctx = context.WithValue(ctx, semanticcache.CacheNoStoreKey, true)
+```
+
+</Tab>
+
+<Tab title="HTTP API">
+
+```bash
+# Read from cache but don't store response
+curl -H "x-bf-cache-key: session-123" \
+     -H "x-bf-cache-no-store: true" ...
+```
+
+</Tab>
+
+</Tabs>
+
+---
+
+## Conversation Configuration
+
+### History Threshold Logic
+
+The `ConversationHistoryThreshold` setting skips caching for conversations with many messages to prevent false positives:
+
+**Why this matters:**
+- **Semantic False Positives**: Long conversation histories have high probability of semantic matches with unrelated conversations due to topic overlap
+- **Direct Cache Inefficiency**: Long conversations rarely have exact hash matches, making direct caching less effective
+- **Performance**: Reduces vector store load by filtering out low-value caching scenarios
+
+```json
+{
+  "conversation_history_threshold": 3  // Skip caching if > 3 messages in conversation
+}
+```
+
+**Recommended Values:**
+- **1-2**: Very conservative (may miss valuable caching opportunities)
+- **3-5**: Balanced approach (default: 3)
+- **10+**: Cache longer conversations (higher false positive risk)  
+
+### System Prompt Handling
+
+Control whether system messages are included in cache key generation:
+
+```json  
+{
+  "exclude_system_prompt": false  // Include system messages in cache key (default)
+}
+```
+
+**When to exclude (`true`):**
+- System prompts change frequently but content is similar
+- Multiple system prompt variations for same use case
+- Focus caching on user content similarity
+
+**When to include (`false`):**
+- System prompts significantly change response behavior  
+- Each system prompt requires distinct cached responses
+- Strict response consistency requirements
 
 ---
 
@@ -340,18 +459,19 @@ curl -X DELETE http://localhost:8080/api/cache/clear-by-key/support-session-456
 
 </Tabs>
 
----
+### Cache Lifecycle & Cleanup
 
-## Use Cases
+The semantic cache automatically handles cleanup to prevent storage bloat:
 
-### Customer Support
-Cache responses for common questions like "How do I reset my password?" or "What are your business hours?" - semantically similar variations get instant responses.
+**Automatic Cleanup:**
+- **TTL Expiration**: Entries are automatically removed when TTL expires
+- **Shutdown Cleanup**: All cache entries are cleared from the vector store namespace when Bifrost client shuts down
+- **Namespace Isolation**: Each Bifrost instance uses isolated vector store namespaces to prevent conflicts
 
-### Content Generation  
-Cache blog post outlines, product descriptions, or marketing copy for similar topics, reducing costs for content teams.
-
-### Data Analysis
-Cache responses for similar analytical queries about datasets, dashboards, or reports, speeding up business intelligence workflows.
+**Manual Cleanup Options:**
+- Clear specific entries by request ID (see examples above)
+- Clear all entries for a cache key
+- Restart Bifrost to clear all cache data
 
 ---
 

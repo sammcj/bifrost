@@ -338,7 +338,6 @@ func TestCacheConfiguration(t *testing.T) {
 		{
 			name: "High Threshold",
 			config: Config{
-				CacheKey:       TestCacheKey,
 				Provider:       schemas.OpenAI,
 				EmbeddingModel: "text-embedding-3-large",
 				Threshold:      0.95, // Very high threshold
@@ -351,7 +350,6 @@ func TestCacheConfiguration(t *testing.T) {
 		{
 			name: "Low Threshold",
 			config: Config{
-				CacheKey:       TestCacheKey,
 				Provider:       schemas.OpenAI,
 				EmbeddingModel: "text-embedding-3-large",
 				Threshold:      0.1, // Very low threshold
@@ -364,7 +362,6 @@ func TestCacheConfiguration(t *testing.T) {
 		{
 			name: "Custom TTL",
 			config: Config{
-				CacheKey:       TestCacheKey,
 				Provider:       schemas.OpenAI,
 				EmbeddingModel: "text-embedding-3-large",
 				Threshold:      0.8,

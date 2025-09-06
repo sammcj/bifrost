@@ -169,7 +169,6 @@ func (plugin *Plugin) extractTextForEmbedding(req *schemas.BifrostRequest, reque
 		return *req.Input.TextCompletionInput, metadataHash, nil
 
 	case req.Input.ChatCompletionInput != nil:
-
 		reqInput := plugin.getInputForCaching(req)
 
 		// Serialize chat messages for embedding
@@ -229,8 +228,17 @@ func (plugin *Plugin) extractTextForEmbedding(req *schemas.BifrostRequest, reque
 		return "", "", fmt.Errorf("no input text found in speech request")
 
 	case req.Input.EmbeddingInput != nil:
-		// Skip semantic caching for embedding requests
-		return "", "", fmt.Errorf("embedding requests are not supported for semantic caching")
+		metadataHash, err := getMetadataHash(metadata)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to marshal metadata for metadata hash: %w", err)
+		}
+
+		var text string
+		for _, t := range req.Input.EmbeddingInput.Texts {
+			text += t + " "
+		}
+
+		return strings.TrimSpace(text), metadataHash, nil
 
 	case req.Input.TranscriptionInput != nil:
 		// Skip semantic caching for transcription requests
@@ -399,4 +407,18 @@ func removeField(arr []string, target string) []string {
 		}
 	}
 	return arr // unchanged if target not found
+}
+
+// isConversationHistoryThresholdExceeded checks if the conversation history threshold is exceeded
+func (plugin *Plugin) isConversationHistoryThresholdExceeded(req *schemas.BifrostRequest) bool {
+	switch {
+	case req.Input.ChatCompletionInput != nil:
+		input := plugin.getInputForCaching(req)
+		if len(*input.ChatCompletionInput) > plugin.config.ConversationHistoryThreshold {
+			return true
+		}
+		return false
+	default:
+		return false
+	}
 }

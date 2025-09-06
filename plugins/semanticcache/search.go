@@ -21,14 +21,15 @@ func (plugin *Plugin) performDirectSearch(ctx *context.Context, req *schemas.Bif
 
 	plugin.logger.Debug(PluginLoggerPrefix + " Generated Hash for Request: " + hash)
 
-	// Store hash in context
-	*ctx = context.WithValue(*ctx, requestHashKey, hash)
-
 	// Extract metadata for strict filtering
 	_, paramsHash, err := plugin.extractTextForEmbedding(req, requestType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract metadata for filtering: %w", err)
 	}
+
+	// Store has and metadata in context
+	*ctx = context.WithValue(*ctx, requestHashKey, hash)
+	*ctx = context.WithValue(*ctx, requestParamsHashKey, paramsHash)
 
 	// Build strict filters for direct hash search
 	filters := []vectorstore.Query{
@@ -98,15 +99,13 @@ func (plugin *Plugin) performSemanticSearch(ctx *context.Context, req *schemas.B
 
 	cacheThreshold := plugin.config.Threshold
 
-	if plugin.config.CacheThresholdKey != "" {
-		thresholdValue := (*ctx).Value(ContextKey(plugin.config.CacheThresholdKey))
-		if thresholdValue != nil {
-			threshold, ok := thresholdValue.(float64)
-			if !ok {
-				plugin.logger.Warn(PluginLoggerPrefix + " Threshold is not a float64, using default threshold")
-			} else {
-				cacheThreshold = threshold
-			}
+	thresholdValue := (*ctx).Value(CacheThresholdKey)
+	if thresholdValue != nil {
+		threshold, ok := thresholdValue.(float64)
+		if !ok {
+			plugin.logger.Warn(PluginLoggerPrefix + " Threshold is not a float64, using default threshold")
+		} else {
+			cacheThreshold = threshold
 		}
 	}
 
@@ -253,7 +252,7 @@ func (plugin *Plugin) buildSingleResponseFromResult(ctx *context.Context, req *s
 	cachedResponse.ExtraFields.Provider = req.Provider
 
 	*ctx = context.WithValue(*ctx, isCacheHitKey, true)
-	*ctx = context.WithValue(*ctx, CacheHitTypeKey, cacheType)
+	*ctx = context.WithValue(*ctx, cacheHitTypeKey, cacheType)
 
 	return &schemas.PluginShortCircuit{
 		Response: &cachedResponse,
@@ -312,7 +311,7 @@ func (plugin *Plugin) buildStreamingResponseFromResult(ctx *context.Context, req
 	}()
 
 	*ctx = context.WithValue(*ctx, isCacheHitKey, true)
-	*ctx = context.WithValue(*ctx, CacheHitTypeKey, cacheType)
+	*ctx = context.WithValue(*ctx, cacheHitTypeKey, cacheType)
 
 	return &schemas.PluginShortCircuit{
 		Stream: streamChan,
