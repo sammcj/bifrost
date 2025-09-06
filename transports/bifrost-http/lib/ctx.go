@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/plugins/governance"
-	"github.com/maximhq/bifrost/plugins/logging"
 	"github.com/maximhq/bifrost/plugins/maxim"
 	"github.com/maximhq/bifrost/plugins/semanticcache"
 	"github.com/maximhq/bifrost/plugins/telemetry"
@@ -76,7 +76,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 	if requestID == "" {
 		requestID = uuid.New().String()
 	}
-	bifrostCtx = context.WithValue(bifrostCtx, logging.ContextKey("request-id"), requestID)
+	bifrostCtx = context.WithValue(bifrostCtx, bifrost.BifrostContextKey("request-id"), requestID)
 
 	// Then process other headers
 	ctx.Request.Header.VisitAll(func(key, value []byte) {
@@ -124,7 +124,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 
 		// Handle cache key header (x-bf-cache-key)
 		if keyStr == "x-bf-cache-key" {
-			bifrostCtx = context.WithValue(bifrostCtx, semanticcache.ContextKey("request-cache-key"), string(value))
+			bifrostCtx = context.WithValue(bifrostCtx, semanticcache.CacheKey, string(value))
 		}
 
 		// Handle cache TTL header (x-bf-cache-ttl)
@@ -143,7 +143,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 			}
 
 			if err == nil {
-				bifrostCtx = context.WithValue(bifrostCtx, semanticcache.ContextKey("request-cache-ttl"), ttlDuration)
+				bifrostCtx = context.WithValue(bifrostCtx, semanticcache.CacheTTLKey, ttlDuration)
 			}
 			// If both parsing attempts fail, we silently ignore the header and use default TTL
 		}
@@ -157,9 +157,19 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 				} else if threshold > 1.0 {
 					threshold = 1.0
 				}
-				bifrostCtx = context.WithValue(bifrostCtx, semanticcache.ContextKey("request-cache-threshold"), threshold)
+				bifrostCtx = context.WithValue(bifrostCtx, semanticcache.CacheThresholdKey, threshold)
 			}
 			// If parsing fails, silently ignore the header (no context value set)
+		}
+
+		if keyStr == "x-bf-cache-type" {
+			bifrostCtx = context.WithValue(bifrostCtx, semanticcache.CacheTypeKey, semanticcache.CacheType(string(value)))
+		}
+
+		if keyStr == "x-bf-cache-no-store" {
+			if valueStr := string(value); valueStr == "true" {
+				bifrostCtx = context.WithValue(bifrostCtx, semanticcache.CacheNoStoreKey, true)
+			}
 		}
 	})
 

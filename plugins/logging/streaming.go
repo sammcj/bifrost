@@ -295,7 +295,7 @@ func (p *LoggerPlugin) cleanupOldStreamAccumulators() {
 
 // handleStreamingResponse handles streaming responses with ordered accumulation
 func (p *LoggerPlugin) handleStreamingResponse(ctx *context.Context, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
-	requestID, ok := (*ctx).Value(ContextKey("request-id")).(string)
+	requestID, ok := (*ctx).Value(bifrost.BifrostContextKey("request-id")).(string)
 	if !ok || requestID == "" {
 		p.logger.Error("request-id not found in context or is empty")
 		return result, err, nil
@@ -362,4 +362,3 @@ func (p *LoggerPlugin) handleStreamingResponse(ctx *context.Context, result *sch
 
 	return result, err, nil
 }
-

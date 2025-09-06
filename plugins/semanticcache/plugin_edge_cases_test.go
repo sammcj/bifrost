@@ -633,7 +633,7 @@ func TestErrorHandlingEdgeCases(t *testing.T) {
 		WaitForCache()
 
 		// Now test with invalid key type - should bypass cache
-		ctxInvalidKey := context.WithValue(context.Background(), ContextKey(TestCacheKey), 12345) // Wrong type (int instead of string)
+		ctxInvalidKey := context.WithValue(context.Background(), CacheKey, 12345) // Wrong type (int instead of string)
 
 		response, err := setup.Client.ChatCompletionRequest(ctxInvalidKey, testRequest)
 		if err != nil {

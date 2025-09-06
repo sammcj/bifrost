@@ -20,6 +20,8 @@ const defaultCacheConfig: CacheConfig = {
 	embedding_model: "text-embedding-3-small",
 	ttl_seconds: 300,
 	threshold: 0.8,
+	conversation_history_threshold: 3,
+	exclude_system_prompt: false,
 	cache_by_model: true,
 	cache_by_provider: true,
 };
@@ -274,12 +276,43 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 										/>
 									</div>
 								</div>
+								<p className="text-muted-foreground text-xs">
+									API keys for the embedding provider will be inherited from the main provider configuration. The semantic cache will use
+									the configured provider&apos;s keys automatically. <b>Updates in keys will be reflected on Bifrost restart.</b>
+								</p>
+							</div>
+
+							{/* Conversation Settings */}
+							<div className="space-y-4">
+								<h3 className="text-sm font-medium">Conversation Settings</h3>
+								<div className="grid grid-cols-2 gap-4">
+									<div className="space-y-2">
+										<Label htmlFor="conversation_history_threshold">Conversation History Threshold</Label>
+										<Input
+											id="conversation_history_threshold"
+											type="number"
+											min="1"
+											max="50"
+											value={cacheConfig.conversation_history_threshold || 3}
+											onChange={(e) => debouncedUpdateCacheConfig({ conversation_history_threshold: parseInt(e.target.value) || 3 })}
+										/>
+										<p className="text-muted-foreground text-xs">
+											Skip caching for conversations with more than this number of messages (prevents false positives)
+										</p>
+									</div>
+								</div>
 								<div className="space-y-2">
-									<Label className="text-sm font-medium">API Keys</Label>
-									<p className="text-muted-foreground text-xs">
-										API keys for the embedding provider will be inherited from the main provider configuration. The semantic cache will use
-										the configured provider&apos;s keys automatically. <b>Updates in keys will be reflected on Bifrost restart.</b>
-									</p>
+									<div className="flex h-fit items-center justify-between space-x-2 rounded-lg border p-3">
+										<div className="space-y-0.5">
+											<Label className="text-sm font-medium">Exclude System Prompt</Label>
+											<p className="text-muted-foreground text-xs">Exclude system messages from cache key generation</p>
+										</div>
+										<Switch
+											checked={cacheConfig.exclude_system_prompt || false}
+											onCheckedChange={(checked) => updateCacheConfig({ exclude_system_prompt: checked })}
+											size="md"
+										/>
+									</div>
 								</div>
 							</div>
 
@@ -320,6 +353,12 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 									</li>
 									<li>
 										You can pass <b>x-bf-cache-threshold</b> header with requests to use request-specific similarity threshold.
+									</li>
+									<li>
+										You can pass <b>x-bf-cache-type</b> header with &quot;direct&quot; or &quot;semantic&quot; to control cache behavior.
+									</li>
+									<li>
+										You can pass <b>x-bf-cache-no-store</b> header with &quot;true&quot; to disable response caching.
 									</li>
 								</ul>
 							</div>
