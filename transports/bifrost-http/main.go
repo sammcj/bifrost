@@ -426,11 +426,6 @@ func main() {
 				}
 			}
 
-			// Set hardcoded values
-			semCacheConfig.CacheKey = "request-cache-key"
-			semCacheConfig.CacheTTLKey = "request-cache-ttl"
-			semCacheConfig.CacheThresholdKey = "request-cache-threshold"
-
 			semanticCachePlugin, err := semanticcache.Init(ctx, semCacheConfig, logger, config.VectorStore)
 			if err != nil {
 				logger.Error("failed to initialize semantic cache: %v", err)

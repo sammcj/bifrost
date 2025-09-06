@@ -12,11 +12,6 @@ import (
 	"github.com/maximhq/bifrost/framework/vectorstore"
 )
 
-// Test constants
-const (
-	TestCacheKey = "x-test-cache-key"
-)
-
 // getWeaviateConfigFromEnv retrieves Weaviate configuration from environment variables
 func getWeaviateConfigFromEnv() vectorstore.WeaviateConfig {
 	scheme := os.Getenv("WEAVIATE_SCHEME")
@@ -87,7 +82,6 @@ func NewTestSetup(t *testing.T) *TestSetup {
 	}
 
 	return NewTestSetupWithConfig(t, Config{
-		CacheKey:       TestCacheKey,
 		Provider:       schemas.OpenAI,
 		EmbeddingModel: "text-embedding-3-large",
 		Threshold:      0.8,
@@ -152,7 +146,6 @@ func NewRedisClusterTestSetup(t *testing.T) *TestSetup {
 	}
 
 	config := Config{
-		CacheKey:       TestCacheKey,
 		Provider:       schemas.OpenAI,
 		EmbeddingModel: "text-embedding-3-large",
 		Threshold:      0.8,
@@ -295,7 +288,179 @@ func WaitForCache() {
 	time.Sleep(1 * time.Second)
 }
 
+// CreateEmbeddingRequest creates an embedding request for testing
+func CreateEmbeddingRequest(texts []string) *schemas.BifrostRequest {
+	return &schemas.BifrostRequest{
+		Provider: schemas.OpenAI,
+		Model:    "text-embedding-3-small",
+		Input: schemas.RequestInput{
+			EmbeddingInput: &schemas.EmbeddingInput{
+				Texts: texts,
+			},
+		},
+	}
+}
+
 // CreateContextWithCacheKey creates a context with the test cache key
 func CreateContextWithCacheKey(value string) context.Context {
-	return context.WithValue(context.Background(), ContextKey(TestCacheKey), value)
+	return context.WithValue(context.Background(), CacheKey, value)
+}
+
+// CreateContextWithCacheKeyAndType creates a context with cache key and cache type
+func CreateContextWithCacheKeyAndType(value string, cacheType CacheType) context.Context {
+	ctx := context.WithValue(context.Background(), CacheKey, value)
+	return context.WithValue(ctx, CacheTypeKey, cacheType)
+}
+
+// CreateContextWithCacheKeyAndTTL creates a context with cache key and custom TTL
+func CreateContextWithCacheKeyAndTTL(value string, ttl time.Duration) context.Context {
+	ctx := context.WithValue(context.Background(), CacheKey, value)
+	return context.WithValue(ctx, CacheTTLKey, ttl)
+}
+
+// CreateContextWithCacheKeyAndThreshold creates a context with cache key and custom threshold
+func CreateContextWithCacheKeyAndThreshold(value string, threshold float64) context.Context {
+	ctx := context.WithValue(context.Background(), CacheKey, value)
+	return context.WithValue(ctx, CacheThresholdKey, threshold)
+}
+
+// CreateContextWithCacheKeyAndNoStore creates a context with cache key and no-store flag
+func CreateContextWithCacheKeyAndNoStore(value string, noStore bool) context.Context {
+	ctx := context.WithValue(context.Background(), CacheKey, value)
+	return context.WithValue(ctx, CacheNoStoreKey, noStore)
+}
+
+// CreateTestSetupWithConversationThreshold creates a test setup with custom conversation history threshold
+func CreateTestSetupWithConversationThreshold(t *testing.T, threshold int) *TestSetup {
+	if os.Getenv("OPENAI_API_KEY") == "" {
+		t.Skip("OPENAI_API_KEY is not set, skipping test")
+	}
+
+	config := Config{
+		Provider:                     schemas.OpenAI,
+		EmbeddingModel:               "text-embedding-3-large",
+		Threshold:                    0.8,
+		ConversationHistoryThreshold: threshold,
+		Keys: []schemas.Key{
+			{
+				Value:  os.Getenv("OPENAI_API_KEY"),
+				Models: []string{},
+				Weight: 1.0,
+			},
+		},
+	}
+
+	return NewTestSetupWithConfig(t, config)
+}
+
+// CreateTestSetupWithExcludeSystemPrompt creates a test setup with ExcludeSystemPrompt setting
+func CreateTestSetupWithExcludeSystemPrompt(t *testing.T, excludeSystem bool) *TestSetup {
+	if os.Getenv("OPENAI_API_KEY") == "" {
+		t.Skip("OPENAI_API_KEY is not set, skipping test")
+	}
+
+	config := Config{
+		Provider:            schemas.OpenAI,
+		EmbeddingModel:      "text-embedding-3-large",
+		Threshold:           0.8,
+		ExcludeSystemPrompt: &excludeSystem,
+		Keys: []schemas.Key{
+			{
+				Value:  os.Getenv("OPENAI_API_KEY"),
+				Models: []string{},
+				Weight: 1.0,
+			},
+		},
+	}
+
+	return NewTestSetupWithConfig(t, config)
+}
+
+// CreateTestSetupWithThresholdAndExcludeSystem creates a test setup with both conversation threshold and exclude system prompt settings
+func CreateTestSetupWithThresholdAndExcludeSystem(t *testing.T, threshold int, excludeSystem bool) *TestSetup {
+	if os.Getenv("OPENAI_API_KEY") == "" {
+		t.Skip("OPENAI_API_KEY is not set, skipping test")
+	}
+
+	config := Config{
+		Provider:                     schemas.OpenAI,
+		EmbeddingModel:               "text-embedding-3-large",
+		Threshold:                    0.8,
+		ConversationHistoryThreshold: threshold,
+		ExcludeSystemPrompt:          &excludeSystem,
+		Keys: []schemas.Key{
+			{
+				Value:  os.Getenv("OPENAI_API_KEY"),
+				Models: []string{},
+				Weight: 1.0,
+			},
+		},
+	}
+
+	return NewTestSetupWithConfig(t, config)
+}
+
+// CreateConversationRequest creates a chat request with conversation history
+func CreateConversationRequest(messages []schemas.BifrostMessage, temperature float64, maxTokens int) *schemas.BifrostRequest {
+	return &schemas.BifrostRequest{
+		Provider: schemas.OpenAI,
+		Model:    "gpt-4o-mini",
+		Input: schemas.RequestInput{
+			ChatCompletionInput: &messages,
+		},
+		Params: &schemas.ModelParameters{
+			Temperature: &temperature,
+			MaxTokens:   &maxTokens,
+		},
+	}
+}
+
+// BuildConversationHistory creates a conversation history from pairs of user/assistant messages
+func BuildConversationHistory(systemPrompt string, userAssistantPairs ...[]string) []schemas.BifrostMessage {
+	messages := []schemas.BifrostMessage{}
+
+	// Add system prompt if provided
+	if systemPrompt != "" {
+		messages = append(messages, schemas.BifrostMessage{
+			Role: schemas.ModelChatMessageRoleSystem,
+			Content: schemas.MessageContent{
+				ContentStr: &systemPrompt,
+			},
+		})
+	}
+
+	// Add user/assistant pairs
+	for _, pair := range userAssistantPairs {
+		if len(pair) >= 1 && pair[0] != "" {
+			userMsg := pair[0]
+			messages = append(messages, schemas.BifrostMessage{
+				Role: schemas.ModelChatMessageRoleUser,
+				Content: schemas.MessageContent{
+					ContentStr: &userMsg,
+				},
+			})
+		}
+		if len(pair) >= 2 && pair[1] != "" {
+			assistantMsg := pair[1]
+			messages = append(messages, schemas.BifrostMessage{
+				Role: schemas.ModelChatMessageRoleAssistant,
+				Content: schemas.MessageContent{
+					ContentStr: &assistantMsg,
+				},
+			})
+		}
+	}
+
+	return messages
+}
+
+// AddUserMessage adds a user message to existing conversation
+func AddUserMessage(messages []schemas.BifrostMessage, userMessage string) []schemas.BifrostMessage {
+	newMessage := schemas.BifrostMessage{
+		Role: schemas.ModelChatMessageRoleUser,
+		Content: schemas.MessageContent{
+			ContentStr: &userMessage,
+		},
+	}
+	return append(messages, newMessage)
 }

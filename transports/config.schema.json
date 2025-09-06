@@ -148,19 +148,6 @@
               }
             }
           ]
-        },
-        "ttl_seconds": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Cache TTL in seconds"
-        },
-        "cache_by_model": {
-          "type": "boolean",
-          "description": "Include model in cache key"
-        },
-        "cache_by_provider": {
-          "type": "boolean",
-          "description": "Include provider in cache key"
         }
       },
       "additionalProperties": false
