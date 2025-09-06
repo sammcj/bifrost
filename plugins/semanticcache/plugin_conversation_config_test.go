@@ -286,7 +286,7 @@ func TestExcludeSystemPromptComparison(t *testing.T) {
 	}
 	// Should NOT hit direct cache, but might hit semantic cache due to similar content
 	if response2.ExtraFields.CacheDebug != nil && response2.ExtraFields.CacheDebug.CacheHit {
-		if response2.ExtraFields.CacheDebug.CacheHitType == "semantic" {
+		if response2.ExtraFields.CacheDebug.HitType != nil && *response2.ExtraFields.CacheDebug.HitType == "semantic" {
 			t.Log("✅ Found semantic cache match (expected with similar content)")
 		} else {
 			t.Error("❌ Unexpected direct cache hit with different system prompts")

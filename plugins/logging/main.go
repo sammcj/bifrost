@@ -68,12 +68,13 @@ type StreamUpdateData struct {
 
 // LogMessage represents a message in the logging queue
 type LogMessage struct {
-	Operation        LogOperation
-	RequestID        string
-	Timestamp        time.Time         // Of the preHook/postHook call
-	InitialData      *InitialLogData   // For create operations
-	UpdateData       *UpdateLogData    // For update operations
-	StreamUpdateData *StreamUpdateData // For stream update operations
+	Operation          LogOperation
+	RequestID          string
+	Timestamp          time.Time                  // Of the preHook/postHook call
+	InitialData        *InitialLogData            // For create operations
+	SemanticCacheDebug *schemas.BifrostCacheDebug // For semantic cache operations
+	UpdateData         *UpdateLogData             // For update operations
+	StreamUpdateData   *StreamUpdateData          // For stream update operations
 }
 
 // InitialLogData contains data for initial log entry creation
@@ -93,12 +94,13 @@ type LogCallback func(*logstore.Log)
 
 // StreamChunk represents a single streaming chunk
 type StreamChunk struct {
-	Timestamp    time.Time                   // When chunk was received
-	Delta        *schemas.BifrostStreamDelta // The actual delta content
-	FinishReason *string                     // If this is the final chunk
-	TokenUsage   *schemas.LLMUsage           // Token usage if available
-	Cost         *float64                    // Cost in dollars from pricing plugin
-	ErrorDetails *schemas.BifrostError       // Error if any
+	Timestamp          time.Time                   // When chunk was received
+	Delta              *schemas.BifrostStreamDelta // The actual delta content
+	FinishReason       *string                     // If this is the final chunk
+	TokenUsage         *schemas.LLMUsage           // Token usage if available
+	SemanticCacheDebug *schemas.BifrostCacheDebug  // Semantic cache debug if available
+	Cost               *float64                    // Cost in dollars from pricing plugin
+	ErrorDetails       *schemas.BifrostError       // Error if any
 }
 
 // StreamAccumulator manages accumulation of streaming chunks
@@ -541,23 +543,27 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 			}
 		}()
 
+		if result != nil {
+			logMsg.SemanticCacheDebug = result.ExtraFields.CacheDebug
+		}
+
 		if logMsg.UpdateData != nil && p.pricingManager != nil {
-			cost := p.pricingManager.CalculateCost(result, provider, model, requestType)
+			cost := p.calculateRequestTotalCost(result, provider, model, requestType)
 			logMsg.UpdateData.Cost = &cost
 		}
 		if logMsg.StreamUpdateData != nil && isFinalChunk && p.pricingManager != nil {
-			cost := p.pricingManager.CalculateCost(result, provider, model, requestType)
+			cost := p.calculateRequestTotalCost(result, provider, model, requestType)
 			logMsg.StreamUpdateData.Cost = &cost
 		}
 
 		var processingErr error
 		if logMsg.Operation == LogOperationStreamUpdate {
 			processingErr = retryOnNotFound(*ctx, func() error {
-				return p.processStreamUpdate(*ctx, logMsg.RequestID, logMsg.Timestamp, logMsg.StreamUpdateData, isFinalChunk)
+				return p.processStreamUpdate(*ctx, logMsg.RequestID, logMsg.Timestamp, logMsg.SemanticCacheDebug, logMsg.StreamUpdateData, isFinalChunk)
 			})
 		} else {
 			processingErr = retryOnNotFound(*ctx, func() error {
-				return p.updateLogEntry(*ctx, logMsg.RequestID, logMsg.Timestamp, logMsg.UpdateData)
+				return p.updateLogEntry(*ctx, logMsg.RequestID, logMsg.Timestamp, logMsg.SemanticCacheDebug, logMsg.UpdateData)
 			})
 		}
 		if processingErr != nil {

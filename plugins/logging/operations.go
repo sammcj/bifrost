@@ -33,7 +33,7 @@ func (p *LoggerPlugin) insertInitialLogEntry(requestID string, timestamp time.Ti
 }
 
 // updateLogEntry updates an existing log entry using GORM
-func (p *LoggerPlugin) updateLogEntry(ctx context.Context, requestID string, timestamp time.Time, data *UpdateLogData) error {
+func (p *LoggerPlugin) updateLogEntry(ctx context.Context, requestID string, timestamp time.Time, cacheDebug *schemas.BifrostCacheDebug, data *UpdateLogData) error {
 	updates := make(map[string]interface{})
 	if !timestamp.IsZero() {
 		// Try to get original timestamp from context first for latency calculation
@@ -115,6 +115,16 @@ func (p *LoggerPlugin) updateLogEntry(ctx context.Context, requestID string, tim
 		updates["cost"] = *data.Cost
 	}
 
+	// Handle cache debug
+	if cacheDebug != nil {
+		tempEntry.CacheDebugParsed = cacheDebug
+		if err := tempEntry.SerializeFields(); err != nil {
+			p.logger.Error("failed to serialize cache debug: %v", err)
+		} else {
+			updates["cache_debug"] = tempEntry.CacheDebug
+		}
+	}
+
 	if data.ErrorDetails != nil {
 		tempEntry.ErrorDetailsParsed = data.ErrorDetails
 		if err := tempEntry.SerializeFields(); err != nil {
@@ -127,7 +137,7 @@ func (p *LoggerPlugin) updateLogEntry(ctx context.Context, requestID string, tim
 }
 
 // processStreamUpdate handles streaming updates using GORM
-func (p *LoggerPlugin) processStreamUpdate(ctx context.Context, requestID string, timestamp time.Time, data *StreamUpdateData, isFinalChunk bool) error {
+func (p *LoggerPlugin) processStreamUpdate(ctx context.Context, requestID string, timestamp time.Time, cacheDebug *schemas.BifrostCacheDebug, data *StreamUpdateData, isFinalChunk bool) error {
 	updates := make(map[string]interface{})
 
 	// Handle error case first
@@ -167,6 +177,7 @@ func (p *LoggerPlugin) processStreamUpdate(ctx context.Context, requestID string
 	// Calculate latency when stream finishes
 	var needsLatency bool
 	var latency float64
+	tempEntry := &logstore.Log{}
 
 	if isFinalChunk {
 		// Stream is finishing, calculate latency
@@ -195,7 +206,6 @@ func (p *LoggerPlugin) processStreamUpdate(ctx context.Context, requestID string
 
 	// Update token usage if provided
 	if data.TokenUsage != nil {
-		tempEntry := &logstore.Log{}
 		tempEntry.TokenUsageParsed = data.TokenUsage
 		if err := tempEntry.SerializeFields(); err == nil {
 			updates["token_usage"] = tempEntry.TokenUsage
@@ -229,13 +239,22 @@ func (p *LoggerPlugin) processStreamUpdate(ctx context.Context, requestID string
 
 	// Handle transcription output from stream updates
 	if data.TranscriptionOutput != nil {
-		tempEntry := &logstore.Log{}
 		tempEntry.TranscriptionOutputParsed = data.TranscriptionOutput
 		// Here we just log error but move one vs breaking the entire logging flow
 		if err := tempEntry.SerializeFields(); err != nil {
 			p.logger.Warn("failed to serialize transcription output: %v", err)
 		} else {
 			updates["transcription_output"] = tempEntry.TranscriptionOutput
+		}
+	}
+
+	// Handle cache debug
+	if cacheDebug != nil {
+		tempEntry.CacheDebugParsed = cacheDebug
+		if err := tempEntry.SerializeFields(); err != nil {
+			p.logger.Error("failed to serialize cache debug: %v", err)
+		} else {
+			updates["cache_debug"] = tempEntry.CacheDebug
 		}
 	}
 

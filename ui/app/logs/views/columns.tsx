@@ -96,8 +96,7 @@ export const createColumns = (): ColumnDef<LogEntry>[] => [
 			</Button>
 		),
 		cell: ({ row }) => {
-			const tokenUsage = row.original.token_usage;
-			if (!tokenUsage) {
+			if (!row.original.cost) {
 				return <div className="pl-4 font-mono text-xs">N/A</div>;
 			}
 

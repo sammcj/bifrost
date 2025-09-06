@@ -24,27 +24,6 @@ interface LogDetailSheetProps {
 export function LogDetailSheet({ log, open, onOpenChange }: LogDetailSheetProps) {
 	if (!log) return null;
 
-	// Performance scoring with muted colors
-	const getLatencyScore = (latency: number) => {
-		if (latency < 500) return { score: 95, label: "Excellent" };
-		if (latency < 1000) return { score: 80, label: "Good" };
-		if (latency < 2000) return { score: 60, label: "Fair" };
-		return { score: 30, label: "Poor" };
-	};
-
-	const latencyScore = getLatencyScore(log.latency || 0);
-	const tokenUsage = log.token_usage;
-	const tokenEfficiency = tokenUsage ? Math.round((tokenUsage.completion_tokens / tokenUsage.total_tokens) * 100) : 0;
-
-	// Calculate estimated costs (example rates)
-	const estimatedCost = tokenUsage
-		? {
-				inputCost: (tokenUsage.prompt_tokens / 1000) * 0.01, // $0.01 per 1K tokens
-				outputCost: (tokenUsage.completion_tokens / 1000) * 0.03, // $0.03 per 1K tokens
-				total: (tokenUsage.prompt_tokens / 1000) * 0.01 + (tokenUsage.completion_tokens / 1000) * 0.03,
-			}
-		: { inputCost: 0, outputCost: 0, total: 0 };
-
 	// Taking out tool call
 	let toolsParameter = null;
 	if (log.params?.tools) {
@@ -142,15 +121,88 @@ export function LogDetailSheet({ log, open, onOpenChange }: LogDetailSheetProps)
 									<LogEntryDetailsView className="w-full" label="Total Tokens" value={log.token_usage?.total_tokens || "-"} />
 								</div>
 							</div>
-							{/* <DottedSeparator />
-							<div className="space-y-4">
-								<BlockHeader title="Cost" icon={<DollarSign className="h-5 w-5 text-gray-600" />} />
-								<div className="grid w-full grid-cols-3 items-center justify-between gap-4">
-									<LogEntryDetailsView className="w-full" label="Input Cost" value={`$${(estimatedCost.inputCost / 100).toFixed(4)}`} />
-									<LogEntryDetailsView className="w-full" label="Output Cost" value={`$${(estimatedCost.outputCost / 100).toFixed(4)}`} />
-									<LogEntryDetailsView className="w-full" label="Total Cost" value={`$${(estimatedCost.total / 100).toFixed(4)}`} />
-								</div>
-							</div> */}
+							{log.cache_debug && (
+								<>
+									<DottedSeparator />
+									<div className="space-y-4">
+										<BlockHeader
+											title={`Caching Details (${log.cache_debug.cache_hit ? "Hit" : "Miss"})`}
+											icon={<DollarSign className="h-5 w-5 text-gray-600" />}
+										/>
+										<div className="grid w-full grid-cols-3 items-center justify-between gap-4">
+											{log.cache_debug.cache_hit ? (
+												<>
+													<LogEntryDetailsView
+														className="w-full"
+														label="Cache Type"
+														value={
+															<Badge variant="secondary" className={`uppercase`}>
+																{log.cache_debug.hit_type}
+															</Badge>
+														}
+													/>
+													{/* <LogEntryDetailsView className="w-full" label="Cache ID" value={log.cache_debug.cache_id} /> */}
+													{log.cache_debug.hit_type === "semantic" && (
+														<>
+															{log.cache_debug.provider_used && (
+																<LogEntryDetailsView
+																	className="w-full"
+																	label="Embedding Provider"
+																	value={
+																		<Badge variant="secondary" className={`uppercase`}>
+																			{log.cache_debug.provider_used}
+																		</Badge>
+																	}
+																/>
+															)}
+															{log.cache_debug.model_used && (
+																<LogEntryDetailsView className="w-full" label="Embedding Model" value={log.cache_debug.model_used} />
+															)}
+															{log.cache_debug.threshold && (
+																<LogEntryDetailsView className="w-full" label="Threshold" value={log.cache_debug.threshold || "-"} />
+															)}
+															{log.cache_debug.similarity && (
+																<LogEntryDetailsView
+																	className="w-full"
+																	label="Similarity Score"
+																	value={log.cache_debug.similarity?.toFixed(2) || "-"}
+																/>
+															)}
+															{log.cache_debug.input_tokens && (
+																<LogEntryDetailsView
+																	className="w-full"
+																	label="Embedding Input Tokens"
+																	value={log.cache_debug.input_tokens}
+																/>
+															)}
+														</>
+													)}
+												</>
+											) : (
+												<>
+													{log.cache_debug.provider_used && (
+														<LogEntryDetailsView
+															className="w-full"
+															label="Embedding Provider"
+															value={
+																<Badge variant="secondary" className={`uppercase`}>
+																	{log.cache_debug.provider_used}
+																</Badge>
+															}
+														/>
+													)}
+													{log.cache_debug.model_used && (
+														<LogEntryDetailsView className="w-full" label="Embedding Model" value={log.cache_debug.model_used} />
+													)}
+													{log.cache_debug.input_tokens && (
+														<LogEntryDetailsView className="w-full" label="Embedding Input Tokens" value={log.cache_debug.input_tokens} />
+													)}
+												</>
+											)}
+										</div>
+									</div>
+								</>
+							)}
 						</>
 					)}
 				</div>

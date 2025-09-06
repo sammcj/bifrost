@@ -84,11 +84,9 @@ func TestStreamingCacheBasicFunctionality(t *testing.T) {
 	// Validate that the second stream was cached
 	cached := false
 	for _, response := range responses2 {
-		if response.ExtraFields.CacheDebug != nil {
-			if response.ExtraFields.CacheDebug.CacheHit {
-				cached = true
-				break
-			}
+		if response.ExtraFields.CacheDebug != nil && response.ExtraFields.CacheDebug.CacheHit {
+			cached = true
+			break
 		}
 	}
 

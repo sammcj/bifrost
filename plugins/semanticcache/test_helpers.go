@@ -261,9 +261,9 @@ func AssertCacheHit(t *testing.T, response *schemas.BifrostResponse, expectedCac
 	}
 
 	if expectedCacheType != "" {
-		cacheType := response.ExtraFields.CacheDebug.CacheHitType
-		if cacheType != expectedCacheType {
-			t.Errorf("Expected cache type '%s', got '%s'", expectedCacheType, cacheType)
+		cacheType := response.ExtraFields.CacheDebug.HitType
+		if cacheType != nil && *cacheType != expectedCacheType {
+			t.Errorf("Expected cache type '%s', got '%s'", expectedCacheType, *cacheType)
 			return
 		}
 

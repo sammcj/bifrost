@@ -501,6 +501,22 @@ func (s *WeaviateStore) CreateNamespace(ctx context.Context, className string, p
 	return nil
 }
 
+func (s *WeaviateStore) DeleteNamespace(ctx context.Context, className string) error {
+	exists, err := s.client.Schema().ClassExistenceChecker().
+		WithClassName(className).
+		Do(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check class existence: %w", err)
+	}
+	if !exists {
+		return nil // Schema already does not exist
+	} else {
+		return s.client.Schema().ClassDeleter().
+			WithClassName(className).
+			Do(ctx)
+	}
+}
+
 // buildWeaviateFilter converts []Query → Weaviate WhereFilter
 func buildWeaviateFilter(queries []Query) *filters.WhereBuilder {
 	if len(queries) == 0 {

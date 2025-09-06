@@ -162,23 +162,21 @@ func TestSemanticSearch(t *testing.T) {
 	// Check if second request was served from semantic cache
 	semanticMatch := false
 
-	if response2.ExtraFields.CacheDebug != nil {
-		if response2.ExtraFields.CacheDebug.CacheHit {
-			if response2.ExtraFields.CacheDebug.CacheHitType == string(CacheTypeSemantic) {
-				semanticMatch = true
+	if response2.ExtraFields.CacheDebug != nil && response2.ExtraFields.CacheDebug.CacheHit {
+		if response2.ExtraFields.CacheDebug.HitType != nil && *response2.ExtraFields.CacheDebug.HitType == string(CacheTypeSemantic) {
+			semanticMatch = true
 
-				threshold := 0.0
-				similarity := 0.0
+			threshold := 0.0
+			similarity := 0.0
 
-				if response2.ExtraFields.CacheDebug.CacheThreshold != nil {
-					threshold = *response2.ExtraFields.CacheDebug.CacheThreshold
-				}
-				if response2.ExtraFields.CacheDebug.CacheSimilarity != nil {
-					similarity = *response2.ExtraFields.CacheDebug.CacheSimilarity
-				}
-
-				t.Logf("✅ Second request was served from semantic cache! Cache threshold: %f, Cache similarity: %f", threshold, similarity)
+			if response2.ExtraFields.CacheDebug.Threshold != nil {
+				threshold = *response2.ExtraFields.CacheDebug.Threshold
 			}
+			if response2.ExtraFields.CacheDebug.Similarity != nil {
+				similarity = *response2.ExtraFields.CacheDebug.Similarity
+			}
+
+			t.Logf("✅ Second request was served from semantic cache! Cache threshold: %f, Cache similarity: %f", threshold, similarity)
 		}
 	}
 
@@ -254,23 +252,21 @@ func TestDirectVsSemanticSearch(t *testing.T) {
 	semanticMatch := false
 
 	// Check if it was served from cache and what type
-	if response3.ExtraFields.CacheDebug != nil {
-		if response3.ExtraFields.CacheDebug.CacheHit {
-			if response3.ExtraFields.CacheDebug.CacheHitType == string(CacheTypeSemantic) {
-				semanticMatch = true
+	if response3.ExtraFields.CacheDebug != nil && response3.ExtraFields.CacheDebug.CacheHit {
+		if response3.ExtraFields.CacheDebug.HitType != nil && *response3.ExtraFields.CacheDebug.HitType == string(CacheTypeSemantic) {
+			semanticMatch = true
 
-				threshold := 0.0
-				similarity := 0.0
+			threshold := 0.0
+			similarity := 0.0
 
-				if response3.ExtraFields.CacheDebug.CacheThreshold != nil {
-					threshold = *response3.ExtraFields.CacheDebug.CacheThreshold
-				}
-				if response3.ExtraFields.CacheDebug.CacheSimilarity != nil {
-					similarity = *response3.ExtraFields.CacheDebug.CacheSimilarity
-				}
-
-				t.Logf("✅ Third request was served from semantic cache! Cache threshold: %f, Cache similarity: %f", threshold, similarity)
+			if response3.ExtraFields.CacheDebug.Threshold != nil {
+				threshold = *response3.ExtraFields.CacheDebug.Threshold
 			}
+			if response3.ExtraFields.CacheDebug.Similarity != nil {
+				similarity = *response3.ExtraFields.CacheDebug.Similarity
+			}
+
+			t.Logf("✅ Third request was served from semantic cache! Cache threshold: %f, Cache similarity: %f", threshold, similarity)
 		}
 	}
 

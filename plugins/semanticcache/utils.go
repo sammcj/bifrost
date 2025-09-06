@@ -14,7 +14,7 @@ import (
 )
 
 // generateEmbedding generates an embedding for the given text using the configured provider.
-func (plugin *Plugin) generateEmbedding(ctx context.Context, text string) ([]float32, error) {
+func (plugin *Plugin) generateEmbedding(ctx context.Context, text string) ([]float32, int, error) {
 	// Create embedding request
 	embeddingReq := &schemas.BifrostRequest{
 		Provider: plugin.config.Provider,
@@ -29,36 +29,40 @@ func (plugin *Plugin) generateEmbedding(ctx context.Context, text string) ([]flo
 	// Generate embedding using bifrost client
 	response, err := plugin.client.EmbeddingRequest(ctx, embeddingReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate embedding: %v", err)
+		return nil, 0, fmt.Errorf("failed to generate embedding: %v", err)
 	}
 
 	// Extract the first embedding from response
 	if len(response.Data) == 0 {
-		return nil, fmt.Errorf("no embeddings returned from provider")
+		return nil, 0, fmt.Errorf("no embeddings returned from provider")
 	}
 
 	// Get the embedding from the first data item
 	embedding := response.Data[0].Embedding
+	inputTokens := 0
+	if response.Usage != nil {
+		inputTokens = response.Usage.TotalTokens
+	}
 
 	if embedding.EmbeddingStr != nil {
 		// decode embedding.EmbeddingStr to []float32
 		var vals []float32
 		if err := json.Unmarshal([]byte(*embedding.EmbeddingStr), &vals); err != nil {
-			return nil, fmt.Errorf("failed to parse string embedding: %w", err)
+			return nil, 0, fmt.Errorf("failed to parse string embedding: %w", err)
 		}
-		return vals, nil
+		return vals, inputTokens, nil
 	} else if embedding.EmbeddingArray != nil {
-		return *embedding.EmbeddingArray, nil
+		return *embedding.EmbeddingArray, inputTokens, nil
 	} else if embedding.Embedding2DArray != nil && len(*embedding.Embedding2DArray) > 0 {
 		// Flatten 2D array into single embedding
 		var flattened []float32
 		for _, arr := range *embedding.Embedding2DArray {
 			flattened = append(flattened, arr...)
 		}
-		return flattened, nil
+		return flattened, inputTokens, nil
 	}
 
-	return nil, fmt.Errorf("embedding data is not in expected format")
+	return nil, 0, fmt.Errorf("embedding data is not in expected format")
 }
 
 // generateRequestHash creates an xxhash of the request for semantic cache key generation.
@@ -310,7 +314,7 @@ func (plugin *Plugin) addSingleResponse(ctx context.Context, responseID string, 
 }
 
 // addStreamingResponse handles streaming response storage by accumulating chunks
-func (plugin *Plugin) addStreamingResponse(ctx context.Context, responseID string, res *schemas.BifrostResponse, bifrostErr *schemas.BifrostError, embedding []float32, metadata map[string]interface{}, ttl time.Duration) error {
+func (plugin *Plugin) addStreamingResponse(ctx context.Context, responseID string, res *schemas.BifrostResponse, bifrostErr *schemas.BifrostError, embedding []float32, metadata map[string]interface{}, ttl time.Duration, isFinalChunk bool) error {
 	// Create accumulator if it doesn't exist
 	accumulator := plugin.getOrCreateStreamAccumulator(responseID, embedding, metadata, ttl)
 
@@ -332,15 +336,13 @@ func (plugin *Plugin) addStreamingResponse(ctx context.Context, responseID strin
 	}
 
 	// Add chunk to accumulator synchronously to maintain order
-	if err := plugin.addStreamChunk(responseID, chunk); err != nil {
+	if err := plugin.addStreamChunk(responseID, chunk, isFinalChunk); err != nil {
 		return fmt.Errorf("failed to add stream chunk: %w", err)
 	}
 
 	// Check if this is the final chunk and gate final processing to ensure single invocation
 	accumulator.mu.Lock()
 	// Check for completion: either FinishReason is present, there's an error, or token usage exists
-	isComplete := chunk.FinishReason != nil || bifrostErr != nil ||
-		(res != nil && res.Usage != nil && res.Usage.TotalTokens > 0)
 	alreadyComplete := accumulator.IsComplete
 
 	// Track if any chunk has an error
@@ -348,7 +350,7 @@ func (plugin *Plugin) addStreamingResponse(ctx context.Context, responseID strin
 		accumulator.HasError = true
 	}
 
-	if isComplete && !alreadyComplete {
+	if isFinalChunk && !alreadyComplete {
 		accumulator.IsComplete = true
 		accumulator.FinalTimestamp = chunk.Timestamp
 	}
@@ -356,7 +358,7 @@ func (plugin *Plugin) addStreamingResponse(ctx context.Context, responseID strin
 
 	// If this is the final chunk and hasn't been processed yet, process accumulated chunks
 	// Note: processAccumulatedStream will check for errors and skip caching if any errors occurred
-	if isComplete && !alreadyComplete {
+	if isFinalChunk && !alreadyComplete {
 		if processErr := plugin.processAccumulatedStream(ctx, responseID); processErr != nil {
 			plugin.logger.Warn(fmt.Sprintf("%s Failed to process accumulated stream for request %s: %v", PluginLoggerPrefix, responseID, processErr))
 		}

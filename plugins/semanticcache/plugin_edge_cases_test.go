@@ -567,17 +567,15 @@ func TestSemanticSimilarityEdgeCases(t *testing.T) {
 
 			// Check if semantic matching occurred
 			semanticMatch := false
-			if response2.ExtraFields.CacheDebug != nil {
-				if response2.ExtraFields.CacheDebug.CacheHit {
-					if response2.ExtraFields.CacheDebug.CacheHitType == string(CacheTypeSemantic) {
-						semanticMatch = true
+			if response2.ExtraFields.CacheDebug != nil && response2.ExtraFields.CacheDebug.CacheHit {
+				if response2.ExtraFields.CacheDebug.HitType != nil && *response2.ExtraFields.CacheDebug.HitType == string(CacheTypeSemantic) {
+					semanticMatch = true
 
-						if response2.ExtraFields.CacheDebug.CacheThreshold != nil {
-							cacheThresholdFloat = *response2.ExtraFields.CacheDebug.CacheThreshold
-						}
-						if response2.ExtraFields.CacheDebug.CacheSimilarity != nil {
-							cacheSimilarityFloat = *response2.ExtraFields.CacheDebug.CacheSimilarity
-						}
+					if response2.ExtraFields.CacheDebug.Threshold != nil {
+						cacheThresholdFloat = *response2.ExtraFields.CacheDebug.Threshold
+					}
+					if response2.ExtraFields.CacheDebug.Similarity != nil {
+						cacheSimilarityFloat = *response2.ExtraFields.CacheDebug.Similarity
 					}
 				}
 			}
