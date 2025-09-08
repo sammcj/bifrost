@@ -342,6 +342,12 @@ func (pm *PricingManager) getPricing(model, provider string, requestType schemas
 
 	pricing, ok := pm.pricingData[makeKey(model, provider, normalizeRequestType(requestType))]
 	if !ok {
+		if provider == string(schemas.Gemini) {
+			pricing, ok = pm.pricingData[makeKey(model, "vertex", normalizeRequestType(requestType))]
+			if ok {
+				return &pricing, true
+			}
+		}
 		return nil, false
 	}
 	return &pricing, true
