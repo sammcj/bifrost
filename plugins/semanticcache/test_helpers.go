@@ -260,6 +260,12 @@ func AssertCacheHit(t *testing.T, response *schemas.BifrostResponse, expectedCac
 		return
 	}
 
+	// Check that it's actually a cache hit
+	if !response.ExtraFields.CacheDebug.CacheHit {
+		t.Error("❌ Expected cache hit but response was not cached")
+		return
+	}
+
 	if expectedCacheType != "" {
 		cacheType := response.ExtraFields.CacheDebug.HitType
 		if cacheType != nil && *cacheType != expectedCacheType {
@@ -280,7 +286,13 @@ func AssertNoCacheHit(t *testing.T, response *schemas.BifrostResponse) {
 		return
 	}
 
-	t.Error("❌ Response was cached when it shouldn't be")
+	// Check the actual CacheHit field instead of just checking if CacheDebug exists
+	if response.ExtraFields.CacheDebug.CacheHit {
+		t.Error("❌ Response was cached when it shouldn't be")
+		return
+	}
+
+	t.Log("✅ Response correctly not served from cache (cache_debug present but CacheHit=false)")
 }
 
 // WaitForCache waits for async cache operations to complete

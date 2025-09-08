@@ -251,8 +251,10 @@ func TestStreamingChunkOrdering(t *testing.T) {
 				i, originalIndex, cachedIndex)
 		}
 
-		// Verify this chunk was served from cache
-		AssertCacheHit(t, &cachedChunks[i], string(CacheTypeDirect))
+		// Only verify cache hit on the last chunk (where CacheDebug is set)
+		if i == len(cachedChunks)-1 {
+			AssertCacheHit(t, &cachedChunks[i], string(CacheTypeDirect))
+		}
 	}
 
 	// Verify chunks are in sequential order
