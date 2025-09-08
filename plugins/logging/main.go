@@ -548,11 +548,11 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 		}
 
 		if logMsg.UpdateData != nil && p.pricingManager != nil {
-			cost := p.calculateRequestTotalCost(result, provider, model, requestType)
+			cost := p.pricingManager.CalculateCostWithCacheDebug(result, provider, model, requestType)
 			logMsg.UpdateData.Cost = &cost
 		}
 		if logMsg.StreamUpdateData != nil && isFinalChunk && p.pricingManager != nil {
-			cost := p.calculateRequestTotalCost(result, provider, model, requestType)
+			cost := p.pricingManager.CalculateCostWithCacheDebug(result, provider, model, requestType)
 			logMsg.StreamUpdateData.Cost = &cost
 		}
 
