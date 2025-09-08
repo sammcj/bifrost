@@ -855,10 +855,6 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 						},
 					}
 
-					if params != nil {
-						streamResponse.ExtraFields.Params = *params
-					}
-
 					// Use utility function to process and send response
 					processAndSendResponse(ctx, postHookRunner, streamResponse, responseChan, provider.logger)
 
@@ -889,10 +885,6 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 							Provider:   providerName,
 							ChunkIndex: chunkIndex,
 						},
-					}
-
-					if params != nil {
-						response.ExtraFields.Params = *params
 					}
 
 					// Use utility function to process and send response
@@ -934,10 +926,6 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 							Provider:   providerName,
 							ChunkIndex: chunkIndex,
 						},
-					}
-
-					if params != nil {
-						response.ExtraFields.Params = *params
 					}
 
 					// Use utility function to process and send response
@@ -996,6 +984,8 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 					if params != nil {
 						response.ExtraFields.Params = *params
 					}
+
+					ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
 
 					// Use utility function to process and send response
 					processAndSendResponse(ctx, postHookRunner, response, responseChan, provider.logger)
