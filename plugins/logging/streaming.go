@@ -373,7 +373,7 @@ func (p *LoggerPlugin) handleStreamingResponse(ctx *context.Context, result *sch
 		if result != nil {
 			if isFinalChunk {
 				if p.pricingManager != nil {
-					cost := p.calculateRequestTotalCost(result, provider, model, requestType)
+					cost := p.pricingManager.CalculateCostWithCacheDebug(result, provider, model, requestType)
 					chunk.Cost = bifrost.Ptr(cost)
 				}
 				chunk.SemanticCacheDebug = result.ExtraFields.CacheDebug
