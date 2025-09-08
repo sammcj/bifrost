@@ -157,7 +157,7 @@ func (pm *PricingManager) CalculateCost(result *schemas.BifrostResponse, provide
 
 	cost := 0.0
 	if usage != nil || audioSeconds != nil || audioTokenDetails != nil {
-		cost = pm.calculateCostForUsage(string(provider), model, usage, requestType, isCacheRead, isBatch, audioSeconds, audioTokenDetails)
+		cost = pm.CalculateCostFromUsage(string(provider), model, usage, requestType, isCacheRead, isBatch, audioSeconds, audioTokenDetails)
 	}
 
 	return cost
@@ -174,8 +174,8 @@ func (pm *PricingManager) Cleanup() error {
 	return nil
 }
 
-// calculateCostForUsage calculates cost in dollars using pricing manager and usage data with conditional pricing
-func (pm *PricingManager) calculateCostForUsage(provider string, model string, usage *schemas.LLMUsage, requestType schemas.RequestType, isCacheRead bool, isBatch bool, audioSeconds *int, audioTokenDetails *schemas.AudioTokenDetails) float64 {
+// CalculateCostFromUsage calculates cost in dollars using pricing manager and usage data with conditional pricing
+func (pm *PricingManager) CalculateCostFromUsage(provider string, model string, usage *schemas.LLMUsage, requestType schemas.RequestType, isCacheRead bool, isBatch bool, audioSeconds *int, audioTokenDetails *schemas.AudioTokenDetails) float64 {
 	// Allow audio-only flows by only returning early if we have no usage data at all
 	if usage == nil && audioSeconds == nil && audioTokenDetails == nil {
 		return 0.0

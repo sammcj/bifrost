@@ -36,7 +36,7 @@ func (plugin *Plugin) getOrCreateStreamAccumulator(requestID string, embedding [
 }
 
 // addStreamChunk adds a chunk to the stream accumulator
-func (plugin *Plugin) addStreamChunk(requestID string, chunk *StreamChunk) error {
+func (plugin *Plugin) addStreamChunk(requestID string, chunk *StreamChunk, isFinalChunk bool) error {
 	// Get accumulator (should exist if properly initialized)
 	accumulatorInterface, exists := plugin.streamAccumulators.Load(requestID)
 	if !exists {
@@ -52,9 +52,11 @@ func (plugin *Plugin) addStreamChunk(requestID string, chunk *StreamChunk) error
 
 	// Set FinalTimestamp when FinishReason is present
 	// This handles both normal completion chunks and usage-only last chunks
-	if chunk.FinishReason != nil {
+	if isFinalChunk {
 		accumulator.FinalTimestamp = chunk.Timestamp
 	}
+
+	plugin.logger.Debug(fmt.Sprintf("%s Added chunk to stream accumulator for request %s", PluginLoggerPrefix, requestID))
 
 	return nil
 }
