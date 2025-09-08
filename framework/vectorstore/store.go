@@ -76,6 +76,7 @@ const (
 // VectorStore represents the interface for the vector store.
 type VectorStore interface {
 	CreateNamespace(ctx context.Context, namespace string, properties map[string]VectorStoreProperties) error
+	DeleteNamespace(ctx context.Context, namespace string) error
 	GetChunk(ctx context.Context, namespace string, id string) (SearchResult, error)
 	GetChunks(ctx context.Context, namespace string, ids []string) ([]SearchResult, error)
 	GetAll(ctx context.Context, namespace string, queries []Query, selectFields []string, cursor *string, limit int64) ([]SearchResult, *string, error)

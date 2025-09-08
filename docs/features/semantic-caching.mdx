@@ -400,13 +400,17 @@ When responses are served from semantic cache, 3 key variables are automatically
 **Location**: `response.ExtraFields.CacheDebug` (as a JSON object)
 
 **Fields**:
-- `CacheHit` (boolean): `true` when response served from cache
-- `CacheHitType` (string): `"semantic"` for similarity match, `"direct"` for hash match
-- `CacheID` (string): Unique cache entry ID for management operations  
+- `CacheHit` (boolean): `true` if the response was served from the cache, `false` when lookup fails.
+- `HitType` (string): `"semantic"` for similarity match, `"direct"` for hash match
+- `CacheID` (string): Unique cache entry ID for management operations (present only for cache hits)
+
 
 **Semantic Cache Only**:
-- `CacheThreshold` (number): Similarity threshold used for the match
-- `CacheSimilarity` (number): Similarity score for the match
+- `ProviderUsed` (string): Provider used for the calculating semantic match embedding. (present for both cache hits and misses)
+- `ModelUsed` (string): Model used for the calculating semantic match embedding. (present for both cache hits and misses)
+- `InputTokens` (number): Number of tokens extracted from the request for the semantic match embedding calculation. (present for both cache hits and misses)
+- `Threshold` (number): Similarity threshold used for the match. (present only for cache hits)
+- `Similarity` (number): Similarity score for the match. (present only for cache hits)
 
 Example HTTP Response:
 
@@ -415,10 +419,34 @@ Example HTTP Response:
   "extra_fields": {
     "cache_debug": {
       "cache_hit": true,
-      "cache_hit_type": "semantic",
+      "hit_type": "direct",
       "cache_id": "550e8500-e29b-41d4-a725-446655440001",
-      "cache_threshold": 0.8,
-      "cache_similarity": 0.95
+    }
+  }
+}
+
+{
+  "extra_fields": {
+    "cache_debug": {
+      "cache_hit": true,
+      "hit_type": "semantic",
+      "cache_id": "550e8500-e29b-41d4-a725-446655440001",
+      "threshold": 0.8,
+      "similarity": 0.95,
+      "provider_used": "openai",
+      "model_used": "gpt-4o-mini",
+      "input_tokens": 100
+    }
+  }
+}
+
+{
+  "extra_fields": {
+    "cache_debug": {
+      "cache_hit": false,
+      "provider_used": "openai",
+      "model_used": "gpt-4o-mini",
+      "input_tokens": 20
     }
   }
 }
@@ -465,13 +493,17 @@ The semantic cache automatically handles cleanup to prevent storage bloat:
 
 **Automatic Cleanup:**
 - **TTL Expiration**: Entries are automatically removed when TTL expires
-- **Shutdown Cleanup**: All cache entries are cleared from the vector store namespace when Bifrost client shuts down
+- **Shutdown Cleanup**: All cache entries are cleared from the vector store namespace and the namespace itself when Bifrost client shuts down
 - **Namespace Isolation**: Each Bifrost instance uses isolated vector store namespaces to prevent conflicts
 
 **Manual Cleanup Options:**
 - Clear specific entries by request ID (see examples above)
 - Clear all entries for a cache key
 - Restart Bifrost to clear all cache data
+
+<Warning>
+The semantic cache namespace and all its cache entries are deleted when Bifrost client shuts down, so DO NOT use the plugin's namespace for external purposes.
+</Warning>
 
 ---
 

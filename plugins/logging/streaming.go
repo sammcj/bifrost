@@ -174,11 +174,23 @@ func (p *LoggerPlugin) processAccumulatedChunks(requestID string) error {
 		lastChunk := accumulator.Chunks[len(accumulator.Chunks)-1]
 		if lastChunk.TokenUsage != nil {
 			tempEntry.TokenUsageParsed = lastChunk.TokenUsage
-			if err := tempEntry.SerializeFields(); err == nil {
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize token usage: %v", err)
+			} else {
 				updates["token_usage"] = tempEntry.TokenUsage
 				updates["prompt_tokens"] = lastChunk.TokenUsage.PromptTokens
 				updates["completion_tokens"] = lastChunk.TokenUsage.CompletionTokens
 				updates["total_tokens"] = lastChunk.TokenUsage.TotalTokens
+			}
+		}
+
+		// Handle cache debug
+		if lastChunk.SemanticCacheDebug != nil {
+			tempEntry.CacheDebugParsed = lastChunk.SemanticCacheDebug
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize cache debug: %v", err)
+			} else {
+				updates["cache_debug"] = tempEntry.CacheDebug
 			}
 		}
 	}
@@ -356,14 +368,17 @@ func (p *LoggerPlugin) handleStreamingResponse(ctx *context.Context, result *sch
 	isFinalChunk := bifrost.IsFinalChunk(ctx)
 
 	go func() {
-		if p.pricingManager != nil {
-			cost := p.pricingManager.CalculateCost(result, provider, model, requestType)
-			chunk.Cost = bifrost.Ptr(cost)
-		}
-
 		// Add chunk to accumulator synchronously to maintain order
 		object := ""
 		if result != nil {
+			if isFinalChunk {
+				if p.pricingManager != nil {
+					cost := p.calculateRequestTotalCost(result, provider, model, requestType)
+					chunk.Cost = bifrost.Ptr(cost)
+				}
+				chunk.SemanticCacheDebug = result.ExtraFields.CacheDebug
+			}
+
 			object = result.Object
 		}
 		if addErr := p.addStreamChunk(requestID, chunk, object, isFinalChunk); addErr != nil {

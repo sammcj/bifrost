@@ -220,14 +220,15 @@ const (
 	CacheNoStoreKey   ContextKey = "semantic_cache_no_store"   // To explicitly disable storing the response in the cache
 
 	// context keys for internal usage
-	requestIDKey         ContextKey = "semantic_cache_request_id"
-	requestHashKey       ContextKey = "semantic_cache_request_hash"
-	requestEmbeddingKey  ContextKey = "semantic_cache_embedding"
-	requestParamsHashKey ContextKey = "semantic_cache_params_hash"
-	requestModelKey      ContextKey = "semantic_cache_model"
-	requestProviderKey   ContextKey = "semantic_cache_provider"
-	isCacheHitKey        ContextKey = "semantic_cache_is_cache_hit"
-	cacheHitTypeKey      ContextKey = "semantic_cache_cache_hit_type"
+	requestIDKey              ContextKey = "semantic_cache_request_id"
+	requestHashKey            ContextKey = "semantic_cache_request_hash"
+	requestEmbeddingKey       ContextKey = "semantic_cache_embedding"
+	requestEmbeddingTokensKey ContextKey = "semantic_cache_embedding_tokens"
+	requestParamsHashKey      ContextKey = "semantic_cache_params_hash"
+	requestModelKey           ContextKey = "semantic_cache_model"
+	requestProviderKey        ContextKey = "semantic_cache_provider"
+	isCacheHitKey             ContextKey = "semantic_cache_is_cache_hit"
+	cacheHitTypeKey           ContextKey = "semantic_cache_cache_hit_type"
 )
 
 type CacheType string
@@ -510,6 +511,24 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 		return res, nil, nil
 	}
 
+	isFinalChunk := bifrost.IsFinalChunk(ctx)
+
+	// Get the input tokens from context (can be nil if not set)
+	inputTokens, ok := (*ctx).Value(requestEmbeddingTokensKey).(int)
+	if ok {
+		isStreamRequest := bifrost.IsStreamRequestType(requestType)
+
+		if !isStreamRequest || (isStreamRequest && isFinalChunk) {
+			if res.ExtraFields.CacheDebug == nil {
+				res.ExtraFields.CacheDebug = &schemas.BifrostCacheDebug{}
+			}
+			res.ExtraFields.CacheDebug.CacheHit = false
+			res.ExtraFields.CacheDebug.ProviderUsed = bifrost.Ptr(string(plugin.config.Provider))
+			res.ExtraFields.CacheDebug.ModelUsed = bifrost.Ptr(plugin.config.EmbeddingModel)
+			res.ExtraFields.CacheDebug.InputTokens = &inputTokens
+		}
+	}
+
 	cacheTTL := plugin.config.TTL
 
 	ttlValue := (*ctx).Value(CacheTTLKey)
@@ -543,7 +562,7 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 		}
 
 		if plugin.isStreamingRequest(requestType) {
-			if err := plugin.addStreamingResponse(cacheCtx, requestID, res, bifrostErr, embeddingToStore, unifiedMetadata, cacheTTL); err != nil {
+			if err := plugin.addStreamingResponse(cacheCtx, requestID, res, bifrostErr, embeddingToStore, unifiedMetadata, cacheTTL, isFinalChunk); err != nil {
 				plugin.logger.Warn(fmt.Sprintf("%s Failed to cache streaming response: %v", PluginLoggerPrefix, err))
 			}
 		} else {
@@ -571,8 +590,8 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 //   - error: Any error that occurred during cleanup operations
 func (plugin *Plugin) Cleanup() error {
 	// Clean up all cache entries created by this plugin
-	// We identify them by the presence of "request_hash" and "cache_key" fields which are unique to our cache entries
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), CacheSetTimeout)
+	defer cancel()
 
 	// Clean up old stream accumulators first
 	plugin.cleanupOldStreamAccumulators()
@@ -590,8 +609,7 @@ func (plugin *Plugin) Cleanup() error {
 
 	results, err := plugin.store.DeleteAll(ctx, VectorStoreClassName, queries)
 	if err != nil {
-		plugin.logger.Warn(fmt.Sprintf("%s Failed to delete cache entries: %v", PluginLoggerPrefix, err))
-		return err
+		return fmt.Errorf("failed to delete cache entries: %w", err)
 	}
 
 	for _, result := range results {
@@ -599,8 +617,12 @@ func (plugin *Plugin) Cleanup() error {
 			plugin.logger.Warn(fmt.Sprintf("%s Failed to delete cache entry: %s", PluginLoggerPrefix, result.Error))
 		}
 	}
-
 	plugin.logger.Info(fmt.Sprintf("%s Cleanup completed - deleted all cache entries", PluginLoggerPrefix))
+
+	if err := plugin.store.DeleteNamespace(ctx, VectorStoreClassName); err != nil {
+		return fmt.Errorf("failed to delete namespace: %w", err)
+	}
+
 	return nil
 }
 
