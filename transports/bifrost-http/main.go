@@ -349,7 +349,7 @@ func main() {
 	telemetry.InitPrometheusMetrics(config.ClientConfig.PrometheusLabels)
 	logger.Debug("prometheus Go/Process collectors registered.")
 
-	promPlugin := telemetry.NewPrometheusPlugin()
+	promPlugin := telemetry.Init(pricingManager)
 
 	var loggingPlugin *logging.LoggerPlugin
 	var loggingHandler *handlers.LoggingHandler
@@ -357,7 +357,7 @@ func main() {
 
 	if config.ClientConfig.EnableLogging && config.LogsStore != nil {
 		// Use dedicated logs database with high-scale optimizations
-		loggingPlugin, err = logging.Init(logger, config.LogsStore)
+		loggingPlugin, err = logging.Init(logger, config.LogsStore, pricingManager)
 		if err != nil {
 			logger.Fatal("failed to initialize logging plugin: %v", err)
 		}
