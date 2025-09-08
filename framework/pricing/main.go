@@ -163,6 +163,45 @@ func (pm *PricingManager) CalculateCost(result *schemas.BifrostResponse, provide
 	return cost
 }
 
+func (pm *PricingManager) CalculateCostWithCacheDebug(result *schemas.BifrostResponse, provider schemas.ModelProvider, model string, requestType schemas.RequestType) float64 {
+	if result == nil || provider == "" || model == "" || requestType == "" {
+		return 0.0
+	}
+
+	cacheDebug := result.ExtraFields.CacheDebug
+
+	if cacheDebug != nil {
+		if cacheDebug.CacheHit {
+			if cacheDebug.HitType != nil && *cacheDebug.HitType == "direct" {
+				return 0
+			} else if cacheDebug.ProviderUsed != nil && cacheDebug.ModelUsed != nil && cacheDebug.InputTokens != nil {
+				return pm.CalculateCostFromUsage(*cacheDebug.ProviderUsed, *cacheDebug.ModelUsed, &schemas.LLMUsage{
+					PromptTokens:     *cacheDebug.InputTokens,
+					CompletionTokens: 0,
+					TotalTokens:      *cacheDebug.InputTokens,
+				}, schemas.EmbeddingRequest, false, false, nil, nil)
+			}
+
+			// Don't over-bill cache hits if fields are missing.
+			return 0
+		} else {
+			baseCost := pm.CalculateCost(result, provider, model, requestType)
+			var semanticCacheCost float64
+			if cacheDebug.ProviderUsed != nil && cacheDebug.ModelUsed != nil && cacheDebug.InputTokens != nil {
+				semanticCacheCost = pm.CalculateCostFromUsage(*cacheDebug.ProviderUsed, *cacheDebug.ModelUsed, &schemas.LLMUsage{
+					PromptTokens:     *cacheDebug.InputTokens,
+					CompletionTokens: 0,
+					TotalTokens:      *cacheDebug.InputTokens,
+				}, schemas.EmbeddingRequest, false, false, nil, nil)
+			}
+
+			return baseCost + semanticCacheCost
+		}
+	}
+
+	return pm.CalculateCost(result, provider, model, requestType)
+}
+
 func (pm *PricingManager) Cleanup() error {
 	if pm.syncTicker != nil {
 		pm.syncTicker.Stop()

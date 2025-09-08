@@ -351,6 +351,8 @@ func main() {
 
 	promPlugin := telemetry.Init(pricingManager)
 
+	loadedPlugins = append(loadedPlugins, promPlugin)
+
 	var loggingPlugin *logging.LoggerPlugin
 	var loggingHandler *handlers.LoggingHandler
 	var wsHandler *handlers.WebSocketHandler
@@ -442,8 +444,6 @@ func main() {
 			}
 		}
 	}
-
-	loadedPlugins = append(loadedPlugins, promPlugin)
 
 	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
 		Account:            account,

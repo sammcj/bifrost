@@ -28,7 +28,23 @@ var (
 	// bifrostUpstreamRequestsTotal tracks the total number of requests forwarded to upstream providers by Bifrost.
 	bifrostUpstreamRequestsTotal *prometheus.CounterVec
 
+	// bifrostUpstreamLatencySeconds tracks the latency of requests forwarded to upstream providers by Bifrost.
 	bifrostUpstreamLatencySeconds *prometheus.HistogramVec
+
+	// bifrostSuccessRequestsTotal tracks the total number of successful requests forwarded to upstream providers by Bifrost.
+	bifrostSuccessRequestsTotal *prometheus.CounterVec
+
+	// bifrostErrorRequestsTotal tracks the total number of error requests forwarded to upstream providers by Bifrost.
+	bifrostErrorRequestsTotal *prometheus.CounterVec
+
+	// bifrostInputTokensTotal tracks the total number of input tokens forwarded to upstream providers by Bifrost.
+	bifrostInputTokensTotal *prometheus.CounterVec
+
+	// bifrostOutputTokensTotal tracks the total number of output tokens forwarded to upstream providers by Bifrost.
+	bifrostOutputTokensTotal *prometheus.CounterVec
+
+	// bifrostCacheHitsTotal tracks the total number of cache hits forwarded to upstream providers by Bifrost, separated by cache type (direct/semantic).
+	bifrostCacheHitsTotal *prometheus.CounterVec
 
 	// bifrostCostTotal tracks the total cost in USD for requests to upstream providers
 	bifrostCostTotal *prometheus.CounterVec
@@ -48,6 +64,9 @@ func InitPrometheusMetrics(labels []string) {
 	httpDefaultLabels := []string{"path", "method", "status"}
 	bifrostDefaultLabels := []string{"provider", "model", "method"}
 
+	// Upstream LLM latency buckets - extended range for AI model inference times
+	upstreamLatencyBuckets := []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 15, 30, 45, 60, 90} // in seconds
+
 	httpRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_requests_total",
@@ -61,7 +80,7 @@ func InitPrometheusMetrics(labels []string) {
 		prometheus.HistogramOpts{
 			Name:    "http_request_duration_seconds",
 			Help:    "Duration of HTTP requests.",
-			Buckets: prometheus.DefBuckets, // Default buckets: .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10
+			Buckets: prometheus.DefBuckets,
 		},
 		append(httpDefaultLabels, labels...),
 	)
@@ -99,9 +118,49 @@ func InitPrometheusMetrics(labels []string) {
 		prometheus.HistogramOpts{
 			Name:    "bifrost_upstream_latency_seconds",
 			Help:    "Latency of requests forwarded to upstream providers by Bifrost.",
-			Buckets: prometheus.DefBuckets,
+			Buckets: upstreamLatencyBuckets, // Extended range for AI model inference times
 		},
 		append(bifrostDefaultLabels, labels...),
+	)
+
+	bifrostSuccessRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "bifrost_success_requests_total",
+			Help: "Total number of successful requests forwarded to upstream providers by Bifrost.",
+		},
+		append(bifrostDefaultLabels, labels...),
+	)
+
+	bifrostErrorRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "bifrost_error_requests_total",
+			Help: "Total number of error requests forwarded to upstream providers by Bifrost.",
+		},
+		append(bifrostDefaultLabels, labels...),
+	)
+
+	bifrostInputTokensTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "bifrost_input_tokens_total",
+			Help: "Total number of input tokens forwarded to upstream providers by Bifrost.",
+		},
+		append(bifrostDefaultLabels, labels...),
+	)
+
+	bifrostOutputTokensTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "bifrost_output_tokens_total",
+			Help: "Total number of output tokens forwarded to upstream providers by Bifrost.",
+		},
+		append(bifrostDefaultLabels, labels...),
+	)
+
+	bifrostCacheHitsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "bifrost_cache_hits_total",
+			Help: "Total number of cache hits forwarded to upstream providers by Bifrost, separated by cache type (direct/semantic).",
+		},
+		append(append(bifrostDefaultLabels, "cache_type"), labels...),
 	)
 
 	bifrostCostTotal = promauto.NewCounterVec(
