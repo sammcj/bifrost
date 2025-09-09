@@ -85,6 +85,8 @@ type ConfigStore interface {
 	UpdateBudget(budget *TableBudget, tx ...*gorm.DB) error
 	UpdateBudgets(budgets []*TableBudget, tx ...*gorm.DB) error
 
+	GetGovernanceConfig() (*GovernanceConfig, error)
+
 	// Model pricing CRUD
 	GetModelPrices() ([]TableModelPricing, error)
 	CreateModelPrices(pricing *TableModelPricing, tx ...*gorm.DB) error

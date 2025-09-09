@@ -18,6 +18,7 @@ import (
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/framework/vectorstore"
 	"github.com/maximhq/bifrost/plugins/semanticcache"
+	"gorm.io/gorm"
 )
 
 // HandlerStore provides access to runtime configuration values for handlers.
@@ -351,13 +352,6 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// Process core configuration if present, otherwise use defaults
-	if configData.Client != nil {
-		config.ClientConfig = *configData.Client
-	} else {
-		config.ClientConfig = DefaultClientConfig
-	}
-
 	// Initializing config store
 	if configData.ConfigStoreConfig != nil && configData.ConfigStoreConfig.Enabled {
 		config.ConfigStore, err = configstore.NewConfigStore(configData.ConfigStoreConfig, logger)
@@ -396,20 +390,54 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 	// From now on, config store gets the priority if enabled and we find data
 	// if we don't find any data in the store, then we resort to config file
 
-	// Initializing providers
-	var processedProviders map[schemas.ModelProvider]configstore.ProviderConfig
+	//NOTE: We follow a standard practice here to first look in store -> not present then use config file -> if present in config file then update store.
+
+	// 1. Check for Client Config
+
+	var clientConfig *configstore.ClientConfig
 	if config.ConfigStore != nil {
-		processedProviders, err = config.ConfigStore.GetProvidersConfig()
+		clientConfig, err = config.ConfigStore.GetClientConfig()
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize config store: %w", err)
-		}
-		if processedProviders != nil {
-			config.Providers = processedProviders
+			logger.Warn("failed to get client config from store: %v", err)
 		}
 	}
 
-	// If we don't have any data in the store, we will process the data from the config file
-	if processedProviders == nil {
+	if clientConfig != nil {
+		config.ClientConfig = *clientConfig
+	} else {
+		logger.Debug("client config not found in store, using config file")
+		// Process core configuration if present, otherwise use defaults
+		if configData.Client != nil {
+			config.ClientConfig = *configData.Client
+		} else {
+			config.ClientConfig = DefaultClientConfig
+		}
+
+		if config.ConfigStore != nil {
+			logger.Debug("updating client config in store")
+			err = config.ConfigStore.UpdateClientConfig(&config.ClientConfig)
+			if err != nil {
+				logger.Warn("failed to update client config: %v", err)
+			}
+		}
+	}
+
+	// 2. Check for Providers
+
+	var processedProviders map[schemas.ModelProvider]configstore.ProviderConfig
+	if config.ConfigStore != nil {
+		logger.Debug("getting providers config from store")
+		processedProviders, err = config.ConfigStore.GetProvidersConfig()
+		if err != nil {
+			logger.Warn("failed to get providers config from store: %v", err)
+		}
+	}
+
+	if processedProviders != nil {
+		config.Providers = processedProviders
+	} else {
+		// If we don't have any data in the store, we will process the data from the config file
+		logger.Debug("no providers config found in store, processing from config file")
 		processedProviders = make(map[schemas.ModelProvider]configstore.ProviderConfig)
 		// Process provider configurations
 		if configData.Providers != nil {
@@ -484,6 +512,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 			config.autoDetectProviders()
 		}
 		if config.ConfigStore != nil {
+			logger.Debug("updating providers config in store")
 			err = config.ConfigStore.UpdateProvidersConfig(processedProviders)
 			if err != nil {
 				logger.Warn("failed to update providers config: %v", err)
@@ -494,21 +523,28 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		}
 	}
 
-	// Parse MCP config if present
+	// 3. Check for MCP Config
+
+	var mcpConfig *schemas.MCPConfig
 	if config.ConfigStore != nil {
-		mcpConfig, err := config.ConfigStore.GetMCPConfig()
+		logger.Debug("getting MCP config from store")
+		mcpConfig, err = config.ConfigStore.GetMCPConfig()
 		if err != nil {
-			return nil, err
+			logger.Warn("failed to get MCP config from store: %v", err)
 		}
-		config.MCPConfig = mcpConfig
 	}
 
-	if config.MCPConfig == nil && configData.MCP != nil {
+	if mcpConfig != nil {
+		config.MCPConfig = mcpConfig
+	} else if configData.MCP != nil {
+		// If MCP config is not present in the store, we will use the config file
+		logger.Debug("no MCP config found in store, processing from config file")
 		config.MCPConfig = configData.MCP
 		if err := config.processMCPEnvVars(); err != nil {
 			logger.Warn("failed to process MCP env vars: %v", err)
 		}
 		if config.ConfigStore != nil {
+			logger.Debug("updating MCP config in store")
 			err = config.ConfigStore.UpdateMCPConfig(config.MCPConfig, config.EnvKeys)
 			if err != nil {
 				logger.Warn("failed to update MCP config: %v", err)
@@ -516,14 +552,92 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		}
 	}
 
-	if configData.Governance != nil {
-		config.GovernanceConfig = configData.Governance
+	// 4. Check for Governance Config
+
+	var governanceConfig *configstore.GovernanceConfig
+	if config.ConfigStore != nil {
+		logger.Debug("getting governance config from store")
+		governanceConfig, err = config.ConfigStore.GetGovernanceConfig()
+		if err != nil {
+			logger.Warn("failed to get governance config from store: %v", err)
+		}
 	}
 
+	if governanceConfig != nil {
+		config.GovernanceConfig = governanceConfig
+	} else if configData.Governance != nil {
+		logger.Debug("no governance config found in store, processing from config file")
+		config.GovernanceConfig = configData.Governance
+
+		if config.ConfigStore != nil {
+			logger.Debug("updating governance config in store")
+			if err := config.ConfigStore.ExecuteTransaction(func(tx *gorm.DB) error {
+				// Create budgets
+				for _, budget := range config.GovernanceConfig.Budgets {
+					if err := config.ConfigStore.CreateBudget(&budget, tx); err != nil {
+						return fmt.Errorf("failed to create budget %s: %w", budget.ID, err)
+					}
+				}
+
+				// Create rate limits
+				for _, rateLimit := range config.GovernanceConfig.RateLimits {
+					if err := config.ConfigStore.CreateRateLimit(&rateLimit, tx); err != nil {
+						return fmt.Errorf("failed to create rate limit %s: %w", rateLimit.ID, err)
+					}
+				}
+
+				// Create customers
+				for _, customer := range config.GovernanceConfig.Customers {
+					if err := config.ConfigStore.CreateCustomer(&customer, tx); err != nil {
+						return fmt.Errorf("failed to create customer %s: %w", customer.ID, err)
+					}
+				}
+
+				// Create teams
+				for _, team := range config.GovernanceConfig.Teams {
+					if err := config.ConfigStore.CreateTeam(&team, tx); err != nil {
+						return fmt.Errorf("failed to create team %s: %w", team.ID, err)
+					}
+				}
+
+				// Create virtual keys
+				for _, virtualKey := range config.GovernanceConfig.VirtualKeys {
+					// Look up existing provider keys by key_id and populate the Keys field
+					var existingKeys []configstore.TableKey
+					for _, keyRef := range virtualKey.Keys {
+						if keyRef.KeyID != "" {
+							var existingKey configstore.TableKey
+							if err := tx.Where("key_id = ?", keyRef.KeyID).First(&existingKey).Error; err != nil {
+								if err == gorm.ErrRecordNotFound {
+									logger.Warn("referenced key %s not found for virtual key %s", keyRef.KeyID, virtualKey.ID)
+									continue
+								}
+								return fmt.Errorf("failed to lookup key %s for virtual key %s: %w", keyRef.KeyID, virtualKey.ID, err)
+							}
+							existingKeys = append(existingKeys, existingKey)
+						}
+					}
+					virtualKey.Keys = existingKeys
+
+					if err := config.ConfigStore.CreateVirtualKey(&virtualKey, tx); err != nil {
+						return fmt.Errorf("failed to create virtual key %s: %w", virtualKey.ID, err)
+					}
+				}
+
+				return nil
+			}); err != nil {
+				logger.Warn("failed to update governance config: %v", err)
+			}
+		}
+	}
+
+	// 5. Check for Plugins
+
 	if config.ConfigStore != nil {
+		logger.Debug("getting plugins from store")
 		plugins, err := config.ConfigStore.GetPlugins()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get plugins: %w", err)
+			logger.Warn("failed to get plugins from store: %v", err)
 		}
 		if plugins != nil {
 			config.Plugins = make([]*schemas.PluginConfig, len(plugins))
@@ -543,7 +657,9 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		}
 	}
 
+	// If plugins are not present in the store, we will use the config file
 	if len(config.Plugins) == 0 && len(configData.Plugins) > 0 {
+		logger.Debug("no plugins found in store, processing from config file")
 		config.Plugins = configData.Plugins
 
 		for i, plugin := range config.Plugins {
@@ -556,6 +672,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		}
 
 		if config.ConfigStore != nil {
+			logger.Debug("updating plugins in store")
 			for _, plugin := range config.Plugins {
 				pluginConfigCopy, err := DeepCopy(plugin.Config)
 				if err != nil {
@@ -580,11 +697,13 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		}
 	}
 
+	// 6. Check for Env Keys in config store
+
 	// Initialize env keys
 	if config.ConfigStore != nil {
 		envKeys, err := config.ConfigStore.GetEnvKeys()
 		if err != nil {
-			return nil, err
+			logger.Warn("failed to get env keys from store: %v", err)
 		}
 		config.EnvKeys = envKeys
 	}
@@ -615,18 +734,18 @@ func (s *Config) GetRawConfigString() string {
 //   - "env.OPENAI_API_KEY" -> actual value from OPENAI_API_KEY environment variable
 //   - "sk-1234567890" -> returned as-is (no env prefix)
 func (s *Config) processEnvValue(value string) (string, string, error) {
-	 v := strings.TrimSpace(value)
-	 if !strings.HasPrefix(v, "env.") {
-	 	return value, "", nil // do not trim non-env values
-	 }
-	 envKey := strings.TrimSpace(strings.TrimPrefix(v, "env."))
-	 if envKey == "" {
-	 	return "", "", fmt.Errorf("environment variable name missing in %q", value)
-	 }
-	 if envValue, ok := os.LookupEnv(envKey); ok {
-	 	return envValue, envKey, nil
-	 }
-	 return "", envKey, fmt.Errorf("environment variable %s not found", envKey)
+	v := strings.TrimSpace(value)
+	if !strings.HasPrefix(v, "env.") {
+		return value, "", nil // do not trim non-env values
+	}
+	envKey := strings.TrimSpace(strings.TrimPrefix(v, "env."))
+	if envKey == "" {
+		return "", "", fmt.Errorf("environment variable name missing in %q", value)
+	}
+	if envValue, ok := os.LookupEnv(envKey); ok {
+		return envValue, envKey, nil
+	}
+	return "", envKey, fmt.Errorf("environment variable %s not found", envKey)
 }
 
 // getRestoredMCPConfig creates a copy of MCP config with env variable references restored
