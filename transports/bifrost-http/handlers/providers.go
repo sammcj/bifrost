@@ -503,6 +503,44 @@ func (h *ProviderHandler) mergeKeys(provider schemas.ModelProvider, oldRawKeys [
 				}
 			}
 
+			// Handle Bedrock config redacted values
+			if updateKey.BedrockKeyConfig != nil && oldRedactedKeys[i].BedrockKeyConfig != nil {
+				if lib.IsRedacted(updateKey.BedrockKeyConfig.AccessKey) &&
+					(!strings.HasPrefix(updateKey.BedrockKeyConfig.AccessKey, "env.") ||
+						!strings.EqualFold(updateKey.BedrockKeyConfig.AccessKey, oldRedactedKeys[i].BedrockKeyConfig.AccessKey)) {
+					mergedKey.BedrockKeyConfig.AccessKey = oldRawKey.BedrockKeyConfig.AccessKey
+				}
+				if lib.IsRedacted(updateKey.BedrockKeyConfig.SecretKey) &&
+					(!strings.HasPrefix(updateKey.BedrockKeyConfig.SecretKey, "env.") ||
+						!strings.EqualFold(updateKey.BedrockKeyConfig.SecretKey, oldRedactedKeys[i].BedrockKeyConfig.SecretKey)) {
+					mergedKey.BedrockKeyConfig.SecretKey = oldRawKey.BedrockKeyConfig.SecretKey
+				}
+				if updateKey.BedrockKeyConfig.SessionToken != nil {
+					if lib.IsRedacted(*updateKey.BedrockKeyConfig.SessionToken) &&
+						(!strings.HasPrefix(*updateKey.BedrockKeyConfig.SessionToken, "env.") ||
+							(oldRedactedKeys[i].BedrockKeyConfig.SessionToken != nil &&
+								!strings.EqualFold(*updateKey.BedrockKeyConfig.SessionToken, *oldRedactedKeys[i].BedrockKeyConfig.SessionToken))) {
+						mergedKey.BedrockKeyConfig.SessionToken = oldRawKey.BedrockKeyConfig.SessionToken
+					}
+				}
+				if updateKey.BedrockKeyConfig.Region != nil {
+					if lib.IsRedacted(*updateKey.BedrockKeyConfig.Region) &&
+						(!strings.HasPrefix(*updateKey.BedrockKeyConfig.Region, "env.") ||
+							(oldRedactedKeys[i].BedrockKeyConfig.Region != nil &&
+								!strings.EqualFold(*updateKey.BedrockKeyConfig.Region, *oldRedactedKeys[i].BedrockKeyConfig.Region))) {
+						mergedKey.BedrockKeyConfig.Region = oldRawKey.BedrockKeyConfig.Region
+					}
+				}
+				if updateKey.BedrockKeyConfig.ARN != nil {
+					if lib.IsRedacted(*updateKey.BedrockKeyConfig.ARN) &&
+						(!strings.HasPrefix(*updateKey.BedrockKeyConfig.ARN, "env.") ||
+							(oldRedactedKeys[i].BedrockKeyConfig.ARN != nil &&
+								!strings.EqualFold(*updateKey.BedrockKeyConfig.ARN, *oldRedactedKeys[i].BedrockKeyConfig.ARN))) {
+						mergedKey.BedrockKeyConfig.ARN = oldRawKey.BedrockKeyConfig.ARN
+					}
+				}
+			}
+
 			resultKeys = append(resultKeys, mergedKey)
 		} else {
 			// Keep unchanged key
