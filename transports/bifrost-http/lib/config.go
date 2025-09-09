@@ -608,14 +608,18 @@ func (s *Config) GetRawConfigString() string {
 //   - "env.OPENAI_API_KEY" -> actual value from OPENAI_API_KEY environment variable
 //   - "sk-1234567890" -> returned as-is (no env prefix)
 func (s *Config) processEnvValue(value string) (string, string, error) {
-	if strings.HasPrefix(value, "env.") {
-		envKey := strings.TrimPrefix(value, "env.")
-		if envValue := os.Getenv(envKey); envValue != "" {
-			return envValue, envKey, nil
-		}
-		return "", envKey, fmt.Errorf("environment variable %s not found", envKey)
-	}
-	return value, "", nil
+	 v := strings.TrimSpace(value)
+	 if !strings.HasPrefix(v, "env.") {
+	 	return value, "", nil // do not trim non-env values
+	 }
+	 envKey := strings.TrimSpace(strings.TrimPrefix(v, "env."))
+	 if envKey == "" {
+	 	return "", "", fmt.Errorf("environment variable name missing in %q", value)
+	 }
+	 if envValue, ok := os.LookupEnv(envKey); ok {
+	 	return envValue, envKey, nil
+	 }
+	 return "", envKey, fmt.Errorf("environment variable %s not found", envKey)
 }
 
 // getRestoredMCPConfig creates a copy of MCP config with env variable references restored
@@ -911,8 +915,8 @@ func (s *Config) AddProvider(provider schemas.ModelProvider, config configstore.
 				EnvVar:     envVar,
 				Provider:   provider,
 				KeyType:    "api_key",
-				ConfigPath: fmt.Sprintf("providers.%s.keys[%s]", provider, key.ID),
-				KeyID:      key.ID,
+				ConfigPath: fmt.Sprintf("providers.%s.keys[%s]", provider, config.Keys[i].ID),
+				KeyID:      config.Keys[i].ID,
 			})
 		}
 
@@ -944,7 +948,7 @@ func (s *Config) AddProvider(provider schemas.ModelProvider, config configstore.
 	s.Providers[provider] = config
 
 	if s.ConfigStore != nil {
-		if err := s.ConfigStore.UpdateProvidersConfig(s.Providers); err != nil {
+		if err := s.ConfigStore.AddProvider(provider, config, s.EnvKeys); err != nil {
 			return fmt.Errorf("failed to update provider config in store: %w", err)
 		}
 		if err := s.ConfigStore.UpdateEnvKeys(s.EnvKeys); err != nil {
@@ -1010,8 +1014,8 @@ func (s *Config) UpdateProviderConfig(provider schemas.ModelProvider, config con
 				EnvVar:     envVar,
 				Provider:   provider,
 				KeyType:    "api_key",
-				ConfigPath: fmt.Sprintf("providers.%s.keys[%s]", provider, key.ID),
-				KeyID:      key.ID,
+				ConfigPath: fmt.Sprintf("providers.%s.keys[%s]", provider, config.Keys[i].ID),
+				KeyID:      config.Keys[i].ID,
 			})
 		}
 
@@ -1043,7 +1047,7 @@ func (s *Config) UpdateProviderConfig(provider schemas.ModelProvider, config con
 	s.Providers[provider] = config
 
 	if s.ConfigStore != nil {
-		if err := s.ConfigStore.UpdateProvidersConfig(s.Providers); err != nil {
+		if err := s.ConfigStore.UpdateProvider(provider, config, s.EnvKeys); err != nil {
 			return fmt.Errorf("failed to update provider config in store: %w", err)
 		}
 		if err := s.ConfigStore.UpdateEnvKeys(s.EnvKeys); err != nil {
@@ -1068,8 +1072,11 @@ func (s *Config) RemoveProvider(provider schemas.ModelProvider) error {
 	s.cleanupEnvKeys(provider, "", nil)
 
 	if s.ConfigStore != nil {
-		if err := s.ConfigStore.UpdateProvidersConfig(s.Providers); err != nil {
+		if err := s.ConfigStore.DeleteProvider(provider); err != nil {
 			return fmt.Errorf("failed to update provider config in store: %w", err)
+		}
+		if err := s.ConfigStore.UpdateEnvKeys(s.EnvKeys); err != nil {
+			logger.Warn("failed to update env keys: %v", err)
 		}
 	}
 
@@ -1373,7 +1380,7 @@ func IsRedacted(key string) bool {
 	}
 
 	if len(key) <= 8 {
-		return strings.Contains(key, "*")
+		return strings.Count(key, "*") == len(key)
 	}
 
 	// Check for exact redaction pattern: 4 chars + 24 asterisks + 4 chars
@@ -1480,20 +1487,32 @@ func (s *Config) CleanupEnvKeysForKeys(provider schemas.ModelProvider, keysToDel
 }
 
 // CleanupEnvKeysForUpdatedKeys removes environment variable entries for keys that are being updated
-// but whose environment variables are changing. This prevents stale env var references.
+// but only for fields where the environment variable reference has actually changed.
+// This function is called after the merge to compare final values with original values.
 //
 // Parameters:
 //   - provider: Provider name the keys belong to
-//   - keysToUpdate: List of keys being updated (uses their IDs to identify env vars to clean up)
-func (s *Config) CleanupEnvKeysForUpdatedKeys(provider schemas.ModelProvider, keysToUpdate []schemas.Key) {
-	// Create a set of key IDs to update for efficient lookup
-	keyIDsToUpdate := make(map[string]bool)
+//   - keysToUpdate: List of keys being updated
+//   - oldKeys: List of original keys before update
+//   - mergedKeys: List of final merged keys after update
+func (s *Config) CleanupEnvKeysForUpdatedKeys(provider schemas.ModelProvider, keysToUpdate []schemas.Key, oldKeys []schemas.Key, mergedKeys []schemas.Key) {
+	// Create maps for efficient lookup
+	keysToUpdateMap := make(map[string]schemas.Key)
 	for _, key := range keysToUpdate {
-		keyIDsToUpdate[key.ID] = true
+		keysToUpdateMap[key.ID] = key
 	}
 
-	// Iterate through all environment variables and remove entries for updated keys
-	// The updated keys will re-add their env vars during processing
+	oldKeysMap := make(map[string]schemas.Key)
+	for _, key := range oldKeys {
+		oldKeysMap[key.ID] = key
+	}
+
+	mergedKeysMap := make(map[string]schemas.Key)
+	for _, key := range mergedKeys {
+		mergedKeysMap[key.ID] = key
+	}
+
+	// Iterate through all environment variables and remove entries only for fields that are changing
 	for envVar, infos := range s.EnvKeys {
 		filteredInfos := make([]configstore.EnvKeyInfo, 0, len(infos))
 
@@ -1501,10 +1520,12 @@ func (s *Config) CleanupEnvKeysForUpdatedKeys(provider schemas.ModelProvider, ke
 			// Keep entries that either:
 			// 1. Don't belong to this provider, OR
 			// 2. Don't have a KeyID (MCP), OR
-			// 3. Have a KeyID that's not being updated
+			// 3. Have a KeyID that's not being updated, OR
+			// 4. Have a KeyID that's being updated but the env var reference hasn't changed
 			shouldKeep := info.Provider != provider ||
 				info.KeyID == "" ||
-				!keyIDsToUpdate[info.KeyID]
+				keysToUpdateMap[info.KeyID].ID == "" ||
+				!s.isEnvVarReferenceChanging(mergedKeysMap[info.KeyID], oldKeysMap[info.KeyID], info.ConfigPath)
 
 			if shouldKeep {
 				filteredInfos = append(filteredInfos, info)
@@ -1518,6 +1539,77 @@ func (s *Config) CleanupEnvKeysForUpdatedKeys(provider schemas.ModelProvider, ke
 			s.EnvKeys[envVar] = filteredInfos
 		}
 	}
+}
+
+// isEnvVarReferenceChanging checks if an environment variable reference is changing between old and merged key
+func (s *Config) isEnvVarReferenceChanging(mergedKey, oldKey schemas.Key, configPath string) bool {
+	// Extract the field name from the config path
+	// e.g., "providers.vertex.keys[123].vertex_key_config.project_id" -> "project_id"
+	pathParts := strings.Split(configPath, ".")
+	if len(pathParts) < 2 {
+		return false
+	}
+	fieldName := pathParts[len(pathParts)-1]
+
+	// Get the old and merged values for this field
+	oldValue := s.getFieldValue(oldKey, fieldName)
+	mergedValue := s.getFieldValue(mergedKey, fieldName)
+
+	// If either value is an env var reference, check if they're different
+	oldIsEnvVar := strings.HasPrefix(oldValue, "env.")
+	mergedIsEnvVar := strings.HasPrefix(mergedValue, "env.")
+
+	// If both are env vars, check if they reference the same variable
+	if oldIsEnvVar && mergedIsEnvVar {
+		return oldValue != mergedValue
+	}
+
+	// If one is env var and other isn't, or both are different types, it's changing
+	return oldIsEnvVar != mergedIsEnvVar || oldValue != mergedValue
+}
+
+// getFieldValue extracts the value of a specific field from a key based on the field name
+func (s *Config) getFieldValue(key schemas.Key, fieldName string) string {
+	switch fieldName {
+	case "project_id":
+		if key.VertexKeyConfig != nil {
+			return key.VertexKeyConfig.ProjectID
+		}
+	case "region":
+		if key.VertexKeyConfig != nil {
+			return key.VertexKeyConfig.Region
+		}
+	case "auth_credentials":
+		if key.VertexKeyConfig != nil {
+			return key.VertexKeyConfig.AuthCredentials
+		}
+	case "endpoint":
+		if key.AzureKeyConfig != nil {
+			return key.AzureKeyConfig.Endpoint
+		}
+	case "api_version":
+		if key.AzureKeyConfig != nil && key.AzureKeyConfig.APIVersion != nil {
+			return *key.AzureKeyConfig.APIVersion
+		}
+	case "access_key":
+		if key.BedrockKeyConfig != nil {
+			return key.BedrockKeyConfig.AccessKey
+		}
+	case "secret_key":
+		if key.BedrockKeyConfig != nil {
+			return key.BedrockKeyConfig.SecretKey
+		}
+	case "session_token":
+		if key.BedrockKeyConfig != nil && key.BedrockKeyConfig.SessionToken != nil {
+			return *key.BedrockKeyConfig.SessionToken
+		}
+	default:
+		// For the main API key value
+		if fieldName == "value" || strings.Contains(fieldName, "key") {
+			return key.Value
+		}
+	}
+	return ""
 }
 
 // autoDetectProviders automatically detects common environment variables and sets up providers
@@ -1598,10 +1690,6 @@ func (s *Config) processAzureKeyConfigEnvVars(key *schemas.Key, provider schemas
 	// Process Endpoint
 	processedEndpoint, envVar, err := s.processEnvValue(azureConfig.Endpoint)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			// It's okay if its not set
-			return nil
-		}
 		return err
 	}
 	if envVar != "" {
@@ -1645,10 +1733,6 @@ func (s *Config) processVertexKeyConfigEnvVars(key *schemas.Key, provider schema
 	// Process ProjectID
 	processedProjectID, envVar, err := s.processEnvValue(vertexConfig.ProjectID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			// It's okay if its not set
-			return nil
-		}
 		return err
 	}
 	if envVar != "" {
@@ -1707,10 +1791,6 @@ func (s *Config) processBedrockKeyConfigEnvVars(key *schemas.Key, provider schem
 	// Process AccessKey
 	processedAccessKey, envVar, err := s.processEnvValue(bedrockConfig.AccessKey)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			// It's okay if its not set
-			return nil
-		}
 		return err
 	}
 	if envVar != "" {

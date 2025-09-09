@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
@@ -14,6 +15,24 @@ import (
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
 )
+
+// processEnvValue processes a value that might be an environment variable reference
+func processEnvValue(value string, logger schemas.Logger) (string, error) {
+	v := strings.TrimSpace(value)
+	if !strings.HasPrefix(v, "env.") {
+		return value, nil
+	}
+	envKey := strings.TrimSpace(strings.TrimPrefix(v, "env."))
+	if envKey == "" {
+		logger.Warn(fmt.Sprintf("Environment variable name missing in value: %s", value))
+		return "", fmt.Errorf("environment variable name missing in %q", value)
+	}
+	if envValue, ok := os.LookupEnv(envKey); ok {
+		return envValue, nil
+	}
+	logger.Warn(fmt.Sprintf("Environment variable not found: %s", envKey))
+	return "", fmt.Errorf("environment variable %s not found", envKey)
+}
 
 // SQLiteConfig represents the configuration for a SQLite database.
 type SQLiteConfig struct {
@@ -161,6 +180,190 @@ func (s *SQLiteConfigStore) UpdateProvidersConfig(providers map[schemas.ModelPro
 	})
 }
 
+// createTableKeyFromSchemaKey creates a TableKey from a schemas.Key with all the necessary field mappings
+func (s *SQLiteConfigStore) createTableKeyFromSchemaKey(key schemas.Key, providerID uint, providerName string) TableKey {
+	dbKey := TableKey{
+		Provider:         providerName,
+		ProviderID:       providerID,
+		KeyID:            key.ID,
+		Value:            key.Value,
+		Models:           key.Models,
+		Weight:           key.Weight,
+		AzureKeyConfig:   key.AzureKeyConfig,
+		VertexKeyConfig:  key.VertexKeyConfig,
+		BedrockKeyConfig: key.BedrockKeyConfig,
+	}
+
+	// Handle Azure config
+	if key.AzureKeyConfig != nil {
+		dbKey.AzureEndpoint = &key.AzureKeyConfig.Endpoint
+		dbKey.AzureAPIVersion = key.AzureKeyConfig.APIVersion
+	}
+
+	// Handle Vertex config
+	if key.VertexKeyConfig != nil {
+		dbKey.VertexProjectID = &key.VertexKeyConfig.ProjectID
+		dbKey.VertexRegion = &key.VertexKeyConfig.Region
+		dbKey.VertexAuthCredentials = &key.VertexKeyConfig.AuthCredentials
+	}
+
+	// Handle Bedrock config
+	if key.BedrockKeyConfig != nil {
+		dbKey.BedrockAccessKey = &key.BedrockKeyConfig.AccessKey
+		dbKey.BedrockSecretKey = &key.BedrockKeyConfig.SecretKey
+		dbKey.BedrockSessionToken = key.BedrockKeyConfig.SessionToken
+		dbKey.BedrockRegion = key.BedrockKeyConfig.Region
+		dbKey.BedrockARN = key.BedrockKeyConfig.ARN
+	}
+
+	return dbKey
+}
+
+// UpdateProviderById updates a single provider configuration in the database without deleting/recreating.
+func (s *SQLiteConfigStore) UpdateProvider(provider schemas.ModelProvider, config ProviderConfig, envKeys map[string][]EnvKeyInfo) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// Find the existing provider
+		var dbProvider TableProvider
+		if err := tx.Where("name = ?", string(provider)).First(&dbProvider).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNotFound
+			}
+			return err
+		}
+
+		// Create a deep copy of the config to avoid modifying the original
+		configCopy, err := deepCopy(config)
+		if err != nil {
+			return err
+		}
+		// Substitute environment variables back to their original form
+		substituteEnvVars(&configCopy, provider, envKeys)
+
+		// Update provider fields
+		dbProvider.NetworkConfig = configCopy.NetworkConfig
+		dbProvider.ConcurrencyAndBufferSize = configCopy.ConcurrencyAndBufferSize
+		dbProvider.ProxyConfig = configCopy.ProxyConfig
+		dbProvider.SendBackRawResponse = configCopy.SendBackRawResponse
+		dbProvider.CustomProviderConfig = configCopy.CustomProviderConfig
+
+		// Save the updated provider
+		if err := tx.Save(&dbProvider).Error; err != nil {
+			return err
+		}
+
+		// Get existing keys for this provider
+		var existingKeys []TableKey
+		if err := tx.Where("provider_id = ?", dbProvider.ID).Find(&existingKeys).Error; err != nil {
+			return err
+		}
+
+		// Create a map of existing keys by KeyID for quick lookup
+		existingKeysMap := make(map[string]TableKey)
+		for _, key := range existingKeys {
+			existingKeysMap[key.KeyID] = key
+		}
+
+		// Process each key in the new config
+		for _, key := range configCopy.Keys {
+			dbKey := s.createTableKeyFromSchemaKey(key, dbProvider.ID, dbProvider.Name)
+
+			// Check if this key already exists
+			if existingKey, exists := existingKeysMap[key.ID]; exists {
+				// Update existing key - preserve the database ID
+				dbKey.ID = existingKey.ID
+				if err := tx.Save(&dbKey).Error; err != nil {
+					return err
+				}
+				// Remove from map to track which keys are still in use
+				delete(existingKeysMap, key.ID)
+			} else {
+				// Create new key
+				if err := tx.Create(&dbKey).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		// Delete keys that are no longer in the new config
+		for _, keyToDelete := range existingKeysMap {
+			if err := tx.Delete(&keyToDelete).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
+// AddProvider creates a new provider configuration in the database.
+func (s *SQLiteConfigStore) AddProvider(provider schemas.ModelProvider, config ProviderConfig, envKeys map[string][]EnvKeyInfo) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// Check if provider already exists
+		var existingProvider TableProvider
+		if err := tx.Where("name = ?", string(provider)).First(&existingProvider).Error; err == nil {
+			return fmt.Errorf("provider %s already exists", provider)
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		// Create a deep copy of the config to avoid modifying the original
+		configCopy, err := deepCopy(config)
+		if err != nil {
+			return err
+		}
+		// Substitute environment variables back to their original form
+		substituteEnvVars(&configCopy, provider, envKeys)
+
+		// Create new provider
+		dbProvider := TableProvider{
+			Name:                     string(provider),
+			NetworkConfig:            configCopy.NetworkConfig,
+			ConcurrencyAndBufferSize: configCopy.ConcurrencyAndBufferSize,
+			ProxyConfig:              configCopy.ProxyConfig,
+			SendBackRawResponse:      configCopy.SendBackRawResponse,
+			CustomProviderConfig:     configCopy.CustomProviderConfig,
+		}
+
+		// Create the provider
+		if err := tx.Create(&dbProvider).Error; err != nil {
+			return err
+		}
+
+		// Create keys for this provider
+		for _, key := range configCopy.Keys {
+			dbKey := s.createTableKeyFromSchemaKey(key, dbProvider.ID, dbProvider.Name)
+
+			// Create the key
+			if err := tx.Create(&dbKey).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
+// DeleteProvider deletes a single provider and all its associated keys from the database.
+func (s *SQLiteConfigStore) DeleteProvider(provider schemas.ModelProvider) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// Find the existing provider
+		var dbProvider TableProvider
+		if err := tx.Where("name = ?", string(provider)).First(&dbProvider).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNotFound
+			}
+			return err
+		}
+
+		// Delete the provider (keys will be deleted due to CASCADE constraint)
+		if err := tx.Delete(&dbProvider).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
 // GetProvidersConfig retrieves the provider configuration from the database.
 func (s *SQLiteConfigStore) GetProvidersConfig() (map[schemas.ModelProvider]ProviderConfig, error) {
 	var dbProviders []TableProvider
@@ -180,14 +383,80 @@ func (s *SQLiteConfigStore) GetProvidersConfig() (map[schemas.ModelProvider]Prov
 		// Convert database keys to schemas.Key
 		keys := make([]schemas.Key, len(dbProvider.Keys))
 		for i, dbKey := range dbProvider.Keys {
+			// Process main key value
+			processedValue, err := processEnvValue(dbKey.Value, s.logger)
+			if err != nil {
+				// If env var not found, keep the original value
+				processedValue = dbKey.Value
+			}
+
+			// Process Azure config if present
+			azureConfig := dbKey.AzureKeyConfig
+			if azureConfig != nil {
+				azureConfigCopy := *azureConfig
+				if processedEndpoint, err := processEnvValue(azureConfig.Endpoint, s.logger); err == nil {
+					azureConfigCopy.Endpoint = processedEndpoint
+				}
+				if azureConfig.APIVersion != nil {
+					if processedAPIVersion, err := processEnvValue(*azureConfig.APIVersion, s.logger); err == nil {
+						azureConfigCopy.APIVersion = &processedAPIVersion
+					}
+				}
+				azureConfig = &azureConfigCopy
+			}
+
+			// Process Vertex config if present
+			vertexConfig := dbKey.VertexKeyConfig
+			if vertexConfig != nil {
+				vertexConfigCopy := *vertexConfig
+				if processedProjectID, err := processEnvValue(vertexConfig.ProjectID, s.logger); err == nil {
+					vertexConfigCopy.ProjectID = processedProjectID
+				}
+				if processedRegion, err := processEnvValue(vertexConfig.Region, s.logger); err == nil {
+					vertexConfigCopy.Region = processedRegion
+				}
+				if processedAuthCredentials, err := processEnvValue(vertexConfig.AuthCredentials, s.logger); err == nil {
+					vertexConfigCopy.AuthCredentials = processedAuthCredentials
+				}
+				vertexConfig = &vertexConfigCopy
+			}
+
+			// Process Bedrock config if present
+			bedrockConfig := dbKey.BedrockKeyConfig
+			if bedrockConfig != nil {
+				bedrockConfigCopy := *bedrockConfig
+				if processedAccessKey, err := processEnvValue(bedrockConfig.AccessKey, s.logger); err == nil {
+					bedrockConfigCopy.AccessKey = processedAccessKey
+				}
+				if processedSecretKey, err := processEnvValue(bedrockConfig.SecretKey, s.logger); err == nil {
+					bedrockConfigCopy.SecretKey = processedSecretKey
+				}
+				if bedrockConfig.SessionToken != nil {
+					if processedSessionToken, err := processEnvValue(*bedrockConfig.SessionToken, s.logger); err == nil {
+						bedrockConfigCopy.SessionToken = &processedSessionToken
+					}
+				}
+				if bedrockConfig.Region != nil {
+					if processedRegion, err := processEnvValue(*bedrockConfig.Region, s.logger); err == nil {
+						bedrockConfigCopy.Region = &processedRegion
+					}
+				}
+				if bedrockConfig.ARN != nil {
+					if processedARN, err := processEnvValue(*bedrockConfig.ARN, s.logger); err == nil {
+						bedrockConfigCopy.ARN = &processedARN
+					}
+				}
+				bedrockConfig = &bedrockConfigCopy
+			}
+
 			keys[i] = schemas.Key{
 				ID:               dbKey.KeyID,
-				Value:            dbKey.Value,
+				Value:            processedValue,
 				Models:           dbKey.Models,
 				Weight:           dbKey.Weight,
-				AzureKeyConfig:   dbKey.AzureKeyConfig,
-				VertexKeyConfig:  dbKey.VertexKeyConfig,
-				BedrockKeyConfig: dbKey.BedrockKeyConfig,
+				AzureKeyConfig:   azureConfig,
+				VertexKeyConfig:  vertexConfig,
+				BedrockKeyConfig: bedrockConfig,
 			}
 		}
 		providerConfig := ProviderConfig{
