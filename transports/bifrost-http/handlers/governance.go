@@ -26,6 +26,10 @@ type GovernanceHandler struct {
 
 // NewGovernanceHandler creates a new governance handler instance
 func NewGovernanceHandler(plugin *governance.GovernancePlugin, configStore configstore.ConfigStore, logger schemas.Logger) (*GovernanceHandler, error) {
+	if configStore == nil {
+		return nil, fmt.Errorf("config store is required")
+	}
+
 	return &GovernanceHandler{
 		plugin:      plugin,
 		pluginStore: plugin.GetGovernanceStore(),

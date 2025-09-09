@@ -1,0 +1,206 @@
+---
+title: "Pricing Module"
+description: "Dynamic model pricing and cost calculation system for AI model usage tracking and billing."
+icon: "dollar-sign"
+---
+
+The Pricing Module provides intelligent cost calculation and dynamic pricing management for AI model usage across all providers supported by Bifrost. It offers real-time cost tracking, multi-modal pricing support, and automatic pricing data synchronization.
+
+## Core Features
+
+### **Automatic Pricing Synchronization**
+The pricing system manages pricing data through a two-phase approach:
+
+**Startup Behavior:**
+- **With ConfigStore**: Downloads pricing sheet from Maxim's datasheet and persists it to the config store, then loads into memory for fast lookups
+- **Without ConfigStore**: Downloads pricing sheet directly into memory on every startup
+
+**Ongoing Synchronization:**
+- When ConfigStore is available, automatic sync occurs every 24 hours to keep pricing data current
+- All pricing data is cached in memory for O(1) lookup performance during cost calculations
+
+This ensures cost calculations always use the latest pricing information from AI providers while maintaining optimal performance.
+
+### **Multi-Modal Cost Calculation**
+Supports diverse pricing models across different AI operation types:
+- **Text Operations**: Token-based and character-based pricing for chat completions, text completions, and embeddings
+- **Audio Processing**: Token-based pricing for speech synthesis and transcription
+- **Image Processing**: Per-image costs with tiered pricing for high-token contexts
+
+### **Intelligent Cache Cost Handling**
+Integrates with semantic caching to provide accurate cost calculations:
+- **Cache Hits**: Zero cost for direct cache hits, embedding cost only for semantic matches
+- **Cache Misses**: Combined cost of base model usage plus embedding generation for cache storage
+
+### **Tiered Pricing Support**
+Automatically applies different pricing rates for high-token contexts (above 128k tokens), reflecting real provider pricing models.
+
+## Architecture
+
+### PricingManager
+The central component that handles all pricing operations:
+
+```go
+type PricingManager struct {
+    configStore configstore.ConfigStore
+    logger      schemas.Logger
+    
+    // In-memory cache for fast access
+    pricingData map[string]configstore.TableModelPricing
+    mu          sync.RWMutex
+    
+    // Background sync worker
+    syncTicker *time.Ticker
+    done       chan struct{}
+    wg         sync.WaitGroup
+}
+```
+
+### Pricing Data Structure
+Each model's pricing information includes comprehensive cost metrics:
+
+```go
+type PricingEntry struct {
+    // Basic pricing
+    InputCostPerToken  float64 `json:"input_cost_per_token"`
+    OutputCostPerToken float64 `json:"output_cost_per_token"`
+    Provider           string  `json:"provider"`
+    Mode               string  `json:"mode"`
+    
+    // Media pricing
+    InputCostPerImage          *float64 `json:"input_cost_per_image,omitempty"`
+    InputCostPerVideoPerSecond *float64 `json:"input_cost_per_video_per_second,omitempty"`
+    InputCostPerAudioPerSecond *float64 `json:"input_cost_per_audio_per_second,omitempty"`
+    
+    // Character-based pricing
+    InputCostPerCharacter  *float64 `json:"input_cost_per_character,omitempty"`
+    OutputCostPerCharacter *float64 `json:"output_cost_per_character,omitempty"`
+    
+    // Tiered pricing (above 128k tokens)
+    InputCostPerTokenAbove128kTokens  *float64 `json:"input_cost_per_token_above_128k_tokens,omitempty"`
+    OutputCostPerTokenAbove128kTokens *float64 `json:"output_cost_per_token_above_128k_tokens,omitempty"`
+    
+    // Special operation pricing
+    CacheReadInputTokenCost   *float64 `json:"cache_read_input_token_cost,omitempty"`
+    InputCostPerTokenBatches  *float64 `json:"input_cost_per_token_batches,omitempty"`
+    OutputCostPerTokenBatches *float64 `json:"output_cost_per_token_batches,omitempty"`
+}
+```
+
+## Usage in Plugins
+
+### Initialization
+In Bifrost's gateway, the `PricingManager` is initialized once at the start and shared across all plugins:
+
+```go
+import "github.com/maximhq/bifrost/framework/pricing"
+
+// Initialize pricing manager with config store and logger
+pricingManager, err := pricing.Init(configStore, logger)
+if err != nil {
+    return fmt.Errorf("failed to initialize pricing manager: %w", err)
+}
+```
+
+### Basic Cost Calculation
+Calculate costs from a Bifrost response:
+
+```go
+// Calculate cost for a completed request
+cost := pricingManager.CalculateCost(
+    result,                           // *schemas.BifrostResponse
+    schemas.OpenAI,                   // provider
+    "gpt-4",                          // model
+    schemas.ChatCompletionRequest,    // request type
+)
+
+logger.Info("Request cost: $%.6f", cost)
+```
+
+### Advanced Cost Calculation with Usage Details
+For more granular cost calculation with custom usage data:
+
+```go
+// Custom usage calculation
+usage := &schemas.LLMUsage{
+    PromptTokens:     1500,
+    CompletionTokens: 800,
+    TotalTokens:      2300,
+}
+
+cost := pricingManager.CalculateCostFromUsage(
+    "openai",                       // provider
+    "gpt-4",                        // model  
+    usage,                          // usage data
+    schemas.ChatCompletionRequest,  // request type
+    false,                          // is cache read
+    false,                          // is batch
+    nil,                            // audio seconds (for audio models)
+    nil,                            // audio token details
+)
+```
+
+### Cache Aware Cost Calculation
+For workflows that implement semantic caching, use cache-aware cost calculation:
+
+```go
+// This automatically handles cache hits/misses and embedding costs
+cost := pricingManager.CalculateCostWithCacheDebug(
+    result,                          // *schemas.BifrostResponse with cache debug info
+    schemas.Anthropic,               // provider
+    "claude-3-sonnet",               // model
+    schemas.ChatCompletionRequest,   // request type
+)
+
+// Cache hits return 0 for direct hits, embedding cost for semantic matches
+// Cache misses return base model cost + embedding generation cost
+```
+
+## Error Handling and Fallbacks
+
+The pricing module handles missing pricing data gracefully:
+
+```go
+// Pricing lookup with fallback behavior
+func (pm *PricingManager) getPricing(model, provider string, requestType schemas.RequestType) (*configstore.TableModelPricing, bool) {
+    // Try direct lookup
+    pricing, ok := pm.pricingData[makeKey(model, provider, normalizeRequestType(requestType))]
+    if !ok {
+        pm.logger.Warn("pricing not found for model %s and provider %s of request type %s", 
+            model, provider, requestType)
+        return nil, false
+    }
+    return &pricing, true
+}
+
+// When pricing is not found, CalculateCost returns 0.0 and logs a warning
+// This ensures operations continue smoothly without billing failures
+```
+
+
+## Cleanup and Lifecycle Management
+
+Properly cleanup resources when shutting down:
+
+```go
+// Cleanup pricing manager resources
+defer func() {
+    if err := pricingManager.Cleanup(); err != nil {
+        logger.Error("Failed to cleanup pricing manager: %v", err)
+    }
+}()
+```
+
+## Thread Safety
+
+All PricingManager operations are thread-safe, making it suitable for concurrent usage across multiple plugins and goroutines. The internal pricing data cache uses read-write mutexes for optimal performance during frequent lookups.
+
+## Best Practices
+
+1. **Shared Instance**: Use a single PricingManager instance across all plugins to avoid redundant data synchronization
+2. **Error Handling**: Always handle the case where pricing returns 0.0 due to missing model data
+3. **Logging**: Monitor pricing sync failures and missing model warnings in production
+4. **Cache Awareness**: Use `CalculateCostWithCacheDebug` when implementing caching features
+5. **Resource Cleanup**: Always call `Cleanup()` during application shutdown to prevent resource leaks
+
+The Pricing Module provides a robust, production-ready foundation for implementing billing, budgeting, and cost monitoring features in Bifrost plugins.

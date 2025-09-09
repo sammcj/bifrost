@@ -66,38 +66,6 @@ icon: "server"
 - **CPU Performance**: Handles 5,000 RPS workload effectively
 - **Queue Management**: 47.13 µs average wait time indicates good throughput
 
-### **Performance Characteristics**
-
-**Fastest Operations:**
-- Key Selection: 16 ns (near-instantaneous)
-- Error Handling: 189 ns
-- Params Preparation: 436 ns
-
-**Most Time-Consuming Operations:**
-- HTTP Request: 1.56s (external provider call)
-- Response Parsing: 11.30 ms
-- JSON Marshaling: 63.47 µs
-
----
-
-## Cost-Effectiveness Analysis
-
-### **Value Proposition**
-The t3.medium instance provides excellent **price-to-performance ratio** for moderate workloads:
-
-- **Lower infrastructure costs** compared to larger instances
-- **Efficient resource utilization** (33% memory usage)
-- **Suitable for most production workloads** under 5,000 RPS
-- **Room for growth** with current resource utilization
-
-### **Ideal Use Cases**
-
-**t3.medium is perfect for:**
-- **Startups and small teams** with budget constraints
-- **Development and staging** environments
-- **Moderate production workloads** (< 3,000 RPS sustained)
-- **Cost-sensitive deployments** where slight latency trade-offs are acceptable
-
 ---
 
 ## Configuration Recommendations
