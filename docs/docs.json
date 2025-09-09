@@ -149,9 +149,11 @@
             "group" : "Framework",
             "icon" : "screwdriver-wrench",
             "pages" : [
+              "architecture/framework/what-is-framework",
+              "architecture/framework/pricing",
               {
                 "group" : "Vector Store",
-                "icon": "hexagon-nodes",
+                "icon": "diagram-project",
                 "pages" : [
                   "architecture/framework/vector-store/weaviate"
                 ]

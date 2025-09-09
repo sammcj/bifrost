@@ -62,12 +62,6 @@ func (s *SQLiteLogStore) SearchLogs(filters SearchFilters, pagination Pagination
 	if filters.EndTime != nil {
 		baseQuery = baseQuery.Where("timestamp <= ?", *filters.EndTime)
 	}
-	if filters.Tokens != nil {
-		baseQuery = baseQuery.Where("total_tokens >= ?", *filters.Tokens)
-	}
-	if filters.Cost != nil {
-		baseQuery = baseQuery.Where("cost >= ?", *filters.Cost)
-	}
 	if filters.MinLatency != nil {
 		baseQuery = baseQuery.Where("latency >= ?", *filters.MinLatency)
 	}
@@ -79,6 +73,12 @@ func (s *SQLiteLogStore) SearchLogs(filters SearchFilters, pagination Pagination
 	}
 	if filters.MaxTokens != nil {
 		baseQuery = baseQuery.Where("total_tokens <= ?", *filters.MaxTokens)
+	}
+	if filters.MinCost != nil {
+		baseQuery = baseQuery.Where("cost >= ?", *filters.MinCost)
+	}
+	if filters.MaxCost != nil {
+		baseQuery = baseQuery.Where("cost <= ?", *filters.MaxCost)
 	}
 	if filters.ContentSearch != "" {
 		baseQuery = baseQuery.Where("content_summary LIKE ?", "%"+filters.ContentSearch+"%")
