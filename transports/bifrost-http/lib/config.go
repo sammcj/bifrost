@@ -615,14 +615,18 @@ func (s *Config) GetRawConfigString() string {
 //   - "env.OPENAI_API_KEY" -> actual value from OPENAI_API_KEY environment variable
 //   - "sk-1234567890" -> returned as-is (no env prefix)
 func (s *Config) processEnvValue(value string) (string, string, error) {
-	if strings.HasPrefix(value, "env.") {
-		envKey := strings.TrimPrefix(value, "env.")
-		if envValue := os.Getenv(envKey); envValue != "" {
-			return envValue, envKey, nil
-		}
-		return "", envKey, fmt.Errorf("environment variable %s not found", envKey)
-	}
-	return value, "", nil
+	 v := strings.TrimSpace(value)
+	 if !strings.HasPrefix(v, "env.") {
+	 	return value, "", nil // do not trim non-env values
+	 }
+	 envKey := strings.TrimSpace(strings.TrimPrefix(v, "env."))
+	 if envKey == "" {
+	 	return "", "", fmt.Errorf("environment variable name missing in %q", value)
+	 }
+	 if envValue, ok := os.LookupEnv(envKey); ok {
+	 	return envValue, envKey, nil
+	 }
+	 return "", envKey, fmt.Errorf("environment variable %s not found", envKey)
 }
 
 // getRestoredMCPConfig creates a copy of MCP config with env variable references restored
@@ -1383,7 +1387,7 @@ func IsRedacted(key string) bool {
 	}
 
 	if len(key) <= 8 {
-		return strings.Contains(key, "*")
+		return strings.Count(key, "*") == len(key)
 	}
 
 	// Check for exact redaction pattern: 4 chars + 24 asterisks + 4 chars

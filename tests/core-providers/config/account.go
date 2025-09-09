@@ -40,16 +40,16 @@ type TestScenarios struct {
 
 // ComprehensiveTestConfig extends TestConfig with additional scenarios
 type ComprehensiveTestConfig struct {
-	Provider       schemas.ModelProvider
-	ChatModel      string
-	TextModel      string
-	EmbeddingModel string
-	TranscriptionModel string
+	Provider             schemas.ModelProvider
+	ChatModel            string
+	TextModel            string
+	EmbeddingModel       string
+	TranscriptionModel   string
 	SpeechSynthesisModel string
-	Scenarios      TestScenarios
-	CustomParams   *schemas.ModelParameters
-	Fallbacks      []schemas.Fallback
-	SkipReason     string // Reason to skip certain tests
+	Scenarios            TestScenarios
+	CustomParams         *schemas.ModelParameters
+	Fallbacks            []schemas.Fallback
+	SkipReason           string // Reason to skip certain tests
 }
 
 // ComprehensiveTestAccount provides a test implementation of the Account interface for comprehensive testing.
@@ -214,7 +214,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 	case schemas.OpenAI:
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
-				DefaultRequestTimeoutInSeconds: 30,
+				DefaultRequestTimeoutInSeconds: 60,
 				MaxRetries:                     1,
 				RetryBackoffInitial:            100 * time.Millisecond,
 				RetryBackoffMax:                2 * time.Second,
@@ -228,7 +228,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				BaseURL:                        getEnvWithDefault("GROQ_OPENAI_BASE_URL", "https://api.groq.com/openai"),
-				DefaultRequestTimeoutInSeconds: 30,
+				DefaultRequestTimeoutInSeconds: 60,
 				MaxRetries:                     1,
 				RetryBackoffInitial:            100 * time.Millisecond,
 				RetryBackoffMax:                2 * time.Second,
@@ -259,7 +259,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 	case schemas.Bedrock:
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
-				DefaultRequestTimeoutInSeconds: 30,
+				DefaultRequestTimeoutInSeconds: 60,
 				MaxRetries:                     1,
 				RetryBackoffInitial:            100 * time.Millisecond,
 				RetryBackoffMax:                2 * time.Second,
@@ -277,7 +277,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 	case schemas.Azure:
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
-				DefaultRequestTimeoutInSeconds: 30,
+				DefaultRequestTimeoutInSeconds: 60,
 				MaxRetries:                     1,
 				RetryBackoffInitial:            100 * time.Millisecond,
 				RetryBackoffMax:                2 * time.Second,
@@ -290,7 +290,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 	case schemas.Vertex:
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
-				DefaultRequestTimeoutInSeconds: 30,
+				DefaultRequestTimeoutInSeconds: 60,
 				MaxRetries:                     1,
 				RetryBackoffInitial:            100 * time.Millisecond,
 				RetryBackoffMax:                2 * time.Second,
@@ -303,7 +303,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 	case schemas.Ollama:
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
-				DefaultRequestTimeoutInSeconds: 30,
+				DefaultRequestTimeoutInSeconds: 60,
 				MaxRetries:                     1,
 				RetryBackoffInitial:            100 * time.Millisecond,
 				RetryBackoffMax:                2 * time.Second,
@@ -325,7 +325,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				BaseURL:                        os.Getenv("SGL_BASE_URL"),
-				DefaultRequestTimeoutInSeconds: 30,
+				DefaultRequestTimeoutInSeconds: 60,
 				MaxRetries:                     1,
 				RetryBackoffInitial:            100 * time.Millisecond,
 				RetryBackoffMax:                2 * time.Second,
@@ -344,7 +344,12 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		}, nil
 	case schemas.Gemini:
 		return &schemas.ProviderConfig{
-			NetworkConfig:            schemas.DefaultNetworkConfig,
+			NetworkConfig: schemas.NetworkConfig{
+				DefaultRequestTimeoutInSeconds: 60,
+				MaxRetries:                     1,
+				RetryBackoffInitial:            100 * time.Millisecond,
+				RetryBackoffMax:                2 * time.Second,
+			},
 			ConcurrencyAndBufferSize: schemas.DefaultConcurrencyAndBufferSize,
 		}, nil
 	default:
@@ -355,10 +360,10 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 // AllProviderConfigs contains test configurations for all providers
 var AllProviderConfigs = []ComprehensiveTestConfig{
 	{
-		Provider:  schemas.OpenAI,
-		ChatModel: "gpt-4o-mini",
-		TextModel: "", // OpenAI doesn't support text completion in newer models
-		TranscriptionModel: "gpt-4o-transcribe",
+		Provider:             schemas.OpenAI,
+		ChatModel:            "gpt-4o-mini",
+		TextModel:            "", // OpenAI doesn't support text completion in newer models
+		TranscriptionModel:   "whisper-1",
 		SpeechSynthesisModel: "tts-1",
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not supported
@@ -374,8 +379,8 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 			MultipleImages:        true,
 			CompleteEnd2End:       true,
 			ProviderSpecific:      true,
-			SpeechSynthesis:       true,  // OpenAI supports TTS
-			SpeechSynthesisStream: true,  // OpenAI supports streaming TTS
+			SpeechSynthesis:       true, // OpenAI supports TTS
+			SpeechSynthesisStream: true, // OpenAI supports streaming TTS
 			Transcription:         true, // OpenAI supports STT with Whisper
 			TranscriptionStream:   true, // OpenAI supports streaming STT
 			Embedding:             true,
@@ -636,12 +641,12 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		},
 	},
 	{
-		Provider:  schemas.Gemini,
-		ChatModel: "gemini-2.0-flash",
-		TextModel: "", // GenAI doesn't support text completion in newer models
-		TranscriptionModel: "gemini-2.5-flash",
+		Provider:             schemas.Gemini,
+		ChatModel:            "gemini-2.0-flash",
+		TextModel:            "", // GenAI doesn't support text completion in newer models
+		TranscriptionModel:   "gemini-2.5-flash",
 		SpeechSynthesisModel: "gemini-2.5-flash-preview-tts",
-		EmbeddingModel: "text-embedding-004",
+		EmbeddingModel:       "text-embedding-004",
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,

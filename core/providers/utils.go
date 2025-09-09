@@ -803,6 +803,46 @@ func processAndSendError(
 	}
 }
 
+func createBifrostChatCompletionChunkResponse(
+	usage *schemas.LLMUsage,
+	finishReason *string,
+	currentChunkIndex int,
+	params *schemas.ModelParameters,
+	providerName schemas.ModelProvider,
+) *schemas.BifrostResponse {
+	response := &schemas.BifrostResponse{
+		Object: "chat.completion.chunk",
+		Usage:  usage,
+		Choices: []schemas.BifrostResponseChoice{
+			{
+				FinishReason: finishReason,
+				BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
+					Delta: schemas.BifrostStreamDelta{}, // empty delta
+				},
+			},
+		},
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			Provider:   providerName,
+			ChunkIndex: currentChunkIndex + 1,
+		},
+	}
+	if params != nil {
+		response.ExtraFields.Params = *params
+	}
+	return response
+}
+
+func handleStreamEndWithSuccess(
+	ctx context.Context,
+	response *schemas.BifrostResponse,
+	postHookRunner schemas.PostHookRunner,
+	responseChan chan *schemas.BifrostStream,
+	logger schemas.Logger,
+) {
+	ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+	processAndSendResponse(ctx, postHookRunner, response, responseChan, logger)
+}
+
 func handleStreamControlSkip(logger schemas.Logger, bifrostErr *schemas.BifrostError) bool {
 	if bifrostErr == nil || bifrostErr.StreamControl == nil {
 		return false

@@ -17,15 +17,21 @@ import (
 )
 
 // processEnvValue processes a value that might be an environment variable reference
-func processEnvValue(value string) (string, error) {
-	if strings.HasPrefix(value, "env.") {
-		envKey := strings.TrimPrefix(value, "env.")
-		if envValue := os.Getenv(envKey); envValue != "" {
-			return envValue, nil
-		}
-		return "", fmt.Errorf("environment variable %s not found", envKey)
+func processEnvValue(value string, logger schemas.Logger) (string, error) {
+	v := strings.TrimSpace(value)
+	if !strings.HasPrefix(v, "env.") {
+		return value, nil
 	}
-	return value, nil
+	envKey := strings.TrimSpace(strings.TrimPrefix(v, "env."))
+	if envKey == "" {
+		logger.Warn(fmt.Sprintf("Environment variable name missing in value: %s", value))
+		return "", fmt.Errorf("environment variable name missing in %q", value)
+	}
+	if envValue, ok := os.LookupEnv(envKey); ok {
+		return envValue, nil
+	}
+	logger.Warn(fmt.Sprintf("Environment variable not found: %s", envKey))
+	return "", fmt.Errorf("environment variable %s not found", envKey)
 }
 
 // SQLiteConfig represents the configuration for a SQLite database.
@@ -403,7 +409,7 @@ func (s *SQLiteConfigStore) GetProvidersConfig() (map[schemas.ModelProvider]Prov
 		keys := make([]schemas.Key, len(dbProvider.Keys))
 		for i, dbKey := range dbProvider.Keys {
 			// Process main key value
-			processedValue, err := processEnvValue(dbKey.Value)
+			processedValue, err := processEnvValue(dbKey.Value, s.logger)
 			if err != nil {
 				// If env var not found, keep the original value
 				processedValue = dbKey.Value
@@ -413,11 +419,11 @@ func (s *SQLiteConfigStore) GetProvidersConfig() (map[schemas.ModelProvider]Prov
 			azureConfig := dbKey.AzureKeyConfig
 			if azureConfig != nil {
 				azureConfigCopy := *azureConfig
-				if processedEndpoint, err := processEnvValue(azureConfig.Endpoint); err == nil {
+				if processedEndpoint, err := processEnvValue(azureConfig.Endpoint, s.logger); err == nil {
 					azureConfigCopy.Endpoint = processedEndpoint
 				}
 				if azureConfig.APIVersion != nil {
-					if processedAPIVersion, err := processEnvValue(*azureConfig.APIVersion); err == nil {
+					if processedAPIVersion, err := processEnvValue(*azureConfig.APIVersion, s.logger); err == nil {
 						azureConfigCopy.APIVersion = &processedAPIVersion
 					}
 				}
@@ -428,13 +434,13 @@ func (s *SQLiteConfigStore) GetProvidersConfig() (map[schemas.ModelProvider]Prov
 			vertexConfig := dbKey.VertexKeyConfig
 			if vertexConfig != nil {
 				vertexConfigCopy := *vertexConfig
-				if processedProjectID, err := processEnvValue(vertexConfig.ProjectID); err == nil {
+				if processedProjectID, err := processEnvValue(vertexConfig.ProjectID, s.logger); err == nil {
 					vertexConfigCopy.ProjectID = processedProjectID
 				}
-				if processedRegion, err := processEnvValue(vertexConfig.Region); err == nil {
+				if processedRegion, err := processEnvValue(vertexConfig.Region, s.logger); err == nil {
 					vertexConfigCopy.Region = processedRegion
 				}
-				if processedAuthCredentials, err := processEnvValue(vertexConfig.AuthCredentials); err == nil {
+				if processedAuthCredentials, err := processEnvValue(vertexConfig.AuthCredentials, s.logger); err == nil {
 					vertexConfigCopy.AuthCredentials = processedAuthCredentials
 				}
 				vertexConfig = &vertexConfigCopy
@@ -444,24 +450,24 @@ func (s *SQLiteConfigStore) GetProvidersConfig() (map[schemas.ModelProvider]Prov
 			bedrockConfig := dbKey.BedrockKeyConfig
 			if bedrockConfig != nil {
 				bedrockConfigCopy := *bedrockConfig
-				if processedAccessKey, err := processEnvValue(bedrockConfig.AccessKey); err == nil {
+				if processedAccessKey, err := processEnvValue(bedrockConfig.AccessKey, s.logger); err == nil {
 					bedrockConfigCopy.AccessKey = processedAccessKey
 				}
-				if processedSecretKey, err := processEnvValue(bedrockConfig.SecretKey); err == nil {
+				if processedSecretKey, err := processEnvValue(bedrockConfig.SecretKey, s.logger); err == nil {
 					bedrockConfigCopy.SecretKey = processedSecretKey
 				}
 				if bedrockConfig.SessionToken != nil {
-					if processedSessionToken, err := processEnvValue(*bedrockConfig.SessionToken); err == nil {
+					if processedSessionToken, err := processEnvValue(*bedrockConfig.SessionToken, s.logger); err == nil {
 						bedrockConfigCopy.SessionToken = &processedSessionToken
 					}
 				}
 				if bedrockConfig.Region != nil {
-					if processedRegion, err := processEnvValue(*bedrockConfig.Region); err == nil {
+					if processedRegion, err := processEnvValue(*bedrockConfig.Region, s.logger); err == nil {
 						bedrockConfigCopy.Region = &processedRegion
 					}
 				}
 				if bedrockConfig.ARN != nil {
-					if processedARN, err := processEnvValue(*bedrockConfig.ARN); err == nil {
+					if processedARN, err := processEnvValue(*bedrockConfig.ARN, s.logger); err == nil {
 						bedrockConfigCopy.ARN = &processedARN
 					}
 				}
@@ -505,7 +511,7 @@ func (s *SQLiteConfigStore) GetMCPConfig() (*schemas.MCPConfig, error) {
 		// Process connection string for environment variables
 		var processedConnectionString *string
 		if dbClient.ConnectionString != nil {
-			processedValue, err := processEnvValue(*dbClient.ConnectionString)
+			processedValue, err := processEnvValue(*dbClient.ConnectionString, s.logger)
 			if err != nil {
 				// If env var not found, keep the original value
 				processedValue = *dbClient.ConnectionString

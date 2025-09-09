@@ -22,11 +22,11 @@ func TestGemini(t *testing.T) {
 	defer client.Shutdown()
 
 	testConfig := config.ComprehensiveTestConfig{
-		Provider:  schemas.Gemini,
-		ChatModel: "gemini-2.0-flash",
-		TextModel: "", // Gemini doesn't support text completion
-		EmbeddingModel: "text-embedding-004",
-		TranscriptionModel: "gemini-2.5-flash",
+		Provider:             schemas.Gemini,
+		ChatModel:            "gemini-2.0-flash",
+		TextModel:            "", // Gemini doesn't support text completion
+		EmbeddingModel:       "text-embedding-004",
+		TranscriptionModel:   "gemini-2.5-flash",
 		SpeechSynthesisModel: "gemini-2.5-flash-preview-tts",
 		Scenarios: config.TestScenarios{
 			TextCompletion:        false, // Not supported

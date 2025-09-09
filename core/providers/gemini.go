@@ -457,8 +457,6 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 				continue
 			}
 
-			chunkIndex++
-
 			// Process chunk using shared function
 			geminiResponse, err := processGeminiStreamChunk(jsonData)
 			if err != nil {
@@ -508,6 +506,8 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 
 			// Only send response if we have actual audio content
 			if len(audioChunk) > 0 {
+				chunkIndex++
+
 				// Create Bifrost speech response for streaming
 				response := &schemas.BifrostResponse{
 					Object: "audio.speech.chunk",
@@ -529,30 +529,26 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 			}
 		}
 
-		chunkIndex++
-		ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
-
-		response := &schemas.BifrostResponse{
-			Object: "audio.speech.chunk",
-			Speech: &schemas.BifrostSpeech{
-				Usage: usage,
-			},
-			ExtraFields: schemas.BifrostResponseExtraFields{
-				Provider:   providerName,
-				ChunkIndex: chunkIndex,
-			},
-		}
-
-		if params != nil {
-			response.ExtraFields.Params = *params
-		}
-
-		processAndSendResponse(ctx, postHookRunner, response, responseChan, provider.logger)
-
 		// Handle scanner errors
 		if err := scanner.Err(); err != nil {
 			provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
 			processAndSendError(ctx, postHookRunner, err, responseChan, provider.logger)
+		} else {
+			response := &schemas.BifrostResponse{
+				Object: "audio.speech.chunk",
+				Speech: &schemas.BifrostSpeech{
+					Usage: usage,
+				},
+				ExtraFields: schemas.BifrostResponseExtraFields{
+					Provider:   providerName,
+					ChunkIndex: chunkIndex + 1,
+				},
+			}
+
+			if params != nil {
+				response.ExtraFields.Params = *params
+			}
+			handleStreamEndWithSuccess(ctx, response, postHookRunner, responseChan, provider.logger)
 		}
 	}()
 
@@ -717,8 +713,6 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 				continue
 			}
 
-			chunkIndex++
-
 			// First, check if this is an error response
 			var errorCheck map[string]interface{}
 			if err := sonic.Unmarshal([]byte(jsonData), &errorCheck); err != nil {
@@ -776,6 +770,8 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 
 			// Only send response if we have actual text content
 			if deltaText != "" {
+				chunkIndex++
+
 				// Create Bifrost transcription response for streaming
 				response := &schemas.BifrostResponse{
 					Object: "audio.transcription.chunk",
@@ -797,36 +793,32 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 			}
 		}
 
-		chunkIndex++
-		ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
-
-		response := &schemas.BifrostResponse{
-			Object: "audio.transcription.chunk",
-			Transcribe: &schemas.BifrostTranscribe{
-				Text: fullTranscriptionText,
-				Usage: &schemas.TranscriptionUsage{
-					Type:         "tokens",
-					InputTokens:  usage.InputTokens,
-					OutputTokens: usage.OutputTokens,
-					TotalTokens:  usage.TotalTokens,
-				},
-			},
-			ExtraFields: schemas.BifrostResponseExtraFields{
-				Provider:   providerName,
-				ChunkIndex: chunkIndex,
-			},
-		}
-
-		if params != nil {
-			response.ExtraFields.Params = *params
-		}
-
-		processAndSendResponse(ctx, postHookRunner, response, responseChan, provider.logger)
-
 		// Handle scanner errors
 		if err := scanner.Err(); err != nil {
 			provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
 			processAndSendError(ctx, postHookRunner, err, responseChan, provider.logger)
+		} else {
+			response := &schemas.BifrostResponse{
+				Object: "audio.transcription.chunk",
+				Transcribe: &schemas.BifrostTranscribe{
+					Text: fullTranscriptionText,
+					Usage: &schemas.TranscriptionUsage{
+						Type:         "tokens",
+						InputTokens:  usage.InputTokens,
+						OutputTokens: usage.OutputTokens,
+						TotalTokens:  usage.TotalTokens,
+					},
+				},
+				ExtraFields: schemas.BifrostResponseExtraFields{
+					Provider:   providerName,
+					ChunkIndex: chunkIndex + 1,
+				},
+			}
+
+			if params != nil {
+				response.ExtraFields.Params = *params
+			}
+			handleStreamEndWithSuccess(ctx, response, postHookRunner, responseChan, provider.logger)
 		}
 	}()
 
