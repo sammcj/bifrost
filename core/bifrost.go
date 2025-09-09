@@ -571,6 +571,7 @@ func (bifrost *Bifrost) GetMCPClients() ([]schemas.MCPClient, error) {
 func (bifrost *Bifrost) AddMCPClient(config schemas.MCPClientConfig) error {
 	if bifrost.mcpManager == nil {
 		manager := &MCPManager{
+			ctx:       bifrost.ctx,
 			clientMap: make(map[string]*MCPClient),
 			logger:    bifrost.logger,
 		}

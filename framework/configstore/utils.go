@@ -103,3 +103,35 @@ func substituteEnvVars(config *ProviderConfig, provider schemas.ModelProvider, e
 		}
 	}
 }
+
+// substituteMCPEnvVars replaces resolved environment variable values with their original env.VAR_NAME references for MCP config
+func substituteMCPEnvVars(config *schemas.MCPConfig, envKeys map[string][]EnvKeyInfo) {
+	// Create a map for quick lookup of env vars by MCP client name
+	envVarMap := make(map[string]string) // key: "clientName.connection_string" -> env var name
+
+	for envVar, keyInfos := range envKeys {
+		for _, keyInfo := range keyInfos {
+			// For MCP connection strings
+			if keyInfo.KeyType == "connection_string" {
+				// Extract client name from config path like "mcp.client_configs.clientName.connection_string"
+				pathParts := strings.Split(keyInfo.ConfigPath, ".")
+				if len(pathParts) >= 3 && pathParts[0] == "mcp" && pathParts[1] == "client_configs" {
+					clientName := pathParts[2]
+					envVarMap[fmt.Sprintf("%s.connection_string", clientName)] = envVar
+				}
+			}
+		}
+	}
+
+	// Substitute values in MCP client configs
+	for i, clientConfig := range config.ClientConfigs {
+		clientPrefix := clientConfig.Name
+
+		// Substitute connection string
+		if clientConfig.ConnectionString != nil {
+			if envVar, exists := envVarMap[fmt.Sprintf("%s.connection_string", clientPrefix)]; exists {
+				config.ClientConfigs[i].ConnectionString = &[]string{fmt.Sprintf("env.%s", envVar)}[0]
+			}
+		}
+	}
+}
