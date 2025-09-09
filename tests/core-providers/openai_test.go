@@ -17,11 +17,12 @@ func TestOpenAI(t *testing.T) {
 	defer client.Shutdown()
 
 	testConfig := config.ComprehensiveTestConfig{
-		Provider:  schemas.OpenAI,
-		ChatModel: "gpt-4o-mini",
-		TextModel: "", // OpenAI doesn't support text completion in newer models
-		EmbeddingModel: "text-embedding-3-small",
-		TranscriptionModel: "gpt-4o-transcribe",
+		Provider:             schemas.OpenAI,
+		ChatModel:            "gpt-4o-mini",
+		TextModel:            "", // OpenAI doesn't support text completion in newer models
+		EmbeddingModel:       "text-embedding-3-small",
+		TranscriptionModel:   "whisper-1",
+		SpeechSynthesisModel: "tts-1",
 		Scenarios: config.TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,

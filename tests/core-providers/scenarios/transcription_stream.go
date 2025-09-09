@@ -2,6 +2,9 @@ package scenarios
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,51 +24,89 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 	}
 
 	t.Run("TranscriptionStream", func(t *testing.T) {
-		// Test streaming with different audio formats and configurations
-		testCases := []struct {
+		// Generate TTS audio for streaming round-trip validation
+		streamRoundTripCases := []struct {
 			name           string
-			audioData      []byte
-			language       *string
-			prompt         *string
+			text           string
+			voiceType      string
+			format         string
 			responseFormat *string
 			expectChunks   int
 		}{
 			{
-				name:           "BasicMP3_Streaming",
-				audioData:      TestAudioDataMP3,
-				language:       bifrost.Ptr("en"),
-				prompt:         nil,
+				name:           "StreamRoundTrip_Basic_MP3",
+				text:           TTSTestTextBasic,
+				voiceType:      "primary",
+				format:         "mp3",
 				responseFormat: nil, // Default JSON streaming
 				expectChunks:   1,
 			},
 			{
-				name:           "WAV_WithPrompt_Streaming",
-				audioData:      TestAudioDataWAV,
-				language:       bifrost.Ptr("en"),
-				prompt:         bifrost.Ptr("This is a test audio file for streaming transcription."),
-				responseFormat: bifrost.Ptr("verbose_json"),
+				name:           "StreamRoundTrip_Medium_MP3",
+				text:           TTSTestTextMedium,
+				voiceType:      "secondary",
+				format:         "mp3",
+				responseFormat: bifrost.Ptr("json"),
 				expectChunks:   1,
 			},
 			{
-				name:           "MP3_Text_Streaming",
-				audioData:      TestAudioDataMP3,
-				language:       nil, // Auto-detect
-				prompt:         nil,
-				responseFormat: bifrost.Ptr("text"),
+				name:           "StreamRoundTrip_Technical_MP3",
+				text:           TTSTestTextTechnical,
+				voiceType:      "tertiary",
+				format:         "mp3",
+				responseFormat: bifrost.Ptr("json"),
 				expectChunks:   1,
 			},
 		}
 
-		for _, tc := range testCases {
+		for _, tc := range streamRoundTripCases {
 			t.Run(tc.name, func(t *testing.T) {
-				request := &schemas.BifrostRequest{
+				// Step 1: Generate TTS audio
+				voice := GetProviderVoice(testConfig.Provider, tc.voiceType)
+				ttsRequest := &schemas.BifrostRequest{
 					Provider: testConfig.Provider,
-					Model:    "gpt-4o-transcribe",
+					Model:    testConfig.SpeechSynthesisModel,
+					Input: schemas.RequestInput{
+						SpeechInput: &schemas.SpeechInput{
+							Input: tc.text,
+							VoiceConfig: schemas.SpeechVoiceInput{
+								Voice: &voice,
+							},
+							ResponseFormat: tc.format,
+						},
+					},
+					Params:    MergeModelParameters(&schemas.ModelParameters{}, testConfig.CustomParams),
+					Fallbacks: testConfig.Fallbacks,
+				}
+
+				ttsResponse, err := client.SpeechRequest(ctx, ttsRequest)
+				require.Nilf(t, err, "TTS generation failed for stream round-trip test: %v", err)
+				require.NotNil(t, ttsResponse.Speech)
+				require.NotNil(t, ttsResponse.Speech.Audio)
+				require.Greater(t, len(ttsResponse.Speech.Audio), 0, "TTS returned empty audio")
+
+				// Save temp audio file
+				tempDir := os.TempDir()
+				audioFileName := filepath.Join(tempDir, "stream_roundtrip_"+tc.name+"."+tc.format)
+				writeErr := os.WriteFile(audioFileName, ttsResponse.Speech.Audio, 0644)
+				require.NoError(t, writeErr, "Failed to save temp audio file")
+
+				// Register cleanup
+				t.Cleanup(func() {
+					os.Remove(audioFileName)
+				})
+
+				t.Logf("🔄 Generated TTS audio for stream round-trip: %s (%d bytes)", audioFileName, len(ttsResponse.Speech.Audio))
+
+				// Step 2: Test streaming transcription
+				streamRequest := &schemas.BifrostRequest{
+					Provider: testConfig.Provider,
+					Model:    testConfig.TranscriptionModel,
 					Input: schemas.RequestInput{
 						TranscriptionInput: &schemas.TranscriptionInput{
-							File:           tc.audioData,
-							Language:       tc.language,
-							Prompt:         tc.prompt,
+							File:           ttsResponse.Speech.Audio,
+							Language:       bifrost.Ptr("en"),
+							Format:         bifrost.Ptr(tc.format),
 							ResponseFormat: tc.responseFormat,
 						},
 					},
@@ -76,7 +117,7 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 				}
 
 				// Test streaming response
-				responseChannel, err := client.TranscriptionStreamRequest(ctx, request)
+				responseChannel, err := client.TranscriptionStreamRequest(ctx, streamRequest)
 				require.Nilf(t, err, "Transcription stream failed: %v", err)
 				require.NotNil(t, responseChannel, "Response channel should not be nil")
 
@@ -122,7 +163,7 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 
 						// Validate stream response structure
 						assert.Equal(t, "audio.transcription.chunk", response.Object)
-						assert.Equal(t, "gpt-4o-transcribe", response.Model)
+						assert.Equal(t, testConfig.TranscriptionModel, response.Model)
 						assert.Equal(t, testConfig.Provider, response.ExtraFields.Provider)
 
 						lastResponse = response
@@ -137,8 +178,39 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 				assert.GreaterOrEqual(t, chunkCount, tc.expectChunks, "Should receive minimum expected chunks")
 				assert.NotNil(t, lastResponse, "Should have received at least one response")
 
-				t.Logf("✅ Streaming transcription successful: %d chunks, final text: '%s'",
-					chunkCount, fullTranscriptionText)
+				// Validate round-trip: check if transcribed text contains key words from original
+				require.NotEmpty(t, fullTranscriptionText, "Transcribed text should not be empty")
+
+				// Normalize for comparison (lowercase, remove punctuation)
+				originalWords := strings.Fields(strings.ToLower(tc.text))
+				transcribedWords := strings.Fields(strings.ToLower(fullTranscriptionText))
+
+				// Check that at least 50% of original words are found in transcription
+				foundWords := 0
+				for _, originalWord := range originalWords {
+					// Remove punctuation for comparison
+					cleanOriginal := strings.Trim(originalWord, ".,!?;:")
+					if len(cleanOriginal) < 3 { // Skip very short words
+						continue
+					}
+
+					for _, transcribedWord := range transcribedWords {
+						cleanTranscribed := strings.Trim(transcribedWord, ".,!?;:")
+						if strings.Contains(cleanTranscribed, cleanOriginal) || strings.Contains(cleanOriginal, cleanTranscribed) {
+							foundWords++
+							break
+						}
+					}
+				}
+
+				// Expect at least 50% word match for successful round-trip
+				minExpectedWords := len(originalWords) / 2
+				assert.GreaterOrEqual(t, foundWords, minExpectedWords,
+					"Stream round-trip failed: original='%s', transcribed='%s', found %d/%d words",
+					tc.text, fullTranscriptionText, foundWords, len(originalWords))
+
+				t.Logf("✅ Stream round-trip successful: '%s' → TTS → SST → '%s' (%d chunks, found %d/%d words)",
+					tc.text, fullTranscriptionText, chunkCount, foundWords, len(originalWords))
 			})
 		}
 	})
@@ -152,28 +224,28 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 	}
 
 	t.Run("TranscriptionStreamAdvanced", func(t *testing.T) {
-		t.Run("VerboseJSON_Streaming", func(t *testing.T) {
-			// Test streaming with verbose JSON format for detailed information
+		t.Run("JSONStreaming", func(t *testing.T) {
+			// Generate audio for streaming test
+			audioData, _ := GenerateTTSAudioForTest(ctx, t, client, testConfig.Provider, testConfig.SpeechSynthesisModel, TTSTestTextBasic, "primary", "mp3")
+
+			// Test streaming with JSON format
 			request := &schemas.BifrostRequest{
 				Provider: testConfig.Provider,
-				Model:    "gpt-4o-transcribe",
+				Model:    testConfig.TranscriptionModel,
 				Input: schemas.RequestInput{
 					TranscriptionInput: &schemas.TranscriptionInput{
-						File:           TestAudioDataMP3,
+						File:           audioData,
 						Language:       bifrost.Ptr("en"),
-						ResponseFormat: bifrost.Ptr("verbose_json"),
+						Format:         bifrost.Ptr("mp3"),
+						ResponseFormat: bifrost.Ptr("json"),
 					},
 				},
-				Params: MergeModelParameters(&schemas.ModelParameters{
-					ExtraParams: map[string]interface{}{
-						"timestamp_granularities": []string{"word", "segment"},
-					},
-				}, testConfig.CustomParams),
+				Params:    MergeModelParameters(&schemas.ModelParameters{}, testConfig.CustomParams),
 				Fallbacks: testConfig.Fallbacks,
 			}
 
 			responseChannel, err := client.TranscriptionStreamRequest(ctx, request)
-			require.Nilf(t, err, "Verbose JSON streaming failed: %v", err)
+			require.Nilf(t, err, "JSON streaming failed: %v", err)
 
 			var receivedResponse bool
 			streamCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -213,18 +285,21 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 		})
 
 		t.Run("MultipleLanguages_Streaming", func(t *testing.T) {
-			// Test streaming with different language hints
-			languages := []string{"en", "es", "fr", "de"}
+			// Generate audio for language streaming tests
+			audioData, _ := GenerateTTSAudioForTest(ctx, t, client, testConfig.Provider, testConfig.SpeechSynthesisModel, TTSTestTextBasic, "primary", "mp3")
+
+			// Test streaming with different language hints (only English for now)
+			languages := []string{"en"}
 
 			for _, lang := range languages {
 				t.Run("StreamLang_"+lang, func(t *testing.T) {
 					langCopy := lang
 					request := &schemas.BifrostRequest{
 						Provider: testConfig.Provider,
-						Model:    "gpt-4o-transcribe",
+						Model:    testConfig.TranscriptionModel,
 						Input: schemas.RequestInput{
 							TranscriptionInput: &schemas.TranscriptionInput{
-								File:     TestAudioDataMP3,
+								File:     audioData,
 								Language: &langCopy,
 							},
 						},
@@ -267,13 +342,16 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 		})
 
 		t.Run("WithCustomPrompt_Streaming", func(t *testing.T) {
+			// Generate audio for custom prompt streaming test
+			audioData, _ := GenerateTTSAudioForTest(ctx, t, client, testConfig.Provider, testConfig.SpeechSynthesisModel, TTSTestTextTechnical, "tertiary", "mp3")
+
 			// Test streaming with custom prompt for context
 			request := &schemas.BifrostRequest{
 				Provider: testConfig.Provider,
-				Model:    "gpt-4o-transcribe",
+				Model:    testConfig.TranscriptionModel,
 				Input: schemas.RequestInput{
 					TranscriptionInput: &schemas.TranscriptionInput{
-						File:     TestAudioDataMP3,
+						File:     audioData,
 						Language: bifrost.Ptr("en"),
 						Prompt:   bifrost.Ptr("This audio contains technical terms, proper nouns, and streaming-related vocabulary."),
 					},

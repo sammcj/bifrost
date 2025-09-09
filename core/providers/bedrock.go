@@ -1490,295 +1490,326 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 		defer close(responseChan)
 		defer resp.Body.Close()
 
-		// Create a buffer scanner to process the AWS Event Stream format
-		scanner := bufio.NewScanner(resp.Body)
+		// Process AWS Event Stream format
 		var messageID string
-
-		// AWS Event Streaming can have large buffers
-		buf := make([]byte, 0, 64*1024)
-		scanner.Buffer(buf, 1024*1024)
-
+		var usage *schemas.LLMUsage
+		var finishReason *string
 		chunkIndex := -1
 
-		for scanner.Scan() {
-			line := scanner.Text()
+		// Read the response body as a continuous stream
+		reader := bufio.NewReader(resp.Body)
+		buffer := make([]byte, 1024*1024) // 1MB buffer
+		var accumulator []byte            // Accumulate data across reads
 
-			// Skip empty lines
-			if line == "" {
-				continue
-			}
-
-			// AWS Event Stream format embeds JSON within binary data
-			// Look for JSON objects in the stream data
-			jsonStart := strings.Index(line, "{")
-			if jsonStart == -1 {
-				continue
-			}
-
-			// Extract the JSON part from the line
-			jsonData := line[jsonStart:]
-
-			// Find the end of the JSON object by counting braces
-			braceCount := 0
-			jsonEnd := -1
-			for i, char := range jsonData {
-				if char == '{' {
-					braceCount++
-				} else if char == '}' {
-					braceCount--
-					if braceCount == 0 {
-						jsonEnd = i + 1
-						break
+		for {
+			n, err := reader.Read(buffer)
+			if err != nil {
+				if err == io.EOF {
+					// Process any remaining data in the accumulator
+					if len(accumulator) > 0 {
+						_ = provider.processAWSEventStreamData(ctx, postHookRunner, accumulator, &messageID, &chunkIndex, &usage, &finishReason, model, providerName, responseChan)
 					}
+					break
+				}
+				provider.logger.Warn(fmt.Sprintf("Error reading %s stream: %v", providerName, err))
+				processAndSendError(ctx, postHookRunner, err, responseChan, provider.logger)
+				return
+			}
+
+			if n == 0 {
+				continue
+			}
+
+			// Append new data to accumulator
+			accumulator = append(accumulator, buffer[:n]...)
+
+			// Process the accumulated data and get the remaining unprocessed part
+			remaining := provider.processAWSEventStreamData(ctx, postHookRunner, accumulator, &messageID, &chunkIndex, &usage, &finishReason, model, providerName, responseChan)
+
+			// Reset accumulator with remaining data
+			accumulator = remaining
+		}
+
+		// Send final response
+		response := createBifrostChatCompletionChunkResponse(usage, finishReason, chunkIndex, params, providerName)
+		handleStreamEndWithSuccess(ctx, response, postHookRunner, responseChan, provider.logger)
+	}()
+
+	return responseChan, nil
+}
+
+// processAWSEventStreamData processes raw AWS Event Stream data and extracts JSON events.
+// Returns any remaining unprocessed bytes that should be kept for the next read.
+func (provider *BedrockProvider) processAWSEventStreamData(
+	ctx context.Context,
+	postHookRunner schemas.PostHookRunner,
+	data []byte,
+	messageID *string,
+	chunkIndex *int,
+	usage **schemas.LLMUsage,
+	finishReason **string,
+	model string,
+	providerName schemas.ModelProvider,
+	responseChan chan *schemas.BifrostStream,
+) []byte {
+	lastProcessed := 0
+	depth := 0
+	inString := false
+	escaped := false
+	objStart := -1
+
+	for i := 0; i < len(data); i++ {
+		b := data[i]
+		if inString {
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch b {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+
+		switch b {
+		case '"':
+			inString = true
+		case '{':
+			if depth == 0 {
+				objStart = i
+			}
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+				if depth == 0 && objStart >= 0 {
+					jsonBytes := data[objStart : i+1]
+					// Quick filter to match original behavior - check for JSON content and relevant fields
+					hasQuotes := bytes.Contains(jsonBytes, []byte(`"`))
+					hasRelevantContent := bytes.Contains(jsonBytes, []byte(`role`)) ||
+						bytes.Contains(jsonBytes, []byte(`delta`)) ||
+						bytes.Contains(jsonBytes, []byte(`usage`)) ||
+						bytes.Contains(jsonBytes, []byte(`stopReason`)) ||
+						bytes.Contains(jsonBytes, []byte(`contentBlockIndex`)) ||
+						bytes.Contains(jsonBytes, []byte(`metadata`))
+
+					if hasQuotes && hasRelevantContent {
+						provider.processEventBuffer(ctx, postHookRunner, jsonBytes, messageID, chunkIndex, usage, finishReason, model, providerName, responseChan)
+						lastProcessed = i + 1
+					}
+					objStart = -1
 				}
 			}
+		default:
+			// skip
+		}
+	}
 
-			if jsonEnd == -1 {
-				continue
+	if lastProcessed < len(data) {
+		return data[lastProcessed:]
+	}
+	return nil
+}
+
+// processEventBuffer processes AWS Event Stream JSON payloads and determines event type from content
+func (provider *BedrockProvider) processEventBuffer(ctx context.Context, postHookRunner schemas.PostHookRunner, eventBuffer []byte, messageID *string, chunkIndex *int, usage **schemas.LLMUsage, finishReason **string, model string, providerName schemas.ModelProvider, responseChan chan *schemas.BifrostStream) {
+	// Parse the JSON event
+	var event map[string]interface{}
+	if err := sonic.Unmarshal(eventBuffer, &event); err != nil {
+		provider.logger.Debug(fmt.Sprintf("Failed to parse JSON from event buffer: %v, data: %s", err, string(eventBuffer)))
+		return
+	}
+
+	// Determine event type based on JSON content structure
+	switch {
+	case event["role"] != nil:
+		// This is a messageStart event
+		*chunkIndex++
+		if role, ok := event["role"].(string); ok {
+			*messageID = fmt.Sprintf("bedrock-%d", time.Now().UnixNano())
+
+			// Send empty response to signal start
+			streamResponse := &schemas.BifrostResponse{
+				ID:     *messageID,
+				Object: "chat.completion.chunk",
+				Model:  model,
+				Choices: []schemas.BifrostResponseChoice{
+					{
+						Index: 0,
+						BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
+							Delta: schemas.BifrostStreamDelta{
+								Role: &role,
+							},
+						},
+					},
+				},
+				ExtraFields: schemas.BifrostResponseExtraFields{
+					Provider:   providerName,
+					ChunkIndex: *chunkIndex,
+				},
 			}
 
-			chunkIndex++
+			// Use utility function to process and send response
+			processAndSendResponse(ctx, postHookRunner, streamResponse, responseChan, provider.logger)
+		}
 
-			// Extract the complete JSON object
-			jsonStr := jsonData[:jsonEnd]
+	case event["contentBlockIndex"] != nil && event["delta"] != nil:
+		// This is a contentBlockDelta event
+		*chunkIndex++
+		contentBlockIndex := 0
+		if idx, ok := event["contentBlockIndex"].(float64); ok {
+			contentBlockIndex = int(idx)
+		}
 
-			// Parse the JSON event
-			var event map[string]interface{}
-			if err := sonic.Unmarshal([]byte(jsonStr), &event); err != nil {
-				provider.logger.Debug(fmt.Sprintf("Failed to parse JSON from stream: %v, data: %s", err, jsonStr))
-				continue
-			}
-
-			// Determine event type and handle accordingly
+		if delta, ok := event["delta"].(map[string]interface{}); ok {
 			switch {
-			case event["contentBlockIndex"] != nil && event["delta"] != nil:
-				// This is a contentBlockDelta event
-				contentBlockIndex := 0
-				if idx, ok := event["contentBlockIndex"].(float64); ok {
-					contentBlockIndex = int(idx)
-				}
-
-				delta, ok := event["delta"].(map[string]interface{})
-				if !ok {
-					continue
-				}
-
-				switch {
-				case delta["text"] != nil:
-					// Handle text delta
-					if text, ok := delta["text"].(string); ok && text != "" {
-						// Create streaming response for this delta
-						streamResponse := &schemas.BifrostResponse{
-							ID:     messageID,
-							Object: "chat.completion.chunk",
-							Model:  model,
-							Choices: []schemas.BifrostResponseChoice{
-								{
-									Index: contentBlockIndex,
-									BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-										Delta: schemas.BifrostStreamDelta{
-											Content: &text,
-										},
-									},
-								},
-							},
-							ExtraFields: schemas.BifrostResponseExtraFields{
-								Provider:   providerName,
-								ChunkIndex: chunkIndex,
-							},
-						}
-
-						if params != nil {
-							streamResponse.ExtraFields.Params = *params
-						}
-
-						// Use utility function to process and send response
-						processAndSendResponse(ctx, postHookRunner, streamResponse, responseChan, provider.logger)
-					}
-
-				case delta["toolUse"] != nil:
-					// Handle tool use delta
-					if toolUse, ok := delta["toolUse"].(map[string]interface{}); ok {
-						// Parse the tool use structure properly
-						var toolCall schemas.ToolCall
-						toolCall.Type = func() *string { s := "function"; return &s }()
-
-						// Extract toolUseId
-						if toolUseID, hasID := toolUse["toolUseId"].(string); hasID {
-							toolCall.ID = &toolUseID
-						}
-
-						// Extract name
-						if name, hasName := toolUse["name"].(string); hasName {
-							toolCall.Function.Name = &name
-						}
-
-						// Extract and marshal input as arguments
-						if input, hasInput := toolUse["input"].(map[string]interface{}); hasInput {
-							inputBytes, err := sonic.Marshal(input)
-							if err != nil {
-								toolCall.Function.Arguments = "{}"
-							} else {
-								toolCall.Function.Arguments = string(inputBytes)
-							}
-						} else {
-							toolCall.Function.Arguments = "{}"
-						}
-
-						// Create streaming response for tool delta
-						streamResponse := &schemas.BifrostResponse{
-							ID:     messageID,
-							Object: "chat.completion.chunk",
-							Model:  model,
-							Choices: []schemas.BifrostResponseChoice{
-								{
-									Index: contentBlockIndex,
-									BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-										Delta: schemas.BifrostStreamDelta{
-											ToolCalls: []schemas.ToolCall{toolCall},
-										},
-									},
-								},
-							},
-							ExtraFields: schemas.BifrostResponseExtraFields{
-								Provider:   providerName,
-								ChunkIndex: chunkIndex,
-							},
-						}
-
-						if params != nil {
-							streamResponse.ExtraFields.Params = *params
-						}
-
-						// Use utility function to process and send response
-						processAndSendResponse(ctx, postHookRunner, streamResponse, responseChan, provider.logger)
-					}
-				}
-
-			case event["role"] != nil:
-				// This is a messageStart event
-				if role, ok := event["role"].(string); ok {
-					messageID = fmt.Sprintf("bedrock-%d", time.Now().UnixNano())
-
-					// Send empty response to signal start
+			case delta["text"] != nil:
+				// Handle text delta
+				if text, ok := delta["text"].(string); ok && text != "" {
+					// Create streaming response for this delta
 					streamResponse := &schemas.BifrostResponse{
-						ID:     messageID,
+						ID:     *messageID,
 						Object: "chat.completion.chunk",
 						Model:  model,
 						Choices: []schemas.BifrostResponseChoice{
 							{
-								Index: 0,
+								Index: contentBlockIndex,
 								BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
 									Delta: schemas.BifrostStreamDelta{
-										Role: &role,
+										Content: &text,
 									},
 								},
 							},
 						},
 						ExtraFields: schemas.BifrostResponseExtraFields{
 							Provider:   providerName,
-							ChunkIndex: chunkIndex,
+							ChunkIndex: *chunkIndex,
 						},
-					}
-
-					if params != nil {
-						streamResponse.ExtraFields.Params = *params
 					}
 
 					// Use utility function to process and send response
 					processAndSendResponse(ctx, postHookRunner, streamResponse, responseChan, provider.logger)
 				}
 
-			case event["stopReason"] != nil:
-				// This is a messageStop event
-				if stopReason, ok := event["stopReason"].(string); ok {
-					// Send a final streaming response with finish reason
-					finalResponse := &schemas.BifrostResponse{
-						ID:     messageID,
+			case delta["toolUse"] != nil:
+				// Handle tool use delta
+				if toolUse, ok := delta["toolUse"].(map[string]interface{}); ok {
+					// Parse the tool use structure properly
+					var toolCall schemas.ToolCall
+					toolCall.Type = func() *string { s := "function"; return &s }()
+
+					// Extract toolUseId
+					if toolUseID, hasID := toolUse["toolUseId"].(string); hasID {
+						toolCall.ID = &toolUseID
+					}
+
+					// Extract name
+					if name, hasName := toolUse["name"].(string); hasName {
+						toolCall.Function.Name = &name
+					}
+
+					// Extract and marshal input as arguments
+					if input, hasInput := toolUse["input"].(map[string]interface{}); hasInput {
+						inputBytes, err := sonic.Marshal(input)
+						if err != nil {
+							toolCall.Function.Arguments = "{}"
+						} else {
+							toolCall.Function.Arguments = string(inputBytes)
+						}
+					} else {
+						toolCall.Function.Arguments = "{}"
+					}
+
+					// Create streaming response for tool delta
+					streamResponse := &schemas.BifrostResponse{
+						ID:     *messageID,
 						Object: "chat.completion.chunk",
 						Model:  model,
 						Choices: []schemas.BifrostResponseChoice{
 							{
-								Index:        0,
-								FinishReason: &stopReason,
+								Index: contentBlockIndex,
 								BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-									Delta: schemas.BifrostStreamDelta{}, // Empty delta for final chunk
+									Delta: schemas.BifrostStreamDelta{
+										ToolCalls: []schemas.ToolCall{toolCall},
+									},
 								},
 							},
 						},
 						ExtraFields: schemas.BifrostResponseExtraFields{
 							Provider:   providerName,
-							ChunkIndex: chunkIndex,
+							ChunkIndex: *chunkIndex,
 						},
-					}
-
-					if params != nil {
-						finalResponse.ExtraFields.Params = *params
 					}
 
 					// Use utility function to process and send response
-					processAndSendResponse(ctx, postHookRunner, finalResponse, responseChan, provider.logger)
-					return
-				}
-
-			case event["usage"] != nil:
-				// This is a metadata event with usage information
-				if usage, ok := event["usage"].(map[string]interface{}); ok {
-					inputTokens := 0
-					outputTokens := 0
-					totalTokens := 0
-
-					if val, exists := usage["inputTokens"].(float64); exists {
-						inputTokens = int(val)
-					}
-					if val, exists := usage["outputTokens"].(float64); exists {
-						outputTokens = int(val)
-					}
-					if val, exists := usage["totalTokens"].(float64); exists {
-						totalTokens = int(val)
-					}
-
-					// Send usage information
-					usageResponse := &schemas.BifrostResponse{
-						ID:     messageID,
-						Object: "chat.completion.chunk",
-						Model:  model,
-						Usage: &schemas.LLMUsage{
-							PromptTokens:     inputTokens,
-							CompletionTokens: outputTokens,
-							TotalTokens:      totalTokens,
-						},
-						Choices: []schemas.BifrostResponseChoice{
-							{
-								Index: 0,
-								BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-									Delta: schemas.BifrostStreamDelta{}, // Empty delta for usage update
-								},
-							},
-						},
-						ExtraFields: schemas.BifrostResponseExtraFields{
-							Provider:   providerName,
-							ChunkIndex: chunkIndex,
-						},
-					}
-
-					if params != nil {
-						usageResponse.ExtraFields.Params = *params
-					}
-
-					// Use utility function to process and send response
-					processAndSendResponse(ctx, postHookRunner, usageResponse, responseChan, provider.logger)
+					processAndSendResponse(ctx, postHookRunner, streamResponse, responseChan, provider.logger)
 				}
 			}
 		}
 
-		if err := scanner.Err(); err != nil {
-			provider.logger.Warn(fmt.Sprintf("Error reading %s stream: %v", providerName, err))
-			processAndSendError(ctx, postHookRunner, err, responseChan, provider.logger)
+	case event["stopReason"] != nil:
+		// This is a messageStop event
+		if stopReason, ok := event["stopReason"].(string); ok {
+			*finishReason = &stopReason
 		}
-	}()
 
-	return responseChan, nil
+	case event["usage"] != nil:
+		// This is a metadata event with usage information at top level
+		if usageData, ok := event["usage"].(map[string]interface{}); ok {
+			inputTokens := 0
+			outputTokens := 0
+			totalTokens := 0
+
+			if val, exists := usageData["inputTokens"].(float64); exists {
+				inputTokens = int(val)
+			}
+			if val, exists := usageData["outputTokens"].(float64); exists {
+				outputTokens = int(val)
+			}
+			if val, exists := usageData["totalTokens"].(float64); exists {
+				totalTokens = int(val)
+			}
+
+			*usage = &schemas.LLMUsage{
+				PromptTokens:     inputTokens,
+				CompletionTokens: outputTokens,
+				TotalTokens:      totalTokens,
+			}
+		}
+
+	case event["metadata"] != nil:
+		// This is a metadata event - check if it contains nested usage information
+		if metadata, ok := event["metadata"].(map[string]interface{}); ok {
+			if usageData, ok := metadata["usage"].(map[string]interface{}); ok {
+				inputTokens := 0
+				outputTokens := 0
+				totalTokens := 0
+
+				if val, exists := usageData["inputTokens"].(float64); exists {
+					inputTokens = int(val)
+				}
+				if val, exists := usageData["outputTokens"].(float64); exists {
+					outputTokens = int(val)
+				}
+				if val, exists := usageData["totalTokens"].(float64); exists {
+					totalTokens = int(val)
+				}
+
+				*usage = &schemas.LLMUsage{
+					PromptTokens:     inputTokens,
+					CompletionTokens: outputTokens,
+					TotalTokens:      totalTokens,
+				}
+			}
+		}
+
+	default:
+		// Log unknown event types for debugging
+		provider.logger.Debug(fmt.Sprintf("Unknown event type received: %v", event))
+	}
 }
 
 func (provider *BedrockProvider) Speech(ctx context.Context, model string, key schemas.Key, input *schemas.SpeechInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
