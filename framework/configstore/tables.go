@@ -735,6 +735,42 @@ func (rl *TableRateLimit) BeforeSave(tx *gorm.DB) error {
 	return nil
 }
 
+func (vk *TableVirtualKey) AfterFind(tx *gorm.DB) error {
+	if vk.Keys != nil {
+		// Clear sensitive data from associated keys, keeping only key IDs and non-sensitive metadata
+		for i := range vk.Keys {
+			key := &vk.Keys[i]
+
+			// Clear the actual API key value
+			key.Value = ""
+
+			// Clear all Azure-related sensitive fields
+			key.AzureEndpoint = nil
+			key.AzureAPIVersion = nil
+			key.AzureDeploymentsJSON = nil
+			key.AzureKeyConfig = nil
+
+			// Clear all Vertex-related sensitive fields
+			key.VertexProjectID = nil
+			key.VertexRegion = nil
+			key.VertexAuthCredentials = nil
+			key.VertexKeyConfig = nil
+
+			// Clear all Bedrock-related sensitive fields
+			key.BedrockAccessKey = nil
+			key.BedrockSecretKey = nil
+			key.BedrockSessionToken = nil
+			key.BedrockRegion = nil
+			key.BedrockARN = nil
+			key.BedrockDeploymentsJSON = nil
+			key.BedrockKeyConfig = nil
+
+			vk.Keys[i] = *key
+		}
+	}
+	return nil
+}
+
 // Database constraints and indexes
 func (vk *TableVirtualKey) AfterAutoMigrate(tx *gorm.DB) error {
 	// Ensure only one of TeamID or CustomerID is set

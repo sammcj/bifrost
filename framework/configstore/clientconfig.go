@@ -51,11 +51,9 @@ type ProviderConfig struct {
 type ConfigMap map[schemas.ModelProvider]ProviderConfig
 
 type GovernanceConfig struct {
-	Enabled       bool              `json:"enabled"`
-	VirtualKeys   []TableVirtualKey `json:"virtual_keys"`
-	Teams         []TableTeam       `json:"teams"`
-	Customers     []TableCustomer   `json:"customers"`
-	Budgets       []TableBudget     `json:"budgets"`
-	RateLimits    []TableRateLimit  `json:"rate_limits"`
-	IsVkMandatory *bool             `json:"is_vk_mandatory"`
+	VirtualKeys []TableVirtualKey `json:"virtual_keys"`
+	Teams       []TableTeam       `json:"teams"`
+	Customers   []TableCustomer   `json:"customers"`
+	Budgets     []TableBudget     `json:"budgets"`
+	RateLimits  []TableRateLimit  `json:"rate_limits"`
 }
