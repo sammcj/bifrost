@@ -180,45 +180,6 @@ func (s *SQLiteConfigStore) UpdateProvidersConfig(providers map[schemas.ModelPro
 	})
 }
 
-// createTableKeyFromSchemaKey creates a TableKey from a schemas.Key with all the necessary field mappings
-func (s *SQLiteConfigStore) createTableKeyFromSchemaKey(key schemas.Key, providerID uint, providerName string) TableKey {
-	dbKey := TableKey{
-		Provider:         providerName,
-		ProviderID:       providerID,
-		KeyID:            key.ID,
-		Value:            key.Value,
-		Models:           key.Models,
-		Weight:           key.Weight,
-		AzureKeyConfig:   key.AzureKeyConfig,
-		VertexKeyConfig:  key.VertexKeyConfig,
-		BedrockKeyConfig: key.BedrockKeyConfig,
-	}
-
-	// Handle Azure config
-	if key.AzureKeyConfig != nil {
-		dbKey.AzureEndpoint = &key.AzureKeyConfig.Endpoint
-		dbKey.AzureAPIVersion = key.AzureKeyConfig.APIVersion
-	}
-
-	// Handle Vertex config
-	if key.VertexKeyConfig != nil {
-		dbKey.VertexProjectID = &key.VertexKeyConfig.ProjectID
-		dbKey.VertexRegion = &key.VertexKeyConfig.Region
-		dbKey.VertexAuthCredentials = &key.VertexKeyConfig.AuthCredentials
-	}
-
-	// Handle Bedrock config
-	if key.BedrockKeyConfig != nil {
-		dbKey.BedrockAccessKey = &key.BedrockKeyConfig.AccessKey
-		dbKey.BedrockSecretKey = &key.BedrockKeyConfig.SecretKey
-		dbKey.BedrockSessionToken = key.BedrockKeyConfig.SessionToken
-		dbKey.BedrockRegion = key.BedrockKeyConfig.Region
-		dbKey.BedrockARN = key.BedrockKeyConfig.ARN
-	}
-
-	return dbKey
-}
-
 // UpdateProviderById updates a single provider configuration in the database without deleting/recreating.
 func (s *SQLiteConfigStore) UpdateProvider(provider schemas.ModelProvider, config ProviderConfig, envKeys map[string][]EnvKeyInfo) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
@@ -265,7 +226,39 @@ func (s *SQLiteConfigStore) UpdateProvider(provider schemas.ModelProvider, confi
 
 		// Process each key in the new config
 		for _, key := range configCopy.Keys {
-			dbKey := s.createTableKeyFromSchemaKey(key, dbProvider.ID, dbProvider.Name)
+			dbKey := TableKey{
+				Provider:         dbProvider.Name,
+				ProviderID:       dbProvider.ID,
+				KeyID:            key.ID,
+				Value:            key.Value,
+				Models:           key.Models,
+				Weight:           key.Weight,
+				AzureKeyConfig:   key.AzureKeyConfig,
+				VertexKeyConfig:  key.VertexKeyConfig,
+				BedrockKeyConfig: key.BedrockKeyConfig,
+			}
+
+			// Handle Azure config
+			if key.AzureKeyConfig != nil {
+				dbKey.AzureEndpoint = &key.AzureKeyConfig.Endpoint
+				dbKey.AzureAPIVersion = key.AzureKeyConfig.APIVersion
+			}
+
+			// Handle Vertex config
+			if key.VertexKeyConfig != nil {
+				dbKey.VertexProjectID = &key.VertexKeyConfig.ProjectID
+				dbKey.VertexRegion = &key.VertexKeyConfig.Region
+				dbKey.VertexAuthCredentials = &key.VertexKeyConfig.AuthCredentials
+			}
+
+			// Handle Bedrock config
+			if key.BedrockKeyConfig != nil {
+				dbKey.BedrockAccessKey = &key.BedrockKeyConfig.AccessKey
+				dbKey.BedrockSecretKey = &key.BedrockKeyConfig.SecretKey
+				dbKey.BedrockSessionToken = key.BedrockKeyConfig.SessionToken
+				dbKey.BedrockRegion = key.BedrockKeyConfig.Region
+				dbKey.BedrockARN = key.BedrockKeyConfig.ARN
+			}
 
 			// Check if this key already exists
 			if existingKey, exists := existingKeysMap[key.ID]; exists {
@@ -331,7 +324,39 @@ func (s *SQLiteConfigStore) AddProvider(provider schemas.ModelProvider, config P
 
 		// Create keys for this provider
 		for _, key := range configCopy.Keys {
-			dbKey := s.createTableKeyFromSchemaKey(key, dbProvider.ID, dbProvider.Name)
+			dbKey := TableKey{
+				Provider:         dbProvider.Name,
+				ProviderID:       dbProvider.ID,
+				KeyID:            key.ID,
+				Value:            key.Value,
+				Models:           key.Models,
+				Weight:           key.Weight,
+				AzureKeyConfig:   key.AzureKeyConfig,
+				VertexKeyConfig:  key.VertexKeyConfig,
+				BedrockKeyConfig: key.BedrockKeyConfig,
+			}
+
+			// Handle Azure config
+			if key.AzureKeyConfig != nil {
+				dbKey.AzureEndpoint = &key.AzureKeyConfig.Endpoint
+				dbKey.AzureAPIVersion = key.AzureKeyConfig.APIVersion
+			}
+
+			// Handle Vertex config
+			if key.VertexKeyConfig != nil {
+				dbKey.VertexProjectID = &key.VertexKeyConfig.ProjectID
+				dbKey.VertexRegion = &key.VertexKeyConfig.Region
+				dbKey.VertexAuthCredentials = &key.VertexKeyConfig.AuthCredentials
+			}
+
+			// Handle Bedrock config
+			if key.BedrockKeyConfig != nil {
+				dbKey.BedrockAccessKey = &key.BedrockKeyConfig.AccessKey
+				dbKey.BedrockSecretKey = &key.BedrockKeyConfig.SecretKey
+				dbKey.BedrockSessionToken = key.BedrockKeyConfig.SessionToken
+				dbKey.BedrockRegion = key.BedrockKeyConfig.Region
+				dbKey.BedrockARN = key.BedrockKeyConfig.ARN
+			}
 
 			// Create the key
 			if err := tx.Create(&dbKey).Error; err != nil {
@@ -483,10 +508,21 @@ func (s *SQLiteConfigStore) GetMCPConfig() (*schemas.MCPConfig, error) {
 	}
 	clientConfigs := make([]schemas.MCPClientConfig, len(dbMCPClients))
 	for i, dbClient := range dbMCPClients {
+		// Process connection string for environment variables
+		var processedConnectionString *string
+		if dbClient.ConnectionString != nil {
+			processedValue, err := processEnvValue(*dbClient.ConnectionString, s.logger)
+			if err != nil {
+				// If env var not found, keep the original value
+				processedValue = *dbClient.ConnectionString
+			}
+			processedConnectionString = &processedValue
+		}
+
 		clientConfigs[i] = schemas.MCPClientConfig{
 			Name:             dbClient.Name,
 			ConnectionType:   schemas.MCPConnectionType(dbClient.ConnectionType),
-			ConnectionString: dbClient.ConnectionString,
+			ConnectionString: processedConnectionString,
 			StdioConfig:      dbClient.StdioConfig,
 			ToolsToExecute:   dbClient.ToolsToExecute,
 			ToolsToSkip:      dbClient.ToolsToSkip,
@@ -498,7 +534,7 @@ func (s *SQLiteConfigStore) GetMCPConfig() (*schemas.MCPConfig, error) {
 }
 
 // UpdateMCPConfig updates the MCP configuration in the database.
-func (s *SQLiteConfigStore) UpdateMCPConfig(config *schemas.MCPConfig) error {
+func (s *SQLiteConfigStore) UpdateMCPConfig(config *schemas.MCPConfig, envKeys map[string][]EnvKeyInfo) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Removing existing MCP clients
 		if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TableMCPClient{}).Error; err != nil {
@@ -509,8 +545,16 @@ func (s *SQLiteConfigStore) UpdateMCPConfig(config *schemas.MCPConfig) error {
 			return nil
 		}
 
-		dbClients := make([]TableMCPClient, 0, len(config.ClientConfigs))
-		for _, clientConfig := range config.ClientConfigs {
+		// Create a deep copy of the config to avoid modifying the original
+		configCopy, err := deepCopy(config)
+		if err != nil {
+			return err
+		}
+		// Substitute environment variables back to their original form
+		substituteMCPEnvVars(configCopy, envKeys)
+
+		dbClients := make([]TableMCPClient, 0, len(configCopy.ClientConfigs))
+		for _, clientConfig := range configCopy.ClientConfigs {
 			dbClient := TableMCPClient{
 				Name:             clientConfig.Name,
 				ConnectionType:   string(clientConfig.ConnectionType),

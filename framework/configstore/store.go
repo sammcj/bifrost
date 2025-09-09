@@ -25,7 +25,7 @@ type ConfigStore interface {
 	GetProvidersConfig() (map[schemas.ModelProvider]ProviderConfig, error)
 
 	// MCP config CRUD
-	UpdateMCPConfig(config *schemas.MCPConfig) error
+	UpdateMCPConfig(config *schemas.MCPConfig, envKeys map[string][]EnvKeyInfo) error
 	GetMCPConfig() (*schemas.MCPConfig, error)
 
 	// Vector store config CRUD
