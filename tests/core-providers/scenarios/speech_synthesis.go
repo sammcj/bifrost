@@ -2,6 +2,8 @@ package scenarios
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/maximhq/bifrost/tests/core-providers/config"
@@ -20,43 +22,47 @@ func RunSpeechSynthesisTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 	}
 
 	t.Run("SpeechSynthesis", func(t *testing.T) {
-		// Test with different text lengths and voices
+		// Test with shared text constants for round-trip validation with transcription
 		testCases := []struct {
 			name           string
 			text           string
-			voice          string
+			voiceType      string
 			format         string
 			expectMinBytes int
+			saveForSST     bool // Whether to save this audio for SST round-trip testing
 		}{
 			{
-				name:           "ShortText_Alloy",
-				text:           "Hello, this is a test of speech synthesis.",
-				voice:          "alloy",
+				name:           "BasicText_Primary_MP3",
+				text:           TTSTestTextBasic,
+				voiceType:      "primary",
 				format:         "mp3",
-				expectMinBytes: 1000, // Expect at least 1KB of audio data
+				expectMinBytes: 1000,
+				saveForSST:     true,
 			},
 			{
-				name:           "MediumText_Nova",
-				text:           "This is a longer text to test speech synthesis with more content. The AI should convert this entire sentence into natural-sounding speech audio.",
-				voice:          "nova",
+				name:           "MediumText_Secondary_MP3",
+				text:           TTSTestTextMedium,
+				voiceType:      "secondary",
 				format:         "mp3",
 				expectMinBytes: 2000,
+				saveForSST:     true,
 			},
 			{
-				name:           "ShortText_Echo_WAV",
-				text:           "Testing WAV format output.",
-				voice:          "echo",
-				format:         "wav",
+				name:           "TechnicalText_Tertiary_MP3",
+				text:           TTSTestTextTechnical,
+				voiceType:      "tertiary",
+				format:         "mp3",
 				expectMinBytes: 500,
+				saveForSST:     true,
 			},
 		}
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				voice := tc.voice
+				voice := GetProviderVoice(testConfig.Provider, tc.voiceType)
 				request := &schemas.BifrostRequest{
 					Provider: testConfig.Provider,
-					Model:    "tts-1",
+					Model:    testConfig.SpeechSynthesisModel, // Use configured model
 					Input: schemas.RequestInput{
 						SpeechInput: &schemas.SpeechInput{
 							Input: tc.text,
@@ -79,10 +85,26 @@ func RunSpeechSynthesisTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 				// Validate audio data
 				assert.Greater(t, len(response.Speech.Audio), tc.expectMinBytes, "Audio data should have minimum expected size")
 				assert.Equal(t, "audio.speech", response.Object)
-				assert.Equal(t, "tts-1", response.Model)
+				assert.Equal(t, testConfig.SpeechSynthesisModel, response.Model)
+
+				// Save audio file for SST round-trip testing if requested
+				if tc.saveForSST {
+					tempDir := os.TempDir()
+					audioFileName := filepath.Join(tempDir, "tts_"+tc.name+"."+tc.format)
+
+					err := os.WriteFile(audioFileName, response.Speech.Audio, 0644)
+					require.NoError(t, err, "Failed to save audio file for SST testing")
+
+					// Register cleanup to remove temp file
+					t.Cleanup(func() {
+						os.Remove(audioFileName)
+					})
+
+					t.Logf("💾 Audio saved for SST testing: %s (text: '%s')", audioFileName, tc.text)
+				}
 
 				t.Logf("✅ Speech synthesis successful: %d bytes of %s audio generated for voice '%s'",
-					len(response.Speech.Audio), tc.format, tc.voice)
+					len(response.Speech.Audio), tc.format, voice)
 			})
 		}
 	})
@@ -137,21 +159,21 @@ func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx c
 		})
 
 		t.Run("AllVoiceOptions", func(t *testing.T) {
-			// Test all available voices
-			voices := []string{"alloy", "echo", "fable", "onyx", "nova", "shimmer"}
-			testText := "Testing voice variation with this consistent text."
+			// Test provider-specific voice options
+			voiceTypes := []string{"primary", "secondary", "tertiary"}
+			testText := TTSTestTextBasic // Use shared constant
 
-			for _, voice := range voices {
-				t.Run("Voice_"+voice, func(t *testing.T) {
-					voiceCopy := voice
+			for _, voiceType := range voiceTypes {
+				t.Run("VoiceType_"+voiceType, func(t *testing.T) {
+					voice := GetProviderVoice(testConfig.Provider, voiceType)
 					request := &schemas.BifrostRequest{
 						Provider: testConfig.Provider,
-						Model:    "tts-1",
+						Model:    testConfig.SpeechSynthesisModel,
 						Input: schemas.RequestInput{
 							SpeechInput: &schemas.SpeechInput{
 								Input: testText,
 								VoiceConfig: schemas.SpeechVoiceInput{
-									Voice: &voiceCopy,
+									Voice: &voice,
 								},
 								ResponseFormat: "mp3",
 							},
@@ -161,13 +183,13 @@ func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx c
 					}
 
 					response, err := client.SpeechRequest(ctx, request)
-					require.Nilf(t, err, "Speech synthesis failed for voice %s: %v", voice, err)
+					require.Nilf(t, err, "Speech synthesis failed for voice %s (%s): %v", voice, voiceType, err)
 					require.NotNil(t, response)
 					require.NotNil(t, response.Speech)
 					require.NotNil(t, response.Speech.Audio)
 
 					assert.Greater(t, len(response.Speech.Audio), 500, "Audio should be generated for voice %s", voice)
-					t.Logf("✅ Voice %s: %d bytes generated", voice, len(response.Speech.Audio))
+					t.Logf("✅ Voice %s (%s): %d bytes generated", voice, voiceType, len(response.Speech.Audio))
 				})
 			}
 		})

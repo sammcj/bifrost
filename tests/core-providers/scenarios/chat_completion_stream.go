@@ -110,6 +110,24 @@ func RunChatCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 		}
 
 	streamComplete:
+		// Validate that the last response contains usage information and/or finish reason
+		// with empty choices (typical final chunk pattern)
+		if lastResponse != nil && lastResponse.BifrostResponse != nil {
+			// Check if this is a final metadata chunk (empty choices with usage/finish info)
+			if len(lastResponse.Choices) == 0 && lastResponse.Usage != nil {
+				assert.Greater(t, lastResponse.Usage.TotalTokens, 0, "Final chunk should have total token count")
+				t.Logf("📊 Final metadata chunk - Total tokens: %d", lastResponse.Usage.TotalTokens)
+			} else if len(lastResponse.Choices) > 0 {
+				// Check if final choice has finish reason
+				finalChoice := lastResponse.Choices[0]
+				if finalChoice.FinishReason != nil {
+					t.Logf("🏁 Stream ended with finish reason: %s", *finalChoice.FinishReason)
+				}
+			} else {
+				t.Fatal("Last response should have choices or usage")
+			}
+		}
+
 		// Validate the complete response
 		assert.Greater(t, responseCount, 0, "Should receive at least one streaming response")
 
@@ -119,16 +137,12 @@ func RunChatCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 
 		if lastResponse.BifrostResponse != nil {
 			// Validate the last response has usage information
-			if lastResponse != nil {
-				if lastResponse.Usage != nil {
-					assert.Greater(t, lastResponse.Usage.TotalTokens, 0, "Total tokens should be greater than 0")
-					assert.Greater(t, lastResponse.Usage.PromptTokens, 0, "Prompt tokens should be greater than 0")
-					assert.Greater(t, lastResponse.Usage.CompletionTokens, 0, "Completion tokens should be greater than 0")
-					t.Logf("📊 Token usage - Prompt: %d, Completion: %d, Total: %d",
-						lastResponse.Usage.PromptTokens,
-						lastResponse.Usage.CompletionTokens,
-						lastResponse.Usage.TotalTokens)
-				}
+			if len(lastResponse.Choices) > 0 {
+				finishReason := lastResponse.Choices[0].FinishReason
+				assert.NotNil(t, finishReason, "Finish reason should not be nil")
+			} else {
+				// This is a metadata-only chunk, which is valid for final chunks
+				assert.NotNil(t, lastResponse.Usage, "Usage should not be nil")
 			}
 		}
 

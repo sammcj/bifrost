@@ -16,7 +16,6 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-	// "github.com/maximhq/bifrost/core/schemas/meta" // FIXME: meta package doesn't exist
 )
 
 // ChatbotConfig holds configuration for the chatbot
@@ -234,7 +233,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 // NewChatSession creates a new chat session with the given configuration
 func NewChatSession(config ChatbotConfig) (*ChatSession, error) {
 	// Create MCP configuration for Bifrost
-	mcpConfig := &schemas.MCPConfig{		
+	mcpConfig := &schemas.MCPConfig{
 		ClientConfigs: []schemas.MCPClientConfig{},
 	}
 
@@ -268,9 +267,7 @@ func NewChatSession(config ChatbotConfig) (*ChatSession, error) {
 	})
 
 	// Initialize Bifrost with MCP configuration
-	account := &ComprehensiveTestAccount{
-
-	}
+	account := &ComprehensiveTestAccount{}
 
 	client, err := bifrost.Init(context.Background(), schemas.BifrostConfig{
 		Account:   account,
