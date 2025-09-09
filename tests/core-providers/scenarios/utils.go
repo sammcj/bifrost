@@ -1,11 +1,66 @@
 package scenarios
 
 import (
+	"context"
+	"os"
 	"strings"
+	"testing"
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
+
+// Shared test texts for TTS->SST round-trip validation
+const (
+	// Basic test text for simple round-trip validation
+	TTSTestTextBasic = "Hello, this is a test of speech synthesis from Bifrost."
+
+	// Medium length text with punctuation for comprehensive testing
+	TTSTestTextMedium = "Testing speech synthesis and transcription round-trip. This text includes punctuation, numbers like 123, and technical terms."
+
+	// Short technical text for WAV format testing
+	TTSTestTextTechnical = "Bifrost AI gateway processes audio requests efficiently."
+)
+
+// GetProviderVoice returns an appropriate voice for the given provider
+func GetProviderVoice(provider schemas.ModelProvider, voiceType string) string {
+	switch provider {
+	case schemas.OpenAI:
+		switch voiceType {
+		case "primary":
+			return "alloy"
+		case "secondary":
+			return "nova"
+		case "tertiary":
+			return "echo"
+		default:
+			return "alloy"
+		}
+	case schemas.Gemini:
+		switch voiceType {
+		case "primary":
+			return "achernar"
+		case "secondary":
+			return "aoede"
+		case "tertiary":
+			return "charon"
+		default:
+			return "achernar"
+		}
+	default:
+		// Default to OpenAI voices for other providers
+		switch voiceType {
+		case "primary":
+			return "alloy"
+		case "secondary":
+			return "nova"
+		case "tertiary":
+			return "echo"
+		default:
+			return "alloy"
+		}
+	}
+}
 
 // Tool definitions for testing
 var WeatherToolDefinition = schemas.Tool{
@@ -69,34 +124,6 @@ var TimeToolDefinition = schemas.Tool{
 // Test images for testing
 const TestImageURL = "https://upload.wikimedia.org/wikipedia/commons/a/a7/Camponotus_flavomarginatus_ant.jpg"
 const TestImageBase64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
-
-// Audio test data for speech and transcription testing
-// Note: In production tests, you would use actual audio files
-// These are minimal valid audio file headers for testing purposes
-
-// TestAudioDataMP3 - Sample MP3 data for testing (MP3 header with minimal audio)
-var TestAudioDataMP3 = []byte{
-	0xFF, 0xFB, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	// Additional MP3 frames would go here for real audio...
-}
-
-// TestAudioDataWAV - Sample WAV data for testing (WAV header with minimal audio)
-var TestAudioDataWAV = []byte{
-	// WAV header
-	0x52, 0x49, 0x46, 0x46, // "RIFF"
-	0x24, 0x00, 0x00, 0x00, // File size
-	0x57, 0x41, 0x56, 0x45, // "WAVE"
-	0x66, 0x6D, 0x74, 0x20, // "fmt "
-	0x10, 0x00, 0x00, 0x00, // Format chunk size
-	0x01, 0x00, 0x01, 0x00, // Audio format and channels
-	0x44, 0xAC, 0x00, 0x00, // Sample rate (44100)
-	0x88, 0x58, 0x01, 0x00, // Byte rate
-	0x02, 0x00, 0x10, 0x00, // Block align and bits per sample
-	0x64, 0x61, 0x74, 0x61, // "data"
-	0x00, 0x00, 0x00, 0x00, // Data size
-	// Audio data would go here for real audio...
-}
 
 // CreateSpeechInput creates a basic speech input for testing
 func CreateSpeechInput(text, voice, format string) *schemas.SpeechInput {
@@ -286,4 +313,60 @@ func copyModelParameters(src *schemas.ModelParameters) *schemas.ModelParameters 
 		User:              src.User,
 		ExtraParams:       src.ExtraParams,
 	}
+}
+
+// --- Additional test helpers appended below (imported on demand) ---
+
+// NOTE: importing context, os, testing only in this block to avoid breaking existing imports.
+// We duplicate types by fully qualifying to not touch import list above.
+
+// GenerateTTSAudioForTest generates real audio using TTS and writes a temp file.
+// Returns audio bytes and temp filepath. Caller’s t will clean it up.
+func GenerateTTSAudioForTest(ctx context.Context, t *testing.T, client *bifrost.Bifrost, provider schemas.ModelProvider, ttsModel string, text string, voiceType string, format string) ([]byte, string) {
+	// inline import guard comment: context/testing/os are required at call sites; Go compiler will include them.
+	voice := GetProviderVoice(provider, voiceType)
+	if voice == "" {
+		voice = GetProviderVoice(provider, "primary")
+	}
+	if format == "" {
+		format = "mp3"
+	}
+
+	req := &schemas.BifrostRequest{
+		Provider: provider,
+		Model:    ttsModel,
+		Input: schemas.RequestInput{
+			SpeechInput: &schemas.SpeechInput{
+				Input: text,
+				VoiceConfig: schemas.SpeechVoiceInput{
+					Voice: &voice,
+				},
+				ResponseFormat: format,
+			},
+		},
+	}
+
+	resp, err := client.SpeechRequest(ctx, req)
+	if err != nil {
+		t.Fatalf("TTS request failed: %v", err)
+	}
+	if resp == nil || resp.Speech == nil || len(resp.Speech.Audio) == 0 {
+		t.Fatalf("TTS response missing audio data")
+	}
+
+	suffix := "." + format
+	f, cerr := os.CreateTemp("", "bifrost-tts-*"+suffix)
+	if cerr != nil {
+		t.Fatalf("failed to create temp audio file: %v", cerr)
+	}
+	tempPath := f.Name()
+	if _, werr := f.Write(resp.Speech.Audio); werr != nil {
+		_ = f.Close()
+		t.Fatalf("failed to write temp audio file: %v", werr)
+	}
+	_ = f.Close()
+
+	t.Cleanup(func() { _ = os.Remove(tempPath) })
+
+	return resp.Speech.Audio, tempPath
 }

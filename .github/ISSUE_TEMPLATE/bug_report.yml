@@ -63,8 +63,8 @@ body:
       multiple: true
       options:
         - Core (Go)
+        - Framework
         - Transports (HTTP)
-        - Providers/Integrations
         - Plugins
         - UI (Next.js)
         - Docs
