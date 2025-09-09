@@ -202,8 +202,8 @@ github.com/mattn/go-sqlite3 v1.14.32 h1:JD12Ag3oLy1zQA+BNn74xRgaBbdhbNIDYvQUEuuE
 github.com/mattn/go-sqlite3 v1.14.32/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/maximhq/bifrost/core v1.1.32 h1:SU/jShPaNdNyLJ5NNWx8Kc+8ynmO/Ui70hWwwe4eFnc=
 github.com/maximhq/bifrost/core v1.1.32/go.mod h1:tf2pFTpoM53UGXXMFYxsaUjMqnCqYDOd9glFgMJvA0c=
-github.com/maximhq/bifrost/framework v1.0.12 h1:40CNho0eGGyXeD+oFrKhySTjeVzjJij1zvMeoLZ40p0=
-github.com/maximhq/bifrost/framework v1.0.12/go.mod h1:CV35DYrh85aNuYML8ZrC9Q90hg00zYFu7fUj6HvN4N8=
+github.com/maximhq/bifrost/framework v1.0.13 h1:h6bZfHmEpMyPE4nbkFwhBfI0PsqZ0hjU0O+jP2TEVS8=
+github.com/maximhq/bifrost/framework v1.0.13/go.mod h1:CV35DYrh85aNuYML8ZrC9Q90hg00zYFu7fUj6HvN4N8=
 github.com/maximhq/bifrost/plugins/governance v1.2.6 h1:0jnQnvH47TE1NCwUX5UiBuKOyvH9x/0qfIkEZalqKr4=
 github.com/maximhq/bifrost/plugins/governance v1.2.6/go.mod h1:p/BwetbQMAC58VNkzaBosWLV2GWX/HcRyy+F0XT6MM4=
 github.com/maximhq/bifrost/plugins/logging v1.2.6 h1:iBkhO52szzRAJ6jhNr5m5oQaRFfldStp0PmVCCzGcqQ=
