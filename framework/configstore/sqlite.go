@@ -1153,6 +1153,43 @@ func (s *SQLiteConfigStore) UpdateBudget(budget *TableBudget, tx ...*gorm.DB) er
 	return txDB.Save(budget).Error
 }
 
+// GetGovernanceConfig retrieves the governance configuration from the database.
+func (s *SQLiteConfigStore) GetGovernanceConfig() (*GovernanceConfig, error) {
+	var virtualKeys []TableVirtualKey
+	var teams []TableTeam
+	var customers []TableCustomer
+	var budgets []TableBudget
+	var rateLimits []TableRateLimit
+
+	if err := s.db.Find(&virtualKeys).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Find(&teams).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Find(&customers).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Find(&budgets).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Find(&rateLimits).Error; err != nil {
+		return nil, err
+	}
+
+	if len(virtualKeys) == 0 && len(teams) == 0 && len(customers) == 0 && len(budgets) == 0 && len(rateLimits) == 0 {
+		return nil, nil
+	}
+
+	return &GovernanceConfig{
+		VirtualKeys: virtualKeys,
+		Teams:       teams,
+		Customers:   customers,
+		Budgets:     budgets,
+		RateLimits:  rateLimits,
+	}, nil
+}
+
 // ExecuteTransaction executes a transaction.
 func (s *SQLiteConfigStore) ExecuteTransaction(fn func(tx *gorm.DB) error) error {
 	return s.db.Transaction(fn)
