@@ -103,7 +103,7 @@ func (gs *GovernanceStore) CheckBudget(vk *configstore.TableVirtualKey) error {
 
 		// Check if current usage exceeds budget limit
 		if budget.CurrentUsage > budget.MaxLimit {
-			return fmt.Errorf("%s budget exceeded: %.2f > %.2f dollars",
+			return fmt.Errorf("%s budget exceeded: %.4f > %.4f dollars",
 				budgetNames[i], budget.CurrentUsage, budget.MaxLimit)
 		}
 	}

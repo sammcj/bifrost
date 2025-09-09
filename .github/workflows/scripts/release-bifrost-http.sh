@@ -235,7 +235,7 @@ This release includes the complete Bifrost HTTP transport with all dependencies 
 $PLUGIN_UPDATES
 ### Installation
 
-#### Docker (Recommended)
+#### Docker
 \`\`\`bash
 docker run -p 8080:8080 maximhq/bifrost:v$VERSION
 \`\`\`

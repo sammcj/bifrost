@@ -46,23 +46,9 @@ Bifrost was benchmarked on two primary AWS EC2 instance configurations:
 
 > **Note**: t3.xlarge tests used significantly larger response payloads (~10 KB vs ~1 KB), yet still achieved better performance metrics.
 
----
-
-## Which Instance Should You Choose?
-
-### **Choose t3.medium when:**
-- **Budget-conscious** deployments
-- **Moderate traffic** (< 3,000 RPS sustained)
-- **Memory-constrained** environments
-- **Development/staging** workloads
-- You can tolerate slightly higher latency for cost savings
-
-### **Choose t3.xlarge when:**
-- **High-throughput** production workloads
-- **Low-latency** requirements are critical
-- **Large response payloads** are common
-- **Enterprise** applications with strict SLAs
-- Memory usage is not a primary constraint
+<Note>
+All benchmarks are on mocked OpenAI calls, whose latency and payload size are mentioned in the respective analysis pages.
+</Note>
 
 ---
 

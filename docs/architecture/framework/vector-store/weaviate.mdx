@@ -1,19 +1,19 @@
 ---
 title: "Weaviate"
-description: "Native Weaviate integration for semantic caching and vector similarity search in Bifrost."
-icon: "database"
+description: "Weaviate implementation for the VectorStore interface, enabling vector similarity search, embeddings storage, and AI-powered features."
+icon: "W"
 ---
 
 ## Overview
 
-Bifrost provides native support for Weaviate as a vector store backend, enabling powerful semantic caching capabilities through vector similarity search. This integration allows you to cache AI responses based on semantic similarity rather than just exact text matches, dramatically reducing costs and improving performance for similar queries.
+Weaviate is a `VectorStore` implementation in Bifrost's framework package. It provides a production-ready vector database solution that enables plugins to store embeddings, perform similarity searches, and build AI-powered features like semantic caching, content recommendations, and knowledge retrieval.
 
-**Key Benefits:**
-- **Semantic Intelligence**: Find cached responses for semantically similar requests
-- **Cost Reduction**: Avoid expensive LLM API calls for similar queries
-- **Performance Boost**: Sub-millisecond cache retrieval vs multi-second API calls
-- **Flexible Matching**: Configurable similarity thresholds for cache lookups
-- **Streaming Support**: Full streaming response caching with proper chunk ordering
+**Key Capabilities:**
+- **Vector Similarity Search**: Find semantically similar content using embeddings
+- **Namespace Management**: Organize data into separate collections with custom schemas
+- **Flexible Filtering**: Query data with complex filters and pagination
+- **High Performance**: Optimized for production workloads with gRPC support
+- **Scalable Storage**: Handle millions of vectors with efficient indexing
 
 
 ## Quick Start
@@ -45,8 +45,13 @@ vectorConfig := &vectorstore.Config{
     Config: vectorstore.WeaviateConfig{
         Scheme:    "http",           // "http" for local, "https" for cloud
         Host:      "localhost:8080", // Your Weaviate host
-        // Optional: API key for cloud deployments
-        // ApiKey:  "your-weaviate-api-key",
+        ApiKey:  "your-weaviate-api-key", // Required for Weaviate Cloud; optional for local/self-hosted
+
+        // Enable gRPC for improved performance (optional)
+        GrpcConfig: &vectorstore.WeaviateGrpcConfig{
+            Host:    "localhost:50051", // gRPC port
+            Secured: false,             // true for TLS
+        },
     },
 }
 
@@ -61,6 +66,7 @@ if err != nil {
 
 <Tab title="config.json">
 
+**Local Setup:**
 ```json
 {
   "vector_store": {
@@ -74,7 +80,7 @@ if err != nil {
 }
 ```
 
-**For Weaviate Cloud:**
+**Cloud Setup with gRPC:**
 ```json
 {
   "vector_store": {
@@ -82,8 +88,12 @@ if err != nil {
     "type": "weaviate",
     "config": {
       "scheme": "https",
-      "host": "your-cluster.weaviate.network",
-      "api_key": "your-weaviate-api-key"
+      "host": "your-weaviate-host",
+      "api_key": "your-weaviate-api-key",
+      "grpc_config": {
+        "host": "your-weaviate-grpc-host",
+        "secured": true
+      }
     }
   }
 }
@@ -93,11 +103,121 @@ if err != nil {
 
 </Tabs>
 
-### 3. Configure Semantic Cache Plugin
+<Note>
+gRPC host will be of format host:port. If host is without a port number then the 80 port for insecured and 443 port for secured connections will be used.
+</Note>
 
-<Tabs group="cache-config">
+## VectorStore Interface Usage
 
-<Tab title="Go SDK">
+### Creating Namespaces
+Create collections (namespaces) with custom schemas:
+
+```go
+// Define properties for your data
+properties := map[string]vectorstore.VectorStoreProperties{
+    "content": {
+        DataType:    vectorstore.VectorStorePropertyTypeString,
+        Description: "The main content text",
+    },
+    "category": {
+        DataType:    vectorstore.VectorStorePropertyTypeString,
+        Description: "Content category",
+    },
+    "tags": {
+        DataType:    vectorstore.VectorStorePropertyTypeStringArray,
+        Description: "Content tags",
+    },
+}
+
+// Create namespace
+err := store.CreateNamespace(ctx, "my_content", properties)
+if err != nil {
+    log.Fatal("Failed to create namespace:", err)
+}
+```
+
+### Storing Data with Embeddings
+Add data with vector embeddings for similarity search:
+
+```go
+// Your embedding data (typically from an embedding model)
+embedding := []float32{0.1, 0.2, 0.3 } // example 3-dimensional vector
+
+// Metadata associated with this vector
+metadata := map[string]interface{}{
+    "content":  "This is my content text",
+    "category": "documentation",
+    "tags":     []string{"guide", "tutorial"},
+}
+
+// Store in vector database
+err := store.Add(ctx, "my_content", "unique-id-123", embedding, metadata)
+if err != nil {
+    log.Fatal("Failed to add data:", err)
+}
+```
+
+### Similarity Search
+Find similar content using vector similarity:
+
+```go
+// Query embedding (from user query)
+queryEmbedding := []float32{0.15, 0.25, 0.35, ...}
+
+// Optional filters
+filters := []vectorstore.Query{
+    {
+        Field:    "category",
+        Operator: vectorstore.QueryOperatorEqual,
+        Value:    "documentation",
+    },
+}
+
+// Perform similarity search
+results, err := store.GetNearest(
+    ctx,
+    "my_content",        // namespace
+    queryEmbedding,      // query vector
+    filters,             // optional filters
+    []string{"content", "category"}, // fields to return
+    0.7,                 // similarity threshold (0-1)
+    10,                  // limit
+)
+
+for _, result := range results {
+    fmt.Printf("Score: %.3f, Content: %s\n", *result.Score, result.Properties["content"])
+}
+```
+
+### Data Retrieval and Management
+Query and manage stored data:
+
+```go
+// Get specific item by ID
+item, err := store.GetChunk(ctx, "my_content", "unique-id-123")
+if err != nil {
+    log.Fatal("Failed to get item:", err)
+}
+
+// Get all items with filtering and pagination
+allResults, cursor, err := store.GetAll(
+    ctx,
+    "my_content",
+    []vectorstore.Query{
+        {Field: "category", Operator: vectorstore.QueryOperatorEqual, Value: "documentation"},
+    },
+    []string{"content", "tags"}, // select fields
+    nil,  // cursor for pagination
+    50,   // limit
+)
+
+// Delete items
+err = store.Delete(ctx, "my_content", "unique-id-123")
+```
+
+## Example: Semantic Caching Plugin
+
+Here's how the semantic cache plugin uses the VectorStore:
 
 ```go
 import (
@@ -107,10 +227,6 @@ import (
 
 // Configure semantic cache plugin with Weaviate backend
 cacheConfig := semanticcache.Config{
-    CacheKey:    "request-cache-key",     // Required: context key for cache triggering
-    CacheTTLKey: "request-cache-ttl",     // Optional: context key for TTL override
-    CacheThresholdKey: "request-cache-threshold", // Optional: context key for threshold override
-    
     // Embedding model configuration (Required)
     Provider:       schemas.OpenAI,
     Keys:          []schemas.Key{{Value: "sk-..."}},
@@ -119,14 +235,9 @@ cacheConfig := semanticcache.Config{
     // Cache behavior
     TTL:       5 * time.Minute,  // Time to live for cached responses
     Threshold: 0.8,              // Similarity threshold for cache lookup
-    
-    // Advanced options
-    CacheByModel:    bifrost.Ptr(true),  // Include model in cache key
-    CacheByProvider: bifrost.Ptr(true),  // Include provider in cache key
-    ExcludeSystemPrompt: bifrost.Ptr(false), // Exclude system messages in cache key
 }
 
-// Create plugin with vector store
+// The semantic cache plugin automatically uses the configured vector store
 plugin, err := semanticcache.Init(context.Background(), cacheConfig, logger, store)
 if err != nil {
     log.Fatal("Failed to create semantic cache plugin:", err)
@@ -139,107 +250,51 @@ bifrostConfig := schemas.BifrostConfig{
 }
 ```
 
-</Tab>
-
-<Tab title="Web UI">
-
-![Semantic Cache Plugin Configuration](../../media/ui-semantic-cache-config.png)
-
-**Note**: Make sure you have a vector store setup (using `config.json`) before configuring the semantic cache plugin.
-
-1. **Navigate to Settings**
-   - Open Bifrost UI at `http://localhost:8080`
-   - Go to Settings.
-
-2. **Configure Semantic Cache Plugin**
-
-- Toggle the plugin switch to enable it, and fill in the required fields.
-
-**Required Fields:**
-- **Provider**: The provider to use for caching.
-- **Embedding Model**: The embedding model to use for caching.
-
-**Note**: Changes will need a restart of the Bifrost server to take effect, because the plugin is loaded on startup only.
-
-</Tab>
-
-<Tab title="config.json">
-
-```json
-{
-  "plugins": [
-    {
-      "enabled": true,
-      "name": "semantic_cache",
-      "config": {        
-        "provider": "openai",
-        "embedding_model": "text-embedding-3-small",
-        
-        "ttl": "5m",
-        "threshold": 0.8,
-        
-        "cache_by_model": true,
-        "cache_by_provider": true,
-        "exclude_system_prompt": false
-      }
-    }
-  ]
-}
-```
-
-> **Note**: All the available keys will be taken from the provider config on initialization, so make sure to add the keys to the provider you have specified in the config. Any updates to the keys will not be reflected until next restart.
-
-**TTL Format Options:**
-- Duration strings: `"30s"`, `"5m"`, `"1h"`, `"24h"`
-- Numeric seconds: `300` (5 minutes), `3600` (1 hour)
-
-</Tab>
-
-</Tabs>
-
 
 
 ## Related Documentation
 
-For detailed information about semantic caching functionality, refer to the following sections in the [Semantic Caching](../../../features/semantic-caching) documentation:
-
-| Topic | Section | Description |
-|-------|---------|-------------|
-| **Cache Triggering** | [Cache Triggering](../../../features/semantic-caching#cache-triggering) | How to enable caching with cache keys in Go SDK and HTTP API |
-| **Per-Request Overrides** | [Per-Request Overrides](../../../features/semantic-caching#per-request-overrides) | Override TTL and similarity threshold per request |
-| **Cache Management** | [Cache Management](../../../features/semantic-caching#cache-management) | Clear cache entries and manage cached responses |
-| **Cache Metadata** | [Cache Metadata](../../../features/semantic-caching#cache-management) | Understand cache hit information and debug data |
+| Topic | Documentation | Description |
+|-------|---------------|-------------|
+| **VectorStore Interface** | [Framework Overview](../what-is-framework) | Understanding the framework package and VectorStore interface |
+| **Semantic Caching** | [Semantic Caching](../../../features/semantic-caching) | Using VectorStore for AI response caching |
 
 ---
 
 ## Use Cases
 
-### Customer Support
-Cache responses for common questions like "How do I reset my password?" or "What are your business hours?" - semantically similar variations get instant responses.
+### Semantic Caching
+Build intelligent caching systems that understand query intent rather than just exact matches.
 
-**Example:**
-- **Original Query**: "How do I reset my password?"
-- **Similar Queries**: "I forgot my password", "Password reset help", "Can't log in, need new password"
-- **Result**: All get the same cached response instantly
+**Applications:**
+- Customer support systems with FAQ matching
+- Code completion and documentation search  
+- Content management with semantic deduplication
 
-### Content Generation
-Cache blog post outlines, product descriptions, or marketing copy for similar topics, reducing costs for content teams.
+### Knowledge Base & Search
+Create intelligent search systems that understand user queries contextually.
 
-**Example:**
-- **Original Query**: "Write a blog post about machine learning basics"
-- **Similar Queries**: "ML fundamentals blog post", "Introduction to machine learning article", "AI basics blog outline"
-- **Result**: Cached content structure with minor variations
+**Applications:**
+- Document search and retrieval systems
+- Product recommendation engines
+- Research paper and knowledge discovery platforms
 
-### Data Analysis
-Cache responses for similar analytical queries about datasets, dashboards, or reports, speeding up business intelligence workflows.
+### Content Classification
+Automatically categorize and tag content based on semantic similarity.
 
-**Example:**
-- **Original Query**: "Show me Q3 sales performance by region"
-- **Similar Queries**: "Q3 regional sales data", "Third quarter sales by region", "Regional Q3 performance metrics"
-- **Result**: Same cached analysis with consistent formatting
+**Applications:**
+- Email classification and routing
+- Content moderation and filtering
+- News article categorization and clustering
 
----
+### Recommendation Systems
+Build personalized recommendation engines using vector similarity.
+
+**Applications:**
+- Product recommendations based on user preferences
+- Content suggestions for media platforms
+- Similar document or article recommendations
 
 <Info>
-**Vector Store Requirement**: Weaviate integration requires a configured vector store before the semantic cache plugin can function. Ensure Weaviate is running and accessible before enabling semantic caching.
+**Production Deployment**: For production environments, consider using gRPC configuration for better performance and enable appropriate authentication mechanisms for your Weaviate deployment.
 </Info>

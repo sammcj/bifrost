@@ -10,12 +10,15 @@ Bifrost provides built-in telemetry and monitoring capabilities through Promethe
 
 **Key Features:**
 - **Prometheus Integration** - Native metrics collection at `/metrics` endpoint
+- **Comprehensive Tracking** - Success/error rates, token usage, costs, and cache performance
 - **Custom Labels** - Configurable dimensions for detailed analysis
 - **Dynamic Headers** - Runtime label injection via `x-bf-prom-*` headers
+- **Cost Monitoring** - Real-time tracking of AI provider costs in USD
+- **Cache Analytics** - Direct and semantic cache hit tracking
 - **Async Collection** - Zero-latency impact on request processing
 - **Multi-Level Tracking** - HTTP transport + upstream provider metrics
 
-The telemetry plugin operates asynchronously to ensure metrics collection doesn't impact request latency or connection performance. For detailed architecture information, see [Architecture > Plugins > Telemetry](../architecture/plugins/telemetry).
+The telemetry plugin operates asynchronously to ensure metrics collection doesn't impact request latency or connection performance.
 
 ---
 
@@ -38,14 +41,89 @@ These metrics track requests forwarded to AI providers:
 
 | Metric | Type | Description | Labels |
 |--------|------|-------------|---------|
-| `bifrost_upstream_requests_total` | Counter | Total requests forwarded to upstream providers | `target`, `method`, custom labels |
-| `bifrost_upstream_latency_seconds` | Histogram | Latency of upstream provider requests | `target`, `method`, custom labels |
+| `bifrost_upstream_requests_total` | Counter | Total requests forwarded to upstream providers | `provider`, `model`, `method`, custom labels |
+| `bifrost_upstream_latency_seconds` | Histogram | Latency of upstream provider requests | `provider`, `model`, `method`, custom labels |
+| `bifrost_success_requests_total` | Counter | Total successful requests to upstream providers | `provider`, `model`, `method`, custom labels |
+| `bifrost_error_requests_total` | Counter | Total failed requests to upstream providers | `provider`, `model`, `method`, custom labels |
+| `bifrost_input_tokens_total` | Counter | Total input tokens sent to upstream providers | `provider`, `model`, `method`, custom labels |
+| `bifrost_output_tokens_total` | Counter | Total output tokens received from upstream providers | `provider`, `model`, `method`, custom labels |
+| `bifrost_cache_hits_total` | Counter | Total cache hits by type (direct/semantic) | `provider`, `model`, `method`, `cache_type`, custom labels |
+| `bifrost_cost_total` | Counter | Total cost in USD for upstream provider requests | `provider`, `model`, `method`, custom labels |
 
 **Label Definitions:**
-- `target`: Provider and model (e.g., `openai/gpt-4o-mini`)
+- `provider`: AI provider name (e.g., `openai`, `anthropic`, `azure`)
+- `model`: Model name (e.g., `gpt-4o-mini`, `claude-3-sonnet`)
 - `method`: Request type (`chat`, `text`, `embedding`, `speech`, `transcription`)
+- `cache_type`: Cache hit type (`direct`, `semantic`) - only for cache hits metric
 - `path`: HTTP endpoint path
 - `status`: HTTP status code
+
+---
+
+## Monitoring Examples
+
+### Success Rate Monitoring
+Track the success rate of requests to different providers:
+
+```promql
+# Success rate by provider
+rate(bifrost_success_requests_total[5m]) / 
+rate(bifrost_upstream_requests_total[5m]) * 100
+```
+
+### Token Usage Analysis
+Monitor token consumption across different models:
+
+```promql
+# Input tokens per minute by model
+increase(bifrost_input_tokens_total[1m])
+
+# Output tokens per minute by model  
+increase(bifrost_output_tokens_total[1m])
+
+# Token efficiency (output/input ratio)
+rate(bifrost_output_tokens_total[5m]) / 
+rate(bifrost_input_tokens_total[5m])
+```
+
+### Cost Tracking
+Monitor spending across providers and models:
+
+```promql
+# Cost per second by provider
+sum by (provider) (rate(bifrost_cost_total[1m]))
+
+# Daily cost estimate
+sum by (provider) (increase(bifrost_cost_total[1d]))
+
+# Cost per request by provider and model
+sum by (provider, model) (rate(bifrost_cost_total[5m])) / 
+sum by (provider, model) (rate(bifrost_upstream_requests_total[5m]))
+```
+
+### Cache Performance
+Track cache effectiveness:
+
+```promql
+# Cache hit rate by type
+rate(bifrost_cache_hits_total[5m]) / 
+rate(bifrost_upstream_requests_total[5m]) * 100
+
+# Direct vs semantic cache hits
+sum by (cache_type) (rate(bifrost_cache_hits_total[5m]))
+```
+
+### Error Rate Analysis
+Monitor error patterns:
+
+```promql
+# Error rate by provider
+rate(bifrost_error_requests_total[5m]) / 
+rate(bifrost_upstream_requests_total[5m]) * 100
+
+# Errors by model
+sum by (model) (rate(bifrost_error_requests_total[5m]))
+```
 
 ---
 
@@ -56,18 +134,16 @@ Configure custom Prometheus labels to add dimensions for filtering and analysis:
 <Tabs group="config-method">
 <Tab title="Web UI">
 
+![Prometheus Labels](../media/ui-prometheus-labels.png)
+
 1. **Navigate to Configuration**
    - Open Bifrost UI at `http://localhost:8080`
-   - Go to **Configuration** → **Client Settings**
+   - Go to **Config** tab
 
-2. **Configure Prometheus Labels**
+2. **Prometheus Labels**
    ```
    Custom Labels: team, environment, organization, project
    ```
-
-3. **Save Configuration**
-   - Click **Save Changes**
-   - Labels will be applied to new metrics immediately
 
 </Tab>
 <Tab title="API">
@@ -168,6 +244,43 @@ scrape_configs:
       - targets: ["bifrost-instance-1:8080", "bifrost-instance-2:8080"]
     scrape_interval: 30s
     metrics_path: /metrics
+```
+
+### Production Alerting Examples
+
+Configure alerts for critical scenarios using the new metrics:
+
+**High Error Rate Alert:**
+```yaml
+- alert: BifrostHighErrorRate
+  expr: sum by (provider) (rate(bifrost_error_requests_total[5m])) / sum by (provider) (rate(bifrost_upstream_requests_total[5m])) > 0.05
+  for: 2m
+  labels:
+    severity: warning
+  annotations:
+    summary: "High error rate detected for provider {{ $labels.provider }} ({{ $value | humanizePercentage }})"
+```
+
+**High Cost Alert:**
+```yaml
+- alert: BifrostHighCosts
+  expr: sum by (provider) (increase(bifrost_cost_total[1d])) > 100  # $100/day threshold
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Daily cost for provider {{ $labels.provider }} exceeds $100 ({{ $value | printf \"%.2f\" }})"
+```
+
+**Cache Performance Alert:**
+```yaml
+- alert: BifrostLowCacheHitRate
+  expr: sum by (provider) (rate(bifrost_cache_hits_total[15m])) / sum by (provider) (rate(bifrost_upstream_requests_total[15m])) < 0.1
+  for: 5m
+  labels:
+    severity: info
+  annotations:
+    summary: "Cache hit rate for provider {{ $labels.provider }} below 10% ({{ $value | humanizePercentage }})"
 ```
 
 ---
