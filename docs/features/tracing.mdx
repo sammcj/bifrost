@@ -146,6 +146,8 @@ curl 'http://localhost:8080/api/logs?' \
 'max_latency=5000&' \
 'min_tokens=10&' \
 'max_tokens=1000&' \
+'min_cost=0.001&' \
+'max_cost=10&' \
 'content_search=python&' \
 'limit=100&' \
 'offset=0'
@@ -162,6 +164,7 @@ curl 'http://localhost:8080/api/logs?' \
 | `start_time` / `end_time` | Time range (RFC3339) | `2024-01-15T10:00:00Z` |
 | `min_latency` / `max_latency` | Response time (ms) | `1000` to `5000` |
 | `min_tokens` / `max_tokens` | Token usage range | `10` to `1000` |
+| `min_cost` / `max_cost` | Cost range (USD) | `0.001` to `10` |
 | `content_search` | Search in messages | `"error handling"` |
 | `limit` / `offset` | Pagination | `100`, `200` |
 

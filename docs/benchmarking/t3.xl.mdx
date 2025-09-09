@@ -49,7 +49,7 @@ icon: "server"
 
 **Bifrost's Total Overhead: 11 µs***
 
-*\*81% reduction compared to t3.medium (59 µs → 11 µs)*
+*\*Excludes JSON marshalling and HTTP calls, which are required in any implementation. 81% reduction compared to t3.medium (59 µs → 11 µs)*
 
 ---
 
@@ -69,18 +69,6 @@ icon: "server"
 - **CPU Performance**: Excellent multi-core utilization for 5,000 RPS
 - **Headroom**: Substantial capacity for traffic spikes and growth
 
-### **Performance Characteristics**
-
-**Fastest Operations:**
-- Key Selection: 10 ns (near-instantaneous)
-- Error Handling: 162 ns  
-- Params Preparation: 417 ns
-
-**Most Time-Consuming Operations:**
-- HTTP Request: 1.50s (external provider call)
-- Response Parsing: 2.11 ms (handling 10 KB responses)
-- JSON Marshaling: 26.80 µs
-
 ---
 
 ## Scalability and Headroom
@@ -98,15 +86,6 @@ The t3.xlarge configuration demonstrates **excellent scaling potential**:
 - **Traffic Spikes**: Can likely handle 15,000+ RPS bursts
 - **Response Size Growth**: Efficiently handles 10 KB responses
 - **Concurrent Users**: Supports thousands of simultaneous users
-
-### **Ideal Use Cases**
-
-**t3.xlarge is perfect for:**
-- **High-throughput production workloads** (5,000+ RPS sustained)
-- **Enterprise applications** with strict SLA requirements
-- **Large response payloads** (documents, code generation, etc.)
-- **Mission-critical systems** requiring sub-15µs overhead
-- **Applications with traffic spikes** needing substantial headroom
 
 ---
 

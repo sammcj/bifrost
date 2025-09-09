@@ -33,12 +33,12 @@ type SearchFilters struct {
 	Objects       []string   `json:"objects,omitempty"` // For filtering by request type (chat.completion, text.completion, embedding)
 	StartTime     *time.Time `json:"start_time,omitempty"`
 	EndTime       *time.Time `json:"end_time,omitempty"`
-	Tokens        *int       `json:"tokens,omitempty"`
-	Cost          *float64   `json:"cost,omitempty"`
 	MinLatency    *float64   `json:"min_latency,omitempty"`
 	MaxLatency    *float64   `json:"max_latency,omitempty"`
 	MinTokens     *int       `json:"min_tokens,omitempty"`
 	MaxTokens     *int       `json:"max_tokens,omitempty"`
+	MinCost       *float64   `json:"min_cost,omitempty"`
+	MaxCost       *float64   `json:"max_cost,omitempty"`
 	ContentSearch string     `json:"content_search,omitempty"`
 }
 
@@ -46,7 +46,7 @@ type SearchFilters struct {
 type PaginationOptions struct {
 	Limit  int    `json:"limit"`
 	Offset int    `json:"offset"`
-	SortBy string `json:"sort_by"` // "timestamp", "latency", "tokens"
+	SortBy string `json:"sort_by"` // "timestamp", "latency", "tokens", "cost"
 	Order  string `json:"order"`   // "asc", "desc"
 }
 

@@ -86,9 +86,14 @@ func (h *LoggingHandler) GetLogs(ctx *fasthttp.RequestCtx) {
 			filters.MaxTokens = &val
 		}
 	}
-	if cost := string(ctx.QueryArgs().Peek("cost")); cost != "" {
+	if cost := string(ctx.QueryArgs().Peek("min_cost")); cost != "" {
 		if val, err := strconv.ParseFloat(cost, 64); err == nil {
-			filters.Cost = &val
+			filters.MinCost = &val
+		}
+	}
+	if maxCost := string(ctx.QueryArgs().Peek("max_cost")); maxCost != "" {
+		if val, err := strconv.ParseFloat(maxCost, 64); err == nil {
+			filters.MaxCost = &val
 		}
 	}
 	if contentSearch := string(ctx.QueryArgs().Peek("content_search")); contentSearch != "" {
