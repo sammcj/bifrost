@@ -50,7 +50,7 @@ func Init(ctx context.Context, config *Config, logger schemas.Logger, store conf
 		logger.Warn("governance plugin requires config store to persist data, running in memory only mode")
 	}
 	if pricingManager == nil {
-		logger.Warn("governance plugin requires pricing manager to calculate cost, running in cost-free mode")
+		logger.Warn("governance plugin requires pricing manager to calculate cost, all cost calculations will be skipped.")
 	}
 
 	governanceStore, err := NewGovernanceStore(logger, store, governanceConfig)

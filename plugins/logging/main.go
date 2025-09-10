@@ -170,7 +170,7 @@ func Init(logger schemas.Logger, logsStore logstore.LogStore, pricingManager *pr
 		return nil, fmt.Errorf("logs store cannot be nil")
 	}
 	if pricingManager == nil {
-		logger.Warn("logging plugin requires pricing manager to calculate cost, running in cost-free mode")
+		logger.Warn("logging plugin requires pricing manager to calculate cost, all cost calculations will be skipped.")
 	}
 
 	plugin := &LoggerPlugin{

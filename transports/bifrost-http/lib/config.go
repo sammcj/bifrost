@@ -363,7 +363,6 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 
 	// Initializing log store
 	if configData.LogsStoreConfig != nil && configData.LogsStoreConfig.Enabled {
-		logger.Info("initializing log store: %v", configData.LogsStoreConfig)
 		config.LogsStore, err = logstore.NewLogStore(configData.LogsStoreConfig, logger)
 		if err != nil {
 			return nil, err
