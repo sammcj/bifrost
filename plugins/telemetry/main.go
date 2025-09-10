@@ -45,7 +45,11 @@ type PrometheusPlugin struct {
 }
 
 // NewPrometheusPlugin creates a new PrometheusPlugin with initialized metrics.
-func Init(pricingManager *pricing.PricingManager) *PrometheusPlugin {
+func Init(pricingManager *pricing.PricingManager, logger schemas.Logger) *PrometheusPlugin {
+	if pricingManager == nil {
+		logger.Warn("telemetry plugin requires pricing manager to calculate cost, all cost calculations will be skipped.")
+	}
+
 	return &PrometheusPlugin{
 		pricingManager:        pricingManager,
 		UpstreamRequestsTotal: bifrostUpstreamRequestsTotal,

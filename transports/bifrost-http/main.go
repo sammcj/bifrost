@@ -336,7 +336,7 @@ func main() {
 	// Initialize pricing manager
 	pricingManager, err := pricing.Init(config.ConfigStore, logger)
 	if err != nil {
-		logger.Fatal("failed to initialize pricing manager: %v", err)
+		logger.Error("failed to initialize pricing manager: %v", err)
 	}
 
 	// Create account backed by the high-performance store (all processing is done in LoadFromDatabase)
@@ -349,7 +349,7 @@ func main() {
 	telemetry.InitPrometheusMetrics(config.ClientConfig.PrometheusLabels)
 	logger.Debug("prometheus Go/Process collectors registered.")
 
-	promPlugin := telemetry.Init(pricingManager)
+	promPlugin := telemetry.Init(pricingManager, logger)
 
 	loadedPlugins = append(loadedPlugins, promPlugin)
 
