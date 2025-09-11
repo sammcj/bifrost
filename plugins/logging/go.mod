@@ -6,7 +6,7 @@ toolchain go1.24.3
 
 require (
 	github.com/maximhq/bifrost/core v1.1.32
-	github.com/maximhq/bifrost/framework v1.0.12
+	github.com/maximhq/bifrost/framework v1.0.14
 )
 
 require (
