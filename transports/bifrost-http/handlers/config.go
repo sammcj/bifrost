@@ -106,6 +106,7 @@ func (h *ConfigHandler) handleUpdateConfig(ctx *fasthttp.RequestCtx) {
 	updatedConfig.EnableGovernance = req.EnableGovernance
 	updatedConfig.EnforceGovernanceHeader = req.EnforceGovernanceHeader
 	updatedConfig.AllowDirectKeys = req.AllowDirectKeys
+	updatedConfig.MaxRequestBodySizeMB = req.MaxRequestBodySizeMB
 
 	// Update the store with the new config
 	h.store.ClientConfig = updatedConfig

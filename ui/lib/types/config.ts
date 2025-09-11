@@ -170,6 +170,7 @@ export interface CoreConfig {
 	enforce_governance_header: boolean;
 	allow_direct_keys: boolean;
 	allowed_origins: string[];
+	max_request_body_size_mb: number;
 }
 
 // Semantic cache configuration types
