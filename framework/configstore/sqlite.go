@@ -56,6 +56,7 @@ func (s *SQLiteConfigStore) UpdateClientConfig(config *ClientConfig) error {
 		AllowDirectKeys:         config.AllowDirectKeys,
 		PrometheusLabels:        config.PrometheusLabels,
 		AllowedOrigins:          config.AllowedOrigins,
+		MaxRequestBodySizeMB:    config.MaxRequestBodySizeMB,
 	}
 	// Delete existing client config and create new one in a transaction
 	return s.db.Transaction(func(tx *gorm.DB) error {
@@ -84,6 +85,7 @@ func (s *SQLiteConfigStore) GetClientConfig() (*ClientConfig, error) {
 		EnforceGovernanceHeader: dbConfig.EnforceGovernanceHeader,
 		AllowDirectKeys:         dbConfig.AllowDirectKeys,
 		AllowedOrigins:          dbConfig.AllowedOrigins,
+		MaxRequestBodySizeMB:    dbConfig.MaxRequestBodySizeMB,
 	}, nil
 }
 

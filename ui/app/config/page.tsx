@@ -25,6 +25,7 @@ const defaultConfig = {
 	allow_direct_keys: false,
 	plugins: [],
 	allowed_origins: [],
+	max_request_body_size_mb: 100,
 };
 
 export default function ConfigPage() {
@@ -40,10 +41,12 @@ export default function ConfigPage() {
 		initial_pool_size: string;
 		prometheus_labels: string;
 		allowed_origins: string;
+		max_request_body_size_mb: string;
 	}>({
 		initial_pool_size: "300",
 		prometheus_labels: "",
 		allowed_origins: "",
+		max_request_body_size_mb: "100",
 	});
 
 	// Handle dropped requests data from RTK Query
@@ -57,6 +60,7 @@ export default function ConfigPage() {
 	const poolSizeTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 	const prometheusLabelsTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 	const allowedOriginsTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+	const maxRequestBodySizeMBTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
 	// Update local values when config is loaded
 	useEffect(() => {
@@ -65,6 +69,7 @@ export default function ConfigPage() {
 				initial_pool_size: config?.initial_pool_size?.toString() || "300",
 				prometheus_labels: config?.prometheus_labels?.join(", ") || "",
 				allowed_origins: config?.allowed_origins?.join(", ") || "",
+				max_request_body_size_mb: config?.max_request_body_size_mb?.toString() || "100",
 			});
 		}
 	}, [config, bifrostConfig]);
@@ -149,6 +154,27 @@ export default function ConfigPage() {
 		[updateConfig],
 	);
 
+	const handleMaxRequestBodySizeMBChange = useCallback(
+		(value: string) => {
+			setLocalValues((prev) => ({ ...prev, max_request_body_size_mb: value }));
+
+			// Clear existing timeout
+			if (maxRequestBodySizeMBTimeoutRef.current) {
+				clearTimeout(maxRequestBodySizeMBTimeoutRef.current);
+			}
+
+			// Set new timeout
+			maxRequestBodySizeMBTimeoutRef.current = setTimeout(() => {
+				const numValue = Number.parseInt(value);
+				if (!isNaN(numValue) && numValue > 0) {
+					updateConfig("max_request_body_size_mb", numValue);
+				}
+			}, 1000);
+			setNeedsRestart(true);
+		},
+		[updateConfig],
+	);
+
 	// Cleanup timeouts on unmount
 	useEffect(() => {
 		return () => {
@@ -160,6 +186,9 @@ export default function ConfigPage() {
 			}
 			if (allowedOriginsTimeoutRef.current) {
 				clearTimeout(allowedOriginsTimeoutRef.current);
+			}
+			if (maxRequestBodySizeMBTimeoutRef.current) {
+				clearTimeout(maxRequestBodySizeMBTimeoutRef.current);
 			}
 		};
 	}, []);
@@ -260,6 +289,26 @@ export default function ConfigPage() {
 								className="w-24"
 								value={localValues.initial_pool_size}
 								onChange={(e) => handlePoolSizeChange(e.target.value)}
+								min="1"
+							/>
+						</div>
+						{needsRestart && <RestartWarning />}
+					</div>
+
+					<div>
+						<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+							<div className="space-y-0.5">
+								<label htmlFor="initial-pool-size" className="text-sm font-medium">
+									Max Request Body Size
+								</label>
+								<p className="text-muted-foreground text-sm">The initial connection pool size.</p>
+							</div>
+							<Input
+								id="max-request-body-size-mb"
+								type="number"
+								className="w-24"
+								value={localValues.max_request_body_size_mb}
+								onChange={(e) => handleMaxRequestBodySizeMBChange(e.target.value)}
 								min="1"
 							/>
 						</div>

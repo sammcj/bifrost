@@ -101,6 +101,14 @@ var (
 	logOutputStyle string // Logger output style: json, pretty
 )
 
+const (
+	DefaultHost           = "localhost"
+	DefaultPort           = "8080"
+	DefaultAppDir         = "./bifrost-data"
+	DefaultLogLevel       = string(schemas.LogLevelInfo)
+	DefaultLogOutputStyle = string(schemas.LoggerOutputTypeJSON)
+)
+
 // init initializes command line flags and validates required configuration.
 // It sets up the following flags:
 //   - host: Host to bind the server to (default: localhost, can be overridden with BIFROST_HOST env var)
@@ -130,14 +138,14 @@ func init() {
 	// Set default host from environment variable or use localhost
 	defaultHost := os.Getenv("BIFROST_HOST")
 	if defaultHost == "" {
-		defaultHost = "localhost"
+		defaultHost = DefaultHost
 	}
 
-	flag.StringVar(&port, "port", "8080", "Port to run the server on")
+	flag.StringVar(&port, "port", DefaultPort, "Port to run the server on")
 	flag.StringVar(&host, "host", defaultHost, "Host to bind the server to (default: localhost, override with BIFROST_HOST env var)")
-	flag.StringVar(&appDir, "app-dir", "./bifrost-data", "Application data directory (contains config.json and logs)")
-	flag.StringVar(&logLevel, "log-level", string(schemas.LogLevelInfo), "Logger level (debug, info, warn, error). Default is info.")
-	flag.StringVar(&logOutputStyle, "log-style", string(schemas.LoggerOutputTypeJSON), "Logger output type (json or pretty). Default is JSON.")
+	flag.StringVar(&appDir, "app-dir", DefaultAppDir, "Application data directory (contains config.json and logs)")
+	flag.StringVar(&logLevel, "log-level", DefaultLogLevel, "Logger level (debug, info, warn, error). Default is info.")
+	flag.StringVar(&logOutputStyle, "log-style", DefaultLogOutputStyle, "Logger output type (json or pretty). Default is JSON.")
 	flag.Parse()
 
 	// Configure logger from flags
@@ -520,7 +528,8 @@ func main() {
 
 	// Create fasthttp server instance
 	server := &fasthttp.Server{
-		Handler: corsHandler,
+		Handler:            corsHandler,
+		MaxRequestBodySize: config.ClientConfig.MaxRequestBodySizeMB * 1024 * 1024,
 	}
 
 	// Create channels for signal and error handling

@@ -34,6 +34,7 @@ type ClientConfig struct {
 	EnforceGovernanceHeader bool     `json:"enforce_governance_header"` // Enforce governance on all requests
 	AllowDirectKeys         bool     `json:"allow_direct_keys"`         // Allow direct keys to be used for requests
 	AllowedOrigins          []string `json:"allowed_origins,omitempty"` // Additional allowed origins for CORS and WebSocket (localhost is always allowed)
+	MaxRequestBodySizeMB    int      `json:"max_request_body_size_mb"`  // The maximum request body size in MB
 }
 
 // ProviderConfig represents the configuration for a specific AI model provider.
