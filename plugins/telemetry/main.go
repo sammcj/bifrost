@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	PluginName = "bifrost-http-telemetry"
+	PluginName = "telemetry"
 )
 
 // ContextKey is a custom type for prometheus context keys to prevent collisions

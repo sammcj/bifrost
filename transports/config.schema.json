@@ -57,6 +57,11 @@
         "allow_direct_keys": {
           "type": "boolean",
           "description": "Allow provider keys"
+        },
+        "max_request_body_size_mb": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum request body size in MB"
         }
       },
       "additionalProperties": false

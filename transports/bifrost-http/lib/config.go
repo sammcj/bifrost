@@ -144,6 +144,7 @@ var DefaultClientConfig = configstore.ClientConfig{
 	EnforceGovernanceHeader: false,
 	AllowDirectKeys:         false,
 	AllowedOrigins:          []string{},
+	MaxRequestBodySizeMB:    100,
 }
 
 // LoadConfig loads initial configuration from a JSON config file into memory
@@ -196,6 +197,11 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 			}
 			if clientConfig == nil {
 				clientConfig = &DefaultClientConfig
+			} else {
+				// For backward compatibility, we need to handle cases where config is already present but max request body size is not set
+				if clientConfig.MaxRequestBodySizeMB == 0 {
+					clientConfig.MaxRequestBodySizeMB = DefaultClientConfig.MaxRequestBodySizeMB
+				}
 			}
 			err = config.ConfigStore.UpdateClientConfig(clientConfig)
 			if err != nil {
@@ -403,11 +409,21 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 
 	if clientConfig != nil {
 		config.ClientConfig = *clientConfig
+
+		// For backward compatibility, we need to handle cases where config is already present but max request body size is not set
+		if config.ClientConfig.MaxRequestBodySizeMB == 0 {
+			config.ClientConfig.MaxRequestBodySizeMB = DefaultClientConfig.MaxRequestBodySizeMB
+		}
 	} else {
 		logger.Debug("client config not found in store, using config file")
 		// Process core configuration if present, otherwise use defaults
 		if configData.Client != nil {
 			config.ClientConfig = *configData.Client
+
+			// For backward compatibility, we need to handle cases where config is already present but max request body size is not set
+			if config.ClientConfig.MaxRequestBodySizeMB == 0 {
+				config.ClientConfig.MaxRequestBodySizeMB = DefaultClientConfig.MaxRequestBodySizeMB
+			}
 		} else {
 			config.ClientConfig = DefaultClientConfig
 		}
