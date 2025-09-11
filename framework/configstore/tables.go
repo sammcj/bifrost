@@ -120,6 +120,7 @@ type TableClientConfig struct {
 	EnableGovernance        bool      `gorm:"" json:"enable_governance"`
 	EnforceGovernanceHeader bool      `gorm:"" json:"enforce_governance_header"`
 	AllowDirectKeys         bool      `gorm:"" json:"allow_direct_keys"`
+	MaxRequestBodySizeMB    int       `gorm:"" json:"max_request_body_size_mb"`
 	CreatedAt               time.Time `gorm:"index;not null" json:"created_at"`
 	UpdatedAt               time.Time `gorm:"index;not null" json:"updated_at"`
 
