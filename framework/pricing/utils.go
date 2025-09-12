@@ -38,10 +38,9 @@ func isCacheReadRequest(req *schemas.BifrostRequest, headers map[string]string) 
 
 // normalizeProvider normalizes the provider name to a consistent format
 func normalizeProvider(p string) string {
-	switch p {
-	case "vertex_ai-language-models", "vertex_ai", "google-vertex":
-		return "vertex"
-	default:
+	if strings.Contains(p, "vertex_ai") || p == "google-vertex" {
+		return string(schemas.Vertex)
+	} else {
 		return p
 	}
 }
