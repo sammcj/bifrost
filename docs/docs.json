@@ -91,6 +91,7 @@
               "features/mcp",
               "features/tracing",
               "features/telemetry",
+              "features/observability",
               "features/governance",
               "features/semantic-caching",
               "features/custom-providers",

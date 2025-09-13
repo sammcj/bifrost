@@ -215,13 +215,12 @@ github.com/maximhq/bifrost/plugins/governance v1.2.9/go.mod h1:3KOk++F4jxS6gtndI
 github.com/maximhq/bifrost/plugins/logging v1.2.9 h1:AyPSxR24VTyLD6dJ5JeYoxN1+maCA5d9FUCXMBwZHvE=
 github.com/maximhq/bifrost/plugins/logging v1.2.9/go.mod h1:on7KopeErGqzjLRq2va81n6/n6WGD/gwbxFtpmX+O60=
 github.com/maximhq/bifrost/plugins/maxim v1.2.7 h1:XelvIZVW0KaE8Q1m0zN4V02Pz9QoVtfxNf7vNyhl15c=
-github.com/maximhq/bifrost/plugins/maxim v1.2.7/go.mod h1:/AGvEY4yAXSQ58Tm7aPQmzCRkHibdzGlJ/qCW4U9uEE=
 github.com/maximhq/bifrost/plugins/semanticcache v1.2.10 h1:1nzHBQjAYUBe5wpLPlevNtfW5wrcW+gDPHSjT1JUZUw=
 github.com/maximhq/bifrost/plugins/semanticcache v1.2.10/go.mod h1:WLp3S/Zgn0dcWQ8truAvcvG4NROsshfsYlZnMvreYFs=
 github.com/maximhq/bifrost/plugins/telemetry v1.2.8 h1:7I7VIgCiDocLqNLtjT8PJjpbl0pbpvaHtQfViaGGVC4=
 github.com/maximhq/bifrost/plugins/telemetry v1.2.8/go.mod h1:qPBe99N0k7BQrekoYxmE7d8cwgh5ZgLs46z+cOj+wz4=
-github.com/maximhq/maxim-go v0.1.8 h1:LXCYwg/WLNY5rPBScki9y4/wjH7h4VEz8vPUXbyoI4g=
-github.com/maximhq/maxim-go v0.1.8/go.mod h1:0+UTWM7UZwNNE5VnljLtr/vpRGtYP8r/2q9WDwlLWFw=
+github.com/maximhq/maxim-go v0.1.10 h1:rGBYSY3qld2zfZeL4HBmropkyfrqNiJ4IYA49jbvYX8=
+github.com/maximhq/maxim-go v0.1.10/go.mod h1:0+UTWM7UZwNNE5VnljLtr/vpRGtYP8r/2q9WDwlLWFw=
 github.com/mitchellh/mapstructure v1.3.3/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/mitchellh/mapstructure v1.4.1/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/mitchellh/mapstructure v1.4.3/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=

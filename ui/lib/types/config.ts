@@ -213,6 +213,7 @@ export interface CoreConfig {
 	prometheus_labels: string[];
 	enable_logging: boolean;
 	enable_governance: boolean;
+	enable_maxim: boolean;
 	enforce_governance_header: boolean;
 	allow_direct_keys: boolean;
 	allowed_origins: string[];
@@ -233,6 +234,12 @@ export interface CacheConfig {
 	cache_by_provider: boolean;
 	created_at?: string;
 	updated_at?: string;
+}
+
+// Maxim configuration types
+export interface MaximConfig {
+	api_key: string;
+	log_repo_id: string;
 }
 
 // Form-specific custom provider config that allows any string for base_provider_type

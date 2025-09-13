@@ -112,9 +112,13 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
 			}
 
+			if labelName == string(maxim.LogRepoIDKey) {
+				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
+			}
+
 			// apart from these all headers starting with x-bf-maxim- are keys for tags
 			// collect them in the maximTags map
-			if labelName != string(maxim.GenerationIDKey) && labelName != string(maxim.TraceIDKey) && labelName != string(maxim.SessionIDKey) && labelName != string(maxim.TraceNameKey) && labelName != string(maxim.GenerationNameKey) {
+			if labelName != string(maxim.GenerationIDKey) && labelName != string(maxim.TraceIDKey) && labelName != string(maxim.SessionIDKey) && labelName != string(maxim.TraceNameKey) && labelName != string(maxim.GenerationNameKey) && labelName != string(maxim.LogRepoIDKey) {
 				maximTags[labelName] = string(value)
 			}
 		}
