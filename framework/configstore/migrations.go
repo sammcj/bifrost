@@ -52,6 +52,10 @@ func migrationInit(db *gorm.DB) error {
 				if err := migrator.CreateTable(&TableClientConfig{}); err != nil {
 					return err
 				}
+			} else if !migrator.HasColumn(&TableClientConfig{}, "max_request_body_size_mb") {
+				if err := migrator.AddColumn(&TableClientConfig{}, "max_request_body_size_mb"); err != nil {
+					return err
+				}
 			}
 			if !migrator.HasTable(&TableEnvKey{}) {
 				if err := migrator.CreateTable(&TableEnvKey{}); err != nil {
