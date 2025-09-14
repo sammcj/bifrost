@@ -1227,10 +1227,10 @@ func (s *SQLiteConfigStore) removeDuplicateKeysAndNullKeys() error {
 	// Find and delete duplicate keys, keeping only the one with the smallest ID
 	// This query deletes all records except the one with the minimum ID for each (key_id, value) pair
 	result := s.db.Exec(`
-		DELETE FROM config_keys 
+		DELETE FROM config_keys
 		WHERE id NOT IN (
-			SELECT MIN(id) 
-			FROM config_keys 
+			SELECT MIN(id)
+			FROM config_keys
 			GROUP BY key_id, value
 		)
 	`)
@@ -1269,25 +1269,7 @@ func newSqliteConfigStore(config *SQLiteConfig, logger schemas.Logger) (ConfigSt
 		return nil, fmt.Errorf("failed to remove duplicate keys: %w", err)
 	}
 	// Auto migrate to all new tables
-	if err := db.AutoMigrate(
-		&TableConfigHash{},
-		&TableProvider{},
-		&TableKey{},
-		&TableModel{},
-		&TableMCPClient{},
-		&TableClientConfig{},
-		&TableEnvKey{},
-		&TableVectorStoreConfig{},
-		&TableLogStoreConfig{},
-		&TableBudget{},
-		&TableRateLimit{},
-		&TableCustomer{},
-		&TableTeam{},
-		&TableVirtualKey{},
-		&TableConfig{},
-		&TableModelPricing{},
-		&TablePlugin{},
-	); err != nil {
+	if err := triggerMigrations(db); err != nil {
 		return nil, err
 	}
 	return s, nil

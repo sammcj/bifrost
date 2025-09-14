@@ -107,7 +107,7 @@ const externalLinks = [
 	},
 	{
 		title: "Full Documentation",
-		url: "https://getmaxim.ai/bifrost/docs",
+		url: "https://docs.getbifrost.ai",
 		icon: BooksIcon,
 		strokeWidth: 1,
 	},
