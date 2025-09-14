@@ -3,12 +3,12 @@ name: Release Pipeline
 # Triggers automatically on push to main when any version file changes
 on:
   push:
-    branches: ["main"]    
+    branches: ["main"]
 
 # Prevent concurrent runs
 concurrency:
   group: release-pipeline
-  cancel-in-progress: false  
+  cancel-in-progress: false
 
 jobs:
   # Check if pipeline should be skipped based on first line of commit message
@@ -57,7 +57,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y jq
-      
+
       - name: Detect what needs release
         id: detect
         run: ./.github/workflows/scripts/detect-all-changes.sh "auto"
@@ -140,7 +140,7 @@ jobs:
       - name: Release framework
         id: release
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}          
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: ./.github/workflows/scripts/release-framework.sh "${{ needs.detect-changes.outputs.framework-version }}"
 
   plugins-release:
@@ -268,7 +268,7 @@ jobs:
       IMAGE_NAME: bifrost
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4             
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -291,6 +291,8 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          build-args: |
+              VERSION=${{ needs.detect-changes.outputs.transport-version }}
           file: ./transports/Dockerfile
           push: true
           tags: ${{ steps.tags.outputs.tags }}
@@ -311,7 +313,7 @@ jobs:
         IMAGE_NAME: bifrost
       steps:
         - name: Checkout repository
-          uses: actions/checkout@v4             
+          uses: actions/checkout@v4
 
         - name: Set up Docker Buildx
           uses: docker/setup-buildx-action@v3
@@ -336,12 +338,14 @@ jobs:
             context: .
             file: ./transports/Dockerfile
             push: true
+            build-args: |
+              VERSION=${{ needs.detect-changes.outputs.transport-version }}
             tags: ${{ steps.tags.outputs.tags }}
             platforms: linux/arm64
             cache-from: type=gha
             cache-to: type=gha,mode=max
 
-  # Docker manifest   
+  # Docker manifest
   docker-manifest:
       needs: [check-skip, detect-changes, docker-build-amd64, docker-build-arm64]
       if: "always() && needs.check-skip.outputs.should-skip != 'true' && needs.docker-build-amd64.result == 'success' && needs.docker-build-arm64.result == 'success'"
@@ -352,8 +356,8 @@ jobs:
         IMAGE_NAME: bifrost
       steps:
         - name: Checkout repository
-          uses: actions/checkout@v4             
-          
+          uses: actions/checkout@v4
+
         - name: Log in to Docker Hub
           uses: docker/login-action@v3
           with:
@@ -362,8 +366,8 @@ jobs:
 
         - name: Create and push multi-arch manifest
           run: |
-            ./.github/workflows/scripts/create-docker-manifest.sh "${{ needs.detect-changes.outputs.transport-version }}"                        
-            
+            ./.github/workflows/scripts/create-docker-manifest.sh "${{ needs.detect-changes.outputs.transport-version }}"
+
   # Notification
   notify:
     needs: [check-skip, detect-changes, core-release, framework-release, plugins-release, bifrost-http-release, docker-manifest]
@@ -375,7 +379,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Discord Notification        
+      - name: Discord Notification
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |

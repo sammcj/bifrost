@@ -3,7 +3,7 @@
 # Variables
 HOST ?= localhost
 PORT ?= 8080
-APP_DIR ?= 
+APP_DIR ?=
 PROMETHEUS_LABELS ?=
 LOG_STYLE ?= json
 LOG_LEVEL ?= info
@@ -16,7 +16,7 @@ BLUE=\033[0;34m
 CYAN=\033[0;36m
 NC=\033[0m # No Color
 
-.PHONY: all help dev build run install-air clean test install-ui setup-workspace work-init work-clean docs docker-build
+.PHONY: all help dev build-ui build run install-air clean test install-ui setup-workspace work-init work-clean docs docker-build
 
 all: help
 
@@ -77,13 +77,13 @@ build: build-ui ## Build bifrost-http binary
 	@echo "$(GREEN)Built: tmp/bifrost-http$(NC)"
 
 docker-build: build-ui ## Build Docker image
-	@echo "$(GREEN)Building Docker image...$(NC)"	
+	@echo "$(GREEN)Building Docker image...$(NC)"
 	@docker build -f transports/Dockerfile -t bifrost .
 	@echo "$(GREEN)Docker image built: bifrost$(NC)"
 
 docker-run: ## Run Docker container
 	@echo "$(GREEN)Running Docker container...$(NC)"
-	@docker run -e APP_PORT=$(PORT) -e APP_HOST=0.0.0.0 -p $(PORT):$(PORT) -e LOG_LEVEL=$(LOG_LEVEL) -e LOG_STYLE=$(LOG_STYLE) -v $(shell pwd):/app/data  bifrost 
+	@docker run -e APP_PORT=$(PORT) -e APP_HOST=0.0.0.0 -p $(PORT):$(PORT) -e LOG_LEVEL=$(LOG_LEVEL) -e LOG_STYLE=$(LOG_STYLE) -v $(shell pwd):/app/data  bifrost
 
 docs: ## Prepare local docs
 	@echo "$(GREEN)Preparing local docs...$(NC)"
