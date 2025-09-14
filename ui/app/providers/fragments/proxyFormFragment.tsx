@@ -16,6 +16,7 @@ import { AlertTriangle } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { fi } from "zod/v4/locales";
 
 interface ProxyFormFragmentProps {
 	provider: ModelProvider;
@@ -31,7 +32,7 @@ export function ProxyFormFragment({ provider, showRestartAlert = false }: ProxyF
 		reValidateMode: "onChange",
 		defaultValues: {
 			proxy_config: {
-				type: provider.proxy_config?.type === "none" ? undefined : provider.proxy_config?.type,
+				type: provider.proxy_config?.type,
 				url: provider.proxy_config?.url || "",
 				username: provider.proxy_config?.username || "",
 				password: provider.proxy_config?.password || "",
@@ -46,7 +47,7 @@ export function ProxyFormFragment({ provider, showRestartAlert = false }: ProxyF
 	useEffect(() => {
 		form.reset({
 			proxy_config: {
-				type: provider.proxy_config?.type === "none" ? undefined : provider.proxy_config?.type,
+				type: provider.proxy_config?.type,
 				url: provider.proxy_config?.url || "",
 				username: provider.proxy_config?.username || "",
 				password: provider.proxy_config?.password || "",
@@ -67,6 +68,9 @@ export function ProxyFormFragment({ provider, showRestartAlert = false }: ProxyF
 			},
 		})
 			.unwrap()
+			.then(() => {
+				toast.success("Provider configuration updated successfully");
+			})
 			.catch((err) => {
 				toast.error("Failed to update provider configuration", {
 					description: getErrorMessage(err),
@@ -96,7 +100,7 @@ export function ProxyFormFragment({ provider, showRestartAlert = false }: ProxyF
 							render={({ field }) => (
 								<FormItem>
 									<FormLabel>Proxy Type</FormLabel>
-									<Select onValueChange={field.onChange} defaultValue={field.value}>
+									<Select onValueChange={field.onChange} value={field.value === "none" ? "" : field.value}>
 										<FormControl>
 											<SelectTrigger className="w-48">
 												<SelectValue placeholder="Select type" />
@@ -172,8 +176,6 @@ export function ProxyFormFragment({ provider, showRestartAlert = false }: ProxyF
 						type="button"
 						variant="outline"
 						onClick={() => {
-							form.reset();
-							// Saving configuration with none
 							onSubmit({ proxy_config: { type: "none", url: "" } });
 						}}
 						disabled={isUpdatingProvider || !provider.proxy_config || provider.proxy_config.type === "none"}

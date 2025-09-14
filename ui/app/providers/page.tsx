@@ -36,7 +36,6 @@ export default function Providers() {
 	const [provider, setProvider] = useQueryState("provider");
 
 	const { data: savedProviders, isLoading: isLoadingProviders } = useGetProvidersQuery();
-
 	const [createProvider, { isLoading: creatingProvider }] = useCreateProviderMutation();
 	const [getProvider, { isLoading: isLoadingProvider }] = useLazyGetProviderQuery();
 
@@ -88,10 +87,10 @@ export default function Providers() {
 	}, [provider]);
 
 	useEffect(() => {
-		if (selectedProvider || !savedProviders || !customProviders) return;
-		setProvider(savedProviders[0]?.name ?? customProviders[0]?.name ?? "");
+		if (selectedProvider || !allProviders || allProviders.length === 0) return;
+		setProvider(allProviders[0].name);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [selectedProvider, savedProviders, customProviders]);
+	}, [selectedProvider, allProviders]);
 
 	if (isLoadingProviders) {
 		return <FullPageLoader />;

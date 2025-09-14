@@ -75,7 +75,7 @@ func (h *ProviderHandler) listProviders(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	var providerResponses []ProviderResponse
+	providerResponses := []ProviderResponse{}
 
 	// Sort providers alphabetically
 	sort.Slice(providers, func(i, j int) bool {
