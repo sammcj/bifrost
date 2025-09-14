@@ -46,10 +46,10 @@ export const TagInput = React.forwardRef<HTMLInputElement, TagInputProps>(({ cla
 	};
 
 	return (
-		<div className={cn("border-input flex flex-wrap items-center gap-2 rounded-sm border", className)}>
+		<div className={cn("border-input dark:bg-accent flex flex-wrap items-center gap-2 rounded-sm border", className)}>
 			<div className={cn("flex flex-row gap-2", value.length > 0 && "pl-2")}>
 				{value.map((tag) => (
-					<Badge key={tag} variant="secondary" className="flex items-center gap-1">
+					<Badge key={tag} variant="secondary" className="bg-accent dark:bg-card flex items-center gap-1">
 						{tag}
 						<button
 							type="button"
@@ -68,7 +68,7 @@ export const TagInput = React.forwardRef<HTMLInputElement, TagInputProps>(({ cla
 				onChange={handleInputChange}
 				onKeyDown={handleKeyDown}
 				onBlur={handleBlur}
-				className={cn("min-w-32 flex-1 border-0 shadow-none focus-visible:ring-0", value.length > 0 ? "px-0" : "px-1")}
+				className={cn("dark:bg-accent min-w-32 flex-1 border-0 shadow-none focus-visible:ring-0", value.length > 0 ? "px-0" : "px-1")}
 				{...props}
 			/>
 		</div>
