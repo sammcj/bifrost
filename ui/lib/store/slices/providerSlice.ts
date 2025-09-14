@@ -60,13 +60,9 @@ const providerSlice = createSlice({
 		// Listen to updateProvider fulfilled to update selected provider if it's the same one
 		builder.addMatcher(providersApi.endpoints.updateProvider.matchFulfilled, (state, action) => {
 			const updatedProvider = action.meta.arg.originalArgs;
-
 			// If the updated provider is the currently selected one, update it
 			if (state.selectedProvider && updatedProvider.name === state.selectedProvider.name) {
 				state.selectedProvider = updatedProvider;
-			} else {
-				// Selection no longer valid
-				state.selectedProvider = null;
 			}
 		});
 	},
