@@ -131,7 +131,7 @@ export function ApiStructureFormFragment({ provider, showRestartAlert }: Props) 
 											<FormLabel>Text Completion</FormLabel>
 										</div>
 										<FormControl>
-											<Switch checked={field.value} onCheckedChange={field.onChange} />
+											<Switch checked={field.value} onCheckedChange={field.onChange} size="md" />
 										</FormControl>
 									</FormItem>
 								)}
@@ -145,7 +145,7 @@ export function ApiStructureFormFragment({ provider, showRestartAlert }: Props) 
 											<FormLabel>Chat Completion</FormLabel>
 										</div>
 										<FormControl>
-											<Switch checked={field.value} onCheckedChange={field.onChange} />
+											<Switch checked={field.value} onCheckedChange={field.onChange} size="md" />
 										</FormControl>
 									</FormItem>
 								)}
@@ -159,7 +159,7 @@ export function ApiStructureFormFragment({ provider, showRestartAlert }: Props) 
 											<FormLabel>Chat Completion Stream</FormLabel>
 										</div>
 										<FormControl>
-											<Switch checked={field.value} onCheckedChange={field.onChange} />
+											<Switch checked={field.value} onCheckedChange={field.onChange} size="md" />
 										</FormControl>
 									</FormItem>
 								)}
@@ -173,7 +173,7 @@ export function ApiStructureFormFragment({ provider, showRestartAlert }: Props) 
 											<FormLabel>Embedding</FormLabel>
 										</div>
 										<FormControl>
-											<Switch checked={field.value} onCheckedChange={field.onChange} />
+											<Switch checked={field.value} onCheckedChange={field.onChange} size="md" />
 										</FormControl>
 									</FormItem>
 								)}
@@ -189,7 +189,7 @@ export function ApiStructureFormFragment({ provider, showRestartAlert }: Props) 
 											<FormLabel>Speech</FormLabel>
 										</div>
 										<FormControl>
-											<Switch checked={field.value} onCheckedChange={field.onChange} />
+											<Switch checked={field.value} onCheckedChange={field.onChange} size="md" />
 										</FormControl>
 									</FormItem>
 								)}
@@ -203,7 +203,7 @@ export function ApiStructureFormFragment({ provider, showRestartAlert }: Props) 
 											<FormLabel>Speech Stream</FormLabel>
 										</div>
 										<FormControl>
-											<Switch checked={field.value} onCheckedChange={field.onChange} />
+											<Switch checked={field.value} onCheckedChange={field.onChange} size="md" />
 										</FormControl>
 									</FormItem>
 								)}
@@ -217,7 +217,7 @@ export function ApiStructureFormFragment({ provider, showRestartAlert }: Props) 
 											<FormLabel>Transcription</FormLabel>
 										</div>
 										<FormControl>
-											<Switch checked={field.value} onCheckedChange={field.onChange} />
+											<Switch checked={field.value} onCheckedChange={field.onChange} size="md" />
 										</FormControl>
 									</FormItem>
 								)}
@@ -231,7 +231,7 @@ export function ApiStructureFormFragment({ provider, showRestartAlert }: Props) 
 											<FormLabel>Transcription Stream</FormLabel>
 										</div>
 										<FormControl>
-											<Switch checked={field.value} onCheckedChange={field.onChange} />
+											<Switch checked={field.value} onCheckedChange={field.onChange} size="md" />
 										</FormControl>
 									</FormItem>
 								)}

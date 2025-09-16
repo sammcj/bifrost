@@ -5,6 +5,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -147,11 +148,9 @@ func (h *ProviderHandler) addProvider(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	// baseProvider tracks the effective base provider type for validations/keys
-	baseProvider := payload.Provider
 	if payload.CustomProviderConfig != nil {
 		// custom provider key should not be same as standard provider names
-		if bifrost.IsStandardProvider(baseProvider) {
+		if bifrost.IsStandardProvider(payload.Provider) {
 			SendError(ctx, fasthttp.StatusBadRequest, "Custom provider cannot be same as a standard provider", h.logger)
 			return
 		}
@@ -166,9 +165,6 @@ func (h *ProviderHandler) addProvider(ctx *fasthttp.RequestCtx) {
 			SendError(ctx, fasthttp.StatusBadRequest, "BaseProviderType must be a standard provider", h.logger)
 			return
 		}
-
-		// CustomProviderKey is internally set by Bifrost, no validation needed
-		baseProvider = payload.CustomProviderConfig.BaseProviderType
 	}
 
 	if payload.ConcurrencyAndBufferSize != nil {
@@ -597,5 +593,10 @@ func getProviderFromCtx(ctx *fasthttp.RequestCtx) (schemas.ModelProvider, error)
 		return "", fmt.Errorf("invalid provider parameter type")
 	}
 
-	return schemas.ModelProvider(providerStr), nil
+	decoded, err := url.PathUnescape(providerStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid provider parameter encoding: %v", err)
+	}
+
+	return schemas.ModelProvider(decoded), nil
 }

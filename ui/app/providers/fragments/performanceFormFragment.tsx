@@ -10,7 +10,7 @@ import { ModelProvider } from "@/lib/types/config";
 import { performanceFormSchema, type PerformanceFormSchema } from "@/lib/types/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
 interface PerformanceFormFragmentProps {
@@ -21,8 +21,8 @@ interface PerformanceFormFragmentProps {
 export function PerformanceFormFragment({ provider, showRestartAlert = false }: PerformanceFormFragmentProps) {
 	const dispatch = useAppDispatch();
 	const [updateProvider, { isLoading: isUpdatingProvider }] = useUpdateProviderMutation();
-	const form = useForm<PerformanceFormSchema>({
-		resolver: zodResolver(performanceFormSchema),
+	const form = useForm<PerformanceFormSchema, any, PerformanceFormSchema>({
+		resolver: zodResolver(performanceFormSchema) as Resolver<PerformanceFormSchema, any, PerformanceFormSchema>,
 		mode: "onChange",
 		reValidateMode: "onChange",
 		defaultValues: {
