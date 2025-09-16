@@ -38,7 +38,7 @@ COPY --from=ui-builder /app/out ./bifrost-http/ui
 ENV GOWORK=off
 ARG VERSION=unknown
 RUN go build \
-    -ldflags="-w -s -extldflags '-static' -X main.Version=${VERSION}" \
+    -ldflags="-w -s -extldflags '-static' -X main.Version=v${VERSION}" \
     -a -trimpath \
     -tags "sqlite_static" \
     -o /app/main \
