@@ -42,7 +42,7 @@ export default function ModelProviderKeysTableView({ provider, className }: Prop
 			case KnownProvidersNames[5]:
 				return key.vertex_key_config?.auth_credentials || "unknown";
 			case KnownProvidersNames[3]:
-				return key.bedrock_key_config?.access_key || "unknown";
+				return key.value || key.bedrock_key_config?.access_key || "system IAM";
 			default:
 				return key.value;
 		}

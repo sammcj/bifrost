@@ -9,9 +9,7 @@ import (
 
 // Migrate performs the necessary database migrations.
 func triggerMigrations(db *gorm.DB) error {
-	var err error
-	err = migrationInit(db)
-	if err != nil {
+	if err := migrationInit(db); err != nil {
 		return err
 	}
 	return nil

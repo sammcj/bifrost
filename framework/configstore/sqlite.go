@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/framework/vectorstore"
@@ -603,7 +602,7 @@ func (s *SQLiteConfigStore) UpdateVectorStoreConfig(config *vectorstore.Config) 
 		if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TableVectorStoreConfig{}).Error; err != nil {
 			return err
 		}
-		jsonConfig, err := bifrost.MarshalToStringPtr(config.Config)
+		jsonConfig, err := marshalToStringPtr(config.Config)
 		if err != nil {
 			return err
 		}
@@ -642,7 +641,7 @@ func (s *SQLiteConfigStore) UpdateLogsStoreConfig(config *logstore.Config) error
 		if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TableLogStoreConfig{}).Error; err != nil {
 			return err
 		}
-		jsonConfig, err := bifrost.MarshalToStringPtr(config)
+		jsonConfig, err := marshalToStringPtr(config)
 		if err != nil {
 			return err
 		}
