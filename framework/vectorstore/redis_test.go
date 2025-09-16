@@ -141,10 +141,9 @@ func (ts *RedisTestSetup) ensureNamespaceExists(t *testing.T) {
 
 	err := ts.Store.CreateNamespace(ts.ctx, TestNamespace, RedisTestDimension, properties)
 	if err != nil {
-		t.Skipf("RediSearch not available or schema creation failed for namespace %q: %v", TestNamespace, err)
-	} else {
-		t.Logf("Created test namespace: %s", TestNamespace)
+		t.Fatalf("Failed to create namespace %q: %v", TestNamespace, err)
 	}
+	t.Logf("Created test namespace: %s", TestNamespace)
 }
 
 // cleanupTestData removes all test objects from the namespace
