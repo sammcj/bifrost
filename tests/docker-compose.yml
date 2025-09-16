@@ -28,6 +28,24 @@ services:
             bifrost_network:
                 ipv4_address: 172.38.0.12
 
+    # Redis Stack instance for vector store tests
+    redis-stack:
+        image: redis/redis-stack:7.4.0-v6
+        command: redis-stack-server --protected-mode no
+        ports:
+            - "6379:6379"
+            - "8001:8001"  # RedisInsight web UI
+        volumes:
+            - redis_data:/data
+        networks:
+            bifrost_network:
+                ipv4_address: 172.38.0.13
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+
 networks:
     bifrost_network:
         driver: bridge
@@ -38,3 +56,4 @@ networks:
 
 volumes:
     weaviate_data:
+    redis_data:
