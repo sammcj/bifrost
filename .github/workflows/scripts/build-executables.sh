@@ -64,7 +64,7 @@ for platform in "${platforms[@]}"; do
 
     env GOWORK=off CGO_ENABLED=1 GOOS="$GOOS" GOARCH="$GOARCH" CC="$CC_COMPILER" CXX="$CXX_COMPILER" \
       go build -trimpath -tags "netgo,osusergo,sqlite_static" \
-      -ldflags "-s -w -buildid= -extldflags '-static' -X main.Version=${VERSION}" \
+      -ldflags "-s -w -buildid= -extldflags '-static' -X main.Version=v${VERSION}" \
       -o "$PROJECT_ROOT/dist/$PLATFORM_DIR/$GOARCH/$output_name" .
 
   elif [[ "$GOOS" = "windows" ]]; then
@@ -74,7 +74,7 @@ for platform in "${platforms[@]}"; do
     fi
 
     env GOWORK=off CGO_ENABLED=1 GOOS="$GOOS" GOARCH="$GOARCH" CC="$CC_COMPILER" CXX="$CXX_COMPILER" \
-      go build -trimpath -ldflags "-s -w -buildid= -X main.Version=${VERSION}" \
+      go build -trimpath -ldflags "-s -w -buildid= -X main.Version=v${VERSION}" \
       -o "$PROJECT_ROOT/dist/$PLATFORM_DIR/$GOARCH/$output_name" .
 
    else # Darwin (macOS)
@@ -87,7 +87,7 @@ for platform in "${platforms[@]}"; do
     fi
 
     env GOWORK=off CGO_ENABLED=1 GOOS="$GOOS" GOARCH="$GOARCH" CC="$CC_COMPILER" CXX="$CXX_COMPILER" \
-      go build -trimpath -ldflags "-s -w -buildid= -X main.Version=${VERSION}" \
+      go build -trimpath -ldflags "-s -w -buildid= -X main.Version=v${VERSION}" \
       -o "$PROJECT_ROOT/dist/$PLATFORM_DIR/$GOARCH/$output_name" .
   fi
 
