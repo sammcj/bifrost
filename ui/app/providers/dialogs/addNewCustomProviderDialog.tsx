@@ -44,6 +44,7 @@ export default function AddCustomProviderDialog({ show, onClose, onSave }: Props
 			.unwrap()
 			.then(() => {
 				onSave();
+				form.reset();
 			})
 			.catch((err) => {
 				toast.error("Failed to add provider", {
@@ -53,12 +54,7 @@ export default function AddCustomProviderDialog({ show, onClose, onSave }: Props
 	};
 
 	return (
-		<Dialog
-			open={show}
-			onOpenChange={(open) => {
-				if (!open) onClose();
-			}}
-		>
+		<Dialog open={show}>
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>Add Custom Provider</DialogTitle>
@@ -110,7 +106,7 @@ export default function AddCustomProviderDialog({ show, onClose, onSave }: Props
 						/>
 
 						<DialogFooter className="flex flex-row gap-2">
-							<Button variant="outline" onClick={onClose}>
+							<Button type="button" variant="outline" onClick={onClose}>
 								Cancel
 							</Button>
 							<Button type="submit">Add</Button>

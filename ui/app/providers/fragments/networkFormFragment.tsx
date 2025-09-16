@@ -12,7 +12,7 @@ import { networkOnlyFormSchema, type NetworkOnlyFormSchema } from "@/lib/types/s
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle } from "lucide-react";
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
 interface NetworkFormFragmentProps {
@@ -25,8 +25,8 @@ export function NetworkFormFragment({ provider, showRestartAlert = false }: Netw
 	const [updateProvider, { isLoading: isUpdatingProvider }] = useUpdateProviderMutation();
 	const isCustomProvider = !isKnownProvider(provider.name as string);
 
-	const form = useForm<NetworkOnlyFormSchema>({
-		resolver: zodResolver(networkOnlyFormSchema),
+	const form = useForm<NetworkOnlyFormSchema, any, NetworkOnlyFormSchema>({
+		resolver: zodResolver(networkOnlyFormSchema) as Resolver<NetworkOnlyFormSchema, any, NetworkOnlyFormSchema>,
 		mode: "onChange",
 		reValidateMode: "onChange",
 		defaultValues: {
