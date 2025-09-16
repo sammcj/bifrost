@@ -1198,7 +1198,7 @@ func handleAnthropicStreaming(
 			logger.Warn(fmt.Sprintf("Error reading %s stream: %v", providerType, err))
 			processAndSendError(ctx, postHookRunner, err, responseChan, logger)
 		} else {
-			response := createBifrostChatCompletionChunkResponse(usage, finishReason, chunkIndex, params, providerType)
+			response := createBifrostChatCompletionChunkResponse(messageID, usage, finishReason, chunkIndex, params, providerType)
 			handleStreamEndWithSuccess(ctx, response, postHookRunner, responseChan, logger)
 		}
 	}()

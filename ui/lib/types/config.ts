@@ -44,8 +44,8 @@ export const DefaultVertexKeyConfig: VertexKeyConfig = {
 
 // BedrockKeyConfig matching Go's schemas.BedrockKeyConfig
 export interface BedrockKeyConfig {
-	access_key: string;
-	secret_key: string;
+	access_key?: string;
+	secret_key?: string;
 	session_token?: string;
 	region: string;
 	arn?: string;

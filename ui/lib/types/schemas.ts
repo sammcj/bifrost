@@ -28,8 +28,8 @@ export const vertexKeyConfigSchema = z.object({
 
 // Bedrock key config schema
 export const bedrockKeyConfigSchema = z.object({
-	access_key: z.string().min(1, "Access key is required"),
-	secret_key: z.string().min(1, "Secret key is required"),
+	access_key: z.string().min(1, "Access key is required").optional(),
+	secret_key: z.string().min(1, "Secret key is required").optional(),
 	session_token: z.string().optional(),
 	region: z.string().min(1, "Region is required"),
 	arn: z.string().optional(),
