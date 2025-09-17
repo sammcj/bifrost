@@ -3,6 +3,7 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { TagInput } from "@/components/ui/tagInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -20,7 +21,7 @@ const MODEL_PLACEHOLDERS = {
 	default: "e.g. gpt-4, gpt-3.5-turbo. Leave blank for all models.",
 	openai: "e.g. gpt-4, gpt-3.5-turbo, gpt-4-turbo, gpt-4o",
 	azure: "e.g. gpt-4, gpt-3.5-turbo (must match deployment mappings)",
-	bedrock: "e.g. anthropic.claude-v2, amazon.titan-text-express-v1",
+	bedrock: "e.g. claude-v2, titan-text-express-v1",
 	vertex: "e.g. gemini-pro, text-bison, chat-bison",
 };
 
@@ -41,15 +42,15 @@ export function ApiKeyFormFragment({ control, providerName }: Props) {
 			{isBedrock && (
 				<Alert variant="default" className="-z-10">
 					<Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
-					<AlertTitle>IAM Role Authentication</AlertTitle>
+					<AlertTitle>Authentication Methods</AlertTitle>
 					<AlertDescription>
-						Leave both Access Key and Secret Key empty to use IAM roles attached to your environment (EC2, Lambda, ECS, EKS). This is the
-						recommended approach for production deployments.
+						You can either use IAM role authentication or API key authentication. Please leave API Key empty when using IAM role
+						authentication.
 					</AlertDescription>
 				</Alert>
 			)}
 			<div className="flex gap-4">
-				{!isVertex && !isBedrock && (
+				{!isVertex && (
 					<div className="flex-1">
 						<FormField
 							control={control}
@@ -273,19 +274,14 @@ export function ApiKeyFormFragment({ control, providerName }: Props) {
 			)}
 			{isBedrock && (
 				<div className="space-y-4">
-					<FormField
-						control={control}
-						name={`key.bedrock_key_config.arn`}
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>ARN</FormLabel>
-								<FormControl>
-									<Input placeholder="ARN" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+					<Separator className="my-6" />
+					<Alert variant="default" className="-z-10">
+						<Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
+						<AlertTitle>IAM Role Authentication</AlertTitle>
+						<AlertDescription>
+							Leave both Access Key and Secret Key empty to use IAM roles attached to your environment (EC2, Lambda, ECS, EKS).
+						</AlertDescription>
+					</Alert>
 					<FormField
 						control={control}
 						name={`key.bedrock_key_config.access_key`}
@@ -293,7 +289,14 @@ export function ApiKeyFormFragment({ control, providerName }: Props) {
 							<FormItem>
 								<FormLabel>Access Key</FormLabel>
 								<FormControl>
-									<Input placeholder="your-aws-access-key or env.AWS_ACCESS_KEY_ID" {...field} />
+									<Input
+										placeholder="your-aws-access-key or env.AWS_ACCESS_KEY_ID"
+										value={field.value ?? ""}
+										onChange={field.onChange}
+										onBlur={field.onBlur}
+										name={field.name}
+										ref={field.ref}
+									/>
 								</FormControl>
 								<FormMessage />
 							</FormItem>
@@ -306,7 +309,14 @@ export function ApiKeyFormFragment({ control, providerName }: Props) {
 							<FormItem>
 								<FormLabel>Secret Key</FormLabel>
 								<FormControl>
-									<Input placeholder="your-aws-secret-key or env.AWS_SECRET_ACCESS_KEY" {...field} />
+									<Input
+										placeholder="your-aws-secret-key or env.AWS_SECRET_ACCESS_KEY"
+										value={field.value ?? ""}
+										onChange={field.onChange}
+										onBlur={field.onBlur}
+										name={field.name}
+										ref={field.ref}
+									/>
 								</FormControl>
 								<FormMessage />
 							</FormItem>
@@ -319,12 +329,20 @@ export function ApiKeyFormFragment({ control, providerName }: Props) {
 							<FormItem>
 								<FormLabel>Session Token (Optional)</FormLabel>
 								<FormControl>
-									<Input placeholder="your-aws-session-token or env.AWS_SESSION_TOKEN" {...field} />
+									<Input
+										placeholder="your-aws-session-token or env.AWS_SESSION_TOKEN"
+										value={field.value ?? ""}
+										onChange={field.onChange}
+										onBlur={field.onBlur}
+										name={field.name}
+										ref={field.ref}
+									/>
 								</FormControl>
 								<FormMessage />
 							</FormItem>
 						)}
 					/>
+					<Separator className="my-6" />
 					<FormField
 						control={control}
 						name={`key.bedrock_key_config.region`}
@@ -332,7 +350,34 @@ export function ApiKeyFormFragment({ control, providerName }: Props) {
 							<FormItem>
 								<FormLabel>Region (Required)</FormLabel>
 								<FormControl>
-									<Input placeholder="us-east-1 or env.AWS_REGION" {...field} />
+									<Input
+										placeholder="us-east-1 or env.AWS_REGION"
+										value={field.value ?? ""}
+										onChange={field.onChange}
+										onBlur={field.onBlur}
+										name={field.name}
+										ref={field.ref}
+									/>
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<FormField
+						control={control}
+						name={`key.bedrock_key_config.arn`}
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>ARN</FormLabel>
+								<FormControl>
+									<Input
+										placeholder="arn:aws:bedrock:us-east-1:123:inference-profile or env.AWS_ARN"
+										value={field.value ?? ""}
+										onChange={field.onChange}
+										onBlur={field.onBlur}
+										name={field.name}
+										ref={field.ref}
+									/>
 								</FormControl>
 								<FormMessage />
 							</FormItem>
@@ -347,7 +392,7 @@ export function ApiKeyFormFragment({ control, providerName }: Props) {
 								<FormDescription>JSON object mapping model names to inference profile names</FormDescription>
 								<FormControl>
 									<Textarea
-										placeholder='{"gpt-4": "my-gpt4-deployment", "gpt-3.5-turbo": "my-gpt35-deployment"}'
+										placeholder='{"claude-3-sonnet": "us.anthropic.claude-3-sonnet-20240229-v1:0", "claude-v2": "us.anthropic.claude-v2:1"}'
 										value={typeof field.value === "string" ? field.value : JSON.stringify(field.value || {}, null, 2)}
 										onChange={(e) => {
 											// Store as string during editing to allow intermediate invalid states
