@@ -969,6 +969,36 @@ func handleAnthropicStreaming(
 				if event.Message != nil {
 					messageID = event.Message.ID
 					modelName = event.Message.Model
+
+					// Send first chunk with role
+					if event.Message.Role != "" {
+						chunkIndex++
+						role := event.Message.Role
+
+						// Create streaming response for message start with role
+						streamResponse := &schemas.BifrostResponse{
+							ID:     messageID,
+							Object: "chat.completion.chunk",
+							Model:  modelName,
+							Choices: []schemas.BifrostResponseChoice{
+								{
+									Index: 0,
+									BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
+										Delta: schemas.BifrostStreamDelta{
+											Role: &role,
+										},
+									},
+								},
+							},
+							ExtraFields: schemas.BifrostResponseExtraFields{
+								Provider:   providerType,
+								ChunkIndex: chunkIndex,
+							},
+						}
+
+						// Use utility function to process and send response
+						processAndSendResponse(ctx, postHookRunner, streamResponse, responseChan, logger)
+					}
 				}
 
 			case "content_block_start":

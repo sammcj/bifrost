@@ -25,6 +25,9 @@ type OpenAIChatRequest struct {
 	TopLogProbs      *int                     `json:"top_logprobs,omitempty"`
 	ResponseFormat   interface{}              `json:"response_format,omitempty"`
 	Seed             *int                     `json:"seed,omitempty"`
+	MaxCompletionTokens *int                     `json:"max_completion_tokens,omitempty"`
+	ReasoningEffort *string                     `json:"reasoning_effort,omitempty"`
+	StreamOptions *map[string]interface{}                     `json:"stream_options,omitempty"`
 }
 
 // OpenAISpeechRequest represents an OpenAI speech synthesis request
@@ -339,6 +342,18 @@ func (r *OpenAIChatRequest) convertParameters() *schemas.ModelParameters {
 	}
 	if r.Seed != nil {
 		params.ExtraParams["seed"] = *r.Seed
+	}
+	if r.StreamOptions != nil {
+		params.ExtraParams["stream_options"] = r.StreamOptions
+	}
+	if r.ResponseFormat != nil {
+		params.ExtraParams["response_format"] = r.ResponseFormat
+	}
+	if r.MaxCompletionTokens != nil {
+		params.ExtraParams["max_completion_tokens"] = *r.MaxCompletionTokens
+	}
+	if r.ReasoningEffort != nil {
+		params.ExtraParams["reasoning_effort"] = *r.ReasoningEffort
 	}
 
 	return params

@@ -313,6 +313,7 @@ func buildProviderSchemas() map[schemas.ModelProvider]ProviderParameterSchema {
 		"timestamp_granularities": true,
 		"encoding_format":         true,
 		"dimensions":              true,
+		"stream_options":          true,
 	}
 
 	anthropicParams := map[string]bool{
