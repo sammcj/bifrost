@@ -210,6 +210,23 @@ const (
 	AnthropicDefaultMaxTokens = 4096
 )
 
+// mapAnthropicFinishReasonToOpenAI maps Anthropic finish reasons to OpenAI-compatible ones
+func MapAnthropicFinishReason(anthropicReason string) string {
+	switch anthropicReason {
+	case "end_turn":
+		return "stop"
+	case "max_tokens":
+		return "length"
+	case "stop_sequence":
+		return "stop"
+	case "tool_use":
+		return "tool_calls"
+	default:
+		// Pass through Anthropic-specific reasons like "pause_turn", "refusal", etc.
+		return anthropicReason
+	}
+}
+
 // NewAnthropicProvider creates a new Anthropic provider instance.
 // It initializes the HTTP client with the provided configuration and sets up response pools.
 // The client is configured with timeouts, concurrency limits, and optional proxy settings.
@@ -796,7 +813,13 @@ func parseAnthropicResponse(response *AnthropicChatResponse, bifrostResponse *sc
 				},
 				StopString: response.StopSequence,
 			},
-			FinishReason: &response.StopReason,
+			FinishReason: func() *string {
+				if response.StopReason != "" {
+					mapped := MapAnthropicFinishReason(response.StopReason)
+					return &mapped
+				}
+				return nil
+			}(),
 		},
 	}
 	bifrostResponse.Usage = &schemas.LLMUsage{
@@ -960,7 +983,8 @@ func handleAnthropicStreaming(
 				}
 			}
 			if event.Delta != nil && event.Delta.StopReason != nil {
-				finishReason = event.Delta.StopReason
+				mappedReason := MapAnthropicFinishReason(*event.Delta.StopReason)
+				finishReason = &mappedReason
 			}
 
 			// Handle different event types
@@ -969,6 +993,36 @@ func handleAnthropicStreaming(
 				if event.Message != nil {
 					messageID = event.Message.ID
 					modelName = event.Message.Model
+
+					// Send first chunk with role
+					if event.Message.Role != "" {
+						chunkIndex++
+						role := event.Message.Role
+
+						// Create streaming response for message start with role
+						streamResponse := &schemas.BifrostResponse{
+							ID:     messageID,
+							Object: "chat.completion.chunk",
+							Model:  modelName,
+							Choices: []schemas.BifrostResponseChoice{
+								{
+									Index: 0,
+									BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
+										Delta: schemas.BifrostStreamDelta{
+											Role: &role,
+										},
+									},
+								},
+							},
+							ExtraFields: schemas.BifrostResponseExtraFields{
+								Provider:   providerType,
+								ChunkIndex: chunkIndex,
+							},
+						}
+
+						// Use utility function to process and send response
+						processAndSendResponse(ctx, postHookRunner, streamResponse, responseChan, logger)
+					}
 				}
 
 			case "content_block_start":
