@@ -30,7 +30,7 @@ func main() {
     }
 
     // Initialize Bifrost with the plugin
-    client, initErr := bifrost.Init(schemas.BifrostConfig{
+    client, initErr := bifrost.Init(context.Background(), schemas.BifrostConfig{
         Account: &yourAccount,
         Plugins: []schemas.Plugin{plugin},
     })
@@ -124,7 +124,7 @@ if err != nil {
 ### Adding to Bifrost
 
 ```go
-client, initErr := bifrost.Init(schemas.BifrostConfig{
+client, initErr := bifrost.Init(context.Background(), schemas.BifrostConfig{
     Account: &yourAccount,
     Plugins: []schemas.Plugin{plugin},
     Logger: bifrost.NewDefaultLogger(schemas.LogLevelInfo),
@@ -476,7 +476,7 @@ Response{
 Enable debug logging to troubleshoot:
 
 ```go
-client, initErr := bifrost.Init(schemas.BifrostConfig{
+client, initErr := bifrost.Init(context.Background(), schemas.BifrostConfig{
     Account: &account,
     Plugins: []schemas.Plugin{plugin},
     Logger:  bifrost.NewDefaultLogger(schemas.LogLevelDebug),

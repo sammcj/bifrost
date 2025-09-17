@@ -411,31 +411,30 @@ func main() {
 	// Eventually same flow will be used for third party plugins
 	for _, plugin := range config.Plugins {
 		if !plugin.Enabled {
+ 			logger.Debug("plugin %s is disabled, skipping initialization", plugin.Name)
 			continue
 		}
 		switch strings.ToLower(plugin.Name) {
 		case maxim.PluginName:
-			if os.Getenv("MAXIM_LOG_REPO_ID") == "" {
-				logger.Warn("maxim log repo id is required to initialize maxim plugin")
-				continue
-			}
-			if os.Getenv("MAXIM_API_KEY") == "" {
-				logger.Warn("maxim api key is required in environment variable MAXIM_API_KEY to initialize maxim plugin")
-				continue
+
+			var maximConfig maxim.Config
+			if plugin.Config != nil {
+				configBytes, err := json.Marshal(plugin.Config)
+				if err != nil {
+					logger.Fatal("failed to marshal maxim config: %v", err)
+				}
+				if err := json.Unmarshal(configBytes, &maximConfig); err != nil {
+					logger.Fatal("failed to unmarshal maxim config: %v", err)
+				}
 			}
 
-			maximPlugin, err := maxim.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), os.Getenv("MAXIM_LOG_REPO_ID"))
+			maximPlugin, err := maxim.Init(maximConfig)
 			if err != nil {
 				logger.Warn("failed to initialize maxim plugin: %v", err)
 			} else {
 				loadedPlugins = append(loadedPlugins, maximPlugin)
 			}
 		case semanticcache.PluginName:
-			if !plugin.Enabled {
-				logger.Debug("semantic cache plugin is disabled, skipping initialization")
-				continue
-			}
-
 			if config.VectorStore == nil {
 				logger.Error("vector store is required to initialize semantic cache plugin, skipping initialization")
 				continue
