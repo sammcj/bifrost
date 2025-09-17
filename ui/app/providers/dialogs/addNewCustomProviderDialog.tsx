@@ -1,16 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { getErrorMessage, useCreateProviderMutation } from "@/lib/store";
-import { toast } from "sonner";
 import { KnownProvider, ModelProviderName } from "@/lib/types/config";
-import { AlertTriangle } from "lucide-react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
 import { AllowedRequestsFields } from "../fragments/allowedRequestsFields";
 
 const allowedRequestsSchema = z.object({
@@ -58,6 +57,12 @@ export default function AddCustomProviderDialog({ show, onClose, onSave }: Props
 		},
 	});
 
+	useEffect(() => {
+		if (show) {
+			form.clearErrors();
+		}
+	}, [show]);
+
 	const onSubmit = (data: FormData) => {
 		addProvider({
 			provider: data.name as ModelProviderName,
@@ -88,13 +93,6 @@ export default function AddCustomProviderDialog({ show, onClose, onSave }: Props
 				</DialogHeader>
 				<Form {...form}>
 					<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-						{form.formState.isDirty && (
-							<Alert>
-								<AlertTriangle className="h-4 w-4" />
-								<AlertDescription>Creating a custom provider requires a Bifrost service restart to take effect.</AlertDescription>
-							</Alert>
-						)}
-
 						<FormField
 							control={form.control}
 							name="name"
@@ -110,7 +108,6 @@ export default function AddCustomProviderDialog({ show, onClose, onSave }: Props
 								</FormItem>
 							)}
 						/>
-
 						<FormField
 							control={form.control}
 							name="baseFormat"
@@ -137,10 +134,8 @@ export default function AddCustomProviderDialog({ show, onClose, onSave }: Props
 								</FormItem>
 							)}
 						/>
-
 						{/* Allowed Requests Configuration */}
 						<AllowedRequestsFields control={form.control} />
-
 						<DialogFooter className="flex flex-row gap-2">
 							<Button type="button" variant="outline" onClick={onClose}>
 								Cancel
