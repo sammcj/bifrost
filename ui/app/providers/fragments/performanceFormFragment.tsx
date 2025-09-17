@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { getErrorMessage, setProviderFormDirtyState, useAppDispatch } from "@/lib/store";
 import { useUpdateProviderMutation } from "@/lib/store/apis/providersApi";
 import { ModelProvider } from "@/lib/types/config";
+import { DefaultPerformanceConfig } from "@/lib/constants/config";
 import { performanceFormSchema, type PerformanceFormSchema } from "@/lib/types/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
@@ -27,8 +28,8 @@ export function PerformanceFormFragment({ provider, showRestartAlert = false }: 
 		reValidateMode: "onChange",
 		defaultValues: {
 			concurrency_and_buffer_size: {
-				concurrency: provider.concurrency_and_buffer_size?.concurrency ?? 10000,
-				buffer_size: provider.concurrency_and_buffer_size?.buffer_size ?? 10000,
+				concurrency: provider.concurrency_and_buffer_size?.concurrency ?? DefaultPerformanceConfig.concurrency,
+				buffer_size: provider.concurrency_and_buffer_size?.buffer_size ?? DefaultPerformanceConfig.buffer_size,
 			},
 			send_back_raw_response: provider.send_back_raw_response ?? false,
 		},
@@ -48,8 +49,8 @@ export function PerformanceFormFragment({ provider, showRestartAlert = false }: 
 		// Reset form with new provider's concurrency_and_buffer_size when provider changes
 		form.reset({
 			concurrency_and_buffer_size: {
-				concurrency: provider.concurrency_and_buffer_size?.concurrency ?? 10000,
-				buffer_size: provider.concurrency_and_buffer_size?.buffer_size ?? 10000,
+				concurrency: provider.concurrency_and_buffer_size?.concurrency ?? DefaultPerformanceConfig.concurrency,
+				buffer_size: provider.concurrency_and_buffer_size?.buffer_size ?? DefaultPerformanceConfig.buffer_size,
 			},
 			send_back_raw_response: provider.send_back_raw_response ?? false,
 		});

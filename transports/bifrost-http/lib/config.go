@@ -138,7 +138,7 @@ type Config struct {
 var DefaultClientConfig = configstore.ClientConfig{
 	DropExcessRequests:      false,
 	PrometheusLabels:        []string{},
-	InitialPoolSize:         300,
+	InitialPoolSize:         schemas.DefaultInitialPoolSize,
 	EnableLogging:           true,
 	EnableGovernance:        true,
 	EnforceGovernanceHeader: false,
