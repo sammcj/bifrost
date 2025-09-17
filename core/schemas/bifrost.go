@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	DefaultInitialPoolSize = 100
+	DefaultInitialPoolSize = 5000
 )
 
 // BifrostConfig represents the configuration for initializing a Bifrost instance.
