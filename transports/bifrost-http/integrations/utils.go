@@ -313,6 +313,7 @@ func buildProviderSchemas() map[schemas.ModelProvider]ProviderParameterSchema {
 		"timestamp_granularities": true,
 		"encoding_format":         true,
 		"dimensions":              true,
+		"stream_options":          true,
 	}
 
 	anthropicParams := map[string]bool{
@@ -1174,5 +1175,31 @@ func newBifrostError(err error, message string) *schemas.BifrostError {
 			Message: message,
 			Error:   err,
 		},
+	}
+}
+
+// MapFinishReasonToProvider maps OpenAI-compatible finish reasons to provider-specific format
+func MapFinishReasonToProvider(finishReason string, targetProvider schemas.ModelProvider) string {
+	switch targetProvider {
+	case schemas.Anthropic:
+		return mapFinishReasonToAnthropic(finishReason)
+	default:
+		// For OpenAI, Azure, and other providers, pass through as-is
+		return finishReason
+	}
+}
+
+// mapFinishReasonToAnthropic maps OpenAI finish reasons to Anthropic format
+func mapFinishReasonToAnthropic(finishReason string) string {
+	switch finishReason {
+	case "stop":
+		return "end_turn"
+	case "length":
+		return "max_tokens"
+	case "tool_calls":
+		return "tool_use"
+	default:
+		// Pass through other reasons like "pause_turn", "refusal", "stop_sequence", etc.
+		return finishReason
 	}
 }
