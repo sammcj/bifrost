@@ -353,6 +353,9 @@ func (provider *OpenAIProvider) ChatCompletionStream(ctx context.Context, postHo
 		"model":    model,
 		"messages": formattedMessages,
 		"stream":   true,
+		"stream_options": map[string]interface{}{
+			"include_usage": true,
+		},
 	}, preparedParams)
 
 	// Prepare OpenAI headers

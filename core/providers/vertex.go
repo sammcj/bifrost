@@ -574,6 +574,7 @@ func (provider *VertexProvider) convertVertexEmbeddingResponse(vertexResponse ma
 							usage = &schemas.LLMUsage{}
 						}
 						usage.TotalTokens += int(count)
+						usage.PromptTokens += int(count)
 					}
 				}
 			}
