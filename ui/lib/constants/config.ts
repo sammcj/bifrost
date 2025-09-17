@@ -10,7 +10,7 @@ export const DefaultNetworkConfig = {
 
 export const DefaultPerformanceConfig = {
 	concurrency: 1000,
-	buffer_size: 10000,
+	buffer_size: 5000,
 } satisfies ConcurrencyAndBufferSize;
 
 export const MCP_STATUS_COLORS = {

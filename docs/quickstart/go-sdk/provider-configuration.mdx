@@ -172,7 +172,7 @@ func (a *MyAccount) GetConfigForProvider(provider schemas.ModelProvider) (*schem
 
 ### Custom Concurrency and Buffer Size
 
-Fine-tune performance by adjusting worker concurrency and queue sizes per provider. This example gives OpenAI higher limits (100 workers, 500 queue) for high throughput, while Anthropic gets conservative limits to respect their rate limits.
+Fine-tune performance by adjusting worker concurrency and queue sizes per provider (defaults are 1000 workers and 5000 queue size). This example gives OpenAI higher limits (100 workers, 500 queue) for high throughput, while Anthropic gets conservative limits to respect their rate limits.
 
 ```go
 func (a *MyAccount) GetConfigForProvider(provider schemas.ModelProvider) (*schemas.ProviderConfig, error) {

@@ -17,7 +17,7 @@ import { toast } from "sonner";
 
 const defaultConfig: CoreConfig = {
 	drop_excess_requests: false,
-	initial_pool_size: 300,
+	initial_pool_size: 1000,
 	prometheus_labels: [],
 	enable_logging: true,
 	enable_governance: true,
@@ -65,7 +65,7 @@ export default function ConfigPage() {
 	useEffect(() => {
 		if (bifrostConfig && config) {
 			setLocalValues({
-				initial_pool_size: config?.initial_pool_size?.toString() || "300",
+				initial_pool_size: config?.initial_pool_size?.toString() || "1000",
 				prometheus_labels: config?.prometheus_labels?.join(", ") || "",
 				allowed_origins: config?.allowed_origins?.join(", ") || "",
 				max_request_body_size_mb: config?.max_request_body_size_mb?.toString() || "100",
