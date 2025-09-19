@@ -337,7 +337,7 @@ func (provider *VertexProvider) Embedding(ctx context.Context, model string, key
 	}
 
 	// Validate input
-	if input == nil || len(input.Texts) == 0 {
+	if input.Text == nil && len(input.Texts) == 0 {
 		return nil, newConfigurationError("embedding input texts are empty", schemas.Vertex)
 	}
 
@@ -349,13 +349,19 @@ func (provider *VertexProvider) Embedding(ctx context.Context, model string, key
 // This is used for all Vertex AI embedding models as they all use the same response format
 func (provider *VertexProvider) handleVertexEmbedding(ctx context.Context, model string, key schemas.Key, input *schemas.EmbeddingInput, params *schemas.ModelParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Prepare request body for Vertex's native embedding API
-	instances := make([]map[string]interface{}, 0, len(input.Texts))
+	texts := input.Texts
+
+	if len(texts) == 0 && input.Text != nil {
+		texts = []string{*input.Text}
+	}
+
+	instances := make([]map[string]interface{}, 0, len(texts))
 	requestBody := map[string]interface{}{
 		"instances": instances,
 	}
 
 	// Add text instances
-	for _, text := range input.Texts {
+	for _, text := range texts {
 		instance := map[string]interface{}{
 			"content": text,
 		}
@@ -555,7 +561,7 @@ func (provider *VertexProvider) convertVertexEmbeddingResponse(vertexResponse ma
 				embeddingFloat32 = append(embeddingFloat32, float32(f64))
 			}
 		}
-		
+
 		// Create embedding object
 		embedding := schemas.BifrostEmbedding{
 			Object: "embedding",
