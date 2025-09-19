@@ -172,7 +172,7 @@ func (provider *MistralProvider) Embedding(ctx context.Context, model string, ke
 	// Prepare request body with base parameters
 	requestBody := map[string]interface{}{
 		"model": model,
-		"input": input.Texts,
+		"input": input,
 	}
 
 	// Merge any additional parameters
@@ -192,11 +192,7 @@ func (provider *MistralProvider) Embedding(ctx context.Context, model string, ke
 		}
 
 		// Merge any extra parameters
-		if params.ExtraParams != nil {
-			for k, v := range params.ExtraParams {
-				requestBody[k] = v
-			}
-		}
+		requestBody = mergeConfig(requestBody, params.ExtraParams)
 	}
 
 	jsonBody, err := sonic.Marshal(requestBody)

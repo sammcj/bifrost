@@ -237,8 +237,14 @@ func (plugin *Plugin) extractTextForEmbedding(req *schemas.BifrostRequest, reque
 			return "", "", fmt.Errorf("failed to marshal metadata for metadata hash: %w", err)
 		}
 
+		texts := req.Input.EmbeddingInput.Texts
+
+		if len(texts) == 0 && req.Input.EmbeddingInput.Text != nil {
+			texts = []string{*req.Input.EmbeddingInput.Text}
+		}
+
 		var text string
-		for _, t := range req.Input.EmbeddingInput.Texts {
+		for _, t := range texts {
 			text += t + " "
 		}
 
