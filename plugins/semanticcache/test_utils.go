@@ -42,6 +42,41 @@ func getWeaviateConfigFromEnv() vectorstore.WeaviateConfig {
 	}
 }
 
+// getRedisConfigFromEnv retrieves Redis configuration from environment variables
+func getRedisConfigFromEnv() vectorstore.RedisConfig {
+	addr := os.Getenv("REDIS_ADDR")
+	if addr == "" {
+		addr = "localhost:6379"
+	}
+	username := os.Getenv("REDIS_USERNAME")
+	password := os.Getenv("REDIS_PASSWORD")
+	db := os.Getenv("REDIS_DB")
+	if db == "" {
+		db = "0"
+	}
+	dbInt, err := strconv.Atoi(db)
+	if err != nil {
+		dbInt = 0
+	}
+
+	timeoutStr := os.Getenv("REDIS_TIMEOUT")
+	if timeoutStr == "" {
+		timeoutStr = "10s"
+	}
+	timeout, err := time.ParseDuration(timeoutStr)
+	if err != nil {
+		timeout = 10 * time.Second
+	}
+
+	return vectorstore.RedisConfig{
+		Addr:           addr,
+		Username:       username,
+		Password:       password,
+		DB:             dbInt,
+		ContextTimeout: timeout,
+	}
+}
+
 // BaseAccount implements the schemas.Account interface for testing purposes.
 type BaseAccount struct{}
 
@@ -61,7 +96,12 @@ func (baseAccount *BaseAccount) GetKeysForProvider(ctx *context.Context, provide
 
 func (baseAccount *BaseAccount) GetConfigForProvider(providerKey schemas.ModelProvider) (*schemas.ProviderConfig, error) {
 	return &schemas.ProviderConfig{
-		NetworkConfig:            schemas.DefaultNetworkConfig,
+		NetworkConfig: schemas.NetworkConfig{
+			DefaultRequestTimeoutInSeconds: 60,
+			MaxRetries:                     5,
+			RetryBackoffInitial:            100 * time.Millisecond,
+			RetryBackoffMax:                10 * time.Second,
+		},
 		ConcurrencyAndBufferSize: schemas.DefaultConcurrencyAndBufferSize,
 	}, nil
 }
@@ -83,7 +123,7 @@ func NewTestSetup(t *testing.T) *TestSetup {
 
 	return NewTestSetupWithConfig(t, Config{
 		Provider:       schemas.OpenAI,
-		EmbeddingModel: "text-embedding-3-large",
+		EmbeddingModel: "text-embedding-3-small",
 		Threshold:      0.8,
 		Keys: []schemas.Key{
 			{
@@ -126,65 +166,6 @@ func NewTestSetupWithConfig(t *testing.T, config Config) *TestSetup {
 	})
 	if err != nil {
 		t.Fatalf("Error initializing Bifrost: %v", err)
-	}
-
-	return &TestSetup{
-		Logger: logger,
-		Store:  store,
-		Plugin: plugin,
-		Client: client,
-		Config: config,
-	}
-}
-
-// NewRedisClusterTestSetup creates a test setup for Redis Cluster testing
-func NewRedisClusterTestSetup(t *testing.T) *TestSetup {
-	ctx := context.Background()
-
-	if os.Getenv("OPENAI_API_KEY") == "" {
-		t.Skip("OPENAI_API_KEY is not set, skipping Redis Cluster test")
-	}
-
-	config := Config{
-		Provider:       schemas.OpenAI,
-		EmbeddingModel: "text-embedding-3-large",
-		Threshold:      0.8,
-		Keys: []schemas.Key{
-			{
-				Value:  os.Getenv("OPENAI_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
-			},
-		},
-	}
-
-	logger := bifrost.NewDefaultLogger(schemas.LogLevelDebug)
-
-	store, err := vectorstore.NewVectorStore(ctx, &vectorstore.Config{
-		Type:   vectorstore.VectorStoreTypeWeaviate,
-		Config: getWeaviateConfigFromEnv(),
-	}, logger)
-	if err != nil {
-		t.Fatalf("Vector store not available or failed to connect: %v", err)
-	}
-
-	plugin, err := Init(ctx, config, logger, store)
-	if err != nil {
-		t.Fatalf("Failed to initialize plugin with vector store: %v", err)
-	}
-
-	// Clear test keys
-	pluginImpl := plugin.(*Plugin)
-	clearTestKeysWithStore(t, pluginImpl.store)
-
-	account := &BaseAccount{}
-	client, err := bifrost.Init(ctx, schemas.BifrostConfig{
-		Account: account,
-		Plugins: []schemas.Plugin{plugin},
-		Logger:  logger,
-	})
-	if err != nil {
-		t.Fatalf("Error initializing Bifrost with Redis Cluster: %v", err)
 	}
 
 	return &TestSetup{
@@ -350,7 +331,7 @@ func CreateTestSetupWithConversationThreshold(t *testing.T, threshold int) *Test
 
 	config := Config{
 		Provider:                     schemas.OpenAI,
-		EmbeddingModel:               "text-embedding-3-large",
+		EmbeddingModel:               "text-embedding-3-small",
 		Threshold:                    0.8,
 		ConversationHistoryThreshold: threshold,
 		Keys: []schemas.Key{
@@ -373,7 +354,7 @@ func CreateTestSetupWithExcludeSystemPrompt(t *testing.T, excludeSystem bool) *T
 
 	config := Config{
 		Provider:            schemas.OpenAI,
-		EmbeddingModel:      "text-embedding-3-large",
+		EmbeddingModel:      "text-embedding-3-small",
 		Threshold:           0.8,
 		ExcludeSystemPrompt: &excludeSystem,
 		Keys: []schemas.Key{
@@ -396,7 +377,7 @@ func CreateTestSetupWithThresholdAndExcludeSystem(t *testing.T, threshold int, e
 
 	config := Config{
 		Provider:                     schemas.OpenAI,
-		EmbeddingModel:               "text-embedding-3-large",
+		EmbeddingModel:               "text-embedding-3-small",
 		Threshold:                    0.8,
 		ConversationHistoryThreshold: threshold,
 		ExcludeSystemPrompt:          &excludeSystem,

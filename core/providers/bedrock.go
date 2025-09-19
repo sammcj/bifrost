@@ -259,7 +259,9 @@ func (provider *BedrockProvider) GetProviderKey() schemas.ModelProvider {
 // CompleteRequest sends a request to Bedrock's API and handles the response.
 // It constructs the API URL, sets up AWS authentication, and processes the response.
 // Returns the response body or an error if the request fails.
-func (provider *BedrockProvider) completeRequest(ctx context.Context, requestBody map[string]interface{}, path string, config schemas.BedrockKeyConfig) ([]byte, *schemas.BifrostError) {
+func (provider *BedrockProvider) completeRequest(ctx context.Context, requestBody map[string]interface{}, path string, key schemas.Key) ([]byte, *schemas.BifrostError) {
+	config := key.BedrockKeyConfig
+
 	region := "us-east-1"
 	if config.Region != nil {
 		region = *config.Region
@@ -301,9 +303,14 @@ func (provider *BedrockProvider) completeRequest(ctx context.Context, requestBod
 	// Set any extra headers from network config
 	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
 
-	// Sign the request using either explicit credentials or IAM role authentication
-	if err := signAWSRequest(ctx, req, config.AccessKey, config.SecretKey, config.SessionToken, region, "bedrock", provider.GetProviderKey()); err != nil {
-		return nil, err
+	// If Value is set, use API Key authentication - else use IAM role authentication
+	if key.Value != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key.Value))
+	} else {
+		// Sign the request using either explicit credentials or IAM role authentication
+		if err := signAWSRequest(ctx, req, config.AccessKey, config.SecretKey, config.SessionToken, region, "bedrock", provider.GetProviderKey()); err != nil {
+			return nil, err
+		}
 	}
 
 	// Execute the request
@@ -834,7 +841,8 @@ func (provider *BedrockProvider) TextCompletion(ctx context.Context, model strin
 		"prompt": text,
 	}, preparedParams)
 
-	body, err := provider.completeRequest(ctx, requestBody, fmt.Sprintf("%s/invoke", model), *key.BedrockKeyConfig)
+	path := provider.getModelPath("invoke", model, key)
+	body, err := provider.completeRequest(ctx, requestBody, path, key)
 	if err != nil {
 		return nil, err
 	}
@@ -1018,19 +1026,10 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, model strin
 	requestBody := mergeConfig(messageBody, preparedParams)
 
 	// Format the path with proper model identifier
-	path := fmt.Sprintf("%s/converse", model)
-
-	if key.BedrockKeyConfig.Deployments != nil {
-		if inferenceProfileId, ok := key.BedrockKeyConfig.Deployments[model]; ok {
-			if key.BedrockKeyConfig.ARN != nil {
-				encodedModelIdentifier := url.QueryEscape(fmt.Sprintf("%s/%s", *key.BedrockKeyConfig.ARN, inferenceProfileId))
-				path = fmt.Sprintf("%s/converse", encodedModelIdentifier)
-			}
-		}
-	}
+	path := provider.getModelPath("converse", model, key)
 
 	// Create the signed request
-	responseBody, err := provider.completeRequest(ctx, requestBody, path, *key.BedrockKeyConfig)
+	responseBody, err := provider.completeRequest(ctx, requestBody, path, key)
 	if err != nil {
 		return nil, err
 	}
@@ -1223,16 +1222,16 @@ func (provider *BedrockProvider) Embedding(ctx context.Context, model string, ke
 
 	switch {
 	case strings.Contains(model, "amazon.titan-embed-text"):
-		return provider.handleTitanEmbedding(ctx, model, *key.BedrockKeyConfig, input, params, providerName)
+		return provider.handleTitanEmbedding(ctx, model, key, input, params, providerName)
 	case strings.Contains(model, "cohere.embed"):
-		return provider.handleCohereEmbedding(ctx, model, *key.BedrockKeyConfig, input, params, providerName)
+		return provider.handleCohereEmbedding(ctx, model, key, input, params, providerName)
 	default:
 		return nil, newConfigurationError("embedding is not supported for this Bedrock model", providerName)
 	}
 }
 
 // handleTitanEmbedding handles embedding requests for Amazon Titan models.
-func (provider *BedrockProvider) handleTitanEmbedding(ctx context.Context, model string, config schemas.BedrockKeyConfig, input *schemas.EmbeddingInput, params *schemas.ModelParameters, providerName schemas.ModelProvider) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *BedrockProvider) handleTitanEmbedding(ctx context.Context, model string, key schemas.Key, input *schemas.EmbeddingInput, params *schemas.ModelParameters, providerName schemas.ModelProvider) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Titan Text Embeddings V1/V2 - only supports single text input
 	if len(input.Texts) == 0 {
 		return nil, newConfigurationError("no input text provided for embedding", providerName)
@@ -1258,8 +1257,8 @@ func (provider *BedrockProvider) handleTitanEmbedding(ctx context.Context, model
 	}
 
 	// Properly escape model name for URL path to ensure AWS SIGv4 signing works correctly
-	path := url.PathEscape(model) + "/invoke"
-	rawResponse, err := provider.completeRequest(ctx, requestBody, path, config)
+	path := provider.getModelPath("invoke", model, key)
+	rawResponse, err := provider.completeRequest(ctx, requestBody, path, key)
 	if err != nil {
 		return nil, err
 	}
@@ -1306,7 +1305,7 @@ func (provider *BedrockProvider) handleTitanEmbedding(ctx context.Context, model
 }
 
 // handleCohereEmbedding handles embedding requests for Cohere models on Bedrock.
-func (provider *BedrockProvider) handleCohereEmbedding(ctx context.Context, model string, config schemas.BedrockKeyConfig, input *schemas.EmbeddingInput, params *schemas.ModelParameters, providerName schemas.ModelProvider) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *BedrockProvider) handleCohereEmbedding(ctx context.Context, model string, key schemas.Key, input *schemas.EmbeddingInput, params *schemas.ModelParameters, providerName schemas.ModelProvider) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	if len(input.Texts) == 0 {
 		return nil, newConfigurationError("no input text provided for embedding", providerName)
 	}
@@ -1320,8 +1319,8 @@ func (provider *BedrockProvider) handleCohereEmbedding(ctx context.Context, mode
 	}
 
 	// Properly escape model name for URL path to ensure AWS SIGv4 signing works correctly
-	path := url.PathEscape(model) + "/invoke"
-	rawResponse, err := provider.completeRequest(ctx, requestBody, path, config)
+	path := provider.getModelPath("invoke", model, key)
+	rawResponse, err := provider.completeRequest(ctx, requestBody, path, key)
 	if err != nil {
 		return nil, err
 	}
@@ -1433,16 +1432,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 	requestBody := mergeConfig(messageBody, preparedParams)
 
 	// Format the path with proper model identifier for streaming
-	path := fmt.Sprintf("%s/converse-stream", model)
-
-	if key.BedrockKeyConfig.Deployments != nil {
-		if inferenceProfileId, ok := key.BedrockKeyConfig.Deployments[model]; ok {
-			if key.BedrockKeyConfig.ARN != nil {
-				encodedModelIdentifier := url.PathEscape(fmt.Sprintf("%s/%s", *key.BedrockKeyConfig.ARN, inferenceProfileId))
-				path = fmt.Sprintf("%s/converse-stream", encodedModelIdentifier)
-			}
-		}
-	}
+	path := provider.getModelPath("converse-stream", model, key)
 
 	region := "us-east-1"
 	if key.BedrockKeyConfig.Region != nil {
@@ -1464,9 +1454,14 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 	// Set any extra headers from network config
 	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
 
-	// Sign the request using either explicit credentials or IAM role authentication
-	if signErr := signAWSRequest(ctx, req, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock", providerName); signErr != nil {
-		return nil, signErr
+	// If Value is set, use API Key authentication - else use IAM role authentication
+	if key.Value != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key.Value))
+	} else {
+		// Sign the request using either explicit credentials or IAM role authentication
+		if err := signAWSRequest(ctx, req, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock", providerName); err != nil {
+			return nil, err
+		}
 	}
 
 	// Make the request
@@ -1531,7 +1526,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 		}
 
 		// Send final response
-		response := createBifrostChatCompletionChunkResponse(usage, finishReason, chunkIndex, params, providerName)
+		response := createBifrostChatCompletionChunkResponse(messageID, usage, finishReason, chunkIndex, params, providerName)
 		handleStreamEndWithSuccess(ctx, response, postHookRunner, responseChan, provider.logger)
 	}()
 
@@ -1826,4 +1821,20 @@ func (provider *BedrockProvider) Transcription(ctx context.Context, model string
 
 func (provider *BedrockProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, model string, key schemas.Key, input *schemas.TranscriptionInput, params *schemas.ModelParameters) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "bedrock")
+}
+
+func (provider *BedrockProvider) getModelPath(basePath string, model string, key schemas.Key) string {
+	// Format the path with proper model identifier for streaming
+	path := fmt.Sprintf("%s/%s", model, basePath)
+
+	if key.BedrockKeyConfig.Deployments != nil {
+		if inferenceProfileId, ok := key.BedrockKeyConfig.Deployments[model]; ok {
+			if key.BedrockKeyConfig.ARN != nil {
+				encodedModelIdentifier := url.PathEscape(fmt.Sprintf("%s/%s", *key.BedrockKeyConfig.ARN, inferenceProfileId))
+				path = fmt.Sprintf("%s/%s", encodedModelIdentifier, basePath)
+			}
+		}
+	}
+
+	return path
 }

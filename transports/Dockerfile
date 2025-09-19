@@ -1,5 +1,5 @@
 # --- UI Build Stage: Build the Next.js frontend ---
-FROM node:24-alpine AS ui-builder
+FROM node:24-alpine3.22 AS ui-builder
 WORKDIR /app
 
 # Copy UI package files and install dependencies
@@ -15,7 +15,7 @@ RUN node scripts/fix-paths.js
 # Skip the copy-build step since we'll copy the files in the Go build stage
 
 # --- Go Build Stage: Compile the Go binary ---
-FROM golang:1.24-alpine AS builder
+FROM golang:1.24-alpine3.22 AS builder
 WORKDIR /app
 
 # Install dependencies including gcc for CGO and sqlite
@@ -36,12 +36,13 @@ COPY --from=ui-builder /app/out ./bifrost-http/ui
 
 # Build the binary with CGO enabled and static SQLite linking
 ENV GOWORK=off
+ARG VERSION=unknown
 RUN go build \
-        -ldflags="-w -s -extldflags '-static'" \
-        -a -trimpath \
-        -tags "sqlite_static" \
-        -o /app/main \
-        ./bifrost-http
+    -ldflags="-w -s -extldflags '-static' -X main.Version=v${VERSION}" \
+    -a -trimpath \
+    -tags "sqlite_static" \
+    -o /app/main \
+    ./bifrost-http
 
 # Compress binary with upx
 RUN upx --best --lzma /app/main
@@ -50,7 +51,7 @@ RUN upx --best --lzma /app/main
 RUN test -f /app/main || (echo "Build failed" && exit 1)
 
 # --- Runtime Stage: Minimal runtime image ---
-FROM alpine:3.19
+FROM alpine:3.22
 WORKDIR /app
 
 # Create data directory and set up user

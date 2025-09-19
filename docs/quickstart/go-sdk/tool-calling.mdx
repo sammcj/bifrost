@@ -73,7 +73,7 @@ if toolCalls != nil {
 Connect to Model Context Protocol (MCP) servers to give AI models access to external tools and services without manually defining each function.
 
 ```go
-client, initErr := bifrost.Init(schemas.BifrostConfig{
+client, initErr := bifrost.Init(context.Background(), schemas.BifrostConfig{
 	Account: &MyAccount{},
 	MCPConfig: &schemas.MCPConfig{
 		ClientConfigs: []schemas.MCPClientConfig{

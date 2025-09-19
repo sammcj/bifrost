@@ -2,7 +2,6 @@ package bifrost
 
 import (
 	"context"
-	"encoding/json"
 	"math/rand"
 	"time"
 
@@ -12,30 +11,6 @@ import (
 // Ptr returns a pointer to the given value.
 func Ptr[T any](v T) *T {
 	return &v
-}
-
-// MarshalToString marshals the given value to a JSON string.
-func MarshalToString(v any) (string, error) {
-	if v == nil {
-		return "", nil
-	}
-	data, err := json.Marshal(v)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-// MarshalToStringPtr marshals the given value to a JSON string and returns a pointer to the string.
-func MarshalToStringPtr(v any) (*string, error) {
-	if v == nil {
-		return nil, nil
-	}
-	data, err := MarshalToString(v)
-	if err != nil {
-		return nil, err
-	}
-	return &data, nil
 }
 
 func attachContextKeys(ctx context.Context, req *schemas.BifrostRequest, requestType schemas.RequestType) context.Context {

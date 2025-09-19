@@ -5,8 +5,8 @@ go 1.24.1
 toolchain go1.24.3
 
 require (
-	github.com/maximhq/bifrost/core v1.1.33
-	github.com/maximhq/maxim-go v0.1.8
+	github.com/maximhq/bifrost/core v1.1.35
+	github.com/maximhq/maxim-go v0.1.10
 )
 
 require github.com/google/uuid v1.6.0

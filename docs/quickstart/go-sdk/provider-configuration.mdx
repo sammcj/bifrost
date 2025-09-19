@@ -172,7 +172,7 @@ func (a *MyAccount) GetConfigForProvider(provider schemas.ModelProvider) (*schem
 
 ### Custom Concurrency and Buffer Size
 
-Fine-tune performance by adjusting worker concurrency and queue sizes per provider. This example gives OpenAI higher limits (100 workers, 500 queue) for high throughput, while Anthropic gets conservative limits to respect their rate limits.
+Fine-tune performance by adjusting worker concurrency and queue sizes per provider (defaults are 1000 workers and 5000 queue size). This example gives OpenAI higher limits (100 workers, 500 queue) for high throughput, while Anthropic gets conservative limits to respect their rate limits.
 
 ```go
 func (a *MyAccount) GetConfigForProvider(provider schemas.ModelProvider) (*schemas.ProviderConfig, error) {
@@ -307,9 +307,10 @@ func (a *MyAccount) GetKeysForProvider(ctx *context.Context, provider schemas.Mo
             {
                 Models: []string{"anthropic.claude-3-sonnet-20240229-v1:0", "anthropic.claude-v2:1"},
                 Weight: 1.0,
+                Value:  os.Getenv("AWS_API_KEY"), // Leave empty for IAM role authentication
                 BedrockKeyConfig: &schemas.BedrockKeyConfig{
-                    AccessKey:    os.Getenv("AWS_ACCESS_KEY_ID"),     // Leave empty for IAM role
-                    SecretKey:    os.Getenv("AWS_SECRET_ACCESS_KEY"), // Leave empty for IAM role
+                    AccessKey:    os.Getenv("AWS_ACCESS_KEY_ID"),     // Leave empty for API Key authentication or system's IAM pickup
+                    SecretKey:    os.Getenv("AWS_SECRET_ACCESS_KEY"), // Leave empty for API Key authentication or system's IAM pickup
                     SessionToken: bifrost.Ptr(os.Getenv("AWS_SESSION_TOKEN")), // Optional
                     Region:       bifrost.Ptr("us-east-1"),
                     // For model profiles (inference profiles)
@@ -327,9 +328,10 @@ func (a *MyAccount) GetKeysForProvider(ctx *context.Context, provider schemas.Mo
 ```
 
 **Notes:**
-- If both `AccessKey` and `SecretKey` are empty, Bifrost uses IAM role authentication from environment
-- `ARN` is required for URL formation - `Deployments` mapping is ignored without it
-- When using `ARN` + `Deployments`, Bifrost uses model profiles; otherwise forms path with incoming model name directly
+- If using API Key authentication, set `Value` field to the API key, else leave it empty for IAM role authentication.
+- In IAM role authentication, if both `AccessKey` and `SecretKey` are empty, Bifrost uses IAM from the environment.
+- `ARN` is required for URL formation - `Deployments` mapping is ignored without it.
+- When using `ARN` + `Deployments`, Bifrost uses model profiles; otherwise forms path with incoming model name directly.
 
 </Tab>
 

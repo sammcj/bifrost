@@ -138,7 +138,7 @@ type Config struct {
 var DefaultClientConfig = configstore.ClientConfig{
 	DropExcessRequests:      false,
 	PrometheusLabels:        []string{},
-	InitialPoolSize:         300,
+	InitialPoolSize:         schemas.DefaultInitialPoolSize,
 	EnableLogging:           true,
 	EnableGovernance:        true,
 	EnforceGovernanceHeader: false,
@@ -816,7 +816,7 @@ func (s *Config) GetProviderConfigRaw(provider schemas.ModelProvider) (*configst
 
 	config, exists := s.Providers[provider]
 	if !exists {
-		return nil, fmt.Errorf("provider %s not found", provider)
+		return nil, ErrNotFound
 	}
 
 	// Return direct reference for maximum performance - this is used by Bifrost core
@@ -848,7 +848,7 @@ func (s *Config) GetProviderConfigRedacted(provider schemas.ModelProvider) (*con
 
 	config, exists := s.Providers[provider]
 	if !exists {
-		return nil, fmt.Errorf("provider %s not found", provider)
+		return nil, ErrNotFound
 	}
 
 	// Create a map for quick lookup of env vars for this provider

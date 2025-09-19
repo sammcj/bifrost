@@ -89,6 +89,8 @@ import (
 //go:embed all:ui
 var uiContent embed.FS
 
+var Version string
+
 var logger = bifrost.NewDefaultLogger(schemas.LogLevelInfo)
 
 // Command line flags
@@ -118,8 +120,12 @@ const (
 //   - log-style: Logger output type (json or pretty). Default is JSON.
 
 func init() {
+	if Version == "" {
+		Version = "v1.0.0"
+	}
+	versionLine := fmt.Sprintf("║%s%s%s║", strings.Repeat(" ", (61-2-len(Version))/2), Version, strings.Repeat(" ", (61-2-len(Version)+1)/2))
 	// Welcome to bifrost!
-	fmt.Println(`
+	fmt.Printf(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
 ║   ██████╗ ██╗███████╗██████╗  ██████╗ ███████╗████████╗   ║
@@ -130,11 +136,15 @@ func init() {
 ║   ╚═════╝ ╚═╝╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝      ║
 ║                                                           ║
 ║═══════════════════════════════════════════════════════════║
-║                The Fastest LLM Gateway                    ║
+%s
 ║═══════════════════════════════════════════════════════════║
-║            https://github.com/maximhq/bifrost             ║
-╚═══════════════════════════════════════════════════════════╝`)
+║                 The Fastest LLM Gateway                   ║
+║═══════════════════════════════════════════════════════════║
+║             https://github.com/maximhq/bifrost            ║
+╚═══════════════════════════════════════════════════════════╝
 
+`, versionLine)
+	handlers.SetVersion(Version)
 	// Set default host from environment variable or use localhost
 	defaultHost := os.Getenv("BIFROST_HOST")
 	if defaultHost == "" {
@@ -401,31 +411,30 @@ func main() {
 	// Eventually same flow will be used for third party plugins
 	for _, plugin := range config.Plugins {
 		if !plugin.Enabled {
+ 			logger.Debug("plugin %s is disabled, skipping initialization", plugin.Name)
 			continue
 		}
 		switch strings.ToLower(plugin.Name) {
 		case maxim.PluginName:
-			if os.Getenv("MAXIM_LOG_REPO_ID") == "" {
-				logger.Warn("maxim log repo id is required to initialize maxim plugin")
-				continue
-			}
-			if os.Getenv("MAXIM_API_KEY") == "" {
-				logger.Warn("maxim api key is required in environment variable MAXIM_API_KEY to initialize maxim plugin")
-				continue
+
+			var maximConfig maxim.Config
+			if plugin.Config != nil {
+				configBytes, err := json.Marshal(plugin.Config)
+				if err != nil {
+					logger.Fatal("failed to marshal maxim config: %v", err)
+				}
+				if err := json.Unmarshal(configBytes, &maximConfig); err != nil {
+					logger.Fatal("failed to unmarshal maxim config: %v", err)
+				}
 			}
 
-			maximPlugin, err := maxim.NewMaximLoggerPlugin(os.Getenv("MAXIM_API_KEY"), os.Getenv("MAXIM_LOG_REPO_ID"))
+			maximPlugin, err := maxim.Init(maximConfig)
 			if err != nil {
 				logger.Warn("failed to initialize maxim plugin: %v", err)
 			} else {
 				loadedPlugins = append(loadedPlugins, maximPlugin)
 			}
 		case semanticcache.PluginName:
-			if !plugin.Enabled {
-				logger.Debug("semantic cache plugin is disabled, skipping initialization")
-				continue
-			}
-
 			if config.VectorStore == nil {
 				logger.Error("vector store is required to initialize semantic cache plugin, skipping initialization")
 				continue
@@ -485,7 +494,6 @@ func main() {
 	// Set up WebSocket callback for real-time log updates
 	if wsHandler != nil && loggingPlugin != nil {
 		loggingPlugin.SetLogCallback(wsHandler.BroadcastLogUpdate)
-
 		// Start WebSocket heartbeat
 		wsHandler.StartHeartbeat()
 	}

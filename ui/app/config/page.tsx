@@ -1,7 +1,7 @@
 "use client";
 
-import PluginsForm from "@/app/config/views/plugins-form";
-import FullPageLoader from "@/components/full-page-loader";
+import PluginsForm from "@/app/config/views/pluginsForm";
+import FullPageLoader from "@/components/fullPageLoader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,15 +15,14 @@ import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-const defaultConfig = {
+const defaultConfig: CoreConfig = {
 	drop_excess_requests: false,
-	initial_pool_size: 300,
+	initial_pool_size: 1000,
 	prometheus_labels: [],
 	enable_logging: true,
 	enable_governance: true,
 	enforce_governance_header: false,
 	allow_direct_keys: false,
-	plugins: [],
 	allowed_origins: [],
 	max_request_body_size_mb: 100,
 };
@@ -66,7 +65,7 @@ export default function ConfigPage() {
 	useEffect(() => {
 		if (bifrostConfig && config) {
 			setLocalValues({
-				initial_pool_size: config?.initial_pool_size?.toString() || "300",
+				initial_pool_size: config?.initial_pool_size?.toString() || "1000",
 				prometheus_labels: config?.prometheus_labels?.join(", ") || "",
 				allowed_origins: config?.allowed_origins?.join(", ") || "",
 				max_request_body_size_mb: config?.max_request_body_size_mb?.toString() || "100",
