@@ -3,21 +3,22 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { getErrorMessage, useGetPluginsQuery, useUpdatePluginMutation, useCreatePluginMutation, useGetProvidersQuery } from "@/lib/store";
-import { CacheConfig, ModelProvider } from "@/lib/types/config";
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { getProviderLabel } from "@/lib/constants/logs";
-import { Loader2 } from "lucide-react";
+import { getErrorMessage, useCreatePluginMutation, useGetPluginsQuery, useGetProvidersQuery, useUpdatePluginMutation } from "@/lib/store";
+import { CacheConfig, ModelProviderName } from "@/lib/types/config";
 import { SEMANTIC_CACHE_PLUGIN } from "@/lib/types/plugins";
+import { Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 const defaultCacheConfig: CacheConfig = {
-	provider: "openai" as ModelProvider,
+	provider: "openai" as ModelProviderName,
 	keys: [],
 	embedding_model: "text-embedding-3-small",
+	dimension: 0,
 	ttl_seconds: 300,
 	threshold: 0.8,
 	conversation_history_threshold: 3,
@@ -35,7 +36,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 
 	const { data: providersData, error: providersError, isLoading: providersLoading } = useGetProvidersQuery();
 
-	const providers = useMemo(() => providersData?.providers || [], [providersData]);
+	const providers = useMemo(() => providersData || [], [providersData]);
 
 	useEffect(() => {
 		if (providersError) {
@@ -65,7 +66,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 		if (providers.length > 0 && !semanticCachePlugin?.config) {
 			setCacheConfig((prev) => ({
 				...prev,
-				provider: providers[0].name as ModelProvider,
+				provider: providers[0].name as ModelProviderName,
 			}));
 		}
 	}, [providers, semanticCachePlugin?.config]);
@@ -120,8 +121,8 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 		}
 	};
 
-	// Ref to store the timeout ID for debouncing
-	const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	// Refs to store the timeout IDs for debouncing (separate for cache)
+	const cacheDebounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Debounced version for text/number inputs
 	const debouncedUpdateCacheConfig = useCallback(
@@ -131,13 +132,13 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 			setCacheConfig(newConfig);
 
 			// Clear previous timeout
-			if (debounceTimeoutRef.current) {
-				clearTimeout(debounceTimeoutRef.current);
+			if (cacheDebounceTimeoutRef.current) {
+				clearTimeout(cacheDebounceTimeoutRef.current);
 			}
 
 			// Only save to backend if plugin is enabled, with debouncing
 			if (semanticCachePlugin?.enabled) {
-				debounceTimeoutRef.current = setTimeout(() => {
+				cacheDebounceTimeoutRef.current = setTimeout(() => {
 					updatePlugin({
 						name: SEMANTIC_CACHE_PLUGIN,
 						data: { enabled: true, config: newConfig },
@@ -157,11 +158,11 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 		[cacheConfig, semanticCachePlugin?.enabled, updatePlugin],
 	);
 
-	// Cleanup timeout on component unmount
+	// Cleanup timeouts on component unmount
 	useEffect(() => {
 		return () => {
-			if (debounceTimeoutRef.current) {
-				clearTimeout(debounceTimeoutRef.current);
+			if (cacheDebounceTimeoutRef.current) {
+				clearTimeout(cacheDebounceTimeoutRef.current);
 			}
 		};
 	}, []);
@@ -224,7 +225,10 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 								<div className="grid grid-cols-2 gap-4">
 									<div className="space-y-2">
 										<Label htmlFor="provider">Configured Providers</Label>
-										<Select value={cacheConfig.provider} onValueChange={(value: ModelProvider) => updateCacheConfig({ provider: value })}>
+										<Select
+											value={cacheConfig.provider}
+											onValueChange={(value: ModelProviderName) => updateCacheConfig({ provider: value })}
+										>
 											<SelectTrigger className="w-full">
 												<SelectValue placeholder="Select provider" />
 											</SelectTrigger>
@@ -273,6 +277,16 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 											step="0.01"
 											value={cacheConfig.threshold}
 											onChange={(e) => debouncedUpdateCacheConfig({ threshold: parseFloat(e.target.value) || 0.8 })}
+										/>
+									</div>
+									<div className="space-y-2">
+										<Label htmlFor="dimension">Dimension</Label>
+										<Input
+											id="dimension"
+											type="number"
+											min="0"
+											value={cacheConfig.dimension}
+											onChange={(e) => debouncedUpdateCacheConfig({ dimension: parseInt(e.target.value) || 0 })}
 										/>
 									</div>
 								</div>

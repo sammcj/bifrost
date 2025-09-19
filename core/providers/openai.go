@@ -353,6 +353,9 @@ func (provider *OpenAIProvider) ChatCompletionStream(ctx context.Context, postHo
 		"model":    model,
 		"messages": formattedMessages,
 		"stream":   true,
+		"stream_options": map[string]interface{}{
+			"include_usage": true,
+		},
 	}, preparedParams)
 
 	// Prepare OpenAI headers
@@ -438,6 +441,7 @@ func handleOpenAIStreaming(
 		usage := &schemas.LLMUsage{}
 
 		var finishReason *string
+		var id string
 
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -513,6 +517,10 @@ func handleOpenAIStreaming(
 				response.Choices[0].FinishReason = nil
 			}
 
+			if response.ID != "" && id == "" {
+				id = response.ID
+			}
+
 			// Handle regular content chunks
 			if choice.BifrostStreamResponseChoice != nil && (choice.BifrostStreamResponseChoice.Delta.Content != nil || len(choice.BifrostStreamResponseChoice.Delta.ToolCalls) > 0) {
 				chunkIndex++
@@ -529,7 +537,7 @@ func handleOpenAIStreaming(
 			logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
 			processAndSendError(ctx, postHookRunner, err, responseChan, logger)
 		} else {
-			response := createBifrostChatCompletionChunkResponse(usage, finishReason, chunkIndex, params, providerName)
+			response := createBifrostChatCompletionChunkResponse(id, usage, finishReason, chunkIndex, params, providerName)
 			handleStreamEndWithSuccess(ctx, response, postHookRunner, responseChan, logger)
 		}
 	}()

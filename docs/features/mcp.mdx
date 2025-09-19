@@ -103,7 +103,7 @@ func main() {
         },
     }
 
-    client, err := bifrost.Init(schemas.BifrostConfig{
+    client, err := bifrost.Init(context.Background(), schemas.BifrostConfig{
         Account:   account,
         MCPConfig: mcpConfig,
         Logger:    bifrost.NewDefaultLogger(schemas.LogLevelInfo),
@@ -282,7 +282,7 @@ import (
 
 func main() {
     // Initialize Bifrost with MCP
-    client, err := bifrost.Init(schemas.BifrostConfig{
+    client, err := bifrost.Init(context.Background(), schemas.BifrostConfig{
         Account: account,
         MCPConfig: &schemas.MCPConfig{
             ClientConfigs: []schemas.MCPClientConfig{
@@ -539,7 +539,7 @@ func calculatorHandler(args CalculatorArgs) (string, error) {
 
 func main() {
     // Initialize Bifrost (tool registry creates in-process MCP automatically)
-    client, err := bifrost.Init(schemas.BifrostConfig{
+    client, err := bifrost.Init(context.Background(), schemas.BifrostConfig{
         Account: account,
         Logger:  bifrost.NewDefaultLogger(schemas.LogLevelInfo),
     })

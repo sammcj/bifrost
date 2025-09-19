@@ -400,7 +400,7 @@ curl --location 'http://localhost:8080/api/providers' \
 
 ### Custom Concurrency and Buffer Size
 
-Fine-tune performance by adjusting worker concurrency and queue sizes per provider. This example gives OpenAI higher limits (100 workers, 500 queue) for high throughput, while Anthropic gets conservative limits to respect their rate limits.
+Fine-tune performance by adjusting worker concurrency and queue sizes per provider (defaults are 1000 workers and 5000 queue size). This example gives OpenAI higher limits (100 workers, 500 queue) for high throughput, while Anthropic gets conservative limits to respect their rate limits.
 
 <Tabs group="concurrency-config">
 
@@ -764,12 +764,13 @@ AWS Bedrock supports both explicit credentials and IAM role authentication:
 ![AWS Bedrock Configuration Interface](../../media/ui-bedrock-config.png)
 
 1. Navigate to **"Providers"** → **"AWS Bedrock"**
-2. Set **Access Key**: AWS Access Key ID (or leave empty for IAM)
-3. Set **Secret Key**: AWS Secret Access Key (or leave empty for IAM)
-4. Set **Region**: e.g., `us-east-1`
-5. Configure **Deployments**: Map model names to inference profiles
-6. Set **ARN**: Required for deployments mapping
-7. Save configuration
+2. Set **API Key**: AWS API Key (or leave empty if using IAM role authentication)
+3. Set **Access Key**: AWS Access Key ID (or leave empty to use IAM in environment)
+4. Set **Secret Key**: AWS Secret Access Key (or leave empty to use IAM in environment)
+5. Set **Region**: e.g., `us-east-1`
+6. Configure **Deployments**: Map model names to inference profiles
+7. Set **ARN**: Required for deployments mapping
+8. Save configuration
 
 </Tab>
 
@@ -833,9 +834,10 @@ curl --location 'http://localhost:8080/api/providers' \
 </Tabs>
 
 **Notes:**
-- If both `access_key` and `secret_key` are empty, Bifrost uses IAM role authentication from environment
-- `arn` is required for URL formation - `deployments` mapping is ignored without it
-- When using `arn` + `deployments`, Bifrost uses model profiles; otherwise forms path with incoming model name directly
+- If using API Key authentication, set `value` field to the API key, else leave it empty for IAM role authentication.
+- In IAM role authentication, if both `access_key` and `secret_key` are empty, Bifrost uses IAM role authentication from the environment.
+- `arn` is required for URL formation - `deployments` mapping is ignored without it.
+- When using `arn` + `deployments`, Bifrost uses model profiles; otherwise forms path with incoming model name directly.
 
 ### Google Vertex
 

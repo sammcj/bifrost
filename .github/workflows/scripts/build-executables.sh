@@ -2,9 +2,16 @@
 set -euo pipefail
 
 # Cross-compile Go binaries for multiple platforms
-# Usage: ./build-executables.sh
+# Usage: ./build-executables.sh <version>
 
-echo "🔨 Building Go executables..."
+# Require version argument (matches usage)
+if [[ -z "${1:-}" ]]; then
+  echo "Usage: $0 <version>" >&2
+  exit 1
+fi
+VERSION="$1"
+
+echo "🔨 Building Go executables with version: $VERSION"
 
 # Get the script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,6 +20,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 # Clean and create dist directory
 rm -rf "$PROJECT_ROOT/dist"
 mkdir -p "$PROJECT_ROOT/dist"
+
 
 # Define platforms
 platforms=(
@@ -55,8 +63,8 @@ for platform in "${platforms[@]}"; do
     fi
 
     env GOWORK=off CGO_ENABLED=1 GOOS="$GOOS" GOARCH="$GOARCH" CC="$CC_COMPILER" CXX="$CXX_COMPILER" \
-      go build -trimpath -tags "netgo,osusergo" \
-      -ldflags "-s -w -buildid=" \
+      go build -trimpath -tags "netgo,osusergo,sqlite_static" \
+      -ldflags "-s -w -buildid= -extldflags '-static' -X main.Version=v${VERSION}" \
       -o "$PROJECT_ROOT/dist/$PLATFORM_DIR/$GOARCH/$output_name" .
 
   elif [[ "$GOOS" = "windows" ]]; then
@@ -66,7 +74,7 @@ for platform in "${platforms[@]}"; do
     fi
 
     env GOWORK=off CGO_ENABLED=1 GOOS="$GOOS" GOARCH="$GOARCH" CC="$CC_COMPILER" CXX="$CXX_COMPILER" \
-      go build -trimpath -ldflags "-s -w -buildid=" \
+      go build -trimpath -ldflags "-s -w -buildid= -X main.Version=v${VERSION}" \
       -o "$PROJECT_ROOT/dist/$PLATFORM_DIR/$GOARCH/$output_name" .
 
    else # Darwin (macOS)
@@ -79,7 +87,7 @@ for platform in "${platforms[@]}"; do
     fi
 
     env GOWORK=off CGO_ENABLED=1 GOOS="$GOOS" GOARCH="$GOARCH" CC="$CC_COMPILER" CXX="$CXX_COMPILER" \
-      go build -trimpath -ldflags "-s -w -buildid=" \
+      go build -trimpath -ldflags "-s -w -buildid= -X main.Version=v${VERSION}" \
       -o "$PROJECT_ROOT/dist/$PLATFORM_DIR/$GOARCH/$output_name" .
   fi
 

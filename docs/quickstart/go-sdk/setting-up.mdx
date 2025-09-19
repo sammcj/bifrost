@@ -72,7 +72,7 @@ func (a *MyAccount) GetConfigForProvider(provider schemas.ModelProvider) (*schem
 
 // Main function implement to initialize bifrost and make a request
 func main() {
-	client, initErr := bifrost.Init(schemas.BifrostConfig{
+	client, initErr := bifrost.Init(context.Background(), schemas.BifrostConfig{
 		Account: &MyAccount{},
 	})
 	if initErr != nil {

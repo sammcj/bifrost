@@ -12,9 +12,9 @@ const (
 	DefaultRetryBackoffInitial     = 500 * time.Millisecond
 	DefaultRetryBackoffMax         = 5 * time.Second
 	DefaultRequestTimeoutInSeconds = 30
-	DefaultBufferSize              = 100
-	DefaultConcurrency             = 10
-	DefaultStreamBufferSize        = 100
+	DefaultBufferSize              = 5000
+	DefaultConcurrency             = 1000
+	DefaultStreamBufferSize        = 5000
 )
 
 // Pre-defined errors for provider operations

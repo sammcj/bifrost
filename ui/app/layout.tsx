@@ -1,10 +1,10 @@
 "use client";
 
-import FullPageLoader from "@/components/full-page-loader";
-import NotAvailableBanner from "@/components/not-available-banner";
-import ProgressProvider from "@/components/progress-bar";
+import FullPageLoader from "@/components/fullPageLoader";
+import NotAvailableBanner from "@/components/notAvailableBanner";
+import ProgressProvider from "@/components/progressBar";
 import Sidebar from "@/components/sidebar";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider } from "@/components/themeProvider";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { WebSocketProvider } from "@/hooks/useWebSocket";
 import { getErrorMessage, ReduxProvider, useGetCoreConfigQuery } from "@/lib/store";
@@ -12,6 +12,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { useEffect } from "react";
 import { toast, Toaster } from "sonner";
 import "./globals.css";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
@@ -54,7 +55,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 					<ThemeProvider attribute="class" defaultTheme="system" enableSystem>
 						<Toaster />
 						<ReduxProvider>
-							<AppContent>{children}</AppContent>
+							<NuqsAdapter>
+								<AppContent>{children}</AppContent>
+							</NuqsAdapter>
 						</ReduxProvider>
 					</ThemeProvider>
 				</ProgressProvider>

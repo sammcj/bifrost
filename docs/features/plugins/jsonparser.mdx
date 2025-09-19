@@ -46,7 +46,7 @@ func main() {
     })
     
     // Initialize Bifrost with the plugin
-    client, err := bifrost.Init(schemas.BifrostConfig{
+    client, err := bifrost.Init(context.Background(), schemas.BifrostConfig{
         Account: &MyAccount{},
         Plugins: []schemas.Plugin{
             jsonPlugin,
@@ -84,7 +84,7 @@ func main() {
     })
     
     // Initialize Bifrost with the plugin
-    client, err := bifrost.Init(schemas.BifrostConfig{
+    client, err := bifrost.Init(context.Background(), schemas.BifrostConfig{
         Account: &MyAccount{},
         Plugins: []schemas.Plugin{
             jsonPlugin,
@@ -201,7 +201,7 @@ func main() {
     })
     
     // Initialize Bifrost with the plugin
-    client, err := bifrost.Init(schemas.BifrostConfig{
+    client, err := bifrost.Init(context.Background(), schemas.BifrostConfig{
         Account: &MyAccount{},
         Plugins: []schemas.Plugin{jsonPlugin},
     })
