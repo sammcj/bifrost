@@ -80,8 +80,10 @@ type CohereChatResponse struct {
 			Version string `json:"version"` // Version of the API used
 		} `json:"api_version"` // API version information
 		BilledUnits struct {
-			InputTokens  float64 `json:"input_tokens"`  // Number of input tokens billed
-			OutputTokens float64 `json:"output_tokens"` // Number of output tokens billed
+			InputTokens     float64 `json:"input_tokens"`    // Number of input tokens billed
+			OutputTokens    float64 `json:"output_tokens"`   // Number of output tokens billed
+			Classifications float64 `json:"classifications"` // Number of classifications billed
+			SearchUnits     float64 `json:"search_units"`    // Number of search units billed
 		} `json:"billed_units"` // Token usage billing information
 		Tokens struct {
 			InputTokens  float64 `json:"input_tokens"`  // Number of input tokens used
@@ -102,6 +104,24 @@ type CohereEmbeddingResponse struct {
 	Embeddings struct {
 		Float [][]float32 `json:"float"` // Array of float embeddings, one for each input text
 	} `json:"embeddings"` // Embeddings in the response
+	Texts []string `json:"texts"` // Texts that were embedded
+	Meta  struct {
+		APIVersion struct {
+			Version        string `json:"version"`         // Version of the API used
+			IsExperimental bool   `json:"is_experimental"` // Whether the API is experimental
+		} `json:"api_version"` // API version information
+		BilledUnits struct {
+			InputTokens     float64 `json:"input_tokens"`    // Number of input tokens billed
+			OutputTokens    float64 `json:"output_tokens"`   // Number of output tokens billed
+			Classifications float64 `json:"classifications"` // Number of classifications billed
+			SearchUnits     float64 `json:"search_units"`    // Number of search units billed
+		} `json:"billed_units"` // Token usage billing information
+		Tokens struct {
+			InputTokens  float64 `json:"input_tokens"`  // Number of input tokens used
+			OutputTokens float64 `json:"output_tokens"` // Number of output tokens generated
+		} `json:"tokens"` // Token usage statistics
+		Warnings []string `json:"warnings"` // Warnings about the response
+	} `json:"meta"` // Metadata about the response
 }
 
 // CohereProvider implements the Provider interface for Cohere.
@@ -336,6 +356,8 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, model string
 			BilledUsage: &schemas.BilledLLMUsage{
 				PromptTokens:     Ptr(response.Meta.BilledUnits.InputTokens),
 				CompletionTokens: Ptr(response.Meta.BilledUnits.OutputTokens),
+				Classifications:  Ptr(response.Meta.BilledUnits.Classifications),
+				SearchUnits:      Ptr(response.Meta.BilledUnits.SearchUnits),
 			},
 			ChatHistory: convertChatHistory(response.ChatHistory),
 		},
@@ -614,10 +636,15 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 
 	// Prepare request body with default values
 	requestBody := map[string]interface{}{
-		"texts":           input.Texts,
 		"model":           model,
 		"input_type":      "search_document", // Default input type - can be overridden via ExtraParams
 		"embedding_types": []string{"float"}, // Default to float embeddings
+	}
+
+	if input.Text != nil {
+		requestBody["texts"] = []string{*input.Text}
+	} else {
+		requestBody["texts"] = input.Texts
 	}
 
 	// Apply additional parameters if provided
@@ -690,9 +717,10 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 		return nil, newBifrostOperationError("error parsing raw response for embedding", err, providerName)
 	}
 
-	// Calculate token usage approximation (since Cohere doesn't provide this for embeddings)
-	totalInputTokens := approximateTokenCount(input.Texts)
+	return handleCohereEmbeddingResponse(cohereResp, model, params, providerName, rawResponse, provider.sendBackRawResponse)
+}
 
+func handleCohereEmbeddingResponse(cohereResp CohereEmbeddingResponse, model string, params *schemas.ModelParameters, providerName schemas.ModelProvider, rawResponse interface{}, sendBackRawResponse bool) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Create BifrostResponse
 	bifrostResponse := &schemas.BifrostResponse{
 		ID:     cohereResp.ID,
@@ -708,16 +736,23 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 		},
 		Model: model,
 		Usage: &schemas.LLMUsage{
-			PromptTokens: totalInputTokens,
-			TotalTokens:  totalInputTokens,
+			PromptTokens:     int(cohereResp.Meta.Tokens.InputTokens),
+			CompletionTokens: int(cohereResp.Meta.Tokens.OutputTokens),
+			TotalTokens:      int(cohereResp.Meta.Tokens.InputTokens + cohereResp.Meta.Tokens.OutputTokens),
 		},
 		ExtraFields: schemas.BifrostResponseExtraFields{
 			Provider: providerName,
+			BilledUsage: &schemas.BilledLLMUsage{
+				PromptTokens:     Ptr(cohereResp.Meta.BilledUnits.InputTokens),
+				CompletionTokens: Ptr(cohereResp.Meta.BilledUnits.OutputTokens),
+				Classifications:  Ptr(cohereResp.Meta.BilledUnits.Classifications),
+				SearchUnits:      Ptr(cohereResp.Meta.BilledUnits.SearchUnits),
+			},
 		},
 	}
 
 	// Only include RawResponse if sendBackRawResponse is enabled
-	if provider.sendBackRawResponse {
+	if sendBackRawResponse {
 		bifrostResponse.ExtraFields.RawResponse = rawResponse
 	}
 
@@ -726,6 +761,7 @@ func (provider *CohereProvider) Embedding(ctx context.Context, model string, key
 	}
 
 	return bifrostResponse, nil
+
 }
 
 // ChatCompletionStream performs a streaming chat completion request to the Cohere API.
