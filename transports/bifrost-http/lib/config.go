@@ -173,12 +173,17 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		Providers:  make(map[schemas.ModelProvider]configstore.ProviderConfig),
 	}
 
+	absConfigFilePath, err := filepath.Abs(configFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path for config file: %w", err)
+	}
+
 	// Check if config file exists
 	data, err := os.ReadFile(configFilePath)
 	if err != nil {
 		// If config file doesn't exist, we will directly use the config store (create one if it doesn't exist)
 		if os.IsNotExist(err) {
-			logger.Info("config file not found at path: %s, initializing with default values", configFilePath)
+			logger.Info("config file not found at path: %s, initializing with default values", absConfigFilePath)
 			// Initializing with default values
 			config.ConfigStore, err = configstore.NewConfigStore(&configstore.Config{
 				Enabled: true,
@@ -351,7 +356,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 
 	// If config file exists, we will use it to only bootstrap config tables.
 
-	logger.Info("loading configuration from: %s", configFilePath)
+	logger.Info("loading configuration from: %s", absConfigFilePath)
 
 	var configData ConfigData
 	if err := json.Unmarshal(data, &configData); err != nil {
