@@ -12,6 +12,9 @@ func triggerMigrations(db *gorm.DB) error {
 	if err := migrationInit(db); err != nil {
 		return err
 	}
+	if err := migrationMany2ManyJoinTable(db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -110,6 +113,7 @@ func migrationInit(db *gorm.DB) error {
 					return err
 				}
 			}
+
 			return nil
 		},
 		Rollback: func(tx *gorm.DB) error {
@@ -164,6 +168,45 @@ func migrationInit(db *gorm.DB) error {
 				return err
 			}
 			if err := migrator.DropTable(&TableConfigHash{}); err != nil {
+				return err
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running db migration: %s", err.Error())
+	}
+	return nil
+}
+
+// createMany2ManyJoinTable creates a many-to-many join table for the given tables.
+func migrationMany2ManyJoinTable(db *gorm.DB) error {
+	m := migration.New(db, migration.DefaultOptions, []*migration.Migration{{
+		ID: "many2manyjoin",
+		Migrate: func(tx *gorm.DB) error {
+			migrator := tx.Migrator()
+
+			// create the many-to-many join table for virtual keys and keys
+			if !migrator.HasTable("governance_virtual_key_keys") {
+				createJoinTableSQL := `
+					CREATE TABLE IF NOT EXISTS governance_virtual_key_keys (
+						table_virtual_key_id VARCHAR(255) NOT NULL,
+						table_key_id INTEGER NOT NULL,
+						PRIMARY KEY (table_virtual_key_id, table_key_id),
+						FOREIGN KEY (table_virtual_key_id) REFERENCES governance_virtual_keys(id) ON DELETE CASCADE,
+						FOREIGN KEY (table_key_id) REFERENCES config_keys(id) ON DELETE CASCADE
+					)
+				`
+				if err := tx.Exec(createJoinTableSQL).Error; err != nil {
+					return fmt.Errorf("failed to create governance_virtual_key_keys table: %w", err)
+				}
+			}
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			if err := tx.Exec("DROP TABLE IF EXISTS governance_virtual_key_keys").Error; err != nil {
 				return err
 			}
 			return nil
