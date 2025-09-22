@@ -179,8 +179,8 @@ github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWE
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/maximhq/bifrost/core v1.1.37 h1:jVFY1tQFY8T2r4S3RE1zN8cFp1Uw97Dec3Ud32rR8Uc=
 github.com/maximhq/bifrost/core v1.1.37/go.mod h1:tf2pFTpoM53UGXXMFYxsaUjMqnCqYDOd9glFgMJvA0c=
-github.com/maximhq/bifrost/framework v1.0.20 h1:K2wmLX9j8vYpODT1ysOeAxQBWQpOv/fKhcxzANeJoIk=
-github.com/maximhq/bifrost/framework v1.0.20/go.mod h1:uEB0iuQtFfuFuMrhccMsb+51mf8m8X2tB8ZlDVoJUbM=
+github.com/maximhq/bifrost/framework v1.0.21 h1:ZFUNejDILLtnyDU6P8+iA21Ey8H+vP0O3xnhuXPLnho=
+github.com/maximhq/bifrost/framework v1.0.21/go.mod h1:uEB0iuQtFfuFuMrhccMsb+51mf8m8X2tB8ZlDVoJUbM=
 github.com/mitchellh/mapstructure v1.3.3/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/mitchellh/mapstructure v1.4.1/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/mitchellh/mapstructure v1.4.3/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
