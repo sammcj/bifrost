@@ -661,14 +661,8 @@ func (provider *BedrockProvider) prepareChatCompletionMessages(messages []schema
 		}
 
 		if len(systemMessages) > 0 {
-			var messages []string
-			for _, message := range systemMessages {
-				messages = append(messages, message.Text)
-			}
-
-			body["system"] = strings.Join(messages, " \n")
+			body["system"] = systemMessages
 		}
-
 		return body, nil
 
 	case strings.Contains(model, "mistral."):
