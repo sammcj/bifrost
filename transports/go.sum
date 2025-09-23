@@ -216,8 +216,8 @@ github.com/maximhq/bifrost/plugins/logging v1.2.14 h1:0NM7x5yp4QTCjiMwBj9g8mwd/R
 github.com/maximhq/bifrost/plugins/logging v1.2.14/go.mod h1:e6uXZ2Mj4zpGF/if/0Cz3izkjBbosCucarTGzDBwMwE=
 github.com/maximhq/bifrost/plugins/maxim v1.3.4 h1:9b1q8olqicE5iUhByJCQxSNHlwYRHpqm+HfRRdoaxLE=
 github.com/maximhq/bifrost/plugins/maxim v1.3.4/go.mod h1:f9c2tzoQrOc+ILmiDhIlXwRQjgm+Qt1pBqy9fgCNBUo=
-github.com/maximhq/bifrost/plugins/semanticcache v1.2.15 h1:F1T03ourOupKGfjhJbpbpy8p5nEaX5oor9idTxvYwgo=
-github.com/maximhq/bifrost/plugins/semanticcache v1.2.15/go.mod h1:AQAJqW4lbmmisjRhhQZthXQ7pqGyTiH823tTHWZe7ak=
+github.com/maximhq/bifrost/plugins/semanticcache v1.2.16 h1:DKFeBJp8JcuxhQKsYSltfKwBFqMkhxx6F1lNryQtCWI=
+github.com/maximhq/bifrost/plugins/semanticcache v1.2.16/go.mod h1:AQAJqW4lbmmisjRhhQZthXQ7pqGyTiH823tTHWZe7ak=
 github.com/maximhq/bifrost/plugins/telemetry v1.2.13 h1:VpkbRGa1N56bcy3vL+dpz0sQ6EoOXee9MmEDeuisack=
 github.com/maximhq/bifrost/plugins/telemetry v1.2.13/go.mod h1:fULx7Ya/NOeGVdgsvttvfanbqWDRWrlzOylnbWk5A7g=
 github.com/maximhq/maxim-go v0.1.10 h1:rGBYSY3qld2zfZeL4HBmropkyfrqNiJ4IYA49jbvYX8=

@@ -14,7 +14,7 @@ require (
 	github.com/maximhq/bifrost/plugins/governance v1.2.14
 	github.com/maximhq/bifrost/plugins/logging v1.2.14
 	github.com/maximhq/bifrost/plugins/maxim v1.3.4
-	github.com/maximhq/bifrost/plugins/semanticcache v1.2.15
+	github.com/maximhq/bifrost/plugins/semanticcache v1.2.16
 	github.com/maximhq/bifrost/plugins/telemetry v1.2.13
 	github.com/prometheus/client_golang v1.23.0
 	github.com/valyala/fasthttp v1.65.0
