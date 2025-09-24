@@ -40,8 +40,9 @@ export function NetworkFormFragment({ provider, showRestartAlert = false }: Netw
 	}, [form.formState.isDirty]);
 
 	const onSubmit = (data: NetworkOnlyFormSchema) => {
-		if (isCustomProvider && !(data.network_config?.base_url || "").trim()) {
-			toast.error("Base URL is required for custom providers.");
+		const requiresBaseUrl = isCustomProvider || provider.name === "ollama" || provider.name === "sgl";
+		if (requiresBaseUrl && !(data.network_config?.base_url || "").trim()) {
+			toast.error("Base URL is required for this provider.");
 			return;
 		}
 		// Create updated provider configuration
@@ -80,6 +81,8 @@ export function NetworkFormFragment({ provider, showRestartAlert = false }: Netw
 		});
 	}, [form, provider.name, provider.network_config]);
 
+	const baseURLRequired = provider.name === "ollama" || provider.name === "sgl" || isCustomProvider;
+
 	return (
 		<Form {...form}>
 			<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 px-6">
@@ -101,7 +104,7 @@ export function NetworkFormFragment({ provider, showRestartAlert = false }: Netw
 							name="network_config.base_url"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Base URL {isCustomProvider ? "(Required for Custom Providers)" : "(Optional)"}</FormLabel>
+									<FormLabel>Base URL {baseURLRequired ? "(Required)" : "(Optional)"}</FormLabel>
 									<FormControl>
 										<Input
 											placeholder={isCustomProvider ? "https://api.your-provider.com" : "https://api.example.com"}

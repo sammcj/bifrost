@@ -81,33 +81,27 @@ export const networkConfigSchema = z
 	});
 
 // Network form schema - more lenient for form inputs
-export const networkFormConfigSchema = z.object({
-	base_url: z
-		.url("Must be a valid URL")
-		.refine((url) => url.startsWith("https://"), {
-			message: "Only HTTPS URLs are supported",
-		})
-		.optional(),
-	extra_headers: z.record(z.string(), z.string()).optional(),
-	default_request_timeout_in_seconds: z.coerce
-		.number("Timeout must be a number")
-		.min(1, "Timeout must be greater than 0 seconds")
-		.max(300, "Timeout must be less than 300 seconds"),
-	max_retries: z.coerce
-		.number("Max retries must be a number")
-		.min(0, "Max retries must be greater than 0")
-		.max(10, "Max retries must be less than 10"),
-	retry_backoff_initial: z.coerce
-		.number("Retry backoff initial must be a number")
-		.min(0, "Retry backoff initial must be greater than 0"),
-	retry_backoff_max: z.coerce
-		.number("Retry backoff max must be a number")
-		.min(0, "Retry backoff max must be greater than 0"),
-})
-.refine((d) => d.retry_backoff_initial <= d.retry_backoff_max, {
-	message: "Initial backoff must be less than or equal to max backoff",
-	path: ["retry_backoff_initial"],
-});
+export const networkFormConfigSchema = z
+	.object({
+		base_url: z.preprocess((v) => (v === "" ? undefined : v), z.string().url("Must be a valid URL").optional()),
+		extra_headers: z.record(z.string(), z.string()).optional(),
+		default_request_timeout_in_seconds: z.coerce
+			.number("Timeout must be a number")
+			.min(1, "Timeout must be greater than 0 seconds")
+			.max(300, "Timeout must be less than 300 seconds"),
+		max_retries: z.coerce
+			.number("Max retries must be a number")
+			.min(0, "Max retries must be greater than 0")
+			.max(10, "Max retries must be less than 10"),
+		retry_backoff_initial: z.coerce
+			.number("Retry backoff initial must be a number")
+			.min(100, "Retry backoff initial must be at least 100ms"),
+		retry_backoff_max: z.coerce.number("Retry backoff max must be a number").min(1000, "Retry backoff max must be at least 1000ms"),
+	})
+	.refine((d) => d.retry_backoff_initial <= d.retry_backoff_max, {
+		message: "Initial backoff must be less than or equal to max backoff",
+		path: ["retry_backoff_initial"],
+	});
 
 // Concurrency and buffer size schema
 export const concurrencyAndBufferSizeSchema = z.object({
