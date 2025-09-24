@@ -13,6 +13,12 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
+// normalizeText applies consistent normalization to text inputs for better cache hit rates.
+// It converts text to lowercase and trims whitespace to reduce cache misses due to minor variations.
+func normalizeText(text string) string {
+	return strings.ToLower(strings.TrimSpace(text))
+}
+
 // generateEmbedding generates an embedding for the given text using the configured provider.
 func (plugin *Plugin) generateEmbedding(ctx context.Context, text string) ([]float32, int, error) {
 	// Create embedding request
@@ -373,37 +379,60 @@ func (plugin *Plugin) addStreamingResponse(ctx context.Context, responseID strin
 	return nil
 }
 
-// getInputForCaching returns a sanitized copy of req.Input for hashing/embedding, removing system messages when ExcludeSystemPrompt is true
+// getInputForCaching returns a normalized and sanitized copy of req.Input for hashing/embedding.
+// It applies text normalization (lowercase + trim) and optionally removes system messages.
 func (plugin *Plugin) getInputForCaching(req *schemas.BifrostRequest) *schemas.RequestInput {
-	if plugin.config.ExcludeSystemPrompt != nil && *plugin.config.ExcludeSystemPrompt && req.Input.ChatCompletionInput != nil {
-		reqInput := req.Input
+	reqInput := req.Input
 
-		originalMessages := *reqInput.ChatCompletionInput
-
-		// Fast path: if there are no system messages, return original input to avoid unnecessary allocations
-		hasSystem := false
-		for i := range originalMessages {
-			if originalMessages[i].Role == schemas.ModelChatMessageRoleSystem {
-				hasSystem = true
-				break
-			}
-		}
-		if !hasSystem {
-			return &req.Input
-		}
-
-		filteredMessages := make([]schemas.BifrostMessage, 0, len(originalMessages))
-		for _, msg := range originalMessages {
-			if msg.Role != schemas.ModelChatMessageRoleSystem {
-				filteredMessages = append(filteredMessages, msg)
-			}
-		}
-		reqInput.ChatCompletionInput = &filteredMessages
-
-		return &reqInput
+	// Handle text completion normalization
+	if reqInput.TextCompletionInput != nil {
+		normalizedText := normalizeText(*reqInput.TextCompletionInput)
+		reqInput.TextCompletionInput = &normalizedText
 	}
 
-	return &req.Input
+	// Handle chat completion normalization
+	if reqInput.ChatCompletionInput != nil {
+		originalMessages := *reqInput.ChatCompletionInput
+		normalizedMessages := make([]schemas.BifrostMessage, 0, len(originalMessages))
+
+		for _, msg := range originalMessages {
+			// Skip system messages if configured to exclude them
+			if plugin.config.ExcludeSystemPrompt != nil && *plugin.config.ExcludeSystemPrompt && msg.Role == schemas.ModelChatMessageRoleSystem {
+				continue
+			}
+
+			// Create a copy of the message with normalized content
+			normalizedMsg := msg
+
+			// Normalize message content
+			if msg.Content.ContentStr != nil {
+				normalizedContent := normalizeText(*msg.Content.ContentStr)
+				normalizedMsg.Content.ContentStr = &normalizedContent
+			} else if msg.Content.ContentBlocks != nil {
+				// Create a copy of content blocks with normalized text
+				normalizedBlocks := make([]schemas.ContentBlock, len(*msg.Content.ContentBlocks))
+				for i, block := range *msg.Content.ContentBlocks {
+					normalizedBlocks[i] = block
+					if block.Text != nil {
+						normalizedText := normalizeText(*block.Text)
+						normalizedBlocks[i].Text = &normalizedText
+					}
+				}
+				normalizedMsg.Content.ContentBlocks = &normalizedBlocks
+			}
+
+			normalizedMessages = append(normalizedMessages, normalizedMsg)
+		}
+
+		reqInput.ChatCompletionInput = &normalizedMessages
+	}
+
+	if reqInput.SpeechInput != nil {
+		normalizedInput := normalizeText(reqInput.SpeechInput.Input)
+		reqInput.SpeechInput.Input = normalizedInput
+	}
+
+	return &reqInput
 }
 
 // removeField removes the first occurrence of target from the slice.
