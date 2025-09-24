@@ -8,7 +8,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/google/uuid v1.6.0
 	github.com/maximhq/bifrost/core v1.1.37
-	github.com/maximhq/bifrost/framework v1.0.21
+	github.com/maximhq/bifrost/framework v1.0.22
 )
 
 require (
