@@ -15,6 +15,9 @@ func triggerMigrations(db *gorm.DB) error {
 	if err := migrationMany2ManyJoinTable(db); err != nil {
 		return err
 	}
+	if err := migrationAddCustomProviderConfigJSONColumn(db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -208,6 +211,27 @@ func migrationMany2ManyJoinTable(db *gorm.DB) error {
 		Rollback: func(tx *gorm.DB) error {
 			if err := tx.Exec("DROP TABLE IF EXISTS governance_virtual_key_keys").Error; err != nil {
 				return err
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running db migration: %s", err.Error())
+	}
+	return nil
+}
+
+func migrationAddCustomProviderConfigJSONColumn(db *gorm.DB) error {
+	m := migration.New(db, migration.DefaultOptions, []*migration.Migration{{
+		ID: "addcustomproviderconfigjsoncolumn",
+		Migrate: func(tx *gorm.DB) error {
+			migrator := tx.Migrator()
+
+			if !migrator.HasColumn(&TableProvider{}, "custom_provider_config_json") {
+				if err := migrator.AddColumn(&TableProvider{}, "custom_provider_config_json"); err != nil {
+					return err
+				}
 			}
 			return nil
 		},
