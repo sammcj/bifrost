@@ -2,7 +2,6 @@ package pricing
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -81,10 +80,11 @@ func Init(configStore configstore.ConfigStore, logger schemas.Logger) (*PricingM
 			return nil, fmt.Errorf("failed to load initial pricing data: %w", err)
 		}
 
-		// Sync pricing data from file to database
-		if err := pm.checkAndSyncPricing(); err != nil {
+		// For the bootup we sync pricing data from file to database
+		if err := pm.syncPricing(); err != nil {
 			return nil, fmt.Errorf("failed to sync pricing data: %w", err)
 		}
+		
 	} else {
 		// Load pricing data from config memory
 		if err := pm.loadPricingIntoMemory(); err != nil {
@@ -167,9 +167,7 @@ func (pm *PricingManager) CalculateCostWithCacheDebug(result *schemas.BifrostRes
 	if result == nil || provider == "" || model == "" || requestType == "" {
 		return 0.0
 	}
-
 	cacheDebug := result.ExtraFields.CacheDebug
-
 	if cacheDebug != nil {
 		if cacheDebug.CacheHit {
 			if cacheDebug.HitType != nil && *cacheDebug.HitType == "direct" {
@@ -218,14 +216,6 @@ func (pm *PricingManager) CalculateCostFromUsage(provider string, model string, 
 	// Allow audio-only flows by only returning early if we have no usage data at all
 	if usage == nil && audioSeconds == nil && audioTokenDetails == nil {
 		return 0.0
-	}
-
-	// Fix model normalization to use the last path segment
-	if strings.Contains(model, "/") {
-		parts := strings.Split(model, "/")
-		if len(parts) > 0 {
-			model = parts[len(parts)-1]
-		}
 	}
 
 	// Get pricing for the model
