@@ -168,7 +168,9 @@
       {
         "tab": "Changelogs",
         "icon": "bolt",
-        "pages": []
+        "pages": [
+          "changelogs/v1.2.21"
+        ]
       }
     ]
   },
