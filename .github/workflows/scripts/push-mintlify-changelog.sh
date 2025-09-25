@@ -10,6 +10,12 @@ fi
 
 VERSION="v$VERSION"
 
+# Check if this page already exists in docs/changelogs/
+if [ -f "docs/changelogs/$VERSION.mdx" ]; then
+  echo "✅ Changelog for $VERSION already exists"
+  exit 0
+fi
+
 # Source changelog utilities
 source "$(dirname "$0")/changelog-utils.sh"
 
