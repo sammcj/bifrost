@@ -111,6 +111,7 @@ if [ -z "$CHANGELOG_BODY" ]; then
   echo "❌ Changelog is empty"
   exit 1
 fi
+echo "📝 New changelog: $CHANGELOG_BODY"
 
 # Finding previous tag
 echo "🔍 Finding previous tag..."
@@ -121,10 +122,8 @@ fi
 echo "🔍 Previous tag: $PREV_TAG"
 
 # Get message of the tag
-echo "📝 Getting tag message..."
-PREV_TAG_MESSAGE=$(git tag -l --format='%(contents)' "$PREV_TAG")
-# Extract just the body (skip the subject line) and filter comments
-PREV_CHANGELOG=$(echo "$PREV_TAG_MESSAGE" | tail -n +3 | grep -v '^<!--' | grep -v '^-->')
+echo "🔍 Getting previous tag message..."
+PREV_CHANGELOG=$(git tag -l --format='%(contents)' "$PREV_TAG")
 echo "📝 Previous changelog body: $PREV_CHANGELOG"
 
 # Checking if tag message is the same as the changelog
