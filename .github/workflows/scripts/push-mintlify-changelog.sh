@@ -75,7 +75,7 @@ if ! grep -q "\"$route\"" docs/docs.json; then
       in_tab=0
       next
     }
-    fixing_empty && $0 ~ /^[[:space:]]*\"changelogs\/[^"]+\",?$/ {
+    fixing_empty && $0 ~ /^[[:space:]]*"changelogs\/[^"]+",?$/ {
       fixing_empty=0
       next
     }
