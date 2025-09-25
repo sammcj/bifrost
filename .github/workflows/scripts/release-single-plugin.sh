@@ -161,13 +161,7 @@ fi
 
 BODY="## Plugin Release: $PLUGIN_NAME v$PLUGIN_VERSION
 
-### 🔌 Plugin: $PLUGIN_NAME v$PLUGIN_VERSION
-
 $CHANGELOG_BODY
-
-### Dependencies
-- **Core**: \`$CORE_VERSION\`
-- **Framework**: \`$FRAMEWORK_VERSION\`
 
 ### Installation
 
@@ -175,12 +169,6 @@ $CHANGELOG_BODY
 # Update your go.mod to use the new plugin version
 go get github.com/maximhq/bifrost/plugins/$PLUGIN_NAME@v$PLUGIN_VERSION
 \`\`\`
-
-### Plugin Details
-- **Name**: $PLUGIN_NAME
-- **Version**: $PLUGIN_VERSION
-- **Core Dependency**: $CORE_VERSION
-- **Framework Dependency**: $FRAMEWORK_VERSION
 
 ---
 _This release was automatically created from version file: \`plugins/$PLUGIN_NAME/version\`_"
