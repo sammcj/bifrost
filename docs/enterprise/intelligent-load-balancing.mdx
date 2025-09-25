@@ -1,12 +1,12 @@
 ---
-title: "Intelligent Load Balancing"
+title: "Adaptive Load Balancing"
 description: "Advanced load balancing algorithms with predictive scaling, health monitoring, and performance optimization for enterprise-grade traffic distribution."
 icon: "brain"
 ---
 
 ## Overview
 
-**Intelligent Load Balancing** in Bifrost automatically optimizes traffic distribution across provider keys and models based on real-time performance metrics. The system continuously monitors error rates, latency, and throughput to dynamically adjust weights, ensuring optimal performance and reliability.
+**Adaptive Load Balancing** in Bifrost automatically optimizes traffic distribution across provider keys and models based on real-time performance metrics. The system continuously monitors error rates, latency, and throughput to dynamically adjust weights, ensuring optimal performance and reliability.
 
 ### Key Features
 
@@ -21,7 +21,7 @@ icon: "brain"
 
 ---
 
-## How Intelligent Load Balancing Works
+## How Adaptive Load Balancing Works
 
 ### Performance Metrics Collection
 
@@ -46,7 +46,7 @@ The system continuously collects performance data for each model-key combination
 
 ### Weight Adjustment Algorithm
 
-The intelligent load balancer automatically adjusts weights based on real-time performance metrics:
+The adaptive load balancer automatically adjusts weights based on real-time performance metrics:
 
 - **High Error Rates**: Reduces weight for keys with elevated error rates
 - **Latency Spikes**: Decreases weight when response times exceed baseline thresholds  
@@ -135,11 +135,11 @@ The system tracks these critical metrics for each model-key combination:
 
 ## Configuration
 
-### Basic Intelligent Load Balancing Setup
+### Basic Adaptive Load Balancing Setup
 
 ```json
 {
-  "intelligent_load_balancing": {
+  "adaptive_load_balancing": {
     "enabled": true,
     "algorithm": "adaptive_weighted",
     "evaluation_interval": "30s",
@@ -163,7 +163,7 @@ The system tracks these critical metrics for each model-key combination:
 
 ```json
 {
-  "intelligent_load_balancing": {
+  "adaptive_load_balancing": {
     "enabled": true,
     "algorithm": "adaptive_weighted",
     "evaluation_interval": "30s",
@@ -214,7 +214,7 @@ The system tracks these critical metrics for each model-key combination:
           "key": "sk-...",
           "model_key_id": "gpt-4-key-1",
           "weight": 1.0,
-          "intelligent_balancing": {
+          "adaptive_balancing": {
             "enabled": true,
             "baseline_latency_ms": 1100,
             "expected_error_rate": 0.01,
@@ -226,7 +226,7 @@ The system tracks these critical metrics for each model-key combination:
           "key": "sk-...",
           "model_key_id": "gpt-4-key-2",
           "weight": 0.8,
-          "intelligent_balancing": {
+          "adaptive_balancing": {
             "enabled": true,
             "baseline_latency_ms": 1200,
             "expected_error_rate": 0.015,
@@ -244,7 +244,7 @@ The system tracks these critical metrics for each model-key combination:
 
 ## Traffic Distribution Examples
 
-### Before Intelligent Load Balancing
+### Before Adaptive Load Balancing
 
 ```json
 {
@@ -268,7 +268,7 @@ The system tracks these critical metrics for each model-key combination:
 }
 ```
 
-### After Intelligent Load Balancing
+### After Adaptive Load Balancing
 
 ```json
 {
@@ -305,11 +305,11 @@ The system tracks these critical metrics for each model-key combination:
 
 ### Real-Time Performance View
 
-Monitor intelligent load balancing effectiveness through these key metrics:
+Monitor adaptive load balancing effectiveness through these key metrics:
 
 ```json
 {
-  "intelligent_load_balancing_metrics": {
+  "adaptive_load_balancing_metrics": {
     "last_evaluation": "2024-01-15T10:30:00Z",
     "next_evaluation": "2024-01-15T10:30:30Z",
     "total_adjustments_last_hour": 12,
