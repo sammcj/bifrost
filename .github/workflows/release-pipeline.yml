@@ -371,7 +371,7 @@ jobs:
   # Push Mintlify changelog
   push-mintlify-changelog:
     needs: [check-skip, detect-changes, bifrost-http-release]
-    if: "always() && needs.check-skip.outputs.should-skip != 'true' && needs.detect-changes.outputs.bifrost-http-needs-release == 'true' && needs.bifrost-http-release.result == 'success'"
+    if: "always() && needs.check-skip.outputs.should-skip != 'true' &&  (needs.detect-changes.outputs.bifrost-http-needs-release == 'false' || needs.bifrost-http-release.result == 'success' || needs.bifrost-http-release.result == 'skipped')"
     runs-on: ubuntu-latest
     permissions:
         contents: write
