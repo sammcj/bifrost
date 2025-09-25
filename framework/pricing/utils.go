@@ -79,10 +79,10 @@ func convertPricingDataToTableModelPricing(modelKey string, entry PricingEntry) 
 	if strings.Contains(modelKey, "/") {
 		parts := strings.Split(modelKey, "/")
 		if len(parts) > 1 {
-			modelName = parts[1]
+			modelName = strings.Join(parts[1:], "/")
 		}
 	}
-
+	
 	pricing := configstore.TableModelPricing{
 		Model:              modelName,
 		Provider:           provider,
