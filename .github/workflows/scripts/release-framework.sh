@@ -150,12 +150,7 @@ fi
 
 BODY="## Framework Release $VERSION
 
-### 📦 Framework Library $VERSION
-
 $CHANGELOG_BODY
-
-### Dependencies
-- **Core**: \`$CORE_VERSION\`
 
 ### Installation
 

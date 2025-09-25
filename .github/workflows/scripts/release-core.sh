@@ -88,8 +88,6 @@ fi
 
 BODY="## Core Release v$VERSION
 
-### 🔧 Core Library v$VERSION
-
 $CHANGELOG_BODY
 
 ### Installation
@@ -97,11 +95,6 @@ $CHANGELOG_BODY
 \`\`\`bash
 go get github.com/maximhq/bifrost/core@v$VERSION
 \`\`\`
-
-### Next Steps
-1. Framework will be updated automatically if needed
-2. Plugins will be updated automatically if needed
-3. Bifrost HTTP will be updated automatically if needed
 
 ---
 _This release was automatically created from version file: \`core/version\`_"

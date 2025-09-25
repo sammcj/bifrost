@@ -255,14 +255,8 @@ fi
 
 BODY="## Bifrost HTTP Transport Release v$VERSION
 
-### 🚀 Bifrost HTTP Transport v$VERSION
-
 $CHANGELOG_BODY
 
-### Dependencies
-- **Core**: \`$CORE_VERSION\`
-- **Framework**: \`$FRAMEWORK_VERSION\`
-$PLUGIN_UPDATES
 ### Installation
 
 #### Docker
