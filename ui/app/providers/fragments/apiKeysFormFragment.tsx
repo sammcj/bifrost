@@ -9,11 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { isRedacted } from "@/lib/utils/validation";
 import { Info } from "lucide-react";
-import { Control } from "react-hook-form";
+import { Control, UseFormReturn } from "react-hook-form";
 
 interface Props {
 	control: Control<any>;
 	providerName: string;
+	form: UseFormReturn<any>;
 }
 
 // Model placeholders based on provider type
@@ -25,7 +26,7 @@ const MODEL_PLACEHOLDERS = {
 	vertex: "e.g. gemini-pro, text-bison, chat-bison",
 };
 
-export function ApiKeyFormFragment({ control, providerName }: Props) {
+export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 	const isBedrock = providerName === "bedrock";
 	const isVertex = providerName === "vertex";
 	const isAzure = providerName === "azure";
@@ -67,7 +68,7 @@ export function ApiKeyFormFragment({ control, providerName }: Props) {
 						/>
 					</div>
 				)}
-				<div>
+				<div className="h-[80px]">
 					<FormField
 						control={control}
 						name={`key.weight`}
@@ -91,13 +92,29 @@ export function ApiKeyFormFragment({ control, providerName }: Props) {
 								<FormControl>
 									<Input
 										placeholder="1.0"
-										className="w-20"
-										{...field}
+										className="w-[220px]"
+										value={field.value === undefined || field.value === null ? "" : String(field.value)}
 										onChange={(e) => {
-											const v = e.target.value.trim();
-											field.onChange(v === "" ? undefined : Number(v));
+											// Clear error while typing
+											form.clearErrors("key.weight");
+											// Keep as string during typing to allow partial input
+											field.onChange(e.target.value === "" ? "" : e.target.value);
 										}}
-										type="string"
+										onBlur={(e) => {
+											const v = e.target.value.trim();
+											if (v !== "") {
+												const num = parseFloat(v);
+												if (!isNaN(num)) {
+													field.onChange(num);
+												} else {
+													form.setError("key.weight", { message: "Weight must be a valid number" });
+												}
+											}
+											field.onBlur();
+										}}
+										name={field.name}
+										ref={field.ref}
+										type="text"
 									/>
 								</FormControl>
 								<FormMessage />
