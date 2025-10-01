@@ -42,7 +42,26 @@ export const modelProviderKeySchema = z
 		id: z.string().min(1, "Id is required"),
 		value: z.string().optional(),
 		models: z.array(z.string()).default([]).optional(),
-		weight: z.number().min(0.1, "Weight must be greater than 0.1").max(1, "Weight must be less than 1"),
+		weight: z.union([
+			z.number().min(0.1, "Weight must be greater than 0.1").max(1, "Weight must be less than 1"),
+			z
+				.string()
+				.transform((val) => {
+					if (val === "") return 1.0;
+					const num = parseFloat(val);
+					if (isNaN(num)) {
+						throw new z.ZodError([
+							{
+								code: "custom",
+								message: "Weight must be a valid number",
+								path: ["weight"],
+							},
+						]);
+					}
+					return num;
+				})
+				.pipe(z.number().min(0.1, "Weight must be greater than 0.1").max(1, "Weight must be less than 1")),
+		]),
 		azure_key_config: azureKeyConfigSchema.optional(),
 		vertex_key_config: vertexKeyConfigSchema.optional(),
 		bedrock_key_config: bedrockKeyConfigSchema.optional(),
