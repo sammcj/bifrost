@@ -4,9 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { VirtualKey } from "@/lib/types/governance";
+import { calculateUsagePercentage, formatCurrency, getUsageVariant, parseResetPeriod } from "@/lib/utils/governance";
 import { formatDistanceToNow } from "date-fns";
-import { parseResetPeriod, calculateUsagePercentage, getUsageVariant } from "@/lib/utils/governance";
-import { formatCurrency } from "@/lib/utils/governance";
 
 interface VirtualKeyDetailDialogProps {
 	virtualKey: VirtualKey;
@@ -37,8 +36,8 @@ export default function VirtualKeyDetailDialog({ virtualKey, onClose }: VirtualK
 
 	return (
 		<Dialog open onOpenChange={onClose}>
-			<DialogContent className="max-h-[80vh] w-full max-w-2xl overflow-y-auto p-0">
-				<DialogHeader className="z-10 border-b px-6 pt-6">
+			<DialogContent className="max-h-[80vh] w-full max-w-2xl overflow-y-auto p-0" showCloseButton={true}>
+				<DialogHeader className="z-10 border-b px-6 pt-6 bg-transparent">
 					<DialogTitle>{virtualKey.name}</DialogTitle>
 					<DialogDescription>{virtualKey.description || "Virtual key details and usage information"}</DialogDescription>
 				</DialogHeader>
