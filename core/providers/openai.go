@@ -169,6 +169,235 @@ func handleOpenAITextCompletionRequest(
 	return response, nil
 }
 
+// TextCompletionStream performs a streaming text completion request to OpenAI's API.
+// It formats the request, sends it to OpenAI, and processes the response.
+// Returns a channel of BifrostStream objects or an error if the request fails.
+func (provider *OpenAIProvider) TextCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	if err := checkOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.TextCompletionStreamRequest); err != nil {
+		return nil, err
+	}
+	return handleOpenAITextCompletionStreaming(
+		ctx,
+		provider.streamClient,
+		provider.networkConfig.BaseURL+"/v1/completions",
+		request,
+		map[string]string{"Authorization": "Bearer " + key.Value},
+		provider.networkConfig.ExtraHeaders,
+		provider.GetProviderKey(),
+		postHookRunner,
+		provider.logger,
+	)
+}
+
+// handleOpenAIStreaming handles streaming for OpenAI-compatible APIs.
+// This shared function reduces code duplication between providers that use the same SSE format.
+func handleOpenAITextCompletionStreaming(
+	ctx context.Context,
+	client *http.Client,
+	url string,
+	request *schemas.BifrostTextCompletionRequest,
+	authHeader map[string]string,
+	extraHeaders map[string]string,
+	providerName schemas.ModelProvider,
+	postHookRunner schemas.PostHookRunner,
+	logger schemas.Logger,
+) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	reqBody := openai.ToOpenAITextCompletionRequest(request)
+	if reqBody == nil {
+		return nil, newBifrostOperationError("text completion input is not provided", nil, providerName)
+	}
+	reqBody.Stream = schemas.Ptr(true)
+	reqBody.StreamOptions = &schemas.ChatStreamOptions{
+		IncludeUsage: schemas.Ptr(true),
+	}
+
+	// Prepare SGL headers (SGL typically doesn't require authorization, but we include it if provided)
+	headers := map[string]string{
+		"Content-Type":  "application/json",
+		"Accept":        "text/event-stream",
+		"Cache-Control": "no-cache",
+	}
+
+	// Copy auth header to headers
+	maps.Copy(headers, authHeader)
+
+	jsonBody, err := sonic.Marshal(reqBody)
+	if err != nil {
+		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, providerName)
+	}
+
+	// Create HTTP request for streaming
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
+	}
+
+	// Set any extra headers from network config
+	setExtraHeadersHTTP(req, extraHeaders, nil)
+
+	// Set headers
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	// Make the request
+	resp, err := client.Do(req)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: &schemas.ErrorField{
+					Type:    schemas.Ptr(schemas.RequestCancelled),
+					Message: schemas.ErrRequestCancelled,
+					Error:   err,
+				},
+			}
+		}
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
+		}
+		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
+	}
+
+	// Check for HTTP errors
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseStreamOpenAIError(resp)
+	}
+
+	// Create response channel
+	responseChan := make(chan *schemas.BifrostStream, schemas.DefaultStreamBufferSize)
+
+	// Start streaming in a goroutine
+	go func() {
+		defer close(responseChan)
+		defer resp.Body.Close()
+
+		scanner := bufio.NewScanner(resp.Body)
+		chunkIndex := -1
+		usage := &schemas.LLMUsage{}
+
+		var finishReason *string
+		var messageID string
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			// Skip empty lines and comments
+			if line == "" || strings.HasPrefix(line, ":") {
+				continue
+			}
+
+			// Check for end of stream
+			if line == "data: [DONE]" {
+				break
+			}
+
+			var jsonData string
+
+			// Parse SSE data
+			if strings.HasPrefix(line, "data: ") {
+				jsonData = strings.TrimPrefix(line, "data: ")
+			} else {
+				// Handle raw JSON errors (without "data: " prefix)
+				jsonData = line
+			}
+
+			// Skip empty data
+			if strings.TrimSpace(jsonData) == "" {
+				continue
+			}
+
+			// First, check if this is an error response
+			var errorCheck map[string]interface{}
+			if err := sonic.Unmarshal([]byte(jsonData), &errorCheck); err != nil {
+				logger.Warn(fmt.Sprintf("Failed to parse stream data as JSON: %v", err))
+				continue
+			}
+
+			// Handle error responses
+			if _, hasError := errorCheck["error"]; hasError {
+				bifrostErr, err := parseOpenAIErrorForStreamDataLine(jsonData)
+				if err != nil {
+					logger.Warn(fmt.Sprintf("Failed to parse error response: %v", err))
+					continue
+				}
+				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+				processAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, logger)
+				return
+			}
+
+			// Parse into bifrost response
+			var response schemas.BifrostResponse
+			if err := sonic.Unmarshal([]byte(jsonData), &response); err != nil {
+				logger.Warn(fmt.Sprintf("Failed to parse stream response: %v", err))
+				continue
+			}
+
+			// Handle usage-only chunks (when stream_options include_usage is true)
+			if response.Usage != nil {
+				// Collect usage information and send at the end of the stream
+				// Here in some cases usage comes before final message
+				// So we need to check if the response.Usage is nil and then if usage != nil
+				// then add up all tokens
+				if response.Usage.PromptTokens > usage.PromptTokens {
+					usage.PromptTokens = response.Usage.PromptTokens
+				}
+				if response.Usage.CompletionTokens > usage.CompletionTokens {
+					usage.CompletionTokens = response.Usage.CompletionTokens
+				}
+				if response.Usage.TotalTokens > usage.TotalTokens {
+					usage.TotalTokens = response.Usage.TotalTokens
+				}
+				calculatedTotal := usage.PromptTokens + usage.CompletionTokens
+				if calculatedTotal > usage.TotalTokens {
+					usage.TotalTokens = calculatedTotal
+				}
+				response.Usage = nil
+			}
+
+			// Skip empty responses or responses without choices
+			if len(response.Choices) == 0 {
+				continue
+			}
+
+			// Handle finish reason, usually in the final chunk
+			choice := response.Choices[0]
+			if choice.FinishReason != nil && *choice.FinishReason != "" {
+				// Collect finish reason and send at the end of the stream
+				finishReason = choice.FinishReason
+				response.Choices[0].FinishReason = nil
+			}
+
+			if response.ID != "" && messageID == "" {
+				messageID = response.ID
+			}
+
+			// Handle regular content chunks
+			if choice.BifrostTextCompletionResponseChoice != nil && choice.BifrostTextCompletionResponseChoice.Text != nil {
+				chunkIndex++
+
+				response.ExtraFields.RequestType = schemas.TextCompletionStreamRequest
+				response.ExtraFields.Provider = providerName
+				response.ExtraFields.ModelRequested = request.Model
+				response.ExtraFields.ChunkIndex = chunkIndex
+
+				processAndSendResponse(ctx, postHookRunner, &response, responseChan, logger)
+			}
+		}
+
+		// Handle scanner errors first
+		if err := scanner.Err(); err != nil {
+			logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
+			processAndSendError(ctx, postHookRunner, err, responseChan, schemas.TextCompletionStreamRequest, providerName, request.Model, logger)
+		} else {
+			response := createBifrostCompletionChunkResponse(messageID, usage, finishReason, chunkIndex, schemas.TextCompletionStreamRequest, providerName, request.Model)
+			handleStreamEndWithSuccess(ctx, response, postHookRunner, responseChan, logger)
+		}
+	}()
+
+	return responseChan, nil
+}
+
 // ChatCompletion performs a chat completion request to the OpenAI API.
 // It supports both text and image content in messages.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
@@ -530,7 +759,7 @@ func handleOpenAIStreaming(
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -557,7 +786,7 @@ func handleOpenAIStreaming(
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -816,7 +1045,7 @@ func (provider *OpenAIProvider) SpeechStream(ctx context.Context, postHookRunner
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -843,7 +1072,7 @@ func (provider *OpenAIProvider) SpeechStream(ctx context.Context, postHookRunner
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -1085,7 +1314,7 @@ func (provider *OpenAIProvider) TranscriptionStream(ctx context.Context, postHoo
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -1112,7 +1341,7 @@ func (provider *OpenAIProvider) TranscriptionStream(ctx context.Context, postHoo
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)

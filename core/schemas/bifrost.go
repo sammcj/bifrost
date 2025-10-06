@@ -90,6 +90,7 @@ type RequestType string
 
 const (
 	TextCompletionRequest       RequestType = "text_completion"
+	TextCompletionStreamRequest RequestType = "text_completion_stream"
 	ChatCompletionRequest       RequestType = "chat_completion"
 	ChatCompletionStreamRequest RequestType = "chat_completion_stream"
 	ResponsesRequest            RequestType = "responses"
@@ -323,7 +324,7 @@ func (be *BifrostEmbeddingResponse) UnmarshalJSON(data []byte) error {
 // IMPORTANT: Only one of BifrostNonStreamResponseChoice or BifrostStreamResponseChoice
 // should be non-nil at a time.
 type BifrostChatResponseChoice struct {
-	Index        int       `json:"index"`
+	Index        int       `json:"index,omitempty"`
 	FinishReason *string   `json:"finish_reason,omitempty"`
 	LogProbs     *LogProbs `json:"log_probs,omitempty"`
 
