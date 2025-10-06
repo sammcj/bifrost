@@ -6,15 +6,21 @@ import "github.com/maximhq/bifrost/core/schemas"
 
 // OpenAITextCompletionRequest represents an OpenAI text completion request
 type OpenAITextCompletionRequest struct {
-	Model  string                      `json:"model"`  // Required: Model to use
+	Model  string                       `json:"model"`  // Required: Model to use
 	Prompt *schemas.TextCompletionInput `json:"prompt"` // Required: String or array of strings
 
 	schemas.TextCompletionParameters
+	Stream *bool `json:"stream,omitempty"`
+}
+
+// IsStreamingRequested implements the StreamingRequest interface
+func (r *OpenAITextCompletionRequest) IsStreamingRequested() bool {
+	return r.Stream != nil && *r.Stream
 }
 
 // OpenAIEmbeddingRequest represents an OpenAI embedding request
 type OpenAIEmbeddingRequest struct {
-	Model string                 `json:"model"`
+	Model string                  `json:"model"`
 	Input *schemas.EmbeddingInput `json:"input"` // Can be string or []string
 
 	schemas.EmbeddingParameters

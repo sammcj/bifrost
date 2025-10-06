@@ -197,7 +197,7 @@ func (a *Accumulator) accumulateToolCallsInMessage(message *schemas.ChatMessage,
 	if message == nil {
 		return
 	}
-	if message.ChatAssistantMessage	 == nil {
+	if message.ChatAssistantMessage == nil {
 		message.ChatAssistantMessage = &schemas.ChatAssistantMessage{}
 	}
 	existingToolCalls := message.ChatAssistantMessage.ToolCalls
@@ -258,7 +258,7 @@ func (a *Accumulator) ProcessStreamingResponse(ctx *context.Context, result *sch
 	}
 	requestType := result.ExtraFields.RequestType
 	isAudioStreaming := requestType == schemas.SpeechStreamRequest || requestType == schemas.TranscriptionStreamRequest
-	isChatStreaming := requestType == schemas.ChatCompletionStreamRequest
+	isChatStreaming := requestType == schemas.ChatCompletionStreamRequest || requestType == schemas.TextCompletionStreamRequest
 	if isChatStreaming {
 		// Handle text-based streaming with ordered accumulation
 		return a.processChatStreamingResponse(ctx, result, bifrostErr)
@@ -309,7 +309,7 @@ func (a *Accumulator) cleanupOldAccumulators() {
 	a.streamAccumulators.Range(func(key, value interface{}) bool {
 		accumulator := value.(*StreamAccumulator)
 		if accumulator.Timestamp.Before(time.Now().Add(-a.ttl)) {
-			a.cleanupStreamAccumulator(key.(string))			
+			a.cleanupStreamAccumulator(key.(string))
 		}
 		count++
 		return true
