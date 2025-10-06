@@ -274,8 +274,8 @@ func (h *CompletionHandler) textCompletion(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if req.Prompt.PromptStr == nil && req.Prompt.PromptArray == nil {
-		SendError(ctx, fasthttp.StatusBadRequest, "Text is required for text completion", h.logger)
+	if req.Prompt == nil || (req.Prompt.PromptStr == nil && req.Prompt.PromptArray == nil) {
+		SendError(ctx, fasthttp.StatusBadRequest, "prompt is required for text completion", h.logger)
 		return
 	}
 
@@ -467,7 +467,7 @@ func (h *CompletionHandler) embeddings(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if req.Input.Text == nil && req.Input.Texts == nil && req.Input.Embedding == nil && req.Input.Embeddings == nil {
+	if req.Input == nil || (req.Input.Text == nil && req.Input.Texts == nil && req.Input.Embedding == nil && req.Input.Embeddings == nil) {
 		SendError(ctx, fasthttp.StatusBadRequest, "Input is required for embeddings", h.logger)
 		return
 	}
@@ -532,7 +532,8 @@ func (h *CompletionHandler) speech(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusBadRequest, "Input is required for speech completion", h.logger)
 		return
 	}
-	if req.VoiceConfig.Voice == nil && len(req.VoiceConfig.MultiVoiceConfig) == 0 {
+
+	if req.VoiceConfig == nil || (req.VoiceConfig.Voice == nil && len(req.VoiceConfig.MultiVoiceConfig) == 0) {
 		SendError(ctx, fasthttp.StatusBadRequest, "Voice is required for speech completion", h.logger)
 		return
 	}

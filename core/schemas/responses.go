@@ -568,7 +568,7 @@ const (
 	ResponsesInputMessageRoleDeveloper ResponsesMessageRoleType = "developer"
 )
 
-// ResponsesInputMessageContent is a union type that can be either a string or array of content blocks
+// ResponsesMessageContent is a union type that can be either a string or array of content blocks
 type ResponsesMessageContent struct {
 	ContentStr    *string                        // Simple text content
 	ContentBlocks []ResponsesMessageContentBlock // Rich content with multiple media types
