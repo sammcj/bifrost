@@ -4,6 +4,7 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/textproto"
@@ -44,8 +45,22 @@ func makeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *f
 			},
 		}
 	case err := <-errChan:
+
 		// The fasthttp.Do call completed.
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return &schemas.BifrostError{
+					IsBifrostError: false,
+					Error: &schemas.ErrorField{
+						Type:    schemas.Ptr(schemas.RequestCancelled),
+						Message: schemas.ErrRequestCancelled,
+						Error:   err,
+					},
+				}
+			}
+			if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+				return newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, "")
+			}
 			// The HTTP request itself failed (e.g., connection error, fasthttp timeout).
 			return &schemas.BifrostError{
 				IsBifrostError: false,

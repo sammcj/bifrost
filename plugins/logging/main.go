@@ -402,6 +402,14 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 			// Output message and tool calls
 			if len(result.Choices) > 0 {
 				choice := result.Choices[0]
+				if choice.BifrostTextCompletionResponseChoice != nil {
+					updateData.OutputMessage = &schemas.ChatMessage{
+						Role: schemas.ChatMessageRoleAssistant,
+						Content: schemas.ChatMessageContent{
+							ContentStr: choice.BifrostTextCompletionResponseChoice.Text,
+						},
+					}
+				}
 				// Check if this is a non-stream response choice
 				if choice.BifrostNonStreamResponseChoice != nil {
 					updateData.OutputMessage = &choice.BifrostNonStreamResponseChoice.Message
@@ -442,7 +450,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 						TotalTokens:      result.Speech.Usage.TotalTokens,
 					}
 				}
-			}
+			}			
 			if result.Transcribe != nil {
 				updateData.TranscriptionOutput = result.Transcribe
 				// Extract token usage
