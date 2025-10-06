@@ -12,6 +12,11 @@
 
 Bifrost is a high-performance AI gateway that unifies access to 12+ providers (OpenAI, Anthropic, AWS Bedrock, Google Vertex, and more) through a single OpenAI-compatible API. Deploy in seconds with zero configuration and get automatic failover, load balancing, semantic caching, and enterprise-grade features.
 
+| Release Type | Version |
+|---------|-------------|
+| **Stable** | v1.2.x |
+| **Pre-release** | v1.3.0-prerelease(x) |
+
 ## Quick Start
 
 ![Get started](./docs/media/getting-started.png)
