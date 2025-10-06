@@ -307,6 +307,11 @@ func (h *CompletionHandler) textCompletion(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	if req.Stream != nil && *req.Stream {
+		h.handleStreamingTextCompletion(ctx, bifrostTextReq, bifrostCtx)
+		return
+	}
+
 	resp, bifrostErr := h.client.TextCompletionRequest(*bifrostCtx, bifrostTextReq)
 	if bifrostErr != nil {
 		SendBifrostError(ctx, bifrostErr, h.logger)
@@ -706,6 +711,19 @@ func (h *CompletionHandler) transcription(ctx *fasthttp.RequestCtx) {
 
 	// Send successful response
 	SendJSON(ctx, resp, h.logger)
+}
+
+// handleStreamingTextCompletion handles streaming text completion requests using Server-Sent Events (SSE)
+func (h *CompletionHandler) handleStreamingTextCompletion(ctx *fasthttp.RequestCtx, req *schemas.BifrostTextCompletionRequest, bifrostCtx *context.Context) {
+	getStream := func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+		return h.client.TextCompletionStreamRequest(*bifrostCtx, req)
+	}
+
+	extractResponse := func(response *schemas.BifrostStream) (interface{}, bool) {
+		return response, true
+	}
+
+	h.handleStreamingResponse(ctx, getStream, extractResponse)
 }
 
 // handleStreamingChatCompletion handles streaming chat completion requests using Server-Sent Events (SSE)

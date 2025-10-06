@@ -268,6 +268,13 @@ func (provider *BedrockProvider) TextCompletion(ctx context.Context, key schemas
 	return bifrostResponse, nil
 }
 
+// TextCompletionStream performs a streaming text completion request to Bedrock's API.
+// It formats the request, sends it to Bedrock, and processes the response.
+// Returns a channel of BifrostStream objects or an error if the request fails.
+func (provider *BedrockProvider) TextCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	return nil, newUnsupportedOperationError("text completion stream", "bedrock")
+}
+
 // ChatCompletion performs a chat completion request to Bedrock's API.
 // It formats the request, sends it to Bedrock, and processes the response.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
