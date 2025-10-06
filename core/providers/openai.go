@@ -1273,12 +1273,18 @@ func parseOpenAIError(resp *fasthttp.Response) *schemas.BifrostError {
 	if errorResp.EventID != nil {
 		bifrostErr.EventID = errorResp.EventID
 	}
-	bifrostErr.Error.Type = errorResp.Error.Type
-	bifrostErr.Error.Code = errorResp.Error.Code
-	bifrostErr.Error.Message = errorResp.Error.Message
-	bifrostErr.Error.Param = errorResp.Error.Param
-	if errorResp.Error.EventID != nil {
-		bifrostErr.Error.EventID = errorResp.Error.EventID
+
+	if errorResp.Error != nil {
+		if bifrostErr.Error == nil {
+			bifrostErr.Error = &schemas.ErrorField{}
+		}
+		bifrostErr.Error.Type = errorResp.Error.Type
+		bifrostErr.Error.Code = errorResp.Error.Code
+		bifrostErr.Error.Message = errorResp.Error.Message
+		bifrostErr.Error.Param = errorResp.Error.Param
+		if errorResp.Error.EventID != nil {
+			bifrostErr.Error.EventID = errorResp.Error.EventID
+		}
 	}
 
 	return bifrostErr
@@ -1311,12 +1317,17 @@ func parseStreamOpenAIError(resp *http.Response) *schemas.BifrostError {
 	if errorResp.EventID != nil {
 		bifrostErr.EventID = errorResp.EventID
 	}
-	bifrostErr.Error.Type = errorResp.Error.Type
-	bifrostErr.Error.Code = errorResp.Error.Code
-	bifrostErr.Error.Message = errorResp.Error.Message
-	bifrostErr.Error.Param = errorResp.Error.Param
-	if errorResp.Error.EventID != nil {
-		bifrostErr.Error.EventID = errorResp.Error.EventID
+	if errorResp.Error != nil {
+		if bifrostErr.Error == nil {
+			bifrostErr.Error = &schemas.ErrorField{}
+		}
+		bifrostErr.Error.Type = errorResp.Error.Type
+		bifrostErr.Error.Code = errorResp.Error.Code
+		bifrostErr.Error.Message = errorResp.Error.Message
+		bifrostErr.Error.Param = errorResp.Error.Param
+		if errorResp.Error.EventID != nil {
+			bifrostErr.Error.EventID = errorResp.Error.EventID
+		}
 	}
 
 	return bifrostErr

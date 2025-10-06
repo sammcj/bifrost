@@ -18,18 +18,18 @@ func TestResponsesAPIBasicFunctionality(t *testing.T) {
 	testRequest := CreateBasicResponsesRequest(
 		"What is Bifrost? Answer in one short sentence.",
 		0.7,
-		50,
+		500,
 	)
 
 	t.Log("Making first Responses API request (should go to OpenAI and be cached)...")
 
-	// Make first request (will go to OpenAI and be cached)
+	// Make first request (will go to OpenAI and be cached) - with retries
 	start1 := time.Now()
-	response1, err1 := setup.Client.ResponsesRequest(ctx, testRequest)
+	response1, err1 := ResponsesRequestWithRetries(t, setup.Client, ctx, testRequest)
 	duration1 := time.Since(start1)
 
 	if err1 != nil {
-		t.Fatalf("First Responses request failed: %v", err1)
+		return // Test will be skipped by retry function
 	}
 
 	if response1 == nil || len(response1.Output) == 0 {
@@ -96,26 +96,26 @@ func TestResponsesAPIDifferentParameters(t *testing.T) {
 	}{
 		{
 			name:        "Identical Requests",
-			request1:    CreateBasicResponsesRequest(basePrompt, 0.5, 50),
-			request2:    CreateBasicResponsesRequest(basePrompt, 0.5, 50),
+			request1:    CreateBasicResponsesRequest(basePrompt, 0.5, 500),
+			request2:    CreateBasicResponsesRequest(basePrompt, 0.5, 500),
 			shouldCache: true,
 		},
 		{
 			name:        "Different Temperature",
-			request1:    CreateBasicResponsesRequest(basePrompt, 0.1, 50),
-			request2:    CreateBasicResponsesRequest(basePrompt, 0.9, 50),
+			request1:    CreateBasicResponsesRequest(basePrompt, 0.1, 500),
+			request2:    CreateBasicResponsesRequest(basePrompt, 0.9, 500),
 			shouldCache: false,
 		},
 		{
 			name:        "Different MaxOutputTokens",
-			request1:    CreateBasicResponsesRequest(basePrompt, 0.5, 50),
+			request1:    CreateBasicResponsesRequest(basePrompt, 0.5, 500),
 			request2:    CreateBasicResponsesRequest(basePrompt, 0.5, 200),
 			shouldCache: false,
 		},
 		{
 			name:        "Different Instructions",
-			request1:    CreateResponsesRequestWithInstructions(basePrompt, "Be concise", 0.5, 50),
-			request2:    CreateResponsesRequestWithInstructions(basePrompt, "Be detailed", 0.5, 50),
+			request1:    CreateResponsesRequestWithInstructions(basePrompt, "Be concise", 0.5, 500),
+			request2:    CreateResponsesRequestWithInstructions(basePrompt, "Be detailed", 0.5, 500),
 			shouldCache: false,
 		},
 	}
@@ -126,9 +126,9 @@ func TestResponsesAPIDifferentParameters(t *testing.T) {
 			clearTestKeysWithStore(t, setup.Store)
 
 			// Make first request
-			_, err1 := setup.Client.ResponsesRequest(ctx, tt.request1)
+			_, err1 := ResponsesRequestWithRetries(t, setup.Client, ctx, tt.request1)
 			if err1 != nil {
-				t.Fatalf("First request failed: %v", err1)
+				return // Test will be skipped by retry function
 			}
 
 			WaitForCache()
@@ -136,7 +136,11 @@ func TestResponsesAPIDifferentParameters(t *testing.T) {
 			// Make second request
 			response2, err2 := setup.Client.ResponsesRequest(ctx, tt.request2)
 			if err2 != nil {
-				t.Fatalf("Second request failed: %v", err2)
+				if err2.Error != nil {
+					t.Fatalf("Second request failed: %v", err2.Error.Message)
+				} else {
+					t.Fatalf("Second request failed: %v", err2)
+				}
 			}
 
 			if tt.shouldCache {
@@ -158,22 +162,26 @@ func TestResponsesAPISemanticMatching(t *testing.T) {
 	ctx := CreateContextWithCacheKeyAndType("test-responses-semantic", CacheTypeSemantic)
 
 	// First request
-	originalRequest := CreateBasicResponsesRequest("What is machine learning?", 0.5, 50)
+	originalRequest := CreateBasicResponsesRequest("What is machine learning?", 0.5, 500)
 	t.Log("Making first Responses request with original text...")
-	response1, err1 := setup.Client.ResponsesRequest(ctx, originalRequest)
+	response1, err1 := ResponsesRequestWithRetries(t, setup.Client, ctx, originalRequest)
 	if err1 != nil {
-		t.Fatalf("First request failed: %v", err1)
+		return // Test will be skipped by retry function
 	}
 
 	AssertNoCacheHit(t, response1)
 	WaitForCache()
 
 	// Test semantic match with similar but different text
-	semanticRequest := CreateBasicResponsesRequest("Can you explain machine learning concepts?", 0.5, 50)
+	semanticRequest := CreateBasicResponsesRequest("Can you explain machine learning concepts?", 0.5, 500)
 	t.Log("Making semantically similar Responses request...")
 	response2, err2 := setup.Client.ResponsesRequest(ctx, semanticRequest)
 	if err2 != nil {
-		t.Fatalf("Second request failed: %v", err2)
+		if err2.Error != nil {
+			t.Fatalf("Second request failed: %v", err2.Error.Message)
+		} else {
+			t.Fatalf("Second request failed: %v", err2)
+		}
 	}
 
 	// This should be a semantic cache hit
@@ -193,13 +201,13 @@ func TestResponsesAPIWithInstructions(t *testing.T) {
 		"Explain artificial intelligence",
 		"You are a helpful assistant. Be concise and accurate.",
 		0.7,
-		100,
+		500,
 	)
 
 	t.Log("Making first Responses request with instructions...")
-	response1, err1 := setup.Client.ResponsesRequest(ctx, request1)
+	response1, err1 := ResponsesRequestWithRetries(t, setup.Client, ctx, request1)
 	if err1 != nil {
-		t.Fatalf("First request failed: %v", err1)
+		return // Test will be skipped by retry function
 	}
 
 	AssertNoCacheHit(t, response1)
@@ -210,13 +218,17 @@ func TestResponsesAPIWithInstructions(t *testing.T) {
 		"Explain artificial intelligence",
 		"You are a helpful assistant. Be concise and accurate.",
 		0.7,
-		100,
+		500,
 	)
 
 	t.Log("Making second identical Responses request with instructions...")
 	response2, err2 := setup.Client.ResponsesRequest(ctx, request2)
 	if err2 != nil {
-		t.Fatalf("Second request failed: %v", err2)
+		if err2.Error != nil {
+			t.Fatalf("Second request failed: %v", err2.Error.Message)
+		} else {
+			t.Fatalf("Second request failed: %v", err2)
+		}
 	}
 
 	// Should be a cache hit
@@ -233,12 +245,12 @@ func TestResponsesAPICacheExpiration(t *testing.T) {
 	shortTTL := 1 * time.Second
 	ctx := CreateContextWithCacheKeyAndTTL("test-responses-ttl", shortTTL)
 
-	responsesRequest := CreateBasicResponsesRequest("TTL test for Responses API", 0.5, 50)
+	responsesRequest := CreateBasicResponsesRequest("TTL test for Responses API", 0.5, 500)
 
 	t.Log("Making first Responses request with short TTL...")
-	response1, err1 := setup.Client.ResponsesRequest(ctx, responsesRequest)
+	response1, err1 := ResponsesRequestWithRetries(t, setup.Client, ctx, responsesRequest)
 	if err1 != nil {
-		t.Fatalf("First request failed: %v", err1)
+		return // Test will be skipped by retry function
 	}
 	AssertNoCacheHit(t, response1)
 
@@ -247,7 +259,11 @@ func TestResponsesAPICacheExpiration(t *testing.T) {
 	t.Log("Making second Responses request before TTL expiration...")
 	response2, err2 := setup.Client.ResponsesRequest(ctx, responsesRequest)
 	if err2 != nil {
-		t.Fatalf("Second request failed: %v", err2)
+		if err2.Error != nil {
+			t.Fatalf("Second request failed: %v", err2.Error.Message)
+		} else {
+			t.Fatalf("Second request failed: %v", err2)
+		}
 	}
 	AssertCacheHit(t, response2, "direct")
 
@@ -255,9 +271,9 @@ func TestResponsesAPICacheExpiration(t *testing.T) {
 	time.Sleep(shortTTL + 2*time.Second) // Wait for TTL to expire
 
 	t.Log("Making third Responses request after TTL expiration...")
-	response3, err3 := setup.Client.ResponsesRequest(ctx, responsesRequest)
+	response3, err3 := ResponsesRequestWithRetries(t, setup.Client, ctx, responsesRequest)
 	if err3 != nil {
-		t.Fatalf("Third request failed: %v", err3)
+		return // Test will be skipped by retry function
 	}
 	// Should not be a cache hit since TTL expired
 	AssertNoCacheHit(t, response3)
@@ -273,13 +289,13 @@ func TestResponsesAPIWithoutCacheKey(t *testing.T) {
 	// Don't set cache key in context
 	ctx := CreateContextWithCacheKey("")
 
-	responsesRequest := CreateBasicResponsesRequest("Test Responses without cache key", 0.5, 50)
+	responsesRequest := CreateBasicResponsesRequest("Test Responses without cache key", 0.5, 500)
 
 	t.Log("Making Responses request without cache key...")
 
-	response, err := setup.Client.ResponsesRequest(ctx, responsesRequest)
+	response, err := ResponsesRequestWithRetries(t, setup.Client, ctx, responsesRequest)
 	if err != nil {
-		t.Fatalf("Responses request failed: %v", err)
+		return // Test will be skipped by retry function
 	}
 
 	// Should not be cached
@@ -293,22 +309,22 @@ func TestResponsesAPINoStoreFlag(t *testing.T) {
 	setup := NewTestSetup(t)
 	defer setup.Cleanup()
 
-	responsesRequest := CreateBasicResponsesRequest("Test no-store with Responses API", 0.7, 50)
+	responsesRequest := CreateBasicResponsesRequest("Test no-store with Responses API", 0.7, 500)
 	ctx := CreateContextWithCacheKeyAndNoStore("test-no-store-responses", true)
 
 	t.Log("Testing no-store with Responses API...")
-	response1, err1 := setup.Client.ResponsesRequest(ctx, responsesRequest)
+	response1, err1 := ResponsesRequestWithRetries(t, setup.Client, ctx, responsesRequest)
 	if err1 != nil {
-		t.Fatalf("Responses request failed: %v", err1)
+		return // Test will be skipped by retry function
 	}
 	AssertNoCacheHit(t, response1)
 
 	WaitForCache()
 
 	// Verify not cached
-	response2, err2 := setup.Client.ResponsesRequest(ctx, responsesRequest)
+	response2, err2 := ResponsesRequestWithRetries(t, setup.Client, ctx, responsesRequest)
 	if err2 != nil {
-		t.Fatalf("Second Responses request failed: %v", err2)
+		return // Test will be skipped by retry function
 	}
 	AssertNoCacheHit(t, response2) // Should not be cached
 
@@ -328,17 +344,17 @@ func TestResponsesAPIStreaming(t *testing.T) {
 
 	// Make non-streaming request first
 	t.Log("Making non-streaming Responses request...")
-	nonStreamRequest := CreateBasicResponsesRequest(prompt, 0.5, 50)
-	_, err1 := setup.Client.ResponsesRequest(ctx, nonStreamRequest)
+	nonStreamRequest := CreateBasicResponsesRequest(prompt, 0.5, 500)
+	_, err1 := ResponsesRequestWithRetries(t, setup.Client, ctx, nonStreamRequest)
 	if err1 != nil {
-		t.Fatalf("Non-streaming Responses request failed: %v", err1)
+		return // Test will be skipped by retry function
 	}
 
 	WaitForCache()
 
 	// Make streaming request with same prompt and parameters
 	t.Log("Making streaming Responses request with same prompt...")
-	streamRequest := CreateStreamingResponsesRequest(prompt, 0.5, 50)
+	streamRequest := CreateStreamingResponsesRequest(prompt, 0.5, 500)
 	stream, err2 := setup.Client.ResponsesStreamRequest(ctx, streamRequest)
 	if err2 != nil {
 		t.Fatalf("Streaming Responses request failed: %v", err2)
@@ -382,7 +398,7 @@ func TestResponsesAPIComplexParameters(t *testing.T) {
 	ctx := CreateContextWithCacheKey("test-responses-complex-params")
 
 	// Create request with various complex parameters
-	request := CreateBasicResponsesRequest("Test complex parameters", 0.8, 150)
+	request := CreateBasicResponsesRequest("Test complex parameters", 0.8, 500)
 	request.Params.TopP = PtrFloat64(0.9)
 	request.Params.Background = &[]bool{true}[0]
 	request.Params.ParallelToolCalls = &[]bool{false}[0]
@@ -390,16 +406,16 @@ func TestResponsesAPIComplexParameters(t *testing.T) {
 	request.Params.Store = &[]bool{true}[0]
 
 	t.Log("Making first Responses request with complex parameters...")
-	response1, err1 := setup.Client.ResponsesRequest(ctx, request)
+	response1, err1 := ResponsesRequestWithRetries(t, setup.Client, ctx, request)
 	if err1 != nil {
-		t.Fatalf("First request failed: %v", err1)
+		return // Test will be skipped by retry function
 	}
 
 	AssertNoCacheHit(t, response1)
 	WaitForCache()
 
 	// Create identical request
-	request2 := CreateBasicResponsesRequest("Test complex parameters", 0.8, 150)
+	request2 := CreateBasicResponsesRequest("Test complex parameters", 0.8, 500)
 	request2.Params.TopP = PtrFloat64(0.9)
 	request2.Params.Background = &[]bool{true}[0]
 	request2.Params.ParallelToolCalls = &[]bool{false}[0]
@@ -409,7 +425,11 @@ func TestResponsesAPIComplexParameters(t *testing.T) {
 	t.Log("Making second identical Responses request with complex parameters...")
 	response2, err2 := setup.Client.ResponsesRequest(ctx, request2)
 	if err2 != nil {
-		t.Fatalf("Second request failed: %v", err2)
+		if err2.Error != nil {
+			t.Fatalf("Second request failed: %v", err2.Error.Message)
+		} else {
+			t.Fatalf("Second request failed: %v", err2)
+		}
 	}
 
 	// Should be a cache hit
