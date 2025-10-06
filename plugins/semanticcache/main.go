@@ -136,7 +136,7 @@ type StreamAccumulator struct {
 //   - logger: Logger instance for plugin operations
 type Plugin struct {
 	store              vectorstore.VectorStore
-	config             Config
+	config             *Config
 	logger             schemas.Logger
 	client             *bifrost.Bifrost
 	streamAccumulators sync.Map // Track stream accumulators by request ID
@@ -262,7 +262,10 @@ const (
 // Returns:
 //   - schemas.Plugin: A configured semantic cache plugin instance
 //   - error: Any error that occurred during plugin initialization
-func Init(ctx context.Context, config Config, logger schemas.Logger, store vectorstore.VectorStore) (schemas.Plugin, error) {
+func Init(ctx context.Context, config *Config, logger schemas.Logger, store vectorstore.VectorStore) (schemas.Plugin, error) {
+	if config == nil {
+		return nil, fmt.Errorf("config is required")
+	}
 	// Set plugin-specific defaults
 	if config.VectorStoreNamespace == "" {
 		logger.Debug(PluginLoggerPrefix + " Vector store namespace is not set, using default of " + DefaultVectorStoreNamespace)
@@ -366,11 +369,6 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	*ctx = context.WithValue(*ctx, requestModelKey, req.Model)
 	*ctx = context.WithValue(*ctx, requestProviderKey, req.Provider)
 
-	requestType, ok := (*ctx).Value(schemas.BifrostContextKeyRequestType).(schemas.RequestType)
-	if !ok {
-		return req, nil, nil
-	}
-
 	performDirectSearch, performSemanticSearch := true, true
 	if (*ctx).Value(CacheTypeKey) != nil {
 		cacheTypeVal, ok := (*ctx).Value(CacheTypeKey).(CacheType)
@@ -383,7 +381,7 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	}
 
 	if performDirectSearch {
-		shortCircuit, err := plugin.performDirectSearch(ctx, req, requestType, cacheKey)
+		shortCircuit, err := plugin.performDirectSearch(ctx, req, cacheKey)
 		if err != nil {
 			plugin.logger.Warn(PluginLoggerPrefix + " Direct search failed: " + err.Error())
 			// Don't return - continue to semantic search fallback
@@ -396,13 +394,13 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	}
 
 	if performSemanticSearch && plugin.client != nil {
-		if req.Input.EmbeddingInput != nil || req.Input.TranscriptionInput != nil {
+		if req.EmbeddingRequest != nil || req.TranscriptionRequest != nil {
 			plugin.logger.Debug(PluginLoggerPrefix + " Skipping semantic search for embedding/transcription input")
 			return req, nil, nil
 		}
 
 		// Try semantic search as fallback
-		shortCircuit, err := plugin.performSemanticSearch(ctx, req, requestType, cacheKey)
+		shortCircuit, err := plugin.performSemanticSearch(ctx, req, cacheKey)
 		if err != nil {
 			return req, nil, nil
 		}
@@ -461,12 +459,6 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 		}
 	}
 
-	// Get the request type from context
-	requestType, ok := (*ctx).Value(schemas.BifrostContextKeyRequestType).(schemas.RequestType)
-	if !ok {
-		return res, nil, nil
-	}
-
 	// Get the cache key from context
 	cacheKey, ok := (*ctx).Value(CacheKey).(string)
 	if !ok {
@@ -498,6 +490,8 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 			plugin.logger.Debug(PluginLoggerPrefix + " Skipping embedding operations for direct-only cache type")
 		}
 	}
+
+	requestType := res.ExtraFields.RequestType
 
 	// Get embedding from context if available and needed
 	if shouldStoreEmbeddings && requestType != schemas.EmbeddingRequest && requestType != schemas.TranscriptionRequest {
@@ -577,7 +571,7 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 			embeddingToStore = nil
 		}
 
-		if plugin.isStreamingRequest(requestType) {
+		if bifrost.IsStreamRequestType(requestType) {
 			if err := plugin.addStreamingResponse(cacheCtx, requestID, res, bifrostErr, embeddingToStore, unifiedMetadata, cacheTTL, isFinalChunk); err != nil {
 				plugin.logger.Warn(fmt.Sprintf("%s Failed to cache streaming response: %v", PluginLoggerPrefix, err))
 			}
