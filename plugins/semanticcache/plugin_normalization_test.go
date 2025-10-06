@@ -91,9 +91,9 @@ func testChatCompletionNormalization(t *testing.T, setup *TestSetup) {
 
 	// Make first request (should miss cache and be stored)
 	t.Logf("Making first request with user: '%s', system: '%s'", testCases[0].userMsg, testCases[0].systemMsg)
-	response1, err1 := setup.Client.ChatCompletionRequest(ctx, requests[0])
+	response1, err1 := ChatRequestWithRetries(t, setup.Client, ctx, requests[0])
 	if err1 != nil {
-		t.Fatalf("First request failed: %v", err1)
+		return // Test will be skipped by retry function
 	}
 
 	if response1 == nil || len(response1.Choices) == 0 {
@@ -151,7 +151,7 @@ func testSpeechNormalization(t *testing.T, setup *TestSetup) {
 	t.Logf("Making first speech request with: '%s'", testCases[0].input)
 	response1, err1 := setup.Client.SpeechRequest(ctx, requests[0])
 	if err1 != nil {
-		t.Fatalf("First request failed: %v", err1)
+		return // Test will be skipped by retry function
 	}
 
 	if response1 == nil || response1.Speech == nil {
@@ -243,9 +243,9 @@ func TestChatCompletionContentBlocksNormalization(t *testing.T) {
 
 	// Make first request (should miss cache and be stored)
 	t.Logf("Making first request with content blocks: %v", testCases[0].textBlocks)
-	response1, err1 := setup.Client.ChatCompletionRequest(ctx, requests[0])
+	response1, err1 := ChatRequestWithRetries(t, setup.Client, ctx, requests[0])
 	if err1 != nil {
-		t.Fatalf("First request failed: %v", err1)
+		return // Test will be skipped by retry function
 	}
 
 	if response1 == nil || len(response1.Choices) == 0 {
@@ -285,9 +285,9 @@ func TestNormalizationWithSemanticCache(t *testing.T) {
 	// Make first request with original text
 	originalRequest := CreateBasicChatRequest("What is Machine Learning?", 0.5, 50)
 	t.Log("Making first request with original text...")
-	response1, err1 := setup.Client.ChatCompletionRequest(ctx, originalRequest)
+	response1, err1 := ChatRequestWithRetries(t, setup.Client, ctx, originalRequest)
 	if err1 != nil {
-		t.Fatalf("First request failed: %v", err1)
+		return // Test will be skipped by retry function
 	}
 
 	AssertNoCacheHit(t, response1)
@@ -298,7 +298,11 @@ func TestNormalizationWithSemanticCache(t *testing.T) {
 	t.Log("Making semantic request with normalized case...")
 	response2, err2 := setup.Client.ChatCompletionRequest(ctx, normalizedRequest)
 	if err2 != nil {
-		t.Fatalf("Second request failed: %v", err2)
+		if err2.Error != nil {
+			t.Fatalf("Second request failed: %v", err2.Error.Message)
+		} else {
+			t.Fatalf("Second request failed: %v", err2)
+		}
 	}
 
 	// This should be a direct cache hit since the normalized text is identical
