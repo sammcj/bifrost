@@ -19,6 +19,8 @@ const (
 
 // Pre-defined errors for provider operations
 const (
+	ErrProviderRequestTimedOut   = "request timed out (default is 30 seconds). You can increase it by setting the default_request_timeout_in_seconds in the network_config or in UI - Providers > Provider Name > Network Config."
+	ErrRequestCancelled          = "request cancelled by caller"
 	ErrProviderRequest           = "failed to make HTTP request to provider API"
 	ErrProviderResponseUnmarshal = "failed to unmarshal response from provider API"
 	ErrProviderJSONMarshaling    = "failed to marshal request body to JSON"

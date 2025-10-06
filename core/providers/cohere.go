@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -355,6 +356,19 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 	// Create HTTP request for streaming
 	req, err := http.NewRequestWithContext(ctx, "POST", provider.networkConfig.BaseURL+"/v2/chat", bytes.NewReader(jsonBody))
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: &schemas.ErrorField{
+					Type:    schemas.Ptr(schemas.RequestCancelled),
+					Message: schemas.ErrRequestCancelled,
+					Error:   err,
+				},
+			}
+		}
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
+		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
 	}
 
@@ -370,6 +384,19 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 	// Make the request
 	resp, err := provider.streamClient.Do(req)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: &schemas.ErrorField{
+					Type:    schemas.Ptr(schemas.RequestCancelled),
+					Message: schemas.ErrRequestCancelled,
+					Error:   err,
+				},
+			}
+		}
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
+		}
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
