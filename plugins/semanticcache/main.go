@@ -140,6 +140,7 @@ type Plugin struct {
 	logger             schemas.Logger
 	client             *bifrost.Bifrost
 	streamAccumulators sync.Map // Track stream accumulators by request ID
+	waitGroup          sync.WaitGroup
 }
 
 // Plugin constants
@@ -293,9 +294,10 @@ func Init(ctx context.Context, config *Config, logger schemas.Logger, store vect
 	}
 
 	plugin := &Plugin{
-		store:  store,
-		config: config,
-		logger: logger,
+		store:     store,
+		config:    config,
+		logger:    logger,
+		waitGroup: sync.WaitGroup{},
 	}
 
 	if config.Provider == "" || len(config.Keys) == 0 {
@@ -562,6 +564,8 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 
 	// Cache everything in a unified VectorEntry asynchronously to avoid blocking the response
 	go func() {
+		plugin.waitGroup.Add(1)
+		defer plugin.waitGroup.Done()
 		// Create a background context with timeout for the cache operation
 		cacheCtx, cancel := context.WithTimeout(context.Background(), CacheSetTimeout)
 		defer cancel()
@@ -608,6 +612,8 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 // Returns:
 //   - error: Any error that occurred during cleanup operations
 func (plugin *Plugin) Cleanup() error {
+	plugin.waitGroup.Wait()
+
 	// Clean up old stream accumulators first
 	plugin.cleanupOldStreamAccumulators()
 
