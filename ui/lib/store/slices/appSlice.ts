@@ -42,6 +42,15 @@ export interface AppState {
 		timestamp: number;
 	} | null;
 
+	// Selected items
+	selectedItems: {
+		providers: string[];
+		virtualKeys: string[];
+		teams: string[];
+		customers: string[];
+		logs: string[];
+	};
+
 	// Feature flags
 	features: {
 		enableGovernance: boolean;
