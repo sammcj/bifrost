@@ -1,6 +1,5 @@
 <!-- The pattern we follow here is to keep the changelog for the latest version -->
 <!-- Old changelogs are automatically attached to the GitHub releases -->
 
-- Feat: Adds support for Responses and Text completions
-- Upgrade dependency: core to 1.2.0
-- Upgrade dependency: framework to 1.1.0
+- Feat: Adds Text Completion Streaming support
+- Upgrade dependency: core to 1.2.1 and framework to 1.1.1

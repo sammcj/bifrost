@@ -138,6 +138,13 @@ func (provider *VertexProvider) TextCompletion(ctx context.Context, key schemas.
 	return nil, newUnsupportedOperationError("text completion", "vertex")
 }
 
+// TextCompletionStream performs a streaming text completion request to Vertex's API.
+// It formats the request, sends it to Vertex, and processes the response.
+// Returns a channel of BifrostStream objects or an error if the request fails.
+func (provider *VertexProvider) TextCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	return nil, newUnsupportedOperationError("text completion stream", "vertex")
+}
+
 // ChatCompletion performs a chat completion request to the Vertex API.
 // It supports both text and image content in messages.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.

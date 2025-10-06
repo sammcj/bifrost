@@ -447,6 +447,35 @@ func processAndSendError(
 	}
 }
 
+func createBifrostCompletionChunkResponse(
+	id string,
+	usage *schemas.LLMUsage,
+	finishReason *string,
+	currentChunkIndex int,
+	requestType schemas.RequestType,
+	providerName schemas.ModelProvider,
+	model string,
+) *schemas.BifrostResponse {
+	response := &schemas.BifrostResponse{
+		ID:     id,
+		Object: "text_completion",
+		Usage:  usage,
+		Choices: []schemas.BifrostChatResponseChoice{
+			{
+				FinishReason:                        finishReason,
+				BifrostTextCompletionResponseChoice: &schemas.BifrostTextCompletionResponseChoice{},
+			},
+		},
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			RequestType:    requestType,
+			Provider:       providerName,
+			ModelRequested: model,
+			ChunkIndex:     currentChunkIndex + 1,
+		},
+	}
+	return response
+}
+
 func createBifrostChatCompletionChunkResponse(
 	id string,
 	usage *schemas.LLMUsage,

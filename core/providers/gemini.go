@@ -75,6 +75,13 @@ func (provider *GeminiProvider) TextCompletion(ctx context.Context, key schemas.
 	return nil, newUnsupportedOperationError("text completion", string(provider.GetProviderKey()))
 }
 
+// TextCompletionStream performs a streaming text completion request to Gemini's API.
+// It formats the request, sends it to Gemini, and processes the response.
+// Returns a channel of BifrostStream objects or an error if the request fails.
+func (provider *GeminiProvider) TextCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	return nil, newUnsupportedOperationError("text completion stream", "gemini")
+}
+
 // ChatCompletion performs a chat completion request to the Gemini API.
 func (provider *GeminiProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Check if chat completion is allowed for this provider
@@ -534,7 +541,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 
 	if request.Input == nil || request.Input.File == nil {
 		return nil, newBifrostOperationError("transcription input is not provided", fmt.Errorf("empty file input"), providerName)
-	}	
+	}
 
 	// Check file size limit (Gemini has a 20MB limit for inline data)
 	if request.Input.File != nil {

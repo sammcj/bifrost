@@ -118,6 +118,14 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 			ErrorConverter: func(err *schemas.BifrostError) interface{} {
 				return err
 			},
+			StreamConfig: &StreamConfig{
+				ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
+					return resp, nil
+				},
+				ErrorConverter: func(err *schemas.BifrostError) interface{} {
+					return err
+				},
+			},
 			PreCallback: AzureEndpointPreHook(handlerStore),
 		})
 	}

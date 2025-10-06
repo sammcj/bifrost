@@ -243,7 +243,7 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 	}
 
 	switch req.RequestType {
-	case schemas.TextCompletionRequest:
+	case schemas.TextCompletionRequest, schemas.TextCompletionStreamRequest:
 		initialData.Params = req.TextCompletionRequest.Params
 	case schemas.ChatCompletionRequest, schemas.ChatCompletionStreamRequest:
 		initialData.Params = req.ChatRequest.Params
@@ -450,7 +450,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 						TotalTokens:      result.Speech.Usage.TotalTokens,
 					}
 				}
-			}			
+			}
 			if result.Transcribe != nil {
 				updateData.TranscriptionOutput = result.Transcribe
 				// Extract token usage
@@ -528,7 +528,7 @@ func (p *LoggerPlugin) Cleanup() error {
 // determineObjectType determines the object type from request input
 func (p *LoggerPlugin) determineObjectType(requestType schemas.RequestType) string {
 	switch requestType {
-	case schemas.TextCompletionRequest:
+	case schemas.TextCompletionRequest, schemas.TextCompletionStreamRequest:
 		return "text.completion"
 	case schemas.ChatCompletionRequest:
 		return "chat.completion"
