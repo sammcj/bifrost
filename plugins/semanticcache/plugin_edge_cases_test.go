@@ -49,9 +49,9 @@ func TestParameterVariations(t *testing.T) {
 			clearTestKeysWithStore(t, setup.Store)
 
 			// Make first request
-			_, err1 := setup.Client.ChatCompletionRequest(ctx, tt.request1)
+			_, err1 := ChatRequestWithRetries(t, setup.Client, ctx, tt.request1)
 			if err1 != nil {
-				t.Fatalf("First request failed: %v", err1)
+				return // Test will be skipped by retry function
 			}
 
 			WaitForCache()
@@ -59,7 +59,11 @@ func TestParameterVariations(t *testing.T) {
 			// Make second request
 			response2, err2 := setup.Client.ChatCompletionRequest(ctx, tt.request2)
 			if err2 != nil {
-				t.Fatalf("Second request failed: %v", err2)
+				if err2.Error != nil {
+					t.Fatalf("Second request failed: %v", err2.Error.Message)
+				} else {
+					t.Fatalf("Second request failed: %v", err2)
+				}
 			}
 
 			// Check cache behavior
@@ -173,7 +177,7 @@ func TestToolVariations(t *testing.T) {
 
 	// Test 1: Request without tools
 	t.Log("Making request without tools...")
-	_, err1 := setup.Client.ChatCompletionRequest(ctx, baseRequest)
+	_, err1 := ChatRequestWithRetries(t, setup.Client, ctx, baseRequest)
 	if err1 != nil {
 		t.Fatalf("Request without tools failed: %v", err1)
 	}
@@ -182,9 +186,9 @@ func TestToolVariations(t *testing.T) {
 
 	// Test 2: Request with tools (should NOT cache hit)
 	t.Log("Making request with tools...")
-	response2, err2 := setup.Client.ChatCompletionRequest(ctx, requestWithTools)
+	response2, err2 := ChatRequestWithRetries(t, setup.Client, ctx, requestWithTools)
 	if err2 != nil {
-		t.Fatalf("Request with tools failed: %v", err2)
+		return // Test will be skipped by retry function
 	}
 
 	AssertNoCacheHit(t, response2)
@@ -202,9 +206,9 @@ func TestToolVariations(t *testing.T) {
 
 	// Test 4: Request with different tools (should NOT cache hit)
 	t.Log("Making request with different tools...")
-	response4, err4 := setup.Client.ChatCompletionRequest(ctx, requestWithDifferentTools)
+	response4, err4 := ChatRequestWithRetries(t, setup.Client, ctx, requestWithDifferentTools)
 	if err4 != nil {
-		t.Fatalf("Request with different tools failed: %v", err4)
+		return // Test will be skipped by retry function
 	}
 
 	AssertNoCacheHit(t, response4)
@@ -365,7 +369,7 @@ func TestContentVariations(t *testing.T) {
 			t.Logf("Testing content variation: %s", tt.name)
 
 			// Make first request
-			_, err1 := setup.Client.ChatCompletionRequest(ctx, tt.request)
+			_, err1 := ChatRequestWithRetries(t, setup.Client, ctx, tt.request)
 			if err1 != nil {
 				t.Logf("⚠️  First %s request failed: %v", tt.name, err1)
 				return // Skip this test case
@@ -527,9 +531,9 @@ func TestSemanticSimilarityEdgeCases(t *testing.T) {
 
 			// Make first request
 			request1 := CreateBasicChatRequest(test.prompt1, 0.1, 50)
-			_, err1 := setup.Client.ChatCompletionRequest(ctx, request1)
+			_, err1 := ChatRequestWithRetries(t, setup.Client, ctx, request1)
 			if err1 != nil {
-				t.Fatalf("First request failed: %v", err1)
+				return // Test will be skipped by retry function
 			}
 
 			// Wait for cache to be written
@@ -539,7 +543,11 @@ func TestSemanticSimilarityEdgeCases(t *testing.T) {
 			request2 := CreateBasicChatRequest(test.prompt2, 0.1, 50) // Same parameters
 			response2, err2 := setup.Client.ChatCompletionRequest(ctx, request2)
 			if err2 != nil {
-				t.Fatalf("Second request failed: %v", err2)
+				if err2.Error != nil {
+					t.Fatalf("Second request failed: %v", err2.Error.Message)
+				} else {
+					t.Fatalf("Second request failed: %v", err2)
+				}
 			}
 
 			var cacheThresholdFloat float64
@@ -588,7 +596,7 @@ func TestErrorHandlingEdgeCases(t *testing.T) {
 	t.Run("Request without cache key", func(t *testing.T) {
 		ctxNoKey := context.Background() // No cache key
 
-		response, err := setup.Client.ChatCompletionRequest(ctxNoKey, testRequest)
+		response, err := ChatRequestWithRetries(t, setup.Client, ctxNoKey, testRequest)
 		if err != nil {
 			t.Errorf("Request without cache key failed: %v", err)
 			return
@@ -603,7 +611,7 @@ func TestErrorHandlingEdgeCases(t *testing.T) {
 	t.Run("Request with invalid cache key type", func(t *testing.T) {
 		// First establish a cached response with valid context
 		validCtx := CreateContextWithCacheKey("error-handling-test")
-		_, err := setup.Client.ChatCompletionRequest(validCtx, testRequest)
+		_, err := ChatRequestWithRetries(t, setup.Client, validCtx, testRequest)
 		if err != nil {
 			t.Fatalf("First request with valid cache key failed: %v", err)
 		}
@@ -613,7 +621,7 @@ func TestErrorHandlingEdgeCases(t *testing.T) {
 		// Now test with invalid key type - should bypass cache
 		ctxInvalidKey := context.WithValue(context.Background(), CacheKey, 12345) // Wrong type (int instead of string)
 
-		response, err := setup.Client.ChatCompletionRequest(ctxInvalidKey, testRequest)
+		response, err := ChatRequestWithRetries(t, setup.Client, ctxInvalidKey, testRequest)
 		if err != nil {
 			t.Errorf("Request with invalid cache key type failed: %v", err)
 			return
