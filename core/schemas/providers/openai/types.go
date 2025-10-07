@@ -1,6 +1,11 @@
 package openai
 
-import "github.com/maximhq/bifrost/core/schemas"
+import (
+	"fmt"
+
+	"github.com/bytedance/sonic"
+	"github.com/maximhq/bifrost/core/schemas"
+)
 
 // REQUEST TYPES
 
@@ -40,9 +45,43 @@ func (r *OpenAIChatRequest) IsStreamingRequested() bool {
 	return r.Stream != nil && *r.Stream
 }
 
+// ResponsesRequestInput is a union of string and array of responses messages
+type OpenAIResponsesRequestInput struct {
+	OpenAIResponsesRequestInputStr   *string
+	OpenAIResponsesRequestInputArray []schemas.ResponsesMessage
+}
+
+// UnmarshalJSON unmarshals the responses request input
+func (r *OpenAIResponsesRequestInput) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := sonic.Unmarshal(data, &str); err == nil {
+		r.OpenAIResponsesRequestInputStr = &str
+		r.OpenAIResponsesRequestInputArray = nil
+		return nil
+	}
+	var array []schemas.ResponsesMessage
+	if err := sonic.Unmarshal(data, &array); err == nil {
+		r.OpenAIResponsesRequestInputStr = nil
+		r.OpenAIResponsesRequestInputArray = array
+		return nil
+	}
+	return fmt.Errorf("invalid responses request input")
+}
+
+// MarshalJSON implements custom JSON marshalling for ResponsesRequestInput.
+func (r *OpenAIResponsesRequestInput) MarshalJSON() ([]byte, error) {
+	if r.OpenAIResponsesRequestInputStr != nil {
+		return sonic.Marshal(*r.OpenAIResponsesRequestInputStr)
+	}
+	if r.OpenAIResponsesRequestInputArray != nil {
+		return sonic.Marshal(r.OpenAIResponsesRequestInputArray)
+	}
+	return sonic.Marshal(nil)
+}
+
 type OpenAIResponsesRequest struct {
-	Model string                     `json:"model"`
-	Input []schemas.ResponsesMessage `json:"input"`
+	Model string                      `json:"model"`
+	Input OpenAIResponsesRequestInput `json:"input"`
 
 	schemas.ResponsesParameters
 	Stream *bool `json:"stream,omitempty"`

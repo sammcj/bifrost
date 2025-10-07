@@ -166,12 +166,37 @@ type ChatRequest struct {
 	*schemas.ChatParameters
 }
 
+// ResponsesRequestInput is a union of string and array of responses messages
+type ResponsesRequestInput struct {
+	ResponsesRequestInputStr   *string
+	ResponsesRequestInputArray []schemas.ResponsesMessage
+}
+
+// UnmarshalJSON unmarshals the responses request input
+func (r *ResponsesRequestInput) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := sonic.Unmarshal(data, &str); err == nil {
+		r.ResponsesRequestInputStr = &str
+		r.ResponsesRequestInputArray = nil
+		return nil
+	}
+	var array []schemas.ResponsesMessage
+	if err := sonic.Unmarshal(data, &array); err == nil {
+		r.ResponsesRequestInputStr = nil
+		r.ResponsesRequestInputArray = array
+		return nil
+	}
+	return fmt.Errorf("invalid responses request input")
+}
+
+// ResponsesRequest is a bifrost responses request
 type ResponsesRequest struct {
-	Input []schemas.ResponsesMessage `json:"input"`
+	Input ResponsesRequestInput `json:"input"`
 	BifrostParams
 	*schemas.ResponsesParameters
 }
 
+// EmbeddingRequest is a bifrost embedding request
 type EmbeddingRequest struct {
 	Input *schemas.EmbeddingInput `json:"input"`
 	BifrostParams
@@ -266,6 +291,10 @@ func (h *CompletionHandler) textCompletion(ctx *fasthttp.RequestCtx) {
 
 	// Create BifrostTextCompletionRequest directly using segregated structure
 	provider, modelName := schemas.ParseModelString(req.Model, "")
+	if provider == "" || modelName == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "model should be in provider/model format", h.logger)
+		return
+	}
 
 	// Parse fallbacks using helper function
 	fallbacks, err := parseFallbacks(req.Fallbacks)
@@ -332,6 +361,10 @@ func (h *CompletionHandler) chatCompletion(ctx *fasthttp.RequestCtx) {
 
 	// Create BifrostChatRequest directly using segregated structure
 	provider, modelName := schemas.ParseModelString(req.Model, "")
+	if provider == "" || modelName == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "model should be in provider/model format", h.logger)
+		return
+	}
 
 	// Parse fallbacks using helper function
 	fallbacks, err := parseFallbacks(req.Fallbacks)
@@ -398,6 +431,10 @@ func (h *CompletionHandler) responses(ctx *fasthttp.RequestCtx) {
 
 	// Create BifrostResponsesRequest directly using segregated structure
 	provider, modelName := schemas.ParseModelString(req.Model, "")
+	if provider == "" || modelName == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "model should be in provider/model format", h.logger)
+		return
+	}
 
 	// Parse fallbacks using helper function
 	fallbacks, err := parseFallbacks(req.Fallbacks)
@@ -406,7 +443,7 @@ func (h *CompletionHandler) responses(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if len(req.Input) == 0 {
+	if len(req.Input.ResponsesRequestInputArray) == 0 && req.Input.ResponsesRequestInputStr == nil {
 		SendError(ctx, fasthttp.StatusBadRequest, "Input is required for responses", h.logger)
 		return
 	}
@@ -423,11 +460,21 @@ func (h *CompletionHandler) responses(ctx *fasthttp.RequestCtx) {
 		req.ResponsesParameters.ExtraParams = extraParams
 	}
 
+	input := req.Input.ResponsesRequestInputArray
+	if input == nil {
+		input = []schemas.ResponsesMessage{
+			{
+				Role:    schemas.Ptr(schemas.ResponsesInputMessageRoleUser),
+				Content: &schemas.ResponsesMessageContent{ContentStr: req.Input.ResponsesRequestInputStr},
+			},
+		}
+	}
+
 	// Create segregated BifrostResponsesRequest
 	bifrostResponsesReq := &schemas.BifrostResponsesRequest{
 		Provider:  schemas.ModelProvider(provider),
 		Model:     modelName,
-		Input:     req.Input,
+		Input:     input,
 		Params:    req.ResponsesParameters,
 		Fallbacks: fallbacks,
 	}
@@ -464,6 +511,10 @@ func (h *CompletionHandler) embeddings(ctx *fasthttp.RequestCtx) {
 
 	// Create BifrostEmbeddingRequest directly using segregated structure
 	provider, modelName := schemas.ParseModelString(req.Model, "")
+	if provider == "" || modelName == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "model should be in provider/model format", h.logger)
+		return
+	}
 
 	// Parse fallbacks using helper function
 	fallbacks, err := parseFallbacks(req.Fallbacks)
@@ -525,6 +576,10 @@ func (h *CompletionHandler) speech(ctx *fasthttp.RequestCtx) {
 
 	// Create BifrostSpeechRequest directly using segregated structure
 	provider, modelName := schemas.ParseModelString(req.Model, "")
+	if provider == "" || modelName == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "model should be in provider/model format", h.logger)
+		return
+	}
 
 	// Parse fallbacks using helper function
 	fallbacks, err := parseFallbacks(req.Fallbacks)
