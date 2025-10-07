@@ -780,7 +780,7 @@ func (provider *BedrockProvider) processEventBuffer(ctx context.Context, postHoo
 				{
 					Index: 0,
 					BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-						Delta: schemas.BifrostStreamDelta{
+						Delta: &schemas.BifrostStreamDelta{
 							Role: streamEvent.Role,
 						},
 					},
@@ -820,7 +820,7 @@ func (provider *BedrockProvider) processEventBuffer(ctx context.Context, postHoo
 				{
 					Index: contentBlockIndex,
 					BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-						Delta: schemas.BifrostStreamDelta{
+						Delta: &schemas.BifrostStreamDelta{
 							ToolCalls: []schemas.ChatAssistantMessageToolCall{toolCall},
 						},
 					},
@@ -854,7 +854,7 @@ func (provider *BedrockProvider) processEventBuffer(ctx context.Context, postHoo
 						{
 							Index: contentBlockIndex,
 							BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-								Delta: schemas.BifrostStreamDelta{
+								Delta: &schemas.BifrostStreamDelta{
 									Content: &text,
 								},
 							},
@@ -891,7 +891,7 @@ func (provider *BedrockProvider) processEventBuffer(ctx context.Context, postHoo
 					{
 						Index: contentBlockIndex,
 						BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-							Delta: schemas.BifrostStreamDelta{
+							Delta: &schemas.BifrostStreamDelta{
 								ToolCalls: []schemas.ChatAssistantMessageToolCall{toolCall},
 							},
 						},

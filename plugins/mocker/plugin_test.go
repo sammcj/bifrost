@@ -79,7 +79,7 @@ func TestMockerPlugin_Disabled(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Hello, test message"),
 				},
 			},
@@ -121,7 +121,7 @@ func TestMockerPlugin_DefaultMockRule(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Hello, test message"),
 				},
 			},
@@ -197,7 +197,7 @@ func TestMockerPlugin_CustomSuccessRule(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Hello, test message"),
 				},
 			},
@@ -276,7 +276,7 @@ func TestMockerPlugin_ErrorResponse(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Hello, test message"),
 				},
 			},
@@ -339,7 +339,7 @@ func TestMockerPlugin_MessageTemplate(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Hello, test message"),
 				},
 			},
@@ -411,7 +411,7 @@ func TestMockerPlugin_Statistics(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("Hello, test message"),
 					},
 				},

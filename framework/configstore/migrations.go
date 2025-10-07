@@ -31,6 +31,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddAllowDirectKeysColumn(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddEnableLiteLLMFallbacksColumn(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -238,6 +241,7 @@ func migrationMany2ManyJoinTable(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
+// migrationAddCustomProviderConfigJSONColumn adds the custom_provider_config_json column to the provider table
 func migrationAddCustomProviderConfigJSONColumn(ctx context.Context, db *gorm.DB) error {
 	m := migration.New(db, migration.DefaultOptions, []*migration.Migration{{
 		ID: "addcustomproviderconfigjsoncolumn",
@@ -260,6 +264,7 @@ func migrationAddCustomProviderConfigJSONColumn(ctx context.Context, db *gorm.DB
 	return nil
 }
 
+// migrationAddVirtualKeyProviderConfigTable adds the virtual_key_provider_config table
 func migrationAddVirtualKeyProviderConfigTable(ctx context.Context, db *gorm.DB) error {
 	m := migration.New(db, migration.DefaultOptions, []*migration.Migration{{
 		ID: "addvirtualkeyproviderconfig",
@@ -292,6 +297,7 @@ func migrationAddVirtualKeyProviderConfigTable(ctx context.Context, db *gorm.DB)
 	return nil
 }
 
+// migrationAddOpenAIUseResponsesAPIColumn adds the open_ai_use_responses_api column to the key table
 func migrationAddOpenAIUseResponsesAPIColumn(ctx context.Context, db *gorm.DB) error {
 	m := migration.New(db, migration.DefaultOptions, []*migration.Migration{{
 		ID: "add_open_ai_use_responses_api_column",
@@ -314,6 +320,7 @@ func migrationAddOpenAIUseResponsesAPIColumn(ctx context.Context, db *gorm.DB) e
 	return nil
 }
 
+// migrationAddAllowedOriginsJSONColumn adds the allowed_origins_json column to the client config table
 func migrationAddAllowedOriginsJSONColumn(ctx context.Context, db *gorm.DB) error {
 	m := migration.New(db, migration.DefaultOptions, []*migration.Migration{{
 		ID: "add_allowed_origins_json_column",
@@ -336,6 +343,7 @@ func migrationAddAllowedOriginsJSONColumn(ctx context.Context, db *gorm.DB) erro
 	return nil
 }
 
+// migrationAddAllowDirectKeysColumn adds the allow_direct_keys column to the client config table
 func migrationAddAllowDirectKeysColumn(ctx context.Context, db *gorm.DB) error {
 	m := migration.New(db, migration.DefaultOptions, []*migration.Migration{{
 		ID: "add_allow_direct_keys_column",
@@ -347,6 +355,37 @@ func migrationAddAllowDirectKeysColumn(ctx context.Context, db *gorm.DB) error {
 				if err := migrator.AddColumn(&TableClientConfig{}, "allow_direct_keys"); err != nil {
 					return err
 				}
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running db migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddEnableLiteLLMFallbacksColumn adds the enable_litellm_fallbacks column to the client config table
+func migrationAddEnableLiteLLMFallbacksColumn(ctx context.Context, db *gorm.DB) error {
+	m := migration.New(db, migration.DefaultOptions, []*migration.Migration{{
+		ID: "add_enable_litellm_fallbacks_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasColumn(&TableClientConfig{}, "enable_litellm_fallbacks") {
+				if err := migrator.AddColumn(&TableClientConfig{}, "enable_litellm_fallbacks"); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			if err := migrator.DropColumn(&TableClientConfig{}, "enable_litellm_fallbacks"); err != nil {
+				return err
 			}
 			return nil
 		},

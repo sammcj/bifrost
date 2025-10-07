@@ -493,7 +493,7 @@ func createBifrostChatCompletionChunkResponse(
 			{
 				FinishReason: finishReason,
 				BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-					Delta: schemas.BifrostStreamDelta{}, // empty delta
+					Delta: &schemas.BifrostStreamDelta{}, // empty delta
 				},
 			},
 		},

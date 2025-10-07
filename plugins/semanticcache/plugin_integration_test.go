@@ -30,7 +30,7 @@ func TestSemanticCacheBasicFlow(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("Hello, world!"),
 					},
 				},
@@ -66,9 +66,9 @@ func TestSemanticCacheBasicFlow(t *testing.T) {
 		Choices: []schemas.BifrostChatResponseChoice{
 			{
 				BifrostNonStreamResponseChoice: &schemas.BifrostNonStreamResponseChoice{
-					Message: schemas.ChatMessage{
+					Message: &schemas.ChatMessage{
 						Role: "assistant",
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr("Hello! How can I help you today?"),
 						},
 					},
@@ -173,7 +173,7 @@ func TestSemanticCacheStrictFiltering(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("What is the weather like?"),
 					},
 				},
@@ -203,9 +203,9 @@ func TestSemanticCacheStrictFiltering(t *testing.T) {
 		Choices: []schemas.BifrostChatResponseChoice{
 			{
 				BifrostNonStreamResponseChoice: &schemas.BifrostNonStreamResponseChoice{
-					Message: schemas.ChatMessage{
+					Message: &schemas.ChatMessage{
 						Role: "assistant",
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr("It's sunny today!"),
 						},
 					},
@@ -241,7 +241,7 @@ func TestSemanticCacheStrictFiltering(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("What is the weather like?"),
 					},
 				},
@@ -278,7 +278,7 @@ func TestSemanticCacheStrictFiltering(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("What is the weather like?"),
 					},
 				},
@@ -319,7 +319,7 @@ func TestSemanticCacheStreamingFlow(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("Tell me a short story"),
 					},
 				},
@@ -366,7 +366,7 @@ func TestSemanticCacheStreamingFlow(t *testing.T) {
 					Index:        i,
 					FinishReason: finishReason,
 					BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-						Delta: schemas.BifrostStreamDelta{
+						Delta: &schemas.BifrostStreamDelta{
 							Content: bifrost.Ptr(chunk),
 						},
 					},
@@ -447,7 +447,7 @@ func TestSemanticCache_NoCacheWhenKeyMissing(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("Test message"),
 					},
 				},
@@ -486,7 +486,7 @@ func TestSemanticCache_CustomTTLHandling(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("TTL test message"),
 					},
 				},
@@ -510,9 +510,9 @@ func TestSemanticCache_CustomTTLHandling(t *testing.T) {
 		Choices: []schemas.BifrostChatResponseChoice{
 			{
 				BifrostNonStreamResponseChoice: &schemas.BifrostNonStreamResponseChoice{
-					Message: schemas.ChatMessage{
+					Message: &schemas.ChatMessage{
 						Role: "assistant",
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr("TTL test response"),
 						},
 					},
@@ -554,7 +554,7 @@ func TestSemanticCache_CustomThresholdHandling(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("Threshold test message"),
 					},
 				},
@@ -595,7 +595,7 @@ func TestSemanticCache_ProviderModelCachingFlags(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("Provider model flags test"),
 					},
 				},
@@ -619,9 +619,9 @@ func TestSemanticCache_ProviderModelCachingFlags(t *testing.T) {
 		Choices: []schemas.BifrostChatResponseChoice{
 			{
 				BifrostNonStreamResponseChoice: &schemas.BifrostNonStreamResponseChoice{
-					Message: schemas.ChatMessage{
+					Message: &schemas.ChatMessage{
 						Role: "assistant",
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr("Provider model test response"),
 						},
 					},
@@ -651,7 +651,7 @@ func TestSemanticCache_ProviderModelCachingFlags(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("Provider model flags test"), // Same content
 					},
 				},
@@ -692,7 +692,7 @@ func TestSemanticCache_ConfigurationEdgeCases(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("Edge case test"),
 					},
 				},

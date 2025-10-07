@@ -13,7 +13,7 @@ import (
 func (a *Accumulator) buildCompleteMessageFromChatStreamChunks(chunks []*ChatStreamChunk) *schemas.ChatMessage {
 	completeMessage := &schemas.ChatMessage{
 		Role:    schemas.ChatMessageRoleAssistant,
-		Content: schemas.ChatMessageContent{},
+		Content: &schemas.ChatMessageContent{},
 	}
 	for _, chunk := range chunks {
 		if chunk.Delta == nil {
@@ -151,7 +151,7 @@ func (a *Accumulator) processChatStreamingResponse(ctx *context.Context, result 
 			if choice.BifrostStreamResponseChoice != nil {
 				// Create a deep copy of the Delta to avoid pointing to stack memory
 				deltaCopy := choice.BifrostStreamResponseChoice.Delta
-				chunk.Delta = &deltaCopy
+				chunk.Delta = deltaCopy
 				chunk.FinishReason = choice.FinishReason
 			}
 			if choice.BifrostTextCompletionResponseChoice != nil {

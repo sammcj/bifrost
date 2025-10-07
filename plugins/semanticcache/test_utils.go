@@ -204,7 +204,7 @@ func CreateBasicChatRequest(content string, temperature float64, maxTokens int) 
 		Input: []schemas.ChatMessage{
 			{
 				Role: "user",
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: &content,
 				},
 			},
@@ -459,7 +459,7 @@ func BuildConversationHistory(systemPrompt string, userAssistantPairs ...[]strin
 	if systemPrompt != "" {
 		messages = append(messages, schemas.ChatMessage{
 			Role: schemas.ChatMessageRoleSystem,
-			Content: schemas.ChatMessageContent{
+			Content: &schemas.ChatMessageContent{
 				ContentStr: &systemPrompt,
 			},
 		})
@@ -471,7 +471,7 @@ func BuildConversationHistory(systemPrompt string, userAssistantPairs ...[]strin
 			userMsg := pair[0]
 			messages = append(messages, schemas.ChatMessage{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: &userMsg,
 				},
 			})
@@ -480,7 +480,7 @@ func BuildConversationHistory(systemPrompt string, userAssistantPairs ...[]strin
 			assistantMsg := pair[1]
 			messages = append(messages, schemas.ChatMessage{
 				Role: schemas.ChatMessageRoleAssistant,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: &assistantMsg,
 				},
 			})
@@ -494,7 +494,7 @@ func BuildConversationHistory(systemPrompt string, userAssistantPairs ...[]strin
 func AddUserMessage(messages []schemas.ChatMessage, userMessage string) []schemas.ChatMessage {
 	newMessage := schemas.ChatMessage{
 		Role: schemas.ChatMessageRoleUser,
-		Content: schemas.ChatMessageContent{
+		Content: &schemas.ChatMessageContent{
 			ContentStr: &userMessage,
 		},
 	}
