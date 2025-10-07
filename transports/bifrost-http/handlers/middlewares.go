@@ -49,9 +49,10 @@ func CorsMiddleware(config *lib.Config) BifrostHTTPMiddleware {
 
 // VKProviderRoutingMiddleware routes requests to the appropriate provider based on the virtual key
 func VKProviderRoutingMiddleware(config *lib.Config, logger schemas.Logger) BifrostHTTPMiddleware {
+	isGovernanceEnabled := config.LoadedPlugins[governance.PluginName]
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
-			if !config.LoadedPlugins[governance.PluginName] {
+			if !isGovernanceEnabled {
 				next(ctx)
 				return
 			}
