@@ -202,20 +202,28 @@ func (a *Accumulator) accumulateToolCallsInMessage(message *schemas.ChatMessage,
 	}
 	existingToolCalls := message.ChatAssistantMessage.ToolCalls
 	for _, deltaToolCall := range deltaToolCalls {
-		// Find existing tool call with same ID or create new one
-		found := false
-		for i := range existingToolCalls {
-			if existingToolCalls[i].ID != nil && deltaToolCall.ID != nil &&
-				*existingToolCalls[i].ID == *deltaToolCall.ID {
-				// Append arguments to existing tool call
-				existingToolCalls[i].Function.Arguments += deltaToolCall.Function.Arguments
-				found = true
-				break
+		var toolCallToModify *schemas.ChatAssistantMessageToolCall
+		// Checking if delta tool name is present,
+		// If present, then it could be different tool call
+		if deltaToolCall.Function.Name != nil {
+			// Creating a new tool call
+			toolCallToModify = &schemas.ChatAssistantMessageToolCall{
+				ID: deltaToolCall.ID,
+				Function: schemas.ChatAssistantMessageToolCallFunction{
+					Name:      deltaToolCall.Function.Name,
+					Arguments: deltaToolCall.Function.Arguments,
+				},
 			}
-		}
-		if !found {
-			// Add new tool call
-			existingToolCalls = append(existingToolCalls, deltaToolCall)
+			existingToolCalls = append(existingToolCalls, *toolCallToModify)
+		} else {
+			// Ensure there's at least one tool call to modify
+			if len(existingToolCalls) == 0 {
+				a.logger.Warn("received tool call delta without name, but no existing tool calls to append to")
+				continue
+			}
+			// Otherwise we will modify the last tool call
+			toolCallToModify = &existingToolCalls[len(existingToolCalls)-1]
+			toolCallToModify.Function.Arguments += deltaToolCall.Function.Arguments
 		}
 	}
 	message.ChatAssistantMessage.ToolCalls = existingToolCalls
@@ -301,6 +309,12 @@ func (a *Accumulator) CreateStreamAccumulator(requestID string, startTimestamp t
 	sc := a.getOrCreateStreamAccumulator(requestID)
 	sc.StartTimestamp = startTimestamp
 	return sc
+}
+
+// CleanupStreamAccumulator cleans up the stream accumulator for a request
+func (a *Accumulator) CleanupStreamAccumulator(requestID string) error {
+	a.cleanupStreamAccumulator(requestID)
+	return nil
 }
 
 // cleanupOldAccumulators removes old accumulators
