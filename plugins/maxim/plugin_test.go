@@ -109,7 +109,7 @@ func TestMaximLoggerPlugin(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: "user",
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Hello, how are you?"),
 				},
 			},

@@ -119,6 +119,7 @@ const (
 
 //* Request Structs
 
+// BifrostTextCompletionRequest is the request struct for text completion requests
 type BifrostTextCompletionRequest struct {
 	Provider  ModelProvider             `json:"provider"`
 	Model     string                    `json:"model"`
@@ -127,6 +128,53 @@ type BifrostTextCompletionRequest struct {
 	Fallbacks []Fallback                `json:"fallbacks,omitempty"`
 }
 
+// ToBifrostChatRequest converts a Bifrost text completion request to a Bifrost chat completion request
+// This method is discouraged to use, but is useful for litellm fallback flows
+func (r *BifrostTextCompletionRequest) ToBifrostChatRequest() *BifrostChatRequest {
+	if r == nil || r.Input == nil {
+		return nil
+	}
+	message := ChatMessage{Role: ChatMessageRoleUser}
+	if r.Input.PromptStr != nil {
+		message.Content = &ChatMessageContent{
+			ContentStr: r.Input.PromptStr,
+		}
+	} else if len(r.Input.PromptArray) > 0 {
+		blocks := make([]ChatContentBlock, 0, len(r.Input.PromptArray))
+		for _, prompt := range r.Input.PromptArray {
+			blocks = append(blocks, ChatContentBlock{
+				Type: ChatContentBlockTypeText,
+				Text: &prompt,
+			})
+		}
+		message.Content = &ChatMessageContent{
+			ContentBlocks: blocks,
+		}
+	}
+	params := ChatParameters{}
+	if r.Params != nil {
+		params.MaxCompletionTokens = r.Params.MaxTokens
+		params.Temperature = r.Params.Temperature
+		params.TopP = r.Params.TopP
+		params.Stop = r.Params.Stop
+		params.ExtraParams = r.Params.ExtraParams
+		params.StreamOptions = r.Params.StreamOptions
+		params.User = r.Params.User
+		params.FrequencyPenalty = r.Params.FrequencyPenalty
+		params.LogitBias = r.Params.LogitBias
+		params.PresencePenalty = r.Params.PresencePenalty
+		params.Seed = r.Params.Seed
+	}
+	return &BifrostChatRequest{
+		Provider:  r.Provider,
+		Model:     r.Model,
+		Fallbacks: r.Fallbacks,
+		Input:     []ChatMessage{message},
+		Params:    &params,
+	}
+}
+
+// BifrostChatRequest is the request struct for chat completion requests
 type BifrostChatRequest struct {
 	Provider  ModelProvider   `json:"provider"`
 	Model     string          `json:"model"`
@@ -191,6 +239,45 @@ type BifrostResponse struct {
 	ExtraFields       BifrostResponseExtraFields  `json:"extra_fields"`
 
 	*ResponsesResponse
+}
+
+// ToTextCompletionResponse converts a Bifrost response to a Bifrost text completion response
+func (r *BifrostResponse) ToTextCompletionResponse() {
+	r.Object = "text_completion"
+	r.ExtraFields.RequestType = TextCompletionRequest
+	if len(r.Choices) == 0 {
+		return
+	}
+	choice := r.Choices[0]
+	if choice.BifrostStreamResponseChoice != nil && choice.BifrostStreamResponseChoice.Delta != nil {
+		r.Choices = []BifrostChatResponseChoice{
+			{
+				Index: 0,
+				BifrostTextCompletionResponseChoice: &BifrostTextCompletionResponseChoice{
+					Text: choice.Delta.Content,
+				},
+				FinishReason: choice.FinishReason,
+				LogProbs:     choice.LogProbs,
+			},
+		}
+	}
+	if choice.BifrostNonStreamResponseChoice != nil {
+		msg := choice.BifrostNonStreamResponseChoice.Message
+		var textContent *string
+		if msg != nil && msg.Content != nil && msg.Content.ContentStr != nil {
+			textContent = msg.Content.ContentStr
+		}
+		r.Choices = []BifrostChatResponseChoice{
+			{
+				Index: 0,
+				BifrostTextCompletionResponseChoice: &BifrostTextCompletionResponseChoice{
+					Text: textContent,
+				},
+				FinishReason: choice.FinishReason,
+				LogProbs:     choice.LogProbs,
+			},
+		}
+	}
 }
 
 // LLMUsage represents token usage information
@@ -329,7 +416,6 @@ type BifrostChatResponseChoice struct {
 	LogProbs     *LogProbs `json:"log_probs,omitempty"`
 
 	*BifrostTextCompletionResponseChoice
-
 	*BifrostNonStreamResponseChoice
 	*BifrostStreamResponseChoice
 }
@@ -340,13 +426,13 @@ type BifrostTextCompletionResponseChoice struct {
 
 // BifrostNonStreamResponseChoice represents a choice in the non-stream response
 type BifrostNonStreamResponseChoice struct {
-	Message    ChatMessage `json:"message"`
-	StopString *string     `json:"stop,omitempty"`
+	Message    *ChatMessage `json:"message"`
+	StopString *string      `json:"stop,omitempty"`
 }
 
 // BifrostStreamResponseChoice represents a choice in the stream response
 type BifrostStreamResponseChoice struct {
-	Delta BifrostStreamDelta `json:"delta"` // Partial message info
+	Delta *BifrostStreamDelta `json:"delta,omitempty"` // Partial message info
 }
 
 // BifrostStreamDelta represents a delta in the stream response

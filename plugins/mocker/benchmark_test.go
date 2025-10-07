@@ -43,7 +43,7 @@ func BenchmarkMockerPlugin_PreHook_SimpleRule(b *testing.B) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Hello, benchmark test"),
 				},
 			},
@@ -102,7 +102,7 @@ func BenchmarkMockerPlugin_PreHook_RegexRule(b *testing.B) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Hello, this should match the regex pattern"),
 				},
 			},
@@ -183,7 +183,7 @@ func BenchmarkMockerPlugin_PreHook_MultipleRules(b *testing.B) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Test message"),
 				},
 			},
@@ -243,7 +243,7 @@ func BenchmarkMockerPlugin_PreHook_NoMatch(b *testing.B) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Test message"),
 				},
 			},
@@ -300,7 +300,7 @@ func BenchmarkMockerPlugin_PreHook_Template(b *testing.B) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Test message"),
 				},
 			},

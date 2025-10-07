@@ -795,9 +795,9 @@ func (p *MockerPlugin) generateSuccessShortCircuit(req *schemas.BifrostRequest, 
 			{
 				Index: 0,
 				BifrostNonStreamResponseChoice: &schemas.BifrostNonStreamResponseChoice{
-					Message: schemas.ChatMessage{
+					Message: &schemas.ChatMessage{
 						Role: schemas.ChatMessageRoleAssistant,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: &message,
 						},
 					},
@@ -960,9 +960,9 @@ func (p *MockerPlugin) handleDefaultBehavior(req *schemas.BifrostRequest) (*sche
 					{
 						Index: 0,
 						BifrostNonStreamResponseChoice: &schemas.BifrostNonStreamResponseChoice{
-							Message: schemas.ChatMessage{
+							Message: &schemas.ChatMessage{
 								Role: schemas.ChatMessageRoleAssistant,
-								Content: schemas.ChatMessageContent{
+								Content: &schemas.ChatMessageContent{
 									ContentStr: bifrost.Ptr("Mock plugin default response"),
 								},
 							},

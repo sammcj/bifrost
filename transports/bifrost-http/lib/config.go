@@ -151,6 +151,7 @@ var DefaultClientConfig = configstore.ClientConfig{
 	AllowDirectKeys:         false,
 	AllowedOrigins:          []string{},
 	MaxRequestBodySizeMB:    100,
+	EnableLiteLLMFallbacks:  false,
 }
 
 // LoadConfig loads initial configuration from a JSON config file into memory

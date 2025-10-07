@@ -855,7 +855,7 @@ func (m *MCPManager) extractTextFromMCPResponse(toolResponse *mcp.CallToolResult
 func (m *MCPManager) createToolResponseMessage(toolCall schemas.ChatAssistantMessageToolCall, responseText string) *schemas.ChatMessage {
 	return &schemas.ChatMessage{
 		Role: schemas.ChatMessageRoleTool,
-		Content: schemas.ChatMessageContent{
+		Content: &schemas.ChatMessageContent{
 			ContentStr: &responseText,
 		},
 		ChatToolMessage: &schemas.ChatToolMessage{
