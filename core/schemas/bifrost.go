@@ -324,7 +324,7 @@ func (be *BifrostEmbeddingResponse) UnmarshalJSON(data []byte) error {
 // IMPORTANT: Only one of BifrostNonStreamResponseChoice or BifrostStreamResponseChoice
 // should be non-nil at a time.
 type BifrostChatResponseChoice struct {
-	Index        int       `json:"index,omitempty"`
+	Index        int       `json:"index"`
 	FinishReason *string   `json:"finish_reason,omitempty"`
 	LogProbs     *LogProbs `json:"log_probs,omitempty"`
 

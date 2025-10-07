@@ -345,6 +345,36 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 	logMsg := p.getLogMessage()
 	logMsg.RequestID = requestID
 	logMsg.Timestamp = time.Now()
+	// If response is nil, and there is an error, we update log with error
+	if result == nil && bifrostErr != nil {
+		// If request type is streaming, then we trigger cleanup as well
+		if bifrost.IsStreamRequestType(requestType) {
+			p.accumulator.CleanupStreamAccumulator(requestID)
+		}
+		logMsg.Operation = LogOperationUpdate
+		logMsg.UpdateData = &UpdateLogData{
+			Status:       "error",
+			ErrorDetails: bifrostErr,
+		}
+		processingErr := retryOnNotFound(p.ctx, func() error {
+			return p.updateLogEntry(p.ctx, logMsg.RequestID, logMsg.Timestamp, logMsg.SemanticCacheDebug, logMsg.UpdateData)
+		})
+		if processingErr != nil {
+			p.logger.Error("failed to process log update for request %s: %v", logMsg.RequestID, processingErr)
+		} else {
+			// Call callback immediately for both streaming and regular updates
+			// UI will handle debouncing if needed
+			p.mu.Lock()
+			if p.logCallback != nil {
+				if updatedEntry, getErr := p.getLogEntry(p.ctx, logMsg.RequestID); getErr == nil {
+					p.logCallback(updatedEntry)
+				}
+			}
+			p.mu.Unlock()
+		}
+
+		return result, bifrostErr, nil
+	}
 	if bifrost.IsStreamRequestType(requestType) {
 		p.logger.Debug("[logging] processing streaming response")
 		streamResponse, err := p.accumulator.ProcessStreamingResponse(ctx, result, bifrostErr)
@@ -376,6 +406,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 				}
 			}()
 		}
+
 	} else {
 		// Handle regular response
 		logMsg.Operation = LogOperationUpdate
