@@ -318,6 +318,8 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 		result, bifrostErr = g.client.SpeechRequest(*bifrostCtx, bifrostReq.SpeechRequest)
 	} else if bifrostReq.TranscriptionRequest != nil {
 		result, bifrostErr = g.client.TranscriptionRequest(*bifrostCtx, bifrostReq.TranscriptionRequest)
+	} else if bifrostReq.ResponsesRequest != nil {
+		result, bifrostErr = g.client.ResponsesRequest(*bifrostCtx, bifrostReq.ResponsesRequest)
 	}
 
 	// Handle errors
@@ -381,6 +383,8 @@ func (g *GenericRouter) handleStreamingRequest(ctx *fasthttp.RequestCtx, config 
 		stream, bifrostErr = g.client.SpeechStreamRequest(*bifrostCtx, bifrostReq.SpeechRequest)
 	} else if bifrostReq.TranscriptionRequest != nil {
 		stream, bifrostErr = g.client.TranscriptionStreamRequest(*bifrostCtx, bifrostReq.TranscriptionRequest)
+	} else if bifrostReq.ResponsesRequest != nil {
+		stream, bifrostErr = g.client.ResponsesStreamRequest(*bifrostCtx, bifrostReq.ResponsesRequest)
 	}
 
 	// Get the streaming channel from Bifrost

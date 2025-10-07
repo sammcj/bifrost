@@ -319,7 +319,7 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 
 // PostHook is called after a response is received - FULLY ASYNC, NO DATABASE I/O
 func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
-	p.logger.Debug("[logging] PostHook called")
+	p.logger.Debug("running post-hook for plugin logging")
 	if ctx == nil {
 		// Log error but don't fail the request
 		p.logger.Error("context is nil in PostHook")
