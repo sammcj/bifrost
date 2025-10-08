@@ -92,6 +92,7 @@ type Log struct {
 	ErrorDetails        string    `gorm:"type:text" json:"-"`                            // JSON serialized *schemas.BifrostError
 	Stream              bool      `gorm:"default:false" json:"stream"`                   // true if this was a streaming response
 	ContentSummary      string    `gorm:"type:text" json:"-"`                            // For content search
+	RawResponse         string    `gorm:"type:text" json:"raw_response"`                 // Populated when `send-back-raw-response` is on
 
 	// Denormalized token fields for easier querying
 	PromptTokens     int `gorm:"default:0" json:"-"`

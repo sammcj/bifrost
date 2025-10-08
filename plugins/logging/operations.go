@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/framework/streaming"
@@ -138,6 +139,16 @@ func (p *LoggerPlugin) updateLogEntry(ctx context.Context, requestID string, tim
 			updates["error_details"] = tempEntry.ErrorDetails
 		}
 	}
+
+	if data.RawResponse != nil {
+		rawResponseBytes, err := sonic.Marshal(data.RawResponse)
+		if err != nil {
+			p.logger.Error("failed to marshal raw response: %v", err)
+		} else {
+			updates["raw_response"] = string(rawResponseBytes)
+		}
+	}
+
 	return p.store.Update(ctx, requestID, updates)
 }
 
