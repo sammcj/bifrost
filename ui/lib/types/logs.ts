@@ -263,6 +263,7 @@ export interface LogEntry {
 	error_details?: BifrostError;
 	stream: boolean; // true if this was a streaming response
 	created_at: string; // ISO string format from Go time.Time - when the log was first created
+	raw_response?: string; // Raw provider response
 }
 
 export interface LogFilters {

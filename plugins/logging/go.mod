@@ -5,8 +5,9 @@ go 1.24
 toolchain go1.24.3
 
 require (
-	github.com/maximhq/bifrost/core v1.2.3
-	github.com/maximhq/bifrost/framework v1.1.3
+	github.com/bytedance/sonic v1.14.0
+	github.com/maximhq/bifrost/core v1.2.2
+	github.com/maximhq/bifrost/framework v1.1.2
 )
 
 require (
@@ -28,7 +29,6 @@ require (
 	github.com/aws/smithy-go v1.22.5 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
