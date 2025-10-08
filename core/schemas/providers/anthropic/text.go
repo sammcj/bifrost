@@ -45,6 +45,38 @@ func ToAnthropicTextCompletionRequest(bifrostReq *schemas.BifrostTextCompletionR
 	return anthropicReq
 }
 
+// ToBifrostRequest converts an Anthropic text request back to Bifrost format
+func (r *AnthropicTextRequest) ToBifrostRequest() *schemas.BifrostTextCompletionRequest {
+	if r == nil {
+		return nil
+	}
+
+	provider, model := schemas.ParseModelString(r.Model, schemas.Anthropic)
+
+	bifrostReq := &schemas.BifrostTextCompletionRequest{
+		Provider: provider,
+		Model:    model,
+		Input: &schemas.TextCompletionInput{
+			PromptStr: &r.Prompt,
+		},
+		Params: &schemas.TextCompletionParameters{
+			MaxTokens:   &r.MaxTokensToSample,
+			Temperature: r.Temperature,
+			TopP:        r.TopP,
+			Stop:        r.StopSequences,
+		},
+	}
+
+	// Add extra params if present
+	if r.TopK != nil {
+		bifrostReq.Params.ExtraParams = map[string]interface{}{
+			"top_k": *r.TopK,
+		}
+	}
+
+	return bifrostReq
+}
+
 func (response *AnthropicTextResponse) ToBifrostResponse() *schemas.BifrostResponse {
 	if response == nil {
 		return nil
@@ -70,4 +102,34 @@ func (response *AnthropicTextResponse) ToBifrostResponse() *schemas.BifrostRespo
 			Provider:    schemas.Anthropic,
 		},
 	}
+}
+
+// ToAnthropicTextCompletionResponse converts a BifrostResponse back to Anthropic text completion format
+func ToAnthropicTextCompletionResponse(bifrostResp *schemas.BifrostResponse) *AnthropicTextResponse {
+	if bifrostResp == nil {
+		return nil
+	}
+
+	anthropicResp := &AnthropicTextResponse{
+		ID:    bifrostResp.ID,
+		Type:  "completion",
+		Model: bifrostResp.Model,
+	}
+
+	// Convert choices to completion text
+	if len(bifrostResp.Choices) > 0 {
+		choice := bifrostResp.Choices[0] // Anthropic text API typically returns one choice
+
+		if choice.BifrostTextCompletionResponseChoice != nil && choice.BifrostTextCompletionResponseChoice.Text != nil {
+			anthropicResp.Completion = *choice.BifrostTextCompletionResponseChoice.Text
+		}
+	}
+
+	// Convert usage information
+	if bifrostResp.Usage != nil {
+		anthropicResp.Usage.InputTokens = bifrostResp.Usage.PromptTokens
+		anthropicResp.Usage.OutputTokens = bifrostResp.Usage.CompletionTokens
+	}
+
+	return anthropicResp
 }
