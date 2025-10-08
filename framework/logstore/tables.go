@@ -365,15 +365,17 @@ func (l *Log) BuildContentSummary() string {
 
 	// Add input messages
 	for _, msg := range l.InputHistoryParsed {
-		// Access content through the Content field
-		if msg.Content.ContentStr != nil && *msg.Content.ContentStr != "" {
-			parts = append(parts, *msg.Content.ContentStr)
-		}
-		// If content blocks exist, extract text from them
-		if msg.Content.ContentBlocks != nil {
-			for _, block := range msg.Content.ContentBlocks {
-				if block.Text != nil && *block.Text != "" {
-					parts = append(parts, *block.Text)
+		if msg.Content != nil {
+			// Access content through the Content field
+			if msg.Content.ContentStr != nil && *msg.Content.ContentStr != "" {
+				parts = append(parts, *msg.Content.ContentStr)
+			}
+			// If content blocks exist, extract text from them
+			if msg.Content.ContentBlocks != nil {
+				for _, block := range msg.Content.ContentBlocks {
+					if block.Text != nil && *block.Text != "" {
+						parts = append(parts, *block.Text)
+					}
 				}
 			}
 		}
