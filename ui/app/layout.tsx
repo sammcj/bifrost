@@ -9,10 +9,10 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { WebSocketProvider } from "@/hooks/useWebSocket";
 import { getErrorMessage, ReduxProvider, useGetCoreConfigQuery } from "@/lib/store";
 import { Geist, Geist_Mono } from "next/font/google";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { useEffect } from "react";
 import { toast, Toaster } from "sonner";
 import "./globals.css";
-import { NuqsAdapter } from "nuqs/adapters/next/app";
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
@@ -50,6 +50,10 @@ function AppContent({ children }: { children: React.ReactNode }) {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 	return (
 		<html lang="en" suppressHydrationWarning>
+			<head>
+				<link rel="dns-prefetch" href="https://getbifrost.ai" />
+				<link rel="preconnect" href="https://getbifrost.ai" />
+			</head>
 			<body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
 				<ProgressProvider>
 					<ThemeProvider attribute="class" defaultTheme="system" enableSystem>
