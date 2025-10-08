@@ -18,6 +18,27 @@ type AnthropicRouter struct {
 func CreateAnthropicRouteConfigs(pathPrefix string) []RouteConfig {
 	return []RouteConfig{
 		{
+			Path:   pathPrefix + "/v1/complete",
+			Method: "POST",
+			GetRequestTypeInstance: func() interface{} {
+				return &anthropic.AnthropicTextRequest{}
+			},
+			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
+				if anthropicReq, ok := req.(*anthropic.AnthropicTextRequest); ok {
+					return &schemas.BifrostRequest{
+						TextCompletionRequest: anthropicReq.ToBifrostRequest(),
+					}, nil
+				}
+				return nil, errors.New("invalid request type")
+			},
+			ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
+				return anthropic.ToAnthropicTextCompletionResponse(resp), nil
+			},
+			ErrorConverter: func(err *schemas.BifrostError) interface{} {
+				return anthropic.ToAnthropicChatCompletionError(err)
+			},
+		},
+		{
 			Path:   pathPrefix + "/v1/messages",
 			Method: "POST",
 			GetRequestTypeInstance: func() interface{} {
