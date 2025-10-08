@@ -90,7 +90,7 @@ func TestToolVariations(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("What's the weather like today?"),
 				},
 			},
@@ -108,7 +108,7 @@ func TestToolVariations(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("What's the weather like today?"),
 				},
 			},
@@ -145,7 +145,7 @@ func TestToolVariations(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("What's the weather like today?"),
 				},
 			},
@@ -235,7 +235,7 @@ func TestContentVariations(t *testing.T) {
 				Input: []schemas.ChatMessage{
 					{
 						Role: schemas.ChatMessageRoleUser,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr("🌟 Unicode test: Hello, 世界! مرحبا 🌍"),
 						},
 					},
@@ -254,7 +254,7 @@ func TestContentVariations(t *testing.T) {
 				Input: []schemas.ChatMessage{
 					{
 						Role: schemas.ChatMessageRoleUser,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentBlocks: []schemas.ChatContentBlock{
 								{
 									Type: schemas.ChatContentBlockTypeText,
@@ -284,7 +284,7 @@ func TestContentVariations(t *testing.T) {
 				Input: []schemas.ChatMessage{
 					{
 						Role: schemas.ChatMessageRoleUser,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentBlocks: []schemas.ChatContentBlock{
 								{
 									Type: schemas.ChatContentBlockTypeText,
@@ -320,7 +320,7 @@ func TestContentVariations(t *testing.T) {
 				Input: []schemas.ChatMessage{
 					{
 						Role: schemas.ChatMessageRoleUser,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr(strings.Repeat("This is a very long prompt. ", 100)),
 						},
 					},
@@ -339,19 +339,19 @@ func TestContentVariations(t *testing.T) {
 				Input: []schemas.ChatMessage{
 					{
 						Role: schemas.ChatMessageRoleUser,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr("What is AI?"),
 						},
 					},
 					{
 						Role: schemas.ChatMessageRoleAssistant,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr("AI stands for Artificial Intelligence..."),
 						},
 					},
 					{
 						Role: schemas.ChatMessageRoleUser,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr("Can you give me examples?"),
 						},
 					},
@@ -409,7 +409,7 @@ func TestBoundaryParameterValues(t *testing.T) {
 				Input: []schemas.ChatMessage{
 					{
 						Role: schemas.ChatMessageRoleUser,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr("Test max parameters"),
 						},
 					},
@@ -431,7 +431,7 @@ func TestBoundaryParameterValues(t *testing.T) {
 				Input: []schemas.ChatMessage{
 					{
 						Role: schemas.ChatMessageRoleUser,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr("Test min parameters"),
 						},
 					},
@@ -453,7 +453,7 @@ func TestBoundaryParameterValues(t *testing.T) {
 				Input: []schemas.ChatMessage{
 					{
 						Role: schemas.ChatMessageRoleUser,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: bifrost.Ptr("Test edge case parameters"),
 						},
 					},

@@ -62,6 +62,10 @@
           "type": "integer",
           "minimum": 1,
           "description": "Maximum request body size in MB"
+        },
+        "enable_litellm_fallbacks": {
+          "type": "boolean",
+          "description": "Enable litellm-specific fallbacks for text completion for Groq"
         }
       },
       "additionalProperties": false

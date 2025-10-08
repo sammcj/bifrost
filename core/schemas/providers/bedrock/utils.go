@@ -179,9 +179,13 @@ func convertMessage(msg schemas.ChatMessage) (BedrockMessage, error) {
 	}
 
 	// Convert content
-	contentBlocks, err := convertContent(msg.Content)
-	if err != nil {
-		return BedrockMessage{}, fmt.Errorf("failed to convert content: %w", err)
+	var contentBlocks []BedrockContentBlock
+	if msg.Content != nil {
+		var err error
+		contentBlocks, err = convertContent(*msg.Content)
+		if err != nil {
+			return BedrockMessage{}, fmt.Errorf("failed to convert content: %w", err)
+		}
 	}
 
 	// Add tool calls if present (for assistant messages)

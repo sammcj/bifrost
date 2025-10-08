@@ -27,13 +27,15 @@ type CompletionHandler struct {
 	client       *bifrost.Bifrost
 	handlerStore lib.HandlerStore
 	logger       schemas.Logger
+	config       *lib.Config
 }
 
-// NewCompletionHandler creates a new completion handler instance
-func NewCompletionHandler(client *bifrost.Bifrost, handlerStore lib.HandlerStore, logger schemas.Logger) *CompletionHandler {
+// NewInferenceHandler creates a new completion handler instance
+func NewInferenceHandler(client *bifrost.Bifrost, config *lib.Config, logger schemas.Logger) *CompletionHandler {
 	return &CompletionHandler{
 		client:       client,
-		handlerStore: handlerStore,
+		handlerStore: config,
+		config:       config,
 		logger:       logger,
 	}
 }
@@ -288,38 +290,36 @@ func (h *CompletionHandler) textCompletion(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid request format: %v", err), h.logger)
 		return
 	}
-
 	// Create BifrostTextCompletionRequest directly using segregated structure
 	provider, modelName := schemas.ParseModelString(req.Model, "")
 	if provider == "" || modelName == "" {
 		SendError(ctx, fasthttp.StatusBadRequest, "model should be in provider/model format", h.logger)
 		return
 	}
-
 	// Parse fallbacks using helper function
 	fallbacks, err := parseFallbacks(req.Fallbacks)
 	if err != nil {
 		SendError(ctx, fasthttp.StatusBadRequest, err.Error(), h.logger)
 		return
 	}
-
 	if req.Prompt == nil || (req.Prompt.PromptStr == nil && req.Prompt.PromptArray == nil) {
 		SendError(ctx, fasthttp.StatusBadRequest, "prompt is required for text completion", h.logger)
 		return
 	}
-
 	// Extract extra params
 	if req.TextCompletionParameters == nil {
 		req.TextCompletionParameters = &schemas.TextCompletionParameters{}
 	}
-
 	extraParams, err := extractExtraParams(ctx.PostBody(), textParamsKnownFields)
 	if err != nil {
 		h.logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
 	} else {
 		req.TextCompletionParameters.ExtraParams = extraParams
 	}
-
+	// Adding fallback context
+	if h.config.ClientConfig.EnableLiteLLMFallbacks {
+		ctx.SetUserValue(schemas.BifrostContextKey("x-litellm-fallback"), "true")
+	}
 	// Create segregated BifrostTextCompletionRequest
 	bifrostTextReq := &schemas.BifrostTextCompletionRequest{
 		Provider:  schemas.ModelProvider(provider),
@@ -328,19 +328,16 @@ func (h *CompletionHandler) textCompletion(ctx *fasthttp.RequestCtx) {
 		Params:    req.TextCompletionParameters,
 		Fallbacks: fallbacks,
 	}
-
 	// Convert context
 	bifrostCtx := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys())
 	if bifrostCtx == nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context", h.logger)
 		return
 	}
-
 	if req.Stream != nil && *req.Stream {
 		h.handleStreamingTextCompletion(ctx, bifrostTextReq, bifrostCtx)
 		return
 	}
-
 	resp, bifrostErr := h.client.TextCompletionRequest(*bifrostCtx, bifrostTextReq)
 	if bifrostErr != nil {
 		SendBifrostError(ctx, bifrostErr, h.logger)

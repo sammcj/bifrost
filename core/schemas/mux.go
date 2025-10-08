@@ -539,7 +539,7 @@ func ToChatMessages(rms []ResponsesMessage) []ChatMessage {
 		// Convert content (skip for refusal messages since refusal is already extracted)
 		if rm.Content != nil && (rm.Type == nil || *rm.Type != ResponsesMessageTypeRefusal) {
 			if rm.Content.ContentStr != nil {
-				cm.Content = ChatMessageContent{
+				cm.Content = &ChatMessageContent{
 					ContentStr: rm.Content.ContentStr,
 				}
 			} else if rm.Content.ContentBlocks != nil {
@@ -591,7 +591,7 @@ func ToChatMessages(rms []ResponsesMessage) []ChatMessage {
 						}
 					}
 				}
-				cm.Content = ChatMessageContent{
+				cm.Content = &ChatMessageContent{
 					ContentBlocks: chatBlocks,
 				}
 			}
@@ -854,7 +854,7 @@ func (br *BifrostResponse) ToChatOnly() {
 			choice := BifrostChatResponseChoice{
 				Index: i,
 				BifrostNonStreamResponseChoice: &BifrostNonStreamResponseChoice{
-					Message: chatMsg,
+					Message: &chatMsg,
 				},
 			}
 			choices = append(choices, choice)

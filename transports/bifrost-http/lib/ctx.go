@@ -83,70 +83,61 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 	// Then process other headers
 	ctx.Request.Header.All()(func(key, value []byte) bool {
 		keyStr := strings.ToLower(string(key))
-
-		if strings.HasPrefix(keyStr, "x-bf-prom-") {
-			labelName := strings.TrimPrefix(keyStr, "x-bf-prom-")
+		if labelName, ok := strings.CutPrefix(keyStr, "x-bf-prom-"); ok {
 			bifrostCtx = context.WithValue(bifrostCtx, telemetry.ContextKey(labelName), string(value))
+			return true
 		}
-
-		if strings.HasPrefix(keyStr, "x-bf-maxim-") {
-			labelName := strings.TrimPrefix(keyStr, "x-bf-maxim-")
-
-			if labelName == string(maxim.GenerationIDKey) {
+		// Checking for maxim headers
+		if labelName, ok := strings.CutPrefix(keyStr, "x-bf-maxim-"); ok {
+			switch labelName {
+			case string(maxim.GenerationIDKey):
 				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
-			}
-
-			if labelName == string(maxim.TraceIDKey) {
+			case string(maxim.TraceIDKey):
 				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
-			}
-
-			if labelName == string(maxim.SessionIDKey) {
+			case string(maxim.SessionIDKey):
 				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
-			}
-
-			if labelName == string(maxim.TraceNameKey) {
+			case string(maxim.TraceNameKey):
 				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
-			}
-
-			if labelName == string(maxim.GenerationNameKey) {
+			case string(maxim.GenerationNameKey):
 				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
-			}
-
-			if labelName == string(maxim.LogRepoIDKey) {
+			case string(maxim.LogRepoIDKey):
 				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
-			}
-
-			// apart from these all headers starting with x-bf-maxim- are keys for tags
-			// collect them in the maximTags map
-			if labelName != string(maxim.GenerationIDKey) && labelName != string(maxim.TraceIDKey) && labelName != string(maxim.SessionIDKey) && labelName != string(maxim.TraceNameKey) && labelName != string(maxim.GenerationNameKey) && labelName != string(maxim.LogRepoIDKey) {
+			default:
+				// apart from these all headers starting with x-bf-maxim- are keys for tags
+				// collect them in the maximTags map
 				maximTags[labelName] = string(value)
 			}
+			return true
 		}
-
-		if strings.HasPrefix(keyStr, "x-bf-mcp-") {
-			labelName := strings.TrimPrefix(keyStr, "x-bf-mcp-")
-
-			if labelName == "include-clients" || labelName == "exclude-clients" || labelName == "include-tools" || labelName == "exclude-tools" {
+		// MCP control headers
+		if labelName, ok := strings.CutPrefix(keyStr, "x-bf-mcp-"); ok {
+			switch labelName {
+			case "include-clients":
+				fallthrough
+			case "exclude-clients":
+				fallthrough
+			case "include-tools":
+				fallthrough
+			case "exclude-tools":
 				bifrostCtx = context.WithValue(bifrostCtx, ContextKey("mcp-"+labelName), string(value))
 				return true
 			}
 		}
-
 		// Handle governance headers (x-bf-team, x-bf-user, x-bf-customer)
 		if keyStr == "x-bf-team" || keyStr == "x-bf-user" || keyStr == "x-bf-customer" {
 			bifrostCtx = context.WithValue(bifrostCtx, governance.ContextKey(keyStr), string(value))
+			return true
 		}
-
 		// Handle virtual key header (x-bf-vk)
 		if keyStr == "x-bf-vk" {
 			bifrostCtx = context.WithValue(bifrostCtx, governance.ContextKey(keyStr), string(value))
+			return true
 		}
-
 		// Handle cache key header (x-bf-cache-key)
 		if keyStr == "x-bf-cache-key" {
 			bifrostCtx = context.WithValue(bifrostCtx, semanticcache.CacheKey, string(value))
+			return true
 		}
-
 		// Handle cache TTL header (x-bf-cache-ttl)
 		if keyStr == "x-bf-cache-ttl" {
 			valueStr := string(value)
@@ -166,8 +157,9 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 				bifrostCtx = context.WithValue(bifrostCtx, semanticcache.CacheTTLKey, ttlDuration)
 			}
 			// If both parsing attempts fail, we silently ignore the header and use default TTL
+			return true
 		}
-
+		// Cache threshold header
 		if keyStr == "x-bf-cache-threshold" {
 			threshold, err := strconv.ParseFloat(string(value), 64)
 			if err == nil {
@@ -180,18 +172,20 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 				bifrostCtx = context.WithValue(bifrostCtx, semanticcache.CacheThresholdKey, threshold)
 			}
 			// If parsing fails, silently ignore the header (no context value set)
+			return true
 		}
-
+		// Cache type header
 		if keyStr == "x-bf-cache-type" {
 			bifrostCtx = context.WithValue(bifrostCtx, semanticcache.CacheTypeKey, semanticcache.CacheType(string(value)))
+			return true
 		}
-
+		// Cache no store header
 		if keyStr == "x-bf-cache-no-store" {
 			if valueStr := string(value); valueStr == "true" {
 				bifrostCtx = context.WithValue(bifrostCtx, semanticcache.CacheNoStoreKey, true)
 			}
+			return true
 		}
-
 		return true
 	})
 
@@ -236,7 +230,11 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 				Weight: 1.0,        // Default weight
 			}
 			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeyDirectKey, key)
-		}
+		}		
+	}
+	// Adding fallback context
+	if ctx.UserValue(schemas.BifrostContextKey("x-litellm-fallback")) != nil {
+		bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey("x-litellm-fallback"), "true")
 	}
 
 	return &bifrostCtx

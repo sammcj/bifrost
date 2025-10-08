@@ -226,6 +226,7 @@ export interface CoreConfig {
 	allow_direct_keys: boolean;
 	allowed_origins: string[];
 	max_request_body_size_mb: number;
+	enable_litellm_fallbacks: boolean;
 }
 
 // Semantic cache configuration types

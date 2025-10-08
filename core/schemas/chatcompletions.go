@@ -200,9 +200,9 @@ const (
 
 // ChatMessage represents a message in a chat conversation.
 type ChatMessage struct {
-	Name    *string            `json:"name,omitempty"` // for chat completions
-	Role    ChatMessageRole    `json:"role,omitempty"`
-	Content ChatMessageContent `json:"content,omitempty"`
+	Name    *string             `json:"name,omitempty"` // for chat completions
+	Role    ChatMessageRole     `json:"role,omitempty"`
+	Content *ChatMessageContent `json:"content,omitempty"`
 
 	// Embedded pointer structs - when non-nil, their exported fields are flattened into the top-level JSON object
 	// IMPORTANT: Only one of the following can be non-nil at a time, otherwise the JSON marshalling will override the common fields

@@ -25,7 +25,7 @@ func (mr *AnthropicMessageRequest) ToBifrostRequest() *schemas.BifrostChatReques
 		if mr.System.ContentStr != nil && *mr.System.ContentStr != "" {
 			messages = append(messages, schemas.ChatMessage{
 				Role: schemas.ChatMessageRoleSystem,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: mr.System.ContentStr,
 				},
 			})
@@ -41,7 +41,7 @@ func (mr *AnthropicMessageRequest) ToBifrostRequest() *schemas.BifrostChatReques
 			}
 			messages = append(messages, schemas.ChatMessage{
 				Role: schemas.ChatMessageRoleSystem,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentBlocks: contentBlocks,
 				},
 			})
@@ -54,7 +54,7 @@ func (mr *AnthropicMessageRequest) ToBifrostRequest() *schemas.BifrostChatReques
 		bifrostMsg.Role = schemas.ChatMessageRole(msg.Role)
 
 		if msg.Content.ContentStr != nil {
-			bifrostMsg.Content = schemas.ChatMessageContent{
+			bifrostMsg.Content = &schemas.ChatMessageContent{
 				ContentStr: msg.Content.ContentStr,
 			}
 		} else if msg.Content.ContentBlocks != nil {
@@ -116,7 +116,7 @@ func (mr *AnthropicMessageRequest) ToBifrostRequest() *schemas.BifrostChatReques
 
 			// Concatenate all text contents
 			if len(contentBlocks) > 0 {
-				bifrostMsg.Content = schemas.ChatMessageContent{
+				bifrostMsg.Content = &schemas.ChatMessageContent{
 					ContentBlocks: contentBlocks,
 				}
 			}
@@ -290,7 +290,7 @@ func (response *AnthropicMessageResponse) ToBifrostResponse() *schemas.BifrostRe
 	// Create message
 	message := schemas.ChatMessage{
 		Role:                 schemas.ChatMessageRoleAssistant,
-		Content:              messageContent,
+		Content:              &messageContent,
 		ChatAssistantMessage: assistantMessage,
 	}
 
@@ -298,7 +298,7 @@ func (response *AnthropicMessageResponse) ToBifrostResponse() *schemas.BifrostRe
 	choice := schemas.BifrostChatResponseChoice{
 		Index: 0,
 		BifrostNonStreamResponseChoice: &schemas.BifrostNonStreamResponseChoice{
-			Message:    message,
+			Message:    &message,
 			StopString: response.StopSequence,
 		},
 		FinishReason: func() *string {

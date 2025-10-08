@@ -191,7 +191,7 @@ func (cohereResp *CohereChatResponse) ToBifrostResponse() *schemas.BifrostRespon
 			{
 				Index: 0,
 				BifrostNonStreamResponseChoice: &schemas.BifrostNonStreamResponseChoice{
-					Message: schemas.ChatMessage{
+					Message: &schemas.ChatMessage{
 						Role: schemas.ChatMessageRoleAssistant,
 					},
 				},
@@ -208,7 +208,7 @@ func (cohereResp *CohereChatResponse) ToBifrostResponse() *schemas.BifrostRespon
 		if cohereResp.Message.Content != nil {
 			if cohereResp.Message.Content.IsString() {
 				content := cohereResp.Message.Content.GetString()
-				bifrostResponse.Choices[0].BifrostNonStreamResponseChoice.Message.Content = schemas.ChatMessageContent{
+				bifrostResponse.Choices[0].BifrostNonStreamResponseChoice.Message.Content = &schemas.ChatMessageContent{
 					ContentStr: content,
 				}
 			} else if cohereResp.Message.Content.IsBlocks() {
@@ -231,7 +231,7 @@ func (cohereResp *CohereChatResponse) ToBifrostResponse() *schemas.BifrostRespon
 						}
 					}
 					if len(contentBlocks) > 0 {
-						bifrostResponse.Choices[0].BifrostNonStreamResponseChoice.Message.Content = schemas.ChatMessageContent{
+						bifrostResponse.Choices[0].BifrostNonStreamResponseChoice.Message.Content = &schemas.ChatMessageContent{
 							ContentBlocks: contentBlocks,
 						}
 					}

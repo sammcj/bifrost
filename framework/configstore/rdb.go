@@ -30,6 +30,7 @@ func (s *RDBConfigStore) UpdateClientConfig(ctx context.Context, config *ClientC
 		PrometheusLabels:        config.PrometheusLabels,
 		AllowedOrigins:          config.AllowedOrigins,
 		MaxRequestBodySizeMB:    config.MaxRequestBodySizeMB,
+		EnableLiteLLMFallbacks:  config.EnableLiteLLMFallbacks,
 	}
 	// Delete existing client config and create new one in a transaction
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -59,6 +60,7 @@ func (s *RDBConfigStore) GetClientConfig(ctx context.Context) (*ClientConfig, er
 		AllowDirectKeys:         dbConfig.AllowDirectKeys,
 		AllowedOrigins:          dbConfig.AllowedOrigins,
 		MaxRequestBodySizeMB:    dbConfig.MaxRequestBodySizeMB,
+		EnableLiteLLMFallbacks:  dbConfig.EnableLiteLLMFallbacks,
 	}, nil
 }
 
@@ -155,7 +157,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 	})
 }
 
-// UpdateProviderById updates a single provider configuration in the database without deleting/recreating.
+// UpdateProvider updates a single provider configuration in the database without deleting/recreating.
 func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.ModelProvider, config ProviderConfig, envKeys map[string][]EnvKeyInfo) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Find the existing provider
@@ -181,7 +183,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 		dbProvider.ProxyConfig = configCopy.ProxyConfig
 		dbProvider.SendBackRawResponse = configCopy.SendBackRawResponse
 		dbProvider.CustomProviderConfig = configCopy.CustomProviderConfig
-
+		
 		// Save the updated provider
 		if err := tx.WithContext(ctx).Save(&dbProvider).Error; err != nil {
 			return err

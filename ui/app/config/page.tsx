@@ -25,6 +25,7 @@ const defaultConfig: CoreConfig = {
 	allow_direct_keys: false,
 	allowed_origins: [],
 	max_request_body_size_mb: 100,
+	enable_litellm_fallbacks: false,
 };
 
 export default function ConfigPage() {
@@ -41,11 +42,13 @@ export default function ConfigPage() {
 		prometheus_labels: string;
 		allowed_origins: string;
 		max_request_body_size_mb: string;
+		enable_litellm_fallbacks: boolean;
 	}>({
 		initial_pool_size: "300",
 		prometheus_labels: "",
 		allowed_origins: "",
 		max_request_body_size_mb: "100",
+		enable_litellm_fallbacks: false,
 	});
 
 	// Handle dropped requests data from RTK Query
@@ -60,7 +63,7 @@ export default function ConfigPage() {
 	const prometheusLabelsTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 	const allowedOriginsTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 	const maxRequestBodySizeMBTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
-
+	
 	// Update local values when config is loaded
 	useEffect(() => {
 		if (bifrostConfig && config) {
@@ -69,6 +72,7 @@ export default function ConfigPage() {
 				prometheus_labels: config?.prometheus_labels?.join(", ") || "",
 				allowed_origins: config?.allowed_origins?.join(", ") || "",
 				max_request_body_size_mb: config?.max_request_body_size_mb?.toString() || "100",
+				enable_litellm_fallbacks: config?.enable_litellm_fallbacks || false,
 			});
 		}
 	}, [config, bifrostConfig]);
@@ -174,6 +178,14 @@ export default function ConfigPage() {
 		[updateConfig],
 	);
 
+	const handleEnableLiteLLMFallbacksChange = useCallback(
+		(value: boolean) => {
+			setLocalValues((prev) => ({ ...prev, enable_litellm_fallbacks: value }));
+			updateConfig("enable_litellm_fallbacks", value);
+		},
+		[updateConfig],
+	);
+
 	// Cleanup timeouts on unmount
 	useEffect(() => {
 		return () => {
@@ -265,6 +277,25 @@ export default function ConfigPage() {
 							onCheckedChange={(checked) => handleConfigChange("allow_direct_keys", checked)}
 						/>
 					</div>
+
+					<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+						<div className="space-y-0.5">
+							<label htmlFor="enable-litellm-fallbacks" className="text-sm font-medium">
+								Enable LiteLLM Fallbacks
+							</label>
+							<p className="text-muted-foreground text-sm">
+								Enable litellm-specific fallbacks for text completion for Groq.								
+							</p>
+						</div>
+						<Switch
+							id="enable-litellm-fallbacks"
+							size="md"
+							checked={config?.enable_litellm_fallbacks}
+							onCheckedChange={(checked) => handleConfigChange("enable_litellm_fallbacks", checked)}
+						/>
+					</div>
+					
+
 
 					<Alert variant="destructive">
 						<AlertTriangle className="h-4 w-4" />
