@@ -9,14 +9,14 @@ require (
 	github.com/fasthttp/router v1.5.4
 	github.com/fasthttp/websocket v1.5.12
 	github.com/google/uuid v1.6.0
-	github.com/maximhq/bifrost/core v1.2.3
-	github.com/maximhq/bifrost/framework v1.1.3
-	github.com/maximhq/bifrost/plugins/governance v1.3.3
-	github.com/maximhq/bifrost/plugins/logging v1.3.3
-	github.com/maximhq/bifrost/plugins/maxim v1.4.3
-	github.com/maximhq/bifrost/plugins/otel v1.0.3
-	github.com/maximhq/bifrost/plugins/semanticcache v1.3.3
-	github.com/maximhq/bifrost/plugins/telemetry v1.3.3
+	github.com/maximhq/bifrost/core v1.2.4
+	github.com/maximhq/bifrost/framework v1.1.4
+	github.com/maximhq/bifrost/plugins/governance v1.3.4
+	github.com/maximhq/bifrost/plugins/logging v1.3.4
+	github.com/maximhq/bifrost/plugins/maxim v1.4.4
+	github.com/maximhq/bifrost/plugins/otel v1.0.4
+	github.com/maximhq/bifrost/plugins/semanticcache v1.3.4
+	github.com/maximhq/bifrost/plugins/telemetry v1.3.4
 	github.com/prometheus/client_golang v1.23.0
 	github.com/valyala/fasthttp v1.65.0
 	gorm.io/gorm v1.31.0
