@@ -14,13 +14,13 @@ import {
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { useGetCoreConfigQuery, useGetVersionQuery } from "@/lib/store";
+import { useGetCoreConfigQuery, useGetLatestReleaseQuery, useGetVersionQuery } from "@/lib/store";
 import { BooksIcon, DiscordLogoIcon, GithubLogoIcon } from "@phosphor-icons/react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ThemeToggle } from "./themeToggle";
 import { PromoCardStack } from "./ui/promoCardStack";
 
@@ -137,29 +137,29 @@ const externalLinks = [
 	},
 ];
 
-// Promotional cards configuration
-const promoCards = [
-	{
-		title: "Need help with production setup?",
-		description: (
-			<>
-				We offer help with production setup including custom integrations and dedicated support.
-				<br />
-				<br />
-				Book a demo with our team{" "}
-				<Link
-					href="https://calendly.com/maximai/bifrost-demo?utm_source=bfd_sdbr"
-					target="_blank"
-					className="text-primary"
-					rel="noopener noreferrer"
-				>
-					here
-				</Link>
-				.
-			</>
-		),
-	},
-];
+// Base promotional card (memoized outside component to prevent recreation)
+const productionSetupHelpCard = {
+	id: "production-setup",
+	title: "Need help with production setup?",
+	description: (
+		<>
+			We offer help with production setup including custom integrations and dedicated support.
+			<br />
+			<br />
+			Book a demo with our team{" "}
+			<Link
+				href="https://calendly.com/maximai/bifrost-demo?utm_source=bfd_sdbr"
+				target="_blank"
+				className="text-primary font-medium underline"
+				rel="noopener noreferrer"
+			>
+				here
+			</Link>
+			.
+		</>
+	),
+	dismissible: false,
+};
 
 const SidebarItem = ({
 	item,
@@ -207,11 +207,60 @@ const SidebarItem = ({
 	);
 };
 
+// Helper function to compare semantic versions
+const compareVersions = (v1: string, v2: string): number => {
+	// Remove 'v' prefix if present
+	const cleanV1 = v1.startsWith("v") ? v1.slice(1) : v1;
+	const cleanV2 = v2.startsWith("v") ? v2.slice(1) : v2;
+
+	// Split into main version and prerelease
+	const [mainV1, prereleaseV1] = cleanV1.split("-");
+	const [mainV2, prereleaseV2] = cleanV2.split("-");
+
+	// Compare main version numbers (major.minor.patch)
+	const partsV1 = mainV1.split(".").map(Number);
+	const partsV2 = mainV2.split(".").map(Number);
+
+	for (let i = 0; i < Math.max(partsV1.length, partsV2.length); i++) {
+		const num1 = partsV1[i] || 0;
+		const num2 = partsV2[i] || 0;
+
+		if (num1 > num2) return 1;
+		if (num1 < num2) return -1;
+	}
+
+	// If main versions are equal, check prerelease
+	// Version without prerelease is higher than version with prerelease
+	if (!prereleaseV1 && prereleaseV2) return 1;
+	if (prereleaseV1 && !prereleaseV2) return -1;
+
+	// Both have prereleases, compare them
+	if (prereleaseV1 && prereleaseV2) {
+		// Extract prerelease number (e.g., "prerelease1" -> 1)
+		const prereleaseNum1 = parseInt(prereleaseV1.replace(/\D/g, "")) || 0;
+		const prereleaseNum2 = parseInt(prereleaseV2.replace(/\D/g, "")) || 0;
+
+		if (prereleaseNum1 > prereleaseNum2) return 1;
+		if (prereleaseNum1 < prereleaseNum2) return -1;
+	}
+
+	return 0;
+};
+
 export default function AppSidebar() {
 	const pathname = usePathname();
 	const [mounted, setMounted] = useState(false);
+	const { data: latestRelease } = useGetLatestReleaseQuery(undefined, {
+		skip: !mounted, // Only fetch after component is mounted
+	});
 	const { data: version } = useGetVersionQuery();
 	const { resolvedTheme } = useTheme();
+	const showNewReleaseBanner = useMemo(() => {
+		if (latestRelease && version) {
+			return compareVersions(latestRelease.name, version) > 0;
+		}
+		return false;
+	}, [latestRelease, version]);
 
 	// Get governance config from RTK Query
 	const { data: coreConfig } = useGetCoreConfigQuery({});
@@ -231,6 +280,31 @@ export default function AppSidebar() {
 	const logoSrc = mounted && resolvedTheme === "dark" ? "/bifrost-logo-dark.png" : "/bifrost-logo.png";
 
 	const { isConnected: isWebSocketConnected } = useWebSocket();
+
+	// Memoize promo cards array to prevent duplicates and unnecessary re-renders
+	const promoCards = useMemo(() => {
+		const cards = [productionSetupHelpCard];
+		if (showNewReleaseBanner && latestRelease) {
+			cards.push({
+				id: "new-release",
+				title: `${latestRelease.name} is now available.`,
+				description: (
+					<div className="flex h-full flex-col gap-2">
+						<img src={`/images/new-release-image.png`} alt="Bifrost" className="h-[95px] object-cover" />
+						<Link
+							href={`https://docs.getbifrost.ai/changelogs/${latestRelease.name}`}
+							target="_blank"
+							className="text-primary mt-auto pb-1 font-medium underline"
+						>
+							View release notes
+						</Link>
+					</div>
+				),
+				dismissible: true,
+			});
+		}
+		return cards;
+	}, [showNewReleaseBanner, latestRelease]);
 
 	return (
 		<Sidebar className="overflow-y-clip border-none bg-transparent">
