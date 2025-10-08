@@ -305,6 +305,32 @@ func FindPluginByName[T schemas.Plugin](plugins []schemas.Plugin, name string) (
 	return zero, fmt.Errorf("plugin %q not found", name)
 }
 
+// ReloadClientConfigFromConfigStore reloads the client config from config store
+func (s *BifrostHTTPServer) ReloadClientConfigFromConfigStore() error {
+	if s.Config == nil || s.Config.ConfigStore == nil {
+		return fmt.Errorf("config store not found")
+	}
+	config, err := s.Config.ConfigStore.GetClientConfig(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get client config: %v", err)
+	}
+	s.Config.ClientConfig = *config
+	
+	// Reloading config in bifrost client
+	if s.Client != nil {
+		account := lib.NewBaseAccount(s.Config)
+		s.Client.ReloadConfig(schemas.BifrostConfig{
+			Account:            account,
+			InitialPoolSize:    s.Config.ClientConfig.InitialPoolSize,
+			DropExcessRequests: s.Config.ClientConfig.DropExcessRequests,
+			Plugins:            s.Plugins,
+			MCPConfig:          s.Config.MCPConfig,
+			Logger:             logger,
+		})
+	}
+	return nil
+}
+
 // ReloadPlugin reloads a plugin with new instance and updates Bifrost core
 func (s *BifrostHTTPServer) ReloadPlugin(ctx context.Context, name string, pluginConfig any) error {
 	logger.Debug("reloading plugin %s", name)
@@ -381,14 +407,14 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...B
 	// ChainMiddlewares chains multiple middlewares together
 	// Initialize handlers
 	providerHandler := NewProviderHandler(s.Config, s.Client, logger)
-	completionHandler := NewCompletionHandler(s.Client, s.Config, logger)
+	inferenceHandler := NewInferenceHandler(s.Client, s.Config, logger)
 	mcpHandler := NewMCPHandler(s.Client, logger, s.Config)
 	integrationHandler := NewIntegrationHandler(s.Client, s.Config)
-	configHandler := NewConfigHandler(s.Client, logger, s.Config)
+	configHandler := NewConfigHandler(s.Client, logger, s.Config, s)
 	pluginsHandler := NewPluginsHandler(s, s.Config.ConfigStore, logger)
 	// Register all handler routes
 	providerHandler.RegisterRoutes(s.Router, middlewares...)
-	completionHandler.RegisterRoutes(s.Router, middlewares...)
+	inferenceHandler.RegisterRoutes(s.Router, middlewares...)
 	mcpHandler.RegisterRoutes(s.Router, middlewares...)
 	integrationHandler.RegisterRoutes(s.Router)
 	configHandler.RegisterRoutes(s.Router, middlewares...)

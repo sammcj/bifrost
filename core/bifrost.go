@@ -187,6 +187,14 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 	return bifrost, nil
 }
 
+// ReloadConfig reloads the config from DB
+// Currently we only update account and drop excess requests
+// We will keep on adding other aspects as required
+func (bifrost *Bifrost) ReloadConfig(config schemas.BifrostConfig) error {
+	bifrost.dropExcessRequests.Store(config.DropExcessRequests)
+	return nil
+}
+
 // PUBLIC API METHODS
 
 // TextCompletionRequest sends a text completion request to the specified provider.
@@ -203,18 +211,18 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
-				Message: "text not provided for text completion request",
+				Message: "prompt not provided for text completion request",
 			},
 		}
 	}
-
+	// Preparing request
 	bifrostReq := bifrost.getBifrostRequest()
 	bifrostReq.Provider = req.Provider
 	bifrostReq.Model = req.Model
 	bifrostReq.Fallbacks = req.Fallbacks
 	bifrostReq.RequestType = schemas.TextCompletionRequest
 	bifrostReq.TextCompletionRequest = req
-
+	// Hand over to bifrost core
 	return bifrost.handleRequest(ctx, bifrostReq)
 }
 
@@ -236,14 +244,12 @@ func (bifrost *Bifrost) TextCompletionStreamRequest(ctx context.Context, req *sc
 			},
 		}
 	}
-
 	bifrostReq := bifrost.getBifrostRequest()
 	bifrostReq.Provider = req.Provider
 	bifrostReq.Model = req.Model
 	bifrostReq.Fallbacks = req.Fallbacks
 	bifrostReq.RequestType = schemas.TextCompletionStreamRequest
 	bifrostReq.TextCompletionRequest = req
-
 	return bifrost.handleStreamRequest(ctx, bifrostReq)
 }
 

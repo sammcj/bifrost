@@ -110,7 +110,7 @@ func (r *GeminiGenerationRequest) ToBifrostRequest() *schemas.BifrostChatRequest
 
 				toolResponseMsg := schemas.ChatMessage{
 					Role: schemas.ChatMessageRoleTool,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: schemas.Ptr(string(responseContent)),
 					},
 					ChatToolMessage: &schemas.ChatToolMessage{
@@ -174,7 +174,7 @@ func (r *GeminiGenerationRequest) ToBifrostRequest() *schemas.BifrostChatRequest
 
 			// Set content only if there are content blocks
 			if len(contentBlocks) > 0 {
-				bifrostMsg.Content = schemas.ChatMessageContent{
+				bifrostMsg.Content = &schemas.ChatMessageContent{
 					ContentBlocks: contentBlocks,
 				}
 			}
@@ -413,9 +413,9 @@ func (r *GenerateContentResponse) ToBifrostResponse() *schemas.BifrostResponse {
 					choice := schemas.BifrostChatResponseChoice{
 						Index: 0,
 						BifrostNonStreamResponseChoice: &schemas.BifrostNonStreamResponseChoice{
-							Message: schemas.ChatMessage{
+							Message: &schemas.ChatMessage{
 								Role: schemas.ChatMessageRoleAssistant,
-								Content: schemas.ChatMessageContent{
+								Content: &schemas.ChatMessageContent{
 									ContentStr: &textContent,
 								},
 							},

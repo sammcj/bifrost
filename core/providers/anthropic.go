@@ -512,7 +512,7 @@ func handleAnthropicStreaming(
 								{
 									Index: 0,
 									BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-										Delta: schemas.BifrostStreamDelta{
+										Delta: &schemas.BifrostStreamDelta{
 											Role: &role,
 										},
 									},
@@ -550,7 +550,7 @@ func handleAnthropicStreaming(
 									{
 										Index: *event.Index,
 										BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-											Delta: schemas.BifrostStreamDelta{
+											Delta: &schemas.BifrostStreamDelta{
 												ToolCalls: []schemas.ChatAssistantMessageToolCall{
 													{
 														Type: func() *string { s := "function"; return &s }(),
@@ -594,7 +594,7 @@ func handleAnthropicStreaming(
 								{
 									Index: *event.Index,
 									BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-										Delta: schemas.BifrostStreamDelta{
+										Delta: &schemas.BifrostStreamDelta{
 											Thought: &thought,
 											Content: &content,
 										},
@@ -631,7 +631,7 @@ func handleAnthropicStreaming(
 									{
 										Index: *event.Index,
 										BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-											Delta: schemas.BifrostStreamDelta{
+											Delta: &schemas.BifrostStreamDelta{
 												Content: &event.Delta.Text,
 											},
 										},
@@ -661,7 +661,7 @@ func handleAnthropicStreaming(
 									{
 										Index: *event.Index,
 										BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-											Delta: schemas.BifrostStreamDelta{
+											Delta: &schemas.BifrostStreamDelta{
 												ToolCalls: []schemas.ChatAssistantMessageToolCall{
 													{
 														Type: func() *string { s := "function"; return &s }(),
@@ -698,7 +698,7 @@ func handleAnthropicStreaming(
 									{
 										Index: *event.Index,
 										BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-											Delta: schemas.BifrostStreamDelta{
+											Delta: &schemas.BifrostStreamDelta{
 												Thought: &event.Delta.Thinking,
 											},
 										},

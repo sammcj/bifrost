@@ -109,9 +109,9 @@ func (bedrockResp *BedrockConverseResponse) ToBifrostResponse() (*schemas.Bifros
 		{
 			Index: 0,
 			BifrostNonStreamResponseChoice: &schemas.BifrostNonStreamResponseChoice{
-				Message: schemas.ChatMessage{
+				Message: &schemas.ChatMessage{
 					Role:                 schemas.ChatMessageRoleAssistant,
-					Content:              messageContent,
+					Content:              &messageContent,
 					ChatAssistantMessage: assistantMessage,
 				},
 			},

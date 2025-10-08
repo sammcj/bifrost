@@ -89,7 +89,7 @@ func TestJsonParserPluginEndToEnd(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Return a JSON object with name, age, and city fields. Example: {\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"),
 				},
 			},
@@ -188,7 +188,7 @@ func TestJsonParserPluginPerRequest(t *testing.T) {
 		Input: []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: bifrost.Ptr("Return a JSON object with name and age fields."),
 				},
 			},

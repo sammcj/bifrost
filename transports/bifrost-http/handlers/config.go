@@ -13,21 +13,28 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+// ConfigManager is the interface for the config manager
+type ConfigManager interface {
+	ReloadClientConfigFromConfigStore() error
+}
+
 // ConfigHandler manages runtime configuration updates for Bifrost.
 // It provides endpoints to update and retrieve settings persisted via the ConfigStore backed by sql database.
 type ConfigHandler struct {
 	client *bifrost.Bifrost
 	logger schemas.Logger
 	store  *lib.Config
+	configManager ConfigManager
 }
 
 // NewConfigHandler creates a new handler for configuration management.
 // It requires the Bifrost client, a logger, and the config store.
-func NewConfigHandler(client *bifrost.Bifrost, logger schemas.Logger, store *lib.Config) *ConfigHandler {
+func NewConfigHandler(client *bifrost.Bifrost, logger schemas.Logger, store *lib.Config, configManager ConfigManager) *ConfigHandler {
 	return &ConfigHandler{
 		client: client,
 		logger: logger,
 		store:  store,
+		configManager: configManager,
 	}
 }
 
@@ -40,7 +47,7 @@ func (h *ConfigHandler) RegisterRoutes(r *router.Router, middlewares ...BifrostH
 }
 
 // getVersion handles GET /api/version - Get the current version
-func (h *ConfigHandler) getVersion(ctx *fasthttp.RequestCtx) {	
+func (h *ConfigHandler) getVersion(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, version, h.logger)
 }
 
@@ -113,6 +120,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	updatedConfig.EnforceGovernanceHeader = req.EnforceGovernanceHeader
 	updatedConfig.AllowDirectKeys = req.AllowDirectKeys
 	updatedConfig.MaxRequestBodySizeMB = req.MaxRequestBodySizeMB
+	updatedConfig.EnableLiteLLMFallbacks = req.EnableLiteLLMFallbacks
 
 	// Update the store with the new config
 	h.store.ClientConfig = updatedConfig
@@ -120,6 +128,12 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	if err := h.store.ConfigStore.UpdateClientConfig(ctx, &updatedConfig); err != nil {
 		h.logger.Warn(fmt.Sprintf("failed to save configuration: %v", err))
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to save configuration: %v", err), h.logger)
+		return
+	}
+
+	if err := h.configManager.ReloadClientConfigFromConfigStore(); err != nil {
+		h.logger.Warn(fmt.Sprintf("failed to reload client config from config store: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to reload client config from config store: %v", err), h.logger)
 		return
 	}
 

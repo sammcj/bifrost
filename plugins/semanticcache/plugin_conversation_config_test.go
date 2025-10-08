@@ -183,7 +183,7 @@ func TestConversationHistoryThresholdDifferentValues(t *testing.T) {
 				}
 				message := schemas.ChatMessage{
 					Role: role,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: bifrost.Ptr("Message " + strconv.Itoa(i+1)),
 					},
 				}
@@ -347,38 +347,38 @@ func TestExcludeSystemPromptWithMultipleSystemMessages(t *testing.T) {
 	conversation1 := []schemas.ChatMessage{
 		{
 			Role:    schemas.ChatMessageRoleSystem,
-			Content: schemas.ChatMessageContent{ContentStr: bifrost.Ptr("You are helpful")},
+			Content: &schemas.ChatMessageContent{ContentStr: bifrost.Ptr("You are helpful")},
 		},
 		{
 			Role:    schemas.ChatMessageRoleSystem,
-			Content: schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Be concise")},
+			Content: &schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Be concise")},
 		},
 		{
 			Role:    schemas.ChatMessageRoleUser,
-			Content: schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hello")},
+			Content: &schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hello")},
 		},
 		{
 			Role:    schemas.ChatMessageRoleAssistant,
-			Content: schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hi!")},
+			Content: &schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hi!")},
 		},
 	}
 
 	conversation2 := []schemas.ChatMessage{
 		{
 			Role:    schemas.ChatMessageRoleSystem,
-			Content: schemas.ChatMessageContent{ContentStr: bifrost.Ptr("You are an expert")},
+			Content: &schemas.ChatMessageContent{ContentStr: bifrost.Ptr("You are an expert")},
 		},
 		{
 			Role:    schemas.ChatMessageRoleSystem,
-			Content: schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Be detailed")},
+			Content: &schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Be detailed")},
 		},
 		{
 			Role:    schemas.ChatMessageRoleUser,
-			Content: schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hello")},
+			Content: &schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hello")},
 		},
 		{
 			Role:    schemas.ChatMessageRoleAssistant,
-			Content: schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hi!")},
+			Content: &schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hi!")},
 		},
 	}
 
@@ -420,11 +420,11 @@ func TestExcludeSystemPromptWithNoSystemMessages(t *testing.T) {
 	conversation := []schemas.ChatMessage{
 		{
 			Role:    schemas.ChatMessageRoleUser,
-			Content: schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hello")},
+			Content: &schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hello")},
 		},
 		{
 			Role:    schemas.ChatMessageRoleAssistant,
-			Content: schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hi there!")},
+			Content: &schemas.ChatMessageContent{ContentStr: bifrost.Ptr("Hi there!")},
 		},
 	}
 

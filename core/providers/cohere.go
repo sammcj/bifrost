@@ -474,7 +474,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 						{
 							Index: 0,
 							BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
-								Delta: schemas.BifrostStreamDelta{},
+								Delta: &schemas.BifrostStreamDelta{},
 							},
 						},
 					},

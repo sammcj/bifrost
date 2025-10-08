@@ -436,14 +436,14 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 				if choice.BifrostTextCompletionResponseChoice != nil {
 					updateData.OutputMessage = &schemas.ChatMessage{
 						Role: schemas.ChatMessageRoleAssistant,
-						Content: schemas.ChatMessageContent{
+						Content: &schemas.ChatMessageContent{
 							ContentStr: choice.BifrostTextCompletionResponseChoice.Text,
 						},
 					}
 				}
 				// Check if this is a non-stream response choice
 				if choice.BifrostNonStreamResponseChoice != nil {
-					updateData.OutputMessage = &choice.BifrostNonStreamResponseChoice.Message
+					updateData.OutputMessage = choice.BifrostNonStreamResponseChoice.Message
 					// Extract tool calls if present
 					if choice.BifrostNonStreamResponseChoice.Message.ChatAssistantMessage != nil &&
 						choice.BifrostNonStreamResponseChoice.Message.ChatAssistantMessage.ToolCalls != nil {
@@ -609,7 +609,7 @@ func (p *LoggerPlugin) extractInputHistory(request *schemas.BifrostRequest) []sc
 		return []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentStr: &text,
 				},
 			},
@@ -634,7 +634,7 @@ func (p *LoggerPlugin) extractInputHistory(request *schemas.BifrostRequest) []sc
 		return []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
+				Content: &schemas.ChatMessageContent{
 					ContentBlocks: contentBlocks,
 				},
 			},

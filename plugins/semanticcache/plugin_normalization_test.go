@@ -71,13 +71,13 @@ func testChatCompletionNormalization(t *testing.T, setup *TestSetup) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleSystem,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: &tc.systemMsg,
 					},
 				},
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: &tc.userMsg,
 					},
 				},
@@ -229,7 +229,7 @@ func TestChatCompletionContentBlocksNormalization(t *testing.T) {
 			Input: []schemas.ChatMessage{
 				{
 					Role: schemas.ChatMessageRoleUser,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentBlocks: contentBlocks,
 					},
 				},

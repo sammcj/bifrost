@@ -118,9 +118,9 @@ func (p *ProcessedStreamResponse) ToBifrostResponse() *schemas.BifrostResponse {
 		}
 		if p.Data.OutputMessage.Content.ContentStr != nil {
 			choice.BifrostNonStreamResponseChoice = &schemas.BifrostNonStreamResponseChoice{
-				Message: schemas.ChatMessage{
+				Message: &schemas.ChatMessage{
 					Role: schemas.ChatMessageRoleAssistant,
-					Content: schemas.ChatMessageContent{
+					Content: &schemas.ChatMessageContent{
 						ContentStr: p.Data.OutputMessage.Content.ContentStr,
 					},
 				},
@@ -129,7 +129,7 @@ func (p *ProcessedStreamResponse) ToBifrostResponse() *schemas.BifrostResponse {
 		if p.Data.OutputMessage.ChatAssistantMessage != nil {
 			if choice.BifrostNonStreamResponseChoice == nil {
 				choice.BifrostNonStreamResponseChoice = &schemas.BifrostNonStreamResponseChoice{
-					Message: schemas.ChatMessage{
+					Message: &schemas.ChatMessage{
 						Role:                 schemas.ChatMessageRoleAssistant,
 						ChatAssistantMessage: p.Data.OutputMessage.ChatAssistantMessage,
 					},
