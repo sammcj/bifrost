@@ -54,6 +54,7 @@ type UpdateLogData struct {
 	Object              string                     // May be different from request
 	SpeechOutput        *schemas.BifrostSpeech     // For non-streaming speech responses
 	TranscriptionOutput *schemas.BifrostTranscribe // For non-streaming transcription responses
+	RawResponse         interface{}
 }
 
 // LogMessage represents a message in the logging queue
@@ -429,6 +430,9 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 			// Token usage
 			if result.Usage != nil && result.Usage.TotalTokens > 0 {
 				updateData.TokenUsage = result.Usage
+			}
+			if result.ExtraFields.RawResponse != nil {
+				updateData.RawResponse = result.ExtraFields.RawResponse
 			}
 			// Output message and tool calls
 			if len(result.Choices) > 0 {

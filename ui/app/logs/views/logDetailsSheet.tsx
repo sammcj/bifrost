@@ -282,6 +282,31 @@ export function LogDetailSheet({ log, open, onOpenChange }: LogDetailSheetProps)
 								/>
 							</>
 						)}
+						{log.raw_response && (
+							<>
+								<div className="mt-4 w-full text-left text-sm font-medium">
+									Raw Response from <span className="font-medium capitalize">{log.provider}</span>
+								</div>
+								<div className="w-full rounded-sm border">
+									<CodeEditor
+										className="z-0 w-full"
+										shouldAdjustInitialHeight={true}
+										maxHeight={250}
+										wrap={true}
+										code={(() => {
+											try {
+												return JSON.stringify(JSON.parse(log.raw_response), null, 2);
+											} catch {
+												return log.raw_response; // Fallback to raw string if parsing fails
+											}
+										})()}
+										lang="json"
+										readonly={true}
+										options={{ scrollBeyondLastLine: false, collapsibleBlocks: true, lineNumbers: "off", alwaysConsumeMouseWheel: false }}
+									/>
+								</div>
+							</>
+						)}
 						{log.error_details?.error.message && (
 							<>
 								<div className="mt-4 w-full text-left text-sm font-medium">Error</div>
