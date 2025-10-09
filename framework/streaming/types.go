@@ -4,7 +4,6 @@ import (
 	"sync"
 	"time"
 
-	bifrost "github.com/maximhq/bifrost/core"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 )
 
@@ -30,7 +29,7 @@ type AccumulatedData struct {
 	Model               string
 	Status              string
 	Stream              bool
-	Latency             float64
+	Latency             int64 // in milliseconds
 	StartTimestamp      time.Time
 	EndTimestamp        time.Time
 	OutputMessage       *schemas.ChatMessage
@@ -153,7 +152,7 @@ func (p *ProcessedStreamResponse) ToBifrostResponse() *schemas.BifrostResponse {
 		Provider:   p.Provider,
 	}
 	if p.Data.Latency != 0 {
-		resp.ExtraFields.Latency = bifrost.Ptr(p.Data.Latency)
+		resp.ExtraFields.Latency = p.Data.Latency
 	}
 	return resp
 }

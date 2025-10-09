@@ -131,7 +131,7 @@ func RunEnd2EndToolCallingTest(t *testing.T, client *bifrost.Bifrost, ctx contex
 		chatConversationMessages := []schemas.ChatMessage{chatUserMessage}
 		if result1.ChatCompletionsResponse.Choices != nil {
 			for _, choice := range result1.ChatCompletionsResponse.Choices {
-				chatConversationMessages = append(chatConversationMessages, choice.Message)
+				chatConversationMessages = append(chatConversationMessages, *choice.Message)
 			}
 		}
 		chatConversationMessages = append(chatConversationMessages, CreateToolChatMessage(toolResult, chatToolCall.ID))

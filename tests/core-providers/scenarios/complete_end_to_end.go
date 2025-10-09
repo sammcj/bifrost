@@ -119,7 +119,7 @@ func RunCompleteEnd2EndTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 		// Add all choice messages to Chat Completions conversation history
 		if result1.ChatCompletionsResponse.Choices != nil {
 			for _, choice := range result1.ChatCompletionsResponse.Choices {
-				chatConversationHistory = append(chatConversationHistory, choice.Message)
+				chatConversationHistory = append(chatConversationHistory, *choice.Message)
 			}
 		}
 

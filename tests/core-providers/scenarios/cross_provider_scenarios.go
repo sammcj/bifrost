@@ -696,7 +696,7 @@ func RunCrossProviderScenarioTest(t *testing.T, client *bifrost.Bifrost, ctx con
 		} else {
 			// Use Chat API choices
 			for _, choice := range response.Choices {
-				conversationHistory = append(conversationHistory, choice.Message)
+				conversationHistory = append(conversationHistory, *choice.Message)
 			}
 		}
 

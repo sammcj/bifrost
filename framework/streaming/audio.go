@@ -67,7 +67,7 @@ func (a *Accumulator) processAccumulatedAudioStreamingChunks(requestID string, b
 	if accumulator.StartTimestamp.IsZero() || accumulator.FinalTimestamp.IsZero() {
 		data.Latency = 0
 	} else {
-		data.Latency = float64(accumulator.FinalTimestamp.Sub(accumulator.StartTimestamp).Nanoseconds()) / 1e6
+		data.Latency = accumulator.FinalTimestamp.Sub(accumulator.StartTimestamp).Nanoseconds() / 1e6
 	}
 	data.EndTimestamp = accumulator.FinalTimestamp
 	data.AudioOutput = completeMessage
