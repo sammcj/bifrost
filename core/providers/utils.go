@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bytedance/sonic"
 	schemas "github.com/maximhq/bifrost/core/schemas"
@@ -23,7 +24,9 @@ import (
 // context is done. The fasthttp client call will continue in its goroutine until it completes
 // or times out based on its own settings. This function merely stops *waiting* for the
 // fasthttp call and returns an error related to the context.
-func makeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *fasthttp.Request, resp *fasthttp.Response) *schemas.BifrostError {
+// Returns the request latency and any error that occurred.
+func makeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *fasthttp.Request, resp *fasthttp.Response) (time.Duration, *schemas.BifrostError) {
+	startTime := time.Now()
 	errChan := make(chan error, 1)
 
 	go func() {
@@ -35,8 +38,9 @@ func makeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *f
 	select {
 	case <-ctx.Done():
 		// Context was cancelled (e.g., deadline exceeded or manual cancellation).
-		// Return a BifrostError indicating this.
-		return &schemas.BifrostError{
+		// Calculate latency even for cancelled requests
+		latency := time.Since(startTime)
+		return latency, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: &schemas.ErrorField{
 				Type:    schemas.Ptr(schemas.RequestCancelled),
@@ -47,9 +51,11 @@ func makeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *f
 	case err := <-errChan:
 
 		// The fasthttp.Do call completed.
+		// Calculate latency for both successful and failed requests
+		latency := time.Since(startTime)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
-				return &schemas.BifrostError{
+				return latency, &schemas.BifrostError{
 					IsBifrostError: false,
 					Error: &schemas.ErrorField{
 						Type:    schemas.Ptr(schemas.RequestCancelled),
@@ -59,10 +65,10 @@ func makeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *f
 				}
 			}
 			if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
-				return newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, "")
+				return latency, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, "")
 			}
 			// The HTTP request itself failed (e.g., connection error, fasthttp timeout).
-			return &schemas.BifrostError{
+			return latency, &schemas.BifrostError{
 				IsBifrostError: false,
 				Error: &schemas.ErrorField{
 					Message: schemas.ErrProviderRequest,
@@ -72,7 +78,7 @@ func makeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *f
 		}
 		// HTTP request was successful from fasthttp's perspective (err is nil).
 		// The caller should check resp.StatusCode() for HTTP-level errors (4xx, 5xx).
-		return nil
+		return latency, nil
 	}
 }
 

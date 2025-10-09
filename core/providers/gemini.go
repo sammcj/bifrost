@@ -119,7 +119,7 @@ func (provider *GeminiProvider) ChatCompletion(ctx context.Context, key schemas.
 	req.SetBody(jsonBody)
 
 	// Make request
-	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	latency, bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -157,6 +157,7 @@ func (provider *GeminiProvider) ChatCompletion(ctx context.Context, key schemas.
 	}
 
 	response.ExtraFields.Provider = providerName
+	response.ExtraFields.Latency = latency.Milliseconds()
 
 	if provider.sendBackRawResponse {
 		response.ExtraFields.RawResponse = rawResponse
@@ -252,7 +253,7 @@ func (provider *GeminiProvider) Speech(ctx context.Context, key schemas.Key, req
 	}
 
 	// Use common request function
-	geminiResponse, rawResponse, bifrostErr := provider.completeRequest(ctx, request.Model, key, jsonBody, ":generateContent")
+	geminiResponse, rawResponse, latency, bifrostErr := provider.completeRequest(ctx, request.Model, key, jsonBody, ":generateContent")
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -263,6 +264,7 @@ func (provider *GeminiProvider) Speech(ctx context.Context, key schemas.Key, req
 	bifrostResponse.ExtraFields.Provider = providerName
 	bifrostResponse.ExtraFields.ModelRequested = request.Model
 	bifrostResponse.ExtraFields.RequestType = schemas.SpeechRequest
+	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
 
 	if provider.sendBackRawResponse {
 		bifrostResponse.ExtraFields.RawResponse = rawResponse
@@ -307,7 +309,7 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -335,7 +337,7 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -512,7 +514,7 @@ func (provider *GeminiProvider) Transcription(ctx context.Context, key schemas.K
 	}
 
 	// Use common request function
-	geminiResponse, rawResponse, bifrostErr := provider.completeRequest(ctx, request.Model, key, jsonBody, ":generateContent")
+	geminiResponse, rawResponse, latency, bifrostErr := provider.completeRequest(ctx, request.Model, key, jsonBody, ":generateContent")
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -523,6 +525,7 @@ func (provider *GeminiProvider) Transcription(ctx context.Context, key schemas.K
 	bifrostResponse.ExtraFields.Provider = providerName
 	bifrostResponse.ExtraFields.ModelRequested = request.Model
 	bifrostResponse.ExtraFields.RequestType = schemas.TranscriptionRequest
+	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
 
 	if provider.sendBackRawResponse {
 		bifrostResponse.ExtraFields.RawResponse = rawResponse
@@ -575,7 +578,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -603,7 +606,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -798,7 +801,7 @@ func extractGeminiUsageMetadata(geminiResponse *gemini.GenerateContentResponse) 
 }
 
 // completeRequest handles the common HTTP request pattern for Gemini API calls
-func (provider *GeminiProvider) completeRequest(ctx context.Context, model string, key schemas.Key, jsonBody []byte, endpoint string) (*gemini.GenerateContentResponse, interface{}, *schemas.BifrostError) {
+func (provider *GeminiProvider) completeRequest(ctx context.Context, model string, key schemas.Key, jsonBody []byte, endpoint string) (*gemini.GenerateContentResponse, interface{}, time.Duration, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Create request
@@ -819,30 +822,32 @@ func (provider *GeminiProvider) completeRequest(ctx context.Context, model strin
 	req.SetBody(jsonBody)
 
 	// Make request
-	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	latency, bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
-		return nil, nil, bifrostErr
+		return nil, nil, latency, bifrostErr
 	}
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
-		return nil, nil, parseGeminiError(providerName, resp)
+		return nil, nil, latency, parseGeminiError(providerName, resp)
 	}
 
-	responseBody := resp.Body()
+	// Copy the response body before releasing the response
+	// to avoid use-after-free since resp.Body() references fasthttp's internal buffer
+	responseBody := append([]byte(nil), resp.Body()...)
 
 	// Parse Gemini's response
 	var geminiResponse gemini.GenerateContentResponse
 	if err := sonic.Unmarshal(responseBody, &geminiResponse); err != nil {
-		return nil, nil, newBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
+		return nil, nil, latency, newBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
 	}
 
 	var rawResponse interface{}
 	if err := sonic.Unmarshal(responseBody, &rawResponse); err != nil {
-		return nil, nil, newBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
+		return nil, nil, latency, newBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
 	}
 
-	return &geminiResponse, rawResponse, nil
+	return &geminiResponse, rawResponse, latency, nil
 }
 
 // parseStreamGeminiError parses Gemini streaming error responses

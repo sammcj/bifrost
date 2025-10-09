@@ -128,19 +128,12 @@ func (bedrockResp *BedrockConverseResponse) ToBifrostResponse() (*schemas.Bifros
 		}
 	}
 
-	// Calculate latency
-	var latency float64
-	if bedrockResp.Metrics != nil {
-		latency = float64(bedrockResp.Metrics.LatencyMs)
-	}
-
 	// Create the final Bifrost response
 	bifrostResponse := &schemas.BifrostResponse{
 		Choices: choices,
 		Usage:   usage,
 		ExtraFields: schemas.BifrostResponseExtraFields{
 			RequestType: schemas.ChatCompletionRequest,
-			Latency:     &latency,
 			Provider:    schemas.Bedrock,
 		},
 	}

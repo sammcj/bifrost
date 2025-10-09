@@ -147,9 +147,9 @@ func RunChatCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 				{
 					Index: 0,
 					BifrostNonStreamResponseChoice: &schemas.BifrostNonStreamResponseChoice{
-						Message: schemas.ChatMessage{
+						Message: &schemas.ChatMessage{
 							Role: schemas.ChatMessageRoleAssistant,
-							Content: schemas.ChatMessageContent{
+							Content: &schemas.ChatMessageContent{
 								ContentStr: &finalContent,
 							},
 						},

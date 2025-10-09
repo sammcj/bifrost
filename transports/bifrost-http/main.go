@@ -125,7 +125,7 @@ func init() {
 	logger.SetLevel(schemas.LogLevel(server.LogLevel))
 	// Setting up logger
 	handlers.SetLogger(logger)
-	
+
 }
 
 // main is the entry point of the application.

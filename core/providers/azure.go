@@ -62,20 +62,20 @@ func (provider *AzureProvider) GetProviderKey() schemas.ModelProvider {
 
 // completeRequest sends a request to Azure's API and handles the response.
 // It constructs the API URL, sets up authentication, and processes the response.
-// Returns the response body or an error if the request fails.
-func (provider *AzureProvider) completeRequest(ctx context.Context, requestBody interface{}, path string, key schemas.Key, model string) ([]byte, *schemas.BifrostError) {
+// Returns the response body, request latency, or an error if the request fails.
+func (provider *AzureProvider) completeRequest(ctx context.Context, requestBody interface{}, path string, key schemas.Key, model string) ([]byte, time.Duration, *schemas.BifrostError) {
 	if key.AzureKeyConfig == nil {
-		return nil, newConfigurationError("azure key config not set", schemas.Azure)
+		return nil, 0, newConfigurationError("azure key config not set", schemas.Azure)
 	}
 
 	// Marshal the request body
 	jsonData, err := sonic.Marshal(requestBody)
 	if err != nil {
-		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, schemas.Azure)
+		return nil, 0, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, schemas.Azure)
 	}
 
 	if key.AzureKeyConfig.Endpoint == "" {
-		return nil, newConfigurationError("endpoint not set", schemas.Azure)
+		return nil, 0, newConfigurationError("endpoint not set", schemas.Azure)
 	}
 
 	url := key.AzureKeyConfig.Endpoint
@@ -83,7 +83,7 @@ func (provider *AzureProvider) completeRequest(ctx context.Context, requestBody 
 	if key.AzureKeyConfig.Deployments != nil {
 		deployment := key.AzureKeyConfig.Deployments[model]
 		if deployment == "" {
-			return nil, newConfigurationError(fmt.Sprintf("deployment not found for model %s", model), schemas.Azure)
+			return nil, 0, newConfigurationError(fmt.Sprintf("deployment not found for model %s", model), schemas.Azure)
 		}
 
 		apiVersion := key.AzureKeyConfig.APIVersion
@@ -93,7 +93,7 @@ func (provider *AzureProvider) completeRequest(ctx context.Context, requestBody 
 
 		url = fmt.Sprintf("%s/openai/deployments/%s/%s?api-version=%s", url, deployment, path, *apiVersion)
 	} else {
-		return nil, newConfigurationError("deployments not set", schemas.Azure)
+		return nil, 0, newConfigurationError("deployments not set", schemas.Azure)
 	}
 
 	// Create the request with the JSON body
@@ -118,10 +118,10 @@ func (provider *AzureProvider) completeRequest(ctx context.Context, requestBody 
 
 	req.SetBody(jsonData)
 
-	// Send the request
-	bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	// Send the request and measure latency
+	latency, bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
-		return nil, bifrostErr
+		return nil, latency, bifrostErr
 	}
 
 	// Handle error response
@@ -133,13 +133,14 @@ func (provider *AzureProvider) completeRequest(ctx context.Context, requestBody 
 		bifrostErr := handleProviderAPIError(resp, &errorResp)
 		bifrostErr.Error.Message = fmt.Sprintf("%s error: %v", schemas.Azure, errorResp)
 
-		return nil, bifrostErr
+		return nil, latency, bifrostErr
 	}
 
-	// Read the response body
-	body := resp.Body()
+	// Read the response body and copy it before releasing the response
+	// to avoid use-after-free since resp.Body() references fasthttp's internal buffer
+	bodyCopy := append([]byte(nil), resp.Body()...)
 
-	return body, nil
+	return bodyCopy, latency, nil
 }
 
 // TextCompletion performs a text completion request to Azure's API.
@@ -152,7 +153,7 @@ func (provider *AzureProvider) TextCompletion(ctx context.Context, key schemas.K
 		return nil, newBifrostOperationError("text completion input is not provided", nil, schemas.Azure)
 	}
 
-	responseBody, err := provider.completeRequest(ctx, reqBody, "completions", key, request.Model)
+	responseBody, latency, err := provider.completeRequest(ctx, reqBody, "completions", key, request.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -167,6 +168,7 @@ func (provider *AzureProvider) TextCompletion(ctx context.Context, key schemas.K
 	response.ExtraFields.Provider = schemas.Azure
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.TextCompletionRequest
+	response.ExtraFields.Latency = latency.Milliseconds()
 
 	// Set raw response if enabled
 	if provider.sendBackRawResponse {
@@ -241,7 +243,7 @@ func (provider *AzureProvider) ChatCompletion(ctx context.Context, key schemas.K
 		return nil, newBifrostOperationError("chat completion input is not provided", nil, schemas.Azure)
 	}
 
-	responseBody, err := provider.completeRequest(ctx, reqBody, "chat/completions", key, request.Model)
+	responseBody, latency, err := provider.completeRequest(ctx, reqBody, "chat/completions", key, request.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -258,6 +260,7 @@ func (provider *AzureProvider) ChatCompletion(ctx context.Context, key schemas.K
 	}
 
 	response.ExtraFields.Provider = schemas.Azure
+	response.ExtraFields.Latency = latency.Milliseconds()
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.ChatCompletionRequest
 
@@ -290,14 +293,13 @@ func (provider *AzureProvider) Responses(ctx context.Context, key schemas.Key, r
 // The input can be either a single string or a slice of strings for batch embedding.
 // Returns a BifrostResponse containing the embedding(s) and any error that occurred.
 func (provider *AzureProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
-
 	// Use centralized converter
 	reqBody := openai.ToOpenAIEmbeddingRequest(request)
 	if reqBody == nil {
 		return nil, newBifrostOperationError("embedding input is not provided", nil, schemas.Azure)
 	}
 
-	responseBody, err := provider.completeRequest(ctx, reqBody, "embeddings", key, request.Model)
+	responseBody, latency, err := provider.completeRequest(ctx, reqBody, "embeddings", key, request.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -311,6 +313,7 @@ func (provider *AzureProvider) Embedding(ctx context.Context, key schemas.Key, r
 	}
 
 	response.ExtraFields.Provider = schemas.Azure
+	response.ExtraFields.Latency = latency.Milliseconds()
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.EmbeddingRequest
 
