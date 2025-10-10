@@ -109,10 +109,15 @@ export const networkConfigSchema = z
 export const networkFormConfigSchema = z
 	.object({
 		base_url: z
-			.url("Must be a valid URL")
-			.refine((url) => url.startsWith("https://") || url.startsWith("http://"), {
-				message: "Must be a valid HTTP or HTTPS URL",
-			})
+			.union([
+				z
+					.string()
+					.url("Must be a valid URL")
+					.refine((url) => url.startsWith("https://") || url.startsWith("http://"), {
+						message: "Must be a valid HTTP or HTTPS URL",
+					}),
+				z.string().length(0),
+			])
 			.optional(),
 		extra_headers: z.record(z.string(), z.string()).optional(),
 		default_request_timeout_in_seconds: z.coerce

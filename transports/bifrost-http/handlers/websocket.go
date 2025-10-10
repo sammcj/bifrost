@@ -14,6 +14,7 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/plugins/logging"
+	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 )
 
@@ -49,8 +50,8 @@ func NewWebSocketHandler(ctx context.Context, logManager logging.LogManager, log
 }
 
 // RegisterRoutes registers all WebSocket-related routes
-func (h *WebSocketHandler) RegisterRoutes(r *router.Router, middlewares ...BifrostHTTPMiddleware) {
-	r.GET("/ws/logs", ChainMiddlewares(h.connectLogStream, middlewares...))
+func (h *WebSocketHandler) RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware) {
+	r.GET("/ws/logs", lib.ChainMiddlewares(h.connectLogStream, middlewares...))
 }
 
 // getUpgrader returns a WebSocket upgrader configured with the current allowed origins

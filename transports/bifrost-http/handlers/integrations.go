@@ -31,9 +31,9 @@ func NewIntegrationHandler(client *bifrost.Bifrost, handlerStore lib.HandlerStor
 }
 
 // RegisterRoutes registers all integration routes for AI provider compatibility endpoints
-func (h *IntegrationHandler) RegisterRoutes(r *router.Router) {
+func (h *IntegrationHandler) RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware) {
 	// Register routes for each integration extension
 	for _, extension := range h.extensions {
-		extension.RegisterRoutes(r)
+		extension.RegisterRoutes(r, middlewares...)
 	}
 }

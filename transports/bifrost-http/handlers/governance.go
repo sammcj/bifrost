@@ -12,6 +12,7 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
 	"github.com/maximhq/bifrost/plugins/governance"
+	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 	"gorm.io/gorm"
 )
@@ -129,27 +130,27 @@ type UpdateCustomerRequest struct {
 }
 
 // RegisterRoutes registers all governance-related routes for the new hierarchical system
-func (h *GovernanceHandler) RegisterRoutes(r *router.Router, middlewares ...BifrostHTTPMiddleware) {
+func (h *GovernanceHandler) RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware) {
 	// Virtual Key CRUD operations
-	r.GET("/api/governance/virtual-keys", ChainMiddlewares(h.getVirtualKeys, middlewares...))
-	r.POST("/api/governance/virtual-keys", ChainMiddlewares(h.createVirtualKey, middlewares...))
-	r.GET("/api/governance/virtual-keys/{vk_id}", ChainMiddlewares(h.getVirtualKey, middlewares...))
-	r.PUT("/api/governance/virtual-keys/{vk_id}", ChainMiddlewares(h.updateVirtualKey, middlewares...))
-	r.DELETE("/api/governance/virtual-keys/{vk_id}", ChainMiddlewares(h.deleteVirtualKey, middlewares...))
+	r.GET("/api/governance/virtual-keys", lib.ChainMiddlewares(h.getVirtualKeys, middlewares...))
+	r.POST("/api/governance/virtual-keys", lib.ChainMiddlewares(h.createVirtualKey, middlewares...))
+	r.GET("/api/governance/virtual-keys/{vk_id}", lib.ChainMiddlewares(h.getVirtualKey, middlewares...))
+	r.PUT("/api/governance/virtual-keys/{vk_id}", lib.ChainMiddlewares(h.updateVirtualKey, middlewares...))
+	r.DELETE("/api/governance/virtual-keys/{vk_id}", lib.ChainMiddlewares(h.deleteVirtualKey, middlewares...))
 
 	// Team CRUD operations
-	r.GET("/api/governance/teams", ChainMiddlewares(h.getTeams, middlewares...))
-	r.POST("/api/governance/teams", ChainMiddlewares(h.createTeam, middlewares...))
-	r.GET("/api/governance/teams/{team_id}", ChainMiddlewares(h.getTeam, middlewares...))
-	r.PUT("/api/governance/teams/{team_id}", ChainMiddlewares(h.updateTeam, middlewares...))
-	r.DELETE("/api/governance/teams/{team_id}", ChainMiddlewares(h.deleteTeam, middlewares...))
+	r.GET("/api/governance/teams", lib.ChainMiddlewares(h.getTeams, middlewares...))
+	r.POST("/api/governance/teams", lib.ChainMiddlewares(h.createTeam, middlewares...))
+	r.GET("/api/governance/teams/{team_id}", lib.ChainMiddlewares(h.getTeam, middlewares...))
+	r.PUT("/api/governance/teams/{team_id}", lib.ChainMiddlewares(h.updateTeam, middlewares...))
+	r.DELETE("/api/governance/teams/{team_id}", lib.ChainMiddlewares(h.deleteTeam, middlewares...))
 
 	// Customer CRUD operations
-	r.GET("/api/governance/customers", ChainMiddlewares(h.getCustomers, middlewares...))
-	r.POST("/api/governance/customers", ChainMiddlewares(h.createCustomer, middlewares...))
-	r.GET("/api/governance/customers/{customer_id}", ChainMiddlewares(h.getCustomer, middlewares...))
-	r.PUT("/api/governance/customers/{customer_id}", ChainMiddlewares(h.updateCustomer, middlewares...))
-	r.DELETE("/api/governance/customers/{customer_id}", ChainMiddlewares(h.deleteCustomer, middlewares...))
+	r.GET("/api/governance/customers", lib.ChainMiddlewares(h.getCustomers, middlewares...))
+	r.POST("/api/governance/customers", lib.ChainMiddlewares(h.createCustomer, middlewares...))
+	r.GET("/api/governance/customers/{customer_id}", lib.ChainMiddlewares(h.getCustomer, middlewares...))
+	r.PUT("/api/governance/customers/{customer_id}", lib.ChainMiddlewares(h.updateCustomer, middlewares...))
+	r.DELETE("/api/governance/customers/{customer_id}", lib.ChainMiddlewares(h.deleteCustomer, middlewares...))
 }
 
 // Virtual Key CRUD Operations

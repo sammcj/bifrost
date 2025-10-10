@@ -315,7 +315,7 @@ func (s *BifrostHTTPServer) ReloadClientConfigFromConfigStore() error {
 		return fmt.Errorf("failed to get client config: %v", err)
 	}
 	s.Config.ClientConfig = *config
-	
+
 	// Reloading config in bifrost client
 	if s.Client != nil {
 		account := lib.NewBaseAccount(s.Config)
@@ -373,7 +373,7 @@ func (s *BifrostHTTPServer) RemovePlugin(ctx context.Context, name string) error
 }
 
 // RegisterRoutes initializes the routes for the Bifrost HTTP server.
-func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...BifrostHTTPMiddleware) error {
+func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...lib.BifrostHTTPMiddleware) error {
 	var err error
 	// Initializing plugin specific handlers
 	var loggingHandler *LoggingHandler
@@ -403,8 +403,9 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...B
 		// Start WebSocket heartbeat
 		wsHandler.StartHeartbeat()
 	}
+	middlewaresWithTelemetry := append(middlewares, telemetry.PrometheusMiddleware)
 	// Chaining all middlewares
-	// ChainMiddlewares chains multiple middlewares together
+	// lib.ChainMiddlewares chains multiple middlewares together
 	// Initialize handlers
 	providerHandler := NewProviderHandler(s.Config, s.Client, logger)
 	inferenceHandler := NewInferenceHandler(s.Client, s.Config, logger)
@@ -414,9 +415,9 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...B
 	pluginsHandler := NewPluginsHandler(s, s.Config.ConfigStore, logger)
 	// Register all handler routes
 	providerHandler.RegisterRoutes(s.Router, middlewares...)
-	inferenceHandler.RegisterRoutes(s.Router, middlewares...)
+	inferenceHandler.RegisterRoutes(s.Router, middlewaresWithTelemetry...)
 	mcpHandler.RegisterRoutes(s.Router, middlewares...)
-	integrationHandler.RegisterRoutes(s.Router)
+	integrationHandler.RegisterRoutes(s.Router, middlewaresWithTelemetry...)
 	configHandler.RegisterRoutes(s.Router, middlewares...)
 	pluginsHandler.RegisterRoutes(s.Router, middlewares...)
 	if cacheHandler != nil {
@@ -450,7 +451,7 @@ func (s *BifrostHTTPServer) InitializeTelemetry() {
 }
 
 // RegisterUIHandler registers the UI handler with the specified router
-func (s *BifrostHTTPServer) RegisterUIHandler(middlewares ...BifrostHTTPMiddleware) {
+func (s *BifrostHTTPServer) RegisterUIHandler(middlewares ...lib.BifrostHTTPMiddleware) {
 	// Register UI handlers
 	// Registering UI handlers
 	// WARNING: This UI handler needs to be registered after all the other handlers
