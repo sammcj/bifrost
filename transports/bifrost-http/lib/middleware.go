@@ -6,7 +6,7 @@ import "github.com/valyala/fasthttp"
 // It follows the standard pattern: receives the next handler and returns a new handler
 type BifrostHTTPMiddleware func(next fasthttp.RequestHandler) fasthttp.RequestHandler
 
-// lib.ChainMiddlewares chains multiple middlewares together
+// ChainMiddlewares chains multiple middlewares together
 // Middlewares are applied in order: the first middleware wraps the second, etc.
 // This allows earlier middlewares to short-circuit by not calling next(ctx)
 func ChainMiddlewares(handler fasthttp.RequestHandler, middlewares ...BifrostHTTPMiddleware) fasthttp.RequestHandler {
