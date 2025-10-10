@@ -1100,7 +1100,7 @@ func (bifrost *Bifrost) shouldTryFallbacks(req *schemas.BifrostRequest, primaryE
 	}
 
 	// Handle request cancellation
-	if primaryErr.Error.Type != nil && *primaryErr.Error.Type == schemas.RequestCancelled {
+	if primaryErr.Error != nil && primaryErr.Error.Type != nil && *primaryErr.Error.Type == schemas.RequestCancelled {
 		return false
 	}
 

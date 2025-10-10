@@ -273,14 +273,14 @@ const (
 )
 
 // RegisterRoutes registers all completion-related routes
-func (h *CompletionHandler) RegisterRoutes(r *router.Router, middlewares ...BifrostHTTPMiddleware) {
+func (h *CompletionHandler) RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware) {
 	// Completion endpoints
-	r.POST("/v1/completions", ChainMiddlewares(h.textCompletion, middlewares...))
-	r.POST("/v1/chat/completions", ChainMiddlewares(h.chatCompletion, middlewares...))
-	r.POST("/v1/responses", ChainMiddlewares(h.responses, middlewares...))
-	r.POST("/v1/embeddings", ChainMiddlewares(h.embeddings, middlewares...))
-	r.POST("/v1/audio/speech", ChainMiddlewares(h.speech, middlewares...))
-	r.POST("/v1/audio/transcriptions", ChainMiddlewares(h.transcription, middlewares...))
+	r.POST("/v1/completions", lib.ChainMiddlewares(h.textCompletion, middlewares...))
+	r.POST("/v1/chat/completions", lib.ChainMiddlewares(h.chatCompletion, middlewares...))
+	r.POST("/v1/responses", lib.ChainMiddlewares(h.responses, middlewares...))
+	r.POST("/v1/embeddings", lib.ChainMiddlewares(h.embeddings, middlewares...))
+	r.POST("/v1/audio/speech", lib.ChainMiddlewares(h.speech, middlewares...))
+	r.POST("/v1/audio/transcriptions", lib.ChainMiddlewares(h.transcription, middlewares...))
 }
 
 // textCompletion handles POST /v1/completions - Process text completion requests

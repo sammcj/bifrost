@@ -68,7 +68,7 @@ import (
 // ExtensionRouter defines the interface that all integration routers must implement
 // to register their routes with the main HTTP router.
 type ExtensionRouter interface {
-	RegisterRoutes(r *router.Router)
+	RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware)
 }
 
 // StreamingRequest interface for requests that support streaming
@@ -173,7 +173,7 @@ func NewGenericRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore, ro
 
 // RegisterRoutes registers all configured routes on the given fasthttp router.
 // This method implements the ExtensionRouter interface.
-func (g *GenericRouter) RegisterRoutes(r *router.Router) {
+func (g *GenericRouter) RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware) {
 	for _, route := range g.routes {
 		// Validate route configuration at startup to fail fast
 		if route.GetRequestTypeInstance == nil {
@@ -202,15 +202,15 @@ func (g *GenericRouter) RegisterRoutes(r *router.Router) {
 		handler := g.createHandler(route)
 		switch strings.ToUpper(route.Method) {
 		case fasthttp.MethodPost:
-			r.POST(route.Path, handler)
+			r.POST(route.Path, lib.ChainMiddlewares(handler, middlewares...))
 		case fasthttp.MethodGet:
-			r.GET(route.Path, handler)
+			r.GET(route.Path, lib.ChainMiddlewares(handler, middlewares...))
 		case fasthttp.MethodPut:
-			r.PUT(route.Path, handler)
+			r.PUT(route.Path, lib.ChainMiddlewares(handler, middlewares...))
 		case fasthttp.MethodDelete:
-			r.DELETE(route.Path, handler)
+			r.DELETE(route.Path, lib.ChainMiddlewares(handler, middlewares...))
 		default:
-			r.POST(route.Path, handler) // Default to POST
+			r.POST(route.Path, lib.ChainMiddlewares(handler, middlewares...)) // Default to POST
 		}
 	}
 }

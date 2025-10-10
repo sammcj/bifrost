@@ -59,14 +59,14 @@ type ErrorResponse struct {
 }
 
 // RegisterRoutes registers all provider management routes
-func (h *ProviderHandler) RegisterRoutes(r *router.Router, middlewares ...BifrostHTTPMiddleware) {
+func (h *ProviderHandler) RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware) {
 	// Provider CRUD operations
-	r.GET("/api/providers", ChainMiddlewares(h.listProviders, middlewares...))
-	r.GET("/api/providers/{provider}", ChainMiddlewares(h.getProvider, middlewares...))
-	r.POST("/api/providers", ChainMiddlewares(h.addProvider, middlewares...))
-	r.PUT("/api/providers/{provider}", ChainMiddlewares(h.updateProvider, middlewares...))
-	r.DELETE("/api/providers/{provider}", ChainMiddlewares(h.deleteProvider, middlewares...))
-	r.GET("/api/keys", ChainMiddlewares(h.listKeys, middlewares...))
+	r.GET("/api/providers", lib.ChainMiddlewares(h.listProviders, middlewares...))
+	r.GET("/api/providers/{provider}", lib.ChainMiddlewares(h.getProvider, middlewares...))
+	r.POST("/api/providers", lib.ChainMiddlewares(h.addProvider, middlewares...))
+	r.PUT("/api/providers/{provider}", lib.ChainMiddlewares(h.updateProvider, middlewares...))
+	r.DELETE("/api/providers/{provider}", lib.ChainMiddlewares(h.deleteProvider, middlewares...))
+	r.GET("/api/keys", lib.ChainMiddlewares(h.listKeys, middlewares...))
 }
 
 // listProviders handles GET /api/providers - List all providers

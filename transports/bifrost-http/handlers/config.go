@@ -21,9 +21,9 @@ type ConfigManager interface {
 // ConfigHandler manages runtime configuration updates for Bifrost.
 // It provides endpoints to update and retrieve settings persisted via the ConfigStore backed by sql database.
 type ConfigHandler struct {
-	client *bifrost.Bifrost
-	logger schemas.Logger
-	store  *lib.Config
+	client        *bifrost.Bifrost
+	logger        schemas.Logger
+	store         *lib.Config
 	configManager ConfigManager
 }
 
@@ -31,19 +31,19 @@ type ConfigHandler struct {
 // It requires the Bifrost client, a logger, and the config store.
 func NewConfigHandler(client *bifrost.Bifrost, logger schemas.Logger, store *lib.Config, configManager ConfigManager) *ConfigHandler {
 	return &ConfigHandler{
-		client: client,
-		logger: logger,
-		store:  store,
+		client:        client,
+		logger:        logger,
+		store:         store,
 		configManager: configManager,
 	}
 }
 
 // RegisterRoutes registers the configuration-related routes.
 // It adds the `PUT /api/config` endpoint.
-func (h *ConfigHandler) RegisterRoutes(r *router.Router, middlewares ...BifrostHTTPMiddleware) {
-	r.GET("/api/config", ChainMiddlewares(h.getConfig, middlewares...))
-	r.PUT("/api/config", ChainMiddlewares(h.updateConfig, middlewares...))
-	r.GET("/api/version", ChainMiddlewares(h.getVersion, middlewares...))
+func (h *ConfigHandler) RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware) {
+	r.GET("/api/config", lib.ChainMiddlewares(h.getConfig, middlewares...))
+	r.PUT("/api/config", lib.ChainMiddlewares(h.updateConfig, middlewares...))
+	r.GET("/api/version", lib.ChainMiddlewares(h.getVersion, middlewares...))
 }
 
 // getVersion handles GET /api/version - Get the current version

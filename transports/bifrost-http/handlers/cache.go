@@ -4,6 +4,7 @@ import (
 	"github.com/fasthttp/router"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/plugins/semanticcache"
+	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 )
 
@@ -24,9 +25,9 @@ func NewCacheHandler(plugin schemas.Plugin, logger schemas.Logger) *CacheHandler
 	}
 }
 
-func (h *CacheHandler) RegisterRoutes(r *router.Router, middlewares ...BifrostHTTPMiddleware) {
-	r.DELETE("/api/cache/clear/{requestId}", ChainMiddlewares(h.clearCache, middlewares...))
-	r.DELETE("/api/cache/clear-by-key/{cacheKey}", ChainMiddlewares(h.clearCacheByKey, middlewares...))
+func (h *CacheHandler) RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware) {
+	r.DELETE("/api/cache/clear/{requestId}", lib.ChainMiddlewares(h.clearCache, middlewares...))
+	r.DELETE("/api/cache/clear-by-key/{cacheKey}", lib.ChainMiddlewares(h.clearCacheByKey, middlewares...))
 }
 
 func (h *CacheHandler) clearCache(ctx *fasthttp.RequestCtx) {
