@@ -143,7 +143,6 @@ func Init(
 		isVkMandatory:  isVkMandatory,
 		inMemoryStore:  inMemoryStore,
 	}
-
 	return plugin, nil
 }
 

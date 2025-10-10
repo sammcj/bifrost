@@ -79,6 +79,7 @@ export const baseApi = createApi({
 		"Plugins",
 		"SCIMProviders",
 		"User",
+		"Guardrails",
 	],
 	endpoints: () => ({}),
 });
