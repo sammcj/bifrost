@@ -133,6 +133,28 @@ func ToAnthropicResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *A
 			if stop, ok := schemas.SafeExtractStringSlice(bifrostReq.Params.ExtraParams["stop"]); ok {
 				anthropicReq.StopSequences = stop
 			}
+			if thinking, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "thinking"); ok {
+				if thinkingMap, ok := thinking.(map[string]interface{}); ok {
+					anthropicThinking := &AnthropicThinking{}
+					if thinkingType, ok := thinkingMap["type"].(string); ok {
+						anthropicThinking.Type = thinkingType
+					}
+					// Handle budget_tokens - JSON numbers can be float64 or int
+					if budgetTokensVal, exists := thinkingMap["budget_tokens"]; exists && budgetTokensVal != nil {
+						switch v := budgetTokensVal.(type) {
+						case float64:
+							budgetInt := int(v)
+							anthropicThinking.BudgetTokens = &budgetInt
+						case int:
+							anthropicThinking.BudgetTokens = &v
+						case int64:
+							budgetInt := int(v)
+							anthropicThinking.BudgetTokens = &budgetInt
+						}
+					}
+					anthropicReq.Thinking = anthropicThinking
+				}
+			}
 		}
 
 		// Convert tools

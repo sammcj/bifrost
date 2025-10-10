@@ -44,6 +44,12 @@ type AnthropicMessageRequest struct {
 	Stream        *bool                `json:"stream,omitempty"`
 	Tools         []AnthropicTool      `json:"tools,omitempty"`
 	ToolChoice    *AnthropicToolChoice `json:"tool_choice,omitempty"`
+	Thinking      *AnthropicThinking   `json:"thinking,omitempty"`
+}
+
+type AnthropicThinking struct {
+	Type         string `json:"type"` // "enabled" or "disabled"
+	BudgetTokens *int   `json:"budget_tokens,omitempty"`
 }
 
 // IsStreamingRequested implements the StreamingRequest interface
