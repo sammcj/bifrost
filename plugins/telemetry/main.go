@@ -141,10 +141,19 @@ func (p *PrometheusPlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 
 		// Record error and success counts
 		if bifrostErr != nil {
-			// Add reason to label values
-			errorLabelValues := append(promLabelValues[:3], bifrostErr.Error.Message) // provider, model, method, reason
-			errorLabelValues = append(errorLabelValues, promLabelValues[3:]...)       // then custom labels
-			p.ErrorRequestsTotal.WithLabelValues(errorLabelValues...).Inc()
+			// Pre-allocate slice for error labels: [provider, model, method, reason, ...customLabels]
+			errorPromLabelValues := make([]string, 4+len(customLabels))
+
+			// Set standard labels
+			errorPromLabelValues[0] = promLabelValues[0]       // provider
+			errorPromLabelValues[1] = promLabelValues[1]       // model
+			errorPromLabelValues[2] = promLabelValues[2]       // method
+			errorPromLabelValues[3] = bifrostErr.Error.Message // reason
+
+			// Copy custom labels from promLabelValues (they start at index 3 in promLabelValues)
+			copy(errorPromLabelValues[4:], promLabelValues[3:])
+
+			p.ErrorRequestsTotal.WithLabelValues(errorPromLabelValues...).Inc()
 		} else {
 			p.SuccessRequestsTotal.WithLabelValues(promLabelValues...).Inc()
 		}

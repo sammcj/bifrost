@@ -9,6 +9,7 @@ import (
 	"github.com/fasthttp/router"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
+	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 	"gorm.io/gorm"
 )
@@ -48,12 +49,12 @@ type UpdatePluginRequest struct {
 }
 
 // RegisterRoutes registers the routes for the PluginsHandler
-func (h *PluginsHandler) RegisterRoutes(r *router.Router, middlewares ...BifrostHTTPMiddleware) {
-	r.GET("/api/plugins", ChainMiddlewares(h.getPlugins, middlewares...))
-	r.GET("/api/plugins/{name}", ChainMiddlewares(h.getPlugin, middlewares...))
-	r.POST("/api/plugins", ChainMiddlewares(h.createPlugin, middlewares...))
-	r.PUT("/api/plugins/{name}", ChainMiddlewares(h.updatePlugin, middlewares...))
-	r.DELETE("/api/plugins/{name}", ChainMiddlewares(h.deletePlugin, middlewares...))
+func (h *PluginsHandler) RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware) {
+	r.GET("/api/plugins", lib.ChainMiddlewares(h.getPlugins, middlewares...))
+	r.GET("/api/plugins/{name}", lib.ChainMiddlewares(h.getPlugin, middlewares...))
+	r.POST("/api/plugins", lib.ChainMiddlewares(h.createPlugin, middlewares...))
+	r.PUT("/api/plugins/{name}", lib.ChainMiddlewares(h.updatePlugin, middlewares...))
+	r.DELETE("/api/plugins/{name}", lib.ChainMiddlewares(h.deletePlugin, middlewares...))
 }
 
 // getPlugins gets all plugins
