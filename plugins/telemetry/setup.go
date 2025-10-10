@@ -49,6 +49,12 @@ var (
 	// bifrostCostTotal tracks the total cost in USD for requests to upstream providers
 	bifrostCostTotal *prometheus.CounterVec
 
+	//bifrostStreamTokenLatencySeconds tracks the latency of the intermediate tokens of a stream response.
+	bifrostStreamInterTokenLatencySeconds *prometheus.HistogramVec
+
+	//bifrostStreamFirstTokenLatencySeconds tracks the latency of the first token of a stream response.
+	bifrostStreamFirstTokenLatencySeconds *prometheus.HistogramVec
+
 	// customLabels stores the expected label names in order
 	customLabels  []string
 	isInitialized bool
@@ -167,6 +173,22 @@ func InitPrometheusMetrics(labels []string) {
 		prometheus.CounterOpts{
 			Name: "bifrost_cost_total",
 			Help: "Total cost in USD for requests to upstream providers.",
+		},
+		append(bifrostDefaultLabels, labels...),
+	)
+
+	bifrostStreamInterTokenLatencySeconds = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "bifrost_stream_inter_token_latency_seconds",
+			Help: "Latency of the intermediate tokens of a stream response.",
+		},
+		append(bifrostDefaultLabels, labels...),
+	)
+
+	bifrostStreamFirstTokenLatencySeconds = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "bifrost_stream_first_token_latency_seconds",
+			Help: "Latency of the first token of a stream response.",
 		},
 		append(bifrostDefaultLabels, labels...),
 	)
