@@ -15,12 +15,8 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// BifrostHTTPMiddleware is a middleware function for the Bifrost HTTP transport
-// It follows the standard pattern: receives the next handler and returns a new handler
-type BifrostHTTPMiddleware func(next fasthttp.RequestHandler) fasthttp.RequestHandler
-
 // CorsMiddleware handles CORS headers for localhost and configured allowed origins
-func CorsMiddleware(config *lib.Config) BifrostHTTPMiddleware {
+func CorsMiddleware(config *lib.Config) lib.BifrostHTTPMiddleware {
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			origin := string(ctx.Request.Header.Peek("Origin"))
@@ -48,7 +44,7 @@ func CorsMiddleware(config *lib.Config) BifrostHTTPMiddleware {
 }
 
 // VKProviderRoutingMiddleware routes requests to the appropriate provider based on the virtual key
-func VKProviderRoutingMiddleware(config *lib.Config, logger schemas.Logger) BifrostHTTPMiddleware {
+func VKProviderRoutingMiddleware(config *lib.Config, logger schemas.Logger) lib.BifrostHTTPMiddleware {
 	isGovernanceEnabled := config.LoadedPlugins[governance.PluginName]
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
@@ -125,7 +121,7 @@ func VKProviderRoutingMiddleware(config *lib.Config, logger schemas.Logger) Bifr
 				next(ctx)
 				return
 			}
-			// Get provider configs for this virtual key			
+			// Get provider configs for this virtual key
 			providerConfigs := virtualKey.ProviderConfigs
 			if len(providerConfigs) == 0 {
 				// No provider configs, continue without modification
@@ -160,6 +156,10 @@ func VKProviderRoutingMiddleware(config *lib.Config, logger schemas.Logger) Bifr
 					break
 				}
 			}
+			// Fallback: if no provider was selected (shouldn't happen but guard against FP issues)
+			if selectedProvider == "" && len(allowedProviderConfigs) > 0 {
+				selectedProvider = schemas.ModelProvider(allowedProviderConfigs[0].Provider)
+			}
 			// Update the model field in the request body
 			requestBody["model"] = string(selectedProvider) + "/" + modelStr
 			// Check if fallbacks field is already present
@@ -193,21 +193,4 @@ func VKProviderRoutingMiddleware(config *lib.Config, logger schemas.Logger) Bifr
 			next(ctx)
 		}
 	}
-}
-
-// ChainMiddlewares chains multiple middlewares together
-// Middlewares are applied in order: the first middleware wraps the second, etc.
-// This allows earlier middlewares to short-circuit by not calling next(ctx)
-func ChainMiddlewares(handler fasthttp.RequestHandler, middlewares ...BifrostHTTPMiddleware) fasthttp.RequestHandler {
-	// If no middlewares, return the original handler
-	if len(middlewares) == 0 {
-		return handler
-	}
-	// Build the chain from right to left (last middleware wraps the handler)
-	// This ensures execution order is left to right (first middleware executes first)
-	chained := handler
-	for i := len(middlewares) - 1; i >= 0; i-- {
-		chained = middlewares[i](chained)
-	}
-	return chained
 }

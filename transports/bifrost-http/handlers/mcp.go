@@ -30,14 +30,14 @@ func NewMCPHandler(client *bifrost.Bifrost, logger schemas.Logger, store *lib.Co
 }
 
 // RegisterRoutes registers all MCP-related routes
-func (h *MCPHandler) RegisterRoutes(r *router.Router, middlewares ...BifrostHTTPMiddleware) {
+func (h *MCPHandler) RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware) {
 	// MCP tool execution endpoint
-	r.POST("/v1/mcp/tool/execute", ChainMiddlewares(h.executeTool, middlewares...))
-	r.GET("/api/mcp/clients", ChainMiddlewares(h.getMCPClients, middlewares...))
-	r.POST("/api/mcp/client", ChainMiddlewares(h.addMCPClient, middlewares...))
-	r.PUT("/api/mcp/client/{name}", ChainMiddlewares(h.editMCPClientTools, middlewares...))
-	r.DELETE("/api/mcp/client/{name}", ChainMiddlewares(h.removeMCPClient, middlewares...))
-	r.POST("/api/mcp/client/{name}/reconnect", ChainMiddlewares(h.reconnectMCPClient, middlewares...))
+	r.POST("/v1/mcp/tool/execute", lib.ChainMiddlewares(h.executeTool, middlewares...))
+	r.GET("/api/mcp/clients", lib.ChainMiddlewares(h.getMCPClients, middlewares...))
+	r.POST("/api/mcp/client", lib.ChainMiddlewares(h.addMCPClient, middlewares...))
+	r.PUT("/api/mcp/client/{name}", lib.ChainMiddlewares(h.editMCPClientTools, middlewares...))
+	r.DELETE("/api/mcp/client/{name}", lib.ChainMiddlewares(h.removeMCPClient, middlewares...))
+	r.POST("/api/mcp/client/{name}/reconnect", lib.ChainMiddlewares(h.reconnectMCPClient, middlewares...))
 }
 
 // executeTool handles POST /v1/mcp/tool/execute - Execute MCP tool

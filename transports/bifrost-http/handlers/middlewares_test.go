@@ -268,7 +268,7 @@ func TestCorsMiddleware_NoOriginHeader(t *testing.T) {
 	}
 }
 
-// TestChainMiddlewares_NoMiddlewares tests chaining with no middlewares
+// Testlib.ChainMiddlewares_NoMiddlewares tests chaining with no middlewares
 func TestChainMiddlewares_NoMiddlewares(t *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
 	handlerCalled := false
@@ -277,7 +277,7 @@ func TestChainMiddlewares_NoMiddlewares(t *testing.T) {
 		handlerCalled = true
 	}
 
-	chained := ChainMiddlewares(handler)
+	chained := lib.ChainMiddlewares(handler)
 	chained(ctx)
 
 	if !handlerCalled {
@@ -285,13 +285,13 @@ func TestChainMiddlewares_NoMiddlewares(t *testing.T) {
 	}
 }
 
-// TestChainMiddlewares_SingleMiddleware tests chaining with a single middleware
+// Testlib.ChainMiddlewares_SingleMiddleware tests chaining with a single middleware
 func TestChainMiddlewares_SingleMiddleware(t *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
 	middlewareCalled := false
 	handlerCalled := false
 
-	middleware := BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	middleware := lib.BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			middlewareCalled = true
 			next(ctx)
@@ -302,7 +302,7 @@ func TestChainMiddlewares_SingleMiddleware(t *testing.T) {
 		handlerCalled = true
 	}
 
-	chained := ChainMiddlewares(handler, middleware)
+	chained := lib.ChainMiddlewares(handler, middleware)
 	chained(ctx)
 
 	if !middlewareCalled {
@@ -313,26 +313,26 @@ func TestChainMiddlewares_SingleMiddleware(t *testing.T) {
 	}
 }
 
-// TestChainMiddlewares_MultipleMiddlewares tests chaining with multiple middlewares
+// Testlib.ChainMiddlewares_MultipleMiddlewares tests chaining with multiple middlewares
 func TestChainMiddlewares_MultipleMiddlewares(t *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
 	executionOrder := []int{}
 
-	middleware1 := BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	middleware1 := lib.BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			executionOrder = append(executionOrder, 1)
 			next(ctx)
 		}
 	})
 
-	middleware2 := BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	middleware2 := lib.BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			executionOrder = append(executionOrder, 2)
 			next(ctx)
 		}
 	})
 
-	middleware3 := BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	middleware3 := lib.BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			executionOrder = append(executionOrder, 3)
 			next(ctx)
@@ -343,7 +343,7 @@ func TestChainMiddlewares_MultipleMiddlewares(t *testing.T) {
 		executionOrder = append(executionOrder, 4)
 	}
 
-	chained := ChainMiddlewares(handler, middleware1, middleware2, middleware3)
+	chained := lib.ChainMiddlewares(handler, middleware1, middleware2, middleware3)
 	chained(ctx)
 
 	// Check execution order: middlewares should execute in order, then handler
@@ -360,11 +360,11 @@ func TestChainMiddlewares_MultipleMiddlewares(t *testing.T) {
 	}
 }
 
-// TestChainMiddlewares_MiddlewareCanModifyContext tests that middlewares can modify the context
+// Testlib.ChainMiddlewares_MiddlewareCanModifyContext tests that middlewares can modify the context
 func TestChainMiddlewares_MiddlewareCanModifyContext(t *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
 
-	middleware := BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	middleware := lib.BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			ctx.SetUserValue("test-key", "test-value")
 			next(ctx)
@@ -380,18 +380,18 @@ func TestChainMiddlewares_MiddlewareCanModifyContext(t *testing.T) {
 		}
 	}
 
-	chained := ChainMiddlewares(handler, middleware)
+	chained := lib.ChainMiddlewares(handler, middleware)
 	chained(ctx)
 }
 
-// TestChainMiddlewares_ShortCircuit tests that when a middleware writes a response
+// Testlib.ChainMiddlewares_ShortCircuit tests that when a middleware writes a response
 // and does not call next, subsequent middlewares and handler do not execute.
 func TestChainMiddlewares_ShortCircuit(t *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
 	executionOrder := []int{}
 
 	// First middleware - writes response and short-circuits by not calling next
-	middleware1 := BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	middleware1 := lib.BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			executionOrder = append(executionOrder, 1)
 			ctx.SetStatusCode(fasthttp.StatusUnauthorized)
@@ -401,7 +401,7 @@ func TestChainMiddlewares_ShortCircuit(t *testing.T) {
 	})
 
 	// Second middleware - should NOT execute when middleware1 short-circuits
-	middleware2 := BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	middleware2 := lib.BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			executionOrder = append(executionOrder, 2)
 			next(ctx)
@@ -409,7 +409,7 @@ func TestChainMiddlewares_ShortCircuit(t *testing.T) {
 	})
 
 	// Third middleware - should NOT execute when middleware1 short-circuits
-	middleware3 := BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	middleware3 := lib.BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			executionOrder = append(executionOrder, 3)
 			next(ctx)
@@ -423,7 +423,7 @@ func TestChainMiddlewares_ShortCircuit(t *testing.T) {
 		ctx.SetBodyString("Success")
 	}
 
-	chained := ChainMiddlewares(handler, middleware1, middleware2, middleware3)
+	chained := lib.ChainMiddlewares(handler, middleware1, middleware2, middleware3)
 	chained(ctx)
 
 	// Verify only middleware1 executed
@@ -448,14 +448,14 @@ func TestChainMiddlewares_ShortCircuit(t *testing.T) {
 	}
 }
 
-// TestChainMiddlewares_ShortCircuitMiddlePosition tests that middleware in the middle
+// Testlib.ChainMiddlewares_ShortCircuitMiddlePosition tests that middleware in the middle
 // can short-circuit, preventing later middlewares and handler from executing.
 func TestChainMiddlewares_ShortCircuitMiddlePosition(t *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
 	executionOrder := []int{}
 
 	// First middleware - executes and calls next
-	middleware1 := BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	middleware1 := lib.BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			executionOrder = append(executionOrder, 1)
 			next(ctx)
@@ -463,7 +463,7 @@ func TestChainMiddlewares_ShortCircuitMiddlePosition(t *testing.T) {
 	})
 
 	// Second middleware - writes response and short-circuits
-	middleware2 := BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	middleware2 := lib.BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			executionOrder = append(executionOrder, 2)
 			ctx.SetStatusCode(fasthttp.StatusUnauthorized)
@@ -473,7 +473,7 @@ func TestChainMiddlewares_ShortCircuitMiddlePosition(t *testing.T) {
 	})
 
 	// Third middleware - should NOT execute
-	middleware3 := BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	middleware3 := lib.BifrostHTTPMiddleware(func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			executionOrder = append(executionOrder, 3)
 			next(ctx)
@@ -487,7 +487,7 @@ func TestChainMiddlewares_ShortCircuitMiddlePosition(t *testing.T) {
 		ctx.SetBodyString("Success")
 	}
 
-	chained := ChainMiddlewares(handler, middleware1, middleware2, middleware3)
+	chained := lib.ChainMiddlewares(handler, middleware1, middleware2, middleware3)
 	chained(ctx)
 
 	// Verify only middleware1 and middleware2 executed
