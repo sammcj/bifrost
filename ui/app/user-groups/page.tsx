@@ -9,13 +9,35 @@ import {
 	useLazyGetVirtualKeysQuery,
 } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import UsersView from "@enterprise/components/user-groups/usersView";
+import { Building, Users, WalletCards } from "lucide-react";
+import { useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import CustomersTable from "./views/customerTable";
 import TeamsTable from "./views/teamsTable";
 
+const tabs = [
+	{
+		id: "users",
+		label: "Users",
+		icon: <Users className="size-4" />,
+	},
+	{
+		id: "teams",
+		label: "Teams",
+		icon: <Building className="size-4" />,
+	},
+	{
+		id: "customers",
+		label: "Customers",
+		icon: <WalletCards className="size-4" />,
+	},
+];
+
 export default function TeamsCustomersPage() {
-	const [activeTab, setActiveTab] = useState("teams");
+	const [activeTab, setActiveTab] = useQueryState("tab");
+
 	const [governanceEnabled, setGovernanceEnabled] = useState<boolean | null>(null);
 
 	// Lazy query hooks
@@ -61,6 +83,12 @@ export default function TeamsCustomersPage() {
 		}
 	}, [vkError, teamsError, customersError]);
 
+	useEffect(() => {
+		if (!activeTab) {
+			setActiveTab(tabs[0].id);
+		}
+	}, [activeTab, setActiveTab]);
+
 	const handleRefresh = () => {
 		if (governanceEnabled) {
 			triggerGetVirtualKeys();
@@ -76,23 +104,25 @@ export default function TeamsCustomersPage() {
 	return (
 		<div className="flex w-full flex-row gap-4">
 			<div className="flex min-w-[200px] flex-col gap-1 rounded-md bg-zinc-50/50 p-4 dark:bg-zinc-800/20">
-				{["teams", "customers"].map((tab) => (
+				{tabs.map((tab) => (
 					<button
-						key={tab}
+						key={tab.id}
 						className={cn(
 							"mb-1 flex w-full items-center gap-2 rounded-sm border px-3 py-1.5 text-sm",
-							activeTab === tab
+							activeTab === tab.id
 								? "bg-secondary opacity-100 hover:opacity-100"
 								: "hover:bg-secondary cursor-pointer border-transparent opacity-100 hover:border",
 						)}
-						onClick={() => setActiveTab(tab)}
+						onClick={() => setActiveTab(tab.id)}
 						type="button"
 					>
-						{tab.replace("-", " ").charAt(0).toUpperCase() + tab.replace("-", " ").slice(1)}
+						{tab.icon}
+						{tab.label}
 					</button>
 				))}
 			</div>
 			<div className="w-full pt-4">
+				{activeTab === "users" && <UsersView />}
 				{activeTab === "teams" && (
 					<TeamsTable
 						teams={teamsData?.teams || []}
