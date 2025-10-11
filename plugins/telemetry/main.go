@@ -34,14 +34,16 @@ type PrometheusPlugin struct {
 	pricingManager *pricing.PricingManager
 
 	// Metrics are defined using promauto for automatic registration
-	UpstreamRequestsTotal *prometheus.CounterVec
-	UpstreamLatency       *prometheus.HistogramVec
-	SuccessRequestsTotal  *prometheus.CounterVec
-	ErrorRequestsTotal    *prometheus.CounterVec
-	InputTokensTotal      *prometheus.CounterVec
-	OutputTokensTotal     *prometheus.CounterVec
-	CacheHitsTotal        *prometheus.CounterVec
-	CostTotal             *prometheus.CounterVec
+	UpstreamRequestsTotal   *prometheus.CounterVec
+	UpstreamLatency         *prometheus.HistogramVec
+	SuccessRequestsTotal    *prometheus.CounterVec
+	ErrorRequestsTotal      *prometheus.CounterVec
+	InputTokensTotal        *prometheus.CounterVec
+	OutputTokensTotal       *prometheus.CounterVec
+	CacheHitsTotal          *prometheus.CounterVec
+	CostTotal               *prometheus.CounterVec
+	StreamInterTokenLatency *prometheus.HistogramVec
+	StreamFirstTokenLatency *prometheus.HistogramVec
 }
 
 // Init creates a new PrometheusPlugin with initialized metrics.
@@ -51,15 +53,17 @@ func Init(pricingManager *pricing.PricingManager, logger schemas.Logger) (*Prome
 	}
 
 	return &PrometheusPlugin{
-		pricingManager:        pricingManager,
-		UpstreamRequestsTotal: bifrostUpstreamRequestsTotal,
-		UpstreamLatency:       bifrostUpstreamLatencySeconds,
-		SuccessRequestsTotal:  bifrostSuccessRequestsTotal,
-		ErrorRequestsTotal:    bifrostErrorRequestsTotal,
-		InputTokensTotal:      bifrostInputTokensTotal,
-		OutputTokensTotal:     bifrostOutputTokensTotal,
-		CacheHitsTotal:        bifrostCacheHitsTotal,
-		CostTotal:             bifrostCostTotal,
+		pricingManager:          pricingManager,
+		UpstreamRequestsTotal:   bifrostUpstreamRequestsTotal,
+		UpstreamLatency:         bifrostUpstreamLatencySeconds,
+		SuccessRequestsTotal:    bifrostSuccessRequestsTotal,
+		ErrorRequestsTotal:      bifrostErrorRequestsTotal,
+		InputTokensTotal:        bifrostInputTokensTotal,
+		OutputTokensTotal:       bifrostOutputTokensTotal,
+		CacheHitsTotal:          bifrostCacheHitsTotal,
+		CostTotal:               bifrostCostTotal,
+		StreamInterTokenLatency: bifrostStreamInterTokenLatencySeconds,
+		StreamFirstTokenLatency: bifrostStreamFirstTokenLatencySeconds,
 	}, nil
 }
 
@@ -94,29 +98,8 @@ func (p *PrometheusPlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 		return result, bifrostErr, nil
 	}
 
-	// For streaming requests, only record metrics on the final chunk
-	if bifrost.IsStreamRequestType(requestType) {
-		streamEndIndicatorValue := (*ctx).Value(schemas.BifrostContextKeyStreamEndIndicator)
-		if streamEndIndicatorValue == nil {
-			// No stream end indicator - this is an intermediate chunk, skip metrics
-			return result, bifrostErr, nil
-		}
-
-		isFinalChunk, ok := streamEndIndicatorValue.(bool)
-		if !ok || !isFinalChunk {
-			// Not the final chunk or can't parse indicator - skip metrics
-			return result, bifrostErr, nil
-		}
-		// This is the final chunk - continue with metrics recording
-	}
-
 	// Calculate cost and record metrics in a separate goroutine to avoid blocking the main thread
 	go func() {
-		cost := 0.0
-		if p.pricingManager != nil && result != nil {
-			cost = p.pricingManager.CalculateCostWithCacheDebug(result)
-		}
-
 		labelValues := map[string]string{
 			"provider": string(provider),
 			"model":    model,
@@ -135,6 +118,34 @@ func (p *PrometheusPlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 		// Get label values in the correct order (cache_type will be handled separately for cache hits)
 		promLabelValues := getPrometheusLabelValues(append([]string{"provider", "model", "method"}, customLabels...), labelValues)
 
+		// For streaming requests, handle per-token metrics for intermediate chunks
+		if bifrost.IsStreamRequestType(requestType) {
+			// Determine if this is the final chunk
+			streamEndIndicatorValue := (*ctx).Value(schemas.BifrostContextKeyStreamEndIndicator)
+			isFinalChunk, ok := streamEndIndicatorValue.(bool)
+
+			// For intermediate chunks, record per-token metrics and exit.
+			// The final chunk will fall through to record full request metrics.
+			if !ok || !isFinalChunk {
+				// Record metrics for the first token
+				if result != nil {
+					if result.ExtraFields.ChunkIndex == 0 {
+						p.StreamFirstTokenLatency.WithLabelValues(promLabelValues...).Observe(float64(result.ExtraFields.Latency) / 1000.0)
+					} else {
+						p.StreamInterTokenLatency.WithLabelValues(promLabelValues...).Observe(float64(result.ExtraFields.Latency) / 1000.0)
+					}
+				}
+				return // Exit goroutine for intermediate chunks
+			} else {
+				p.StreamInterTokenLatency.WithLabelValues(promLabelValues...).Observe(float64(result.ExtraFields.Latency) / 1000.0)
+			}
+		}
+
+		cost := 0.0
+		if p.pricingManager != nil && result != nil {
+			cost = p.pricingManager.CalculateCostWithCacheDebug(result)
+		}
+
 		duration := time.Since(startTime).Seconds()
 		p.UpstreamLatency.WithLabelValues(promLabelValues...).Observe(duration)
 		p.UpstreamRequestsTotal.WithLabelValues(promLabelValues...).Inc()
@@ -146,17 +157,11 @@ func (p *PrometheusPlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 
 		// Record error and success counts
 		if bifrostErr != nil {
-			// Pre-allocate slice for error labels: [provider, model, method, reason, ...customLabels]
-			errorPromLabelValues := make([]string, 4+len(customLabels))
-
-			// Set standard labels
-			errorPromLabelValues[0] = promLabelValues[0]       // provider
-			errorPromLabelValues[1] = promLabelValues[1]       // model
-			errorPromLabelValues[2] = promLabelValues[2]       // method
-			errorPromLabelValues[3] = bifrostErr.Error.Message // reason
-
-			// Copy custom labels from promLabelValues (they start at index 3 in promLabelValues)
-			copy(errorPromLabelValues[4:], promLabelValues[3:])
+			// Add reason to label values (create new slice to avoid modifying original)
+			errorPromLabelValues := make([]string, 0, len(promLabelValues)+1)
+			errorPromLabelValues = append(errorPromLabelValues, promLabelValues[:3]...)   // provider, model, method
+			errorPromLabelValues = append(errorPromLabelValues, bifrostErr.Error.Message) // reason
+			errorPromLabelValues = append(errorPromLabelValues, promLabelValues[3:]...)   // then custom labels
 
 			p.ErrorRequestsTotal.WithLabelValues(errorPromLabelValues...).Inc()
 		} else {
@@ -177,8 +182,10 @@ func (p *PrometheusPlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 					cacheType = *result.ExtraFields.CacheDebug.HitType
 				}
 
-				// Add cache_type to label values
-				cacheHitLabelValues := append(promLabelValues[:3], cacheType)             // provider, model, method, cache_type
+				// Add cache_type to label values (create new slice to avoid modifying original)
+				cacheHitLabelValues := make([]string, 0, len(promLabelValues)+1)
+				cacheHitLabelValues = append(cacheHitLabelValues, promLabelValues[:3]...) // provider, model, method
+				cacheHitLabelValues = append(cacheHitLabelValues, cacheType)              // cache_type
 				cacheHitLabelValues = append(cacheHitLabelValues, promLabelValues[3:]...) // then custom labels
 
 				p.CacheHitsTotal.WithLabelValues(cacheHitLabelValues...).Inc()
