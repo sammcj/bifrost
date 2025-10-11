@@ -14,7 +14,7 @@ interface Props {
 
 export default function ContactUsView({ icon, title, description, className, readmeLink }: Props) {
 	return (
-		<div className={cn("flex min-h-[80vh] flex-col items-center justify-center gap-4 text-center", className)}>
+		<div className={cn("flex flex-col items-center justify-center gap-4 text-center", className)}>
 			<div className="text-muted-foreground">{icon}</div>
 			<div className="flex flex-col gap-1">
 				<h1 className="text-muted-foreground text-xl font-medium">{title}</h1>

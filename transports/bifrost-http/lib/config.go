@@ -177,18 +177,18 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 	configFilePath := filepath.Join(configDirPath, "config.json")
 	configDBPath := filepath.Join(configDirPath, "config.db")
 	logsDBPath := filepath.Join(configDirPath, "logs.db")
-
+	// Initialize config
 	config := &Config{
 		configPath: configFilePath,
 		EnvKeys:    make(map[string][]configstore.EnvKeyInfo),
 		Providers:  make(map[schemas.ModelProvider]configstore.ProviderConfig),
+		Plugins: atomic.Pointer[[]schemas.Plugin]{},
 	}
 	// Getting absolute path for config file
 	absConfigFilePath, err := filepath.Abs(configFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get absolute path for config file: %w", err)
 	}
-
 	// Check if config file exists
 	data, err := os.ReadFile(configFilePath)
 	if err != nil {
