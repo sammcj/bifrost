@@ -24,7 +24,6 @@ import (
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/core/schemas/providers/bedrock"
 	cohere "github.com/maximhq/bifrost/core/schemas/providers/cohere"
-	"github.com/valyala/fasthttp"
 )
 
 // BedrockProvider implements the Provider interface for AWS Bedrock.
@@ -156,7 +155,7 @@ func (provider *BedrockProvider) completeRequest(ctx context.Context, requestBod
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, latency, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, provider.GetProviderKey())
 		}
 		return nil, latency, &schemas.BifrostError{
@@ -471,7 +470,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 	// Make the request
 	resp, respErr := provider.client.Do(req)
 	if respErr != nil {
-		if errors.Is(respErr, fasthttp.ErrTimeout) || errors.Is(respErr, context.Canceled) || errors.Is(respErr, context.DeadlineExceeded) {
+		if errors.Is(respErr, http.ErrHandlerTimeout) || errors.Is(respErr, context.Canceled) || errors.Is(respErr, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, respErr, provider.GetProviderKey())
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, respErr, providerName)

@@ -19,12 +19,13 @@ func TestGroq(t *testing.T) {
 	testConfig := config.ComprehensiveTestConfig{
 		Provider:       schemas.Groq,
 		ChatModel:      "llama-3.3-70b-versatile",
-		TextModel:      "", // Groq doesn't support text completion
-		EmbeddingModel: "", // Groq doesn't support embedding
+		TextModel:      "llama-3.3-70b-versatile", // Use same model for text completion (via conversion)
+		EmbeddingModel: "",                        // Groq doesn't support embedding
 		Scenarios: config.TestScenarios{
-			TextCompletion:        false, // Not supported
+			TextCompletion:        true, // Supported via chat completion conversion
+			TextCompletionStream:  true, // Supported via chat completion streaming conversion
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,

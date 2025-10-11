@@ -273,58 +273,6 @@ func (provider *AzureProvider) ChatCompletion(ctx context.Context, key schemas.K
 	return response, nil
 }
 
-// Responses performs a responses request to Azure's API.
-// It formats the request, sends it to Azure, and processes the response.
-// Returns a BifrostResponse containing the completion results or an error if the request fails.
-func (provider *AzureProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
-	if err != nil {
-		return nil, err
-	}
-
-	response.ToResponsesOnly()
-	response.ExtraFields.RequestType = schemas.ResponsesRequest
-	response.ExtraFields.Provider = provider.GetProviderKey()
-	response.ExtraFields.ModelRequested = request.Model
-
-	return response, nil
-}
-
-// Embedding generates embeddings for the given input text(s) using Azure OpenAI.
-// The input can be either a single string or a slice of strings for batch embedding.
-// Returns a BifrostResponse containing the embedding(s) and any error that occurred.
-func (provider *AzureProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	// Use centralized converter
-	reqBody := openai.ToOpenAIEmbeddingRequest(request)
-	if reqBody == nil {
-		return nil, newBifrostOperationError("embedding input is not provided", nil, schemas.Azure)
-	}
-
-	responseBody, latency, err := provider.completeRequest(ctx, reqBody, "embeddings", key, request.Model)
-	if err != nil {
-		return nil, err
-	}
-
-	response := &schemas.BifrostResponse{}
-
-	// Use enhanced response handler with pre-allocated response
-	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)
-	if bifrostErr != nil {
-		return nil, bifrostErr
-	}
-
-	response.ExtraFields.Provider = schemas.Azure
-	response.ExtraFields.Latency = latency.Milliseconds()
-	response.ExtraFields.ModelRequested = request.Model
-	response.ExtraFields.RequestType = schemas.EmbeddingRequest
-
-	if provider.sendBackRawResponse {
-		response.ExtraFields.RawResponse = rawResponse
-	}
-
-	return response, nil
-}
-
 // ChatCompletionStream performs a streaming chat completion request to Azure's OpenAI API.
 // It supports real-time streaming of responses using Server-Sent Events (SSE).
 // Uses Azure-specific URL construction with deployments and supports both api-key and Bearer token authentication.
@@ -369,7 +317,7 @@ func (provider *AzureProvider) ChatCompletionStream(ctx context.Context, postHoo
 	}
 
 	// Use shared streaming logic from OpenAI
-	return handleOpenAIStreaming(
+	return handleOpenAIChatCompletionStreaming(
 		ctx,
 		provider.streamClient,
 		fullURL,
@@ -381,6 +329,67 @@ func (provider *AzureProvider) ChatCompletionStream(ctx context.Context, postHoo
 		postHookRunner,
 		provider.logger,
 	)
+}
+
+// Responses performs a responses request to Azure's API.
+// It formats the request, sends it to Azure, and processes the response.
+// Returns a BifrostResponse containing the completion results or an error if the request fails.
+func (provider *AzureProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
+	if err != nil {
+		return nil, err
+	}
+
+	response.ToResponsesOnly()
+	response.ExtraFields.RequestType = schemas.ResponsesRequest
+	response.ExtraFields.Provider = provider.GetProviderKey()
+	response.ExtraFields.ModelRequested = request.Model
+
+	return response, nil
+}
+
+func (provider *AzureProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	return provider.ChatCompletionStream(
+		ctx,
+		getResponsesChunkConverterCombinedPostHookRunner(postHookRunner),
+		key,
+		request.ToChatRequest(),
+	)
+}
+
+// Embedding generates embeddings for the given input text(s) using Azure OpenAI.
+// The input can be either a single string or a slice of strings for batch embedding.
+// Returns a BifrostResponse containing the embedding(s) and any error that occurred.
+func (provider *AzureProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	// Use centralized converter
+	reqBody := openai.ToOpenAIEmbeddingRequest(request)
+	if reqBody == nil {
+		return nil, newBifrostOperationError("embedding input is not provided", nil, schemas.Azure)
+	}
+
+	responseBody, latency, err := provider.completeRequest(ctx, reqBody, "embeddings", key, request.Model)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &schemas.BifrostResponse{}
+
+	// Use enhanced response handler with pre-allocated response
+	rawResponse, bifrostErr := handleProviderResponse(responseBody, response, provider.sendBackRawResponse)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	response.ExtraFields.Provider = schemas.Azure
+	response.ExtraFields.Latency = latency.Milliseconds()
+	response.ExtraFields.ModelRequested = request.Model
+	response.ExtraFields.RequestType = schemas.EmbeddingRequest
+
+	if provider.sendBackRawResponse {
+		response.ExtraFields.RawResponse = rawResponse
+	}
+
+	return response, nil
 }
 
 func (provider *AzureProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
@@ -397,8 +406,4 @@ func (provider *AzureProvider) Transcription(ctx context.Context, key schemas.Ke
 
 func (provider *AzureProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "azure")
-}
-
-func (provider *AzureProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError("responses stream", "azure")
 }

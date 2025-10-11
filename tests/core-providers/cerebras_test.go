@@ -23,8 +23,9 @@ func TestCerebras(t *testing.T) {
 		EmbeddingModel: "", // Cerebras doesn't support embedding
 		Scenarios: config.TestScenarios{
 			TextCompletion:        true,
+			TextCompletionStream:  true,
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
