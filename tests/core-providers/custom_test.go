@@ -28,7 +28,7 @@ func TestCustomProvider(t *testing.T) {
 		Scenarios: config.TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,

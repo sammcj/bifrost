@@ -27,8 +27,9 @@ func TestOpenAI(t *testing.T) {
 		ReasoningModel:       "gpt-5",
 		Scenarios: config.TestScenarios{
 			TextCompletion:        true,
+			TextCompletionStream:  true,
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,

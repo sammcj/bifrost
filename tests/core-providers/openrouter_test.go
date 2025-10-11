@@ -29,7 +29,7 @@ func TestOpenRouter(t *testing.T) {
 		Scenarios: config.TestScenarios{
 			TextCompletion:        true,
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
