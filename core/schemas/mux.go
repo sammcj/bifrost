@@ -936,7 +936,7 @@ func (br *BifrostResponse) ToResponsesStream() {
 
 	case delta.Thought != nil && *delta.Thought != "":
 		// Reasoning/thought content delta (for models that support reasoning)
-		streamResp.Type = ResponsesStreamResponseTypeOutputTextDelta
+		streamResp.Type = ResponsesStreamResponseTypeReasoningSummaryTextDelta
 		streamResp.Delta = delta.Thought
 
 	case delta.Refusal != nil && *delta.Refusal != "":
@@ -949,7 +949,7 @@ func (br *BifrostResponse) ToResponsesStream() {
 		toolCall := delta.ToolCalls[0] // Take first tool call
 
 		if toolCall.Function.Arguments != "" {
-			streamResp.Type = ResponsesStreamResponseTypeFunctionCallArgumentsAdded
+			streamResp.Type = ResponsesStreamResponseTypeFunctionCallArgumentsDelta
 			streamResp.Arguments = &toolCall.Function.Arguments
 
 			// Set item for function call metadata if this is a new tool call

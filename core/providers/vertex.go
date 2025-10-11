@@ -401,7 +401,7 @@ func (provider *VertexProvider) ChatCompletionStream(ctx context.Context, postHo
 		}
 
 		// Use shared Anthropic streaming logic
-		return handleAnthropicStreaming(
+		return handleAnthropicChatCompletionStreaming(
 			ctx,
 			client,
 			url,

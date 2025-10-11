@@ -537,14 +537,14 @@ func ToAnthropicChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) *A
 				// Convert text content
 				if msg.Content.ContentStr != nil {
 					content = append(content, AnthropicContentBlock{
-						Type: "text",
+						Type: AnthropicContentBlockTypeText,
 						Text: msg.Content.ContentStr,
 					})
 				} else if msg.Content.ContentBlocks != nil {
 					for _, block := range msg.Content.ContentBlocks {
 						if block.Text != nil {
 							content = append(content, AnthropicContentBlock{
-								Type: "text",
+								Type: AnthropicContentBlockTypeText,
 								Text: block.Text,
 							})
 						} else if block.ImageURLStruct != nil {
@@ -558,7 +558,7 @@ func ToAnthropicChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) *A
 			if msg.ChatAssistantMessage != nil && msg.ChatAssistantMessage.ToolCalls != nil {
 				for _, toolCall := range msg.ChatAssistantMessage.ToolCalls {
 					toolUse := AnthropicContentBlock{
-						Type: "tool_use",
+						Type: AnthropicContentBlockTypeToolUse,
 						ID:   toolCall.ID,
 						Name: toolCall.Function.Name,
 					}
@@ -576,7 +576,7 @@ func ToAnthropicChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) *A
 			}
 
 			// Set content
-			if len(content) == 1 && content[0].Type == "text" {
+			if len(content) == 1 && content[0].Type == AnthropicContentBlockTypeText {
 				// Single text content can be string
 				anthropicMsg.Content = AnthropicContent{ContentStr: content[0].Text}
 			} else if len(content) > 0 {
@@ -632,14 +632,14 @@ func ToAnthropicChatCompletionResponse(bifrostResp *schemas.BifrostResponse) *An
 		// Add text content
 		if choice.Message.Content.ContentStr != nil && *choice.Message.Content.ContentStr != "" {
 			content = append(content, AnthropicContentBlock{
-				Type: "text",
+				Type: AnthropicContentBlockTypeText,
 				Text: choice.Message.Content.ContentStr,
 			})
 		} else if choice.Message.Content.ContentBlocks != nil {
 			for _, block := range choice.Message.Content.ContentBlocks {
 				if block.Text != nil {
 					content = append(content, AnthropicContentBlock{
-						Type: "text",
+						Type: AnthropicContentBlockTypeText,
 						Text: block.Text,
 					})
 				}
@@ -660,7 +660,7 @@ func ToAnthropicChatCompletionResponse(bifrostResp *schemas.BifrostResponse) *An
 				}
 
 				content = append(content, AnthropicContentBlock{
-					Type:  "tool_use",
+					Type:  AnthropicContentBlockTypeToolUse,
 					ID:    toolCall.ID,
 					Name:  toolCall.Function.Name,
 					Input: input,
@@ -677,7 +677,8 @@ func ToAnthropicChatCompletionResponse(bifrostResp *schemas.BifrostResponse) *An
 	return anthropicResp
 }
 
-func (chunk *AnthropicStreamEvent) ToBifrostStream() (*schemas.BifrostResponse, *schemas.BifrostError, bool) {
+// ToBifrostChatCompletionStream converts an Anthropic stream event to a Bifrost Chat Completion Stream response
+func (chunk *AnthropicStreamEvent) ToBifrostChatCompletionStream() (*schemas.BifrostResponse, *schemas.BifrostError, bool) {
 	switch chunk.Type {
 	case AnthropicStreamEventTypeMessageStart:
 		return nil, nil, false
@@ -847,7 +848,7 @@ func ToAnthropicChatCompletionStreamResponse(bifrostResp *schemas.BifrostRespons
 				streamResp.Type = "content_block_delta"
 				streamResp.Index = &choice.Index
 				streamResp.Delta = &AnthropicStreamDelta{
-					Type: "text_delta",
+					Type: AnthropicStreamDeltaTypeText,
 					Text: delta.Content,
 				}
 			} else if delta.Thought != nil {
@@ -855,7 +856,7 @@ func ToAnthropicChatCompletionStreamResponse(bifrostResp *schemas.BifrostRespons
 				streamResp.Type = "content_block_delta"
 				streamResp.Index = &choice.Index
 				streamResp.Delta = &AnthropicStreamDelta{
-					Type:     "thinking_delta",
+					Type:     AnthropicStreamDeltaTypeThinking,
 					Thinking: delta.Thought,
 				}
 			} else if len(delta.ToolCalls) > 0 {
@@ -867,7 +868,7 @@ func ToAnthropicChatCompletionStreamResponse(bifrostResp *schemas.BifrostRespons
 					streamResp.Type = "content_block_start"
 					streamResp.Index = &choice.Index
 					streamResp.ContentBlock = &AnthropicContentBlock{
-						Type: "tool_use",
+						Type: AnthropicContentBlockTypeToolUse,
 						ID:   toolCall.ID,
 						Name: toolCall.Function.Name,
 					}
@@ -876,7 +877,7 @@ func ToAnthropicChatCompletionStreamResponse(bifrostResp *schemas.BifrostRespons
 					streamResp.Type = "content_block_delta"
 					streamResp.Index = &choice.Index
 					streamResp.Delta = &AnthropicStreamDelta{
-						Type:        "input_json_delta",
+						Type:        AnthropicStreamDeltaTypeInputJSON,
 						PartialJSON: &toolCall.Function.Arguments,
 					}
 				}
@@ -906,7 +907,7 @@ func ToAnthropicChatCompletionStreamResponse(bifrostResp *schemas.BifrostRespons
 			var content []AnthropicContentBlock
 			if choice.BifrostNonStreamResponseChoice.Message.Content.ContentStr != nil {
 				content = append(content, AnthropicContentBlock{
-					Type: "text",
+					Type: AnthropicContentBlockTypeText,
 					Text: choice.BifrostNonStreamResponseChoice.Message.Content.ContentStr,
 				})
 			}
@@ -943,7 +944,7 @@ func ToAnthropicChatCompletionStreamResponse(bifrostResp *schemas.BifrostRespons
 		streamResp.Type = "content_block_delta"
 		streamResp.Index = schemas.Ptr(0)
 		streamResp.Delta = &AnthropicStreamDelta{
-			Type: "text_delta",
+			Type: AnthropicStreamDeltaTypeText,
 			Text: schemas.Ptr(""),
 		}
 	}
