@@ -47,23 +47,23 @@ func CreateAnthropicRouteConfigs(pathPrefix string) []RouteConfig {
 			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if anthropicReq, ok := req.(*anthropic.AnthropicMessageRequest); ok {
 					return &schemas.BifrostRequest{
-						ChatRequest: anthropicReq.ToBifrostRequest(),
+						ResponsesRequest: anthropicReq.ToResponsesBifrostRequest(),
 					}, nil
 				}
 				return nil, errors.New("invalid request type")
 			},
 			ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
-				return anthropic.ToAnthropicChatCompletionResponse(resp), nil
+				return anthropic.ToAnthropicResponsesResponse(resp), nil
 			},
 			ErrorConverter: func(err *schemas.BifrostError) interface{} {
 				return anthropic.ToAnthropicChatCompletionError(err)
 			},
 			StreamConfig: &StreamConfig{
 				ResponseConverter: func(resp *schemas.BifrostResponse) (interface{}, error) {
-					return anthropic.ToAnthropicChatCompletionStreamResponse(resp), nil
+					return anthropic.ToAnthropicResponsesStreamResponse(resp), nil
 				},
 				ErrorConverter: func(err *schemas.BifrostError) interface{} {
-					return anthropic.ToAnthropicChatCompletionStreamError(err)
+					return anthropic.ToAnthropicResponsesStreamError(err)
 				},
 			},
 		},

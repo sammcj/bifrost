@@ -383,14 +383,16 @@ func (l *Log) BuildContentSummary() string {
 
 	// Add output message
 	if l.OutputMessageParsed != nil {
-		if l.OutputMessageParsed.Content.ContentStr != nil && *l.OutputMessageParsed.Content.ContentStr != "" {
-			parts = append(parts, *l.OutputMessageParsed.Content.ContentStr)
-		}
-		// If content blocks exist, extract text from them
-		if l.OutputMessageParsed.Content.ContentBlocks != nil {
-			for _, block := range l.OutputMessageParsed.Content.ContentBlocks {
-				if block.Text != nil && *block.Text != "" {
-					parts = append(parts, *block.Text)
+		if l.OutputMessageParsed.Content != nil {
+			if l.OutputMessageParsed.Content.ContentStr != nil && *l.OutputMessageParsed.Content.ContentStr != "" {
+				parts = append(parts, *l.OutputMessageParsed.Content.ContentStr)
+			}
+			// If content blocks exist, extract text from them
+			if l.OutputMessageParsed.Content.ContentBlocks != nil {
+				for _, block := range l.OutputMessageParsed.Content.ContentBlocks {
+					if block.Text != nil && *block.Text != "" {
+						parts = append(parts, *block.Text)
+					}
 				}
 			}
 		}

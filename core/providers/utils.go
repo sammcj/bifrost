@@ -338,6 +338,42 @@ func newProviderAPIError(message string, err error, statusCode int, providerType
 	}
 }
 
+func sendCreatedEventResponsesChunk(ctx context.Context, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream, logger schemas.Logger) {
+	firstChunk := &schemas.BifrostResponse{
+		ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+			Type:           schemas.ResponsesStreamResponseTypeCreated,
+			SequenceNumber: 0,
+			Response:       &schemas.ResponsesStreamResponseStruct{},
+		},
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			RequestType:    schemas.ResponsesStreamRequest,
+			Provider:       provider,
+			ModelRequested: model,
+			ChunkIndex:     0,
+			Latency:        time.Since(startTime).Milliseconds(),
+		},
+	}
+	processAndSendResponse(ctx, postHookRunner, firstChunk, responseChan, logger)
+}
+
+// sendInProgressResponsesChunk sends a ResponsesStreamResponseTypeInProgress event
+func sendInProgressEventResponsesChunk(ctx context.Context, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream, logger schemas.Logger) {
+	chunk := &schemas.BifrostResponse{
+		ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+			Type:           schemas.ResponsesStreamResponseTypeInProgress,
+			SequenceNumber: 1,
+		},
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			RequestType:    schemas.ResponsesStreamRequest,
+			Provider:       provider,
+			ModelRequested: model,
+			ChunkIndex:     1,
+			Latency:        time.Since(startTime).Milliseconds(),
+		},
+	}
+	processAndSendResponse(ctx, postHookRunner, chunk, responseChan, logger)
+}
+
 // processAndSendResponse handles post-hook processing and sends the response to the channel.
 // This utility reduces code duplication across streaming implementations by encapsulating
 // the common pattern of running post hooks, handling errors, and sending responses with
