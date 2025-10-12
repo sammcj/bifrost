@@ -499,7 +499,7 @@ type BifrostResponseExtraFields struct {
 	RequestType    RequestType        `json:"request_type"`
 	Provider       ModelProvider      `json:"provider"`
 	ModelRequested string             `json:"model_requested"`
-	Latency        int64              `json:"latency,omitempty"` // in milliseconds (for streaming responses this will be each chunk latency, and the last chunk latency will be the total latency)
+	Latency        int64              `json:"latency"` // in milliseconds (for streaming responses this will be each chunk latency, and the last chunk latency will be the total latency)
 	BilledUsage    *BilledLLMUsage    `json:"billed_usage,omitempty"`
 	ChunkIndex     int                `json:"chunk_index"` // used for streaming responses to identify the chunk index, will be 0 for non-streaming responses
 	RawResponse    interface{}        `json:"raw_response,omitempty"`
