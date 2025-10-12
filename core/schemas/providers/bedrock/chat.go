@@ -140,3 +140,115 @@ func (bedrockResp *BedrockConverseResponse) ToBifrostResponse() (*schemas.Bifros
 
 	return bifrostResponse, nil
 }
+
+func (chunk *BedrockStreamEvent) ToBifrostChatCompletionStream() (*schemas.BifrostResponse, *schemas.BifrostError, bool) {
+	// event with metrics/usage is the last and with stop reason is the second last
+	switch {
+	case chunk.Role != nil:
+		// Send empty response to signal start
+		streamResponse := &schemas.BifrostResponse{
+			Object: "chat.completion.chunk",
+			Choices: []schemas.BifrostChatResponseChoice{
+				{
+					Index: 0,
+					BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
+						Delta: &schemas.BifrostStreamDelta{
+							Role: chunk.Role,
+						},
+					},
+				},
+			},
+		}
+
+		return streamResponse, nil, false
+
+	case chunk.Start != nil && chunk.Start.ToolUse != nil:
+		// Handle tool use start event
+		contentBlockIndex := 0
+		if chunk.ContentBlockIndex != nil {
+			contentBlockIndex = *chunk.ContentBlockIndex
+		}
+
+		toolUseStart := chunk.Start.ToolUse
+
+		// Create tool call structure for start event
+		var toolCall schemas.ChatAssistantMessageToolCall
+		toolCall.ID = schemas.Ptr(toolUseStart.ToolUseID)
+		toolCall.Type = schemas.Ptr("function")
+		toolCall.Function.Name = schemas.Ptr(toolUseStart.Name)
+		toolCall.Function.Arguments = "{}" // Start with empty arguments
+
+		streamResponse := &schemas.BifrostResponse{
+			Object: "chat.completion.chunk",
+			Choices: []schemas.BifrostChatResponseChoice{
+				{
+					Index: contentBlockIndex,
+					BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
+						Delta: &schemas.BifrostStreamDelta{
+							ToolCalls: []schemas.ChatAssistantMessageToolCall{toolCall},
+						},
+					},
+				},
+			},
+		}
+
+		return streamResponse, nil, false
+
+	case chunk.ContentBlockIndex != nil && chunk.Delta != nil:
+		// Handle contentBlockDelta event
+		contentBlockIndex := *chunk.ContentBlockIndex
+
+		switch {
+		case chunk.Delta.Text != nil:
+			// Handle text delta
+			text := *chunk.Delta.Text
+			if text != "" {
+				streamResponse := &schemas.BifrostResponse{
+					Object: "chat.completion.chunk",
+					Choices: []schemas.BifrostChatResponseChoice{
+						{
+							Index: contentBlockIndex,
+							BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
+								Delta: &schemas.BifrostStreamDelta{
+									Content: &text,
+								},
+							},
+						},
+					},
+				}
+
+				return streamResponse, nil, false
+			}
+
+		case chunk.Delta.ToolUse != nil:
+			// Handle tool use delta
+			toolUseDelta := chunk.Delta.ToolUse
+
+			// Create tool call structure
+			var toolCall schemas.ChatAssistantMessageToolCall
+			toolCall.Type = schemas.Ptr("function")
+
+			// For streaming, we need to accumulate tool use data
+			// This is a simplified approach - in practice, you'd need to track tool calls across chunks
+			toolCall.Function.Arguments = toolUseDelta.Input
+
+			streamResponse := &schemas.BifrostResponse{
+				Object: "chat.completion.chunk",
+				Choices: []schemas.BifrostChatResponseChoice{
+					{
+						Index: contentBlockIndex,
+						BifrostStreamResponseChoice: &schemas.BifrostStreamResponseChoice{
+							Delta: &schemas.BifrostStreamDelta{
+								ToolCalls: []schemas.ChatAssistantMessageToolCall{toolCall},
+							},
+						},
+					},
+				},
+			}
+
+			return streamResponse, nil, false
+		}
+	}
+
+	return nil, nil, false
+}

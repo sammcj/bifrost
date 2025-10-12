@@ -6,6 +6,7 @@ toolchain go1.24.3
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.38.0
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10
 	github.com/aws/aws-sdk-go-v2/config v1.31.0
 	github.com/bytedance/sonic v1.14.0
 	github.com/google/uuid v1.6.0
