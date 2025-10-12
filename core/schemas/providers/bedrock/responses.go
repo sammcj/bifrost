@@ -531,3 +531,103 @@ func convertBedrockMessageToResponsesMessages(bedrockMsg BedrockMessage) []schem
 
 	return outputMessages
 }
+
+// ToBifrostResponsesStream converts a Bedrock stream event to a Bifrost Responses Stream response
+func (chunk *BedrockStreamEvent) ToBifrostResponsesStream(sequenceNumber int) (*schemas.BifrostResponse, *schemas.BifrostError, bool) {
+	// event with metrics/usage is the last and with stop reason is the second last
+	switch {
+	case chunk.Role != nil:
+		// Message start - create output item added event
+		messageType := schemas.ResponsesMessageTypeMessage
+		role := schemas.ResponsesInputMessageRoleAssistant
+
+		item := &schemas.ResponsesMessage{
+			Type: &messageType,
+			Role: &role,
+			Content: &schemas.ResponsesMessageContent{
+				ContentBlocks: []schemas.ResponsesMessageContentBlock{}, // Empty blocks slice for mutation support
+			},
+		}
+
+		return &schemas.BifrostResponse{
+			ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+				Type:           schemas.ResponsesStreamResponseTypeOutputItemAdded,
+				SequenceNumber: sequenceNumber,
+				OutputIndex:    schemas.Ptr(0), // Assuming single output for now
+				Item:           item,
+			},
+		}, nil, false
+
+	case chunk.Start != nil:
+		// Handle content block start (text content or tool use) - create content part added event
+		contentBlockIndex := 0
+		if chunk.ContentBlockIndex != nil {
+			contentBlockIndex = *chunk.ContentBlockIndex
+		}
+
+		// Create content part for any content type
+		part := &schemas.ResponsesMessageContentBlock{
+			Type: schemas.ResponsesOutputMessageContentTypeText,
+			Text: schemas.Ptr(""), // Empty initially
+		}
+
+		return &schemas.BifrostResponse{
+			ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+				Type:           schemas.ResponsesStreamResponseTypeContentPartAdded,
+				SequenceNumber: sequenceNumber,
+				OutputIndex:    schemas.Ptr(0),
+				ContentIndex:   &contentBlockIndex,
+				Part:           part,
+			},
+		}, nil, false
+
+	case chunk.ContentBlockIndex != nil && chunk.Delta != nil:
+		// Handle contentBlockDelta event
+		contentBlockIndex := *chunk.ContentBlockIndex
+
+		switch {
+		case chunk.Delta.Text != nil:
+			// Handle text delta
+			text := *chunk.Delta.Text
+			if text != "" {
+				return &schemas.BifrostResponse{
+					ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+						Type:           schemas.ResponsesStreamResponseTypeOutputTextDelta,
+						SequenceNumber: sequenceNumber,
+						OutputIndex:    schemas.Ptr(0),
+						ContentIndex:   &contentBlockIndex,
+						Delta:          &text,
+					},
+				}, nil, false
+			}
+
+		case chunk.Delta.ToolUse != nil:
+			// Handle tool use delta - function call arguments
+			toolUseDelta := chunk.Delta.ToolUse
+
+			if toolUseDelta.Input != "" {
+				return &schemas.BifrostResponse{
+					ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+						Type:           schemas.ResponsesStreamResponseTypeFunctionCallArgumentsAdded,
+						SequenceNumber: sequenceNumber,
+						OutputIndex:    schemas.Ptr(0),
+						ContentIndex:   &contentBlockIndex,
+						Arguments:      &toolUseDelta.Input,
+					},
+				}, nil, false
+			}
+		}
+
+	case chunk.StopReason != nil:
+		// Handle end of message - create output item done event
+		return &schemas.BifrostResponse{
+			ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+				Type:           schemas.ResponsesStreamResponseTypeOutputItemDone,
+				SequenceNumber: sequenceNumber,
+				OutputIndex:    schemas.Ptr(0),
+			},
+		}, nil, false
+	}
+
+	return nil, nil, false
+}
