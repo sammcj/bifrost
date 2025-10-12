@@ -124,7 +124,7 @@ type BedrockGuardContent struct {
 
 // BedrockGuardContentText represents text content for guardrails
 type BedrockGuardContentText struct {
-	Text       string                     `json:"text"`                 // Required: Text content
+	Text       string                    `json:"text"`                 // Required: Text content
 	Qualifiers []BedrockContentQualifier `json:"qualifiers,omitempty"` // Optional: Content qualifiers
 }
 
@@ -139,15 +139,15 @@ const (
 
 // BedrockInferenceConfig represents inference configuration parameters
 type BedrockInferenceConfig struct {
-	MaxTokens     *int      `json:"maxTokens,omitempty"`     // Maximum number of tokens to generate
+	MaxTokens     *int     `json:"maxTokens,omitempty"`     // Maximum number of tokens to generate
 	StopSequences []string `json:"stopSequences,omitempty"` // Sequences that will stop generation
-	Temperature   *float64  `json:"temperature,omitempty"`   // Sampling temperature (0.0 to 1.0)
-	TopP          *float64  `json:"topP,omitempty"`          // Top-p sampling parameter (0.0 to 1.0)
+	Temperature   *float64 `json:"temperature,omitempty"`   // Sampling temperature (0.0 to 1.0)
+	TopP          *float64 `json:"topP,omitempty"`          // Top-p sampling parameter (0.0 to 1.0)
 }
 
 // BedrockToolConfig represents tool configuration
 type BedrockToolConfig struct {
-	Tools      []BedrockTool     `json:"tools,omitempty"`      // Available tools
+	Tools      []BedrockTool      `json:"tools,omitempty"`      // Available tools
 	ToolChoice *BedrockToolChoice `json:"toolChoice,omitempty"` // Tool choice strategy
 }
 
@@ -225,10 +225,10 @@ type BedrockMistralTextResponse struct {
 
 // BedrockConverseResponse represents a Bedrock Converse API response
 type BedrockConverseResponse struct {
-	Output                        *BedrockConverseOutput     `json:"output"`                                  // Required: Response output
+	Output                        *BedrockConverseOutput    `json:"output"`                                  // Required: Response output
 	StopReason                    string                    `json:"stopReason"`                              // Required: Reason for stopping
-	Usage                         *BedrockTokenUsage         `json:"usage"`                                   // Required: Token usage information
-	Metrics                       *BedrockConverseMetrics    `json:"metrics"`                                 // Required: Response metrics
+	Usage                         *BedrockTokenUsage        `json:"usage"`                                   // Required: Token usage information
+	Metrics                       *BedrockConverseMetrics   `json:"metrics"`                                 // Required: Response metrics
 	AdditionalModelResponseFields map[string]interface{}    `json:"additionalModelResponseFields,omitempty"` // Optional: Additional model-specific response fields
 	PerformanceConfig             *BedrockPerformanceConfig `json:"performanceConfig,omitempty"`             // Optional: Performance configuration used
 	Trace                         *BedrockConverseTrace     `json:"trace,omitempty"`                         // Optional: Guardrail trace information
@@ -258,10 +258,10 @@ type BedrockConverseTrace struct {
 
 // BedrockGuardrailTrace represents detailed guardrail trace information
 type BedrockGuardrailTrace struct {
-	Action            *string                       `json:"action,omitempty"`            // Action taken by guardrail
+	Action            *string                      `json:"action,omitempty"`            // Action taken by guardrail
 	InputAssessments  []BedrockGuardrailAssessment `json:"inputAssessments,omitempty"`  // Input assessments
 	OutputAssessments []BedrockGuardrailAssessment `json:"outputAssessments,omitempty"` // Output assessments
-	Trace             *BedrockGuardrailTraceDetail  `json:"trace,omitempty"`             // Detailed trace information
+	Trace             *BedrockGuardrailTraceDetail `json:"trace,omitempty"`             // Detailed trace information
 }
 
 // BedrockGuardrailAssessment represents a guardrail assessment

@@ -388,42 +388,44 @@ func convertToolConfig(params *schemas.ChatParameters) *BedrockToolConfig {
 
 	var bedrockTools []BedrockTool
 	for _, tool := range params.Tools {
-		// Create the complete schema object that Bedrock expects
-		var schemaObject interface{}
-		if tool.Function.Parameters != nil {
-			// Use the complete parameters object which includes type, properties, required, etc.
-			schemaObject = map[string]interface{}{
-				"type":       tool.Function.Parameters.Type,
-				"properties": tool.Function.Parameters.Properties,
+		if tool.Function != nil {
+			// Create the complete schema object that Bedrock expects
+			var schemaObject interface{}
+			if tool.Function.Parameters != nil {
+				// Use the complete parameters object which includes type, properties, required, etc.
+				schemaObject = map[string]interface{}{
+					"type":       tool.Function.Parameters.Type,
+					"properties": tool.Function.Parameters.Properties,
+				}
+				// Add required field if present
+				if len(tool.Function.Parameters.Required) > 0 {
+					schemaObject.(map[string]interface{})["required"] = tool.Function.Parameters.Required
+				}
+			} else {
+				// Fallback to empty object schema if no parameters
+				schemaObject = map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{},
+				}
 			}
-			// Add required field if present
-			if len(tool.Function.Parameters.Required) > 0 {
-				schemaObject.(map[string]interface{})["required"] = tool.Function.Parameters.Required
-			}
-		} else {
-			// Fallback to empty object schema if no parameters
-			schemaObject = map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			}
-		}
 
-		// Use the tool description if available, otherwise use a generic description
-		description := "Function tool"
-		if tool.Function.Description != nil {
-			description = *tool.Function.Description
-		}
+			// Use the tool description if available, otherwise use a generic description
+			description := "Function tool"
+			if tool.Function.Description != nil {
+				description = *tool.Function.Description
+			}
 
-		bedrockTool := BedrockTool{
-			ToolSpec: &BedrockToolSpec{
-				Name:        tool.Function.Name,
-				Description: schemas.Ptr(description),
-				InputSchema: BedrockToolInputSchema{
-					JSON: schemaObject,
+			bedrockTool := BedrockTool{
+				ToolSpec: &BedrockToolSpec{
+					Name:        tool.Function.Name,
+					Description: schemas.Ptr(description),
+					InputSchema: BedrockToolInputSchema{
+						JSON: schemaObject,
+					},
 				},
-			},
+			}
+			bedrockTools = append(bedrockTools, bedrockTool)
 		}
-		bedrockTools = append(bedrockTools, bedrockTool)
 	}
 
 	toolConfig := &BedrockToolConfig{
