@@ -207,11 +207,16 @@ func (a *Accumulator) accumulateToolCallsInMessage(message *schemas.ChatMessage,
 		// If present, then it could be different tool call
 		if deltaToolCall.Function.Name != nil {
 			// Creating a new tool call
+			// Only set arguments if they're not empty or just empty braces
+			args := deltaToolCall.Function.Arguments
+			if args == "{}" {
+				args = "" // Reset empty braces to empty string to avoid duplication
+			}
 			toolCallToModify = &schemas.ChatAssistantMessageToolCall{
 				ID: deltaToolCall.ID,
 				Function: schemas.ChatAssistantMessageToolCallFunction{
 					Name:      deltaToolCall.Function.Name,
-					Arguments: deltaToolCall.Function.Arguments,
+					Arguments: args,
 				},
 			}
 			existingToolCalls = append(existingToolCalls, *toolCallToModify)
