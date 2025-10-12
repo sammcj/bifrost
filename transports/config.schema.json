@@ -5,6 +5,11 @@
   "description": "Schema for Bifrost HTTP transport configuration",
   "type": "object",
   "properties": {
+    "encryption_key": {
+      "type": "string",
+      "description": "Encryption key for the configuration. If not provided, a default key will be used. You can set the value as env.<ENV_VAR_NAME> to use an environment variable. We also read encryption key from BIFROST_ENCRYPTION_KEY environment variable.",
+      "default": "bifrost-default-encryption-key-32b"
+    },
     "client": {
       "type": "object",
       "description": "Client configuration settings",

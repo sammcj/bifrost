@@ -3,9 +3,11 @@
 import {
 	Binoculars,
 	BookUser,
+	Boxes,
 	BoxIcon,
 	BugIcon,
 	Building2,
+	Cog,
 	Construction,
 	KeyRound,
 	Layers,
@@ -26,16 +28,20 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
+	SidebarMenuSub,
+	SidebarMenuSubButton,
+	SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { IS_ENTERPRISE } from "@/lib/constants/config";
 import { useGetCoreConfigQuery, useGetLatestReleaseQuery, useGetVersionQuery } from "@/lib/store";
 import { BooksIcon, DiscordLogoIcon, GithubLogoIcon } from "@phosphor-icons/react";
+import { ChevronRight } from "lucide-react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ThemeToggle } from "./themeToggle";
 import { PromoCardStack } from "./ui/promoCardStack";
@@ -112,6 +118,20 @@ const enterpriseItems = [
 		url: "/guardrails",
 		icon: Construction,
 		description: "Guardrails configuration",
+		subItems: [
+			{
+				title: "Configuration",
+				url: "/guardrails/configuration",
+				icon: Cog,
+				description: "Guardrail configuration",
+			},
+			{
+				title: "Providers",
+				url: "/guardrails/providers",
+				icon: Boxes,
+				description: "Guardrail providers configuration",
+			},
+		],
 	},
 	{
 		title: "Cluster Config",
@@ -194,44 +214,103 @@ const SidebarItem = ({
 	isActive,
 	isAllowed,
 	isWebSocketConnected,
+	isExpanded,
+	onToggle,
+	pathname,
+	router,
 }: {
-	item: (typeof items)[0];
+	item: (typeof items)[0] | (typeof enterpriseItems)[0];
 	isActive: boolean;
 	isAllowed: boolean;
 	isWebSocketConnected: boolean;
+	isExpanded?: boolean;
+	onToggle?: () => void;
+	pathname: string;
+	router: ReturnType<typeof useRouter>;
 }) => {
+	const hasSubItems = 'subItems' in item && item.subItems && item.subItems.length > 0;
+	const isAnySubItemActive = hasSubItems && item.subItems?.some(subItem => pathname.startsWith(subItem.url));
+
+	const handleClick = (e: React.MouseEvent) => {
+		if (hasSubItems && onToggle) {
+			e.preventDefault();
+			onToggle();
+		}
+	};
+
+	const handleNavigation = (url: string) => {
+		if (!isAllowed) return;
+		router.push(url);
+	};
+
+	const handleSubItemClick = (url: string) => {
+		router.push(url);
+	};
+
 	return (
-		<TooltipProvider key={item.title}>
-			<Tooltip>
-				<TooltipTrigger>
-					<SidebarMenuItem>
+		<SidebarMenuItem key={item.title}>
+			<TooltipProvider>
+				<Tooltip>
+					<TooltipTrigger asChild>
 						<SidebarMenuButton
-							asChild
-							className={`relative h-7.5 rounded-md border px-3 transition-all duration-200 ${
-								isActive
+							className={`relative h-7.5 rounded-md border px-3 transition-all duration-200 cursor-pointer ${
+								isActive || isAnySubItemActive
 									? "bg-sidebar-accent text-primary border-primary/20"
 									: isAllowed
 										? "hover:bg-sidebar-accent hover:text-accent-foreground border-transparent text-slate-500 dark:text-zinc-400"
 										: "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-default border-transparent"
 							} `}
+							onClick={hasSubItems ? handleClick : () => handleNavigation(item.url)}
 						>
-							<Link href={isAllowed ? item.url : "#"} className="flex w-full items-center justify-between">
-								<div>
-									<div className="hover:text-accent-foreground flex items-center gap-2">
-										<item.icon className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
-										<span className={`text-sm ${isActive ? "font-medium" : "font-normal"}`}>{item.title}</span>
-									</div>
+							<div className="flex w-full items-center justify-between">
+								<div className="flex items-center gap-2">
+									<item.icon className={`h-4 w-4 ${isActive || isAnySubItemActive ? "text-primary" : "text-muted-foreground"}`} />
+									<span className={`text-sm ${isActive || isAnySubItemActive ? "font-medium" : "font-normal"}`}>{item.title}</span>
 								</div>
-								{item.url === "/logs" && isWebSocketConnected && (
+								{hasSubItems && (
+									<ChevronRight 
+										className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
+									/>
+								)}
+								{!hasSubItems && item.url === "/logs" && isWebSocketConnected && (
 									<div className="h-2 w-2 animate-pulse rounded-full bg-green-800 dark:bg-green-200" />
 								)}
-							</Link>
+							</div>
 						</SidebarMenuButton>
-					</SidebarMenuItem>
-				</TooltipTrigger>
-				{!isAllowed && <TooltipContent side="right">Please enable governance in the config page</TooltipContent>}
-			</Tooltip>
-		</TooltipProvider>
+					</TooltipTrigger>
+					{!isAllowed && <TooltipContent side="right">Please enable governance in the config page</TooltipContent>}
+				</Tooltip>
+			</TooltipProvider>
+			{hasSubItems && isExpanded && (
+				<SidebarMenuSub className="ml-4 border-l border-sidebar-border pl-2 space-y-0.5 mt-1">
+					{item.subItems?.map((subItem) => {
+						const isSubItemActive = pathname.startsWith(subItem.url);
+						const SubItemIcon = subItem.icon;
+						return (
+							<SidebarMenuSubItem key={subItem.title}>
+								<SidebarMenuSubButton
+									className={`h-7 rounded-md px-2 transition-all duration-200 cursor-pointer ${
+										isSubItemActive
+											? "bg-sidebar-accent text-primary font-medium"
+											: "hover:bg-sidebar-accent hover:text-accent-foreground text-slate-500 dark:text-zinc-400"
+									}`}
+									onClick={() => handleSubItemClick(subItem.url)}
+								>
+									<div className="flex items-center gap-2">
+										{SubItemIcon && (
+											<SubItemIcon className={`h-3.5 w-3.5 ${isSubItemActive ? "text-primary" : "text-muted-foreground"}`} />
+										)}
+										<span className={`text-sm ${isSubItemActive ? "font-medium" : "font-normal"}`}>
+											{subItem.title}
+										</span>
+									</div>
+								</SidebarMenuSubButton>
+							</SidebarMenuSubItem>
+						);
+					})}
+				</SidebarMenuSub>
+			)}
+		</SidebarMenuItem>
 	);
 };
 
@@ -277,7 +356,9 @@ const compareVersions = (v1: string, v2: string): number => {
 
 export default function AppSidebar() {
 	const pathname = usePathname();
+	const router = useRouter();
 	const [mounted, setMounted] = useState(false);
+	const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 	const { data: latestRelease } = useGetLatestReleaseQuery(undefined, {
 		skip: !mounted, // Only fetch after component is mounted
 	});
@@ -297,6 +378,36 @@ export default function AppSidebar() {
 	useEffect(() => {
 		setMounted(true);
 	}, []);
+
+	// Auto-expand items when their subitems are active
+	useEffect(() => {
+		const newExpandedItems = new Set<string>();
+		
+		enterpriseItems.forEach(item => {
+			if ('subItems' in item && item.subItems && Array.isArray(item.subItems)) {
+				const hasActiveSubItem = item.subItems.some((subItem: { url: string }) => pathname.startsWith(subItem.url));
+				if (hasActiveSubItem) {
+					newExpandedItems.add(item.title);
+				}
+			}
+		});
+		
+		if (newExpandedItems.size > 0) {
+			setExpandedItems(prev => new Set([...prev, ...newExpandedItems]));
+		}
+	}, [pathname]);
+
+	const toggleItem = (title: string) => {
+		setExpandedItems(prev => {
+			const next = new Set(prev);
+			if (next.has(title)) {
+				next.delete(title);
+			} else {
+				next.add(title);
+			}
+			return next;
+		});
+	};
 
 	const isActiveRoute = (url: string) => {
 		if (url === "/" && pathname === "/") return true;
@@ -360,6 +471,10 @@ export default function AppSidebar() {
 										isActive={isActive}
 										isAllowed={isAllowed}
 										isWebSocketConnected={isWebSocketConnected}
+										isExpanded={expandedItems.has(item.title)}
+										onToggle={() => toggleItem(item.title)}
+										pathname={pathname}
+										router={router}
 									/>
 								);
 							})}
@@ -377,6 +492,10 @@ export default function AppSidebar() {
 										isActive={isActive}
 										isAllowed={isAllowed}
 										isWebSocketConnected={isWebSocketConnected}
+										isExpanded={expandedItems.has(item.title)}
+										onToggle={() => toggleItem(item.title)}
+										pathname={pathname}
+										router={router}
 									/>
 								);
 							})}
