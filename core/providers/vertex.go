@@ -435,6 +435,7 @@ func (provider *VertexProvider) ChatCompletionStream(ctx context.Context, postHo
 	}
 }
 
+// Responses performs a responses request to the Vertex API.
 func (provider *VertexProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
 	if err != nil {
@@ -449,6 +450,7 @@ func (provider *VertexProvider) Responses(ctx context.Context, key schemas.Key, 
 	return response, nil
 }
 
+// ResponsesStream performs a streaming responses request to the Vertex API.
 func (provider *VertexProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,
@@ -611,18 +613,22 @@ func (provider *VertexProvider) handleVertexEmbedding(ctx context.Context, model
 	return bifrostResponse, nil
 }
 
+// Speech is not supported by the Vertex provider.
 func (provider *VertexProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "vertex")
 }
 
+// SpeechStream is not supported by the Vertex provider.
 func (provider *VertexProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech stream", "vertex")
 }
 
+// Transcription is not supported by the Vertex provider.
 func (provider *VertexProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "vertex")
 }
 
+// TranscriptionStream is not supported by the Vertex provider.
 func (provider *VertexProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "vertex")
 }

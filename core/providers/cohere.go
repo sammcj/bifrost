@@ -483,6 +483,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 	return responseChan, nil
 }
 
+// Responses performs a responses request to the Cohere API using v2 converter.
 func (provider *CohereProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Check if chat completion is allowed
 	if err := checkOperationAllowed(schemas.Cohere, provider.customProviderConfig, schemas.ResponsesRequest); err != nil {
@@ -518,6 +519,7 @@ func (provider *CohereProvider) Responses(ctx context.Context, key schemas.Key, 
 	return bifrostResponse, nil
 }
 
+// ResponsesStream performs a streaming responses request to the Cohere API.
 func (provider *CohereProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	// Check if responses stream is allowed
 	if err := checkOperationAllowed(schemas.Cohere, provider.customProviderConfig, schemas.ResponsesStreamRequest); err != nil {
@@ -672,7 +674,7 @@ func (provider *CohereProvider) ResponsesStream(ctx context.Context, postHookRun
 						response.ExtraFields.BilledUsage.CompletionTokens = event.Delta.Usage.BilledUnits.OutputTokens
 					}
 				}
-				
+
 				lastChunkTime = time.Now()
 				chunkIndex++
 
@@ -799,18 +801,22 @@ func (provider *CohereProvider) Embedding(ctx context.Context, key schemas.Key, 
 	return bifrostResponse, nil
 }
 
+// Speech is not supported by the Cohere provider.
 func (provider *CohereProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "cohere")
 }
 
+// SpeechStream is not supported by the Cohere provider.
 func (provider *CohereProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech stream", "cohere")
 }
 
+// Transcription is not supported by the Cohere provider.
 func (provider *CohereProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "cohere")
 }
 
+// TranscriptionStream is not supported by the Cohere provider.
 func (provider *CohereProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "cohere")
 }

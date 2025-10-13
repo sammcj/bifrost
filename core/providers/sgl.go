@@ -136,6 +136,7 @@ func (provider *SGLProvider) ChatCompletionStream(ctx context.Context, postHookR
 	)
 }
 
+// Responses performs a responses request to the SGL API.
 func (provider *SGLProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
 	if err != nil {
@@ -150,6 +151,7 @@ func (provider *SGLProvider) Responses(ctx context.Context, key schemas.Key, req
 	return response, nil
 }
 
+// ResponsesStream performs a streaming responses request to the SGL API.
 func (provider *SGLProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,
@@ -174,18 +176,22 @@ func (provider *SGLProvider) Embedding(ctx context.Context, key schemas.Key, req
 	)
 }
 
+// Speech is not supported by the SGL provider.
 func (provider *SGLProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "sgl")
 }
 
+// SpeechStream is not supported by the SGL provider.
 func (provider *SGLProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech stream", "sgl")
 }
 
+// Transcription is not supported by the SGL provider.
 func (provider *SGLProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "sgl")
 }
 
+// TranscriptionStream is not supported by the SGL provider.
 func (provider *SGLProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "sgl")
 }

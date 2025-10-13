@@ -118,10 +118,10 @@ func makeRequestWithDirectKey() {
     }
     ctx = context.WithValue(ctx, schemas.BifrostContextKeyDirectKey, directKey)
     
-    response, err := client.ChatCompletion(ctx, &schemas.BifrostRequest{
+    response, err := client.ChatCompletionRequest(ctx, &schemas.BifrostChatRequest{
         Provider: schemas.OpenAI,
         Model:    "gpt-4o-mini",
-        Messages: messages,
+        Input:    messages,
     })
 }
 ```
