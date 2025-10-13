@@ -83,7 +83,7 @@ func (provider *BedrockProvider) GetProviderKey() schemas.ModelProvider {
 	return getProviderName(schemas.Bedrock, provider.customProviderConfig)
 }
 
-// CompleteRequest sends a request to Bedrock's API and handles the response.
+// completeRequest sends a request to Bedrock's API and handles the response.
 // It constructs the API URL, sets up AWS authentication, and processes the response.
 // Returns the response body, request latency, or an error if the request fails.
 func (provider *BedrockProvider) completeRequest(ctx context.Context, requestBody interface{}, path string, key schemas.Key) ([]byte, time.Duration, *schemas.BifrostError) {
@@ -203,6 +203,70 @@ func (provider *BedrockProvider) completeRequest(ctx context.Context, requestBod
 	}
 
 	return body, latency, nil
+}
+
+// makeStreamingRequest creates a streaming request to Bedrock's API.
+// It formats the request, sends it to Bedrock, and returns the response.
+// Returns the response body and an error if the request fails.
+func (provider *BedrockProvider) makeStreamingRequest(ctx context.Context, requestBody interface{}, key schemas.Key, model string) (*http.Response, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
+
+	if key.BedrockKeyConfig == nil {
+		return nil, newConfigurationError("bedrock key config is not provided", providerName)
+	}
+
+	// Format the path with proper model identifier for streaming
+	path := provider.getModelPath("converse-stream", model, key)
+
+	region := "us-east-1"
+	if key.BedrockKeyConfig.Region != nil {
+		region = *key.BedrockKeyConfig.Region
+	}
+
+	// Create the streaming request
+	jsonBody, jsonErr := sonic.Marshal(requestBody)
+	if jsonErr != nil {
+		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, jsonErr, providerName)
+	}
+
+	// Create HTTP request for streaming
+	req, reqErr := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("https://bedrock-runtime.%s.amazonaws.com/model/%s", region, path), bytes.NewReader(jsonBody))
+	if reqErr != nil {
+		return nil, newBifrostOperationError("error creating request", reqErr, providerName)
+	}
+
+	// Set any extra headers from network config
+	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
+
+	// If Value is set, use API Key authentication - else use IAM role authentication
+	if key.Value != "" {
+		req.Header.Set("Accept", "application/vnd.amazon.eventstream")
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key.Value))
+	} else {
+		req.Header.Set("Accept", "application/vnd.amazon.eventstream")
+		// Sign the request using either explicit credentials or IAM role authentication
+		if err := signAWSRequest(ctx, req, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock", providerName); err != nil {
+			return nil, err
+		}
+	}
+
+	// Make the request
+	resp, respErr := provider.client.Do(req)
+	if respErr != nil {
+		if errors.Is(respErr, http.ErrHandlerTimeout) || errors.Is(respErr, context.Canceled) || errors.Is(respErr, context.DeadlineExceeded) {
+			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, respErr, provider.GetProviderKey())
+		}
+		return nil, newBifrostOperationError(schemas.ErrProviderRequest, respErr, providerName)
+	}
+
+	// Check for HTTP errors
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return nil, newProviderAPIError(fmt.Sprintf("HTTP error from %s: %d", providerName, resp.StatusCode), fmt.Errorf("%s", string(body)), resp.StatusCode, providerName, nil, nil)
+	}
+
+	return resp, nil
 }
 
 // signAWSRequest signs an HTTP request using AWS Signature Version 4.
@@ -423,64 +487,14 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 
 	providerName := provider.GetProviderKey()
 
-	if key.BedrockKeyConfig == nil {
-		return nil, newConfigurationError("bedrock key config is not provided", providerName)
-	}
-
 	reqBody, err := bedrock.ToBedrockChatCompletionRequest(request)
 	if err != nil {
 		return nil, newBifrostOperationError("failed to convert request", err, providerName)
 	}
 
-	// Format the path with proper model identifier for streaming
-	path := provider.getModelPath("converse-stream", request.Model, key)
-
-	region := "us-east-1"
-	if key.BedrockKeyConfig.Region != nil {
-		region = *key.BedrockKeyConfig.Region
-	}
-
-	// Create the streaming request
-	jsonBody, jsonErr := sonic.Marshal(reqBody)
-	if jsonErr != nil {
-		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, jsonErr, providerName)
-	}
-
-	// Create HTTP request for streaming
-	req, reqErr := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("https://bedrock-runtime.%s.amazonaws.com/model/%s", region, path), bytes.NewReader(jsonBody))
-	if reqErr != nil {
-		return nil, newBifrostOperationError("error creating request", reqErr, providerName)
-	}
-
-	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
-
-	// If Value is set, use API Key authentication - else use IAM role authentication
-	if key.Value != "" {
-		req.Header.Set("Accept", "application/vnd.amazon.eventstream")
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key.Value))
-	} else {
-		req.Header.Set("Accept", "application/vnd.amazon.eventstream")
-		// Sign the request using either explicit credentials or IAM role authentication
-		if err := signAWSRequest(ctx, req, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock", providerName); err != nil {
-			return nil, err
-		}
-	}
-
-	// Make the request
-	resp, respErr := provider.client.Do(req)
-	if respErr != nil {
-		if errors.Is(respErr, http.ErrHandlerTimeout) || errors.Is(respErr, context.Canceled) || errors.Is(respErr, context.DeadlineExceeded) {
-			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, respErr, provider.GetProviderKey())
-		}
-		return nil, newBifrostOperationError(schemas.ErrProviderRequest, respErr, providerName)
-	}
-
-	// Check for HTTP errors
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		return nil, newProviderAPIError(fmt.Sprintf("HTTP error from %s: %d", providerName, resp.StatusCode), fmt.Errorf("%s", string(body)), resp.StatusCode, providerName, nil, nil)
+	resp, bifrostErr := provider.makeStreamingRequest(ctx, reqBody, key, request.Model)
+	if bifrostErr != nil {
+		return nil, bifrostErr
 	}
 
 	// Create response channel
@@ -654,6 +668,157 @@ func (provider *BedrockProvider) Responses(ctx context.Context, key schemas.Key,
 	return bifrostResponse, nil
 }
 
+// ChatCompletionStream performs a streaming chat completion request to Bedrock's API.
+// It formats the request, sends it to Bedrock, and processes the streaming response.
+// Returns a channel for streaming BifrostResponse objects or an error if the request fails.
+func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	if err := checkOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.ResponsesStreamRequest); err != nil {
+		return nil, err
+	}
+
+	providerName := provider.GetProviderKey()
+
+	reqBody, err := bedrock.ToBedrockResponsesRequest(request)
+	if err != nil {
+		return nil, newBifrostOperationError("failed to convert request", err, providerName)
+	}
+
+	resp, bifrostErr := provider.makeStreamingRequest(ctx, reqBody, key, request.Model)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	// Create response channel
+	responseChan := make(chan *schemas.BifrostStream, schemas.DefaultStreamBufferSize)
+
+	// Start streaming in a goroutine
+	go func() {
+		defer close(responseChan)
+		defer resp.Body.Close()
+
+		// Process AWS Event Stream format
+		var usage *schemas.LLMUsage
+		chunkIndex := 0
+
+		// Process AWS Event Stream format using proper decoder
+		startTime := time.Now()
+		lastChunkTime := startTime
+		decoder := eventstream.NewDecoder()
+		payloadBuf := make([]byte, 0, 1024*1024) // 1MB payload buffer
+
+		for {
+			// Decode a single EventStream message
+			message, err := decoder.Decode(resp.Body, payloadBuf)
+			if err != nil {
+				if err == io.EOF {
+					// End of stream - this is normal
+					break
+				}
+				provider.logger.Warn(fmt.Sprintf("Error decoding %s EventStream message: %v", providerName, err))
+				processAndSendError(ctx, postHookRunner, err, responseChan, schemas.ResponsesStreamRequest, providerName, request.Model, provider.logger)
+				return
+			}
+
+			// Process the decoded message payload (contains JSON for normal events)
+			if len(message.Payload) > 0 {
+				if msgTypeHeader := message.Headers.Get(":message-type"); msgTypeHeader != nil {
+					if msgType := msgTypeHeader.String(); msgType != "event" {
+						excType := msgType
+						if excHeader := message.Headers.Get(":exception-type"); excHeader != nil {
+							if v := excHeader.String(); v != "" {
+								excType = v
+							}
+						}
+						errMsg := string(message.Payload)
+						err := fmt.Errorf("%s stream %s: %s", providerName, excType, errMsg)
+						processAndSendError(ctx, postHookRunner, err, responseChan, schemas.ResponsesStreamRequest, providerName, request.Model, provider.logger)
+						return
+					}
+				}
+
+				// Parse the JSON event into our typed structure
+				var streamEvent bedrock.BedrockStreamEvent
+				if err := sonic.Unmarshal(message.Payload, &streamEvent); err != nil {
+					provider.logger.Debug(fmt.Sprintf("Failed to parse JSON from event buffer: %v, data: %s", err, string(message.Payload)))
+					return
+				}
+
+				if chunkIndex == 0 {
+					sendCreatedEventResponsesChunk(ctx, postHookRunner, provider.GetProviderKey(), request.Model, startTime, responseChan, provider.logger)
+					sendInProgressEventResponsesChunk(ctx, postHookRunner, provider.GetProviderKey(), request.Model, startTime, responseChan, provider.logger)
+					chunkIndex = 2
+				}
+
+				if streamEvent.Usage != nil {
+					usage = &schemas.LLMUsage{
+						ResponsesExtendedResponseUsage: &schemas.ResponsesExtendedResponseUsage{
+							InputTokens:  streamEvent.Usage.InputTokens,
+							OutputTokens: streamEvent.Usage.OutputTokens,
+						},
+						TotalTokens: streamEvent.Usage.TotalTokens,
+					}
+				}
+
+				response, bifrostErr, _ := streamEvent.ToBifrostResponsesStream(chunkIndex)
+				if response != nil {
+
+					response.ExtraFields = schemas.BifrostResponseExtraFields{
+						RequestType:    schemas.ResponsesStreamRequest,
+						Provider:       providerName,
+						ModelRequested: request.Model,
+						ChunkIndex:     chunkIndex,
+						Latency:        time.Since(lastChunkTime).Milliseconds(),
+					}
+					chunkIndex++
+					lastChunkTime = time.Now()
+
+					if provider.sendBackRawResponse {
+						response.ExtraFields.RawResponse = string(message.Payload)
+					}
+
+					processAndSendResponse(ctx, postHookRunner, response, responseChan, provider.logger)
+				}
+				if bifrostErr != nil {
+					bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+						RequestType:    schemas.ResponsesStreamRequest,
+						Provider:       providerName,
+						ModelRequested: request.Model,
+					}
+					processAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, provider.logger)
+					return
+				}
+			}
+		}
+
+		// Send final response
+		response := &schemas.BifrostResponse{
+			ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+				Type:           schemas.ResponsesStreamResponseTypeCompleted,
+				SequenceNumber: chunkIndex + 1,
+				Response: &schemas.ResponsesStreamResponseStruct{
+					Usage: &schemas.ResponsesResponseUsage{
+						ResponsesExtendedResponseUsage: &schemas.ResponsesExtendedResponseUsage{
+							InputTokens:  usage.InputTokens,
+							OutputTokens: usage.OutputTokens,
+						},
+						TotalTokens: usage.TotalTokens,
+					},
+				},
+			},
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType:    schemas.ResponsesStreamRequest,
+				Provider:       providerName,
+				ModelRequested: request.Model,
+				ChunkIndex:     chunkIndex + 1,
+				Latency:        time.Since(startTime).Milliseconds(),
+			},
+		}
+		handleStreamEndWithSuccess(ctx, response, postHookRunner, responseChan, provider.logger)
+	}()
+
+	return responseChan, nil
+}
+
 // Embedding generates embeddings for the given input text(s) using Amazon Bedrock.
 // Supports Titan and Cohere embedding models. Returns a BifrostResponse containing the embedding(s) and any error that occurred.
 func (provider *BedrockProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
@@ -768,8 +933,4 @@ func (provider *BedrockProvider) getModelPath(basePath string, model string, key
 	}
 
 	return path
-}
-
-func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError("responses stream", "bedrock")
 }
