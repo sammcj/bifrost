@@ -670,6 +670,7 @@ type ResponsesOutputMessageContentTextAnnotation struct {
 	Type        string  `json:"type"`                  // "file_citation" | "url_citation" | "container_file_citation" | "file_path"
 	Index       *int    `json:"index,omitempty"`       // Common index field (FileCitation, FilePath)
 	FileID      *string `json:"file_id,omitempty"`     // Common file ID field (FileCitation, ContainerFileCitation, FilePath)
+	Text        *string `json:"text,omitempty"`        // Text of the citation
 	StartIndex  *int    `json:"start_index,omitempty"` // Common start index field (URLCitation, ContainerFileCitation)
 	EndIndex    *int    `json:"end_index,omitempty"`   // Common end index field (URLCitation, ContainerFileCitation)
 	Filename    *string `json:"filename,omitempty"`
