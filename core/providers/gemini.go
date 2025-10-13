@@ -208,6 +208,15 @@ func (provider *GeminiProvider) Responses(ctx context.Context, key schemas.Key, 
 	return response, nil
 }
 
+func (provider *GeminiProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	return provider.ChatCompletionStream(
+		ctx,
+		getResponsesChunkConverterCombinedPostHookRunner(postHookRunner),
+		key,
+		request.ToChatRequest(),
+	)
+}
+
 // Embedding performs an embedding request to the Gemini API.
 func (provider *GeminiProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Check if embedding is allowed for this provider
@@ -914,8 +923,4 @@ func parseGeminiError(providerName schemas.ModelProvider, resp *fasthttp.Respons
 	}
 
 	return newBifrostOperationError(fmt.Sprintf("Gemini error: %v", errorResp), fmt.Errorf("HTTP %d", resp.StatusCode()), providerName)
-}
-
-func (provider *GeminiProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError("responses stream", "gemini")
 }

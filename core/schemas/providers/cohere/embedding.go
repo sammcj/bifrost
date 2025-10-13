@@ -110,15 +110,14 @@ func (cohereResp *CohereEmbeddingResponse) ToBifrostResponse() *schemas.BifrostR
 	// Convert usage information
 	if cohereResp.Meta != nil {
 		if cohereResp.Meta.Tokens != nil {
-			usage := &schemas.LLMUsage{}
+			bifrostResponse.Usage = &schemas.LLMUsage{}
 			if cohereResp.Meta.Tokens.InputTokens != nil {
-				usage.PromptTokens = int(*cohereResp.Meta.Tokens.InputTokens)
+				bifrostResponse.Usage.PromptTokens = int(*cohereResp.Meta.Tokens.InputTokens)
 			}
 			if cohereResp.Meta.Tokens.OutputTokens != nil {
-				usage.CompletionTokens = int(*cohereResp.Meta.Tokens.OutputTokens)
+				bifrostResponse.Usage.CompletionTokens = int(*cohereResp.Meta.Tokens.OutputTokens)
 			}
-			usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
-			bifrostResponse.Usage = usage
+			bifrostResponse.Usage.TotalTokens = bifrostResponse.Usage.PromptTokens + bifrostResponse.Usage.CompletionTokens
 		}
 
 		// Convert billed usage

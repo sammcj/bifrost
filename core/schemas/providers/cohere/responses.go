@@ -101,12 +101,18 @@ func (cohereResp *CohereChatResponse) ToResponsesBifrostResponse() *schemas.Bifr
 
 		if cohereResp.Usage.Tokens != nil {
 			if cohereResp.Usage.Tokens.InputTokens != nil {
-				usage.PromptTokens = int(*cohereResp.Usage.Tokens.InputTokens)
+				usage.ResponsesExtendedResponseUsage.InputTokens = int(*cohereResp.Usage.Tokens.InputTokens)
 			}
 			if cohereResp.Usage.Tokens.OutputTokens != nil {
-				usage.CompletionTokens = int(*cohereResp.Usage.Tokens.OutputTokens)
+				usage.ResponsesExtendedResponseUsage.OutputTokens = int(*cohereResp.Usage.Tokens.OutputTokens)
 			}
-			usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
+			usage.TotalTokens = usage.ResponsesExtendedResponseUsage.InputTokens + usage.ResponsesExtendedResponseUsage.OutputTokens
+		}
+
+		if cohereResp.Usage.CachedTokens != nil {
+			usage.ResponsesExtendedResponseUsage.InputTokensDetails = &schemas.ResponsesResponseInputTokens{
+				CachedTokens: int(*cohereResp.Usage.CachedTokens),
+			}
 		}
 
 		bifrostResp.Usage = usage
@@ -421,4 +427,254 @@ func convertCohereContentBlockToBifrost(cohereBlock CohereContentBlock) schemas.
 			Text: schemas.Ptr(string(cohereBlock.Type)),
 		}
 	}
+}
+
+func (chunk *CohereStreamEvent) ToBifrostResponsesStream(sequenceNumber int) (*schemas.BifrostResponse, *schemas.BifrostError, bool) {
+	switch chunk.Type {
+	case StreamEventMessageStart:
+		messageType := schemas.ResponsesMessageTypeMessage
+		role := schemas.ResponsesInputMessageRoleAssistant
+
+		item := &schemas.ResponsesMessage{
+			ID:   chunk.ID,
+			Type: &messageType,
+			Role: &role,
+			Content: &schemas.ResponsesMessageContent{
+				ContentStr: schemas.Ptr(""), // Empty content initially
+			},
+		}
+
+		return &schemas.BifrostResponse{
+			ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+				Type:           schemas.ResponsesStreamResponseTypeOutputItemAdded,
+				SequenceNumber: sequenceNumber,
+				Item:           item,
+			},
+		}, nil, false
+	case StreamEventContentStart:
+		// Content block start - create content part added event
+		if chunk.Delta != nil && chunk.Index != nil && chunk.Delta.Message != nil && chunk.Delta.Message.Content != nil {
+			var contentType schemas.ResponsesMessageContentBlockType
+			var part *schemas.ResponsesMessageContentBlock
+
+			switch chunk.Delta.Message.Content.Type {
+			case CohereContentBlockTypeText:
+				contentType = schemas.ResponsesOutputMessageContentTypeText
+				part = &schemas.ResponsesMessageContentBlock{
+					Type: contentType,
+					Text: schemas.Ptr(""), // Empty text initially
+				}
+			case CohereContentBlockTypeThinking:
+				// This is a function call starting
+				contentType = schemas.ResponsesOutputMessageContentTypeReasoning // Will be updated to function call
+				part = &schemas.ResponsesMessageContentBlock{
+					Type: contentType,
+					Text: schemas.Ptr(""), // Will contain function call info
+				}
+			}
+
+			if part != nil {
+				return &schemas.BifrostResponse{
+					ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+						Type:           schemas.ResponsesStreamResponseTypeContentPartAdded,
+						SequenceNumber: sequenceNumber,
+						ContentIndex:   chunk.Index,
+						Part:           part,
+					},
+				}, nil, false
+			}
+		}
+	case StreamEventContentDelta:
+		if chunk.Index != nil && chunk.Delta != nil {
+			// Handle text content delta
+			if chunk.Delta.Message != nil && chunk.Delta.Message.Content != nil && chunk.Delta.Message.Content.Text != nil && *chunk.Delta.Message.Content.Text != "" {
+				return &schemas.BifrostResponse{
+					ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+						Type:           schemas.ResponsesStreamResponseTypeOutputTextDelta,
+						SequenceNumber: sequenceNumber,
+						ContentIndex:   chunk.Index,
+						Delta:          chunk.Delta.Message.Content.Text,
+					},
+				}, nil, false
+			}
+		}
+		return nil, nil, false
+	case StreamEventContentEnd:
+		// Content block is complete
+		if chunk.Index != nil {
+			return &schemas.BifrostResponse{
+				ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+					Type:           schemas.ResponsesStreamResponseTypeContentPartDone,
+					SequenceNumber: sequenceNumber,
+					ContentIndex:   chunk.Index,
+				},
+			}, nil, false
+		}
+	case StreamEventToolPlanDelta:
+		if chunk.Delta != nil && chunk.Delta.Message != nil && chunk.Delta.Message.ToolPlan != nil && *chunk.Delta.Message.ToolPlan != "" {
+			// Tool plan delta - map to reasoning summary text delta
+			return &schemas.BifrostResponse{
+				ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+					Type:           schemas.ResponsesStreamResponseTypeReasoningSummaryTextDelta,
+					SequenceNumber: sequenceNumber,
+					ContentIndex:   schemas.Ptr(0), // Tool plan is typically at index 0
+					Delta:          chunk.Delta.Message.ToolPlan,
+				},
+			}, nil, false
+		}
+		return nil, nil, false
+	case StreamEventToolCallStart:
+		if chunk.Index != nil && chunk.Delta != nil && chunk.Delta.Message != nil && chunk.Delta.Message.ToolCalls != nil {
+			// Tool call start - create function call message
+			toolCall := chunk.Delta.Message.ToolCalls
+			if toolCall.Function != nil && toolCall.Function.Name != nil {
+				messageType := schemas.ResponsesMessageTypeFunctionCall
+
+				item := &schemas.ResponsesMessage{
+					ID:   toolCall.ID,
+					Type: &messageType,
+					ResponsesToolMessage: &schemas.ResponsesToolMessage{
+						CallID:    toolCall.ID,
+						Name:      toolCall.Function.Name,
+						Arguments: schemas.Ptr(""), // Arguments will be filled by deltas
+					},
+				}
+
+				return &schemas.BifrostResponse{
+					ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+						Type:           schemas.ResponsesStreamResponseTypeOutputItemAdded,
+						SequenceNumber: sequenceNumber,
+						Item:           item,
+					},
+				}, nil, false
+			}
+		}
+		return nil, nil, false
+	case StreamEventToolCallDelta:
+		if chunk.Index != nil && chunk.Delta != nil && chunk.Delta.Message != nil && chunk.Delta.Message.ToolCalls != nil {
+			// Tool call delta - handle function arguments streaming
+			toolCall := chunk.Delta.Message.ToolCalls
+			if toolCall.Function != nil {
+				return &schemas.BifrostResponse{
+					ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+						Type:           schemas.ResponsesStreamResponseTypeFunctionCallArgumentsAdded,
+						SequenceNumber: sequenceNumber,
+						ContentIndex:   chunk.Index,
+						Arguments:      schemas.Ptr(toolCall.Function.Arguments),
+					},
+				}, nil, false
+			}
+		}
+		return nil, nil, false
+	case StreamEventToolCallEnd:
+		if chunk.Index != nil {
+			// Tool call end - indicate function call arguments are complete
+			return &schemas.BifrostResponse{
+				ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+					Type:           schemas.ResponsesStreamResponseTypeFunctionCallArgumentsDone,
+					SequenceNumber: sequenceNumber,
+					ContentIndex:   chunk.Index,
+				},
+			}, nil, false
+		}
+		return nil, nil, false
+	case StreamEventCitationStart:
+		if chunk.Index != nil && chunk.Delta != nil && chunk.Delta.Message != nil && chunk.Delta.Message.Citations != nil {
+			// Citation start - create annotation for the citation
+			citation := chunk.Delta.Message.Citations
+
+			// Map Cohere citation to ResponsesOutputMessageContentTextAnnotation
+			annotation := &schemas.ResponsesOutputMessageContentTextAnnotation{
+				Type:       "file_citation", // Default to file_citation
+				StartIndex: schemas.Ptr(citation.Start),
+				EndIndex:   schemas.Ptr(citation.End),
+			}
+
+			// Set annotation type and metadata
+			if len(citation.Sources) > 0 {
+				source := citation.Sources[0]
+
+				if source.ID != nil {
+					annotation.FileID = source.ID
+				}
+
+				if source.Document != nil {
+					if title, ok := (*source.Document)["title"].(string); ok {
+						annotation.Title = &title
+					}
+					if id, ok := (*source.Document)["id"].(string); ok && annotation.FileID == nil {
+						annotation.FileID = &id
+					}
+					if snippet, ok := (*source.Document)["snippet"].(string); ok {
+						annotation.Text = &snippet
+					}
+					if url, ok := (*source.Document)["url"].(string); ok {
+						annotation.URL = &url
+					}
+				}
+			}
+
+			return &schemas.BifrostResponse{
+				ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+					Type:            schemas.ResponsesStreamResponseTypeOutputTextAnnotationAdded,
+					SequenceNumber:  sequenceNumber,
+					ContentIndex:    schemas.Ptr(citation.ContentIndex),
+					Annotation:      annotation,
+					AnnotationIndex: chunk.Index,
+				},
+			}, nil, false
+		}
+		return nil, nil, false
+	case StreamEventCitationEnd:
+		if chunk.Index != nil {
+			// Citation end - indicate annotation is complete
+			return &schemas.BifrostResponse{
+				ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+					Type:            schemas.ResponsesStreamResponseTypeOutputTextAnnotationAdded,
+					SequenceNumber:  sequenceNumber,
+					ContentIndex:    chunk.Index,
+					AnnotationIndex: chunk.Index,
+				},
+			}, nil, false
+		}
+		return nil, nil, false
+	case StreamEventMessageEnd:
+		response := &schemas.BifrostResponse{
+			ResponsesStreamResponse: &schemas.ResponsesStreamResponse{
+				Type:           schemas.ResponsesStreamResponseTypeCompleted,
+				SequenceNumber: sequenceNumber,
+				Response:       &schemas.ResponsesStreamResponseStruct{}, // Initialize Response field
+			},
+		}
+
+		if chunk.Delta != nil {
+			if chunk.Delta.Usage != nil {
+				usage := &schemas.ResponsesResponseUsage{
+					ResponsesExtendedResponseUsage: &schemas.ResponsesExtendedResponseUsage{},
+				}
+
+				if chunk.Delta.Usage.Tokens != nil {
+					if chunk.Delta.Usage.Tokens.InputTokens != nil {
+						usage.ResponsesExtendedResponseUsage.InputTokens = int(*chunk.Delta.Usage.Tokens.InputTokens)
+					}
+					if chunk.Delta.Usage.Tokens.OutputTokens != nil {
+						usage.ResponsesExtendedResponseUsage.OutputTokens = int(*chunk.Delta.Usage.Tokens.OutputTokens)
+					}
+					usage.TotalTokens = usage.ResponsesExtendedResponseUsage.InputTokens + usage.ResponsesExtendedResponseUsage.OutputTokens
+				}
+
+				if chunk.Delta.Usage.CachedTokens != nil {
+					usage.ResponsesExtendedResponseUsage.InputTokensDetails = &schemas.ResponsesResponseInputTokens{
+						CachedTokens: int(*chunk.Delta.Usage.CachedTokens),
+					}
+				}
+				response.ResponsesStreamResponse.Response.Usage = usage
+			}
+		}
+
+		return response, nil, true
+	case StreamEventDebug:
+		return nil, nil, false
+	}
+	return nil, nil, false
 }
