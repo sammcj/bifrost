@@ -306,15 +306,13 @@ func main() {
     }
 
     // Create request with tools automatically included
-    request := &schemas.BifrostRequest{
+    request := &schemas.BifrostChatRequest{
         Provider: schemas.OpenAI,
         Model:    "gpt-4o-mini",
-        Input: schemas.RequestInput{
-            ChatCompletionInput: &[]schemas.ChatMessage{
-                firstMessage,
-            },
+        Input: []schemas.ChatMessage{
+            firstMessage,
         },
-        Params: &schemas.ModelParameters{
+        Params: &schemas.ChatParameters{
             Temperature: bifrost.Ptr(0.7),
         },
     }
@@ -366,13 +364,11 @@ func main() {
         }
 
         // Send complete conversation history for final response
-        finalRequest := &schemas.BifrostRequest{
+        finalRequest := &schemas.BifrostChatRequest{
             Provider: schemas.OpenAI,
             Model:    "gpt-4o-mini",
-            Input: schemas.RequestInput{
-                ChatCompletionInput: &conversationHistory,
-            },
-            Params: &schemas.ModelParameters{
+            Input: conversationHistory,
+            Params: &schemas.ChatParameters{
                 Temperature: bifrost.Ptr(0.7),
             },
         }
@@ -545,12 +541,12 @@ func main() {
     })
 
     // Define tool schema
-    calculatorSchema := schemas.Tool{
+    calculatorSchema := schemas.ChatTool{
         Type: "function",
-        Function: schemas.Function{
+        Function: schemas.ChatToolFunction{
             Name:        "calculator",
             Description: "Perform basic arithmetic operations",
-            Parameters: schemas.FunctionParameters{
+            Parameters: schemas.ToolFunctionParameters{
                 Type: "object",
                 Properties: map[string]interface{}{
                     "operation": map[string]interface{}{
@@ -588,20 +584,18 @@ func main() {
     }
 
     // Now use the tool in requests
-    request := &schemas.BifrostRequest{
+    request := &schemas.BifrostChatRequest{
         Provider: schemas.OpenAI,
         Model:    "gpt-4o-mini",
-        Input: schemas.RequestInput{
-            ChatCompletionInput: &[]schemas.ChatMessage{
-                {
-                    Role: schemas.ChatMessageRoleUser,
-                    Content: schemas.ChatMessageContent{
-                        ContentStr: bifrost.Ptr("Calculate 15.5 + 24.3"),
-                    },
+        Input: []schemas.ChatMessage{
+            {
+                Role: schemas.ChatMessageRoleUser,
+                Content: schemas.ChatMessageContent{
+                    ContentStr: bifrost.Ptr("Calculate 15.5 + 24.3"),
                 },
             },
         },
-        Params: &schemas.ModelParameters{
+        Params: &schemas.ChatParameters{
             Temperature: bifrost.Ptr(0.7),
         },
     }

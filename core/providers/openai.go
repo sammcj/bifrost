@@ -237,6 +237,19 @@ func handleOpenAITextCompletionStreaming(
 	// Create HTTP request for streaming
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: &schemas.ErrorField{
+					Type:    schemas.Ptr(schemas.RequestCancelled),
+					Message: schemas.ErrRequestCancelled,
+					Error:   err,
+				},
+			}
+		}
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
+		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
 	}
 
@@ -779,6 +792,7 @@ func handleOpenAIChatCompletionStreaming(
 	return responseChan, nil
 }
 
+// Responses performs a responses request to the OpenAI API.
 func (provider *OpenAIProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Check if chat completion is allowed for this provider
 	if err := checkOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ResponsesRequest); err != nil {
@@ -877,6 +891,7 @@ func handleOpenAIResponsesRequest(
 	return response, nil
 }
 
+// ResponsesStream performs a streaming responses request to the OpenAI API.
 func (provider *OpenAIProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	// Check if chat completion stream is allowed for this provider
 	if err := checkOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ResponsesStreamRequest); err != nil {
@@ -1551,6 +1566,7 @@ func (provider *OpenAIProvider) Transcription(ctx context.Context, key schemas.K
 
 }
 
+// TranscriptionStream performs a streaming transcription request to the OpenAI API.
 func (provider *OpenAIProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	if err := checkOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.TranscriptionStreamRequest); err != nil {
 		return nil, err
@@ -1738,6 +1754,7 @@ func (provider *OpenAIProvider) TranscriptionStream(ctx context.Context, postHoo
 	return responseChan, nil
 }
 
+// parseTranscriptionFormDataBodyFromRequest parses the transcription request and writes it to the multipart form.
 func parseTranscriptionFormDataBodyFromRequest(writer *multipart.Writer, openaiReq *openai.OpenAITranscriptionRequest, providerName schemas.ModelProvider) *schemas.BifrostError {
 	// Add file field
 	fileWriter, err := writer.CreateFormFile("file", "audio.mp3") // OpenAI requires a filename
@@ -1786,6 +1803,7 @@ func parseTranscriptionFormDataBodyFromRequest(writer *multipart.Writer, openaiR
 	return nil
 }
 
+// parseOpenAIError parses OpenAI error responses.
 func parseOpenAIError(resp *fasthttp.Response) *schemas.BifrostError {
 	var errorResp schemas.BifrostError
 
@@ -1811,6 +1829,7 @@ func parseOpenAIError(resp *fasthttp.Response) *schemas.BifrostError {
 	return bifrostErr
 }
 
+// parseStreamOpenAIError parses OpenAI streaming error responses.
 func parseStreamOpenAIError(resp *http.Response) *schemas.BifrostError {
 	var errorResp schemas.BifrostError
 
@@ -1854,6 +1873,7 @@ func parseStreamOpenAIError(resp *http.Response) *schemas.BifrostError {
 	return bifrostErr
 }
 
+// parseOpenAIErrorForStreamDataLine parses OpenAI error responses from a stream data line.
 func parseOpenAIErrorForStreamDataLine(jsonData string, requestType schemas.RequestType, providerName schemas.ModelProvider, model string) (*schemas.BifrostError, error) {
 	var openAIError schemas.BifrostError
 	if err := sonic.Unmarshal([]byte(jsonData), &openAIError); err != nil {

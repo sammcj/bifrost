@@ -171,6 +171,7 @@ func (provider *GroqProvider) ChatCompletionStream(ctx context.Context, postHook
 	)
 }
 
+// Responses performs a responses request to the Groq API.
 func (provider *GroqProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
 	if err != nil {
@@ -185,6 +186,7 @@ func (provider *GroqProvider) Responses(ctx context.Context, key schemas.Key, re
 	return response, nil
 }
 
+// ResponsesStream performs a streaming responses request to the Groq API.
 func (provider *GroqProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,
@@ -199,18 +201,22 @@ func (provider *GroqProvider) Embedding(ctx context.Context, key schemas.Key, re
 	return nil, newUnsupportedOperationError("embedding", "groq")
 }
 
+// Speech is not supported by the Groq provider.
 func (provider *GroqProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "groq")
 }
 
+// SpeechStream is not supported by the Groq provider.
 func (provider *GroqProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech stream", "groq")
 }
 
+// Transcription is not supported by the Groq provider.
 func (provider *GroqProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "groq")
 }
 
+// TranscriptionStream is not supported by the Groq provider.
 func (provider *GroqProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "groq")
 }

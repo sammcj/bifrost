@@ -211,10 +211,10 @@ func main() {
     defer client.Shutdown()
 
     // Request structured JSON response  
-    request := &schemas.BifrostRequest{
+    request := &schemas.BifrostChatRequest{
         Provider: schemas.OpenAI,
         Model:    "gpt-4o-mini",
-        Messages: []schemas.ChatMessage{
+        Input: []schemas.ChatMessage{
             {
                 Role: schemas.ChatMessageRoleUser,
                 Content: schemas.ChatMessageContent{

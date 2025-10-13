@@ -129,6 +129,7 @@ func (provider *OpenRouterProvider) ChatCompletionStream(ctx context.Context, po
 	)
 }
 
+// Responses performs a responses request to the OpenRouter API.
 func (provider *OpenRouterProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return handleOpenAIResponsesRequest(
 		ctx,
@@ -143,6 +144,7 @@ func (provider *OpenRouterProvider) Responses(ctx context.Context, key schemas.K
 	)
 }
 
+// ResponsesStream performs a streaming responses request to the OpenRouter API.
 func (provider *OpenRouterProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,
@@ -152,22 +154,27 @@ func (provider *OpenRouterProvider) ResponsesStream(ctx context.Context, postHoo
 	)
 }
 
+// Embedding is not supported by the OpenRouter provider.
 func (provider *OpenRouterProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("embedding", "openrouter")
 }
 
+// Speech is not supported by the OpenRouter provider.
 func (provider *OpenRouterProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "openrouter")
 }
 
+// SpeechStream is not supported by the OpenRouter provider.
 func (provider *OpenRouterProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech stream", "openrouter")
 }
 
+// Transcription is not supported by the OpenRouter provider.
 func (provider *OpenRouterProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "openrouter")
 }
 
+// TranscriptionStream is not supported by the OpenRouter provider.
 func (provider *OpenRouterProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "openrouter")
 }

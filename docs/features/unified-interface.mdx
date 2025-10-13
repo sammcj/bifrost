@@ -65,10 +65,10 @@ type BifrostResponse struct {
 }
 
 // Works with any provider
-response, err := client.ChatCompletion(ctx, &schemas.BifrostRequest{
+response, err := client.ChatCompletionRequest(ctx, &schemas.BifrostChatRequest{
     Provider: schemas.OpenAI,    // or Anthropic, Bedrock, etc.
     Model:    "gpt-4o-mini",     // or "claude-3-sonnet", etc.
-    Messages: messages,
+    Input:    messages,
 })
 // Response structure is always the same!
 ```
@@ -77,6 +77,32 @@ response, err := client.ChatCompletion(ctx, &schemas.BifrostRequest{
 
 
 </Tabs>
+
+## Provider Support Matrix
+
+The following table summarizes which operations are supported by each provider via Bifrost’s unified interface.
+
+| Provider | Text | Text (stream) | Chat | Chat (stream) | Responses | Responses (stream) | Embeddings | TTS | TTS (stream) | STT | STT (stream) |
+|----------|------|----------------|------|---------------|-----------|--------------------|------------|-----|-------------|-----|--------------|
+| Anthropic | Yes | No | Yes | Yes | Yes | Yes | No | No | No | No | No |
+| Azure OpenAI | Yes | Yes | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
+| Bedrock | Yes | No | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
+| Cerebras | Yes | Yes | Yes | Yes | Yes | Yes | No | No | No | No | No |
+| Cohere | No | No | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
+| Gemini | No | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Groq | No | No | Yes | Yes | Yes | Yes | No | No | No | No | No |
+| Mistral | No | No | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
+| Ollama | Yes | Yes | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
+| OpenAI | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| OpenRouter | Yes | Yes | Yes | Yes | Yes | Yes | No | No | No | No | No |
+| Parasail | Yes | Yes | Yes | Yes | Yes | Yes | No | No | No | No | No |
+| SGL | Yes | Yes | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
+| Vertex AI | No | No | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
+
+Notes:
+- “Text” refers to the classic text completion interface (`/v1/completions`).
+- “Responses” refers to the OpenAI-style Responses API (`/v1/responses`). Non-OpenAI providers map this to their native chat API under the hood.
+- TTS corresponds to `/v1/audio/speech` and STT to `/v1/audio/transcriptions`.
 
 ## The Power of Consistency
 
