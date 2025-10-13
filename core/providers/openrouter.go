@@ -62,7 +62,7 @@ func (provider *OpenRouterProvider) GetProviderKey() schemas.ModelProvider {
 }
 
 // TextCompletion performs a text completion request to the OpenRouter API.
-func (provider *OpenRouterProvider) TextCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *OpenRouterProvider) TextCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (*schemas.BifrostTextCompletionResponse, *schemas.BifrostError) {
 	return handleOpenAITextCompletionRequest(
 		ctx,
 		provider.client,
@@ -95,7 +95,7 @@ func (provider *OpenRouterProvider) TextCompletionStream(ctx context.Context, po
 }
 
 // ChatCompletion performs a chat completion request to the OpenRouter API.
-func (provider *OpenRouterProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *OpenRouterProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 	return handleOpenAIChatCompletionRequest(
 		ctx,
 		provider.client,
@@ -130,7 +130,7 @@ func (provider *OpenRouterProvider) ChatCompletionStream(ctx context.Context, po
 }
 
 // Responses performs a responses request to the OpenRouter API.
-func (provider *OpenRouterProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *OpenRouterProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
 	return handleOpenAIResponsesRequest(
 		ctx,
 		provider.client,
@@ -155,12 +155,12 @@ func (provider *OpenRouterProvider) ResponsesStream(ctx context.Context, postHoo
 }
 
 // Embedding is not supported by the OpenRouter provider.
-func (provider *OpenRouterProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *OpenRouterProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostEmbeddingResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("embedding", "openrouter")
 }
 
 // Speech is not supported by the OpenRouter provider.
-func (provider *OpenRouterProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *OpenRouterProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "openrouter")
 }
 
@@ -170,7 +170,7 @@ func (provider *OpenRouterProvider) SpeechStream(ctx context.Context, postHookRu
 }
 
 // Transcription is not supported by the OpenRouter provider.
-func (provider *OpenRouterProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *OpenRouterProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "openrouter")
 }
 
