@@ -123,6 +123,26 @@
         ]
       },
       {
+        "tab": "Deployment Guides",
+        "icon": "server",
+        "pages": [
+          {
+            "group":"Common setup instructions",
+            "icon": "book",
+            "pages": [
+              "deployment-guides/how-to/install-make"
+            ]
+          },
+          {
+            "group":"Platform specific guides",
+            "icon": "swatchbook",
+            "pages": [
+              "deployment-guides/fly"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "API Reference",
         "icon": "code",
         "groups": [
