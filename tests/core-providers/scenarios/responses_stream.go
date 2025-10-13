@@ -308,7 +308,7 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 
 						// Check for function call events
 						switch streamResp.Type {
-						case schemas.ResponsesStreamResponseTypeFunctionCallArgumentsAdded:
+						case schemas.ResponsesStreamResponseTypeFunctionCallArgumentsDelta:
 							functionCallArgsDetected = true
 							if streamResp.Arguments != nil {
 								t.Logf("🔧 Function call arguments chunk: %q", *streamResp.Arguments)

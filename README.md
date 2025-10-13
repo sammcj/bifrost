@@ -25,7 +25,7 @@ Bifrost is a high-performance AI gateway that unifies access to 12+ providers (O
   </tr>
   <tr>
     <td><strong>Pre-release</strong></td>
-    <td>v1.3.0-prerelease5</td>
+    <td>v1.3.0-prerelease7</td>
   </tr>
 </table>
 
