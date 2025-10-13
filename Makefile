@@ -209,7 +209,7 @@ deploy-to-fly-io: ## Deploy to Fly.io (Usage: make deploy-to-fly-io APP_NAME=you
 		echo "$(YELLOW)fly.toml not found in current directory$(NC)"; \
 		echo "$(CYAN)Would you like to create a temporary fly.toml with 2 vCPU configuration?$(NC)"; \
 		echo "$(CYAN)(It will be removed after deployment)$(NC)"; \
-		read -p "Create temporary fly.toml? [y/N]: " response; \
+		printf "Create temporary fly.toml? [y/N]: "; read response; \
 		case "$$response" in \
 			[yY][eE][sS]|[yY]) \
 				echo "$(YELLOW)Creating temporary fly.toml with 2 vCPU configuration...$(NC)"; \
