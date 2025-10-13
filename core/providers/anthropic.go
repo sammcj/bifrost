@@ -395,7 +395,7 @@ func handleAnthropicStreaming(
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerType)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerType)
@@ -422,7 +422,7 @@ func handleAnthropicStreaming(
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerType)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerType)

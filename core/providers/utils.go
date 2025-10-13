@@ -548,3 +548,28 @@ func getProviderName(defaultProvider schemas.ModelProvider, customConfig *schema
 	}
 	return defaultProvider
 }
+
+func getResponsesChunkConverterCombinedPostHookRunner(postHookRunner schemas.PostHookRunner) schemas.PostHookRunner {
+	responsesChunkConverter := func(_ *context.Context, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError) {
+		if result != nil {
+			result.ToResponsesStream()
+			result.ExtraFields.RequestType = schemas.ResponsesStreamRequest
+		} else if err != nil {
+			// Ensure downstream knows this is a Responses stream even on errors
+			if err.ExtraFields.RequestType == "" {
+				err.ExtraFields.RequestType = schemas.ResponsesStreamRequest
+			}
+		}
+		return result, err
+	}
+
+	// Create a combined post hook runner that first converts to responses stream, then runs the original post hooks
+	combinedPostHookRunner := func(ctx *context.Context, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError) {
+		// First run the responses chunk converter
+		result, err = responsesChunkConverter(ctx, result, err)
+		// Then run the original post hook runner
+		return postHookRunner(ctx, result, err)
+	}
+
+	return combinedPostHookRunner
+}

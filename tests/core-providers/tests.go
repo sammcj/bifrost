@@ -26,8 +26,10 @@ func runAllComprehensiveTests(t *testing.T, client *bifrost.Bifrost, ctx context
 	// Define all test scenario functions in a slice
 	testScenarios := []TestScenarioFunc{
 		scenarios.RunTextCompletionTest,
+		scenarios.RunTextCompletionStreamTest,
 		scenarios.RunSimpleChatTest,
 		scenarios.RunChatCompletionStreamTest,
+		scenarios.RunResponsesStreamTest,
 		scenarios.RunMultiTurnConversationTest,
 		scenarios.RunToolCallsTest,
 		scenarios.RunMultipleToolCallsTest,
@@ -66,7 +68,7 @@ func printTestSummary(t *testing.T, testConfig config.ComprehensiveTestConfig) {
 	}{
 		{"TextCompletion", testConfig.Scenarios.TextCompletion && testConfig.TextModel != ""},
 		{"SimpleChat", testConfig.Scenarios.SimpleChat},
-		{"ChatCompletionStream", testConfig.Scenarios.ChatCompletionStream},
+		{"CompletionStream", testConfig.Scenarios.CompletionStream},
 		{"MultiTurnConversation", testConfig.Scenarios.MultiTurnConversation},
 		{"ToolCalls", testConfig.Scenarios.ToolCalls},
 		{"MultipleToolCalls", testConfig.Scenarios.MultipleToolCalls},

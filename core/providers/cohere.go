@@ -377,7 +377,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -405,7 +405,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, &schemas.BifrostError{

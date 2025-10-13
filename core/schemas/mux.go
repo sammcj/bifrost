@@ -881,3 +881,150 @@ func (br *BifrostResponse) ToChatOnly() {
 	// Clear ResponsesResponse after conversion
 	br.ResponsesResponse = nil
 }
+
+// ToResponsesStream converts the BifrostResponse from Chat streaming format to Responses streaming format
+// This converts Chat stream chunks (Choices with Deltas) to ResponsesStreamResponse format
+func (br *BifrostResponse) ToResponsesStream() {
+	if br == nil {
+		return
+	}
+
+	// If ResponsesStreamResponse already exists, keep it and clear Chat fields
+	if br.ResponsesStreamResponse != nil {
+		br.Choices = nil
+		return
+	}
+
+	// If no choices to convert, return early
+	if len(br.Choices) == 0 {
+		return
+	}
+
+	// Convert first streaming choice to ResponsesStreamResponse
+	// Note: Chat API typically has one choice per chunk in streaming
+	choice := br.Choices[0]
+	if choice.BifrostStreamResponseChoice == nil || choice.BifrostStreamResponseChoice.Delta == nil {
+		return
+	}
+
+	delta := choice.BifrostStreamResponseChoice.Delta
+	streamResp := &ResponsesStreamResponse{
+		SequenceNumber: br.ExtraFields.ChunkIndex,
+		OutputIndex:    &choice.Index,
+	}
+
+	// Handle different types of streaming content
+	switch {
+	case delta.Role != nil:
+		// Role initialization - typically the first chunk
+		streamResp.Type = ResponsesStreamResponseTypeOutputItemAdded
+		streamResp.Item = &ResponsesMessage{
+			Type: Ptr(ResponsesMessageTypeMessage),
+			Role: Ptr(ResponsesInputMessageRoleAssistant),
+		}
+		if *delta.Role == "assistant" {
+			streamResp.Item.Role = Ptr(ResponsesInputMessageRoleAssistant)
+		}
+		fallthrough
+
+	case delta.Content != nil && *delta.Content != "":
+		if delta.Content != nil && *delta.Content != "" { // Need this check again because of the fallthrough
+			// Text content delta
+			streamResp.Type = ResponsesStreamResponseTypeOutputTextDelta
+			streamResp.Delta = delta.Content
+		}
+
+	case delta.Thought != nil && *delta.Thought != "":
+		// Reasoning/thought content delta (for models that support reasoning)
+		streamResp.Type = ResponsesStreamResponseTypeOutputTextDelta
+		streamResp.Delta = delta.Thought
+
+	case delta.Refusal != nil && *delta.Refusal != "":
+		// Refusal delta
+		streamResp.Type = ResponsesStreamResponseTypeRefusalDelta
+		streamResp.Refusal = delta.Refusal
+
+	case len(delta.ToolCalls) > 0:
+		// Tool call delta - handle function call arguments
+		toolCall := delta.ToolCalls[0] // Take first tool call
+
+		if toolCall.Function.Arguments != "" {
+			streamResp.Type = ResponsesStreamResponseTypeFunctionCallArgumentsAdded
+			streamResp.Arguments = &toolCall.Function.Arguments
+
+			// Set item for function call metadata if this is a new tool call
+			if toolCall.ID != nil || toolCall.Function.Name != nil {
+				messageType := ResponsesMessageTypeFunctionCall
+				streamResp.Item = &ResponsesMessage{
+					Type: &messageType,
+					Role: Ptr(ResponsesInputMessageRoleAssistant),
+					ResponsesToolMessage: &ResponsesToolMessage{
+						CallID: toolCall.ID,
+						Name:   toolCall.Function.Name,
+					},
+				}
+			}
+		}
+
+	default:
+		// Check if this is a completion chunk with finish_reason and/or usage
+		if choice.FinishReason != nil {
+			// Handle completion events based on finish_reason
+			switch *choice.FinishReason {
+			case "stop":
+				streamResp.Type = ResponsesStreamResponseTypeCompleted
+			case "length":
+				streamResp.Type = ResponsesStreamResponseTypeIncomplete
+			case "tool_calls":
+				streamResp.Type = ResponsesStreamResponseTypeOutputItemDone
+			default:
+				// For other finish reasons, mark as completed
+				streamResp.Type = ResponsesStreamResponseTypeCompleted
+			}
+
+			// Add usage information if present in the response
+			if br.Usage != nil {
+				streamResp.Response = &ResponsesStreamResponseStruct{
+					Usage: &ResponsesResponseUsage{
+						ResponsesExtendedResponseUsage: &ResponsesExtendedResponseUsage{
+							InputTokens:  br.Usage.PromptTokens,
+							OutputTokens: br.Usage.CompletionTokens,
+						},
+						TotalTokens: br.Usage.TotalTokens,
+					},
+				}
+			}
+		} else {
+			// Fallback for unknown delta types - treat as text delta if there's any content
+			if delta.Content != nil {
+				streamResp.Type = ResponsesStreamResponseTypeOutputTextDelta
+				streamResp.Delta = delta.Content
+			} else {
+				// Unknown delta type, return without setting ResponsesStreamResponse
+				return
+			}
+		}
+	}
+
+	// Override with finish_reason handling if not already processed in default case
+	if choice.FinishReason != nil && streamResp.Type != ResponsesStreamResponseTypeCompleted &&
+		streamResp.Type != ResponsesStreamResponseTypeIncomplete && streamResp.Type != ResponsesStreamResponseTypeOutputItemDone {
+		switch *choice.FinishReason {
+		case "stop":
+			streamResp.Type = ResponsesStreamResponseTypeCompleted
+		case "length":
+			streamResp.Type = ResponsesStreamResponseTypeIncomplete
+		case "tool_calls":
+			streamResp.Type = ResponsesStreamResponseTypeOutputItemDone
+		default:
+			// For other finish reasons, mark as completed
+			streamResp.Type = ResponsesStreamResponseTypeCompleted
+		}
+	}
+
+	// Set the ResponsesStreamResponse and clear Chat fields
+	br.ResponsesStreamResponse = streamResp
+	br.ExtraFields.RequestType = ResponsesStreamRequest
+	br.Choices = nil
+	br.Object = ""
+}
