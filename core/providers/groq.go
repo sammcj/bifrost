@@ -151,6 +151,26 @@ func (provider *GroqProvider) ChatCompletion(ctx context.Context, key schemas.Ke
 	)
 }
 
+// ChatCompletionStream performs a streaming chat completion request to the Groq API.
+// It supports real-time streaming of responses using Server-Sent Events (SSE).
+// Uses Groq's OpenAI-compatible streaming format.
+// Returns a channel containing BifrostResponse objects representing the stream or an error if the request fails.
+func (provider *GroqProvider) ChatCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostChatRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	// Use shared OpenAI-compatible streaming logic
+	return handleOpenAIChatCompletionStreaming(
+		ctx,
+		provider.streamClient,
+		provider.networkConfig.BaseURL+"/v1/chat/completions",
+		request,
+		map[string]string{"Authorization": "Bearer " + key.Value},
+		provider.networkConfig.ExtraHeaders,
+		provider.sendBackRawResponse,
+		schemas.Groq,
+		postHookRunner,
+		provider.logger,
+	)
+}
+
 func (provider *GroqProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
 	if err != nil {
@@ -165,29 +185,18 @@ func (provider *GroqProvider) Responses(ctx context.Context, key schemas.Key, re
 	return response, nil
 }
 
+func (provider *GroqProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	return provider.ChatCompletionStream(
+		ctx,
+		getResponsesChunkConverterCombinedPostHookRunner(postHookRunner),
+		key,
+		request.ToChatRequest(),
+	)
+}
+
 // Embedding is not supported by the Groq provider.
 func (provider *GroqProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("embedding", "groq")
-}
-
-// ChatCompletionStream performs a streaming chat completion request to the Groq API.
-// It supports real-time streaming of responses using Server-Sent Events (SSE).
-// Uses Groq's OpenAI-compatible streaming format.
-// Returns a channel containing BifrostResponse objects representing the stream or an error if the request fails.
-func (provider *GroqProvider) ChatCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostChatRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	// Use shared OpenAI-compatible streaming logic
-	return handleOpenAIStreaming(
-		ctx,
-		provider.streamClient,
-		provider.networkConfig.BaseURL+"/v1/chat/completions",
-		request,
-		map[string]string{"Authorization": "Bearer " + key.Value},
-		provider.networkConfig.ExtraHeaders,
-		provider.sendBackRawResponse,
-		schemas.Groq,
-		postHookRunner,
-		provider.logger,
-	)
 }
 
 func (provider *GroqProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
@@ -204,8 +213,4 @@ func (provider *GroqProvider) Transcription(ctx context.Context, key schemas.Key
 
 func (provider *GroqProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "groq")
-}
-
-func (provider *GroqProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError("responses stream", "groq")
 }

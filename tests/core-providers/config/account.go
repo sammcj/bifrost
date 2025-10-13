@@ -19,8 +19,9 @@ const ProviderOpenAICustom = schemas.ModelProvider("openai-custom")
 // TestScenarios defines the comprehensive test scenarios
 type TestScenarios struct {
 	TextCompletion        bool
+	TextCompletionStream  bool
 	SimpleChat            bool
-	ChatCompletionStream  bool
+	CompletionStream      bool
 	MultiTurnConversation bool
 	ToolCalls             bool
 	MultipleToolCalls     bool
@@ -462,8 +463,9 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		SpeechSynthesisModel: "tts-1",
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not supported
+			TextCompletionStream:  false, // Not supported
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
@@ -491,7 +493,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
@@ -518,7 +520,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not supported for Claude
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
@@ -545,7 +547,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not typical for Cohere
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
@@ -572,7 +574,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
@@ -599,7 +601,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not typical
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
@@ -652,7 +654,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not typical
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
@@ -679,7 +681,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
@@ -706,7 +708,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		Scenarios: TestScenarios{
 			TextCompletion:        false,
 			SimpleChat:            true, // Enable simple chat for testing
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
@@ -736,7 +738,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,
@@ -763,7 +765,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		Scenarios: TestScenarios{
 			TextCompletion:        true,
 			SimpleChat:            true,
-			ChatCompletionStream:  true,
+			CompletionStream:      true,
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			MultipleToolCalls:     true,

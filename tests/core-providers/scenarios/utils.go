@@ -363,7 +363,6 @@ func GetResultContent(result *schemas.BifrostResponse) string {
 			}
 		}
 	}
-
 	return ""
 }
 

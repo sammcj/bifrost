@@ -111,6 +111,26 @@ func (provider *CerebrasProvider) ChatCompletion(ctx context.Context, key schema
 	)
 }
 
+// ChatCompletionStream performs a streaming chat completion request to the Cerebras API.
+// It supports real-time streaming of responses using Server-Sent Events (SSE).
+// Uses Cerebras's OpenAI-compatible streaming format.
+// Returns a channel containing BifrostResponse objects representing the stream or an error if the request fails.
+func (provider *CerebrasProvider) ChatCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostChatRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	// Use shared OpenAI-compatible streaming logic
+	return handleOpenAIChatCompletionStreaming(
+		ctx,
+		provider.streamClient,
+		provider.networkConfig.BaseURL+"/v1/chat/completions",
+		request,
+		map[string]string{"Authorization": "Bearer " + key.Value},
+		provider.networkConfig.ExtraHeaders,
+		provider.sendBackRawResponse,
+		schemas.Cerebras,
+		postHookRunner,
+		provider.logger,
+	)
+}
+
 func (provider *CerebrasProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
 	if err != nil {
@@ -125,29 +145,18 @@ func (provider *CerebrasProvider) Responses(ctx context.Context, key schemas.Key
 	return response, nil
 }
 
+func (provider *CerebrasProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	return provider.ChatCompletionStream(
+		ctx,
+		getResponsesChunkConverterCombinedPostHookRunner(postHookRunner),
+		key,
+		request.ToChatRequest(),
+	)
+}
+
 // Embedding is not supported by the Cerebras provider.
 func (provider *CerebrasProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("embedding", "cerebras")
-}
-
-// ChatCompletionStream performs a streaming chat completion request to the Cerebras API.
-// It supports real-time streaming of responses using Server-Sent Events (SSE).
-// Uses Cerebras's OpenAI-compatible streaming format.
-// Returns a channel containing BifrostResponse objects representing the stream or an error if the request fails.
-func (provider *CerebrasProvider) ChatCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostChatRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	// Use shared OpenAI-compatible streaming logic
-	return handleOpenAIStreaming(
-		ctx,
-		provider.streamClient,
-		provider.networkConfig.BaseURL+"/v1/chat/completions",
-		request,
-		map[string]string{"Authorization": "Bearer " + key.Value},
-		provider.networkConfig.ExtraHeaders,
-		provider.sendBackRawResponse,
-		schemas.Cerebras,
-		postHookRunner,
-		provider.logger,
-	)
 }
 
 func (provider *CerebrasProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
@@ -164,8 +173,4 @@ func (provider *CerebrasProvider) Transcription(ctx context.Context, key schemas
 
 func (provider *CerebrasProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "cerebras")
-}
-
-func (provider *CerebrasProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError("responses stream", "cerebras")
 }

@@ -177,7 +177,7 @@ func (provider *GeminiProvider) ChatCompletionStream(ctx context.Context, postHo
 	}
 
 	// Use shared OpenAI-compatible streaming logic
-	return handleOpenAIStreaming(
+	return handleOpenAIChatCompletionStreaming(
 		ctx,
 		provider.streamClient,
 		provider.networkConfig.BaseURL+"/openai/chat/completions",
@@ -310,7 +310,7 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -338,7 +338,7 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -594,7 +594,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)
@@ -622,7 +622,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, providerName)
 		}
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, providerName)

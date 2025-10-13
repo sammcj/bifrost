@@ -21,7 +21,6 @@ import (
 	"github.com/maximhq/bifrost/core/schemas/providers/anthropic"
 	"github.com/maximhq/bifrost/core/schemas/providers/openai"
 	"github.com/maximhq/bifrost/core/schemas/providers/vertex"
-	"github.com/valyala/fasthttp"
 )
 
 type VertexError struct {
@@ -222,7 +221,7 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, schemas.Vertex)
 		}
 		return nil, &schemas.BifrostError{
@@ -259,7 +258,7 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 				},
 			}
 		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, schemas.Vertex)
 		}
 		// Remove client from pool for non-context errors (could be auth/network issues)
@@ -346,173 +345,6 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 	}
 }
 
-func (provider *VertexProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
-	if err != nil {
-		return nil, err
-	}
-
-	response.ToResponsesOnly()
-	response.ExtraFields.RequestType = schemas.ResponsesRequest
-	response.ExtraFields.Provider = provider.GetProviderKey()
-	response.ExtraFields.ModelRequested = request.Model
-
-	return response, nil
-}
-
-// Embedding generates embeddings for the given input text(s) using Vertex AI.
-// All Vertex AI embedding models use the same response format regardless of the model type.
-// Returns a BifrostResponse containing the embedding(s) and any error that occurred.
-func (provider *VertexProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	if key.VertexKeyConfig == nil {
-		return nil, newConfigurationError("vertex key config is not set", schemas.Vertex)
-	}
-
-	projectID := key.VertexKeyConfig.ProjectID
-	if projectID == "" {
-		return nil, newConfigurationError("project ID is not set", schemas.Vertex)
-	}
-
-	region := key.VertexKeyConfig.Region
-	if region == "" {
-		return nil, newConfigurationError("region is not set in key config", schemas.Vertex)
-	}
-
-	// Use centralized Vertex converter
-	reqBody := vertex.ToVertexEmbeddingRequest(request)
-	if reqBody == nil {
-		return nil, newConfigurationError("embedding input texts are empty", schemas.Vertex)
-	}
-
-	// All Vertex AI embedding models use the same native Vertex embedding API
-	return provider.handleVertexEmbedding(ctx, request.Model, key, reqBody, request.Params)
-}
-
-// handleVertexEmbedding handles embedding requests using Vertex's native embedding API
-// This is used for all Vertex AI embedding models as they all use the same response format
-func (provider *VertexProvider) handleVertexEmbedding(ctx context.Context, model string, key schemas.Key, vertexReq *vertex.VertexEmbeddingRequest, params *schemas.EmbeddingParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	// Use the typed request directly
-	jsonBody, err := sonic.Marshal(vertexReq)
-	if err != nil {
-		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, schemas.Vertex)
-	}
-
-	// Build the native Vertex embedding API endpoint
-	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:predict",
-		key.VertexKeyConfig.Region, key.VertexKeyConfig.ProjectID, key.VertexKeyConfig.Region, model)
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: &schemas.ErrorField{
-					Type:    schemas.Ptr(schemas.RequestCancelled),
-					Message: schemas.ErrRequestCancelled,
-					Error:   err,
-				},
-			}
-		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
-			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, schemas.Vertex)
-		}
-		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, schemas.Vertex)
-	}
-
-	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
-
-	req.Header.Set("Content-Type", "application/json")
-
-	client, err := getAuthClient(key)
-	if err != nil {
-		// Remove client from pool if auth client creation fails
-		removeVertexClient(key.VertexKeyConfig.AuthCredentials)
-		return nil, newBifrostOperationError("error creating auth client", err, schemas.Vertex)
-	}
-
-	// Make request
-	resp, err := client.Do(req)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: &schemas.ErrorField{
-					Type:    schemas.Ptr(schemas.RequestCancelled),
-					Message: schemas.ErrRequestCancelled,
-					Error:   err,
-				},
-			}
-		}
-		if errors.Is(err, fasthttp.ErrTimeout) ||  errors.Is(err, context.DeadlineExceeded) {
-			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, schemas.Vertex)
-		}
-		// Remove client from pool for non-context errors (could be auth/network issues)
-		removeVertexClient(key.VertexKeyConfig.AuthCredentials)
-		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, schemas.Vertex)
-	}
-	defer resp.Body.Close()
-
-	// Handle error response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, newBifrostOperationError("error reading response", err, schemas.Vertex)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		// Remove client from pool for authentication/authorization errors
-		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			removeVertexClient(key.VertexKeyConfig.AuthCredentials)
-		}
-
-		// Try to parse Vertex's error format
-		var vertexError map[string]interface{}
-		if err := sonic.Unmarshal(body, &vertexError); err != nil {
-			return nil, newBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, schemas.Vertex)
-		}
-
-		// Extract error message from Vertex's error format
-		errorMessage := "Unknown error"
-		if errorObj, exists := vertexError["error"]; exists {
-			if errorMap, ok := errorObj.(map[string]interface{}); ok {
-				if message, exists := errorMap["message"]; exists {
-					if msgStr, ok := message.(string); ok {
-						errorMessage = msgStr
-					}
-				}
-			}
-		}
-
-		return nil, newProviderAPIError(errorMessage, nil, resp.StatusCode, schemas.Vertex, nil, nil)
-	}
-
-	// Parse Vertex's native embedding response using typed response
-	var vertexResponse vertex.VertexEmbeddingResponse
-	if err := sonic.Unmarshal(body, &vertexResponse); err != nil {
-		return nil, newBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, schemas.Vertex)
-	}
-
-	// Use centralized Vertex converter
-	bifrostResponse := vertexResponse.ToBifrostResponse()
-
-	// Set ExtraFields
-	bifrostResponse.ExtraFields.Provider = schemas.Vertex
-	bifrostResponse.ExtraFields.ModelRequested = model
-	bifrostResponse.ExtraFields.RequestType = schemas.EmbeddingRequest
-
-	// Set raw response if enabled
-	if provider.sendBackRawResponse {
-		// Convert back to map for raw response
-		rawResponseBytes, _ := sonic.Marshal(&vertexResponse)
-		var rawResponseMap map[string]interface{}
-		sonic.Unmarshal(rawResponseBytes, &rawResponseMap)
-		bifrostResponse.ExtraFields.RawResponse = rawResponseMap
-	}
-
-	return bifrostResponse, nil
-}
-
 // ChatCompletionStream performs a streaming chat completion request to the Vertex API.
 // It supports both OpenAI-style streaming (for non-Claude models) and Anthropic-style streaming (for Claude models).
 // Returns a channel of BifrostResponse objects for streaming results or an error if the request fails.
@@ -588,12 +420,12 @@ func (provider *VertexProvider) ChatCompletionStream(ctx context.Context, postHo
 			authHeader["Authorization"] = "Bearer " + key.Value
 		}
 		// Use shared OpenAI streaming logic
-		return handleOpenAIStreaming(
+		return handleOpenAIChatCompletionStreaming(
 			ctx,
 			client,
 			url,
 			request,
-			map[string]string{"Authorization": "Bearer " + key.Value},
+			authHeader,
 			provider.networkConfig.ExtraHeaders,
 			provider.sendBackRawResponse,
 			schemas.Vertex,
@@ -601,6 +433,182 @@ func (provider *VertexProvider) ChatCompletionStream(ctx context.Context, postHo
 			provider.logger,
 		)
 	}
+}
+
+func (provider *VertexProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
+	if err != nil {
+		return nil, err
+	}
+
+	response.ToResponsesOnly()
+	response.ExtraFields.RequestType = schemas.ResponsesRequest
+	response.ExtraFields.Provider = provider.GetProviderKey()
+	response.ExtraFields.ModelRequested = request.Model
+
+	return response, nil
+}
+
+func (provider *VertexProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	return provider.ChatCompletionStream(
+		ctx,
+		getResponsesChunkConverterCombinedPostHookRunner(postHookRunner),
+		key,
+		request.ToChatRequest(),
+	)
+}
+
+// Embedding generates embeddings for the given input text(s) using Vertex AI.
+// All Vertex AI embedding models use the same response format regardless of the model type.
+// Returns a BifrostResponse containing the embedding(s) and any error that occurred.
+func (provider *VertexProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	if key.VertexKeyConfig == nil {
+		return nil, newConfigurationError("vertex key config is not set", schemas.Vertex)
+	}
+
+	projectID := key.VertexKeyConfig.ProjectID
+	if projectID == "" {
+		return nil, newConfigurationError("project ID is not set", schemas.Vertex)
+	}
+
+	region := key.VertexKeyConfig.Region
+	if region == "" {
+		return nil, newConfigurationError("region is not set in key config", schemas.Vertex)
+	}
+
+	// Use centralized Vertex converter
+	reqBody := vertex.ToVertexEmbeddingRequest(request)
+	if reqBody == nil {
+		return nil, newConfigurationError("embedding input texts are empty", schemas.Vertex)
+	}
+
+	// All Vertex AI embedding models use the same native Vertex embedding API
+	return provider.handleVertexEmbedding(ctx, request.Model, key, reqBody, request.Params)
+}
+
+// handleVertexEmbedding handles embedding requests using Vertex's native embedding API
+// This is used for all Vertex AI embedding models as they all use the same response format
+func (provider *VertexProvider) handleVertexEmbedding(ctx context.Context, model string, key schemas.Key, vertexReq *vertex.VertexEmbeddingRequest, params *schemas.EmbeddingParameters) (*schemas.BifrostResponse, *schemas.BifrostError) {
+	// Use the typed request directly
+	jsonBody, err := sonic.Marshal(vertexReq)
+	if err != nil {
+		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, schemas.Vertex)
+	}
+
+	// Build the native Vertex embedding API endpoint
+	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:predict",
+		key.VertexKeyConfig.Region, key.VertexKeyConfig.ProjectID, key.VertexKeyConfig.Region, model)
+
+	// Create request
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: &schemas.ErrorField{
+					Type:    schemas.Ptr(schemas.RequestCancelled),
+					Message: schemas.ErrRequestCancelled,
+					Error:   err,
+				},
+			}
+		}
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, schemas.Vertex)
+		}
+		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, schemas.Vertex)
+	}
+
+	// Set any extra headers from network config
+	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client, err := getAuthClient(key)
+	if err != nil {
+		// Remove client from pool if auth client creation fails
+		removeVertexClient(key.VertexKeyConfig.AuthCredentials)
+		return nil, newBifrostOperationError("error creating auth client", err, schemas.Vertex)
+	}
+
+	// Make request
+	resp, err := client.Do(req)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: &schemas.ErrorField{
+					Type:    schemas.Ptr(schemas.RequestCancelled),
+					Message: schemas.ErrRequestCancelled,
+					Error:   err,
+				},
+			}
+		}
+		if errors.Is(err, http.ErrHandlerTimeout) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, newBifrostOperationError(schemas.ErrProviderRequestTimedOut, err, schemas.Vertex)
+		}
+		// Remove client from pool for non-context errors (could be auth/network issues)
+		removeVertexClient(key.VertexKeyConfig.AuthCredentials)
+		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, schemas.Vertex)
+	}
+	defer resp.Body.Close()
+
+	// Handle error response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, newBifrostOperationError("error reading response", err, schemas.Vertex)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		// Remove client from pool for authentication/authorization errors
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			removeVertexClient(key.VertexKeyConfig.AuthCredentials)
+		}
+
+		// Try to parse Vertex's error format
+		var vertexError map[string]interface{}
+		if err := sonic.Unmarshal(body, &vertexError); err != nil {
+			return nil, newBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, schemas.Vertex)
+		}
+
+		// Extract error message from Vertex's error format
+		errorMessage := "Unknown error"
+		if errorObj, exists := vertexError["error"]; exists {
+			if errorMap, ok := errorObj.(map[string]interface{}); ok {
+				if message, exists := errorMap["message"]; exists {
+					if msgStr, ok := message.(string); ok {
+						errorMessage = msgStr
+					}
+				}
+			}
+		}
+
+		return nil, newProviderAPIError(errorMessage, nil, resp.StatusCode, schemas.Vertex, nil, nil)
+	}
+
+	// Parse Vertex's native embedding response using typed response
+	var vertexResponse vertex.VertexEmbeddingResponse
+	if err := sonic.Unmarshal(body, &vertexResponse); err != nil {
+		return nil, newBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, schemas.Vertex)
+	}
+
+	// Use centralized Vertex converter
+	bifrostResponse := vertexResponse.ToBifrostResponse()
+
+	// Set ExtraFields
+	bifrostResponse.ExtraFields.Provider = schemas.Vertex
+	bifrostResponse.ExtraFields.ModelRequested = model
+	bifrostResponse.ExtraFields.RequestType = schemas.EmbeddingRequest
+
+	// Set raw response if enabled
+	if provider.sendBackRawResponse {
+		// Convert back to map for raw response
+		rawResponseBytes, _ := sonic.Marshal(&vertexResponse)
+		var rawResponseMap map[string]interface{}
+		sonic.Unmarshal(rawResponseBytes, &rawResponseMap)
+		bifrostResponse.ExtraFields.RawResponse = rawResponseMap
+	}
+
+	return bifrostResponse, nil
 }
 
 func (provider *VertexProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
@@ -617,8 +625,4 @@ func (provider *VertexProvider) Transcription(ctx context.Context, key schemas.K
 
 func (provider *VertexProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "vertex")
-}
-
-func (provider *VertexProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError("responses stream", "vertex")
 }
