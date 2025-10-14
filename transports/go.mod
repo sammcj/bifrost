@@ -9,14 +9,14 @@ require (
 	github.com/fasthttp/router v1.5.4
 	github.com/fasthttp/websocket v1.5.12
 	github.com/google/uuid v1.6.0
-	github.com/maximhq/bifrost/core v1.2.5
-	github.com/maximhq/bifrost/framework v1.1.5
-	github.com/maximhq/bifrost/plugins/governance v1.3.5
-	github.com/maximhq/bifrost/plugins/logging v1.3.5
-	github.com/maximhq/bifrost/plugins/maxim v1.4.5
-	github.com/maximhq/bifrost/plugins/otel v1.0.5
-	github.com/maximhq/bifrost/plugins/semanticcache v1.3.5
-	github.com/maximhq/bifrost/plugins/telemetry v1.3.5
+	github.com/maximhq/bifrost/core v1.2.6
+	github.com/maximhq/bifrost/framework v1.1.6
+	github.com/maximhq/bifrost/plugins/governance v1.3.6
+	github.com/maximhq/bifrost/plugins/logging v1.3.6
+	github.com/maximhq/bifrost/plugins/maxim v1.4.6
+	github.com/maximhq/bifrost/plugins/otel v1.0.6
+	github.com/maximhq/bifrost/plugins/semanticcache v1.3.6
+	github.com/maximhq/bifrost/plugins/telemetry v1.3.6
 	github.com/prometheus/client_golang v1.23.0
 	github.com/valyala/fasthttp v1.65.0
 	gorm.io/gorm v1.31.0
@@ -27,6 +27,7 @@ require (
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.38.0 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.31.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.4 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.3 // indirect
