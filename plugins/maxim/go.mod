@@ -5,7 +5,7 @@ go 1.24.1
 toolchain go1.24.3
 
 require (
-	github.com/maximhq/bifrost/core v1.2.5
+	github.com/maximhq/bifrost/core v1.2.6
 	github.com/maximhq/maxim-go v0.1.13
 )
 
@@ -15,6 +15,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.8.0 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.38.0 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.31.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.4 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.3 // indirect
