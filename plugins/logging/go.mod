@@ -6,8 +6,8 @@ toolchain go1.24.3
 
 require (
 	github.com/bytedance/sonic v1.14.0
-	github.com/maximhq/bifrost/core v1.2.5
-	github.com/maximhq/bifrost/framework v1.1.5
+	github.com/maximhq/bifrost/core v1.2.6
+	github.com/maximhq/bifrost/framework v1.1.6
 )
 
 require (
@@ -15,6 +15,7 @@ require (
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.38.0 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.31.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.4 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.3 // indirect
