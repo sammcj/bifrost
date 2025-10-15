@@ -12,6 +12,7 @@ import (
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
+	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/pricing"
 )
 
@@ -200,7 +201,7 @@ func (p *GovernancePlugin) TransportInterceptor(url string, headers map[string]s
 		// No provider configs, continue without modification
 		return headers, body, nil
 	}
-	allowedProviderConfigs := make([]configstore.TableVirtualKeyProviderConfig, 0)
+	allowedProviderConfigs := make([]configstoreTables.TableVirtualKeyProviderConfig, 0)
 	for _, config := range providerConfigs {
 		if len(config.AllowedModels) == 0 || slices.Contains(config.AllowedModels, modelStr) {
 			allowedProviderConfigs = append(allowedProviderConfigs, config)

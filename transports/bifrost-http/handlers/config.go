@@ -3,12 +3,17 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
+	"time"
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/framework"
 	"github.com/maximhq/bifrost/framework/configstore"
+	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
+	"github.com/maximhq/bifrost/framework/pricing"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 )
@@ -16,6 +21,7 @@ import (
 // ConfigManager is the interface for the config manager
 type ConfigManager interface {
 	ReloadClientConfigFromConfigStore() error
+	ReloadPricingManager() error
 }
 
 // ConfigHandler manages runtime configuration updates for Bifrost.
@@ -53,7 +59,6 @@ func (h *ConfigHandler) getVersion(ctx *fasthttp.RequestCtx) {
 
 // getConfig handles GET /config - Get the current configuration
 func (h *ConfigHandler) getConfig(ctx *fasthttp.RequestCtx) {
-
 	var mapConfig = make(map[string]any)
 
 	if query := string(ctx.QueryArgs().Peek("from_db")); query == "true" {
@@ -70,10 +75,34 @@ func (h *ConfigHandler) getConfig(ctx *fasthttp.RequestCtx) {
 		if cc != nil {
 			mapConfig["client_config"] = *cc
 		}
+		// Fetching framework config
+		fc, err := h.store.ConfigStore.GetFrameworkConfig(ctx)
+		if err != nil {
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to fetch framework config from db: %v", err), h.logger)
+			return
+		}
+		if fc != nil {
+			mapConfig["framework_config"] = *fc
+		} else {
+			mapConfig["framework_config"] = configstoreTables.TableFrameworkConfig{
+				PricingURL:          bifrost.Ptr(pricing.DefaultPricingURL),
+				PricingSyncInterval: bifrost.Ptr(int64(pricing.DefaultPricingSyncInterval.Seconds())),
+			}
+		}
 	} else {
 		mapConfig["client_config"] = h.store.ClientConfig
+		if h.store.FrameworkConfig == nil {
+			mapConfig["framework_config"] = configstoreTables.TableFrameworkConfig{
+				PricingURL:          bifrost.Ptr(pricing.DefaultPricingURL),
+				PricingSyncInterval: bifrost.Ptr(int64(pricing.DefaultPricingSyncInterval.Seconds())),
+			}
+		} else {
+			mapConfig["framework_config"] = configstoreTables.TableFrameworkConfig{
+				PricingURL:          h.store.FrameworkConfig.Pricing.PricingURL,
+				PricingSyncInterval: bifrost.Ptr(int64(*h.store.FrameworkConfig.Pricing.PricingSyncInterval)),
+			}
+		}
 	}
-
 	mapConfig["is_db_connected"] = h.store.ConfigStore != nil
 	mapConfig["is_cache_connected"] = h.store.VectorStore != nil
 	mapConfig["is_logs_connected"] = h.store.LogsStore != nil
@@ -90,10 +119,37 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	var req configstore.ClientConfig
+	payload := struct {
+		ClientConfig    configstore.ClientConfig               `json:"client_config"`
+		FrameworkConfig configstoreTables.TableFrameworkConfig `json:"framework_config"`
+	}{}
 
-	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
+	if err := json.Unmarshal(ctx.PostBody(), &payload); err != nil {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid request format: %v", err), h.logger)
+		return
+	}
+
+	// Validating framework config
+	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != pricing.DefaultPricingURL {
+		// Checking the accessibility of the pricing URL
+		resp, err := http.Get(*payload.FrameworkConfig.PricingURL)
+		if err != nil {
+			h.logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err), h.logger)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			h.logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode), h.logger)
+			return
+		}
+	}
+
+	// Checking the pricing sync interval
+	if payload.FrameworkConfig.PricingSyncInterval != nil && *payload.FrameworkConfig.PricingSyncInterval <= 0 {
+		h.logger.Warn("pricing sync interval must be greater than 0")
+		SendError(ctx, fasthttp.StatusBadRequest, "pricing sync interval must be greater than 0", h.logger)
 		return
 	}
 
@@ -101,26 +157,26 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	currentConfig := h.store.ClientConfig
 	updatedConfig := currentConfig
 
-	if req.DropExcessRequests != currentConfig.DropExcessRequests {
-		h.client.UpdateDropExcessRequests(req.DropExcessRequests)
-		updatedConfig.DropExcessRequests = req.DropExcessRequests
+	if payload.ClientConfig.DropExcessRequests != currentConfig.DropExcessRequests {
+		h.client.UpdateDropExcessRequests(payload.ClientConfig.DropExcessRequests)
+		updatedConfig.DropExcessRequests = payload.ClientConfig.DropExcessRequests
 	}
 
-	if !slices.Equal(req.PrometheusLabels, currentConfig.PrometheusLabels) {
-		updatedConfig.PrometheusLabels = req.PrometheusLabels
+	if !slices.Equal(payload.ClientConfig.PrometheusLabels, currentConfig.PrometheusLabels) {
+		updatedConfig.PrometheusLabels = payload.ClientConfig.PrometheusLabels
 	}
 
-	if !slices.Equal(req.AllowedOrigins, currentConfig.AllowedOrigins) {
-		updatedConfig.AllowedOrigins = req.AllowedOrigins
+	if !slices.Equal(payload.ClientConfig.AllowedOrigins, currentConfig.AllowedOrigins) {
+		updatedConfig.AllowedOrigins = payload.ClientConfig.AllowedOrigins
 	}
 
-	updatedConfig.InitialPoolSize = req.InitialPoolSize
-	updatedConfig.EnableLogging = req.EnableLogging
-	updatedConfig.EnableGovernance = req.EnableGovernance
-	updatedConfig.EnforceGovernanceHeader = req.EnforceGovernanceHeader
-	updatedConfig.AllowDirectKeys = req.AllowDirectKeys
-	updatedConfig.MaxRequestBodySizeMB = req.MaxRequestBodySizeMB
-	updatedConfig.EnableLiteLLMFallbacks = req.EnableLiteLLMFallbacks
+	updatedConfig.InitialPoolSize = payload.ClientConfig.InitialPoolSize
+	updatedConfig.EnableLogging = payload.ClientConfig.EnableLogging
+	updatedConfig.EnableGovernance = payload.ClientConfig.EnableGovernance
+	updatedConfig.EnforceGovernanceHeader = payload.ClientConfig.EnforceGovernanceHeader
+	updatedConfig.AllowDirectKeys = payload.ClientConfig.AllowDirectKeys
+	updatedConfig.MaxRequestBodySizeMB = payload.ClientConfig.MaxRequestBodySizeMB
+	updatedConfig.EnableLiteLLMFallbacks = payload.ClientConfig.EnableLiteLLMFallbacks
 
 	// Update the store with the new config
 	h.store.ClientConfig = updatedConfig
@@ -130,13 +186,82 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to save configuration: %v", err), h.logger)
 		return
 	}
-
+	// Reloading client config from config store
 	if err := h.configManager.ReloadClientConfigFromConfigStore(); err != nil {
 		h.logger.Warn(fmt.Sprintf("failed to reload client config from config store: %v", err))
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to reload client config from config store: %v", err), h.logger)
 		return
 	}
-
+	// Fetching existing framework config
+	frameworkConfig, err := h.store.ConfigStore.GetFrameworkConfig(ctx)
+	if err != nil {
+		h.logger.Warn(fmt.Sprintf("failed to get framework config from store: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to get framework config from store: %v", err), h.logger)
+		return
+	}
+	// if framework config is nil, we will use the default pricing config
+	if frameworkConfig == nil {
+		frameworkConfig = &configstoreTables.TableFrameworkConfig{
+			ID:                  0,
+			PricingURL:          bifrost.Ptr(pricing.DefaultPricingURL),
+			PricingSyncInterval: bifrost.Ptr(int64(pricing.DefaultPricingSyncInterval.Seconds())),
+		}
+	}
+	// Handling individual nil cases
+	if frameworkConfig.PricingURL == nil {
+		frameworkConfig.PricingURL = bifrost.Ptr(pricing.DefaultPricingURL)
+	}
+	if frameworkConfig.PricingSyncInterval == nil {
+		frameworkConfig.PricingSyncInterval = bifrost.Ptr(int64(pricing.DefaultPricingSyncInterval.Seconds()))
+	}
+	// Updating framework config
+	shouldReloadFrameworkConfig := false
+	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != *frameworkConfig.PricingURL {
+		// Checking the accessibility of the pricing URL
+		resp, err := http.Get(*payload.FrameworkConfig.PricingURL)
+		if err != nil {
+			h.logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err), h.logger)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			h.logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode), h.logger)
+			return
+		}
+		frameworkConfig.PricingURL = payload.FrameworkConfig.PricingURL
+		shouldReloadFrameworkConfig = true
+	}
+	if payload.FrameworkConfig.PricingSyncInterval != nil {
+		syncInterval := int64(*payload.FrameworkConfig.PricingSyncInterval)
+		if syncInterval != *frameworkConfig.PricingSyncInterval {
+			frameworkConfig.PricingSyncInterval = &syncInterval
+			shouldReloadFrameworkConfig = true
+		}
+	}
+	if shouldReloadFrameworkConfig {
+		var syncDuration time.Duration
+		if frameworkConfig.PricingSyncInterval != nil {
+			syncDuration = time.Duration(*frameworkConfig.PricingSyncInterval) * time.Second
+		} else {
+			syncDuration = pricing.DefaultPricingSyncInterval
+		}
+		h.store.FrameworkConfig = &framework.FrameworkConfig{
+			Pricing: &pricing.Config{
+				PricingURL:          frameworkConfig.PricingURL,
+				PricingSyncInterval: &syncDuration,
+			},
+		}
+		// Saving framework config
+		if err := h.store.ConfigStore.UpdateFrameworkConfig(ctx, frameworkConfig); err != nil {
+			h.logger.Warn(fmt.Sprintf("failed to save framework configuration: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to save framework configuration: %v", err), h.logger)
+			return
+		}
+		// Reloading pricing manager
+		h.configManager.ReloadPricingManager()
+	}
 	ctx.SetStatusCode(fasthttp.StatusOK)
 	SendJSON(ctx, map[string]any{
 		"status":  "success",

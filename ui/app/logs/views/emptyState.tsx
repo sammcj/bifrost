@@ -23,7 +23,7 @@ type Examples = {
 };
 
 // Common editor options to reduce duplication
-const EDITOR_OPTIONS = {
+const EditorOptions = {
 	scrollBeyondLastLine: false,
 	minimap: { enabled: false },
 	lineNumbers: "off",
@@ -69,7 +69,7 @@ function CodeBlock({ code, language, onLanguageChange, showLanguageSelect = fals
 					<Copy className="size-4" />
 				</Button>
 			</div>
-			<CodeEditor className="w-full" code={code} lang={language} readonly={readonly} height={300} fontSize={14} options={EDITOR_OPTIONS} />
+			<CodeEditor className="w-full" code={code} lang={language} readonly={readonly} height={300} fontSize={14} options={EditorOptions} />
 		</div>
 	);
 }
@@ -244,7 +244,7 @@ const result = await chain.invoke({ input: "What is LangChain?" });`,
 	}, []);
 
 	const isUnexpectedError = error && error.includes("An unexpected error occurred");
-
+	
 	return (
 		<div className="dark:bg-card flex w-full flex-col items-center justify-center space-y-8 bg-white">
 			{error && (

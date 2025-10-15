@@ -213,9 +213,16 @@ export interface LatestReleaseResponse {
 	changelogUrl: string;
 }
 
+export interface FrameworkConfig {
+	id: number;
+	pricing_url: string;
+	pricing_sync_interval: number;
+}
+
 // Bifrost Config
 export interface BifrostConfig {
 	client_config: CoreConfig;
+	framework_config: FrameworkConfig;
 	is_db_connected: boolean;
 	is_cache_connected: boolean;
 	is_logs_connected: boolean;

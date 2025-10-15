@@ -6,8 +6,9 @@ import (
 	"fmt"
 
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/framework/migrator"
+	"github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/logstore"
+	"github.com/maximhq/bifrost/framework/migrator"
 	"github.com/maximhq/bifrost/framework/vectorstore"
 	"gorm.io/gorm"
 )
@@ -18,6 +19,10 @@ type ConfigStore interface {
 	// Client config CRUD
 	UpdateClientConfig(ctx context.Context, config *ClientConfig) error
 	GetClientConfig(ctx context.Context) (*ClientConfig, error)
+
+	// Framework config CRUD
+	UpdateFrameworkConfig(ctx context.Context, config *tables.TableFrameworkConfig) error
+	GetFrameworkConfig(ctx context.Context) (*tables.TableFrameworkConfig, error)
 
 	// Provider config CRUD
 	UpdateProvidersConfig(ctx context.Context, providers map[schemas.ModelProvider]ProviderConfig) error
@@ -43,66 +48,66 @@ type ConfigStore interface {
 	GetEnvKeys(ctx context.Context) (map[string][]EnvKeyInfo, error)
 
 	// Config CRUD
-	GetConfig(ctx context.Context, key string) (*TableConfig, error)
-	UpdateConfig(ctx context.Context, config *TableConfig, tx ...*gorm.DB) error
+	GetConfig(ctx context.Context, key string) (*tables.TableConfig, error)
+	UpdateConfig(ctx context.Context, config *tables.TableConfig, tx ...*gorm.DB) error
 
 	// Plugins CRUD
-	GetPlugins(ctx context.Context) ([]TablePlugin, error)
-	GetPlugin(ctx context.Context, name string) (*TablePlugin, error)
-	CreatePlugin(ctx context.Context, plugin *TablePlugin, tx ...*gorm.DB) error
-	UpdatePlugin(ctx context.Context, plugin *TablePlugin, tx ...*gorm.DB) error
+	GetPlugins(ctx context.Context) ([]tables.TablePlugin, error)
+	GetPlugin(ctx context.Context, name string) (*tables.TablePlugin, error)
+	CreatePlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error
+	UpdatePlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error
 	DeletePlugin(ctx context.Context, name string, tx ...*gorm.DB) error
 
 	// Governance config CRUD
-	GetVirtualKeys(ctx context.Context) ([]TableVirtualKey, error)
-	GetVirtualKey(ctx context.Context, id string) (*TableVirtualKey, error)
-	GetVirtualKeyByValue(ctx context.Context, value string) (*TableVirtualKey, error)
-	CreateVirtualKey(ctx context.Context, virtualKey *TableVirtualKey, tx ...*gorm.DB) error
-	UpdateVirtualKey(ctx context.Context, virtualKey *TableVirtualKey, tx ...*gorm.DB) error
+	GetVirtualKeys(ctx context.Context) ([]tables.TableVirtualKey, error)
+	GetVirtualKey(ctx context.Context, id string) (*tables.TableVirtualKey, error)
+	GetVirtualKeyByValue(ctx context.Context, value string) (*tables.TableVirtualKey, error)
+	CreateVirtualKey(ctx context.Context, virtualKey *tables.TableVirtualKey, tx ...*gorm.DB) error
+	UpdateVirtualKey(ctx context.Context, virtualKey *tables.TableVirtualKey, tx ...*gorm.DB) error
 	DeleteVirtualKey(ctx context.Context, id string) error
 
 	// Virtual key provider config CRUD
-	GetVirtualKeyProviderConfigs(ctx context.Context, virtualKeyID string) ([]TableVirtualKeyProviderConfig, error)
-	CreateVirtualKeyProviderConfig(ctx context.Context, virtualKeyProviderConfig *TableVirtualKeyProviderConfig, tx ...*gorm.DB) error
-	UpdateVirtualKeyProviderConfig(ctx context.Context, virtualKeyProviderConfig *TableVirtualKeyProviderConfig, tx ...*gorm.DB) error
+	GetVirtualKeyProviderConfigs(ctx context.Context, virtualKeyID string) ([]tables.TableVirtualKeyProviderConfig, error)
+	CreateVirtualKeyProviderConfig(ctx context.Context, virtualKeyProviderConfig *tables.TableVirtualKeyProviderConfig, tx ...*gorm.DB) error
+	UpdateVirtualKeyProviderConfig(ctx context.Context, virtualKeyProviderConfig *tables.TableVirtualKeyProviderConfig, tx ...*gorm.DB) error
 	DeleteVirtualKeyProviderConfig(ctx context.Context, id uint, tx ...*gorm.DB) error
 
 	// Team CRUD
-	GetTeams(ctx context.Context, customerID string) ([]TableTeam, error)
-	GetTeam(ctx context.Context, id string) (*TableTeam, error)
-	CreateTeam(ctx context.Context, team *TableTeam, tx ...*gorm.DB) error
-	UpdateTeam(ctx context.Context, team *TableTeam, tx ...*gorm.DB) error
+	GetTeams(ctx context.Context, customerID string) ([]tables.TableTeam, error)
+	GetTeam(ctx context.Context, id string) (*tables.TableTeam, error)
+		CreateTeam(ctx context.Context, team *tables.TableTeam, tx ...*gorm.DB) error
+	UpdateTeam(ctx context.Context, team *tables.TableTeam, tx ...*gorm.DB) error
 	DeleteTeam(ctx context.Context, id string) error
 
 	// Customer CRUD
-	GetCustomers(ctx context.Context) ([]TableCustomer, error)
-	GetCustomer(ctx context.Context, id string) (*TableCustomer, error)
-	CreateCustomer(ctx context.Context, customer *TableCustomer, tx ...*gorm.DB) error
-	UpdateCustomer(ctx context.Context, customer *TableCustomer, tx ...*gorm.DB) error
+	GetCustomers(ctx context.Context) ([]tables.TableCustomer, error)
+	GetCustomer(ctx context.Context, id string) (*tables.TableCustomer, error)
+	CreateCustomer(ctx context.Context, customer *tables.TableCustomer, tx ...*gorm.DB) error
+	UpdateCustomer(ctx context.Context, customer *tables.TableCustomer, tx ...*gorm.DB) error
 	DeleteCustomer(ctx context.Context, id string) error
 
 	// Rate limit CRUD
-	GetRateLimit(ctx context.Context, id string) (*TableRateLimit, error)
-	CreateRateLimit(ctx context.Context, rateLimit *TableRateLimit, tx ...*gorm.DB) error
-	UpdateRateLimit(ctx context.Context, rateLimit *TableRateLimit, tx ...*gorm.DB) error
-	UpdateRateLimits(ctx context.Context, rateLimits []*TableRateLimit, tx ...*gorm.DB) error
+	GetRateLimit(ctx context.Context, id string) (*tables.TableRateLimit, error)
+	CreateRateLimit(ctx context.Context, rateLimit *tables.TableRateLimit, tx ...*gorm.DB) error
+	UpdateRateLimit(ctx context.Context, rateLimit *tables.TableRateLimit, tx ...*gorm.DB) error
+	UpdateRateLimits(ctx context.Context, rateLimits []*tables.TableRateLimit, tx ...*gorm.DB) error
 
 	// Budget CRUD
-	GetBudgets(ctx context.Context) ([]TableBudget, error)
-	GetBudget(ctx context.Context, id string, tx ...*gorm.DB) (*TableBudget, error)
-	CreateBudget(ctx context.Context, budget *TableBudget, tx ...*gorm.DB) error
-	UpdateBudget(ctx context.Context, budget *TableBudget, tx ...*gorm.DB) error
-	UpdateBudgets(ctx context.Context, budgets []*TableBudget, tx ...*gorm.DB) error
+	GetBudgets(ctx context.Context) ([]tables.TableBudget, error)
+	GetBudget(ctx context.Context, id string, tx ...*gorm.DB) (*tables.TableBudget, error)
+	CreateBudget(ctx context.Context, budget *tables.TableBudget, tx ...*gorm.DB) error
+	UpdateBudget(ctx context.Context, budget *tables.TableBudget, tx ...*gorm.DB) error
+	UpdateBudgets(ctx context.Context, budgets []*tables.TableBudget, tx ...*gorm.DB) error
 
 	GetGovernanceConfig(ctx context.Context) (*GovernanceConfig, error)
 
 	// Model pricing CRUD
-	GetModelPrices(ctx context.Context) ([]TableModelPricing, error)
-	CreateModelPrices(ctx context.Context, pricing *TableModelPricing, tx ...*gorm.DB) error
+	GetModelPrices(ctx context.Context) ([]tables.TableModelPricing, error)
+	CreateModelPrices(ctx context.Context, pricing *tables.TableModelPricing, tx ...*gorm.DB) error
 	DeleteModelPrices(ctx context.Context, tx ...*gorm.DB) error
 
 	// Key management
-	GetKeysByIDs(ctx context.Context, ids []string) ([]TableKey, error)
+	GetKeysByIDs(ctx context.Context, ids []string) ([]tables.TableKey, error)
 
 	// Generic transaction manager
 	ExecuteTransaction(ctx context.Context, fn func(tx *gorm.DB) error) error

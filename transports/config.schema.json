@@ -7,8 +7,7 @@
   "properties": {
     "encryption_key": {
       "type": "string",
-      "description": "Encryption key for the configuration. If not provided, a default key will be used. You can set the value as env.<ENV_VAR_NAME> to use an environment variable. We also read encryption key from BIFROST_ENCRYPTION_KEY environment variable.",
-      "default": "bifrost-default-encryption-key-32b"
+      "description": "You can set the value as env.<ENV_VAR_NAME> to use an environment variable. We also read encryption key from BIFROST_ENCRYPTION_KEY environment variable. Note: once set, the encryption key cannot be changed unless you clean up the database. Accepts any string; a secure 32-byte AES-256 key will be derived using Argon2id KDF. If not provided, data will be saved in plain text. Recommended: use a passphrase of at least 16 bytes for better security"
     },
     "client": {
       "type": "object",
@@ -71,6 +70,15 @@
         "enable_litellm_fallbacks": {
           "type": "boolean",
           "description": "Enable litellm-specific fallbacks for text completion for Groq"
+        }
+      },
+      "additionalProperties": false
+    },
+    "framework": {
+      "type": "object",
+      "properties": {
+        "pricing": {
+          "$ref": "#/$defs/pricing_config"
         }
       },
       "additionalProperties": false
@@ -655,6 +663,25 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "pricing_config": {
+      "type": "object",
+      "properties": {
+        "pricing_url": {
+          "type": "string",
+          "description": "Pricing URL",
+          "optional": true,
+          "format": "uri"
+        },
+        "pricing_sync_interval": {
+          "type": "integer",
+          "description": "Pricing sync interval in seconds. Default is 24 hours. Minimum is 3600 seconds (1 hour).",
+          "default": 86400,
+          "optional": true,
+          "minimum": 3600
+        }
+      },
+      "additionalProperties": false
+    },
     "network_config": {
       "type": "object",
       "properties": {
