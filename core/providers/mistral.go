@@ -67,7 +67,7 @@ func (provider *MistralProvider) GetProviderKey() schemas.ModelProvider {
 }
 
 // TextCompletion is not supported by the Mistral provider.
-func (provider *MistralProvider) TextCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *MistralProvider) TextCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (*schemas.BifrostTextCompletionResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("text completion", "mistral")
 }
 
@@ -79,7 +79,7 @@ func (provider *MistralProvider) TextCompletionStream(ctx context.Context, postH
 }
 
 // ChatCompletion performs a chat completion request to the Mistral API.
-func (provider *MistralProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *MistralProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 	return handleOpenAIChatCompletionRequest(
 		ctx,
 		provider.client,
@@ -114,13 +114,13 @@ func (provider *MistralProvider) ChatCompletionStream(ctx context.Context, postH
 }
 
 // Responses performs a responses request to the Mistral API.
-func (provider *MistralProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
+func (provider *MistralProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
+	chatResponse, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
 	if err != nil {
 		return nil, err
 	}
 
-	response.ToResponsesOnly()
+	response := chatResponse.ToBifrostResponsesResponse()
 	response.ExtraFields.RequestType = schemas.ResponsesRequest
 	response.ExtraFields.Provider = provider.GetProviderKey()
 	response.ExtraFields.ModelRequested = request.Model
@@ -140,7 +140,7 @@ func (provider *MistralProvider) ResponsesStream(ctx context.Context, postHookRu
 
 // Embedding generates embeddings for the given input text(s) using the Mistral API.
 // Supports Mistral's embedding models and returns a BifrostResponse containing the embedding(s).
-func (provider *MistralProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *MistralProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostEmbeddingResponse, *schemas.BifrostError) {
 	// Use the shared embedding request handler
 	return handleOpenAIEmbeddingRequest(
 		ctx,
@@ -156,7 +156,7 @@ func (provider *MistralProvider) Embedding(ctx context.Context, key schemas.Key,
 }
 
 // Speech is not supported by the Mistral provider.
-func (provider *MistralProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *MistralProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "mistral")
 }
 
@@ -166,7 +166,7 @@ func (provider *MistralProvider) SpeechStream(ctx context.Context, postHookRunne
 }
 
 // Transcription is not supported by the Mistral provider.
-func (provider *MistralProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *MistralProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "mistral")
 }
 

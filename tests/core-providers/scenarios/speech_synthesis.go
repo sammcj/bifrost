@@ -74,59 +74,30 @@ func RunSpeechSynthesisTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 					Fallbacks: testConfig.Fallbacks,
 				}
 
-				// Use retry framework for speech synthesis (can be resource intensive)
-				retryConfig := GetTestRetryConfigForScenario("SpeechSynthesis", testConfig)
-				retryContext := TestRetryContext{
-					ScenarioName: "SpeechSynthesis_" + tc.name,
-					ExpectedBehavior: map[string]interface{}{
-						"generate_audio":  true,
-						"voice_type":      tc.voiceType,
-						"format":          tc.format,
-						"min_audio_bytes": tc.expectMinBytes,
-					},
-					TestMetadata: map[string]interface{}{
-						"provider":    testConfig.Provider,
-						"model":       testConfig.SpeechSynthesisModel,
-						"voice":       voice,
-						"text_length": len(tc.text),
-					},
-				}
-
 				// Enhanced validation for speech synthesis
 				expectations := SpeechExpectations(tc.expectMinBytes)
 				expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 
-				response, bifrostErr := WithTestRetry(t, retryConfig, retryContext, expectations, "SpeechSynthesis_"+tc.name, func() (*schemas.BifrostResponse, *schemas.BifrostError) {
-					return client.SpeechRequest(ctx, request)
-				})
+				speechResponse, bifrostErr := client.SpeechRequest(ctx, request)
 				if bifrostErr != nil {
-					t.Fatalf("❌ SpeechSynthesis_"+tc.name+" request failed after retries: %v", GetErrorMessage(bifrostErr))
+					t.Fatalf("❌ SpeechSynthesis_"+tc.name+" request failed: %v", GetErrorMessage(bifrostErr))
 				}
 
-				// Additional speech-specific validations
-				if response.Speech == nil || response.Speech.Audio == nil {
-					t.Fatal("Speech synthesis response missing audio data")
+				// Validate using the new validation framework
+				result := ValidateSpeechResponse(t, speechResponse, bifrostErr, expectations, "SpeechSynthesis_"+tc.name)
+				if !result.Passed {
+					t.Fatalf("❌ Speech synthesis validation failed: %v", result.Errors)
 				}
 
-				audioSize := len(response.Speech.Audio)
-				if audioSize < tc.expectMinBytes {
-					t.Fatalf("Audio data too small: got %d bytes, expected at least %d", audioSize, tc.expectMinBytes)
-				}
-
-				if response.Object != "audio.speech" {
-					t.Logf("⚠️ Unexpected response object type: %s", response.Object)
-				}
-
-				if response.Model != testConfig.SpeechSynthesisModel {
-					t.Logf("⚠️ Model mismatch: expected %s, got %s", testConfig.SpeechSynthesisModel, response.Model)
-				}
+				// Additional speech-specific validations (complementary to main validation)
+				validateSpeechSynthesisSpecific(t, speechResponse, tc.expectMinBytes, testConfig.SpeechSynthesisModel)
 
 				// Save audio file for SST round-trip testing if requested
 				if tc.saveForSST {
 					tempDir := os.TempDir()
 					audioFileName := filepath.Join(tempDir, "tts_"+tc.name+"."+tc.format)
 
-					err := os.WriteFile(audioFileName, response.Speech.Audio, 0644)
+					err := os.WriteFile(audioFileName, speechResponse.Audio, 0644)
 					require.NoError(t, err, "Failed to save audio file for SST testing")
 
 					// Register cleanup to remove temp file
@@ -138,7 +109,7 @@ func RunSpeechSynthesisTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 				}
 
 				t.Logf("✅ Speech synthesis successful: %d bytes of %s audio generated for voice '%s'",
-					len(response.Speech.Audio), tc.format, voice)
+					len(speechResponse.Audio), tc.format, voice)
 			})
 		}
 	})
@@ -161,7 +132,7 @@ func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx c
 			that the speech synthesis can handle realistic use cases with substantial content.
 			`
 
-			voice := "shimmer"
+			voice := GetProviderVoice(testConfig.Provider, "tertiary")
 			request := &schemas.BifrostSpeechRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.SpeechSynthesisModel,
@@ -197,26 +168,30 @@ func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx c
 			expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 
 			response, bifrostErr := WithTestRetry(t, retryConfig, retryContext, expectations, "SpeechSynthesis_HD", func() (*schemas.BifrostResponse, *schemas.BifrostError) {
-				return client.SpeechRequest(ctx, request)
+				c, err := client.SpeechRequest(ctx, request)
+				if err != nil {
+					return nil, err
+				}
+				return &schemas.BifrostResponse{SpeechResponse: c}, nil
 			})
 			if bifrostErr != nil {
 				t.Fatalf("❌ SpeechSynthesis_HD request failed after retries: %v", GetErrorMessage(bifrostErr))
 			}
 
-			if response.Speech == nil || response.Speech.Audio == nil {
+			if response.SpeechResponse == nil || response.SpeechResponse.Audio == nil {
 				t.Fatal("HD speech synthesis response missing audio data")
 			}
 
-			audioSize := len(response.Speech.Audio)
+			audioSize := len(response.SpeechResponse.Audio)
 			if audioSize < 5000 {
 				t.Fatalf("HD audio data too small: got %d bytes, expected at least 5000", audioSize)
 			}
 
-			if response.Model != testConfig.SpeechSynthesisModel {
-				t.Logf("⚠️ Expected HD model, got: %s", response.Model)
+			if response.SpeechResponse.ExtraFields.ModelRequested != testConfig.SpeechSynthesisModel {
+				t.Logf("⚠️ Expected HD model, got: %s", response.SpeechResponse.ExtraFields.ModelRequested)
 			}
 
-			t.Logf("✅ HD speech synthesis successful: %d bytes generated", len(response.Speech.Audio))
+			t.Logf("✅ HD speech synthesis successful: %d bytes generated", len(response.SpeechResponse.Audio))
 		})
 
 		t.Run("AllVoiceOptions", func(t *testing.T) {
@@ -242,41 +217,48 @@ func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx c
 						Fallbacks: testConfig.Fallbacks,
 					}
 
-					retryConfig := GetTestRetryConfigForScenario("SpeechSynthesis_Voice", testConfig)
-					retryContext := TestRetryContext{
-						ScenarioName: "SpeechSynthesis_Voice_" + voiceType,
-						ExpectedBehavior: map[string]interface{}{
-							"generate_audio": true,
-							"voice_type":     voiceType,
-						},
-						TestMetadata: map[string]interface{}{
-							"provider": testConfig.Provider,
-							"voice":    voice,
-						},
-					}
-
 					expectations := SpeechExpectations(500)
 					expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 
-					response, bifrostErr := WithTestRetry(t, retryConfig, retryContext, expectations, "SpeechSynthesis_Voice_"+voiceType, func() (*schemas.BifrostResponse, *schemas.BifrostError) {
-						return client.SpeechRequest(ctx, request)
-					})
-
+					speechResponse, bifrostErr := client.SpeechRequest(ctx, request)
 					if bifrostErr != nil {
-						t.Fatalf("❌ SpeechSynthesis_Voice_"+voiceType+" request failed after retries: %v", GetErrorMessage(bifrostErr))
+						t.Fatalf("❌ SpeechSynthesis_Voice_"+voiceType+" request failed: %v", GetErrorMessage(bifrostErr))
 					}
 
-					if response.Speech == nil || response.Speech.Audio == nil {
+					if speechResponse.Audio == nil {
 						t.Fatalf("Voice %s (%s) missing audio data", voice, voiceType)
 					}
 
-					audioSize := len(response.Speech.Audio)
+					audioSize := len(speechResponse.Audio)
 					if audioSize < 500 {
 						t.Fatalf("Audio too small for voice %s: got %d bytes, expected at least 500", voice, audioSize)
 					}
-					t.Logf("✅ Voice %s (%s): %d bytes generated", voice, voiceType, len(response.Speech.Audio))
+					t.Logf("✅ Voice %s (%s): %d bytes generated", voice, voiceType, len(speechResponse.Audio))
 				})
 			}
 		})
 	})
+}
+
+// validateSpeechSynthesisSpecific performs speech-specific validation
+// This is complementary to the main validation framework and focuses on speech synthesis concerns
+func validateSpeechSynthesisSpecific(t *testing.T, response *schemas.BifrostSpeechResponse, expectMinBytes int, expectedModel string) {
+	if response == nil {
+		t.Fatal("Invalid speech synthesis response structure")
+	}
+
+	if response.Audio == nil {
+		t.Fatal("Speech synthesis response missing audio data")
+	}
+
+	audioSize := len(response.Audio)
+	if audioSize < expectMinBytes {
+		t.Fatalf("Audio data too small: got %d bytes, expected at least %d", audioSize, expectMinBytes)
+	}
+	
+	if expectedModel != "" && response.ExtraFields.ModelRequested != expectedModel {
+		t.Logf("⚠️ Expected model, got: %s", response.ExtraFields.ModelRequested)
+	}
+
+	t.Logf("✅ Audio validation passed: %d bytes generated", audioSize)
 }

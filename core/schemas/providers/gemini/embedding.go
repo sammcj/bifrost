@@ -52,3 +52,113 @@ func ToGeminiEmbeddingRequest(bifrostReq *schemas.BifrostEmbeddingRequest) *Gemi
 	}
 	return request
 }
+
+// ToGeminiEmbeddingResponse converts a BifrostResponse with embedding data to Gemini's embedding response format
+func ToGeminiEmbeddingResponse(bifrostResp *schemas.BifrostEmbeddingResponse) *GeminiEmbeddingResponse {
+	if bifrostResp == nil || len(bifrostResp.Data) == 0 {
+		return nil
+	}
+
+	geminiResp := &GeminiEmbeddingResponse{
+		Embeddings: make([]GeminiEmbedding, len(bifrostResp.Data)),
+	}
+
+	// Convert each embedding from Bifrost format to Gemini format
+	for i, embedding := range bifrostResp.Data {
+		var values []float32
+
+		// Extract embedding values from BifrostEmbeddingResponse
+		if embedding.Embedding.EmbeddingArray != nil {
+			values = embedding.Embedding.EmbeddingArray
+		} else if len(embedding.Embedding.Embedding2DArray) > 0 {
+			// If it's a 2D array, take the first array
+			values = embedding.Embedding.Embedding2DArray[0]
+		}
+
+		geminiEmbedding := GeminiEmbedding{
+			Values: values,
+		}
+
+		// Add statistics if available (token count from usage metadata)
+		if bifrostResp.Usage != nil {
+			geminiEmbedding.Statistics = &ContentEmbeddingStatistics{
+				TokenCount: int32(bifrostResp.Usage.PromptTokens),
+			}
+		}
+
+		geminiResp.Embeddings[i] = geminiEmbedding
+	}
+
+	// Set metadata if available (for Vertex API compatibility)
+	if bifrostResp.Usage != nil {
+		geminiResp.Metadata = &EmbedContentMetadata{
+			BillableCharacterCount: int32(bifrostResp.Usage.PromptTokens),
+		}
+	}
+
+	return geminiResp
+}
+
+// ToBifrostEmbeddingRequest converts a GeminiGenerationRequest to BifrostEmbeddingRequest format
+func (request *GeminiGenerationRequest) ToBifrostEmbeddingRequest() *schemas.BifrostEmbeddingRequest {
+	if request == nil {
+		return nil
+	}
+
+	provider, model := schemas.ParseModelString(request.Model, schemas.Gemini)
+
+	if provider == schemas.Vertex && request.IsEmbedding {
+		// Add google/ prefix for Bifrost if not already present
+		if !strings.HasPrefix(model, "google/") {
+			model = "google/" + model
+		}
+	}
+
+	// Create the embedding request
+	bifrostReq := &schemas.BifrostEmbeddingRequest{
+		Provider: provider,
+		Model:    model,
+	}
+
+	if len(request.Requests) > 0 {
+		embeddingRequest := request.Requests[0]
+		if embeddingRequest.Content != nil {
+			var texts []string
+			for _, part := range embeddingRequest.Content.Parts {
+				if part != nil && part.Text != "" {
+					texts = append(texts, part.Text)
+				}
+			}
+			if len(texts) > 0 {
+				bifrostReq.Input = &schemas.EmbeddingInput{}
+				if len(texts) == 1 {
+					bifrostReq.Input.Text = &texts[0]
+				} else {
+					bifrostReq.Input.Texts = texts
+				}
+			}
+		}
+
+		// Convert parameters
+		if embeddingRequest.OutputDimensionality != nil || embeddingRequest.TaskType != nil || embeddingRequest.Title != nil {
+			bifrostReq.Params = &schemas.EmbeddingParameters{}
+
+			if embeddingRequest.OutputDimensionality != nil {
+				bifrostReq.Params.Dimensions = embeddingRequest.OutputDimensionality
+			}
+
+			// Handle extra parameters
+			if embeddingRequest.TaskType != nil || embeddingRequest.Title != nil {
+				bifrostReq.Params.ExtraParams = make(map[string]interface{})
+				if embeddingRequest.TaskType != nil {
+					bifrostReq.Params.ExtraParams["taskType"] = embeddingRequest.TaskType
+				}
+				if embeddingRequest.Title != nil {
+					bifrostReq.Params.ExtraParams["title"] = embeddingRequest.Title
+				}
+			}
+		}
+	}
+
+	return bifrostReq
+}
