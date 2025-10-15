@@ -194,6 +194,7 @@ type BifrostChatRequest struct {
 	Fallbacks []Fallback      `json:"fallbacks,omitempty"`
 }
 
+// BifrostResponsesRequest is the request struct for responses requests.
 type BifrostResponsesRequest struct {
 	Provider  ModelProvider        `json:"provider"`
 	Model     string               `json:"model"`
@@ -202,6 +203,7 @@ type BifrostResponsesRequest struct {
 	Fallbacks []Fallback           `json:"fallbacks,omitempty"`
 }
 
+// BifrostEmbeddingRequest is the request struct for embedding requests.
 type BifrostEmbeddingRequest struct {
 	Provider  ModelProvider        `json:"provider"`
 	Model     string               `json:"model"`
@@ -210,6 +212,7 @@ type BifrostEmbeddingRequest struct {
 	Fallbacks []Fallback           `json:"fallbacks,omitempty"`
 }
 
+// BifrostSpeechRequest is the request struct for speech requests.
 type BifrostSpeechRequest struct {
 	Provider  ModelProvider     `json:"provider"`
 	Model     string            `json:"model"`
@@ -218,6 +221,7 @@ type BifrostSpeechRequest struct {
 	Fallbacks []Fallback        `json:"fallbacks,omitempty"`
 }
 
+// BifrostTranscriptionRequest is the request struct for transcription requests.
 type BifrostTranscriptionRequest struct {
 	Provider  ModelProvider            `json:"provider"`
 	Model     string                   `json:"model"`
@@ -301,6 +305,7 @@ type LLMUsage struct {
 	*ResponsesExtendedResponseUsage
 }
 
+// AudioLLMUsage represents token usage information for audio models.
 type AudioLLMUsage struct {
 	InputTokens        int                `json:"input_tokens"`
 	InputTokensDetails *AudioTokenDetails `json:"input_tokens_details,omitempty"`
@@ -308,6 +313,7 @@ type AudioLLMUsage struct {
 	TotalTokens        int                `json:"total_tokens"`
 }
 
+// AudioTokenDetails provides detailed information about audio token usage.
 type AudioTokenDetails struct {
 	TextTokens  int `json:"text_tokens"`
 	AudioTokens int `json:"audio_tokens"`
@@ -417,6 +423,7 @@ type BifrostError struct {
 	ExtraFields    BifrostErrorExtraFields `json:"extra_fields,omitempty"`
 }
 
+// StreamControl represents stream control options.
 type StreamControl struct {
 	LogError   *bool `json:"log_error,omitempty"`   // Optional: Controls logging of error
 	SkipStream *bool `json:"skip_stream,omitempty"` // Optional: Controls skipping of stream chunk
@@ -432,6 +439,7 @@ type ErrorField struct {
 	EventID *string     `json:"event_id,omitempty"`
 }
 
+// BifrostErrorExtraFields contains additional fields in an error response.
 type BifrostErrorExtraFields struct {
 	Provider       ModelProvider `json:"provider"`
 	ModelRequested string        `json:"model_requested"`

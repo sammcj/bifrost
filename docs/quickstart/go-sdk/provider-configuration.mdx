@@ -55,12 +55,10 @@ func (a *MyAccount) GetConfigForProvider(provider schemas.ModelProvider) (*schem
 Once providers are configured, you can make requests to any specific provider. This example shows how to send a request directly to Mistral's latest vision model. Bifrost handles the provider-specific API formatting automatically.
 
 ```go
-response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostChatRequest{
     Provider: schemas.Mistral,
     Model:    "pixtral-12b-latest",
-    Input: schemas.RequestInput{
-        ChatCompletionInput: &messages,
-    },
+    Input:    messages,
 })
 ```
 

@@ -8,7 +8,7 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
-// convertGenerationConfigToChatParameters converts Gemini GenerationConfig to ModelParameters
+// convertGenerationConfigToChatParameters converts Gemini GenerationConfig to ChatParameters
 func (r *GeminiGenerationRequest) convertGenerationConfigToChatParameters() *schemas.ChatParameters {
 	params := &schemas.ChatParameters{
 		ExtraParams: make(map[string]interface{}),

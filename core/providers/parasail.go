@@ -113,6 +113,7 @@ func (provider *ParasailProvider) ChatCompletionStream(ctx context.Context, post
 	)
 }
 
+// Responses performs a responses request to the Parasail API.
 func (provider *ParasailProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
 	if err != nil {
@@ -127,6 +128,7 @@ func (provider *ParasailProvider) Responses(ctx context.Context, key schemas.Key
 	return response, nil
 }
 
+// ResponsesStream performs a streaming responses request to the Parasail API.
 func (provider *ParasailProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,

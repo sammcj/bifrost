@@ -45,7 +45,7 @@ var anthropicTextResponsePool = sync.Pool{
 	},
 }
 
-// acquireAnthropicChatResponse gets an Anthropic chat response from the pool and resets it.
+// acquireAnthropicChatResponse gets an Anthropic chat response from the pool.
 func acquireAnthropicChatResponse() *anthropic.AnthropicMessageResponse {
 	resp := anthropicChatResponsePool.Get().(*anthropic.AnthropicMessageResponse)
 	*resp = anthropic.AnthropicMessageResponse{} // Reset the struct
@@ -59,7 +59,7 @@ func releaseAnthropicChatResponse(resp *anthropic.AnthropicMessageResponse) {
 	}
 }
 
-// acquireAnthropicTextResponse gets an Anthropic text response from the pool and resets it.
+// acquireAnthropicTextResponse gets an Anthropic text response from the pool.
 func acquireAnthropicTextResponse() *anthropic.AnthropicTextResponse {
 	resp := anthropicTextResponsePool.Get().(*anthropic.AnthropicTextResponse)
 	*resp = anthropic.AnthropicTextResponse{} // Reset the struct
@@ -311,7 +311,7 @@ func (provider *AnthropicProvider) ChatCompletionStream(ctx context.Context, pos
 	)
 }
 
-// handleAnthropicStreaming handles streaming for Anthropic-compatible APIs (Anthropic, Vertex Claude models).
+// handleAnthropicChatCompletionStreaming handles streaming for Anthropic-compatible APIs.
 // This shared function reduces code duplication between providers that use the same SSE event format.
 func handleAnthropicChatCompletionStreaming(
 	ctx context.Context,
@@ -549,6 +549,7 @@ func (provider *AnthropicProvider) Responses(ctx context.Context, key schemas.Ke
 	return bifrostResponse, nil
 }
 
+// ResponsesStream performs a streaming responses request to the Anthropic API.
 func (provider *AnthropicProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	if err := checkOperationAllowed(schemas.Anthropic, provider.customProviderConfig, schemas.ResponsesStreamRequest); err != nil {
 		return nil, err
@@ -761,18 +762,22 @@ func (provider *AnthropicProvider) Embedding(ctx context.Context, key schemas.Ke
 	return nil, newUnsupportedOperationError("embedding", "anthropic")
 }
 
+// Speech is not supported by the Anthropic provider.
 func (provider *AnthropicProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "anthropic")
 }
 
+// SpeechStream is not supported by the Anthropic provider.
 func (provider *AnthropicProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech stream", "anthropic")
 }
 
+// Transcription is not supported by the Anthropic provider.
 func (provider *AnthropicProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "anthropic")
 }
 
+// TranscriptionStream is not supported by the Anthropic provider.
 func (provider *AnthropicProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "anthropic")
 }

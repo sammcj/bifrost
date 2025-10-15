@@ -9,25 +9,23 @@ icon: "images"
 Send images to vision-capable models for analysis, description, and understanding. This example shows how to analyze an image from a URL using GPT-4o with high detail processing for better accuracy.
 
 ```go
-response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostChatRequest{
 	Provider: schemas.OpenAI,
 	Model:    "gpt-4o", // Using vision-capable model
-	Input: schemas.RequestInput{
-		ChatCompletionInput: &[]schemas.ChatMessage{
-			{
-				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
-					ContentBlocks: &[]schemas.ContentBlock{
-						{
-							Type: schemas.ContentBlockTypeText,
-							Text: bifrost.Ptr("What do you see in this image? Please describe it in detail."),
-						},
-						{
-							Type: schemas.ContentBlockTypeImage,
-							ImageURL: &schemas.ImageURLStruct{
-								URL:    "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
-								Detail: bifrost.Ptr("high"), // Optional: can be "low", "high", or "auto"
-							},
+	Input: []schemas.ChatMessage{
+		{
+			Role: schemas.ChatMessageRoleUser,
+			Content: &schemas.ChatMessageContent{
+				ContentBlocks: []schemas.ChatContentBlock{
+					{
+						Type: schemas.ChatContentBlockTypeText,
+						Text: schemas.Ptr("What do you see in this image? Please describe it in detail."),
+					},
+					{
+						Type: schemas.ChatContentBlockTypeImage,
+						ImageURLStruct: &schemas.ChatInputImage{
+							URL:    "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+							Detail: schemas.Ptr("high"), // Optional: can be "low", "high", or "auto"
 						},
 					},
 				},
@@ -50,25 +48,23 @@ If your chat application supports text input, you can add audio input and output
 ### Audio Input to Model
 
 ```go
-response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostChatRequest{
 	Provider: schemas.OpenAI,
 	Model:    "gpt-4o-audio-preview",
-	Input: schemas.RequestInput{
-		ChatCompletionInput: &[]schemas.ChatMessage{
-			{
-				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
-					ContentBlocks: &[]schemas.ContentBlock{
-						{
-							Type: schemas.ContentBlockTypeText,
-							Text: bifrost.Ptr("Please analyze this audio recording and summarize what was discussed."),
-						},
-						{
-							Type: schemas.ContentBlockTypeInputAudio,
-							InputAudio: &schemas.InputAudioStruct{
-								Data:   <"base64-encoded audio data containing the word 'Affirmative'>",
-								Format: "wav",
-							},
+	Input: []schemas.ChatMessage{
+		{
+			Role: schemas.ChatMessageRoleUser,
+			Content: &schemas.ChatMessageContent{
+				ContentBlocks: []schemas.ChatContentBlock{
+					{
+						Type: schemas.ChatContentBlockTypeText,
+						Text: schemas.Ptr("Please analyze this audio recording and summarize what was discussed."),
+					},
+					{
+						Type: schemas.ChatContentBlockTypeInputAudio,
+						InputAudio: &schemas.ChatInputAudio{
+							Data:   []byte("base64-encoded audio data containing the word 'Affirmative'"),
+							Format: "wav",
 						},
 					},
 				},
@@ -83,17 +79,17 @@ response, err := client.ChatCompletionRequest(context.Background(), &schemas.Bif
 Convert text into natural-sounding speech using AI voice models. This example demonstrates generating an MP3 audio file from text using the "alloy" voice. The result is saved to a local file for playback.
 
 ```go
-response, err := client.SpeechRequest(context.Background(), &schemas.BifrostRequest{
+response, err := client.SpeechRequest(context.Background(), &schemas.BifrostSpeechRequest{
 	Provider: schemas.OpenAI,
 	Model:    "tts-1", // Using text-to-speech model
-	Input: schemas.RequestInput{
-		SpeechInput: &schemas.SpeechInput{
-			Input: "Hello! This is a sample text that will be converted to speech using Bifrost's speech synthesis capabilities. The weather today is wonderful, and I hope you're having a great day!",
-			VoiceConfig: schemas.SpeechVoiceInput{
-				Voice: bifrost.Ptr("alloy"),
-			},
-			ResponseFormat: "mp3",
+	Input: &schemas.SpeechInput{
+		Input: "Hello! This is a sample text that will be converted to speech using Bifrost's speech synthesis capabilities. The weather today is wonderful, and I hope you're having a great day!",
+	},
+	Params: &schemas.SpeechParameters{
+		VoiceConfig: &schemas.SpeechVoiceInput{
+			Voice: schemas.Ptr("alloy"),
 		},
+		ResponseFormat: schemas.Ptr("mp3"),
 	},
 })
 
@@ -128,14 +124,14 @@ if err != nil {
 
 fmt.Printf("Loaded audio file %s (%d bytes) for transcription...\n", audioFilename, len(audioData))
 
-response, err := client.TranscriptionRequest(context.Background(), &schemas.BifrostRequest{
+response, err := client.TranscriptionRequest(context.Background(), &schemas.BifrostTranscriptionRequest{
 	Provider: schemas.OpenAI,
 	Model:    "whisper-1", // Using Whisper model for transcription
-	Input: schemas.RequestInput{
-		TranscriptionInput: &schemas.TranscriptionInput{
-			File:   audioData,
-			Prompt: bifrost.Ptr("This is a sample audio transcription from Bifrost speech synthesis."), // Optional: provide context
-		},
+	Input: &schemas.TranscriptionInput{
+		File: audioData,
+	},
+	Params: &schemas.TranscriptionParameters{
+		Prompt: schemas.Ptr("This is a sample audio transcription from Bifrost speech synthesis."), // Optional: provide context
 	},
 })
 
@@ -153,30 +149,28 @@ fmt.Printf("Transcription Result: %s\n", response.Transcribe.Text)
 Send multiple images in a single request for comparison or analysis. This is useful for comparing products, analyzing changes over time, or understanding relationships between different visual elements.
 
 ```go
-response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostChatRequest{
 	Provider: schemas.OpenAI,
 	Model:    "gpt-4o",
-	Input: schemas.RequestInput{
-		ChatCompletionInput: &[]schemas.ChatMessage{
-			{
-				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
-					ContentBlocks: &[]schemas.ContentBlock{
-						{
-							Type: schemas.ContentBlockTypeText,
-							Text: bifrost.Ptr("Compare these two images. What are the differences?"),
+	Input: []schemas.ChatMessage{
+		{
+			Role: schemas.ChatMessageRoleUser,
+			Content: &schemas.ChatMessageContent{
+				ContentBlocks: []schemas.ChatContentBlock{
+					{
+						Type: schemas.ChatContentBlockTypeText,
+						Text: schemas.Ptr("Compare these two images. What are the differences?"),
+					},
+					{
+						Type: schemas.ChatContentBlockTypeImage,
+						ImageURLStruct: &schemas.ChatInputImage{
+							URL: "https://example.com/image1.jpg",
 						},
-						{
-							Type: schemas.ContentBlockTypeImage,
-							ImageURL: &schemas.ImageURLStruct{
-								URL: "https://example.com/image1.jpg",
-							},
-						},
-						{
-							Type: schemas.ContentBlockTypeImage,
-							ImageURL: &schemas.ImageURLStruct{
-								URL: "https://example.com/image2.jpg",
-							},
+					},
+					{
+						Type: schemas.ChatContentBlockTypeImage,
+						ImageURLStruct: &schemas.ChatInputImage{
+							URL: "https://example.com/image2.jpg",
 						},
 					},
 				},
@@ -199,25 +193,23 @@ if err != nil {
 base64Image := base64.StdEncoding.EncodeToString(imageData)
 dataURL := fmt.Sprintf("data:image/jpeg;base64,%s", base64Image)
 
-response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostChatRequest{
 	Provider: schemas.OpenAI,
 	Model:    "gpt-4o",
-	Input: schemas.RequestInput{
-		ChatCompletionInput: &[]schemas.ChatMessage{
-			{
-				Role: schemas.ChatMessageRoleUser,
-				Content: schemas.ChatMessageContent{
-					ContentBlocks: &[]schemas.ContentBlock{
-						{
-							Type: schemas.ContentBlockTypeText,
-							Text: bifrost.Ptr("Analyze this image and describe what you see."),
-						},
-						{
-							Type: schemas.ContentBlockTypeImage,
-							ImageURL: &schemas.ImageURLStruct{
-								URL:    dataURL,
-								Detail: bifrost.Ptr("high"),
-							},
+	Input: []schemas.ChatMessage{
+		{
+			Role: schemas.ChatMessageRoleUser,
+			Content: &schemas.ChatMessageContent{
+				ContentBlocks: []schemas.ChatContentBlock{
+					{
+						Type: schemas.ChatContentBlockTypeText,
+						Text: schemas.Ptr("Analyze this image and describe what you see."),
+					},
+					{
+						Type: schemas.ChatContentBlockTypeImage,
+						ImageURLStruct: &schemas.ChatInputImage{
+							URL:    dataURL,
+							Detail: schemas.Ptr("high"),
 						},
 					},
 				},
@@ -238,17 +230,17 @@ OpenAI provides six distinct voice options, each with different characteristics.
 voices := []string{"alloy", "echo", "fable", "onyx", "nova", "shimmer"}
 
 for _, voice := range voices {
-	response, err := client.SpeechRequest(context.Background(), &schemas.BifrostRequest{
+	response, err := client.SpeechRequest(context.Background(), &schemas.BifrostSpeechRequest{
 		Provider: schemas.OpenAI,
 		Model:    "tts-1",
-		Input: schemas.RequestInput{
-			SpeechInput: &schemas.SpeechInput{
-				Input: fmt.Sprintf("This is the %s voice speaking.", voice),
-				VoiceConfig: schemas.SpeechVoiceInput{
-					Voice: bifrost.Ptr(voice),
-				},
-				ResponseFormat: "mp3",
+		Input: &schemas.SpeechInput{
+			Input: fmt.Sprintf("This is the %s voice speaking.", voice),
+		},
+		Params: &schemas.SpeechParameters{
+			VoiceConfig: &schemas.SpeechVoiceInput{
+				Voice: schemas.Ptr(voice),
 			},
+			ResponseFormat: schemas.Ptr("mp3"),
 		},
 	})
 	
@@ -268,16 +260,18 @@ Generate audio in different formats depending on your use case. MP3 for general 
 formats := []string{"mp3", "opus", "aac", "flac"}
 
 for _, format := range formats {
-	response, err := client.SpeechRequest(context.Background(), &schemas.BifrostRequest{
+	response, err := client.SpeechRequest(context.Background(), &schemas.BifrostSpeechRequest{
 		Provider: schemas.OpenAI,
 		Model:    "tts-1",
-		Input: schemas.RequestInput{
-			SpeechInput: &schemas.SpeechInput{
-				Input:          "Testing different audio formats.",
-				VoiceConfig:    schemas.SpeechVoiceInput{Voice: bifrost.Ptr("alloy")},
-				ResponseFormat: format,
-			},
+		Input: &schemas.SpeechInput{
+			Input: "Testing different audio formats.",
 		},
+		Params: &schemas.SpeechParameters{
+			VoiceConfig: &schemas.SpeechVoiceInput{
+				Voice: schemas.Ptr("alloy"),
+			},
+			ResponseFormat: schemas.Ptr(format),
+		}
 	})
 	
 	if err == nil && response.Speech != nil {
@@ -294,15 +288,15 @@ for _, format := range formats {
 Improve transcription accuracy by specifying the source language. This is particularly helpful for non-English audio or when the audio contains technical terms or specific domain vocabulary.
 
 ```go
-response, err := client.TranscriptionRequest(context.Background(), &schemas.BifrostRequest{
+response, err := client.TranscriptionRequest(context.Background(), &schemas.BifrostTranscriptionRequest{
 	Provider: schemas.OpenAI,
 	Model:    "whisper-1",
-	Input: schemas.RequestInput{
-		TranscriptionInput: &schemas.TranscriptionInput{
-			File:     audioData,
-			Language: bifrost.Ptr("es"), // Spanish
-			Prompt:   bifrost.Ptr("This is a Spanish audio recording about technology."),
-		},
+	Input: &schemas.TranscriptionInput{
+		File: audioData,
+	},
+	Params: &schemas.TranscriptionParameters{
+		Language: schemas.Ptr("es"), // Spanish
+		Prompt:   schemas.Ptr("This is a Spanish audio recording about technology."),
 	},
 })
 ```
@@ -313,27 +307,27 @@ Choose between simple text output or detailed JSON responses with timestamps. Th
 
 ```go
 // Text only
-response, err := client.TranscriptionRequest(context.Background(), &schemas.BifrostRequest{
+response, err := client.TranscriptionRequest(context.Background(), &schemas.BifrostTranscriptionRequest{
 	Provider: schemas.OpenAI,
 	Model:    "whisper-1",
-	Input: schemas.RequestInput{
-		TranscriptionInput: &schemas.TranscriptionInput{
-			File:           audioData,
-			ResponseFormat: bifrost.Ptr("text"),
-		},
+	Input: &schemas.TranscriptionInput{
+		File: audioData,
+	},
+	Params: &schemas.TranscriptionParameters{
+		ResponseFormat: schemas.Ptr("text"),
 	},
 })
 
 // JSON with timestamps
-response, err := client.TranscriptionRequest(context.Background(), &schemas.BifrostRequest{
+response, err := client.TranscriptionRequest(context.Background(), &schemas.BifrostTranscriptionRequest{
 	Provider: schemas.OpenAI,
 	Model:    "whisper-1",
-	Input: schemas.RequestInput{
-		TranscriptionInput: &schemas.TranscriptionInput{
-			File:           audioData,
-			ResponseFormat: bifrost.Ptr("verbose_json"),
-			TimestampGranularities: &[]string{"word", "segment"},
-		},
+	Input: &schemas.TranscriptionInput{
+		File: audioData,
+	},
+	Params: &schemas.TranscriptionParameters{
+		ResponseFormat:             schemas.Ptr("verbose_json"),
+		TimestampGranularities:     []string{"word", "segment"},
 	},
 })
 ```

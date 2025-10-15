@@ -68,6 +68,7 @@ func (provider *OllamaProvider) GetProviderKey() schemas.ModelProvider {
 	return schemas.Ollama
 }
 
+// TextCompletion performs a text completion request to the Ollama API.
 func (provider *OllamaProvider) TextCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return handleOpenAITextCompletionRequest(
 		ctx,
@@ -135,6 +136,7 @@ func (provider *OllamaProvider) ChatCompletionStream(ctx context.Context, postHo
 	)
 }
 
+// Responses performs a responses request to the Ollama API.
 func (provider *OllamaProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
 	if err != nil {
@@ -149,6 +151,7 @@ func (provider *OllamaProvider) Responses(ctx context.Context, key schemas.Key, 
 	return response, nil
 }
 
+// ResponsesStream performs a streaming responses request to the Ollama API.
 func (provider *OllamaProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,
@@ -158,6 +161,7 @@ func (provider *OllamaProvider) ResponsesStream(ctx context.Context, postHookRun
 	)
 }
 
+// Embedding performs an embedding request to the Ollama API.
 func (provider *OllamaProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return handleOpenAIEmbeddingRequest(
 		ctx,
@@ -172,18 +176,22 @@ func (provider *OllamaProvider) Embedding(ctx context.Context, key schemas.Key, 
 	)
 }
 
+// Speech is not supported by the Ollama provider.
 func (provider *OllamaProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "ollama")
 }
 
+// SpeechStream is not supported by the Ollama provider.
 func (provider *OllamaProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech stream", "ollama")
 }
 
+// Transcription is not supported by the Ollama provider.
 func (provider *OllamaProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "ollama")
 }
 
+// TranscriptionStream is not supported by the Ollama provider.
 func (provider *OllamaProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "ollama")
 }
