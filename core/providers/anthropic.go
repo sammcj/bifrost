@@ -444,7 +444,7 @@ func handleAnthropicChatCompletionStreaming(
 				}
 			}
 			if event.Delta != nil && event.Delta.StopReason != nil {
-				mappedReason := anthropic.MapAnthropicFinishReasonToBifrost(*event.Delta.StopReason)
+				mappedReason := schemas.MapProviderFinishReasonToBifrost(*event.Delta.StopReason, providerType)
 				finishReason = &mappedReason
 			}
 			if event.Message != nil {
