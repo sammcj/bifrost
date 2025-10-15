@@ -231,8 +231,12 @@ else
        [ "$(printf '%s\n' "$LATEST_BASE_VERSION" "$base_version" | sort -V | tail -1)" = "$base_version" ]; then
       
       if [ "$base_version" = "$LATEST_BASE_VERSION" ]; then
-        # Same base version - prefer stable (no hyphen) over prerelease
-        if [[ "$version" != *"-"* ]] && [[ "${LATEST_TRANSPORT_TAG#transports/v}" == *"-"* ]]; then
+        # Same base version - prefer stable (no hyphen) over prerelease, otherwise take the later one
+        if [[ "$version" != *"-"* ]]; then
+          # Current is stable, always prefer it
+          LATEST_TRANSPORT_TAG="$tag"
+        elif [[ "${LATEST_TRANSPORT_TAG#transports/v}" == *"-"* ]]; then
+          # Both are prereleases, take the later one (thanks to sort -V)
           LATEST_TRANSPORT_TAG="$tag"
         fi
       else
@@ -242,6 +246,10 @@ else
       fi
     fi
   done
+  
+  if [ -n "$LATEST_TRANSPORT_TAG" ]; then
+    echo "   🏷️ Latest transport tag: $LATEST_TRANSPORT_TAG"
+  fi
   if [ -z "$LATEST_TRANSPORT_TAG" ]; then
     echo "   ✅ First transport release: $TRANSPORT_VERSION"
     if [ "$GIT_TAG_EXISTS" = "false" ]; then
@@ -251,13 +259,46 @@ else
   else
     PREVIOUS_TRANSPORT_VERSION=${LATEST_TRANSPORT_TAG#transports/v}
     echo "   📋 Previous: $PREVIOUS_TRANSPORT_VERSION, Current: $TRANSPORT_VERSION"
-    # Debug the sort behavior
-    sorted_first=$(printf '%s\n' "$PREVIOUS_TRANSPORT_VERSION" "$TRANSPORT_VERSION" | sort -V | head -1)
-    echo "   🔍 DEBUG: sort -V | head -1 returns: '$sorted_first'"
-    echo "   🔍 DEBUG: Current version: '$TRANSPORT_VERSION'"
-    echo "   🔍 DEBUG: Versions different? $([ "$PREVIOUS_TRANSPORT_VERSION" != "$TRANSPORT_VERSION" ] && echo "YES" || echo "NO")"
-    # Fixed: Check if previous version sorts first (meaning current is greater)
-    if [ "$sorted_first" = "$PREVIOUS_TRANSPORT_VERSION" ] && [ "$PREVIOUS_TRANSPORT_VERSION" != "$TRANSPORT_VERSION" ]; then
+    
+    # Function to compare versions with proper prerelease handling
+    # Returns 0 if $1 < $2, 1 otherwise
+    version_less_than() {
+      local v1="$1"
+      local v2="$2"
+      
+      # Extract base versions (remove prerelease suffix)
+      local base1=$(echo "$v1" | sed 's/-.*$//')
+      local base2=$(echo "$v2" | sed 's/-.*$//')
+      
+      # Compare base versions
+      if [ "$base1" != "$base2" ]; then
+        # Different base versions, use sort -V
+        [ "$(printf '%s\n' "$base1" "$base2" | sort -V | head -1)" = "$base1" ]
+        return $?
+      fi
+      
+      # Same base version, check prereleases
+      local pre1=$(echo "$v1" | grep -o '\-.*$' || echo "")
+      local pre2=$(echo "$v2" | grep -o '\-.*$' || echo "")
+      
+      if [ -z "$pre1" ] && [ -n "$pre2" ]; then
+        # v1 is stable, v2 is prerelease: v2 < v1
+        return 1
+      elif [ -n "$pre1" ] && [ -z "$pre2" ]; then
+        # v1 is prerelease, v2 is stable: v1 < v2
+        return 0
+      elif [ -n "$pre1" ] && [ -n "$pre2" ]; then
+        # Both prereleases, compare them
+        [ "$(printf '%s\n' "$pre1" "$pre2" | sort -V | head -1)" = "$pre1" ]
+        return $?
+      else
+        # Both stable and same base: equal
+        return 1
+      fi
+    }
+    
+    # Check if current version is greater than previous
+    if version_less_than "$PREVIOUS_TRANSPORT_VERSION" "$TRANSPORT_VERSION"; then
       echo "   ✅ Transport version incremented: $PREVIOUS_TRANSPORT_VERSION → $TRANSPORT_VERSION"
       if [ "$GIT_TAG_EXISTS" = "false" ]; then
         echo "   🏷️  Git tag missing - transport release needed"
