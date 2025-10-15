@@ -563,7 +563,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 				}
 
 				if streamEvent.StopReason != nil {
-					finishReason = streamEvent.StopReason
+					finishReason = schemas.Ptr(schemas.MapProviderFinishReasonToBifrost(*streamEvent.StopReason, providerName))
 				}
 
 				response, bifrostErr, _ := streamEvent.ToBifrostChatCompletionStream()

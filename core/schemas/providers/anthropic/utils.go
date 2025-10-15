@@ -4,45 +4,6 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
-var (
-	finishReasonMap = map[string]string{
-		"end_turn":      "stop",
-		"max_tokens":    "length",
-		"stop_sequence": "stop",
-		"tool_use":      "tool_calls",
-	}
-
-	// reverseFinishReasonMap = func() map[string]string {
-	// 	m := make(map[string]string, len(finishReasonMap))
-	// 	for k, v := range finishReasonMap {
-	// 		m[v] = k
-	// 	}
-	// 	return m
-	// }()
-
-	reverseFinishReasonMap = map[string]string{
-		"stop":       "end_turn", // canonical default
-		"length":     "max_tokens",
-		"tool_calls": "tool_use",
-	}
-)
-
-// MapAnthropicFinishReasonToOpenAI maps Anthropic finish reasons to OpenAI-compatible ones
-func MapAnthropicFinishReasonToBifrost(anthropicReason string) string {
-	if _, ok := finishReasonMap[anthropicReason]; ok {
-		return finishReasonMap[anthropicReason]
-	}
-	return anthropicReason
-}
-
-// MapBifrostFinishReasonToAnthropic maps Bifrost finish reasons back to Anthropic
-func MapBifrostFinishReasonToAnthropic(bifrostReason string) string {
-	if mapped, ok := reverseFinishReasonMap[bifrostReason]; ok {
-		return mapped
-	}
-	return bifrostReason
-}
-
 // ConvertToAnthropicImageBlock converts a Bifrost image block to Anthropic format
 // Uses the same pattern as the original buildAnthropicImageSourceMap function
 func ConvertToAnthropicImageBlock(block schemas.ChatContentBlock) AnthropicContentBlock {
