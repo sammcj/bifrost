@@ -339,7 +339,7 @@ func (response *AnthropicMessageResponse) ToBifrostResponse() *schemas.BifrostRe
 		},
 		FinishReason: func() *string {
 			if response.StopReason != nil && *response.StopReason != "" {
-				mapped := MapAnthropicFinishReasonToBifrost(*response.StopReason)
+				mapped := schemas.MapProviderFinishReasonToBifrost(*response.StopReason, schemas.Anthropic)
 				return &mapped
 			}
 			return nil
@@ -622,7 +622,7 @@ func ToAnthropicChatCompletionResponse(bifrostResp *schemas.BifrostResponse) *An
 		choice := bifrostResp.Choices[0] // Anthropic typically returns one choice
 
 		if choice.FinishReason != nil {
-			mappedReason := schemas.MapFinishReasonToProvider(*choice.FinishReason, schemas.Anthropic)
+			mappedReason := schemas.MapBifrostFinishReasonToProvider(*choice.FinishReason, schemas.Anthropic)
 			anthropicResp.StopReason = &mappedReason
 		}
 		if choice.StopString != nil {
@@ -883,7 +883,7 @@ func ToAnthropicChatCompletionStreamResponse(bifrostResp *schemas.BifrostRespons
 				}
 			} else if choice.FinishReason != nil && *choice.FinishReason != "" {
 				// Handle finish reason - map back to Anthropic format
-				stopReason := schemas.MapFinishReasonToProvider(*choice.FinishReason, schemas.Anthropic)
+				stopReason := schemas.MapBifrostFinishReasonToProvider(*choice.FinishReason, schemas.Anthropic)
 				streamResp.Type = "message_delta"
 				streamResp.Delta = &AnthropicStreamDelta{
 					Type:       "message_delta",

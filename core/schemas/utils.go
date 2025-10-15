@@ -33,29 +33,59 @@ func ParseModelString(model string, defaultProvider ModelProvider) (ModelProvide
 	return defaultProvider, model
 }
 
-// MapFinishReasonToProvider maps OpenAI-compatible finish reasons to provider-specific format
-func MapFinishReasonToProvider(finishReason string, targetProvider ModelProvider) string {
+// Shared finish reason mappings for Anthropic-compatible providers (Anthropic, Bedrock)
+var (
+	// Maps provider-specific finish reasons to Bifrost format
+	anthropicFinishReasonToBifrost = map[string]string{
+		"end_turn":      "stop",
+		"max_tokens":    "length",
+		"stop_sequence": "stop",
+		"tool_use":      "tool_calls",
+		"content_filtered": "content_filter",
+	}
+
+	// Maps Bifrost finish reasons to provider-specific format
+	bifrostToAnthropicFinishReason = map[string]string{
+		"stop":       "end_turn", // canonical default
+		"length":     "max_tokens",
+		"tool_calls": "tool_use",
+		"content_filter": "content_filtered",
+	}
+)
+
+// ConvertAnthropicFinishReasonToBifrost converts provider finish reasons to Bifrost format
+func ConvertAnthropicFinishReasonToBifrost(providerReason string) string {
+	if bifrostReason, ok := anthropicFinishReasonToBifrost[providerReason]; ok {
+		return bifrostReason
+	}
+	return providerReason
+}
+
+// ConvertBifrostFinishReasonToAnthropic converts Bifrost finish reasons to provider format
+func ConvertBifrostFinishReasonToAnthropic(bifrostReason string) string {
+	if providerReason, ok := bifrostToAnthropicFinishReason[bifrostReason]; ok {
+		return providerReason
+	}
+	return bifrostReason
+}
+
+// MapProviderFinishReasonToBifrost maps provider finish reasons to bifrost finish reasons
+func MapProviderFinishReasonToBifrost(finishReason string, targetProvider ModelProvider) string {
 	switch targetProvider {
-	case Anthropic:
-		return mapFinishReasonToAnthropic(finishReason)
+	case Anthropic, Bedrock:
+		return ConvertAnthropicFinishReasonToBifrost(finishReason)
 	default:
-		// For OpenAI, Azure, and other providers, pass through as-is
 		return finishReason
 	}
 }
 
-// mapFinishReasonToAnthropic maps OpenAI finish reasons to Anthropic format
-func mapFinishReasonToAnthropic(finishReason string) string {
-	switch finishReason {
-	case "stop":
-		return "end_turn"
-	case "length":
-		return "max_tokens"
-	case "tool_calls":
-		return "tool_use"
+// MapBifrostFinishReasonToProvider maps bifrost finish reasons to provider finish reasons
+func MapBifrostFinishReasonToProvider(bifrostReason string, targetProvider ModelProvider) string {
+	switch targetProvider {
+	case Anthropic, Bedrock:
+		return ConvertBifrostFinishReasonToAnthropic(bifrostReason)
 	default:
-		// Pass through other reasons like "pause_turn", "refusal", "stop_sequence", etc.
-		return finishReason
+		return bifrostReason
 	}
 }
 
