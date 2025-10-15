@@ -69,7 +69,7 @@ func (provider *SGLProvider) GetProviderKey() schemas.ModelProvider {
 }
 
 // TextCompletion is not supported by the SGL provider.
-func (provider *SGLProvider) TextCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *SGLProvider) TextCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (*schemas.BifrostTextCompletionResponse, *schemas.BifrostError) {
 	return handleOpenAITextCompletionRequest(
 		ctx,
 		provider.client,
@@ -102,7 +102,7 @@ func (provider *SGLProvider) TextCompletionStream(ctx context.Context, postHookR
 }
 
 // ChatCompletion performs a chat completion request to the SGL API.
-func (provider *SGLProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *SGLProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 	return handleOpenAIChatCompletionRequest(
 		ctx,
 		provider.client,
@@ -137,13 +137,13 @@ func (provider *SGLProvider) ChatCompletionStream(ctx context.Context, postHookR
 }
 
 // Responses performs a responses request to the SGL API.
-func (provider *SGLProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
+func (provider *SGLProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
+	chatResponse, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
 	if err != nil {
 		return nil, err
 	}
 
-	response.ToResponsesOnly()
+	response := chatResponse.ToBifrostResponsesResponse()
 	response.ExtraFields.RequestType = schemas.ResponsesRequest
 	response.ExtraFields.Provider = provider.GetProviderKey()
 	response.ExtraFields.ModelRequested = request.Model
@@ -162,7 +162,7 @@ func (provider *SGLProvider) ResponsesStream(ctx context.Context, postHookRunner
 }
 
 // Embedding is not supported by the SGL provider.
-func (provider *SGLProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *SGLProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostEmbeddingResponse, *schemas.BifrostError) {
 	return handleOpenAIEmbeddingRequest(
 		ctx,
 		provider.client,
@@ -177,7 +177,7 @@ func (provider *SGLProvider) Embedding(ctx context.Context, key schemas.Key, req
 }
 
 // Speech is not supported by the SGL provider.
-func (provider *SGLProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *SGLProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "sgl")
 }
 
@@ -187,7 +187,7 @@ func (provider *SGLProvider) SpeechStream(ctx context.Context, postHookRunner sc
 }
 
 // Transcription is not supported by the SGL provider.
-func (provider *SGLProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (provider *SGLProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "sgl")
 }
 

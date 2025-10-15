@@ -5140,18 +5140,27 @@
         "type": "object",
         "required": [
           "model",
-          "messages"
+          "input"
         ],
         "properties": {
           "model": {
             "type": "string",
             "description": "Model identifier in 'provider/model' format"
           },
-          "messages": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ResponsesMessage"
-            }
+          "input": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Simple text input for the response"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ResponsesMessage"
+                },
+                "description": "Array of ResponsesMessage objects for structured input"
+              }
+            ]
           },
           "fallbacks": {
             "type": "array",
