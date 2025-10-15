@@ -115,7 +115,7 @@ func (bedrockResp *BedrockConverseResponse) ToBifrostResponse() (*schemas.Bifros
 					ChatAssistantMessage: assistantMessage,
 				},
 			},
-			FinishReason: &bedrockResp.StopReason,
+			FinishReason: schemas.Ptr(schemas.MapProviderFinishReasonToBifrost(bedrockResp.StopReason, schemas.Bedrock)),
 		},
 	}
 	var usage *schemas.LLMUsage
