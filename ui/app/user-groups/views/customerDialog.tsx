@@ -197,18 +197,18 @@ export default function CustomerDialog({ customer, onSave, onCancel }: CustomerD
 										></div>
 									</div>
 								</div>
-								<div className="space-y-2">
+								<div className="space-y-2 text-sm">
 									<div className="flex justify-between">
 										<span>Current Usage:</span>
-										<span>{formatCurrency(customer.budget.current_usage)}</span>
+										<span className="font-mono">{formatCurrency(customer.budget.current_usage)}</span>
 									</div>
 									<div className="flex justify-between">
 										<span>Budget Limit:</span>
-										<span>{formatCurrency(customer.budget.max_limit)}</span>
+										<span className="font-mono">{formatCurrency(customer.budget.max_limit)}</span>
 									</div>
 									<div className="flex justify-between">
 										<span>Reset Period:</span>
-										<span>{customer.budget.reset_duration}</span>
+										<span className="font-mono">{customer.budget.reset_duration}</span>
 									</div>
 								</div>
 								<div className="text-muted-foreground bg-accent border-accent mt-3 rounded-md border p-2 text-sm">
@@ -221,7 +221,7 @@ export default function CustomerDialog({ customer, onSave, onCancel }: CustomerD
 							<div className="space-y-2">
 								<div className="flex items-center gap-2">
 									<span className="text-sm">Current Usage:</span>
-									<div className="flex items-center gap-2">
+									<div className="flex items-center gap-2 mt-0.5">
 										<span className="font-mono text-sm">
 											{formatCurrency(customer.budget.current_usage)} / {formatCurrency(customer.budget.max_limit)}
 										</span>
@@ -235,7 +235,7 @@ export default function CustomerDialog({ customer, onSave, onCancel }: CustomerD
 								</div>
 								<div className="flex items-center gap-2">
 									<span className="text-sm">Last Reset:</span>
-									<div className="flex items-center gap-2">
+									<div className="flex items-center gap-2 mt-0.5">
 										<span className="font-mono text-sm">
 											{formatDistanceToNow(new Date(customer.budget.last_reset), { addSuffix: true })}
 										</span>

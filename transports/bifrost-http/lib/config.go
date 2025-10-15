@@ -12,11 +12,15 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/framework"
 	"github.com/maximhq/bifrost/framework/configstore"
+	"github.com/maximhq/bifrost/framework/configstore/tables"
+	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/encrypt"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/framework/pricing"
@@ -40,6 +44,7 @@ type ConfigData struct {
 	Client            *configstore.ClientConfig             `json:"client"`
 	EncryptionKey     string                                `json:"encryption_key"`
 	Providers         map[string]configstore.ProviderConfig `json:"providers"`
+	FrameworkConfig   *framework.FrameworkConfig            `json:"framework,omitempty"`
 	MCP               *schemas.MCPConfig                    `json:"mcp,omitempty"`
 	Governance        *configstore.GovernanceConfig         `json:"governance,omitempty"`
 	VectorStoreConfig *vectorstore.Config                   `json:"vector_store,omitempty"`
@@ -54,6 +59,7 @@ type ConfigData struct {
 func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 	// First, unmarshal into a temporary struct to get all fields except the complex configs
 	type TempConfigData struct {
+		FrameworkConfig   json.RawMessage                       `json:"framework,omitempty"`
 		Client            *configstore.ClientConfig             `json:"client"`
 		EncryptionKey     string                                `json:"encryption_key"`
 		Providers         map[string]configstore.ProviderConfig `json:"providers"`
@@ -85,6 +91,15 @@ func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("failed to unmarshal vector store config: %w", err)
 		}
 		cd.VectorStoreConfig = &vectorStoreConfig
+	}
+
+	// Parse FrameworkConfig using its internal unmarshaler
+	if len(temp.FrameworkConfig) > 0 {
+		var frameworkConfig framework.FrameworkConfig
+		if err := json.Unmarshal(temp.FrameworkConfig, &frameworkConfig); err != nil {
+			return fmt.Errorf("failed to unmarshal framework config: %w", err)
+		}
+		cd.FrameworkConfig = &frameworkConfig
 	}
 
 	// Parse ConfigStoreConfig using its internal unmarshaler
@@ -135,6 +150,7 @@ type Config struct {
 	Providers        map[schemas.ModelProvider]configstore.ProviderConfig
 	MCPConfig        *schemas.MCPConfig
 	GovernanceConfig *configstore.GovernanceConfig
+	FrameworkConfig  *framework.FrameworkConfig
 
 	// Track which keys come from environment variables
 	EnvKeys map[string][]configstore.EnvKeyInfo
@@ -160,6 +176,29 @@ var DefaultClientConfig = configstore.ClientConfig{
 	AllowedOrigins:          []string{},
 	MaxRequestBodySizeMB:    100,
 	EnableLiteLLMFallbacks:  false,
+}
+
+// initializeEncryption initializes the encryption key
+func (c *Config) initializeEncryption(configKey string) error {
+	encryptionKey := ""
+	if configKey != "" {
+		if strings.HasPrefix(configKey, "env.") {
+			var err error
+			if encryptionKey, _, err = c.processEnvValue(configKey); err != nil {
+				return fmt.Errorf("failed to process encryption key: %w", err)
+			}
+		} else {
+			logger.Warn("encryption_key should reference an environment variable (env.VAR_NAME) rather than storing the key directly in the config file")
+			encryptionKey = configKey
+		}
+	}
+	if encryptionKey == "" {
+		if os.Getenv("BIFROST_ENCRYPTION_KEY") != "" {
+			encryptionKey = os.Getenv("BIFROST_ENCRYPTION_KEY")
+		}
+	}
+	encrypt.Init(encryptionKey, logger)
+	return nil
 }
 
 // LoadConfig loads initial configuration from a JSON config file into memory
@@ -376,8 +415,43 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to update env keys: %w", err)
 			}
+			// Fetching framework config if present
+			frameworkConfig, err := config.ConfigStore.GetFrameworkConfig(ctx)
+			if err != nil {
+				logger.Warn("failed to get framework config from store: %v", err)
+			}
+			pricingConfig := &pricing.Config{}
+			if frameworkConfig != nil && frameworkConfig.PricingURL != nil {
+				pricingConfig.PricingURL = frameworkConfig.PricingURL
+			} else {
+				pricingConfig.PricingURL = bifrost.Ptr(pricing.DefaultPricingURL)
+			}
+			if frameworkConfig != nil && frameworkConfig.PricingSyncInterval != nil && *frameworkConfig.PricingSyncInterval > 0 {
+				syncDuration := time.Duration(*frameworkConfig.PricingSyncInterval) * time.Second
+				pricingConfig.PricingSyncInterval = &syncDuration
+			} else {
+				pricingConfig.PricingSyncInterval = bifrost.Ptr(pricing.DefaultPricingSyncInterval)
+			}
+			// Updating DB with latest config
+			configID := uint(0)
+			if frameworkConfig != nil {
+				configID = frameworkConfig.ID
+			}
+			duration := pricingConfig.PricingSyncInterval.Seconds()
+			logger.Debug("updating framework config with duration: %d", duration)
+			err = config.ConfigStore.UpdateFrameworkConfig(ctx, &tables.TableFrameworkConfig{
+				ID:                  configID,
+				PricingURL:          pricingConfig.PricingURL,
+				PricingSyncInterval: bifrost.Ptr(int64(duration)),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to update framework config: %w", err)
+			}
+			config.FrameworkConfig = &framework.FrameworkConfig{
+				Pricing: pricingConfig,
+			}
 			// Initializing pricing manager
-			pricingManager, err := pricing.Init(ctx, config.ConfigStore, logger)
+			pricingManager, err := pricing.Init(ctx, pricingConfig, config.ConfigStore, logger)
 			if err != nil {
 				logger.Warn("failed to initialize pricing manager: %v", err)
 			}
@@ -664,10 +738,10 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 				// Create virtual keys
 				for _, virtualKey := range config.GovernanceConfig.VirtualKeys {
 					// Look up existing provider keys by key_id and populate the Keys field
-					var existingKeys []configstore.TableKey
+					var existingKeys []configstoreTables.TableKey
 					for _, keyRef := range virtualKey.Keys {
 						if keyRef.KeyID != "" {
-							var existingKey configstore.TableKey
+							var existingKey configstoreTables.TableKey
 							if err := tx.Where("key_id = ?", keyRef.KeyID).First(&existingKey).Error; err != nil {
 								if err == gorm.ErrRecordNotFound {
 									logger.Warn("referenced key %s not found for virtual key %s", keyRef.KeyID, virtualKey.ID)
@@ -741,7 +815,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					continue
 				}
 
-				pluginConfig := &configstore.TablePlugin{
+				pluginConfig := &configstoreTables.TablePlugin{
 					Name:    plugin.Name,
 					Enabled: plugin.Enabled,
 					Config:  pluginConfigCopy,
@@ -774,7 +848,30 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 	}
 
 	// Initializing pricing manager
-	pricingManager, err := pricing.Init(ctx, config.ConfigStore, logger)
+	pricingConfig := &pricing.Config{}
+	if config.ConfigStore != nil {
+		frameworkConfig, err := config.ConfigStore.GetFrameworkConfig(ctx)
+		if err != nil {
+			logger.Warn("failed to get framework config from store: %v", err)
+		}
+		if frameworkConfig != nil && frameworkConfig.PricingURL != nil {
+			pricingConfig.PricingURL = frameworkConfig.PricingURL
+		}
+		if frameworkConfig != nil && frameworkConfig.PricingSyncInterval != nil {
+			syncDuration := time.Duration(*frameworkConfig.PricingSyncInterval) * time.Second
+			pricingConfig.PricingSyncInterval = &syncDuration
+		}
+	} else if configData.FrameworkConfig != nil && configData.FrameworkConfig.Pricing != nil {
+		pricingConfig.PricingURL = configData.FrameworkConfig.Pricing.PricingURL
+		syncDuration := time.Duration(*configData.FrameworkConfig.Pricing.PricingSyncInterval) * time.Second
+		pricingConfig.PricingSyncInterval = &syncDuration
+	}
+	// Updating framework config
+	config.FrameworkConfig = &framework.FrameworkConfig{
+		Pricing: pricingConfig,
+	}
+	// Creating pricing manager
+	pricingManager, err := pricing.Init(ctx, pricingConfig, config.ConfigStore, logger)
 	if err != nil {
 		logger.Warn("failed to initialize pricing manager: %v", err)
 	}
@@ -1297,14 +1394,14 @@ func (c *Config) RemoveProvider(ctx context.Context, provider schemas.ModelProvi
 }
 
 // GetAllKeys returns the redacted keys
-func (c *Config) GetAllKeys() ([]configstore.TableKey, error) {
+func (c *Config) GetAllKeys() ([]configstoreTables.TableKey, error) {
 	c.Mu.RLock()
 	defer c.Mu.RUnlock()
 
-	keys := make([]configstore.TableKey, 0)
+	keys := make([]configstoreTables.TableKey, 0)
 	for providerKey, provider := range c.Providers {
 		for _, key := range provider.Keys {
-			keys = append(keys, configstore.TableKey{
+			keys = append(keys, configstoreTables.TableKey{
 				KeyID:    key.ID,
 				Value:    "",
 				Models:   key.Models,
@@ -2222,7 +2319,7 @@ func (c *Config) AddProviderKeysToSemanticCacheConfig(config *schemas.PluginConf
 	return nil
 }
 
-func (c *Config) RemoveProviderKeysFromSemanticCacheConfig(config *configstore.TablePlugin) error {
+func (c *Config) RemoveProviderKeysFromSemanticCacheConfig(config *configstoreTables.TablePlugin) error {
 	if config.Name != semanticcache.PluginName {
 		return nil
 	}

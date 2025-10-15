@@ -1,4 +1,4 @@
-// Package schemas defines the core schemas and types used by the Bifrost system.
+	// Package schemas defines the core schemas and types used by the Bifrost system.
 package schemas
 
 import (

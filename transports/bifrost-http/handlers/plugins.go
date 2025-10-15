@@ -9,6 +9,7 @@ import (
 	"github.com/fasthttp/router"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
+	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 	"gorm.io/gorm"
@@ -129,7 +130,7 @@ func (h *PluginsHandler) createPlugin(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusConflict, "Plugin already exists", h.logger)
 		return
 	}
-	if err := h.configStore.CreatePlugin(ctx, &configstore.TablePlugin{
+	if err := h.configStore.CreatePlugin(ctx, &configstoreTables.TablePlugin{
 		Name:    request.Name,
 		Enabled: request.Enabled,
 		Config:  request.Config,
@@ -192,7 +193,7 @@ func (h *PluginsHandler) updatePlugin(ctx *fasthttp.RequestCtx) {
 	if _, err := h.configStore.GetPlugin(ctx, name); err != nil {
 		// If doesn't exist, create it
 		if errors.Is(err, configstore.ErrNotFound) {
-			if err := h.configStore.CreatePlugin(ctx, &configstore.TablePlugin{
+			if err := h.configStore.CreatePlugin(ctx, &configstoreTables.TablePlugin{
 				Name:    name,
 				Enabled: false,
 				Config:  map[string]any{},
@@ -215,7 +216,7 @@ func (h *PluginsHandler) updatePlugin(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if err := h.configStore.UpdatePlugin(ctx, &configstore.TablePlugin{
+	if err := h.configStore.UpdatePlugin(ctx, &configstoreTables.TablePlugin{
 		Name:    name,
 		Enabled: request.Enabled,
 		Config:  request.Config,

@@ -1,4 +1,4 @@
-import { BifrostConfig, CoreConfig, LatestReleaseResponse } from "@/lib/types/config";
+import { BifrostConfig, LatestReleaseResponse } from "@/lib/types/config";
 import axios from "axios";
 import { baseApi } from "./baseApi";
 
@@ -67,7 +67,7 @@ export const configApi = baseApi.injectEndpoints({
 		keepUnusedDataFor: 300, // Cache for 5 minutes (seconds)
 	}),
 		// Update core configuration
-		updateCoreConfig: builder.mutation<null, CoreConfig>({
+		updateCoreConfig: builder.mutation<null, BifrostConfig>({
 			query: (data) => ({
 				url: "/config",
 				method: "PUT",
