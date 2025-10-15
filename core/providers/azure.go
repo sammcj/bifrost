@@ -348,6 +348,7 @@ func (provider *AzureProvider) Responses(ctx context.Context, key schemas.Key, r
 	return response, nil
 }
 
+// ResponsesStream performs a streaming responses request to Azure's API.
 func (provider *AzureProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,
@@ -392,18 +393,22 @@ func (provider *AzureProvider) Embedding(ctx context.Context, key schemas.Key, r
 	return response, nil
 }
 
+// Speech is not supported by the Azure provider.
 func (provider *AzureProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "azure")
 }
 
+// SpeechStream is not supported by the Azure provider.
 func (provider *AzureProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech stream", "azure")
 }
 
+// Transcription is not supported by the Azure provider.
 func (provider *AzureProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "azure")
 }
 
+// TranscriptionStream is not supported by the Azure provider.
 func (provider *AzureProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "azure")
 }

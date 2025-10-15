@@ -113,6 +113,7 @@ func (provider *MistralProvider) ChatCompletionStream(ctx context.Context, postH
 	)
 }
 
+// Responses performs a responses request to the Mistral API.
 func (provider *MistralProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	response, err := provider.ChatCompletion(ctx, key, request.ToChatRequest())
 	if err != nil {
@@ -127,6 +128,7 @@ func (provider *MistralProvider) Responses(ctx context.Context, key schemas.Key,
 	return response, nil
 }
 
+// ResponsesStream performs a streaming responses request to the Mistral API.
 func (provider *MistralProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,
@@ -153,18 +155,22 @@ func (provider *MistralProvider) Embedding(ctx context.Context, key schemas.Key,
 	)
 }
 
+// Speech is not supported by the Mistral provider.
 func (provider *MistralProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "mistral")
 }
 
+// SpeechStream is not supported by the Mistral provider.
 func (provider *MistralProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech stream", "mistral")
 }
 
+// Transcription is not supported by the Mistral provider.
 func (provider *MistralProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "mistral")
 }
 
+// TranscriptionStream is not supported by the Mistral provider.
 func (provider *MistralProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "mistral")
 }

@@ -93,10 +93,10 @@ func chatWithFallbacks(client *bifrost.Bifrost) {
     ctx := context.Background()
     
     // Chat request with multiple fallbacks
-    response, err := client.ChatCompletion(ctx, &schemas.BifrostRequest{
+    response, err := client.ChatCompletionRequest(ctx, &schemas.BifrostChatRequest{
         Provider: schemas.OpenAI,
         Model:    "gpt-4o-mini",
-        Messages: []schemas.ChatMessage{
+        Input: []schemas.ChatMessage{
             {
                 Role: schemas.ChatMessageRoleUser,
                 Content: schemas.ChatMessageContent{
@@ -115,8 +115,8 @@ func chatWithFallbacks(client *bifrost.Bifrost) {
                 Model:    "anthropic.claude-3-sonnet-20240229-v1:0",
             },
         },
-        ModelParameters: &schemas.ModelParameters{
-            MaxTokens:   bifrost.Ptr(1000),
+        Params: &schemas.ChatParameters{
+            MaxCompletionTokens:   bifrost.Ptr(1000),
             Temperature: bifrost.Ptr(0.7),
         },
     })

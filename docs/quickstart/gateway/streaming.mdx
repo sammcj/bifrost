@@ -4,6 +4,32 @@ description: "Receive AI responses in real-time via Server-Sent Events. Perfect 
 icon: "water"
 ---
 
+
+## Streaming Text Completion
+
+Request text completions with streaming enabled to receive partial `text` chunks as they are generated.
+
+```bash
+curl --location 'http://localhost:8080/v1/completions' \
+--header 'Content-Type: application/json' \
+--data '{
+    "model": "openai/gpt-4o-mini",
+    "prompt": "Write a short haiku about the ocean",
+    "stream": true
+}'
+```
+
+**Response Format (Server-Sent Events):**
+```
+data: {"choices":[{"text":"Waves whisper soft"}],"model":"gpt-4o-mini"}
+
+data: {"choices":[{"text":" on distant shores, the moon calls"}],"model":"gpt-4o-mini"}
+
+data: {"choices":[{"text":" tides to rise."}],"model":"gpt-4o-mini"}
+
+data: [DONE]
+```
+
 ## Streaming Chat Responses
 
 Receive AI responses in real-time as they're generated. Perfect for chat applications where you want to show responses as they're being typed, improving user experience.
@@ -38,6 +64,35 @@ Each chunk contains partial content that you can append to build the complete re
 <Note>
 Bifrost standardizes all stream responses to send usage and finish reason only in the last chunk, and content in the previous chunks.
 </Note>
+
+## Responses API Streaming
+
+Stream the OpenAI-style Responses API with event-based SSE. This includes `event:` lines and does not use the `[DONE]` marker; the stream ends when the connection closes.
+
+```bash
+curl --location 'http://localhost:8080/v1/responses' \
+--header 'Content-Type: application/json' \
+--data '{
+    "model": "openai/gpt-4o-mini",
+    "input": "Tell me one interesting fact about Mars",
+    "stream": true
+}'
+```
+
+**Response Format (Server-Sent Events):**
+```
+event: response.created
+data: {"type":"response.created"}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","delta": /* partial text delta payload */ }
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","delta": * more text delta */ }
+
+event: response.completed
+data: {"type":"response.completed","response":{ /* usage, finish_reason, etc. */ }}
+```
 
 ## Text-to-Speech Streaming: Real-time Audio Generation
 

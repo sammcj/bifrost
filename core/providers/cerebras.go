@@ -145,6 +145,7 @@ func (provider *CerebrasProvider) Responses(ctx context.Context, key schemas.Key
 	return response, nil
 }
 
+// ResponsesStream performs a streaming responses request to the Cerebras API.
 func (provider *CerebrasProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,
@@ -159,18 +160,22 @@ func (provider *CerebrasProvider) Embedding(ctx context.Context, key schemas.Key
 	return nil, newUnsupportedOperationError("embedding", "cerebras")
 }
 
+// Speech is not supported by the Cerebras provider.
 func (provider *CerebrasProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "cerebras")
 }
 
+// SpeechStream is not supported by the Cerebras provider.
 func (provider *CerebrasProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech stream", "cerebras")
 }
 
+// Transcription is not supported by the Cerebras provider.
 func (provider *CerebrasProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "cerebras")
 }
 
+// TranscriptionStream is not supported by the Cerebras provider.
 func (provider *CerebrasProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "cerebras")
 }

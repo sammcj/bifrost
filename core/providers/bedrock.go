@@ -668,7 +668,7 @@ func (provider *BedrockProvider) Responses(ctx context.Context, key schemas.Key,
 	return bifrostResponse, nil
 }
 
-// ChatCompletionStream performs a streaming chat completion request to Bedrock's API.
+// ResponsesStream performs a streaming chat completion request to Bedrock's API.
 // It formats the request, sends it to Bedrock, and processes the streaming response.
 // Returns a channel for streaming BifrostResponse objects or an error if the request fails.
 func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
@@ -903,18 +903,22 @@ func (provider *BedrockProvider) Embedding(ctx context.Context, key schemas.Key,
 	return bifrostResponse, nil
 }
 
+// Speech is not supported by the Bedrock provider.
 func (provider *BedrockProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech", "bedrock")
 }
 
+// SpeechStream is not supported by the Bedrock provider.
 func (provider *BedrockProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("speech stream", "bedrock")
 }
 
+// Transcription is not supported by the Bedrock provider.
 func (provider *BedrockProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription", "bedrock")
 }
 
+// TranscriptionStream is not supported by the Bedrock provider.
 func (provider *BedrockProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "bedrock")
 }

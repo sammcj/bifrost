@@ -83,18 +83,16 @@ func main() {
 	messages := []schemas.ChatMessage{
 		{
             Role:    schemas.ChatMessageRoleUser,
-            Content: schemas.ChatMessageContent{
-                ContentStr: bifrost.Ptr("Hello, Bifrost!"),
+            Content: &schemas.ChatMessageContent{
+                ContentStr: schemas.Ptr("Hello, Bifrost!"),
             },
         },
 	}
 
-	response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostRequest{
+	response, err := client.ChatCompletionRequest(context.Background(), &schemas.BifrostChatRequest{
 		Provider: schemas.OpenAI,
 		Model:    "gpt-4o-mini",
-		Input: schemas.RequestInput{
-			ChatCompletionInput: &messages,
-		},
+		Input:    messages,
 	})
 
 	if err != nil {

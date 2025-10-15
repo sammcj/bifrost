@@ -208,6 +208,7 @@ func (provider *GeminiProvider) Responses(ctx context.Context, key schemas.Key, 
 	return response, nil
 }
 
+// ResponsesStream performs a streaming responses request to the Gemini API.
 func (provider *GeminiProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,
@@ -238,6 +239,7 @@ func (provider *GeminiProvider) Embedding(ctx context.Context, key schemas.Key, 
 	)
 }
 
+// Speech performs a speech synthesis request to the Gemini API.
 func (provider *GeminiProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Check if speech is allowed for this provider
 	if err := checkOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.SpeechRequest); err != nil {
@@ -283,6 +285,7 @@ func (provider *GeminiProvider) Speech(ctx context.Context, key schemas.Key, req
 	return bifrostResponse, nil
 }
 
+// SpeechStream performs a streaming speech synthesis request to the Gemini API.
 func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	// Check if speech stream is allowed for this provider
 	if err := checkOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.SpeechStreamRequest); err != nil {
@@ -510,6 +513,7 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 	return responseChan, nil
 }
 
+// Transcription performs a speech-to-text request to the Gemini API.
 func (provider *GeminiProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	// Check if transcription is allowed for this provider
 	if err := checkOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.TranscriptionRequest); err != nil {
@@ -559,6 +563,7 @@ func (provider *GeminiProvider) Transcription(ctx context.Context, key schemas.K
 	return bifrostResponse, nil
 }
 
+// TranscriptionStream performs a streaming speech-to-text request to the Gemini API.
 func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	// Check if transcription stream is allowed for this provider
 	if err := checkOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.TranscriptionStreamRequest); err != nil {

@@ -414,7 +414,7 @@ flowchart TD
 
 ```go
 // Example tool execution control in your application
-func handleToolExecution(toolCall schemas.ToolCall, userContext UserContext) error {
+func handleToolExecution(toolCall schemas.ChatToolCall, userContext UserContext) error {
     // YOUR SECURITY AND APPROVAL LOGIC HERE
     if !userContext.HasPermission(toolCall.Function.Name) {
         return createDenialResponse("Tool not permitted for user role")
