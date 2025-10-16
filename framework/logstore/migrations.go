@@ -16,7 +16,10 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationUpdateObjectColumnValues(ctx, db); err != nil {
 		return err
 	}
-	if err := addParentRequestIDColumn(ctx, db); err != nil {
+	if err := migrationAddParentRequestIDColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := migrationAddResponsesOutputColumn(ctx, db); err != nil {
 		return err
 	}
 	return nil
@@ -133,7 +136,8 @@ func migrationUpdateObjectColumnValues(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
-func addParentRequestIDColumn(ctx context.Context, db *gorm.DB) error {
+// migrationAddParentRequestIDColumn adds the parent_request_id column to the logs table
+func migrationAddParentRequestIDColumn(ctx context.Context, db *gorm.DB) error {
 	opts := *migrator.DefaultOptions
 	opts.UseTransaction = true
 	m := migrator.New(db, &opts, []*migrator.Migration{{
@@ -160,6 +164,69 @@ func addParentRequestIDColumn(ctx context.Context, db *gorm.DB) error {
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while adding parent_request_id column: %s", err.Error())
+	}
+	return nil
+}
+
+func migrationAddResponsesOutputColumn(ctx context.Context, db *gorm.DB) error {
+	opts := *migrator.DefaultOptions
+	opts.UseTransaction = true
+	m := migrator.New(db, &opts, []*migrator.Migration{{
+		ID: "logs_init_add_responses_output_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasColumn(&Log{}, "responses_output") {
+				if err := migrator.AddColumn(&Log{}, "responses_output"); err != nil {
+					return err
+				}
+			}
+			if !migrator.HasColumn(&Log{}, "input_history") {
+				if err := migrator.AddColumn(&Log{}, "input_history"); err != nil {
+					return err
+				}
+			}
+			if !migrator.HasColumn(&Log{}, "output_message") {
+				if err := migrator.AddColumn(&Log{}, "output_message"); err != nil {
+					return err
+				}
+			}
+			if !migrator.HasColumn(&Log{}, "embedding_output") {
+				if err := migrator.AddColumn(&Log{}, "embedding_output"); err != nil {
+					return err
+				}
+			}
+			if !migrator.HasColumn(&Log{}, "raw_response") {
+				if err := migrator.AddColumn(&Log{}, "raw_response"); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if err := migrator.DropColumn(&Log{}, "responses_output"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&Log{}, "input_history"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&Log{}, "output_message"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&Log{}, "embedding_output"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&Log{}, "raw_response"); err != nil {
+				return err
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while adding responses_output column: %s", err.Error())
 	}
 	return nil
 }

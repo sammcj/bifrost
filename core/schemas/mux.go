@@ -176,28 +176,28 @@ func (ctc *ChatToolChoice) ToResponsesToolChoice() *ResponsesToolChoice {
 }
 
 // ToChatToolChoice converts a ResponsesToolChoice to ChatToolChoice format
-func (rtc *ResponsesToolChoice) ToChatToolChoice() *ChatToolChoice {
-	if rtc == nil {
+func (tc *ResponsesToolChoice) ToChatToolChoice() *ChatToolChoice {
+	if tc == nil {
 		return &ChatToolChoice{}
 	}
 
 	ctc := &ChatToolChoice{}
 
 	// Handle string choice
-	if rtc.ResponsesToolChoiceStr != nil {
-		ctc.ChatToolChoiceStr = rtc.ResponsesToolChoiceStr
+	if tc.ResponsesToolChoiceStr != nil {
+		ctc.ChatToolChoiceStr = tc.ResponsesToolChoiceStr
 		return ctc
 	}
 
 	// Handle structured choice
-	if rtc.ResponsesToolChoiceStruct != nil {
+	if tc.ResponsesToolChoiceStruct != nil {
 		ctc.ChatToolChoiceStruct = &ChatToolChoiceStruct{
-			Type: ChatToolChoiceType(rtc.ResponsesToolChoiceStruct.Type),
+			Type: ChatToolChoiceType(tc.ResponsesToolChoiceStruct.Type),
 		}
 
 		// Handle mode-based choices (none, auto, required)
-		if rtc.ResponsesToolChoiceStruct.Mode != nil {
-			switch *rtc.ResponsesToolChoiceStruct.Mode {
+		if tc.ResponsesToolChoiceStruct.Mode != nil {
+			switch *tc.ResponsesToolChoiceStruct.Mode {
 			case "none":
 				ctc.ChatToolChoiceStruct.Type = ChatToolChoiceTypeNone
 			case "auto":
@@ -208,24 +208,24 @@ func (rtc *ResponsesToolChoice) ToChatToolChoice() *ChatToolChoice {
 		}
 
 		// Handle function choice
-		if rtc.ResponsesToolChoiceStruct.Type == ResponsesToolChoiceTypeFunction && rtc.ResponsesToolChoiceStruct.Name != nil {
+		if tc.ResponsesToolChoiceStruct.Type == ResponsesToolChoiceTypeFunction && tc.ResponsesToolChoiceStruct.Name != nil {
 			ctc.ChatToolChoiceStruct.Function = ChatToolChoiceFunction{
-				Name: *rtc.ResponsesToolChoiceStruct.Name,
+				Name: *tc.ResponsesToolChoiceStruct.Name,
 			}
 		}
 
 		// Handle custom choice
-		if rtc.ResponsesToolChoiceStruct.Type == ResponsesToolChoiceTypeCustom && rtc.ResponsesToolChoiceStruct.Name != nil {
+		if tc.ResponsesToolChoiceStruct.Type == ResponsesToolChoiceTypeCustom && tc.ResponsesToolChoiceStruct.Name != nil {
 			ctc.ChatToolChoiceStruct.Custom = ChatToolChoiceCustom{
-				Name: *rtc.ResponsesToolChoiceStruct.Name,
+				Name: *tc.ResponsesToolChoiceStruct.Name,
 			}
 		}
 
 		// Handle allowed tools
-		if len(rtc.ResponsesToolChoiceStruct.Tools) > 0 {
+		if len(tc.ResponsesToolChoiceStruct.Tools) > 0 {
 			ctc.ChatToolChoiceStruct.Type = ChatToolChoiceTypeAllowedTools
-			tools := make([]ChatToolChoiceAllowedToolsTool, len(rtc.ResponsesToolChoiceStruct.Tools))
-			for i, tool := range rtc.ResponsesToolChoiceStruct.Tools {
+			tools := make([]ChatToolChoiceAllowedToolsTool, len(tc.ResponsesToolChoiceStruct.Tools))
+			for i, tool := range tc.ResponsesToolChoiceStruct.Tools {
 				tools[i] = ChatToolChoiceAllowedToolsTool{
 					Type: tool.Type,
 				}
@@ -235,8 +235,8 @@ func (rtc *ResponsesToolChoice) ToChatToolChoice() *ChatToolChoice {
 			}
 			// Copy the mode if present, otherwise default to "auto"
 			mode := "auto"
-			if rtc.ResponsesToolChoiceStruct.Mode != nil && *rtc.ResponsesToolChoiceStruct.Mode != "" {
-				mode = *rtc.ResponsesToolChoiceStruct.Mode
+			if tc.ResponsesToolChoiceStruct.Mode != nil && *tc.ResponsesToolChoiceStruct.Mode != "" {
+				mode = *tc.ResponsesToolChoiceStruct.Mode
 			}
 			ctc.ChatToolChoiceStruct.AllowedTools = ChatToolChoiceAllowedTools{
 				Mode:  mode,
@@ -778,19 +778,19 @@ func (brr *BifrostResponsesRequest) ToChatRequest() *BifrostChatRequest {
 
 // ToBifrostResponsesResponse converts the BifrostChatResponse to BifrostResponsesResponse format
 // This converts Chat-style fields (Choices) to Responses API format
-func (br *BifrostChatResponse) ToBifrostResponsesResponse() *BifrostResponsesResponse {
-	if br == nil {
+func (cr *BifrostChatResponse) ToBifrostResponsesResponse() *BifrostResponsesResponse {
+	if cr == nil {
 		return nil
 	}
 
 	// Create new BifrostResponsesResponse from Chat fields
 	responsesResp := &BifrostResponsesResponse{
-		CreatedAt: br.Created,
+		CreatedAt: cr.Created,
 	}
 
 	// Convert Choices to Output messages
 	var outputMessages []ResponsesMessage
-	for _, choice := range br.Choices {
+	for _, choice := range cr.Choices {
 		if choice.ChatNonStreamResponseChoice != nil && choice.ChatNonStreamResponseChoice.Message != nil {
 			// Convert ChatMessage to ResponsesMessages
 			responsesMessages := choice.ChatNonStreamResponseChoice.Message.ToResponsesMessages()
@@ -804,20 +804,20 @@ func (br *BifrostChatResponse) ToBifrostResponsesResponse() *BifrostResponsesRes
 	}
 
 	// Convert Usage if needed
-	if br.Usage != nil {
+	if cr.Usage != nil {
 		responsesResp.Usage = &ResponsesResponseUsage{
-			InputTokens:  br.Usage.PromptTokens,
-			OutputTokens: br.Usage.CompletionTokens,
-			TotalTokens:  br.Usage.TotalTokens,
+			InputTokens:  cr.Usage.PromptTokens,
+			OutputTokens: cr.Usage.CompletionTokens,
+			TotalTokens:  cr.Usage.TotalTokens,
 		}
 
 		if responsesResp.Usage.TotalTokens == 0 {
-			responsesResp.Usage.TotalTokens = br.Usage.PromptTokens + br.Usage.CompletionTokens
+			responsesResp.Usage.TotalTokens = cr.Usage.PromptTokens + cr.Usage.CompletionTokens
 		}
 	}
 
 	// Copy other relevant fields
-	responsesResp.ExtraFields = br.ExtraFields
+	responsesResp.ExtraFields = cr.ExtraFields
 	responsesResp.ExtraFields.RequestType = ResponsesRequest
 
 	return responsesResp
@@ -879,29 +879,29 @@ func (responsesResp *BifrostResponsesResponse) ToBifrostChatResponse() *BifrostC
 
 // ToBifrostResponsesStreamResponse converts the BifrostChatResponse from Chat streaming format to Responses streaming format
 // This converts Chat stream chunks (Choices with Deltas) to BifrostResponsesStreamResponse format
-func (br *BifrostChatResponse) ToBifrostResponsesStreamResponse() *BifrostResponsesStreamResponse {
-	if br == nil {
+func (cr *BifrostChatResponse) ToBifrostResponsesStreamResponse() *BifrostResponsesStreamResponse {
+	if cr == nil {
 		return nil
 	}
 
 	// If no choices to convert, return early
-	if len(br.Choices) == 0 {
+	if len(cr.Choices) == 0 {
 		return nil
 	}
 
 	// Convert first streaming choice to BifrostResponsesStreamResponse
 	// Note: Chat API typically has one choice per chunk in streaming
-	choice := br.Choices[0]
+	choice := cr.Choices[0]
 	if choice.ChatStreamResponseChoice == nil || choice.ChatStreamResponseChoice.Delta == nil {
 		return nil
 	}
 
 	delta := choice.ChatStreamResponseChoice.Delta
 	streamResp := &BifrostResponsesStreamResponse{
-		SequenceNumber: br.ExtraFields.ChunkIndex,
+		SequenceNumber: cr.ExtraFields.ChunkIndex,
 		ContentIndex:   Ptr(0),
 		OutputIndex:    &choice.Index,
-		ExtraFields:    br.ExtraFields,
+		ExtraFields:    cr.ExtraFields,
 	}
 
 	// Handle different types of streaming content
@@ -974,12 +974,12 @@ func (br *BifrostChatResponse) ToBifrostResponsesStreamResponse() *BifrostRespon
 			}
 
 			// Add usage information if present in the response
-			if br.Usage != nil {
+			if cr.Usage != nil {
 				streamResp.Response = &BifrostResponsesResponse{
 					Usage: &ResponsesResponseUsage{
-						InputTokens:  br.Usage.PromptTokens,
-						OutputTokens: br.Usage.CompletionTokens,
-						TotalTokens:  br.Usage.TotalTokens,
+						InputTokens:  cr.Usage.PromptTokens,
+						OutputTokens: cr.Usage.CompletionTokens,
+						TotalTokens:  cr.Usage.TotalTokens,
 					},
 				}
 			}

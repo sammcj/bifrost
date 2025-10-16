@@ -19,13 +19,10 @@ import (
 // PluginName is the name of the governance plugin
 const PluginName = "governance"
 
-// contextKey is a custom type for context keys to avoid collisions
-type contextKey string
-
 const (
-	governanceRejectedContextKey    contextKey = "bf-governance-rejected"
-	governanceIsCacheReadContextKey contextKey = "bf-governance-is-cache-read"
-	governanceIsBatchContextKey     contextKey = "bf-governance-is-batch"
+	governanceRejectedContextKey    schemas.BifrostContextKey = "bf-governance-rejected"
+	governanceIsCacheReadContextKey schemas.BifrostContextKey = "bf-governance-is-cache-read"
+	governanceIsBatchContextKey     schemas.BifrostContextKey = "bf-governance-is-batch"
 )
 
 // Config is the configuration for the governance plugin
@@ -157,7 +154,7 @@ func (p *GovernancePlugin) TransportInterceptor(url string, headers map[string]s
 	var virtualKeyValue string
 
 	for header, value := range headers {
-		if strings.ToLower(string(header)) == "x-bf-vk" {
+		if strings.ToLower(string(header)) == string(schemas.BifrostContextKeyVirtualKey) {
 			virtualKeyValue = string(value)
 			break
 		}
@@ -262,9 +259,8 @@ func (p *GovernancePlugin) TransportInterceptor(url string, headers map[string]s
 func (p *GovernancePlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	// Extract governance headers and virtual key using utility functions
 	headers := extractHeadersFromContext(*ctx)
-	virtualKey := getStringFromContext(*ctx, schemas.BifrostContextKeyVirtualKeyHeader)
+	virtualKey := getStringFromContext(*ctx, schemas.BifrostContextKeyVirtualKey)
 	requestID := getStringFromContext(*ctx, schemas.BifrostContextKeyRequestID)
-
 	if virtualKey == "" {
 		if p.isVkMandatory != nil && *p.isVkMandatory {
 			return req, &schemas.PluginShortCircuit{
@@ -362,7 +358,7 @@ func (p *GovernancePlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 
 	// Extract governance information
 	headers := extractHeadersFromContext(*ctx)
-	virtualKey := getStringFromContext(*ctx, schemas.BifrostContextKeyVirtualKeyHeader)
+	virtualKey := getStringFromContext(*ctx, schemas.BifrostContextKeyVirtualKey)
 	requestID := getStringFromContext(*ctx, schemas.BifrostContextKeyRequestID)
 
 	// Skip if no virtual key

@@ -3,22 +3,22 @@ package governance
 
 import (
 	"context"
-)
 
-type ContextKey string
+	"github.com/maximhq/bifrost/core/schemas"
+)
 
 // extractHeadersFromContext extracts governance headers from context (standalone version)
 func extractHeadersFromContext(ctx context.Context) map[string]string {
 	headers := make(map[string]string)
 
-	// Extract governance headers using lib.ContextKey
-	if teamID := getStringFromContext(ctx, ContextKey("x-bf-team")); teamID != "" {
+	// Extract governance headers using schemas.BifrostContextKey
+	if teamID := getStringFromContext(ctx, schemas.BifrostContextKey("x-bf-team")); teamID != "" {
 		headers["x-bf-team"] = teamID
 	}
-	if userID := getStringFromContext(ctx, ContextKey("x-bf-user")); userID != "" {
+	if userID := getStringFromContext(ctx, schemas.BifrostContextKey("x-bf-user")); userID != "" {
 		headers["x-bf-user"] = userID
 	}
-	if customerID := getStringFromContext(ctx, ContextKey("x-bf-customer")); customerID != "" {
+	if customerID := getStringFromContext(ctx, schemas.BifrostContextKey("x-bf-customer")); customerID != "" {
 		headers["x-bf-customer"] = customerID
 	}
 

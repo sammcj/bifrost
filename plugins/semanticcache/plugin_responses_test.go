@@ -334,8 +334,7 @@ func TestResponsesAPINoStoreFlag(t *testing.T) {
 // TestResponsesAPIStreaming tests streaming Responses API requests
 func TestResponsesAPIStreaming(t *testing.T) {
 	t.Log("Responses streaming not supported yet")
-	return
-
+	
 	setup := NewTestSetup(t)
 	defer setup.Cleanup()
 

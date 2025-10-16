@@ -18,11 +18,8 @@ const (
 	PluginName = "telemetry"
 )
 
-// ContextKey is a custom type for prometheus context keys to prevent collisions
-type ContextKey string
-
 const (
-	startTimeKey ContextKey = "bf-prom-start-time"
+	startTimeKey schemas.BifrostContextKey = "bf-prom-start-time"
 )
 
 // PrometheusPlugin implements the schemas.Plugin interface for Prometheus metrics.
@@ -108,7 +105,7 @@ func (p *PrometheusPlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 
 		// Get all prometheus labels from context
 		for _, key := range customLabels {
-			if value := (*ctx).Value(ContextKey(key)); value != nil {
+			if value := (*ctx).Value(schemas.BifrostContextKey(key)); value != nil {
 				if strValue, ok := value.(string); ok {
 					labelValues[key] = strValue
 				}
