@@ -12,7 +12,7 @@ import { CreateMCPClientRequest, MCPConnectionType, MCPStdioConfig } from "@/lib
 import { parseArrayFromText } from "@/lib/utils/array";
 import { Validator } from "@/lib/utils/validation";
 import { Info } from "lucide-react";
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
 interface ClientFormProps {
 	open: boolean;

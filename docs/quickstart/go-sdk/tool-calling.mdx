@@ -79,6 +79,7 @@ client, initErr := bifrost.Init(context.Background(), schemas.BifrostConfig{
 				Name:             "youtube-mcp",
 				ConnectionType:   schemas.MCPConnectionTypeHTTP,
 				ConnectionString: schemas.Ptr("http://your-youtube-mcp-url"),
+				ToolsToExecute: []string{"*"}, // Allow all tools from this client
 			},
 		},
 	},

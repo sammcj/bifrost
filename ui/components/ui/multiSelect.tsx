@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import { CheckIcon, ChevronDown, WandSparkles, XCircle, XIcon } from "lucide-react";
+import { CheckIcon, ChevronDown, XCircle, XIcon } from "lucide-react";
 import * as React from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,7 @@ export interface AnimationConfig {
  * Variants for the multi-select component to handle different styles.
  * Uses class-variance-authority (cva) to define different styles based on "variant" prop.
  */
-const multiSelectVariants = cva("m-1 transition-all duration-300 ease-in-out", {
+const multiSelectVariants = cva("m-1", {
 	variants: {
 		variant: {
 			default: "border-foreground/10 text-foreground bg-card hover:bg-card/80",
@@ -37,18 +37,9 @@ const multiSelectVariants = cva("m-1 transition-all duration-300 ease-in-out", {
 			destructive: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
 			inverted: "inverted",
 		},
-		badgeAnimation: {
-			bounce: "hover:-translate-y-1 hover:scale-110",
-			pulse: "hover:animate-pulse",
-			wiggle: "hover:animate-wiggle",
-			fade: "hover:opacity-80",
-			slide: "hover:translate-x-1",
-			none: "",
-		},
 	},
 	defaultVariants: {
 		variant: "default",
-		badgeAnimation: "bounce",
 	},
 });
 
@@ -189,6 +180,12 @@ interface MultiSelectProps
 	popoverClassName?: string;
 
 	/**
+	 * Custom CSS class for the command.
+	 * Optional, can be used to customize command appearance.
+	 */
+	commandClassName?: string;
+
+	/**
 	 * If true, disables the component completely.
 	 * Optional, defaults to false.
 	 */
@@ -303,6 +300,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 			autoSize = false,
 			singleLine = false,
 			popoverClassName,
+			commandClassName,
 			disabled = false,
 			responsive,
 			minWidth,
@@ -316,7 +314,6 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 	) => {
 		const [selectedValues, setSelectedValues] = React.useState<string[]>(defaultValue);
 		const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
-		const [isAnimating, setIsAnimating] = React.useState(false);
 		const [searchValue, setSearchValue] = React.useState("");
 
 		const [politeMessage, setPoliteMessage] = React.useState("");
@@ -439,45 +436,11 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 		const responsiveSettings = getResponsiveSettings();
 
 		const getBadgeAnimationClass = () => {
-			if (animationConfig?.badgeAnimation) {
-				switch (animationConfig.badgeAnimation) {
-					case "bounce":
-						return isAnimating ? "animate-bounce" : "hover:-translate-y-1 hover:scale-110";
-					case "pulse":
-						return "hover:animate-pulse";
-					case "wiggle":
-						return "hover:animate-wiggle";
-					case "fade":
-						return "hover:opacity-80";
-					case "slide":
-						return "hover:translate-x-1";
-					case "none":
-						return "";
-					default:
-						return "";
-				}
-			}
-			return isAnimating ? "animate-bounce" : "";
+			return ""; // No animations
 		};
 
 		const getPopoverAnimationClass = () => {
-			if (animationConfig?.popoverAnimation) {
-				switch (animationConfig.popoverAnimation) {
-					case "scale":
-						return "animate-scaleIn";
-					case "slide":
-						return "animate-slideInDown";
-					case "fade":
-						return "animate-fadeIn";
-					case "flip":
-						return "animate-flipIn";
-					case "none":
-						return "";
-					default:
-						return "";
-				}
-			}
-			return "";
+			return ""; // No animations
 		};
 
 		const getAllOptions = React.useCallback((): MultiSelectOption[] => {
@@ -755,7 +718,6 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 													return null;
 												}
 												const badgeStyle: React.CSSProperties = {
-													animationDuration: `${animation}s`,
 													...(customStyle?.badgeColor && {
 														backgroundColor: customStyle.badgeColor,
 													}),
@@ -776,11 +738,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 															singleLine && "flex-shrink-0 whitespace-nowrap",
 															"[&>svg]:pointer-events-auto",
 														)}
-														style={{
-															...badgeStyle,
-															animationDuration: `${animationConfig?.duration || animation}s`,
-															animationDelay: `${animationConfig?.delay || 0}s`,
-														}}
+														style={badgeStyle}
 													>
 														{IconComponent && !responsiveSettings.hideIcons && (
 															<IconComponent
@@ -828,10 +786,6 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 													singleLine && "flex-shrink-0 whitespace-nowrap",
 													"[&>svg]:pointer-events-auto",
 												)}
-												style={{
-													animationDuration: `${animationConfig?.duration || animation}s`,
-													animationDelay: `${animationConfig?.delay || 0}s`,
-												}}
 											>
 												{`+ ${selectedValues.length - responsiveSettings.maxCount} more`}
 												<XCircle
@@ -881,25 +835,17 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 						role="listbox"
 						aria-multiselectable="true"
 						aria-label="Available options"
-						className={cn(
-							"w-auto p-0",
-							getPopoverAnimationClass(),
-							screenSize === "mobile" && "w-[85vw] max-w-[280px]",
-							screenSize === "tablet" && "w-[70vw] max-w-md",
-							screenSize === "desktop" && "min-w-[300px]",
-							popoverClassName,
-						)}
+						className={cn("w-full overflow-hidden p-0", popoverClassName)}
 						style={{
-							animationDuration: `${animationConfig?.duration || animation}s`,
-							animationDelay: `${animationConfig?.delay || 0}s`,
-							maxWidth: `min(${widthConstraints.maxWidth}, 85vw)`,
-							maxHeight: screenSize === "mobile" ? "70vh" : "60vh",
 							touchAction: "manipulation",
 						}}
 						align="start"
+						side="bottom"
+						sideOffset={4}
+						avoidCollisions={true}
 						onEscapeKeyDown={() => setIsPopoverOpen(false)}
 					>
-						<Command className="w-[calc(48rem-52px)] max-w-full">
+						<Command className={cn("flex w-full flex-col", commandClassName)}>
 							{searchable && (
 								<CommandInput
 									placeholder="Search options..."
@@ -917,10 +863,14 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 							)}
 							<CommandList
 								className={cn(
-									"multiselect-scrollbar max-h-[40vh] overflow-y-auto",
+									"multiselect-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto",
 									screenSize === "mobile" && "max-h-[50vh]",
-									"overscroll-behavior-y-contain",
+									"overscroll-behavior-y-contain scroll-smooth",
 								)}
+								style={{
+									scrollbarWidth: "thin",
+									scrollbarColor: "rgba(156, 163, 175, 0.5) transparent",
+								}}
 							>
 								<CommandEmpty>{emptyIndicator || "No results found."}</CommandEmpty>{" "}
 								{!hideSelectAll && !searchValue && (
@@ -942,7 +892,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 												)}
 												aria-hidden="true"
 											>
-												<CheckIcon className="dark:text-primary h-4 w-4 text-white" />
+												<CheckIcon className="text-secondary bg-primary h-4 w-4 rounded-md" />
 											</div>
 											<span>
 												(Select All
@@ -976,7 +926,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 															)}
 															aria-hidden="true"
 														>
-															<CheckIcon className="h-4 w-4" />
+															<CheckIcon className="text-secondary h-4 w-4" />
 														</div>
 														{option.icon && <option.icon className="text-muted-foreground mr-2 h-4 w-4" aria-hidden="true" />}
 														<span>{option.label}</span>
@@ -1009,12 +959,12 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 														)}
 														aria-hidden="true"
 													>
-														<CheckIcon className="h-4 w-4" />
+														<CheckIcon className="text-secondary h-4 w-4" />
 													</div>
 													{option.icon && <option.icon className="text-muted-foreground mr-2 h-4 w-4" aria-hidden="true" />}
-													<div>
-														<div>{option.label}</div>
-														{option.description && <span className="text-muted-foreground text-xs">{option.description}</span>}
+													<div className="pr-2">
+														<div className="truncate break-words">{option.label}</div>
+														{option.description && <span className="text-muted-foreground text-xs break-words">{option.description}</span>}
 													</div>
 												</CommandItem>
 											);
@@ -1036,12 +986,6 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 							</CommandList>
 						</Command>
 					</PopoverContent>
-					{animation > 0 && selectedValues.length > 0 && (
-						<WandSparkles
-							className={cn("text-foreground bg-background my-2 h-3 w-3 cursor-pointer", isAnimating ? "" : "text-muted-foreground")}
-							onClick={() => setIsAnimating(!isAnimating)}
-						/>
-					)}
 				</Popover>
 			</>
 		);

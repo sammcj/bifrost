@@ -5,6 +5,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/fasthttp/router"
@@ -42,14 +43,17 @@ func NewGovernanceHandler(plugin *governance.GovernancePlugin, configStore confi
 
 // CreateVirtualKeyRequest represents the request body for creating a virtual key
 type CreateVirtualKeyRequest struct {
-	Name            string   `json:"name" validate:"required"`
-	Description     string   `json:"description,omitempty"`
-	AllowedModels   []string `json:"allowed_models,omitempty"` // Empty means all models allowed
+	Name            string `json:"name" validate:"required"`
+	Description     string `json:"description,omitempty"`
 	ProviderConfigs []struct {
 		Provider      string   `json:"provider" validate:"required"`
 		Weight        float64  `json:"weight,omitempty"`
 		AllowedModels []string `json:"allowed_models,omitempty"` // Empty means all models allowed
 	} `json:"provider_configs,omitempty"` // Empty means all providers allowed
+	MCPConfigs []struct {
+		MCPClientName  string   `json:"mcp_client_name" validate:"required"`
+		ToolsToExecute []string `json:"tools_to_execute,omitempty"`
+	} `json:"mcp_configs,omitempty"` // Empty means all MCP clients allowed
 	TeamID     *string                 `json:"team_id,omitempty"`     // Mutually exclusive with CustomerID
 	CustomerID *string                 `json:"customer_id,omitempty"` // Mutually exclusive with TeamID
 	Budget     *CreateBudgetRequest    `json:"budget,omitempty"`
@@ -60,14 +64,18 @@ type CreateVirtualKeyRequest struct {
 
 // UpdateVirtualKeyRequest represents the request body for updating a virtual key
 type UpdateVirtualKeyRequest struct {
-	Description     *string  `json:"description,omitempty"`
-	AllowedModels   []string `json:"allowed_models,omitempty"`
+	Description     *string `json:"description,omitempty"`
 	ProviderConfigs []struct {
 		ID            *uint    `json:"id,omitempty"` // null for new entries
 		Provider      string   `json:"provider" validate:"required"`
 		Weight        float64  `json:"weight,omitempty"`
 		AllowedModels []string `json:"allowed_models,omitempty"` // Empty means all models allowed
 	} `json:"provider_configs,omitempty"`
+	MCPConfigs []struct {
+		ID             *uint    `json:"id,omitempty"` // null for new entries
+		MCPClientName  string   `json:"mcp_client_name" validate:"required"`
+		ToolsToExecute []string `json:"tools_to_execute,omitempty"`
+	} `json:"mcp_configs,omitempty"`
 	TeamID     *string                 `json:"team_id,omitempty"`
 	CustomerID *string                 `json:"customer_id,omitempty"`
 	Budget     *UpdateBudgetRequest    `json:"budget,omitempty"`
@@ -284,8 +292,38 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 			}
 		}
 
+		if req.MCPConfigs != nil {
+			// Check for duplicate MCPClientName values before processing
+			seenMCPClientNames := make(map[string]bool)
+			for _, mc := range req.MCPConfigs {
+				if seenMCPClientNames[mc.MCPClientName] {
+					return fmt.Errorf("duplicate mcp_client_name: %s", mc.MCPClientName)
+				}
+				seenMCPClientNames[mc.MCPClientName] = true
+			}
+
+			for _, mc := range req.MCPConfigs {
+				mcpClient, err := h.configStore.GetMCPClientByName(ctx, mc.MCPClientName)
+				if err != nil {
+					return fmt.Errorf("failed to get MCP client: %w", err)
+				}
+				if err := h.configStore.CreateVirtualKeyMCPConfig(ctx, &configstoreTables.TableVirtualKeyMCPConfig{
+					VirtualKeyID:   vk.ID,
+					MCPClientID:    mcpClient.ID,
+					ToolsToExecute: mc.ToolsToExecute,
+				}, tx); err != nil {
+					return err
+				}
+			}
+		}
+
 		return nil
 	}); err != nil {
+		// Check if this is a duplicate MCPClientName error and return 400 instead of 500
+		if strings.Contains(err.Error(), "duplicate mcp_client_name:") {
+			SendError(ctx, 400, err.Error(), h.logger)
+			return
+		}
 		SendError(ctx, 500, err.Error(), h.logger)
 		return
 	}
@@ -540,9 +578,77 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 			}
 		}
 
+		if req.MCPConfigs != nil {
+			// Check for duplicate MCPClientName values among all configs before processing
+			seenMCPClientNames := make(map[string]bool)
+			for _, mc := range req.MCPConfigs {
+				if seenMCPClientNames[mc.MCPClientName] {
+					return fmt.Errorf("duplicate mcp_client_name: %s", mc.MCPClientName)
+				}
+				seenMCPClientNames[mc.MCPClientName] = true
+			}
+
+			// Get existing MCP configs for comparison
+			var existingMCPConfigs []configstoreTables.TableVirtualKeyMCPConfig
+			if err := tx.Where("virtual_key_id = ?", vk.ID).Find(&existingMCPConfigs).Error; err != nil {
+				return err
+			}
+
+			// Create maps for easier lookup
+			existingMCPConfigsMap := make(map[uint]configstoreTables.TableVirtualKeyMCPConfig)
+			for _, config := range existingMCPConfigs {
+				existingMCPConfigsMap[config.ID] = config
+			}
+
+			requestMCPConfigsMap := make(map[uint]bool)
+
+			// Process new configs: create new ones and update existing ones
+			for _, mc := range req.MCPConfigs {
+				if mc.ID == nil {
+					mcpClient, err := h.configStore.GetMCPClientByName(ctx, mc.MCPClientName)
+					if err != nil {
+						return fmt.Errorf("failed to get MCP client: %w", err)
+					}
+					// Create new MCP config
+					if err := h.configStore.CreateVirtualKeyMCPConfig(ctx, &configstoreTables.TableVirtualKeyMCPConfig{
+						VirtualKeyID:   vk.ID,
+						MCPClientID:    mcpClient.ID,
+						ToolsToExecute: mc.ToolsToExecute,
+					}, tx); err != nil {
+						return err
+					}
+				} else {
+					// Update existing MCP config
+					existing, ok := existingMCPConfigsMap[*mc.ID]
+					if !ok {
+						return fmt.Errorf("MCP config %d does not belong to this virtual key", *mc.ID)
+					}
+					requestMCPConfigsMap[*mc.ID] = true
+					existing.ToolsToExecute = mc.ToolsToExecute
+					if err := h.configStore.UpdateVirtualKeyMCPConfig(ctx, &existing, tx); err != nil {
+						return err
+					}
+				}
+			}
+
+			// Delete MCP configs that are not in the request
+			for id := range existingMCPConfigsMap {
+				if !requestMCPConfigsMap[id] {
+					if err := h.configStore.DeleteVirtualKeyMCPConfig(ctx, id, tx); err != nil {
+						return err
+					}
+				}
+			}
+		}
+
 		return nil
 	}); err != nil {
 		h.logger.Error("failed to update virtual key: %v", err)
+		// Check if this is a duplicate MCPClientName error and return 400 instead of 500
+		if strings.Contains(err.Error(), "duplicate mcp_client_name:") {
+			SendError(ctx, 400, err.Error(), h.logger)
+			return
+		}
 		SendError(ctx, 500, "Failed to update virtual key", h.logger)
 		return
 	}

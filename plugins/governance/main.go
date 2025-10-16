@@ -152,6 +152,7 @@ func (p *GovernancePlugin) GetName() string {
 // TransportInterceptor intercepts requests before they are processed (governance decision point)
 func (p *GovernancePlugin) TransportInterceptor(url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	var virtualKeyValue string
+	var err error
 
 	for header, value := range headers {
 		if strings.ToLower(string(header)) == string(schemas.BifrostContextKeyVirtualKey) {
@@ -163,14 +164,33 @@ func (p *GovernancePlugin) TransportInterceptor(url string, headers map[string]s
 		return headers, body, nil
 	}
 
+	virtualKey, ok := p.store.GetVirtualKey(virtualKeyValue)
+	if !ok || virtualKey == nil || !virtualKey.IsActive {
+		return headers, body, nil
+	}
+
+	body, err = p.loadBalanceProvider(body, virtualKey)
+	if err != nil {
+		return headers, body, err
+	}
+
+	headers, err = p.addMCPIncludeTools(headers, virtualKey)
+	if err != nil {
+		return headers, body, err
+	}
+
+	return headers, body, nil
+}
+
+func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *configstoreTables.TableVirtualKey) (map[string]any, error) {
 	// Check if the request has a model field
 	modelValue, hasModel := body["model"]
 	if !hasModel {
-		return headers, body, nil
+		return body, nil
 	}
 	modelStr, ok := modelValue.(string)
 	if !ok || modelStr == "" {
-		return headers, body, nil
+		return body, nil
 	}
 
 	// Check if model already has provider prefix (contains "/")
@@ -180,23 +200,18 @@ func (p *GovernancePlugin) TransportInterceptor(url string, headers map[string]s
 		// assume the prefixed model should be left unchanged.
 		if p.inMemoryStore != nil {
 			if _, ok := p.inMemoryStore.GetConfiguredProviders()[provider]; ok {
-				return headers, body, nil
+				return body, nil
 			}
 		} else {
-			return headers, body, nil
+			return body, nil
 		}
-	}
-
-	virtualKey, ok := p.store.GetVirtualKey(virtualKeyValue)
-	if !ok || virtualKey == nil || !virtualKey.IsActive {
-		return headers, body, nil
 	}
 
 	// Get provider configs for this virtual key
 	providerConfigs := virtualKey.ProviderConfigs
 	if len(providerConfigs) == 0 {
 		// No provider configs, continue without modification
-		return headers, body, nil
+		return body, nil
 	}
 	allowedProviderConfigs := make([]configstoreTables.TableVirtualKeyProviderConfig, 0)
 	for _, config := range providerConfigs {
@@ -206,7 +221,7 @@ func (p *GovernancePlugin) TransportInterceptor(url string, headers map[string]s
 	}
 	if len(allowedProviderConfigs) == 0 {
 		// No allowed provider configs, continue without modification
-		return headers, body, nil
+		return body, nil
 	}
 	// Weighted random selection from allowed providers for the main model
 	totalWeight := 0.0
@@ -252,7 +267,41 @@ func (p *GovernancePlugin) TransportInterceptor(url string, headers map[string]s
 		body["fallbacks"] = fallbacks
 	}
 
-	return headers, body, nil
+	return body, nil
+}
+
+func (p *GovernancePlugin) addMCPIncludeTools(headers map[string]string, virtualKey *configstoreTables.TableVirtualKey) (map[string]string, error) {
+	if len(virtualKey.MCPConfigs) > 0 {
+		if headers == nil {
+			headers = make(map[string]string)
+		}
+		executeOnlyTools := make([]string, 0)
+		for _, vkMcpConfig := range virtualKey.MCPConfigs {
+			if len(vkMcpConfig.ToolsToExecute) == 0 {
+				// No tools specified in virtual key config - skip this client entirely
+				continue
+			}
+
+			// Handle wildcard in virtual key config - allow all tools from this client
+			if slices.Contains(vkMcpConfig.ToolsToExecute, "*") {
+				// Virtual key uses wildcard - use client-specific wildcard
+				executeOnlyTools = append(executeOnlyTools, fmt.Sprintf("%s/*", vkMcpConfig.MCPClient.Name))
+				continue
+			}
+
+			for _, tool := range vkMcpConfig.ToolsToExecute {
+				if tool != "" {
+					// Add the tool - client config filtering will be handled by mcp.go
+					executeOnlyTools = append(executeOnlyTools, fmt.Sprintf("%s/%s", vkMcpConfig.MCPClient.Name, tool))
+				}
+			}
+		}
+
+		// Set even when empty to exclude tools when no tools are present in the virtual key config
+		headers["x-bf-mcp-include-tools"] = strings.Join(executeOnlyTools, ",")
+	}
+
+	return headers, nil
 }
 
 // PreHook intercepts requests before they are processed (governance decision point)

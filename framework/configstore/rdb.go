@@ -909,6 +909,8 @@ func (s *RDBConfigStore) GetVirtualKeys(ctx context.Context) ([]tables.TableVirt
 		Preload("Budget").
 		Preload("RateLimit").
 		Preload("ProviderConfigs").
+		Preload("MCPConfigs").
+		Preload("MCPConfigs.MCPClient").
 		Preload("Keys", func(db *gorm.DB) *gorm.DB {
 			return db.Select("id, name, key_id, models_json, provider")
 		}).Find(&virtualKeys).Error; err != nil {
@@ -926,6 +928,8 @@ func (s *RDBConfigStore) GetVirtualKey(ctx context.Context, id string) (*tables.
 		Preload("Budget").
 		Preload("RateLimit").
 		Preload("ProviderConfigs").
+		Preload("MCPConfigs").
+		Preload("MCPConfigs.MCPClient").
 		Preload("Keys", func(db *gorm.DB) *gorm.DB {
 			return db.Select("id, name, key_id, models_json, provider")
 		}).First(&virtualKey, "id = ?", id).Error; err != nil {
@@ -942,6 +946,8 @@ func (s *RDBConfigStore) GetVirtualKeyByValue(ctx context.Context, value string)
 		Preload("Budget").
 		Preload("RateLimit").
 		Preload("ProviderConfigs").
+		Preload("MCPConfigs").
+		Preload("MCPConfigs.MCPClient").
 		Preload("Keys", func(db *gorm.DB) *gorm.DB {
 			return db.Select("id, name, key_id, models_json, provider")
 		}).First(&virtualKey, "value = ?", value).Error; err != nil {
@@ -1071,6 +1077,57 @@ func (s *RDBConfigStore) DeleteVirtualKeyProviderConfig(ctx context.Context, id 
 		txDB = s.db
 	}
 	return txDB.WithContext(ctx).Delete(&tables.TableVirtualKeyProviderConfig{}, "id = ?", id).Error
+}
+
+// GetVirtualKeyMCPConfigs retrieves all virtual key MCP configs from the database.
+func (s *RDBConfigStore) GetVirtualKeyMCPConfigs(ctx context.Context, virtualKeyID string) ([]tables.TableVirtualKeyMCPConfig, error) {
+	var virtualKey tables.TableVirtualKey
+	if err := s.db.WithContext(ctx).First(&virtualKey, "id = ?", virtualKeyID).Error; err != nil {
+		return nil, err
+	}
+
+	if virtualKey.ID == "" {
+		return nil, nil
+	}
+
+	var mcpConfigs []tables.TableVirtualKeyMCPConfig
+	if err := s.db.WithContext(ctx).Where("virtual_key_id = ?", virtualKey.ID).Find(&mcpConfigs).Error; err != nil {
+		return nil, err
+	}
+	return mcpConfigs, nil
+}
+
+// CreateVirtualKeyMCPConfig creates a new virtual key MCP config in the database.
+func (s *RDBConfigStore) CreateVirtualKeyMCPConfig(ctx context.Context, virtualKeyMCPConfig *tables.TableVirtualKeyMCPConfig, tx ...*gorm.DB) error {
+	var txDB *gorm.DB
+	if len(tx) > 0 {
+		txDB = tx[0]
+	} else {
+		txDB = s.db
+	}
+	return txDB.WithContext(ctx).Create(virtualKeyMCPConfig).Error
+}
+
+// UpdateVirtualKeyMCPConfig updates a virtual key provider config in the database.
+func (s *RDBConfigStore) UpdateVirtualKeyMCPConfig(ctx context.Context, virtualKeyMCPConfig *tables.TableVirtualKeyMCPConfig, tx ...*gorm.DB) error {
+	var txDB *gorm.DB
+	if len(tx) > 0 {
+		txDB = tx[0]
+	} else {
+		txDB = s.db
+	}
+	return txDB.WithContext(ctx).Save(virtualKeyMCPConfig).Error
+}
+
+// DeleteVirtualKeyMCPConfig deletes a virtual key provider config from the database.
+func (s *RDBConfigStore) DeleteVirtualKeyMCPConfig(ctx context.Context, id uint, tx ...*gorm.DB) error {
+	var txDB *gorm.DB
+	if len(tx) > 0 {
+		txDB = tx[0]
+	} else {
+		txDB = s.db
+	}
+	return txDB.WithContext(ctx).Delete(&tables.TableVirtualKeyMCPConfig{}, "id = ?", id).Error
 }
 
 // GetTeams retrieves all teams from the database.
