@@ -1,3 +1,4 @@
+// Package pricing provides a pricing manager for the framework.
 package pricing
 
 import (
@@ -9,22 +10,33 @@ import (
 
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
+	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 )
 
 // Default sync interval and config key
 const (
 	DefaultPricingSyncInterval = 24 * time.Hour
 	LastPricingSyncKey         = "LastModelPricingSync"
-	PricingFileURL             = "https://getbifrost.ai/datasheet"
+	DefaultPricingURL          = "https://getbifrost.ai/datasheet"
 	TokenTierAbove128K         = 128000
 )
 
+// Config is the pricing manager configuration.
+type Config struct {
+	PricingURL          *string        `json:"pricing_url,omitempty"`
+	PricingSyncInterval *time.Duration `json:"pricing_sync_interval,omitempty"`
+}
+
+// PricingManager is the pricing manager for the framework.
 type PricingManager struct {
 	configStore configstore.ConfigStore
 	logger      schemas.Logger
 
+	pricingURL          string
+	pricingSyncInterval time.Duration
+
 	// In-memory cache for fast access - direct map for O(1) lookups
-	pricingData map[string]configstore.TableModelPricing
+	pricingData map[string]configstoreTables.TableModelPricing
 	mu          sync.RWMutex
 
 	modelPool map[schemas.ModelProvider][]string
@@ -73,13 +85,24 @@ type PricingEntry struct {
 }
 
 // Init initializes the pricing manager
-func Init(ctx context.Context, configStore configstore.ConfigStore, logger schemas.Logger) (*PricingManager, error) {
+func Init(ctx context.Context, config *Config, configStore configstore.ConfigStore, logger schemas.Logger) (*PricingManager, error) {
+	// Initialize pricing URL and sync interval
+	pricingURL := DefaultPricingURL
+	if config.PricingURL != nil {
+		pricingURL = *config.PricingURL
+	}
+	pricingSyncInterval := DefaultPricingSyncInterval
+	if config.PricingSyncInterval != nil {
+		pricingSyncInterval = *config.PricingSyncInterval
+	}
 	pm := &PricingManager{
-		configStore: configStore,
-		logger:      logger,
-		pricingData: make(map[string]configstore.TableModelPricing),
-		modelPool:   make(map[schemas.ModelProvider][]string),
-		done:        make(chan struct{}),
+		pricingURL:          pricingURL,
+		pricingSyncInterval: pricingSyncInterval,
+		configStore:         configStore,
+		logger:              logger,
+		pricingData:         make(map[string]configstoreTables.TableModelPricing),
+		modelPool:           make(map[schemas.ModelProvider][]string),
+		done:                make(chan struct{}),
 	}
 
 	logger.Info("initializing pricing manager...")
@@ -90,7 +113,7 @@ func Init(ctx context.Context, configStore configstore.ConfigStore, logger schem
 			return nil, fmt.Errorf("failed to load initial pricing data: %w", err)
 		}
 
-		// For the bootup we sync pricing data from file to database
+		// For the boot-up we sync pricing data from file to database
 		if err := pm.syncPricing(ctx); err != nil {
 			return nil, fmt.Errorf("failed to sync pricing data: %w", err)
 		}
@@ -113,6 +136,24 @@ func Init(ctx context.Context, configStore configstore.ConfigStore, logger schem
 	return pm, nil
 }
 
+// Reload reloads the pricing manager from config
+func (pm *PricingManager) Reload(ctx context.Context, config *Config) error {
+	pm.pricingURL = DefaultPricingURL
+	if config.PricingURL != nil {
+		pm.pricingURL = *config.PricingURL
+	}
+	pm.pricingSyncInterval = DefaultPricingSyncInterval
+	if config.PricingSyncInterval != nil {
+		pm.pricingSyncInterval = *config.PricingSyncInterval
+	}
+	err := pm.syncPricing(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to sync pricing data: %w", err)
+	}
+	return nil
+}
+
+// CalculateCost calculates the cost of a Bifrost response
 func (pm *PricingManager) CalculateCost(result *schemas.BifrostResponse) float64 {
 	if result == nil {
 		return 0.0
@@ -202,6 +243,7 @@ func (pm *PricingManager) CalculateCost(result *schemas.BifrostResponse) float64
 	return cost
 }
 
+// CalculateCostWithCacheDebug calculates the cost of a Bifrost response with cache debug information
 func (pm *PricingManager) CalculateCostWithCacheDebug(result *schemas.BifrostResponse) float64 {
 	if result == nil {
 		return 0.0
@@ -446,7 +488,7 @@ func (pm *PricingManager) GetProvidersForModel(model string) []schemas.ModelProv
 }
 
 // getPricing returns pricing information for a model (thread-safe)
-func (pm *PricingManager) getPricing(model, provider string, requestType schemas.RequestType) (*configstore.TableModelPricing, bool) {
+func (pm *PricingManager) getPricing(model, provider string, requestType schemas.RequestType) (*configstoreTables.TableModelPricing, bool) {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 

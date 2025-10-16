@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/maximhq/bifrost/framework/configstore"
+	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"gorm.io/gorm"
 )
 
@@ -47,7 +47,7 @@ func (pm *PricingManager) shouldSyncPricing(ctx context.Context) (bool, string) 
 		return true, "corrupted sync timestamp"
 	}
 
-	if time.Since(lastSync) >= DefaultPricingSyncInterval {
+	if time.Since(lastSync) >= pm.pricingSyncInterval {
 		return true, "sync interval elapsed"
 	}
 
@@ -112,7 +112,7 @@ func (pm *PricingManager) syncPricing(ctx context.Context) error {
 		return fmt.Errorf("failed to sync pricing data to database: %w", err)
 	}
 
-	config := &configstore.TableConfig{
+	config := &configstoreTables.TableConfig{
 		Key:   LastPricingSyncKey,
 		Value: time.Now().Format(time.RFC3339),
 	}
@@ -137,7 +137,7 @@ func (pm *PricingManager) loadPricingFromURL(ctx context.Context) (PricingData, 
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, PricingFileURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pm.pricingURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
@@ -180,7 +180,7 @@ func (pm *PricingManager) loadPricingIntoMemory(ctx context.Context) error {
 	defer pm.mu.Unlock()
 
 	// Clear and rebuild the pricing map
-	pm.pricingData = make(map[string]configstore.TableModelPricing, len(pricingData))
+	pm.pricingData = make(map[string]configstoreTables.TableModelPricing, len(pricingData))
 	for modelKey, entry := range pricingData {
 		pricing := convertPricingDataToTableModelPricing(modelKey, entry)
 		key := makeKey(pricing.Model, pricing.Provider, pricing.Mode)
@@ -205,7 +205,7 @@ func (pm *PricingManager) loadPricingFromDatabase(ctx context.Context) error {
 	defer pm.mu.Unlock()
 
 	// Clear and rebuild the pricing map
-	pm.pricingData = make(map[string]configstore.TableModelPricing, len(pricingRecords))
+	pm.pricingData = make(map[string]configstoreTables.TableModelPricing, len(pricingRecords))
 	for _, pricing := range pricingRecords {
 		key := makeKey(pricing.Model, pricing.Provider, pricing.Mode)
 		pm.pricingData[key] = pricing

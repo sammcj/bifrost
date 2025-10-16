@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/migrator"
 	"gorm.io/gorm"
 )
@@ -37,6 +38,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationTeamsTableUpdates(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddFrameworkConfigsTable(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -47,92 +51,92 @@ func migrationInit(ctx context.Context, db *gorm.DB) error {
 		Migrate: func(tx *gorm.DB) error {
 			tx = tx.WithContext(ctx)
 			migrator := tx.Migrator()
-			if !migrator.HasTable(&TableConfigHash{}) {
-				if err := migrator.CreateTable(&TableConfigHash{}); err != nil {
+			if !migrator.HasTable(&tables.TableConfigHash{}) {
+				if err := migrator.CreateTable(&tables.TableConfigHash{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableProvider{}) {
-				if err := migrator.CreateTable(&TableProvider{}); err != nil {
+			if !migrator.HasTable(&tables.TableProvider{}) {
+				if err := migrator.CreateTable(&tables.TableProvider{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableKey{}) {
-				if err := migrator.CreateTable(&TableKey{}); err != nil {
+			if !migrator.HasTable(&tables.TableKey{}) {
+				if err := migrator.CreateTable(&tables.TableKey{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableModel{}) {
-				if err := migrator.CreateTable(&TableModel{}); err != nil {
+			if !migrator.HasTable(&tables.TableModel{}) {
+				if err := migrator.CreateTable(&tables.TableModel{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableMCPClient{}) {
-				if err := migrator.CreateTable(&TableMCPClient{}); err != nil {
+			if !migrator.HasTable(&tables.TableMCPClient{}) {
+				if err := migrator.CreateTable(&tables.TableMCPClient{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableClientConfig{}) {
-				if err := migrator.CreateTable(&TableClientConfig{}); err != nil {
+			if !migrator.HasTable(&tables.TableClientConfig{}) {
+				if err := migrator.CreateTable(&tables.TableClientConfig{}); err != nil {
 					return err
 				}
-			} else if !migrator.HasColumn(&TableClientConfig{}, "max_request_body_size_mb") {
-				if err := migrator.AddColumn(&TableClientConfig{}, "max_request_body_size_mb"); err != nil {
-					return err
-				}
-			}
-			if !migrator.HasTable(&TableEnvKey{}) {
-				if err := migrator.CreateTable(&TableEnvKey{}); err != nil {
+			} else if !migrator.HasColumn(&tables.TableClientConfig{}, "max_request_body_size_mb") {
+				if err := migrator.AddColumn(&tables.TableClientConfig{}, "max_request_body_size_mb"); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableVectorStoreConfig{}) {
-				if err := migrator.CreateTable(&TableVectorStoreConfig{}); err != nil {
+			if !migrator.HasTable(&tables.TableEnvKey{}) {
+				if err := migrator.CreateTable(&tables.TableEnvKey{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableLogStoreConfig{}) {
-				if err := migrator.CreateTable(&TableLogStoreConfig{}); err != nil {
+			if !migrator.HasTable(&tables.TableVectorStoreConfig{}) {
+				if err := migrator.CreateTable(&tables.TableVectorStoreConfig{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableBudget{}) {
-				if err := migrator.CreateTable(&TableBudget{}); err != nil {
+			if !migrator.HasTable(&tables.TableLogStoreConfig{}) {
+				if err := migrator.CreateTable(&tables.TableLogStoreConfig{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableRateLimit{}) {
-				if err := migrator.CreateTable(&TableRateLimit{}); err != nil {
+			if !migrator.HasTable(&tables.TableBudget{}) {
+				if err := migrator.CreateTable(&tables.TableBudget{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableCustomer{}) {
-				if err := migrator.CreateTable(&TableCustomer{}); err != nil {
+			if !migrator.HasTable(&tables.TableRateLimit{}) {
+				if err := migrator.CreateTable(&tables.TableRateLimit{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableTeam{}) {
-				if err := migrator.CreateTable(&TableTeam{}); err != nil {
+			if !migrator.HasTable(&tables.TableCustomer{}) {
+				if err := migrator.CreateTable(&tables.TableCustomer{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableVirtualKey{}) {
-				if err := migrator.CreateTable(&TableVirtualKey{}); err != nil {
+			if !migrator.HasTable(&tables.TableTeam{}) {
+				if err := migrator.CreateTable(&tables.TableTeam{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableConfig{}) {
-				if err := migrator.CreateTable(&TableConfig{}); err != nil {
+			if !migrator.HasTable(&tables.TableVirtualKey{}) {
+				if err := migrator.CreateTable(&tables.TableVirtualKey{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TableModelPricing{}) {
-				if err := migrator.CreateTable(&TableModelPricing{}); err != nil {
+			if !migrator.HasTable(&tables.TableConfig{}) {
+				if err := migrator.CreateTable(&tables.TableConfig{}); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasTable(&TablePlugin{}) {
-				if err := migrator.CreateTable(&TablePlugin{}); err != nil {
+			if !migrator.HasTable(&tables.TableModelPricing{}) {
+				if err := migrator.CreateTable(&tables.TableModelPricing{}); err != nil {
+					return err
+				}
+			}
+			if !migrator.HasTable(&tables.TablePlugin{}) {
+				if err := migrator.CreateTable(&tables.TablePlugin{}); err != nil {
 					return err
 				}
 			}
@@ -143,55 +147,55 @@ func migrationInit(ctx context.Context, db *gorm.DB) error {
 			tx = tx.WithContext(ctx)
 			migrator := tx.Migrator()
 			// Drop children first, then parents (adjust if your actual FKs differ)
-			if err := migrator.DropTable(&TableVirtualKey{}); err != nil {
+			if err := migrator.DropTable(&tables.TableVirtualKey{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableKey{}); err != nil {
+			if err := migrator.DropTable(&tables.TableKey{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableTeam{}); err != nil {
+			if err := migrator.DropTable(&tables.TableTeam{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableProvider{}); err != nil {
+			if err := migrator.DropTable(&tables.TableProvider{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableCustomer{}); err != nil {
+			if err := migrator.DropTable(&tables.TableCustomer{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableBudget{}); err != nil {
+			if err := migrator.DropTable(&tables.TableBudget{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableRateLimit{}); err != nil {
+			if err := migrator.DropTable(&tables.TableRateLimit{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableModel{}); err != nil {
+			if err := migrator.DropTable(&tables.TableModel{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableMCPClient{}); err != nil {
+			if err := migrator.DropTable(&tables.TableMCPClient{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableClientConfig{}); err != nil {
+			if err := migrator.DropTable(&tables.TableClientConfig{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableEnvKey{}); err != nil {
+			if err := migrator.DropTable(&tables.TableEnvKey{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableVectorStoreConfig{}); err != nil {
+			if err := migrator.DropTable(&tables.TableVectorStoreConfig{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableLogStoreConfig{}); err != nil {
+			if err := migrator.DropTable(&tables.TableLogStoreConfig{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableConfig{}); err != nil {
+			if err := migrator.DropTable(&tables.TableConfig{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableModelPricing{}); err != nil {
+			if err := migrator.DropTable(&tables.TableModelPricing{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TablePlugin{}); err != nil {
+			if err := migrator.DropTable(&tables.TablePlugin{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&TableConfigHash{}); err != nil {
+			if err := migrator.DropTable(&tables.TableConfigHash{}); err != nil {
 				return err
 			}
 			return nil
@@ -252,8 +256,8 @@ func migrationAddCustomProviderConfigJSONColumn(ctx context.Context, db *gorm.DB
 			tx = tx.WithContext(ctx)
 			migrator := tx.Migrator()
 
-			if !migrator.HasColumn(&TableProvider{}, "custom_provider_config_json") {
-				if err := migrator.AddColumn(&TableProvider{}, "custom_provider_config_json"); err != nil {
+			if !migrator.HasColumn(&tables.TableProvider{}, "custom_provider_config_json") {
+				if err := migrator.AddColumn(&tables.TableProvider{}, "custom_provider_config_json"); err != nil {
 					return err
 				}
 			}
@@ -275,8 +279,8 @@ func migrationAddVirtualKeyProviderConfigTable(ctx context.Context, db *gorm.DB)
 			tx = tx.WithContext(ctx)
 			migrator := tx.Migrator()
 
-			if !migrator.HasTable(&TableVirtualKeyProviderConfig{}) {
-				if err := migrator.CreateTable(&TableVirtualKeyProviderConfig{}); err != nil {
+			if !migrator.HasTable(&tables.TableVirtualKeyProviderConfig{}) {
+				if err := migrator.CreateTable(&tables.TableVirtualKeyProviderConfig{}); err != nil {
 					return err
 				}
 			}
@@ -287,7 +291,7 @@ func migrationAddVirtualKeyProviderConfigTable(ctx context.Context, db *gorm.DB)
 			tx = tx.WithContext(ctx)
 			migrator := tx.Migrator()
 
-			if err := migrator.DropTable(&TableVirtualKeyProviderConfig{}); err != nil {
+			if err := migrator.DropTable(&tables.TableVirtualKeyProviderConfig{}); err != nil {
 				return err
 			}
 			return nil
@@ -308,8 +312,8 @@ func migrationAddOpenAIUseResponsesAPIColumn(ctx context.Context, db *gorm.DB) e
 			tx = tx.WithContext(ctx)
 			migrator := tx.Migrator()
 
-			if !migrator.HasColumn(&TableKey{}, "open_ai_use_responses_api") {
-				if err := migrator.AddColumn(&TableKey{}, "open_ai_use_responses_api"); err != nil {
+			if !migrator.HasColumn(&tables.TableKey{}, "open_ai_use_responses_api") {
+				if err := migrator.AddColumn(&tables.TableKey{}, "open_ai_use_responses_api"); err != nil {
 					return err
 				}
 			}
@@ -331,8 +335,8 @@ func migrationAddAllowedOriginsJSONColumn(ctx context.Context, db *gorm.DB) erro
 			tx = tx.WithContext(ctx)
 			migrator := tx.Migrator()
 
-			if !migrator.HasColumn(&TableClientConfig{}, "allowed_origins_json") {
-				if err := migrator.AddColumn(&TableClientConfig{}, "allowed_origins_json"); err != nil {
+			if !migrator.HasColumn(&tables.TableClientConfig{}, "allowed_origins_json") {
+				if err := migrator.AddColumn(&tables.TableClientConfig{}, "allowed_origins_json"); err != nil {
 					return err
 				}
 			}
@@ -354,8 +358,8 @@ func migrationAddAllowDirectKeysColumn(ctx context.Context, db *gorm.DB) error {
 			tx = tx.WithContext(ctx)
 			migrator := tx.Migrator()
 
-			if !migrator.HasColumn(&TableClientConfig{}, "allow_direct_keys") {
-				if err := migrator.AddColumn(&TableClientConfig{}, "allow_direct_keys"); err != nil {
+			if !migrator.HasColumn(&tables.TableClientConfig{}, "allow_direct_keys") {
+				if err := migrator.AddColumn(&tables.TableClientConfig{}, "allow_direct_keys"); err != nil {
 					return err
 				}
 			}
@@ -376,8 +380,8 @@ func migrationAddEnableLiteLLMFallbacksColumn(ctx context.Context, db *gorm.DB) 
 		Migrate: func(tx *gorm.DB) error {
 			tx = tx.WithContext(ctx)
 			migrator := tx.Migrator()
-			if !migrator.HasColumn(&TableClientConfig{}, "enable_litellm_fallbacks") {
-				if err := migrator.AddColumn(&TableClientConfig{}, "enable_litellm_fallbacks"); err != nil {
+			if !migrator.HasColumn(&tables.TableClientConfig{}, "enable_litellm_fallbacks") {
+				if err := migrator.AddColumn(&tables.TableClientConfig{}, "enable_litellm_fallbacks"); err != nil {
 					return err
 				}
 			}
@@ -387,7 +391,7 @@ func migrationAddEnableLiteLLMFallbacksColumn(ctx context.Context, db *gorm.DB) 
 			tx = tx.WithContext(ctx)
 			migrator := tx.Migrator()
 
-			if err := migrator.DropColumn(&TableClientConfig{}, "enable_litellm_fallbacks"); err != nil {
+			if err := migrator.DropColumn(&tables.TableClientConfig{}, "enable_litellm_fallbacks"); err != nil {
 				return err
 			}
 			return nil
@@ -407,18 +411,40 @@ func migrationTeamsTableUpdates(ctx context.Context, db *gorm.DB) error {
 		Migrate: func(tx *gorm.DB) error {
 			tx = tx.WithContext(ctx)
 			migrator := tx.Migrator()
-			if !migrator.HasColumn(&TableTeam{}, "profile") {
-				if err := migrator.AddColumn(&TableTeam{}, "profile"); err != nil {
+			if !migrator.HasColumn(&tables.TableTeam{}, "profile") {
+				if err := migrator.AddColumn(&tables.TableTeam{}, "profile"); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasColumn(&TableTeam{}, "config") {
-				if err := migrator.AddColumn(&TableTeam{}, "config"); err != nil {
+			if !migrator.HasColumn(&tables.TableTeam{}, "config") {
+				if err := migrator.AddColumn(&tables.TableTeam{}, "config"); err != nil {
 					return err
 				}
 			}
-			if !migrator.HasColumn(&TableTeam{}, "claims") {
-				if err := migrator.AddColumn(&TableTeam{}, "claims"); err != nil {
+			if !migrator.HasColumn(&tables.TableTeam{}, "claims") {
+				if err := migrator.AddColumn(&tables.TableTeam{}, "claims"); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running db migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddFrameworkConfigsTable adds the framework_configs table
+func migrationAddFrameworkConfigsTable(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_framework_configs_table",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasTable(&tables.TableFrameworkConfig{}) {
+				if err := migrator.CreateTable(&tables.TableFrameworkConfig{}); err != nil {
 					return err
 				}
 			}

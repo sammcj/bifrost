@@ -9,6 +9,7 @@ import (
 
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
+	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 )
 
 // UsageUpdate contains data for VK-level usage tracking
@@ -96,7 +97,7 @@ func (t *UsageTracker) UpdateUsage(ctx context.Context, update *UsageUpdate) {
 }
 
 // updateBudgetHierarchy updates budget usage atomically in the VK → Team → Customer hierarchy
-func (t *UsageTracker) updateBudgetHierarchy(ctx context.Context, vk *configstore.TableVirtualKey, update *UsageUpdate) {
+func (t *UsageTracker) updateBudgetHierarchy(ctx context.Context, vk *configstoreTables.TableVirtualKey, update *UsageUpdate) {
 	// Use atomic budget update to prevent race conditions and ensure consistency
 	if err := t.store.UpdateBudget(ctx, vk, update.Cost); err != nil {
 		t.logger.Error("failed to update budget hierarchy atomically for VK %s: %v", vk.ID, err)
@@ -151,7 +152,7 @@ func (t *UsageTracker) PerformStartupResets(ctx context.Context) error {
 	t.logger.Info("performing startup reset check for expired rate limits and budgets")
 	now := time.Now()
 
-	var resetRateLimits []*configstore.TableRateLimit
+	var resetRateLimits []*configstoreTables.TableRateLimit
 	var errs []string
 	var vksWithRateLimits int
 	var vksWithoutRateLimits int
@@ -179,7 +180,7 @@ func (t *UsageTracker) PerformStartupResets(ctx context.Context) error {
 
 		// Check token limits
 		if rateLimit.TokenResetDuration != nil {
-			if duration, err := configstore.ParseDuration(*rateLimit.TokenResetDuration); err == nil {
+			if duration, err := configstoreTables.ParseDuration(*rateLimit.TokenResetDuration); err == nil {
 				timeSinceReset := now.Sub(rateLimit.TokenLastReset)
 				if timeSinceReset >= duration {
 					rateLimit.TokenCurrentUsage = 0
@@ -193,7 +194,7 @@ func (t *UsageTracker) PerformStartupResets(ctx context.Context) error {
 
 		// Check request limits
 		if rateLimit.RequestResetDuration != nil {
-			if duration, err := configstore.ParseDuration(*rateLimit.RequestResetDuration); err == nil {
+			if duration, err := configstoreTables.ParseDuration(*rateLimit.RequestResetDuration); err == nil {
 				timeSinceReset := now.Sub(rateLimit.RequestLastReset)
 				if timeSinceReset >= duration {
 					rateLimit.RequestCurrentUsage = 0

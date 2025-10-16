@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +12,7 @@ import { getErrorMessage, useCreatePluginMutation, useGetPluginsQuery, useGetPro
 import { CacheConfig, ModelProviderName } from "@/lib/types/config";
 import { SEMANTIC_CACHE_PLUGIN } from "@/lib/types/plugins";
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 const defaultCacheConfig: CacheConfig = {
@@ -33,6 +34,9 @@ interface PluginsFormProps {
 
 export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) {
 	const [cacheConfig, setCacheConfig] = useState<CacheConfig>(defaultCacheConfig);
+	const [originalCacheEnabled, setOriginalCacheEnabled] = useState<boolean>(false);
+	const [serverCacheConfig, setServerCacheConfig] = useState<CacheConfig>(defaultCacheConfig);
+	const [serverCacheEnabled, setServerCacheEnabled] = useState<boolean>(false);
 
 	const { data: providersData, error: providersError, isLoading: providersLoading } = useGetProvidersQuery();
 
@@ -46,8 +50,8 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 
 	// RTK Query hooks
 	const { data: plugins, isLoading: loading } = useGetPluginsQuery();
-	const [updatePlugin] = useUpdatePluginMutation();
-	const [createPlugin] = useCreatePluginMutation();
+	const [updatePlugin, { isLoading: isUpdating }] = useUpdatePluginMutation();
+	const [createPlugin, { isLoading: isCreating }] = useCreatePluginMutation();
 
 	// Get semantic cache plugin and its config
 	const semanticCachePlugin = useMemo(() => plugins?.find((plugin) => plugin.name === SEMANTIC_CACHE_PLUGIN), [plugins]);
@@ -57,7 +61,11 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 	// Initialize cache config from plugin data
 	useEffect(() => {
 		if (semanticCachePlugin?.config) {
-			setCacheConfig({ ...defaultCacheConfig, ...semanticCachePlugin.config });
+			const config = { ...defaultCacheConfig, ...semanticCachePlugin.config };
+			setCacheConfig(config);
+			setServerCacheConfig(config);
+			setOriginalCacheEnabled(semanticCachePlugin.enabled);
+			setServerCacheEnabled(semanticCachePlugin.enabled);
 		}
 	}, [semanticCachePlugin]);
 
@@ -71,101 +79,58 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 		}
 	}, [providers, semanticCachePlugin?.config]);
 
+	const hasChanges = useMemo(() => {
+		if (originalCacheEnabled !== serverCacheEnabled) return true;
+		
+		return (
+			cacheConfig.provider !== serverCacheConfig.provider ||
+			cacheConfig.embedding_model !== serverCacheConfig.embedding_model ||
+			cacheConfig.dimension !== serverCacheConfig.dimension ||
+			cacheConfig.ttl_seconds !== serverCacheConfig.ttl_seconds ||
+			cacheConfig.threshold !== serverCacheConfig.threshold ||
+			cacheConfig.conversation_history_threshold !== serverCacheConfig.conversation_history_threshold ||
+			cacheConfig.exclude_system_prompt !== serverCacheConfig.exclude_system_prompt ||
+			cacheConfig.cache_by_model !== serverCacheConfig.cache_by_model ||
+			cacheConfig.cache_by_provider !== serverCacheConfig.cache_by_provider
+		);
+	}, [cacheConfig, serverCacheConfig, originalCacheEnabled, serverCacheEnabled]);
+
 	// Handle semantic cache toggle (create or update)
-	const handleSemanticCacheToggle = async (enabled: boolean) => {
+	const handleSemanticCacheToggle = (enabled: boolean) => {
+		setOriginalCacheEnabled(enabled);
+	};
+
+	// Update cache config locally
+	const updateCacheConfigLocal = (updates: Partial<CacheConfig>) => {
+		setCacheConfig((prev) => ({ ...prev, ...updates }));
+	};
+
+	// Save all changes
+	const handleSave = async () => {
 		try {
 			if (semanticCachePlugin) {
 				// Update existing plugin
 				await updatePlugin({
 					name: SEMANTIC_CACHE_PLUGIN,
-					data: { enabled, config: cacheConfig },
+					data: { enabled: originalCacheEnabled, config: cacheConfig },
 				}).unwrap();
 			} else {
 				// Create new plugin
 				await createPlugin({
 					name: SEMANTIC_CACHE_PLUGIN,
-					enabled,
+					enabled: originalCacheEnabled,
 					config: cacheConfig,
 				}).unwrap();
 			}
-			toast.success(`Semantic cache ${enabled ? "enabled" : "disabled"} successfully`);
+			toast.success("Plugin configuration updated successfully");
+			// Update server state to match current state
+			setServerCacheConfig(cacheConfig);
+			setServerCacheEnabled(originalCacheEnabled);
 		} catch (error) {
 			const errorMessage = getErrorMessage(error);
-			toast.error(`Failed to ${enabled ? "enable" : "disable"} semantic cache: ${errorMessage}`);
+			toast.error(`Failed to update plugin configuration: ${errorMessage}`);
 		}
 	};
-
-	// Update cache config
-	const updateCacheConfig = async (updates: Partial<CacheConfig>) => {
-		// Capture snapshot of previous config before updating
-		const previousConfig = cacheConfig;
-		const newConfig = { ...cacheConfig, ...updates };
-
-		// Set optimistic state
-		setCacheConfig(newConfig);
-
-		if (semanticCachePlugin?.enabled) {
-			try {
-				await updatePlugin({
-					name: SEMANTIC_CACHE_PLUGIN,
-					data: { enabled: true, config: newConfig },
-				}).unwrap();
-
-				// Success toast
-				toast.success("Cache configuration updated successfully");
-			} catch (error) {
-				// Revert to previous config on error
-				setCacheConfig(previousConfig);
-				toast.error("Failed to update cache configuration");
-			}
-		}
-	};
-
-	// Refs to store the timeout IDs for debouncing (separate for cache)
-	const cacheDebounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-	// Debounced version for text/number inputs
-	const debouncedUpdateCacheConfig = useCallback(
-		(updates: Partial<CacheConfig>) => {
-			// Update local state immediately for responsive UI
-			const newConfig = { ...cacheConfig, ...updates };
-			setCacheConfig(newConfig);
-
-			// Clear previous timeout
-			if (cacheDebounceTimeoutRef.current) {
-				clearTimeout(cacheDebounceTimeoutRef.current);
-			}
-
-			// Only save to backend if plugin is enabled, with debouncing
-			if (semanticCachePlugin?.enabled) {
-				cacheDebounceTimeoutRef.current = setTimeout(() => {
-					updatePlugin({
-						name: SEMANTIC_CACHE_PLUGIN,
-						data: { enabled: true, config: newConfig },
-					})
-						.unwrap()
-						.then(() => {
-							toast.success("Cache configuration updated successfully");
-						})
-						.catch((error) => {
-							toast.error("Failed to update cache configuration");
-							// Revert on error
-							setCacheConfig(cacheConfig);
-						});
-				}, 500); // 500ms debounce
-			}
-		},
-		[cacheConfig, semanticCachePlugin?.enabled, updatePlugin],
-	);
-
-	// Cleanup timeouts on component unmount
-	useEffect(() => {
-		return () => {
-			if (cacheDebounceTimeoutRef.current) {
-				clearTimeout(cacheDebounceTimeoutRef.current);
-			}
-		};
-	}, []);
 
 	if (loading) {
 		return (
@@ -182,7 +147,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 			{/* Semantic Cache Toggle */}
 			<div className="rounded-lg border p-4">
 				<div className="flex items-center justify-between space-x-2">
-					<div className="space-y-0.5">
+					<div className="flex-1 space-y-0.5">
 						<label htmlFor="enable-caching" className="text-sm font-medium">
 							Enable Semantic Caching
 						</label>
@@ -196,21 +161,28 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 							)}
 						</p>
 					</div>
-					<Switch
-						id="enable-caching"
-						size="md"
-						checked={isSemanticCacheEnabled && isVectorStoreEnabled}
-						disabled={!isVectorStoreEnabled || providersLoading || providers.length === 0}
-						onCheckedChange={(checked) => {
-							if (isVectorStoreEnabled) {
-								handleSemanticCacheToggle(checked);
-							}
-						}}
-					/>
+					<div className="flex items-center gap-2">
+						<Switch
+							id="enable-caching"
+							size="md"
+							checked={originalCacheEnabled && isVectorStoreEnabled}
+							disabled={!isVectorStoreEnabled || providersLoading || providers.length === 0}
+							onCheckedChange={(checked) => {
+								if (isVectorStoreEnabled) {
+									handleSemanticCacheToggle(checked);
+								}
+							}}
+						/>
+						{(isSemanticCacheEnabled || originalCacheEnabled) && (
+							<Button onClick={handleSave} disabled={!hasChanges || isUpdating || isCreating} size="sm">
+								{isUpdating || isCreating ? "Saving..." : "Save"}
+							</Button>
+						)}
+					</div>
 				</div>
 
 				{/* Cache Configuration (only show when enabled) */}
-				{isSemanticCacheEnabled &&
+				{originalCacheEnabled &&
 					isVectorStoreEnabled &&
 					(providersLoading ? (
 						<div className="flex items-center justify-center">
@@ -227,7 +199,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 										<Label htmlFor="provider">Configured Providers</Label>
 										<Select
 											value={cacheConfig.provider}
-											onValueChange={(value: ModelProviderName) => updateCacheConfig({ provider: value })}
+											onValueChange={(value: ModelProviderName) => updateCacheConfigLocal({ provider: value })}
 										>
 											<SelectTrigger className="w-full">
 												<SelectValue placeholder="Select provider" />
@@ -247,7 +219,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 											id="embedding_model"
 											placeholder="text-embedding-3-small"
 											value={cacheConfig.embedding_model}
-											onChange={(e) => debouncedUpdateCacheConfig({ embedding_model: e.target.value })}
+											onChange={(e) => updateCacheConfigLocal({ embedding_model: e.target.value })}
 										/>
 									</div>
 								</div>
@@ -264,7 +236,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 											type="number"
 											min="1"
 											value={cacheConfig.ttl_seconds}
-											onChange={(e) => debouncedUpdateCacheConfig({ ttl_seconds: parseInt(e.target.value) || 300 })}
+											onChange={(e) => updateCacheConfigLocal({ ttl_seconds: parseInt(e.target.value) || 300 })}
 										/>
 									</div>
 									<div className="space-y-2">
@@ -276,7 +248,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 											max="1"
 											step="0.01"
 											value={cacheConfig.threshold}
-											onChange={(e) => debouncedUpdateCacheConfig({ threshold: parseFloat(e.target.value) || 0.8 })}
+											onChange={(e) => updateCacheConfigLocal({ threshold: parseFloat(e.target.value) || 0.8 })}
 										/>
 									</div>
 									<div className="space-y-2">
@@ -286,7 +258,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 											type="number"
 											min="0"
 											value={cacheConfig.dimension}
-											onChange={(e) => debouncedUpdateCacheConfig({ dimension: parseInt(e.target.value) || 0 })}
+											onChange={(e) => updateCacheConfigLocal({ dimension: parseInt(e.target.value) || 0 })}
 										/>
 									</div>
 								</div>
@@ -308,7 +280,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 											min="1"
 											max="50"
 											value={cacheConfig.conversation_history_threshold || 3}
-											onChange={(e) => debouncedUpdateCacheConfig({ conversation_history_threshold: parseInt(e.target.value) || 3 })}
+											onChange={(e) => updateCacheConfigLocal({ conversation_history_threshold: parseInt(e.target.value) || 3 })}
 										/>
 										<p className="text-muted-foreground text-xs">
 											Skip caching for conversations with more than this number of messages (prevents false positives)
@@ -323,7 +295,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 										</div>
 										<Switch
 											checked={cacheConfig.exclude_system_prompt || false}
-											onCheckedChange={(checked) => updateCacheConfig({ exclude_system_prompt: checked })}
+											onCheckedChange={(checked) => updateCacheConfigLocal({ exclude_system_prompt: checked })}
 											size="md"
 										/>
 									</div>
@@ -341,7 +313,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 										</div>
 										<Switch
 											checked={cacheConfig.cache_by_model}
-											onCheckedChange={(checked) => updateCacheConfig({ cache_by_model: checked })}
+											onCheckedChange={(checked) => updateCacheConfigLocal({ cache_by_model: checked })}
 											size="md"
 										/>
 									</div>
@@ -352,7 +324,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 										</div>
 										<Switch
 											checked={cacheConfig.cache_by_provider}
-											onCheckedChange={(checked) => updateCacheConfig({ cache_by_provider: checked })}
+											onCheckedChange={(checked) => updateCacheConfigLocal({ cache_by_provider: checked })}
 											size="md"
 										/>
 									</div>

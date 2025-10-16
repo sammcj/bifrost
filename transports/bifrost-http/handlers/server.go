@@ -392,6 +392,17 @@ func (s *BifrostHTTPServer) ReloadPlugin(ctx context.Context, name string, plugi
 	}
 }
 
+// ReloadPricingManager reloads the pricing manager
+func (s *BifrostHTTPServer) ReloadPricingManager() error {
+	if s.Config == nil || s.Config.PricingManager == nil {
+		return fmt.Errorf("pricing manager not found")
+	}
+	if s.Config.FrameworkConfig == nil || s.Config.FrameworkConfig.Pricing == nil {
+		return fmt.Errorf("framework config not found")
+	}
+	return s.Config.PricingManager.Reload(context.Background(), s.Config.FrameworkConfig.Pricing)
+}
+
 // RemovePlugin removes a plugin from the server.
 // Uses atomic CompareAndSwap with retry loop to handle concurrent updates safely.
 func (s *BifrostHTTPServer) RemovePlugin(ctx context.Context, name string) error {
