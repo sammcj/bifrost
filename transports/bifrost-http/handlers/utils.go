@@ -21,6 +21,16 @@ func SendJSON(ctx *fasthttp.RequestCtx, data interface{}, logger schemas.Logger)
 	}
 }
 
+// SendJSONWithStatus sends a JSON response with a custom status code
+func SendJSONWithStatus(ctx *fasthttp.RequestCtx, data interface{}, statusCode int, logger schemas.Logger) {
+	ctx.SetContentType("application/json")
+	ctx.SetStatusCode(statusCode)
+	if err := json.NewEncoder(ctx).Encode(data); err != nil {
+		logger.Warn(fmt.Sprintf("Failed to encode JSON response: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to encode response: %v", err), logger)
+	}
+}
+
 // SendError sends a BifrostError response
 func SendError(ctx *fasthttp.RequestCtx, statusCode int, message string, logger schemas.Logger) {
 	bifrostErr := &schemas.BifrostError{
