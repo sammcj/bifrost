@@ -28,10 +28,11 @@
 			],
 			"@enterprise/*": [
 				"./app/enterprise/*",
-				"./app/_fallbacks/enterprise/*",
+				"./app/_fallbacks/enterprise/*"
 			],
 			"@schemas/*": [
-				"./app/enterprise/lib/schemas/*"
+				"./app/enterprise/lib/schemas/*",
+				"./app/_fallbacks/enterprise/lib/schemas/*"
 			]
 		}
 	},
