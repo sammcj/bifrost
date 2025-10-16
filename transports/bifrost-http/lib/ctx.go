@@ -14,10 +14,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/plugins/governance"
 	"github.com/maximhq/bifrost/plugins/maxim"
 	"github.com/maximhq/bifrost/plugins/semanticcache"
-	"github.com/maximhq/bifrost/plugins/telemetry"
 	"github.com/valyala/fasthttp"
 )
 
@@ -65,8 +63,6 @@ import (
 //	bifrostCtx := ConvertToBifrostContext(fastCtx)
 //	// bifrostCtx now contains any prometheus and maxim header values
 
-type ContextKey string
-
 func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *context.Context {
 	bifrostCtx := context.Background()
 
@@ -84,24 +80,24 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 	ctx.Request.Header.All()(func(key, value []byte) bool {
 		keyStr := strings.ToLower(string(key))
 		if labelName, ok := strings.CutPrefix(keyStr, "x-bf-prom-"); ok {
-			bifrostCtx = context.WithValue(bifrostCtx, telemetry.ContextKey(labelName), string(value))
+			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(labelName), string(value))
 			return true
 		}
 		// Checking for maxim headers
 		if labelName, ok := strings.CutPrefix(keyStr, "x-bf-maxim-"); ok {
 			switch labelName {
 			case string(maxim.GenerationIDKey):
-				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
+				bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(labelName), string(value))
 			case string(maxim.TraceIDKey):
-				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
+				bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(labelName), string(value))
 			case string(maxim.SessionIDKey):
-				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
+				bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(labelName), string(value))
 			case string(maxim.TraceNameKey):
-				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
+				bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(labelName), string(value))
 			case string(maxim.GenerationNameKey):
-				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
+				bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(labelName), string(value))
 			case string(maxim.LogRepoIDKey):
-				bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(labelName), string(value))
+				bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(labelName), string(value))
 			default:
 				// apart from these all headers starting with x-bf-maxim- are keys for tags
 				// collect them in the maximTags map
@@ -119,18 +115,18 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 			case "include-tools":
 				fallthrough
 			case "exclude-tools":
-				bifrostCtx = context.WithValue(bifrostCtx, ContextKey("mcp-"+labelName), string(value))
+				bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey("mcp-"+labelName), string(value))
 				return true
 			}
 		}
 		// Handle governance headers (x-bf-team, x-bf-user, x-bf-customer)
 		if keyStr == "x-bf-team" || keyStr == "x-bf-user" || keyStr == "x-bf-customer" {
-			bifrostCtx = context.WithValue(bifrostCtx, governance.ContextKey(keyStr), string(value))
+			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(keyStr), string(value))
 			return true
 		}
 		// Handle virtual key header (x-bf-vk)
-		if keyStr == "x-bf-vk" {
-			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeyVirtualKeyHeader, string(value))
+		if keyStr == string(schemas.BifrostContextKeyVirtualKey) {
+			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(keyStr), string(value))
 			return true
 		}
 		// Handle cache key header (x-bf-cache-key)
@@ -191,7 +187,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 
 	// Store the collected maxim tags in the context
 	if len(maximTags) > 0 {
-		bifrostCtx = context.WithValue(bifrostCtx, maxim.ContextKey(maxim.TagsKey), maximTags)
+		bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(maxim.TagsKey), maximTags)
 	}
 
 	if allowDirectKeys {

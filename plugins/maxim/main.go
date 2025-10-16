@@ -65,22 +65,17 @@ func Init(config *Config) (schemas.Plugin, error) {
 	return plugin, nil
 }
 
-// ContextKey is a custom type for context keys to prevent key collisions in the context.
-// It provides type safety for context values and ensures that context keys are unique
-// across different packages.
-type ContextKey string
-
 // TraceIDKey is the context key used to store and retrieve trace IDs.
 // This constant provides a consistent key for tracking request traces
 // throughout the request/response lifecycle.
 const (
-	SessionIDKey      ContextKey = "session-id"
-	TraceIDKey        ContextKey = "trace-id"
-	TraceNameKey      ContextKey = "trace-name"
-	GenerationIDKey   ContextKey = "generation-id"
-	GenerationNameKey ContextKey = "generation-name"
-	TagsKey           ContextKey = "maxim-tags"
-	LogRepoIDKey      ContextKey = "log-repo-id"
+	SessionIDKey      schemas.BifrostContextKey = "session-id"
+	TraceIDKey        schemas.BifrostContextKey = "trace-id"
+	TraceNameKey      schemas.BifrostContextKey = "trace-name"
+	GenerationIDKey   schemas.BifrostContextKey = "generation-id"
+	GenerationNameKey schemas.BifrostContextKey = "generation-name"
+	TagsKey           schemas.BifrostContextKey = "maxim-tags"
+	LogRepoIDKey      schemas.BifrostContextKey = "log-repo-id"
 )
 
 // The plugin provides request/response tracing functionality by integrating with Maxim's logging system.
@@ -367,29 +362,31 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	if traceID == "" {
 		// If traceID is not set, create a new trace
 		traceID = uuid.New().String()
-		name := fmt.Sprintf("bifrost_%s", string(req.RequestType))
-		if traceName != "" {
-			name = traceName
-		}
-
-		traceConfig := logging.TraceConfig{
-			Id:   traceID,
-			Name: maxim.StrPtr(name),
-			Tags: &tags,
-		}
-
-		if sessionID != "" {
-			traceConfig.SessionId = &sessionID
-		}
-
-		// Create trace in the effective log repository
-		logger, err := plugin.getOrCreateLogger(effectiveLogRepoID)
-		if err == nil {
-			trace := logger.Trace(&traceConfig)
-			trace.SetInput(latestMessage)
-		}
 	}
 
+	name := fmt.Sprintf("bifrost_%s", string(req.RequestType))
+	if traceName != "" {
+		name = traceName
+	}
+
+	traceConfig := logging.TraceConfig{
+		Id:   traceID,
+		Name: maxim.StrPtr(name),
+		Tags: &tags,
+	}
+
+	if sessionID != "" {
+		traceConfig.SessionId = &sessionID
+	}
+
+	// Create trace in the effective log repository
+	logger, err := plugin.getOrCreateLogger(effectiveLogRepoID)
+	if err != nil {
+		return req, nil, fmt.Errorf("failed to create trace: %w", err)
+	}
+
+	trace := logger.Trace(&traceConfig)
+	trace.SetInput(latestMessage)
 	generationID := uuid.New().String()
 
 	generationConfig := logging.GenerationConfig{
@@ -406,10 +403,7 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	}
 
 	// Add generation to the effective log repository
-	logger, err := plugin.getOrCreateLogger(effectiveLogRepoID)
-	if err == nil {
-		logger.AddGenerationToTrace(traceID, &generationConfig)
-	}
+	logger.AddGenerationToTrace(traceID, &generationConfig)
 
 	if ctx != nil {
 		if _, ok := (*ctx).Value(TraceIDKey).(string); !ok {

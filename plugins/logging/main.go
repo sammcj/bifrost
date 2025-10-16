@@ -21,9 +21,6 @@ const (
 	PluginName = "logging"
 )
 
-// ContextKey is a custom type for context keys to prevent collisions
-type ContextKey string
-
 // LogOperation represents the type of logging operation
 type LogOperation string
 
@@ -31,11 +28,6 @@ const (
 	LogOperationCreate       LogOperation = "create"
 	LogOperationUpdate       LogOperation = "update"
 	LogOperationStreamUpdate LogOperation = "stream_update"
-)
-
-// Context keys for logging optimization
-const (
-	DroppedCreateContextKey ContextKey = "logging-dropped"
 )
 
 // UpdateLogData contains data for log entry updates
@@ -291,11 +283,6 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 	if ctx == nil {
 		// Log error but don't fail the request
 		p.logger.Error("context is nil in PostHook")
-		return result, bifrostErr, nil
-	}
-	// Check if the create operation was dropped - if so, skip the update
-	if dropped, ok := (*ctx).Value(DroppedCreateContextKey).(bool); ok && dropped {
-		// Create was dropped, skip update to avoid wasted processing and errors
 		return result, bifrostErr, nil
 	}
 	requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)

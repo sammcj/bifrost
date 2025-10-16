@@ -19,7 +19,6 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework"
 	"github.com/maximhq/bifrost/framework/configstore"
-	"github.com/maximhq/bifrost/framework/configstore/tables"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/encrypt"
 	"github.com/maximhq/bifrost/framework/logstore"
@@ -439,7 +438,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 			}
 			duration := pricingConfig.PricingSyncInterval.Seconds()
 			logger.Debug("updating framework config with duration: %d", duration)
-			err = config.ConfigStore.UpdateFrameworkConfig(ctx, &tables.TableFrameworkConfig{
+			err = config.ConfigStore.UpdateFrameworkConfig(ctx, &configstoreTables.TableFrameworkConfig{
 				ID:                  configID,
 				PricingURL:          pricingConfig.PricingURL,
 				PricingSyncInterval: bifrost.Ptr(int64(duration)),
