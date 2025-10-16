@@ -95,9 +95,9 @@ type BifrostContextKey string
 
 // BifrostContextKeyRequestType is a context key for the request type.
 const (
+	BifrostContextKeyVirtualKey         BifrostContextKey = "x-bf-vk"
 	BifrostContextKeyRequestID          BifrostContextKey = "request-id"
-	BifrostContextKeyFallbackRequestID  BifrostContextKey = "fallback-request-id"
-	BifrostContextKeyVirtualKeyHeader   BifrostContextKey = "x-bf-vk"
+	BifrostContextKeyFallbackRequestID  BifrostContextKey = "fallback-request-id"	
 	BifrostContextKeyDirectKey          BifrostContextKey = "bifrost-direct-key"
 	BifrostContextKeySelectedKey        BifrostContextKey = "bifrost-key-selected" // To store the selected key ID (set by bifrost)
 	BifrostContextKeyStreamEndIndicator BifrostContextKey = "bifrost-stream-end-indicator"
@@ -134,73 +134,74 @@ type BifrostRequest struct {
 	TranscriptionRequest  *BifrostTranscriptionRequest
 }
 
-func (req *BifrostRequest) GetRequestFields() (provider ModelProvider, model string, fallbacks []Fallback) {
+// GetRequestFields returns the provider, model, and fallbacks from the request.
+func (br *BifrostRequest) GetRequestFields() (provider ModelProvider, model string, fallbacks []Fallback) {
 	switch {
-	case req.TextCompletionRequest != nil:
-		return req.TextCompletionRequest.Provider, req.TextCompletionRequest.Model, req.TextCompletionRequest.Fallbacks
-	case req.ChatRequest != nil:
-		return req.ChatRequest.Provider, req.ChatRequest.Model, req.ChatRequest.Fallbacks
-	case req.ResponsesRequest != nil:
-		return req.ResponsesRequest.Provider, req.ResponsesRequest.Model, req.ResponsesRequest.Fallbacks
-	case req.EmbeddingRequest != nil:
-		return req.EmbeddingRequest.Provider, req.EmbeddingRequest.Model, req.EmbeddingRequest.Fallbacks
-	case req.SpeechRequest != nil:
-		return req.SpeechRequest.Provider, req.SpeechRequest.Model, req.SpeechRequest.Fallbacks
-	case req.TranscriptionRequest != nil:
-		return req.TranscriptionRequest.Provider, req.TranscriptionRequest.Model, req.TranscriptionRequest.Fallbacks
+	case br.TextCompletionRequest != nil:
+		return br.TextCompletionRequest.Provider, br.TextCompletionRequest.Model, br.TextCompletionRequest.Fallbacks
+	case br.ChatRequest != nil:
+		return br.ChatRequest.Provider, br.ChatRequest.Model, br.ChatRequest.Fallbacks
+	case br.ResponsesRequest != nil:
+		return br.ResponsesRequest.Provider, br.ResponsesRequest.Model, br.ResponsesRequest.Fallbacks
+	case br.EmbeddingRequest != nil:
+		return br.EmbeddingRequest.Provider, br.EmbeddingRequest.Model, br.EmbeddingRequest.Fallbacks
+	case br.SpeechRequest != nil:
+		return br.SpeechRequest.Provider, br.SpeechRequest.Model, br.SpeechRequest.Fallbacks
+	case br.TranscriptionRequest != nil:
+		return br.TranscriptionRequest.Provider, br.TranscriptionRequest.Model, br.TranscriptionRequest.Fallbacks
 	}
 
 	return "", "", nil
 }
 
-func (r *BifrostRequest) SetProvider(provider ModelProvider) {
+func (br *BifrostRequest) SetProvider(provider ModelProvider) {
 	switch {
-	case r.TextCompletionRequest != nil:
-		r.TextCompletionRequest.Provider = provider
-	case r.ChatRequest != nil:
-		r.ChatRequest.Provider = provider
-	case r.ResponsesRequest != nil:
-		r.ResponsesRequest.Provider = provider
-	case r.EmbeddingRequest != nil:
-		r.EmbeddingRequest.Provider = provider
-	case r.SpeechRequest != nil:
-		r.SpeechRequest.Provider = provider
-	case r.TranscriptionRequest != nil:
-		r.TranscriptionRequest.Provider = provider
+	case br.TextCompletionRequest != nil:
+		br.TextCompletionRequest.Provider = provider
+	case br.ChatRequest != nil:
+		br.ChatRequest.Provider = provider
+	case br.ResponsesRequest != nil:
+		br.ResponsesRequest.Provider = provider
+	case br.EmbeddingRequest != nil:
+		br.EmbeddingRequest.Provider = provider
+	case br.SpeechRequest != nil:
+		br.SpeechRequest.Provider = provider
+	case br.TranscriptionRequest != nil:
+		br.TranscriptionRequest.Provider = provider
 	}
 }
 
-func (r *BifrostRequest) SetModel(model string) {
+func (br *BifrostRequest) SetModel(model string) {
 	switch {
-	case r.TextCompletionRequest != nil:
-		r.TextCompletionRequest.Model = model
-	case r.ChatRequest != nil:
-		r.ChatRequest.Model = model
-	case r.ResponsesRequest != nil:
-		r.ResponsesRequest.Model = model
-	case r.EmbeddingRequest != nil:
-		r.EmbeddingRequest.Model = model
-	case r.SpeechRequest != nil:
-		r.SpeechRequest.Model = model
-	case r.TranscriptionRequest != nil:
-		r.TranscriptionRequest.Model = model
+	case br.TextCompletionRequest != nil:
+		br.TextCompletionRequest.Model = model
+	case br.ChatRequest != nil:
+		br.ChatRequest.Model = model
+	case br.ResponsesRequest != nil:
+		br.ResponsesRequest.Model = model
+	case br.EmbeddingRequest != nil:
+		br.EmbeddingRequest.Model = model
+	case br.SpeechRequest != nil:
+		br.SpeechRequest.Model = model
+	case br.TranscriptionRequest != nil:
+		br.TranscriptionRequest.Model = model
 	}
 }
 
-func (r *BifrostRequest) SetFallbacks(fallbacks []Fallback) {
+func (br *BifrostRequest) SetFallbacks(fallbacks []Fallback) {
 	switch {
-	case r.TextCompletionRequest != nil:
-		r.TextCompletionRequest.Fallbacks = fallbacks
-	case r.ChatRequest != nil:
-		r.ChatRequest.Fallbacks = fallbacks
-	case r.ResponsesRequest != nil:
-		r.ResponsesRequest.Fallbacks = fallbacks
-	case r.EmbeddingRequest != nil:
-		r.EmbeddingRequest.Fallbacks = fallbacks
-	case r.SpeechRequest != nil:
-		r.SpeechRequest.Fallbacks = fallbacks
-	case r.TranscriptionRequest != nil:
-		r.TranscriptionRequest.Fallbacks = fallbacks
+	case br.TextCompletionRequest != nil:
+		br.TextCompletionRequest.Fallbacks = fallbacks
+	case br.ChatRequest != nil:
+		br.ChatRequest.Fallbacks = fallbacks
+	case br.ResponsesRequest != nil:
+		br.ResponsesRequest.Fallbacks = fallbacks
+	case br.EmbeddingRequest != nil:
+		br.EmbeddingRequest.Fallbacks = fallbacks
+	case br.SpeechRequest != nil:
+		br.SpeechRequest.Fallbacks = fallbacks
+	case br.TranscriptionRequest != nil:
+		br.TranscriptionRequest.Fallbacks = fallbacks
 	}
 }
 

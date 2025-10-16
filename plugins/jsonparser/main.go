@@ -49,10 +49,8 @@ type PluginConfig struct {
 	MaxAge          time.Duration
 }
 
-type ContextKey string
-
 const (
-	EnableStreamingJSONParser ContextKey = "enable-streaming-json-parser"
+	EnableStreamingJSONParser schemas.BifrostContextKey = "enable-streaming-json-parser"
 )
 
 // Init creates a new JSON parser plugin instance with custom configuration

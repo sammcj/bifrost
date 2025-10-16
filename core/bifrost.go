@@ -1220,7 +1220,7 @@ func (bifrost *Bifrost) handleRequest(ctx context.Context, req *schemas.BifrostR
 	bifrost.logger.Debug(fmt.Sprintf("Primary provider %s with model %s and %d fallbacks", provider, model, len(fallbacks)))
 
 	// Try the primary provider first
-	primaryResult, primaryErr := bifrost.tryRequest(req, ctx)
+	primaryResult, primaryErr := bifrost.tryRequest(ctx, req)
 
 	if primaryErr != nil {
 		bifrost.logger.Debug(fmt.Sprintf("Primary provider %s with model %s returned error: %v", provider, model, primaryErr))
@@ -1247,7 +1247,7 @@ func (bifrost *Bifrost) handleRequest(ctx context.Context, req *schemas.BifrostR
 		}
 
 		// Try the fallback provider
-		result, fallbackErr := bifrost.tryRequest(fallbackReq, ctx)
+		result, fallbackErr := bifrost.tryRequest(ctx, fallbackReq)
 		if fallbackErr == nil {
 			bifrost.logger.Debug(fmt.Sprintf("Successfully used fallback provider %s with model %s", fallback.Provider, fallback.Model))
 			return result, nil
@@ -1322,7 +1322,7 @@ func (bifrost *Bifrost) handleStreamRequest(ctx context.Context, req *schemas.Bi
 
 // tryRequest is a generic function that handles common request processing logic
 // It consolidates queue setup, plugin pipeline execution, enqueue logic, and response handling
-func (bifrost *Bifrost) tryRequest(req *schemas.BifrostRequest, ctx context.Context) (*schemas.BifrostResponse, *schemas.BifrostError) {
+func (bifrost *Bifrost) tryRequest(ctx context.Context, req *schemas.BifrostRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	provider, _, _ := req.GetRequestFields()
 	queue, err := bifrost.getProviderQueue(provider)
 	if err != nil {

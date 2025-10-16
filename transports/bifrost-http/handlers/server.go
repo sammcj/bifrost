@@ -253,7 +253,6 @@ func LoadPlugin[T schemas.Plugin](ctx context.Context, name string, pluginConfig
 func LoadPlugins(ctx context.Context, config *lib.Config) ([]schemas.Plugin, error) {
 	var err error
 	plugins := []schemas.Plugin{}
-
 	// Initialize telemetry plugin
 	promPlugin, err := LoadPlugin[*telemetry.PrometheusPlugin](ctx, telemetry.PluginName, nil, config)
 	if err != nil {
@@ -331,7 +330,6 @@ func (s *BifrostHTTPServer) ReloadClientConfigFromConfigStore() error {
 		return fmt.Errorf("failed to get client config: %v", err)
 	}
 	s.Config.ClientConfig = *config
-
 	// Reloading config in bifrost client
 	if s.Client != nil {
 		account := lib.NewBaseAccount(s.Config)
@@ -470,7 +468,7 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	middlewaresWithTelemetry := append(middlewares, telemetry.PrometheusMiddleware)
 	// Chaining all middlewares
 	// lib.ChainMiddlewares chains multiple middlewares together
-	// Initialize 
+	// Initialize
 	healthHandler := NewHealthHandler(s.Config, logger)
 	providerHandler := NewProviderHandler(s.Config, s.Client, logger)
 	inferenceHandler := NewInferenceHandler(s.Client, s.Config, logger)

@@ -220,26 +220,23 @@ func (pa *PluginAccount) GetConfigForProvider(providerKey schemas.ModelProvider)
 // Dependencies is a list of dependencies that the plugin requires.
 var Dependencies []framework.FrameworkDependency = []framework.FrameworkDependency{framework.FrameworkDependencyVectorStore}
 
-// ContextKey is a custom type for context keys to prevent key collisions
-type ContextKey string
-
 const (
-	CacheKey          ContextKey = "semantic_cache_key"        // To set the cache key for a request - REQUIRED for all requests
-	CacheTTLKey       ContextKey = "semantic_cache_ttl"        // To explicitly set the TTL for a request
-	CacheThresholdKey ContextKey = "semantic_cache_threshold"  // To explicitly set the threshold for a request
-	CacheTypeKey      ContextKey = "semantic_cache_cache_type" // To explicitly set the cache type for a request
-	CacheNoStoreKey   ContextKey = "semantic_cache_no_store"   // To explicitly disable storing the response in the cache
+	CacheKey          schemas.BifrostContextKey = "semantic_cache_key"        // To set the cache key for a request - REQUIRED for all requests
+	CacheTTLKey       schemas.BifrostContextKey = "semantic_cache_ttl"        // To explicitly set the TTL for a request
+	CacheThresholdKey schemas.BifrostContextKey = "semantic_cache_threshold"  // To explicitly set the threshold for a request
+	CacheTypeKey      schemas.BifrostContextKey = "semantic_cache_cache_type" // To explicitly set the cache type for a request
+	CacheNoStoreKey   schemas.BifrostContextKey = "semantic_cache_no_store"   // To explicitly disable storing the response in the cache
 
 	// context keys for internal usage
-	requestIDKey              ContextKey = "semantic_cache_request_id"
-	requestHashKey            ContextKey = "semantic_cache_request_hash"
-	requestEmbeddingKey       ContextKey = "semantic_cache_embedding"
-	requestEmbeddingTokensKey ContextKey = "semantic_cache_embedding_tokens"
-	requestParamsHashKey      ContextKey = "semantic_cache_params_hash"
-	requestModelKey           ContextKey = "semantic_cache_model"
-	requestProviderKey        ContextKey = "semantic_cache_provider"
-	isCacheHitKey             ContextKey = "semantic_cache_is_cache_hit"
-	cacheHitTypeKey           ContextKey = "semantic_cache_cache_hit_type"
+	requestIDKey              schemas.BifrostContextKey = "semantic_cache_request_id"
+	requestHashKey            schemas.BifrostContextKey = "semantic_cache_request_hash"
+	requestEmbeddingKey       schemas.BifrostContextKey = "semantic_cache_embedding"
+	requestEmbeddingTokensKey schemas.BifrostContextKey = "semantic_cache_embedding_tokens"
+	requestParamsHashKey      schemas.BifrostContextKey = "semantic_cache_params_hash"
+	requestModelKey           schemas.BifrostContextKey = "semantic_cache_model"
+	requestProviderKey        schemas.BifrostContextKey = "semantic_cache_provider"
+	isCacheHitKey             schemas.BifrostContextKey = "semantic_cache_is_cache_hit"
+	cacheHitTypeKey           schemas.BifrostContextKey = "semantic_cache_cache_hit_type"
 )
 
 type CacheType string
