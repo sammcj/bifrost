@@ -49,7 +49,7 @@ func NewTestSetup(t *testing.T) *TestSetup {
 	config := WeaviateConfig{
 		Scheme:  scheme,
 		Host:    host,
-		ApiKey:  apiKey,
+		APIKey:  apiKey,
 		Timeout: timeout,
 	}
 
@@ -204,7 +204,7 @@ func TestWeaviateConfig_Validation(t *testing.T) {
 			config: WeaviateConfig{
 				Scheme: "https",
 				Host:   "cluster.weaviate.network",
-				ApiKey: "test-key",
+				APIKey: "test-key",
 			},
 			expectError: false,
 		},
@@ -723,7 +723,7 @@ func TestVectorStoreFactory_Weaviate(t *testing.T) {
 		Config: WeaviateConfig{
 			Scheme: getEnvWithDefault("WEAVIATE_SCHEME", DefaultTestScheme),
 			Host:   getEnvWithDefault("WEAVIATE_HOST", DefaultTestHost),
-			ApiKey: os.Getenv("WEAVIATE_API_KEY"),
+			APIKey: os.Getenv("WEAVIATE_API_KEY"),
 		},
 	}
 

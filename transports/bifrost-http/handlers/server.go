@@ -470,7 +470,8 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	middlewaresWithTelemetry := append(middlewares, telemetry.PrometheusMiddleware)
 	// Chaining all middlewares
 	// lib.ChainMiddlewares chains multiple middlewares together
-	// Initialize handlers
+	// Initialize 
+	healthHandler := NewHealthHandler(s.Config, logger)
 	providerHandler := NewProviderHandler(s.Config, s.Client, logger)
 	inferenceHandler := NewInferenceHandler(s.Client, s.Config, logger)
 	mcpHandler := NewMCPHandler(s.Client, logger, s.Config)
@@ -478,6 +479,7 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	configHandler := NewConfigHandler(s.Client, logger, s.Config, s)
 	pluginsHandler := NewPluginsHandler(s, s.Config.ConfigStore, logger)
 	// Register all handler routes
+	healthHandler.RegisterRoutes(s.Router, middlewares...)
 	providerHandler.RegisterRoutes(s.Router, middlewares...)
 	inferenceHandler.RegisterRoutes(s.Router, middlewaresWithTelemetry...)
 	mcpHandler.RegisterRoutes(s.Router, middlewares...)
