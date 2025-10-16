@@ -2,6 +2,7 @@ package configstore
 
 import (
 	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/framework/configstore/tables"
 )
 
 type EnvKeyType string
@@ -53,9 +54,9 @@ type ProviderConfig struct {
 type ConfigMap map[schemas.ModelProvider]ProviderConfig
 
 type GovernanceConfig struct {
-	VirtualKeys []TableVirtualKey `json:"virtual_keys"`
-	Teams       []TableTeam       `json:"teams"`
-	Customers   []TableCustomer   `json:"customers"`
-	Budgets     []TableBudget     `json:"budgets"`
-	RateLimits  []TableRateLimit  `json:"rate_limits"`
+	VirtualKeys []tables.TableVirtualKey `json:"virtual_keys"`
+	Teams       []tables.TableTeam       `json:"teams"`
+	Customers   []tables.TableCustomer   `json:"customers"`
+	Budgets     []tables.TableBudget     `json:"budgets"`
+	RateLimits  []tables.TableRateLimit  `json:"rate_limits"`
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
+	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -51,13 +52,13 @@ func NewGovernanceStore(ctx context.Context, logger schemas.Logger, configStore 
 }
 
 // GetVirtualKey retrieves a virtual key by its value (lock-free) with all relationships preloaded
-func (gs *GovernanceStore) GetVirtualKey(vkValue string) (*configstore.TableVirtualKey, bool) {
+func (gs *GovernanceStore) GetVirtualKey(vkValue string) (*configstoreTables.TableVirtualKey, bool) {
 	value, exists := gs.virtualKeys.Load(vkValue)
 	if !exists || value == nil {
 		return nil, false
 	}
 
-	vk, ok := value.(*configstore.TableVirtualKey)
+	vk, ok := value.(*configstoreTables.TableVirtualKey)
 	if !ok || vk == nil {
 		return nil, false
 	}
@@ -65,12 +66,12 @@ func (gs *GovernanceStore) GetVirtualKey(vkValue string) (*configstore.TableVirt
 }
 
 // GetAllBudgets returns all budgets (for background reset operations)
-func (gs *GovernanceStore) GetAllBudgets() map[string]*configstore.TableBudget {
-	result := make(map[string]*configstore.TableBudget)
+func (gs *GovernanceStore) GetAllBudgets() map[string]*configstoreTables.TableBudget {
+	result := make(map[string]*configstoreTables.TableBudget)
 	gs.budgets.Range(func(key, value interface{}) bool {
 		// Type-safe conversion
 		keyStr, keyOk := key.(string)
-		budget, budgetOk := value.(*configstore.TableBudget)
+		budget, budgetOk := value.(*configstoreTables.TableBudget)
 
 		if keyOk && budgetOk && budget != nil {
 			result[keyStr] = budget
@@ -81,7 +82,7 @@ func (gs *GovernanceStore) GetAllBudgets() map[string]*configstore.TableBudget {
 }
 
 // CheckBudget performs budget checking using in-memory store data (lock-free for high performance)
-func (gs *GovernanceStore) CheckBudget(ctx context.Context, vk *configstore.TableVirtualKey) error {
+func (gs *GovernanceStore) CheckBudget(ctx context.Context, vk *configstoreTables.TableVirtualKey) error {
 	if vk == nil {
 		return fmt.Errorf("virtual key cannot be nil")
 	}
@@ -93,7 +94,7 @@ func (gs *GovernanceStore) CheckBudget(ctx context.Context, vk *configstore.Tabl
 	for i, budget := range budgetsToCheck {
 		// Check if budget needs reset (in-memory check)
 		if budget.ResetDuration != "" {
-			if duration, err := configstore.ParseDuration(budget.ResetDuration); err == nil {
+			if duration, err := configstoreTables.ParseDuration(budget.ResetDuration); err == nil {
 				if time.Since(budget.LastReset).Round(time.Millisecond) >= duration {
 					// Budget expired but hasn't been reset yet - treat as reset
 					// Note: actual reset will happen in post-hook via AtomicBudgetUpdate
@@ -113,7 +114,7 @@ func (gs *GovernanceStore) CheckBudget(ctx context.Context, vk *configstore.Tabl
 }
 
 // UpdateBudget performs atomic budget updates across the hierarchy (both in memory and in database)
-func (gs *GovernanceStore) UpdateBudget(ctx context.Context, vk *configstore.TableVirtualKey, cost float64) error {
+func (gs *GovernanceStore) UpdateBudget(ctx context.Context, vk *configstoreTables.TableVirtualKey, cost float64) error {
 	if vk == nil {
 		return fmt.Errorf("virtual key cannot be nil")
 	}
@@ -125,7 +126,7 @@ func (gs *GovernanceStore) UpdateBudget(ctx context.Context, vk *configstore.Tab
 		for _, budgetID := range budgetIDs {
 			// Update in-memory cache for next read (lock-free)
 			if cachedBudgetValue, exists := gs.budgets.Load(budgetID); exists && cachedBudgetValue != nil {
-				if cachedBudget, ok := cachedBudgetValue.(*configstore.TableBudget); ok && cachedBudget != nil {
+				if cachedBudget, ok := cachedBudgetValue.(*configstoreTables.TableBudget); ok && cachedBudget != nil {
 					clone := *cachedBudget
 					clone.CurrentUsage += cost
 					gs.budgets.Store(budgetID, &clone)
@@ -141,7 +142,7 @@ func (gs *GovernanceStore) UpdateBudget(ctx context.Context, vk *configstore.Tab
 
 		// Update each budget atomically
 		for _, budgetID := range budgetIDs {
-			var budget configstore.TableBudget
+			var budget configstoreTables.TableBudget
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&budget, "id = ?", budgetID).Error; err != nil {
 				return fmt.Errorf("failed to lock budget %s: %w", budgetID, err)
 			}
@@ -159,7 +160,7 @@ func (gs *GovernanceStore) UpdateBudget(ctx context.Context, vk *configstore.Tab
 
 			// Update in-memory cache for next read (lock-free)
 			if cachedBudgetValue, exists := gs.budgets.Load(budgetID); exists && cachedBudgetValue != nil {
-				if cachedBudget, ok := cachedBudgetValue.(*configstore.TableBudget); ok && cachedBudget != nil {
+				if cachedBudget, ok := cachedBudgetValue.(*configstoreTables.TableBudget); ok && cachedBudget != nil {
 					clone := *cachedBudget
 					clone.CurrentUsage += cost
 					clone.LastReset = budget.LastReset
@@ -183,7 +184,7 @@ func (gs *GovernanceStore) UpdateRateLimitUsage(ctx context.Context, vkValue str
 		return fmt.Errorf("virtual key not found: %s", vkValue)
 	}
 
-	vk, ok := vkValue_.(*configstore.TableVirtualKey)
+	vk, ok := vkValue_.(*configstoreTables.TableVirtualKey)
 	if !ok || vk == nil {
 		return fmt.Errorf("invalid virtual key type for: %s", vkValue)
 	}
@@ -197,7 +198,7 @@ func (gs *GovernanceStore) UpdateRateLimitUsage(ctx context.Context, vkValue str
 
 	// Check and reset token counter if needed
 	if rateLimit.TokenResetDuration != nil {
-		if duration, err := configstore.ParseDuration(*rateLimit.TokenResetDuration); err == nil {
+		if duration, err := configstoreTables.ParseDuration(*rateLimit.TokenResetDuration); err == nil {
 			if now.Sub(rateLimit.TokenLastReset) >= duration {
 				rateLimit.TokenCurrentUsage = 0
 				rateLimit.TokenLastReset = now
@@ -208,7 +209,7 @@ func (gs *GovernanceStore) UpdateRateLimitUsage(ctx context.Context, vkValue str
 
 	// Check and reset request counter if needed
 	if rateLimit.RequestResetDuration != nil {
-		if duration, err := configstore.ParseDuration(*rateLimit.RequestResetDuration); err == nil {
+		if duration, err := configstoreTables.ParseDuration(*rateLimit.RequestResetDuration); err == nil {
 			if now.Sub(rateLimit.RequestLastReset) >= duration {
 				rateLimit.RequestCurrentUsage = 0
 				rateLimit.RequestLastReset = now
@@ -239,12 +240,12 @@ func (gs *GovernanceStore) UpdateRateLimitUsage(ctx context.Context, vkValue str
 }
 
 // checkAndResetSingleRateLimit checks and resets a single rate limit's counters if expired
-func (gs *GovernanceStore) checkAndResetSingleRateLimit(ctx context.Context, rateLimit *configstore.TableRateLimit, now time.Time) bool {
+func (gs *GovernanceStore) checkAndResetSingleRateLimit(ctx context.Context, rateLimit *configstoreTables.TableRateLimit, now time.Time) bool {
 	updated := false
 
 	// Check and reset token counter if needed
 	if rateLimit.TokenResetDuration != nil {
-		if duration, err := configstore.ParseDuration(*rateLimit.TokenResetDuration); err == nil {
+		if duration, err := configstoreTables.ParseDuration(*rateLimit.TokenResetDuration); err == nil {
 			if now.Sub(rateLimit.TokenLastReset).Round(time.Millisecond) >= duration {
 				rateLimit.TokenCurrentUsage = 0
 				rateLimit.TokenLastReset = now
@@ -255,7 +256,7 @@ func (gs *GovernanceStore) checkAndResetSingleRateLimit(ctx context.Context, rat
 
 	// Check and reset request counter if needed
 	if rateLimit.RequestResetDuration != nil {
-		if duration, err := configstore.ParseDuration(*rateLimit.RequestResetDuration); err == nil {
+		if duration, err := configstoreTables.ParseDuration(*rateLimit.RequestResetDuration); err == nil {
 			if now.Sub(rateLimit.RequestLastReset).Round(time.Millisecond) >= duration {
 				rateLimit.RequestCurrentUsage = 0
 				rateLimit.RequestLastReset = now
@@ -270,11 +271,11 @@ func (gs *GovernanceStore) checkAndResetSingleRateLimit(ctx context.Context, rat
 // ResetExpiredRateLimits performs background reset of expired rate limits (lock-free)
 func (gs *GovernanceStore) ResetExpiredRateLimits(ctx context.Context) error {
 	now := time.Now()
-	var resetRateLimits []*configstore.TableRateLimit
+	var resetRateLimits []*configstoreTables.TableRateLimit
 
 	gs.virtualKeys.Range(func(key, value interface{}) bool {
 		// Type-safe conversion
-		vk, ok := value.(*configstore.TableVirtualKey)
+		vk, ok := value.(*configstoreTables.TableVirtualKey)
 		if !ok || vk == nil || vk.RateLimit == nil {
 			return true // continue
 		}
@@ -301,16 +302,16 @@ func (gs *GovernanceStore) ResetExpiredRateLimits(ctx context.Context) error {
 // ResetExpiredBudgets checks and resets budgets that have exceeded their reset duration (lock-free)
 func (gs *GovernanceStore) ResetExpiredBudgets(ctx context.Context) error {
 	now := time.Now()
-	var resetBudgets []*configstore.TableBudget
+	var resetBudgets []*configstoreTables.TableBudget
 
 	gs.budgets.Range(func(key, value interface{}) bool {
 		// Type-safe conversion
-		budget, ok := value.(*configstore.TableBudget)
+		budget, ok := value.(*configstoreTables.TableBudget)
 		if !ok || budget == nil {
 			return true // continue
 		}
 
-		duration, err := configstore.ParseDuration(budget.ResetDuration)
+		duration, err := configstoreTables.ParseDuration(budget.ResetDuration)
 		if err != nil {
 			gs.logger.Error("invalid budget reset duration %s: %w", budget.ResetDuration, err)
 			return true // continue
@@ -431,7 +432,7 @@ func (gs *GovernanceStore) loadFromConfigMemory(ctx context.Context, config *con
 }
 
 // rebuildInMemoryStructures rebuilds all in-memory data structures (lock-free)
-func (gs *GovernanceStore) rebuildInMemoryStructures(ctx context.Context, customers []configstore.TableCustomer, teams []configstore.TableTeam, virtualKeys []configstore.TableVirtualKey, budgets []configstore.TableBudget) {
+func (gs *GovernanceStore) rebuildInMemoryStructures(ctx context.Context, customers []configstoreTables.TableCustomer, teams []configstoreTables.TableTeam, virtualKeys []configstoreTables.TableVirtualKey, budgets []configstoreTables.TableBudget) {
 	// Clear existing data by creating new sync.Maps
 	gs.virtualKeys = sync.Map{}
 	gs.teams = sync.Map{}
@@ -466,18 +467,18 @@ func (gs *GovernanceStore) rebuildInMemoryStructures(ctx context.Context, custom
 // UTILITY FUNCTIONS
 
 // collectBudgetsFromHierarchy collects budgets and their metadata from the hierarchy (VK → Team → Customer)
-func (gs *GovernanceStore) collectBudgetsFromHierarchy(ctx context.Context, vk *configstore.TableVirtualKey) ([]*configstore.TableBudget, []string) {
+func (gs *GovernanceStore) collectBudgetsFromHierarchy(ctx context.Context, vk *configstoreTables.TableVirtualKey) ([]*configstoreTables.TableBudget, []string) {
 	if vk == nil {
 		return nil, nil
 	}
 
-	var budgets []*configstore.TableBudget
+	var budgets []*configstoreTables.TableBudget
 	var budgetNames []string
 
 	// Collect all budgets in hierarchy order using lock-free sync.Map access (VK → Team → Customer)
 	if vk.BudgetID != nil {
 		if budgetValue, exists := gs.budgets.Load(*vk.BudgetID); exists && budgetValue != nil {
-			if budget, ok := budgetValue.(*configstore.TableBudget); ok && budget != nil {
+			if budget, ok := budgetValue.(*configstoreTables.TableBudget); ok && budget != nil {
 				budgets = append(budgets, budget)
 				budgetNames = append(budgetNames, "VK")
 			}
@@ -486,10 +487,10 @@ func (gs *GovernanceStore) collectBudgetsFromHierarchy(ctx context.Context, vk *
 
 	if vk.TeamID != nil {
 		if teamValue, exists := gs.teams.Load(*vk.TeamID); exists && teamValue != nil {
-			if team, ok := teamValue.(*configstore.TableTeam); ok && team != nil {
+			if team, ok := teamValue.(*configstoreTables.TableTeam); ok && team != nil {
 				if team.BudgetID != nil {
 					if budgetValue, exists := gs.budgets.Load(*team.BudgetID); exists && budgetValue != nil {
-						if budget, ok := budgetValue.(*configstore.TableBudget); ok && budget != nil {
+						if budget, ok := budgetValue.(*configstoreTables.TableBudget); ok && budget != nil {
 							budgets = append(budgets, budget)
 							budgetNames = append(budgetNames, "Team")
 						}
@@ -499,10 +500,10 @@ func (gs *GovernanceStore) collectBudgetsFromHierarchy(ctx context.Context, vk *
 				// Check if team belongs to a customer
 				if team.CustomerID != nil {
 					if customerValue, exists := gs.customers.Load(*team.CustomerID); exists && customerValue != nil {
-						if customer, ok := customerValue.(*configstore.TableCustomer); ok && customer != nil {
+						if customer, ok := customerValue.(*configstoreTables.TableCustomer); ok && customer != nil {
 							if customer.BudgetID != nil {
 								if budgetValue, exists := gs.budgets.Load(*customer.BudgetID); exists && budgetValue != nil {
-									if budget, ok := budgetValue.(*configstore.TableBudget); ok && budget != nil {
+									if budget, ok := budgetValue.(*configstoreTables.TableBudget); ok && budget != nil {
 										budgets = append(budgets, budget)
 										budgetNames = append(budgetNames, "Customer")
 									}
@@ -517,10 +518,10 @@ func (gs *GovernanceStore) collectBudgetsFromHierarchy(ctx context.Context, vk *
 
 	if vk.CustomerID != nil {
 		if customerValue, exists := gs.customers.Load(*vk.CustomerID); exists && customerValue != nil {
-			if customer, ok := customerValue.(*configstore.TableCustomer); ok && customer != nil {
+			if customer, ok := customerValue.(*configstoreTables.TableCustomer); ok && customer != nil {
 				if customer.BudgetID != nil {
 					if budgetValue, exists := gs.budgets.Load(*customer.BudgetID); exists && budgetValue != nil {
-						if budget, ok := budgetValue.(*configstore.TableBudget); ok && budget != nil {
+						if budget, ok := budgetValue.(*configstoreTables.TableBudget); ok && budget != nil {
 							budgets = append(budgets, budget)
 							budgetNames = append(budgetNames, "Customer")
 						}
@@ -534,7 +535,7 @@ func (gs *GovernanceStore) collectBudgetsFromHierarchy(ctx context.Context, vk *
 }
 
 // collectBudgetIDsFromMemory collects budget IDs from in-memory store data (lock-free)
-func (gs *GovernanceStore) collectBudgetIDsFromMemory(ctx context.Context, vk *configstore.TableVirtualKey) []string {
+func (gs *GovernanceStore) collectBudgetIDsFromMemory(ctx context.Context, vk *configstoreTables.TableVirtualKey) []string {
 	budgets, _ := gs.collectBudgetsFromHierarchy(ctx, vk)
 
 	budgetIDs := make([]string, len(budgets))
@@ -546,8 +547,8 @@ func (gs *GovernanceStore) collectBudgetIDsFromMemory(ctx context.Context, vk *c
 }
 
 // resetBudgetIfNeeded checks and resets budget within a transaction
-func (gs *GovernanceStore) resetBudgetIfNeeded(ctx context.Context, tx *gorm.DB, budget *configstore.TableBudget) error {
-	duration, err := configstore.ParseDuration(budget.ResetDuration)
+func (gs *GovernanceStore) resetBudgetIfNeeded(ctx context.Context, tx *gorm.DB, budget *configstoreTables.TableBudget) error {
+	duration, err := configstoreTables.ParseDuration(budget.ResetDuration)
 	if err != nil {
 		return fmt.Errorf("invalid reset duration %s: %w", budget.ResetDuration, err)
 	}
@@ -571,7 +572,7 @@ func (gs *GovernanceStore) resetBudgetIfNeeded(ctx context.Context, tx *gorm.DB,
 // PUBLIC API METHODS
 
 // CreateVirtualKeyInMemory adds a new virtual key to the in-memory store (lock-free)
-func (gs *GovernanceStore) CreateVirtualKeyInMemory(vk *configstore.TableVirtualKey) { // with rateLimit preloaded
+func (gs *GovernanceStore) CreateVirtualKeyInMemory(vk *configstoreTables.TableVirtualKey) { // with rateLimit preloaded
 	if vk == nil {
 		return // Nothing to create
 	}
@@ -579,7 +580,7 @@ func (gs *GovernanceStore) CreateVirtualKeyInMemory(vk *configstore.TableVirtual
 }
 
 // UpdateVirtualKeyInMemory updates an existing virtual key in the in-memory store (lock-free)
-func (gs *GovernanceStore) UpdateVirtualKeyInMemory(vk *configstore.TableVirtualKey) { // with rateLimit preloaded
+func (gs *GovernanceStore) UpdateVirtualKeyInMemory(vk *configstoreTables.TableVirtualKey) { // with rateLimit preloaded
 	if vk == nil {
 		return // Nothing to update
 	}
@@ -595,7 +596,7 @@ func (gs *GovernanceStore) DeleteVirtualKeyInMemory(vkID string) {
 	// Find and delete the VK by ID (lock-free)
 	gs.virtualKeys.Range(func(key, value interface{}) bool {
 		// Type-safe conversion
-		vk, ok := value.(*configstore.TableVirtualKey)
+		vk, ok := value.(*configstoreTables.TableVirtualKey)
 		if !ok || vk == nil {
 			return true // continue iteration
 		}
@@ -609,7 +610,7 @@ func (gs *GovernanceStore) DeleteVirtualKeyInMemory(vkID string) {
 }
 
 // CreateTeamInMemory adds a new team to the in-memory store (lock-free)
-func (gs *GovernanceStore) CreateTeamInMemory(team *configstore.TableTeam) {
+func (gs *GovernanceStore) CreateTeamInMemory(team *configstoreTables.TableTeam) {
 	if team == nil {
 		return // Nothing to create
 	}
@@ -617,7 +618,7 @@ func (gs *GovernanceStore) CreateTeamInMemory(team *configstore.TableTeam) {
 }
 
 // UpdateTeamInMemory updates an existing team in the in-memory store (lock-free)
-func (gs *GovernanceStore) UpdateTeamInMemory(team *configstore.TableTeam) {
+func (gs *GovernanceStore) UpdateTeamInMemory(team *configstoreTables.TableTeam) {
 	if team == nil {
 		return // Nothing to update
 	}
@@ -633,7 +634,7 @@ func (gs *GovernanceStore) DeleteTeamInMemory(teamID string) {
 }
 
 // CreateCustomerInMemory adds a new customer to the in-memory store (lock-free)
-func (gs *GovernanceStore) CreateCustomerInMemory(customer *configstore.TableCustomer) {
+func (gs *GovernanceStore) CreateCustomerInMemory(customer *configstoreTables.TableCustomer) {
 	if customer == nil {
 		return // Nothing to create
 	}
@@ -641,7 +642,7 @@ func (gs *GovernanceStore) CreateCustomerInMemory(customer *configstore.TableCus
 }
 
 // UpdateCustomerInMemory updates an existing customer in the in-memory store (lock-free)
-func (gs *GovernanceStore) UpdateCustomerInMemory(customer *configstore.TableCustomer) {
+func (gs *GovernanceStore) UpdateCustomerInMemory(customer *configstoreTables.TableCustomer) {
 	if customer == nil {
 		return // Nothing to update
 	}
@@ -657,7 +658,7 @@ func (gs *GovernanceStore) DeleteCustomerInMemory(customerID string) {
 }
 
 // CreateBudgetInMemory adds a new budget to the in-memory store (lock-free)
-func (gs *GovernanceStore) CreateBudgetInMemory(budget *configstore.TableBudget) {
+func (gs *GovernanceStore) CreateBudgetInMemory(budget *configstoreTables.TableBudget) {
 	if budget == nil {
 		return // Nothing to create
 	}
@@ -665,7 +666,7 @@ func (gs *GovernanceStore) CreateBudgetInMemory(budget *configstore.TableBudget)
 }
 
 // UpdateBudgetInMemory updates a specific budget in the in-memory cache (lock-free)
-func (gs *GovernanceStore) UpdateBudgetInMemory(budget *configstore.TableBudget) error {
+func (gs *GovernanceStore) UpdateBudgetInMemory(budget *configstoreTables.TableBudget) error {
 	if budget == nil {
 		return fmt.Errorf("budget cannot be nil")
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
+	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/plugins/governance"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
@@ -198,7 +199,7 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 			return
 		}
 		// Validate reset duration format
-		if _, err := configstore.ParseDuration(req.Budget.ResetDuration); err != nil {
+		if _, err := configstoreTables.ParseDuration(req.Budget.ResetDuration); err != nil {
 			SendError(ctx, 400, fmt.Sprintf("Invalid reset duration format: %s", req.Budget.ResetDuration), h.logger)
 			return
 		}
@@ -210,10 +211,10 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 		isActive = *req.IsActive
 	}
 
-	var vk configstore.TableVirtualKey
+	var vk configstoreTables.TableVirtualKey
 	if err := h.configStore.ExecuteTransaction(ctx, func(tx *gorm.DB) error {
 		// Get the keys if DBKeyIDs are provided
-		var keys []configstore.TableKey
+		var keys []configstoreTables.TableKey
 		if len(req.KeyIDs) > 0 {
 			var err error
 			keys, err = h.configStore.GetKeysByIDs(ctx, req.KeyIDs)
@@ -225,7 +226,7 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 			}
 		}
 
-		vk = configstore.TableVirtualKey{
+		vk = configstoreTables.TableVirtualKey{
 			ID:          uuid.NewString(),
 			Name:        req.Name,
 			Value:       uuid.NewString(),
@@ -237,7 +238,7 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 		}
 
 		if req.Budget != nil {
-			budget := configstore.TableBudget{
+			budget := configstoreTables.TableBudget{
 				ID:            uuid.NewString(),
 				MaxLimit:      req.Budget.MaxLimit,
 				ResetDuration: req.Budget.ResetDuration,
@@ -251,7 +252,7 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 		}
 
 		if req.RateLimit != nil {
-			rateLimit := configstore.TableRateLimit{
+			rateLimit := configstoreTables.TableRateLimit{
 				ID:                   uuid.NewString(),
 				TokenMaxLimit:        req.RateLimit.TokenMaxLimit,
 				TokenResetDuration:   req.RateLimit.TokenResetDuration,
@@ -272,7 +273,7 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 
 		if req.ProviderConfigs != nil {
 			for _, pc := range req.ProviderConfigs {
-				if err := h.configStore.CreateVirtualKeyProviderConfig(ctx, &configstore.TableVirtualKeyProviderConfig{
+				if err := h.configStore.CreateVirtualKeyProviderConfig(ctx, &configstoreTables.TableVirtualKeyProviderConfig{
 					VirtualKeyID:  vk.ID,
 					Provider:      pc.Provider,
 					Weight:        pc.Weight,
@@ -377,7 +378,7 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 		if req.Budget != nil {
 			if vk.BudgetID != nil {
 				// Update existing budget
-				budget := configstore.TableBudget{}
+				budget := configstoreTables.TableBudget{}
 				if err := tx.First(&budget, "id = ?", *vk.BudgetID).Error; err != nil {
 					return err
 				}
@@ -401,11 +402,11 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 				if *req.Budget.MaxLimit < 0 {
 					return fmt.Errorf("budget max_limit cannot be negative: %.2f", *req.Budget.MaxLimit)
 				}
-				if _, err := configstore.ParseDuration(*req.Budget.ResetDuration); err != nil {
+				if _, err := configstoreTables.ParseDuration(*req.Budget.ResetDuration); err != nil {
 					return fmt.Errorf("invalid reset duration format: %s", *req.Budget.ResetDuration)
 				}
 				// Storing now
-				budget := configstore.TableBudget{
+				budget := configstoreTables.TableBudget{
 					ID:            uuid.NewString(),
 					MaxLimit:      *req.Budget.MaxLimit,
 					ResetDuration: *req.Budget.ResetDuration,
@@ -424,7 +425,7 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 		if req.RateLimit != nil {
 			if vk.RateLimitID != nil {
 				// Update existing rate limit
-				rateLimit := configstore.TableRateLimit{}
+				rateLimit := configstoreTables.TableRateLimit{}
 				if err := tx.First(&rateLimit, "id = ?", *vk.RateLimitID).Error; err != nil {
 					return err
 				}
@@ -447,7 +448,7 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 				}
 			} else {
 				// Create new rate limit
-				rateLimit := configstore.TableRateLimit{
+				rateLimit := configstoreTables.TableRateLimit{
 					ID:                   uuid.NewString(),
 					TokenMaxLimit:        req.RateLimit.TokenMaxLimit,
 					TokenResetDuration:   req.RateLimit.TokenResetDuration,
@@ -466,7 +467,7 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 		// Handle DBKey associations if provided
 		if req.KeyIDs != nil {
 			// Get the keys if DBKeyIDs are provided
-			var keys []configstore.TableKey
+			var keys []configstoreTables.TableKey
 			if len(req.KeyIDs) > 0 {
 				var err error
 				keys, err = h.configStore.GetKeysByIDs(ctx, req.KeyIDs)
@@ -488,13 +489,13 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 
 		if req.ProviderConfigs != nil {
 			// Get existing provider configs for comparison
-			var existingConfigs []configstore.TableVirtualKeyProviderConfig
+			var existingConfigs []configstoreTables.TableVirtualKeyProviderConfig
 			if err := tx.Where("virtual_key_id = ?", vk.ID).Find(&existingConfigs).Error; err != nil {
 				return err
 			}
 
 			// Create maps for easier lookup
-			existingConfigsMap := make(map[uint]configstore.TableVirtualKeyProviderConfig)
+			existingConfigsMap := make(map[uint]configstoreTables.TableVirtualKeyProviderConfig)
 			for _, config := range existingConfigs {
 				existingConfigsMap[config.ID] = config
 			}
@@ -505,7 +506,7 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 			for _, pc := range req.ProviderConfigs {
 				if pc.ID == nil {
 					// Create new provider config
-					if err := h.configStore.CreateVirtualKeyProviderConfig(ctx, &configstore.TableVirtualKeyProviderConfig{
+					if err := h.configStore.CreateVirtualKeyProviderConfig(ctx, &configstoreTables.TableVirtualKeyProviderConfig{
 						VirtualKeyID:  vk.ID,
 						Provider:      pc.Provider,
 						Weight:        pc.Weight,
@@ -649,22 +650,22 @@ func (h *GovernanceHandler) createTeam(ctx *fasthttp.RequestCtx) {
 			return
 		}
 		// Validate reset duration format
-		if _, err := configstore.ParseDuration(req.Budget.ResetDuration); err != nil {
+		if _, err := configstoreTables.ParseDuration(req.Budget.ResetDuration); err != nil {
 			SendError(ctx, 400, fmt.Sprintf("Invalid reset duration format: %s", req.Budget.ResetDuration), h.logger)
 			return
 		}
 	}
 
-	var team configstore.TableTeam
+	var team configstoreTables.TableTeam
 	if err := h.configStore.ExecuteTransaction(ctx, func(tx *gorm.DB) error {
-		team = configstore.TableTeam{
+		team = configstoreTables.TableTeam{
 			ID:         uuid.NewString(),
 			Name:       req.Name,
 			CustomerID: req.CustomerID,
 		}
 
 		if req.Budget != nil {
-			budget := configstore.TableBudget{
+			budget := configstoreTables.TableBudget{
 				ID:            uuid.NewString(),
 				MaxLimit:      req.Budget.MaxLimit,
 				ResetDuration: req.Budget.ResetDuration,
@@ -778,7 +779,7 @@ func (h *GovernanceHandler) updateTeam(ctx *fasthttp.RequestCtx) {
 				team.Budget = budget
 			} else {
 				// Create new budget
-				budget := configstore.TableBudget{
+				budget := configstoreTables.TableBudget{
 					ID:            uuid.NewString(),
 					MaxLimit:      *req.Budget.MaxLimit,
 					ResetDuration: *req.Budget.ResetDuration,
@@ -902,21 +903,21 @@ func (h *GovernanceHandler) createCustomer(ctx *fasthttp.RequestCtx) {
 			return
 		}
 		// Validate reset duration format
-		if _, err := configstore.ParseDuration(req.Budget.ResetDuration); err != nil {
+		if _, err := configstoreTables.ParseDuration(req.Budget.ResetDuration); err != nil {
 			SendError(ctx, 400, fmt.Sprintf("Invalid reset duration format: %s", req.Budget.ResetDuration), h.logger)
 			return
 		}
 	}
 
-	var customer configstore.TableCustomer
+	var customer configstoreTables.TableCustomer
 	if err := h.configStore.ExecuteTransaction(ctx, func(tx *gorm.DB) error {
-		customer = configstore.TableCustomer{
+		customer = configstoreTables.TableCustomer{
 			ID:   uuid.NewString(),
 			Name: req.Name,
 		}
 
 		if req.Budget != nil {
-			budget := configstore.TableBudget{
+			budget := configstoreTables.TableBudget{
 				ID:            uuid.NewString(),
 				MaxLimit:      req.Budget.MaxLimit,
 				ResetDuration: req.Budget.ResetDuration,
@@ -1026,7 +1027,7 @@ func (h *GovernanceHandler) updateCustomer(ctx *fasthttp.RequestCtx) {
 				customer.Budget = budget
 			} else {
 				// Create new budget
-				budget := configstore.TableBudget{
+				budget := configstoreTables.TableBudget{
 					ID:            uuid.NewString(),
 					MaxLimit:      *req.Budget.MaxLimit,
 					ResetDuration: *req.Budget.ResetDuration,

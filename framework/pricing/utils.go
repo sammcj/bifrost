@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/framework/configstore"
+	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 )
 
 // makeKey creates a unique key for a model, provider, and mode for pricingData map
@@ -73,7 +73,7 @@ func normalizeRequestType(reqType schemas.RequestType) string {
 }
 
 // convertPricingDataToTableModelPricing converts the pricing data to a TableModelPricing struct
-func convertPricingDataToTableModelPricing(modelKey string, entry PricingEntry) configstore.TableModelPricing {
+func convertPricingDataToTableModelPricing(modelKey string, entry PricingEntry) configstoreTables.TableModelPricing {
 	provider := normalizeProvider(entry.Provider)
 
 	// Handle provider/model format - extract just the model name
@@ -85,7 +85,7 @@ func convertPricingDataToTableModelPricing(modelKey string, entry PricingEntry) 
 		}
 	}
 
-	pricing := configstore.TableModelPricing{
+	pricing := configstoreTables.TableModelPricing{
 		Model:              modelName,
 		Provider:           provider,
 		InputCostPerToken:  entry.InputCostPerToken,

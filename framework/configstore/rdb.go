@@ -7,8 +7,9 @@ import (
 	"fmt"
 
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/framework/migrator"
+	"github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/logstore"
+	"github.com/maximhq/bifrost/framework/migrator"
 	"github.com/maximhq/bifrost/framework/vectorstore"
 	"gorm.io/gorm"
 )
@@ -21,7 +22,7 @@ type RDBConfigStore struct {
 
 // UpdateClientConfig updates the client configuration in the database.
 func (s *RDBConfigStore) UpdateClientConfig(ctx context.Context, config *ClientConfig) error {
-	dbConfig := TableClientConfig{
+	dbConfig := tables.TableClientConfig{
 		DropExcessRequests:      config.DropExcessRequests,
 		InitialPoolSize:         config.InitialPoolSize,
 		EnableLogging:           config.EnableLogging,
@@ -35,7 +36,7 @@ func (s *RDBConfigStore) UpdateClientConfig(ctx context.Context, config *ClientC
 	}
 	// Delete existing client config and create new one in a transaction
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TableClientConfig{}).Error; err != nil {
+		if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&tables.TableClientConfig{}).Error; err != nil {
 			return err
 		}
 		return tx.Create(&dbConfig).Error
@@ -47,9 +48,33 @@ func (s *RDBConfigStore) DB() *gorm.DB {
 	return s.db
 }
 
+// UpdateFrameworkConfig updates the framework configuration in the database.
+func (s *RDBConfigStore) UpdateFrameworkConfig(ctx context.Context, config *tables.TableFrameworkConfig) error {
+	// Update the framework configuration
+	return s.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&tables.TableFrameworkConfig{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(config).Error
+	})
+
+}
+
+// GetFrameworkConfig retrieves the framework configuration from the database.
+func (s *RDBConfigStore) GetFrameworkConfig(ctx context.Context) (*tables.TableFrameworkConfig, error) {
+	var dbConfig tables.TableFrameworkConfig
+	if err := s.db.WithContext(ctx).First(&dbConfig).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &dbConfig, nil
+}
+
 // GetClientConfig retrieves the client configuration from the database.
 func (s *RDBConfigStore) GetClientConfig(ctx context.Context) (*ClientConfig, error) {
-	var dbConfig TableClientConfig
+	var dbConfig tables.TableClientConfig
 	if err := s.db.WithContext(ctx).First(&dbConfig).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -74,7 +99,7 @@ func (s *RDBConfigStore) GetClientConfig(ctx context.Context) (*ClientConfig, er
 func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers map[schemas.ModelProvider]ProviderConfig) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Delete all existing providers (cascades to keys)
-		if err := tx.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TableProvider{}).Error; err != nil {
+		if err := tx.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&tables.TableProvider{}).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrNotFound
 			}
@@ -82,7 +107,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 		}
 
 		for providerName, providerConfig := range providers {
-			dbProvider := TableProvider{
+			dbProvider := tables.TableProvider{
 				Name:                     string(providerName),
 				NetworkConfig:            providerConfig.NetworkConfig,
 				ConcurrencyAndBufferSize: providerConfig.ConcurrencyAndBufferSize,
@@ -97,9 +122,9 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 			}
 
 			// Create keys for this provider
-			dbKeys := make([]TableKey, 0, len(providerConfig.Keys))
+			dbKeys := make([]tables.TableKey, 0, len(providerConfig.Keys))
 			for _, key := range providerConfig.Keys {
-				dbKey := TableKey{
+				dbKey := tables.TableKey{
 					Provider:         dbProvider.Name,
 					ProviderID:       dbProvider.ID,
 					KeyID:            key.ID,
@@ -139,7 +164,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 			// Upsert keys to handle duplicates properly
 			for _, dbKey := range dbKeys {
 				// First try to find existing key by KeyID
-				var existingKey TableKey
+				var existingKey tables.TableKey
 				result := tx.WithContext(ctx).Where("key_id = ?", dbKey.KeyID).First(&existingKey)
 
 				if result.Error == nil {
@@ -167,7 +192,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.ModelProvider, config ProviderConfig, envKeys map[string][]EnvKeyInfo) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Find the existing provider
-		var dbProvider TableProvider
+		var dbProvider tables.TableProvider
 		if err := tx.WithContext(ctx).Where("name = ?", string(provider)).First(&dbProvider).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrNotFound
@@ -196,20 +221,20 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 		}
 
 		// Get existing keys for this provider
-		var existingKeys []TableKey
+		var existingKeys []tables.TableKey
 		if err := tx.WithContext(ctx).Where("provider_id = ?", dbProvider.ID).Find(&existingKeys).Error; err != nil {
 			return err
 		}
 
 		// Create a map of existing keys by KeyID for quick lookup
-		existingKeysMap := make(map[string]TableKey)
+		existingKeysMap := make(map[string]tables.TableKey)
 		for _, key := range existingKeys {
 			existingKeysMap[key.KeyID] = key
 		}
 
 		// Process each key in the new config
 		for _, key := range configCopy.Keys {
-			dbKey := TableKey{
+			dbKey := tables.TableKey{
 				Provider:         dbProvider.Name,
 				ProviderID:       dbProvider.ID,
 				KeyID:            key.ID,
@@ -275,7 +300,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.ModelProvider, config ProviderConfig, envKeys map[string][]EnvKeyInfo) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Check if provider already exists
-		var existingProvider TableProvider
+		var existingProvider tables.TableProvider
 		if err := tx.WithContext(ctx).Where("name = ?", string(provider)).First(&existingProvider).Error; err == nil {
 			return fmt.Errorf("provider %s already exists", provider)
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -291,7 +316,7 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 		substituteEnvVars(&configCopy, provider, envKeys)
 
 		// Create new provider
-		dbProvider := TableProvider{
+		dbProvider := tables.TableProvider{
 			Name:                     string(provider),
 			NetworkConfig:            configCopy.NetworkConfig,
 			ConcurrencyAndBufferSize: configCopy.ConcurrencyAndBufferSize,
@@ -307,7 +332,7 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 
 		// Create keys for this provider
 		for _, key := range configCopy.Keys {
-			dbKey := TableKey{
+			dbKey := tables.TableKey{
 				Provider:         dbProvider.Name,
 				ProviderID:       dbProvider.ID,
 				KeyID:            key.ID,
@@ -355,7 +380,7 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 func (s *RDBConfigStore) DeleteProvider(ctx context.Context, provider schemas.ModelProvider) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Find the existing provider
-		var dbProvider TableProvider
+		var dbProvider tables.TableProvider
 		if err := tx.WithContext(ctx).Where("name = ?", string(provider)).First(&dbProvider).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrNotFound
@@ -374,7 +399,7 @@ func (s *RDBConfigStore) DeleteProvider(ctx context.Context, provider schemas.Mo
 
 // GetProvidersConfig retrieves the provider configuration from the database.
 func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.ModelProvider]ProviderConfig, error) {
-	var dbProviders []TableProvider
+	var dbProviders []tables.TableProvider
 	if err := s.db.WithContext(ctx).Preload("Keys").Find(&dbProviders).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -482,7 +507,7 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 
 // GetMCPConfig retrieves the MCP configuration from the database.
 func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, error) {
-	var dbMCPClients []TableMCPClient
+	var dbMCPClients []tables.TableMCPClient
 	if err := s.db.WithContext(ctx).Find(&dbMCPClients).Error; err != nil {
 		return nil, err
 	}
@@ -520,7 +545,7 @@ func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, 
 func (s *RDBConfigStore) UpdateMCPConfig(ctx context.Context, config *schemas.MCPConfig, envKeys map[string][]EnvKeyInfo) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Removing existing MCP clients
-		if err := tx.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TableMCPClient{}).Error; err != nil {
+		if err := tx.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&tables.TableMCPClient{}).Error; err != nil {
 			return err
 		}
 
@@ -536,9 +561,9 @@ func (s *RDBConfigStore) UpdateMCPConfig(ctx context.Context, config *schemas.MC
 		// Substitute environment variables back to their original form
 		substituteMCPEnvVars(configCopy, envKeys)
 
-		dbClients := make([]TableMCPClient, 0, len(configCopy.ClientConfigs))
+		dbClients := make([]tables.TableMCPClient, 0, len(configCopy.ClientConfigs))
 		for _, clientConfig := range configCopy.ClientConfigs {
-			dbClient := TableMCPClient{
+			dbClient := tables.TableMCPClient{
 				Name:             clientConfig.Name,
 				ConnectionType:   string(clientConfig.ConnectionType),
 				ConnectionString: clientConfig.ConnectionString,
@@ -562,7 +587,7 @@ func (s *RDBConfigStore) UpdateMCPConfig(ctx context.Context, config *schemas.MC
 
 // GetVectorStoreConfig retrieves the vector store configuration from the database.
 func (s *RDBConfigStore) GetVectorStoreConfig(ctx context.Context) (*vectorstore.Config, error) {
-	var vectorStoreTableConfig TableVectorStoreConfig
+	var vectorStoreTableConfig tables.TableVectorStoreConfig
 	if err := s.db.WithContext(ctx).First(&vectorStoreTableConfig).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// Return default cache configuration
@@ -581,14 +606,14 @@ func (s *RDBConfigStore) GetVectorStoreConfig(ctx context.Context) (*vectorstore
 func (s *RDBConfigStore) UpdateVectorStoreConfig(ctx context.Context, config *vectorstore.Config) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Delete existing cache config
-		if err := tx.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TableVectorStoreConfig{}).Error; err != nil {
+		if err := tx.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&tables.TableVectorStoreConfig{}).Error; err != nil {
 			return err
 		}
 		jsonConfig, err := marshalToStringPtr(config.Config)
 		if err != nil {
 			return err
 		}
-		var record = &TableVectorStoreConfig{
+		var record = &tables.TableVectorStoreConfig{
 			Type:    string(config.Type),
 			Enabled: config.Enabled,
 			Config:  jsonConfig,
@@ -600,7 +625,7 @@ func (s *RDBConfigStore) UpdateVectorStoreConfig(ctx context.Context, config *ve
 
 // GetLogsStoreConfig retrieves the logs store configuration from the database.
 func (s *RDBConfigStore) GetLogsStoreConfig(ctx context.Context) (*logstore.Config, error) {
-	var dbConfig TableLogStoreConfig
+	var dbConfig tables.TableLogStoreConfig
 	if err := s.db.WithContext(ctx).First(&dbConfig).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -620,14 +645,14 @@ func (s *RDBConfigStore) GetLogsStoreConfig(ctx context.Context) (*logstore.Conf
 // UpdateLogsStoreConfig updates the logs store configuration in the database.
 func (s *RDBConfigStore) UpdateLogsStoreConfig(ctx context.Context, config *logstore.Config) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TableLogStoreConfig{}).Error; err != nil {
+		if err := tx.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&tables.TableLogStoreConfig{}).Error; err != nil {
 			return err
 		}
 		jsonConfig, err := marshalToStringPtr(config)
 		if err != nil {
 			return err
 		}
-		var record = &TableLogStoreConfig{
+		var record = &tables.TableLogStoreConfig{
 			Enabled: config.Enabled,
 			Type:    string(config.Type),
 			Config:  jsonConfig,
@@ -638,7 +663,7 @@ func (s *RDBConfigStore) UpdateLogsStoreConfig(ctx context.Context, config *logs
 
 // GetEnvKeys retrieves the environment keys from the database.
 func (s *RDBConfigStore) GetEnvKeys(ctx context.Context) (map[string][]EnvKeyInfo, error) {
-	var dbEnvKeys []TableEnvKey
+	var dbEnvKeys []tables.TableEnvKey
 	if err := s.db.WithContext(ctx).Find(&dbEnvKeys).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -662,13 +687,13 @@ func (s *RDBConfigStore) GetEnvKeys(ctx context.Context) (map[string][]EnvKeyInf
 func (s *RDBConfigStore) UpdateEnvKeys(ctx context.Context, keys map[string][]EnvKeyInfo) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Delete existing env keys
-		if err := tx.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TableEnvKey{}).Error; err != nil {
+		if err := tx.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&tables.TableEnvKey{}).Error; err != nil {
 			return err
 		}
-		var dbEnvKeys []TableEnvKey
+		var dbEnvKeys []tables.TableEnvKey
 		for envVar, infos := range keys {
 			for _, info := range infos {
-				dbEnvKey := TableEnvKey{
+				dbEnvKey := tables.TableEnvKey{
 					EnvVar:     envVar,
 					Provider:   string(info.Provider),
 					KeyType:    string(info.KeyType),
@@ -688,8 +713,8 @@ func (s *RDBConfigStore) UpdateEnvKeys(ctx context.Context, keys map[string][]En
 }
 
 // GetConfig retrieves a specific config from the database.
-func (s *RDBConfigStore) GetConfig(ctx context.Context, key string) (*TableConfig, error) {
-	var config TableConfig
+func (s *RDBConfigStore) GetConfig(ctx context.Context, key string) (*tables.TableConfig, error) {
+	var config tables.TableConfig
 	if err := s.db.WithContext(ctx).First(&config, "key = ?", key).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -700,7 +725,7 @@ func (s *RDBConfigStore) GetConfig(ctx context.Context, key string) (*TableConfi
 }
 
 // UpdateConfig updates a specific config in the database.
-func (s *RDBConfigStore) UpdateConfig(ctx context.Context, config *TableConfig, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) UpdateConfig(ctx context.Context, config *tables.TableConfig, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -711,8 +736,8 @@ func (s *RDBConfigStore) UpdateConfig(ctx context.Context, config *TableConfig, 
 }
 
 // GetModelPrices retrieves all model pricing records from the database.
-func (s *RDBConfigStore) GetModelPrices(ctx context.Context) ([]TableModelPricing, error) {
-	var modelPrices []TableModelPricing
+func (s *RDBConfigStore) GetModelPrices(ctx context.Context) ([]tables.TableModelPricing, error) {
+	var modelPrices []tables.TableModelPricing
 	if err := s.db.WithContext(ctx).Find(&modelPrices).Error; err != nil {
 		return nil, err
 	}
@@ -720,7 +745,7 @@ func (s *RDBConfigStore) GetModelPrices(ctx context.Context) ([]TableModelPricin
 }
 
 // CreateModelPrices creates a new model pricing record in the database.
-func (s *RDBConfigStore) CreateModelPrices(ctx context.Context, pricing *TableModelPricing, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) CreateModelPrices(ctx context.Context, pricing *tables.TableModelPricing, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -738,21 +763,21 @@ func (s *RDBConfigStore) DeleteModelPrices(ctx context.Context, tx ...*gorm.DB) 
 	} else {
 		txDB = s.db
 	}
-	return txDB.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TableModelPricing{}).Error
+	return txDB.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&tables.TableModelPricing{}).Error
 }
 
 // PLUGINS METHODS
 
-func (s *RDBConfigStore) GetPlugins(ctx context.Context) ([]TablePlugin, error) {
-	var plugins []TablePlugin
+func (s *RDBConfigStore) GetPlugins(ctx context.Context) ([]tables.TablePlugin, error) {
+	var plugins []tables.TablePlugin
 	if err := s.db.WithContext(ctx).Find(&plugins).Error; err != nil {
 		return nil, err
 	}
 	return plugins, nil
 }
 
-func (s *RDBConfigStore) GetPlugin(ctx context.Context, name string) (*TablePlugin, error) {
-	var plugin TablePlugin
+func (s *RDBConfigStore) GetPlugin(ctx context.Context, name string) (*tables.TablePlugin, error) {
+	var plugin tables.TablePlugin
 	if err := s.db.WithContext(ctx).First(&plugin, "name = ?", name).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -762,7 +787,7 @@ func (s *RDBConfigStore) GetPlugin(ctx context.Context, name string) (*TablePlug
 	return &plugin, nil
 }
 
-func (s *RDBConfigStore) CreatePlugin(ctx context.Context, plugin *TablePlugin, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) CreatePlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -772,7 +797,7 @@ func (s *RDBConfigStore) CreatePlugin(ctx context.Context, plugin *TablePlugin, 
 	return txDB.WithContext(ctx).Create(plugin).Error
 }
 
-func (s *RDBConfigStore) UpdatePlugin(ctx context.Context, plugin *TablePlugin, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) UpdatePlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	var localTx bool
 
@@ -784,7 +809,7 @@ func (s *RDBConfigStore) UpdatePlugin(ctx context.Context, plugin *TablePlugin, 
 		localTx = true
 	}
 
-	if err := txDB.WithContext(ctx).Delete(&TablePlugin{}, "name = ?", plugin.Name).Error; err != nil {
+	if err := txDB.WithContext(ctx).Delete(&tables.TablePlugin{}, "name = ?", plugin.Name).Error; err != nil {
 		if localTx {
 			txDB.Rollback()
 		}
@@ -812,14 +837,14 @@ func (s *RDBConfigStore) DeletePlugin(ctx context.Context, name string, tx ...*g
 	} else {
 		txDB = s.db
 	}
-	return txDB.WithContext(ctx).Delete(&TablePlugin{}, "name = ?", name).Error
+	return txDB.WithContext(ctx).Delete(&tables.TablePlugin{}, "name = ?", name).Error
 }
 
 // GOVERNANCE METHODS
 
 // GetVirtualKeys retrieves all virtual keys from the database.
-func (s *RDBConfigStore) GetVirtualKeys(ctx context.Context) ([]TableVirtualKey, error) {
-	var virtualKeys []TableVirtualKey
+func (s *RDBConfigStore) GetVirtualKeys(ctx context.Context) ([]tables.TableVirtualKey, error) {
+	var virtualKeys []tables.TableVirtualKey
 
 	// Preload all relationships for complete information
 	if err := s.db.WithContext(ctx).Preload("Team").
@@ -837,8 +862,8 @@ func (s *RDBConfigStore) GetVirtualKeys(ctx context.Context) ([]TableVirtualKey,
 }
 
 // GetVirtualKey retrieves a virtual key from the database.
-func (s *RDBConfigStore) GetVirtualKey(ctx context.Context, id string) (*TableVirtualKey, error) {
-	var virtualKey TableVirtualKey
+func (s *RDBConfigStore) GetVirtualKey(ctx context.Context, id string) (*tables.TableVirtualKey, error) {
+	var virtualKey tables.TableVirtualKey
 	if err := s.db.WithContext(ctx).Preload("Team").
 		Preload("Customer").
 		Preload("Budget").
@@ -852,7 +877,7 @@ func (s *RDBConfigStore) GetVirtualKey(ctx context.Context, id string) (*TableVi
 	return &virtualKey, nil
 }
 
-func (s *RDBConfigStore) CreateVirtualKey(ctx context.Context, virtualKey *TableVirtualKey, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) CreateVirtualKey(ctx context.Context, virtualKey *tables.TableVirtualKey, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -875,7 +900,7 @@ func (s *RDBConfigStore) CreateVirtualKey(ctx context.Context, virtualKey *Table
 	return nil
 }
 
-func (s *RDBConfigStore) UpdateVirtualKey(ctx context.Context, virtualKey *TableVirtualKey, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) UpdateVirtualKey(ctx context.Context, virtualKey *tables.TableVirtualKey, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -907,12 +932,12 @@ func (s *RDBConfigStore) UpdateVirtualKey(ctx context.Context, virtualKey *Table
 }
 
 // GetKeysByIDs retrieves multiple keys by their IDs
-func (s *RDBConfigStore) GetKeysByIDs(ctx context.Context, ids []string) ([]TableKey, error) {
+func (s *RDBConfigStore) GetKeysByIDs(ctx context.Context, ids []string) ([]tables.TableKey, error) {
 	if len(ids) == 0 {
-		return []TableKey{}, nil
+		return []tables.TableKey{}, nil
 	}
 
-	var keys []TableKey
+	var keys []tables.TableKey
 	if err := s.db.WithContext(ctx).Where("key_id IN ?", ids).Find(&keys).Error; err != nil {
 		return nil, err
 	}
@@ -921,12 +946,12 @@ func (s *RDBConfigStore) GetKeysByIDs(ctx context.Context, ids []string) ([]Tabl
 
 // DeleteVirtualKey deletes a virtual key from the database.
 func (s *RDBConfigStore) DeleteVirtualKey(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Delete(&TableVirtualKey{}, "id = ?", id).Error
+	return s.db.WithContext(ctx).Delete(&tables.TableVirtualKey{}, "id = ?", id).Error
 }
 
 // GetVirtualKeyProviderConfigs retrieves all virtual key provider configs from the database.
-func (s *RDBConfigStore) GetVirtualKeyProviderConfigs(ctx context.Context, virtualKeyID string) ([]TableVirtualKeyProviderConfig, error) {
-	var virtualKey TableVirtualKey
+func (s *RDBConfigStore) GetVirtualKeyProviderConfigs(ctx context.Context, virtualKeyID string) ([]tables.TableVirtualKeyProviderConfig, error) {
+	var virtualKey tables.TableVirtualKey
 	if err := s.db.WithContext(ctx).First(&virtualKey, "id = ?", virtualKeyID).Error; err != nil {
 		return nil, err
 	}
@@ -935,7 +960,7 @@ func (s *RDBConfigStore) GetVirtualKeyProviderConfigs(ctx context.Context, virtu
 		return nil, nil
 	}
 
-	var providerConfigs []TableVirtualKeyProviderConfig
+	var providerConfigs []tables.TableVirtualKeyProviderConfig
 	if err := s.db.WithContext(ctx).Where("virtual_key_id = ?", virtualKey.ID).Find(&providerConfigs).Error; err != nil {
 		return nil, err
 	}
@@ -943,7 +968,7 @@ func (s *RDBConfigStore) GetVirtualKeyProviderConfigs(ctx context.Context, virtu
 }
 
 // CreateVirtualKeyProviderConfig creates a new virtual key provider config in the database.
-func (s *RDBConfigStore) CreateVirtualKeyProviderConfig(ctx context.Context, virtualKeyProviderConfig *TableVirtualKeyProviderConfig, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) CreateVirtualKeyProviderConfig(ctx context.Context, virtualKeyProviderConfig *tables.TableVirtualKeyProviderConfig, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -954,7 +979,7 @@ func (s *RDBConfigStore) CreateVirtualKeyProviderConfig(ctx context.Context, vir
 }
 
 // UpdateVirtualKeyProviderConfig updates a virtual key provider config in the database.
-func (s *RDBConfigStore) UpdateVirtualKeyProviderConfig(ctx context.Context, virtualKeyProviderConfig *TableVirtualKeyProviderConfig, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) UpdateVirtualKeyProviderConfig(ctx context.Context, virtualKeyProviderConfig *tables.TableVirtualKeyProviderConfig, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -972,12 +997,12 @@ func (s *RDBConfigStore) DeleteVirtualKeyProviderConfig(ctx context.Context, id 
 	} else {
 		txDB = s.db
 	}
-	return txDB.WithContext(ctx).Delete(&TableVirtualKeyProviderConfig{}, "id = ?", id).Error
+	return txDB.WithContext(ctx).Delete(&tables.TableVirtualKeyProviderConfig{}, "id = ?", id).Error
 }
 
 // GetVirtualKeyByValue retrieves a virtual key by its value
-func (s *RDBConfigStore) GetVirtualKeyByValue(ctx context.Context, value string) (*TableVirtualKey, error) {
-	var virtualKey TableVirtualKey
+func (s *RDBConfigStore) GetVirtualKeyByValue(ctx context.Context, value string) (*tables.TableVirtualKey, error) {
+	var virtualKey tables.TableVirtualKey
 	if err := s.db.WithContext(ctx).Preload("Team").
 		Preload("Customer").
 		Preload("Budget").
@@ -992,7 +1017,7 @@ func (s *RDBConfigStore) GetVirtualKeyByValue(ctx context.Context, value string)
 }
 
 // GetTeams retrieves all teams from the database.
-func (s *RDBConfigStore) GetTeams(ctx context.Context, customerID string) ([]TableTeam, error) {
+func (s *RDBConfigStore) GetTeams(ctx context.Context, customerID string) ([]tables.TableTeam, error) {
 	// Preload relationships for complete information
 	query := s.db.WithContext(ctx).Preload("Customer").Preload("Budget")
 
@@ -1001,7 +1026,7 @@ func (s *RDBConfigStore) GetTeams(ctx context.Context, customerID string) ([]Tab
 		query = query.Where("customer_id = ?", customerID)
 	}
 
-	var teams []TableTeam
+	var teams []tables.TableTeam
 	if err := query.Find(&teams).Error; err != nil {
 		return nil, err
 	}
@@ -1009,8 +1034,8 @@ func (s *RDBConfigStore) GetTeams(ctx context.Context, customerID string) ([]Tab
 }
 
 // GetTeam retrieves a specific team from the database.
-func (s *RDBConfigStore) GetTeam(ctx context.Context, id string) (*TableTeam, error) {
-	var team TableTeam
+func (s *RDBConfigStore) GetTeam(ctx context.Context, id string) (*tables.TableTeam, error) {
+	var team tables.TableTeam
 	if err := s.db.WithContext(ctx).Preload("Customer").Preload("Budget").First(&team, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
@@ -1018,7 +1043,7 @@ func (s *RDBConfigStore) GetTeam(ctx context.Context, id string) (*TableTeam, er
 }
 
 // CreateTeam creates a new team in the database.
-func (s *RDBConfigStore) CreateTeam(ctx context.Context, team *TableTeam, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) CreateTeam(ctx context.Context, team *tables.TableTeam, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -1029,7 +1054,7 @@ func (s *RDBConfigStore) CreateTeam(ctx context.Context, team *TableTeam, tx ...
 }
 
 // UpdateTeam updates an existing team in the database.
-func (s *RDBConfigStore) UpdateTeam(ctx context.Context, team *TableTeam, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) UpdateTeam(ctx context.Context, team *tables.TableTeam, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -1041,12 +1066,12 @@ func (s *RDBConfigStore) UpdateTeam(ctx context.Context, team *TableTeam, tx ...
 
 // DeleteTeam deletes a team from the database.
 func (s *RDBConfigStore) DeleteTeam(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Delete(&TableTeam{}, "id = ?", id).Error
+	return s.db.WithContext(ctx).Delete(&tables.TableTeam{}, "id = ?", id).Error
 }
 
 // GetCustomers retrieves all customers from the database.
-func (s *RDBConfigStore) GetCustomers(ctx context.Context) ([]TableCustomer, error) {
-	var customers []TableCustomer
+func (s *RDBConfigStore) GetCustomers(ctx context.Context) ([]tables.TableCustomer, error) {
+	var customers []tables.TableCustomer
 	if err := s.db.WithContext(ctx).Preload("Teams").Preload("Budget").Find(&customers).Error; err != nil {
 		return nil, err
 	}
@@ -1054,8 +1079,8 @@ func (s *RDBConfigStore) GetCustomers(ctx context.Context) ([]TableCustomer, err
 }
 
 // GetCustomer retrieves a specific customer from the database.
-func (s *RDBConfigStore) GetCustomer(ctx context.Context, id string) (*TableCustomer, error) {
-	var customer TableCustomer
+func (s *RDBConfigStore) GetCustomer(ctx context.Context, id string) (*tables.TableCustomer, error) {
+	var customer tables.TableCustomer
 	if err := s.db.WithContext(ctx).Preload("Teams").Preload("Budget").First(&customer, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
@@ -1063,7 +1088,7 @@ func (s *RDBConfigStore) GetCustomer(ctx context.Context, id string) (*TableCust
 }
 
 // CreateCustomer creates a new customer in the database.
-func (s *RDBConfigStore) CreateCustomer(ctx context.Context, customer *TableCustomer, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) CreateCustomer(ctx context.Context, customer *tables.TableCustomer, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -1074,7 +1099,7 @@ func (s *RDBConfigStore) CreateCustomer(ctx context.Context, customer *TableCust
 }
 
 // UpdateCustomer updates an existing customer in the database.
-func (s *RDBConfigStore) UpdateCustomer(ctx context.Context, customer *TableCustomer, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) UpdateCustomer(ctx context.Context, customer *tables.TableCustomer, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -1086,12 +1111,12 @@ func (s *RDBConfigStore) UpdateCustomer(ctx context.Context, customer *TableCust
 
 // DeleteCustomer deletes a customer from the database.
 func (s *RDBConfigStore) DeleteCustomer(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Delete(&TableCustomer{}, "id = ?", id).Error
+	return s.db.WithContext(ctx).Delete(&tables.TableCustomer{}, "id = ?", id).Error
 }
 
 // GetRateLimit retrieves a specific rate limit from the database.
-func (s *RDBConfigStore) GetRateLimit(ctx context.Context, id string) (*TableRateLimit, error) {
-	var rateLimit TableRateLimit
+func (s *RDBConfigStore) GetRateLimit(ctx context.Context, id string) (*tables.TableRateLimit, error) {
+	var rateLimit tables.TableRateLimit
 	if err := s.db.WithContext(ctx).First(&rateLimit, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
@@ -1099,7 +1124,7 @@ func (s *RDBConfigStore) GetRateLimit(ctx context.Context, id string) (*TableRat
 }
 
 // CreateRateLimit creates a new rate limit in the database.
-func (s *RDBConfigStore) CreateRateLimit(ctx context.Context, rateLimit *TableRateLimit, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) CreateRateLimit(ctx context.Context, rateLimit *tables.TableRateLimit, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -1110,7 +1135,7 @@ func (s *RDBConfigStore) CreateRateLimit(ctx context.Context, rateLimit *TableRa
 }
 
 // UpdateRateLimit updates a rate limit in the database.
-func (s *RDBConfigStore) UpdateRateLimit(ctx context.Context, rateLimit *TableRateLimit, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) UpdateRateLimit(ctx context.Context, rateLimit *tables.TableRateLimit, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -1121,7 +1146,7 @@ func (s *RDBConfigStore) UpdateRateLimit(ctx context.Context, rateLimit *TableRa
 }
 
 // UpdateRateLimits updates multiple rate limits in the database.
-func (s *RDBConfigStore) UpdateRateLimits(ctx context.Context, rateLimits []*TableRateLimit, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) UpdateRateLimits(ctx context.Context, rateLimits []*tables.TableRateLimit, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -1137,8 +1162,8 @@ func (s *RDBConfigStore) UpdateRateLimits(ctx context.Context, rateLimits []*Tab
 }
 
 // GetBudgets retrieves all budgets from the database.
-func (s *RDBConfigStore) GetBudgets(ctx context.Context) ([]TableBudget, error) {
-	var budgets []TableBudget
+func (s *RDBConfigStore) GetBudgets(ctx context.Context) ([]tables.TableBudget, error) {
+	var budgets []tables.TableBudget
 	if err := s.db.WithContext(ctx).Find(&budgets).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -1149,14 +1174,14 @@ func (s *RDBConfigStore) GetBudgets(ctx context.Context) ([]TableBudget, error) 
 }
 
 // GetBudget retrieves a specific budget from the database.
-func (s *RDBConfigStore) GetBudget(ctx context.Context, id string, tx ...*gorm.DB) (*TableBudget, error) {
+func (s *RDBConfigStore) GetBudget(ctx context.Context, id string, tx ...*gorm.DB) (*tables.TableBudget, error) {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
 	} else {
 		txDB = s.db
 	}
-	var budget TableBudget
+	var budget tables.TableBudget
 	if err := txDB.WithContext(ctx).First(&budget, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -1167,7 +1192,7 @@ func (s *RDBConfigStore) GetBudget(ctx context.Context, id string, tx ...*gorm.D
 }
 
 // CreateBudget creates a new budget in the database.
-func (s *RDBConfigStore) CreateBudget(ctx context.Context, budget *TableBudget, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) CreateBudget(ctx context.Context, budget *tables.TableBudget, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -1178,7 +1203,7 @@ func (s *RDBConfigStore) CreateBudget(ctx context.Context, budget *TableBudget, 
 }
 
 // UpdateBudgets updates multiple budgets in the database.
-func (s *RDBConfigStore) UpdateBudgets(ctx context.Context, budgets []*TableBudget, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) UpdateBudgets(ctx context.Context, budgets []*tables.TableBudget, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -1195,7 +1220,7 @@ func (s *RDBConfigStore) UpdateBudgets(ctx context.Context, budgets []*TableBudg
 }
 
 // UpdateBudget updates a budget in the database.
-func (s *RDBConfigStore) UpdateBudget(ctx context.Context, budget *TableBudget, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) UpdateBudget(ctx context.Context, budget *tables.TableBudget, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -1207,11 +1232,11 @@ func (s *RDBConfigStore) UpdateBudget(ctx context.Context, budget *TableBudget, 
 
 // GetGovernanceConfig retrieves the governance configuration from the database.
 func (s *RDBConfigStore) GetGovernanceConfig(ctx context.Context) (*GovernanceConfig, error) {
-	var virtualKeys []TableVirtualKey
-	var teams []TableTeam
-	var customers []TableCustomer
-	var budgets []TableBudget
-	var rateLimits []TableRateLimit
+	var virtualKeys []tables.TableVirtualKey
+	var teams []tables.TableTeam
+	var customers []tables.TableCustomer
+	var budgets []tables.TableBudget
+	var rateLimits []tables.TableRateLimit
 
 	if err := s.db.WithContext(ctx).Preload("ProviderConfigs").Find(&virtualKeys).Error; err != nil {
 		return nil, err
