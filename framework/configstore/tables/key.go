@@ -12,6 +12,7 @@ import (
 // TableKey represents an API key configuration in the database
 type TableKey struct {
 	ID         uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name       string    `gorm:"type:varchar(255);uniqueIndex:idx_key_name;not null" json:"name"`
 	ProviderID uint      `gorm:"index;not null" json:"provider_id"`
 	Provider   string    `gorm:"index;type:varchar(50)" json:"provider"`                          // ModelProvider as string
 	KeyID      string    `gorm:"type:varchar(255);uniqueIndex:idx_key_id;not null" json:"key_id"` // UUID from schemas.Key
@@ -20,9 +21,6 @@ type TableKey struct {
 	Weight     float64   `gorm:"default:1.0" json:"weight"`
 	CreatedAt  time.Time `gorm:"index;not null" json:"created_at"`
 	UpdatedAt  time.Time `gorm:"index;not null" json:"updated_at"`
-
-	// OpenAI config fields (embedded)
-	OpenAIUseResponsesAPI *bool `gorm:"type:boolean" json:"openai_use_responses_api,omitempty"`
 
 	// Azure config fields (embedded instead of separate table for simplicity)
 	AzureEndpoint        *string `gorm:"type:text" json:"azure_endpoint,omitempty"`
@@ -44,7 +42,6 @@ type TableKey struct {
 
 	// Virtual fields for runtime use (not stored in DB)
 	Models           []string                  `gorm:"-" json:"models"`
-	OpenAIKeyConfig  *schemas.OpenAIKeyConfig  `gorm:"-" json:"openai_key_config,omitempty"`
 	AzureKeyConfig   *schemas.AzureKeyConfig   `gorm:"-" json:"azure_key_config,omitempty"`
 	VertexKeyConfig  *schemas.VertexKeyConfig  `gorm:"-" json:"vertex_key_config,omitempty"`
 	BedrockKeyConfig *schemas.BedrockKeyConfig `gorm:"-" json:"bedrock_key_config,omitempty"`
@@ -63,12 +60,6 @@ func (k *TableKey) BeforeSave(tx *gorm.DB) error {
 		k.ModelsJSON = string(data)
 	} else {
 		k.ModelsJSON = "[]"
-	}
-
-	if k.OpenAIKeyConfig != nil {
-		k.OpenAIUseResponsesAPI = &k.OpenAIKeyConfig.UseResponsesAPI
-	} else {
-		k.OpenAIUseResponsesAPI = nil
 	}
 
 	if k.AzureKeyConfig != nil {
@@ -158,20 +149,13 @@ func (k *TableKey) AfterFind(tx *gorm.DB) error {
 		}
 	}
 
-	// Reconstruct OpenAI config if fields are present
-	if k.OpenAIUseResponsesAPI != nil {
-		k.OpenAIKeyConfig = &schemas.OpenAIKeyConfig{
-			UseResponsesAPI: *k.OpenAIUseResponsesAPI,
-		}
-	}
-
 	// Reconstruct Azure config if fields are present
 	if k.AzureEndpoint != nil {
 		azureConfig := &schemas.AzureKeyConfig{
 			Endpoint:   "",
 			APIVersion: k.AzureAPIVersion,
 		}
-		
+
 		if k.AzureEndpoint != nil {
 			azureConfig.Endpoint = *k.AzureEndpoint
 		}

@@ -23,8 +23,6 @@ const providerKeyFormSchema = z.object({
 	key: modelProviderKeySchema,
 });
 
-type ProviderKeyFormData = z.infer<typeof providerKeyFormSchema>;
-
 export default function ProviderKeyForm({ provider, keyIndex, onCancel, onSave }: Props) {
 	const [updateProvider, { isLoading: isUpdatingProvider }] = useUpdateProviderMutation();
 	const form = useForm({
@@ -34,6 +32,7 @@ export default function ProviderKeyForm({ provider, keyIndex, onCancel, onSave }
 		defaultValues: {
 			key: provider?.keys?.[keyIndex] ?? {
 				id: uuid(),
+				name: "",
 				value: "",
 				models: [],
 				weight: 1.0,

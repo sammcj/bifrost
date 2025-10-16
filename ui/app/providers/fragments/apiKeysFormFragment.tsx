@@ -4,7 +4,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { TagInput } from "@/components/ui/tagInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -30,7 +29,6 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 			: isVertex
 				? ModelPlaceholders.vertex
 				: ModelPlaceholders.openai;
-	const isOpenAI = providerName === "openai";
 
 	return (
 		<div data-tab="api-keys" className="space-y-4 overflow-hidden">
@@ -44,79 +42,90 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 					</AlertDescription>
 				</Alert>
 			)}
-			<div className="flex gap-4">
-				{!isVertex && (
-					<div className="flex-1">
-						<FormField
-							control={control}
-							name={`key.value`}
-							render={({ field }) => (
-								<FormItem>
-									<FormLabel>API Key</FormLabel>
-									<FormControl>
-										<Input placeholder="API Key or env.MY_KEY" type="text" {...field} />
-									</FormControl>
-									<FormMessage />
-								</FormItem>
-							)}
-						/>
-					</div>
-				)}
-				<div className="h-[80px]">
+			<div className="flex items-start gap-4">
+				<div className="flex-1">
 					<FormField
 						control={control}
-						name={`key.weight`}
+						name={`key.name`}
 						render={({ field }) => (
 							<FormItem>
-								<div className="flex items-center gap-2">
-									<FormLabel>Weight</FormLabel>
-									<TooltipProvider>
-										<Tooltip>
-											<TooltipTrigger asChild>
-												<span>
-													<Info className="text-muted-foreground h-3 w-3" />
-												</span>
-											</TooltipTrigger>
-											<TooltipContent>
-												<p>Determines traffic distribution between keys. Higher weights receive more requests.</p>
-											</TooltipContent>
-										</Tooltip>
-									</TooltipProvider>
-								</div>
+								<FormLabel>Name</FormLabel>
 								<FormControl>
-									<Input
-										placeholder="1.0"
-										className="w-[220px]"
-										value={field.value === undefined || field.value === null ? "" : String(field.value)}
-										onChange={(e) => {
-											// Clear error while typing
-											form.clearErrors("key.weight");
-											// Keep as string during typing to allow partial input
-											field.onChange(e.target.value === "" ? "" : e.target.value);
-										}}
-										onBlur={(e) => {
-											const v = e.target.value.trim();
-											if (v !== "") {
-												const num = parseFloat(v);
-												if (!isNaN(num)) {
-													field.onChange(num);
-												} else {
-													form.setError("key.weight", { message: "Weight must be a valid number" });
-												}
-											}
-											field.onBlur();
-										}}
-										name={field.name}
-										ref={field.ref}
-										type="text"
-									/>
+									<Input placeholder="Production Key" type="text" {...field} />
 								</FormControl>
 								<FormMessage />
 							</FormItem>
 						)}
 					/>
 				</div>
+				<FormField
+					control={control}
+					name={`key.weight`}
+					render={({ field }) => (
+						<FormItem>
+							<div className="flex items-center gap-2">
+								<FormLabel>Weight</FormLabel>
+								<TooltipProvider>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<span>
+												<Info className="text-muted-foreground h-3 w-3" />
+											</span>
+										</TooltipTrigger>
+										<TooltipContent>
+											<p>Determines traffic distribution between keys. Higher weights receive more requests.</p>
+										</TooltipContent>
+									</Tooltip>
+								</TooltipProvider>
+							</div>
+							<FormControl>
+								<Input
+									placeholder="1.0"
+									className="w-[220px]"
+									value={field.value === undefined || field.value === null ? "" : String(field.value)}
+									onChange={(e) => {
+										// Clear error while typing
+										form.clearErrors("key.weight");
+										// Keep as string during typing to allow partial input
+										field.onChange(e.target.value === "" ? "" : e.target.value);
+									}}
+									onBlur={(e) => {
+										const v = e.target.value.trim();
+										if (v !== "") {
+											const num = parseFloat(v);
+											if (!isNaN(num)) {
+												field.onChange(num);
+											} else {
+												form.setError("key.weight", { message: "Weight must be a valid number" });
+											}
+										}
+										field.onBlur();
+									}}
+									name={field.name}
+									ref={field.ref}
+									type="text"
+								/>
+							</FormControl>
+							<FormMessage />
+						</FormItem>
+					)}
+				/>
 			</div>
+			{!isVertex && (
+				<FormField
+					control={control}
+					name={`key.value`}
+					render={({ field }) => (
+						<FormItem>
+							<FormLabel>API Key</FormLabel>
+							<FormControl>
+								<Input placeholder="API Key or env.MY_KEY" type="text" {...field} />
+							</FormControl>
+							<FormMessage />
+						</FormItem>
+					)}
+				/>
+			)}
 			<FormField
 				control={control}
 				name={`key.models`}
@@ -144,30 +153,6 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 					</FormItem>
 				)}
 			/>
-			{isOpenAI && (
-				<div className="space-y-4">
-					<FormField
-						control={control}
-						name={`key.openai_key_config.use_responses_api`}
-						render={({ field }) => (
-							<FormItem>
-								<FormControl>
-									<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
-										<div className="space-y-0.5">
-											<label htmlFor="enforce-governance" className="text-sm font-medium">
-												Use Responses API
-											</label>
-											<p className="text-muted-foreground text-sm">Use the Responses API instead of the Chat Completion API.</p>
-										</div>
-										<Switch id="enforce-governance" size="md" checked={field.value} onCheckedChange={field.onChange} />
-									</div>
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-				</div>
-			)}
 			{isAzure && (
 				<div className="space-y-4">
 					<FormField

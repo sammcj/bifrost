@@ -154,6 +154,34 @@ export function NetworkFormFragment({ provider, showRestartAlert = false }: Netw
 								)}
 							/>
 						</div>
+						<div className="flex w-full flex-row items-start gap-4">
+							<FormField
+								control={form.control}
+								name="network_config.retry_backoff_initial"
+								render={({ field }) => (
+									<FormItem className="flex-1">
+										<FormLabel>Initial Backoff (ms)</FormLabel>
+										<FormControl>
+											<Input placeholder="e.g 500" {...field} onChange={(e) => field.onChange(Number(e.target.value))} />
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={form.control}
+								name="network_config.retry_backoff_max"
+								render={({ field }) => (
+									<FormItem className="flex-1">
+										<FormLabel>Max Backoff (ms)</FormLabel>
+										<FormControl>
+											<Input placeholder="e.g 10000" {...field} onChange={(e) => field.onChange(Number(e.target.value))} />
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+						</div>
 						<FormField
 							control={form.control}
 							name="network_config.extra_headers"
@@ -193,34 +221,6 @@ export function NetworkFormFragment({ provider, showRestartAlert = false }: Netw
 								</FormItem>
 							)}
 						/>
-						<div className="flex w-full flex-row items-start gap-4">
-							<FormField
-								control={form.control}
-								name="network_config.retry_backoff_initial"
-								render={({ field }) => (
-									<FormItem className="flex-1">
-										<FormLabel>Initial Backoff (ms)</FormLabel>
-										<FormControl>
-											<Input placeholder="e.g 500" {...field} onChange={(e) => field.onChange(Number(e.target.value))} />
-										</FormControl>
-										<FormMessage />
-									</FormItem>
-								)}
-							/>
-							<FormField
-								control={form.control}
-								name="network_config.retry_backoff_max"
-								render={({ field }) => (
-									<FormItem className="flex-1">
-										<FormLabel>Max Backoff (ms)</FormLabel>
-										<FormControl>
-											<Input placeholder="e.g 5000" {...field} onChange={(e) => field.onChange(Number(e.target.value))} />
-										</FormControl>
-										<FormMessage />
-									</FormItem>
-								)}
-							/>
-						</div>
 					</div>
 				</div>
 
