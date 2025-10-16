@@ -312,10 +312,10 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					for i, dbKey := range dbProvider.Keys {
 						keys[i] = schemas.Key{
 							ID:               dbKey.ID, // Key ID is passed in dbKey, not ID
+							Name:             dbKey.Name,
 							Value:            dbKey.Value,
 							Models:           dbKey.Models,
 							Weight:           dbKey.Weight,
-							OpenAIKeyConfig:  dbKey.OpenAIKeyConfig,
 							AzureKeyConfig:   dbKey.AzureKeyConfig,
 							VertexKeyConfig:  dbKey.VertexKeyConfig,
 							BedrockKeyConfig: dbKey.BedrockKeyConfig,
@@ -1034,10 +1034,10 @@ func (c *Config) GetProviderConfigRedacted(provider schemas.ModelProvider) (*con
 	redactedConfig.Keys = make([]schemas.Key, len(config.Keys))
 	for i, key := range config.Keys {
 		redactedConfig.Keys[i] = schemas.Key{
-			ID:              key.ID,
-			Models:          key.Models, // Copy slice reference - read-only so safe
-			Weight:          key.Weight,
-			OpenAIKeyConfig: key.OpenAIKeyConfig,
+			ID:     key.ID,
+			Name:   key.Name,
+			Models: key.Models, // Copy slice reference - read-only so safe
+			Weight: key.Weight,
 		}
 
 		// Redact API key value
@@ -1402,6 +1402,7 @@ func (c *Config) GetAllKeys() ([]configstoreTables.TableKey, error) {
 		for _, key := range provider.Keys {
 			keys = append(keys, configstoreTables.TableKey{
 				KeyID:    key.ID,
+				Name:     key.Name,
 				Value:    "",
 				Models:   key.Models,
 				Weight:   key.Weight,
