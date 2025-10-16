@@ -176,7 +176,7 @@ vectorConfig := &vectorstore.Config{
     Config: vectorstore.WeaviateConfig{
         Scheme: "http",           // "http" for local, "https" for cloud
         Host:   "localhost:8080", // Your Weaviate host
-        ApiKey: "your-weaviate-api-key", // Required for Weaviate Cloud; optional for local/self-hosted
+        APIKey: "your-weaviate-api-key", // Required for Weaviate Cloud; optional for local/self-hosted
 
         // Enable gRPC for improved performance (optional)
         GrpcConfig: &vectorstore.WeaviateGrpcConfig{
@@ -249,7 +249,7 @@ vectorConfig := &vectorstore.Config{
     Config: vectorstore.WeaviateConfig{
         Scheme: "https",
         Host:   "your-weaviate-host",
-        ApiKey: "your-api-key",
+        APIKey: "your-api-key",
         
         // Enable gRPC for better performance
         GrpcConfig: &vectorstore.WeaviateGrpcConfig{
