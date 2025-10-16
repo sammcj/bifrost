@@ -1,4 +1,4 @@
-import GuardrailsView from "@enterprise/components/guardrails/guardrailsView";
+import GuardrailsView from "@/app/enterprise/components/guardrails/guardrailsProviderView";
 
 
 

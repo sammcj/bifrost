@@ -2,7 +2,7 @@ import { Construction } from "lucide-react";
 import ContactUsView from "../views/contactUsView";
 
 
-export default function GuardrailsView() {
+export default function GuardrailsConfigurationView() {
     return (
         <div className="h-full w-full">
             <ContactUsView
