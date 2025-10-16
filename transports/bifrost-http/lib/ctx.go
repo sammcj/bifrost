@@ -130,7 +130,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 		}
 		// Handle virtual key header (x-bf-vk)
 		if keyStr == "x-bf-vk" {
-			bifrostCtx = context.WithValue(bifrostCtx, governance.ContextKey(keyStr), string(value))
+			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeyVirtualKeyHeader, string(value))
 			return true
 		}
 		// Handle cache key header (x-bf-cache-key)
@@ -230,7 +230,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 				Weight: 1.0,        // Default weight
 			}
 			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeyDirectKey, key)
-		}		
+		}
 	}
 	// Adding fallback context
 	if ctx.UserValue(schemas.BifrostContextKey("x-litellm-fallback")) != nil {
