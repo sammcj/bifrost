@@ -9,8 +9,8 @@ require (
 	github.com/fasthttp/router v1.5.4
 	github.com/fasthttp/websocket v1.5.12
 	github.com/google/uuid v1.6.0
-	github.com/maximhq/bifrost/core v1.2.7
-	github.com/maximhq/bifrost/framework v1.1.7
+	github.com/maximhq/bifrost/core v1.2.8
+	github.com/maximhq/bifrost/framework v1.1.8
 	github.com/maximhq/bifrost/plugins/governance v1.3.7
 	github.com/maximhq/bifrost/plugins/logging v1.3.7
 	github.com/maximhq/bifrost/plugins/maxim v1.4.7
