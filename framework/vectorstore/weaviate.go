@@ -29,7 +29,7 @@ type WeaviateConfig struct {
 	GrpcConfig *WeaviateGrpcConfig `json:"grpc_config,omitempty"` // grpc config for weaviate (optional)
 
 	// Authentication settings (optional)
-	ApiKey  string            `json:"api_key,omitempty"` // API key for authentication
+	APIKey  string            `json:"api_key,omitempty"` // API key for authentication
 	Headers map[string]string `json:"headers,omitempty"` // Additional headers
 
 	// Connection settings
@@ -49,6 +49,12 @@ type WeaviateStore struct {
 	client *weaviate.Client
 	config *WeaviateConfig
 	logger schemas.Logger
+}
+
+// Ping checks if the Weaviate server is reachable.
+func (s *WeaviateStore) Ping(ctx context.Context) error {
+	_, err := s.client.Misc().MetaGetter().Do(ctx)
+	return err
 }
 
 // Add stores a new object (with or without embedding)
@@ -403,8 +409,8 @@ func newWeaviateStore(ctx context.Context, config *WeaviateConfig, logger schema
 	}
 
 	// Add authentication if provided
-	if config.ApiKey != "" {
-		cfg.AuthConfig = auth.ApiKey{Value: config.ApiKey}
+	if config.APIKey != "" {
+		cfg.AuthConfig = auth.ApiKey{Value: config.APIKey}
 	}
 
 	// Add grpc config if provided

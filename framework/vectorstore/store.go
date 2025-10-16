@@ -76,6 +76,8 @@ const (
 
 // VectorStore represents the interface for the vector store.
 type VectorStore interface {
+	// Health check
+	Ping(ctx context.Context) error
 	CreateNamespace(ctx context.Context, namespace string, dimension int, properties map[string]VectorStoreProperties) error
 	DeleteNamespace(ctx context.Context, namespace string) error
 	GetChunk(ctx context.Context, namespace string, id string) (SearchResult, error)

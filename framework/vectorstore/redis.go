@@ -46,6 +46,12 @@ type RedisStore struct {
 	logger schemas.Logger
 }
 
+// Ping checks if the Redis server is reachable.
+func (s *RedisStore) Ping(ctx context.Context) error {
+	return s.client.Ping(ctx).Err()
+}
+
+// CreateNamespace creates a new namespace in the Redis vector store.
 func (s *RedisStore) CreateNamespace(ctx context.Context, namespace string, dimension int, properties map[string]VectorStoreProperties) error {
 	ctx, cancel := withTimeout(ctx, s.config.ContextTimeout)
 	defer cancel()
@@ -105,6 +111,7 @@ func (s *RedisStore) CreateNamespace(ctx context.Context, namespace string, dime
 	return nil
 }
 
+// GetChunk retrieves a chunk from the Redis vector store.
 func (s *RedisStore) GetChunk(ctx context.Context, namespace string, id string) (SearchResult, error) {
 	ctx, cancel := withTimeout(ctx, s.config.ContextTimeout)
 	defer cancel()
@@ -141,6 +148,7 @@ func (s *RedisStore) GetChunk(ctx context.Context, namespace string, id string) 
 	return searchResult, nil
 }
 
+// GetChunks retrieves multiple chunks from the Redis vector store.
 func (s *RedisStore) GetChunks(ctx context.Context, namespace string, ids []string) ([]SearchResult, error) {
 	ctx, cancel := withTimeout(ctx, s.config.ContextTimeout)
 	defer cancel()
@@ -204,6 +212,7 @@ func (s *RedisStore) GetChunks(ctx context.Context, namespace string, ids []stri
 	return results, nil
 }
 
+// GetAll retrieves all chunks from the Redis vector store.
 func (s *RedisStore) GetAll(ctx context.Context, namespace string, queries []Query, selectFields []string, cursor *string, limit int64) ([]SearchResult, *string, error) {
 	ctx, cancel := withTimeout(ctx, s.config.ContextTimeout)
 	defer cancel()
@@ -460,6 +469,7 @@ func buildRedisQueryCondition(query Query) string {
 	}
 }
 
+// GetNearest retrieves the nearest chunks from the Redis vector store.
 func (s *RedisStore) GetNearest(ctx context.Context, namespace string, vector []float32, queries []Query, selectFields []string, threshold float64, limit int64) ([]SearchResult, error) {
 	ctx, cancel := withTimeout(ctx, s.config.ContextTimeout)
 	defer cancel()
@@ -565,6 +575,7 @@ func (s *RedisStore) GetNearest(ctx context.Context, namespace string, vector []
 	return results, nil
 }
 
+// Add stores a new chunk in the Redis vector store.
 func (s *RedisStore) Add(ctx context.Context, namespace string, id string, embedding []float32, metadata map[string]interface{}) error {
 	ctx, cancel := withTimeout(ctx, s.config.ContextTimeout)
 	defer cancel()
@@ -618,6 +629,7 @@ func (s *RedisStore) Add(ctx context.Context, namespace string, id string, embed
 	return nil
 }
 
+// Delete deletes a chunk from the Redis vector store.
 func (s *RedisStore) Delete(ctx context.Context, namespace string, id string) error {
 	ctx, cancel := withTimeout(ctx, s.config.ContextTimeout)
 	defer cancel()
@@ -643,6 +655,7 @@ func (s *RedisStore) Delete(ctx context.Context, namespace string, id string) er
 	return nil
 }
 
+// DeleteAll deletes all chunks from the Redis vector store.
 func (s *RedisStore) DeleteAll(ctx context.Context, namespace string, queries []Query) ([]DeleteResult, error) {
 	ctx, cancel := withTimeout(ctx, s.config.ContextTimeout)
 	defer cancel()
@@ -742,6 +755,7 @@ func (s *RedisStore) deleteAllWithCursor(ctx context.Context, namespace string, 
 	return deleteResults, nil
 }
 
+// DeleteNamespace deletes a namespace from the Redis vector store.
 func (s *RedisStore) DeleteNamespace(ctx context.Context, namespace string) error {
 	ctx, cancel := withTimeout(ctx, s.config.ContextTimeout)
 	defer cancel()
@@ -758,6 +772,7 @@ func (s *RedisStore) DeleteNamespace(ctx context.Context, namespace string) erro
 	return nil
 }
 
+// Close closes the Redis vector store.
 func (s *RedisStore) Close(ctx context.Context, namespace string) error {
 	// Close the Redis client connection
 	return s.client.Close()
