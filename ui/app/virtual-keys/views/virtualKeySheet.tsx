@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,13 @@ import { ModelPlaceholders } from "@/lib/constants/config";
 import { resetDurationOptions } from "@/lib/constants/governance";
 import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
 import { ProviderLabels, ProviderName, ProviderNames } from "@/lib/constants/logs";
-import { getErrorMessage, useCreateVirtualKeyMutation, useGetAllKeysQuery, useUpdateVirtualKeyMutation } from "@/lib/store";
+import {
+	getErrorMessage,
+	useCreateVirtualKeyMutation,
+	useGetAllKeysQuery,
+	useGetMCPClientsQuery,
+	useUpdateVirtualKeyMutation,
+} from "@/lib/store";
 import {
 	CreateVirtualKeyRequest,
 	Customer,
@@ -34,7 +40,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-interface VirtualKeyDialogProps {
+interface VirtualKeySheetProps {
 	virtualKey?: VirtualKey | null;
 	teams: Team[];
 	customers: Customer[];
@@ -50,12 +56,19 @@ const providerConfigSchema = z.object({
 	allowed_models: z.array(z.string()).optional(),
 });
 
+const mcpConfigSchema = z.object({
+	id: z.number().optional(),
+	mcp_client_name: z.string().min(1, "MCP client name is required"),
+	tools_to_execute: z.array(z.string()).optional(),
+});
+
 // Main form schema
 const formSchema = z
 	.object({
 		name: z.string().min(1, "Virtual key name is required"),
 		description: z.string().optional(),
 		providerConfigs: z.array(providerConfigSchema).optional(),
+		mcpConfigs: z.array(mcpConfigSchema).optional(),
 		entityType: z.enum(["team", "customer", "none"]),
 		teamId: z.string().optional(),
 		customerId: z.string().optional(),
@@ -91,13 +104,14 @@ const formSchema = z
 
 type FormData = z.infer<typeof formSchema>;
 
-export default function VirtualKeyDialog({ virtualKey, teams, customers, onSave, onCancel }: VirtualKeyDialogProps) {
+export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, onCancel }: VirtualKeySheetProps) {
 	const isEditing = !!virtualKey;
 
 	// RTK Query hooks
 	const { data: keysData, error: keysError, isLoading: keysLoading } = useGetAllKeysQuery();
 	const [createVirtualKey, { isLoading: isCreating }] = useCreateVirtualKeyMutation();
 	const [updateVirtualKey, { isLoading: isUpdating }] = useUpdateVirtualKeyMutation();
+	const { data: mcpClientsData, error: mcpClientsError, isLoading: mcpClientsLoading } = useGetMCPClientsQuery();
 	const isLoading = isCreating || isUpdating;
 
 	const availableKeys = keysData || [];
@@ -109,6 +123,12 @@ export default function VirtualKeyDialog({ virtualKey, teams, customers, onSave,
 			name: virtualKey?.name || "",
 			description: virtualKey?.description || "",
 			providerConfigs: virtualKey?.provider_configs || [],
+			mcpConfigs:
+				virtualKey?.mcp_configs?.map((config) => ({
+					id: config.id,
+					mcp_client_name: config.mcp_client?.name || "",
+					tools_to_execute: config.tools_to_execute || [],
+				})) || [],
 			entityType: virtualKey?.team_id ? "team" : virtualKey?.customer_id ? "customer" : "none",
 			teamId: virtualKey?.team_id || "",
 			customerId: virtualKey?.customer_id || "",
@@ -133,8 +153,14 @@ export default function VirtualKeyDialog({ virtualKey, teams, customers, onSave,
 	// Provider configuration state
 	const [selectedProvider, setSelectedProvider] = useState<string>("");
 
+	// MCP client configuration state
+	const [selectedMCPClient, setSelectedMCPClient] = useState<string>("");
+
 	// Get current provider configs from form
 	const providerConfigs = form.watch("providerConfigs") || [];
+
+	// Get current MCP configs from form
+	const mcpConfigs = form.watch("mcpConfigs") || [];
 
 	// Handle adding a new provider configuration
 	const handleAddProvider = (provider: string) => {
@@ -166,6 +192,35 @@ export default function VirtualKeyDialog({ virtualKey, teams, customers, onSave,
 		form.setValue("providerConfigs", updatedConfigs, { shouldDirty: true });
 	};
 
+	// Handle adding a new MCP client configuration
+	const handleAddMCPClient = (mcpClientName: string) => {
+		const existingConfig = mcpConfigs.find((config) => config.mcp_client_name === mcpClientName);
+		if (existingConfig) {
+			toast.error("This MCP client is already configured");
+			return;
+		}
+
+		const newConfig = {
+			mcp_client_name: mcpClientName,
+			tools_to_execute: [], // Empty means no tools allowed
+		};
+
+		form.setValue("mcpConfigs", [...mcpConfigs, newConfig], { shouldDirty: true });
+	};
+
+	// Handle removing an MCP client configuration
+	const handleRemoveMCPClient = (index: number) => {
+		const updatedConfigs = mcpConfigs.filter((_, i) => i !== index);
+		form.setValue("mcpConfigs", updatedConfigs, { shouldDirty: true });
+	};
+
+	// Handle updating MCP client configuration
+	const handleUpdateMCPConfig = (index: number, field: keyof (typeof mcpConfigs)[0], value: any) => {
+		const updatedConfigs = [...mcpConfigs];
+		updatedConfigs[index] = { ...updatedConfigs[index], [field]: value };
+		form.setValue("mcpConfigs", updatedConfigs, { shouldDirty: true });
+	};
+
 	// Helper function to convert string weights to numbers
 	const normalizeProviderConfigs = (configs: (VirtualKeyProviderConfig & { weight: string | number })[]): VirtualKeyProviderConfig[] => {
 		return configs.map((config) => ({
@@ -194,6 +249,7 @@ export default function VirtualKeyDialog({ virtualKey, teams, customers, onSave,
 				const updateData: UpdateVirtualKeyRequest = {
 					description: data.description || undefined,
 					provider_configs: normalizedProviderConfigs,
+					mcp_configs: data.mcpConfigs,
 					team_id: data.entityType === "team" ? data.teamId : undefined,
 					customer_id: data.entityType === "customer" ? data.customerId : undefined,
 					key_ids: data.selectedDBKeys,
@@ -229,6 +285,7 @@ export default function VirtualKeyDialog({ virtualKey, teams, customers, onSave,
 					name: data.name,
 					description: data.description || undefined,
 					provider_configs: normalizedProviderConfigs,
+					mcp_configs: data.mcpConfigs,
 					team_id: data.entityType === "team" ? data.teamId : undefined,
 					customer_id: data.entityType === "customer" ? data.customerId : undefined,
 					key_ids: data.selectedDBKeys,
@@ -267,19 +324,19 @@ export default function VirtualKeyDialog({ virtualKey, teams, customers, onSave,
 	};
 
 	return (
-		<Dialog open onOpenChange={onCancel}>
-			<DialogContent className="custom-scrollbar max-h-[90vh] !max-w-3xl overflow-y-auto p-0">
-				<DialogHeader className="z-10 border-b px-6 pt-6">
-					<DialogTitle className="flex items-center gap-2">{isEditing ? virtualKey?.name : "Create Virtual Key"}</DialogTitle>
-					<DialogDescription>
+		<Sheet open onOpenChange={onCancel}>
+			<SheetContent className="dark:bg-card flex w-full flex-col overflow-x-hidden bg-white p-8 sm:max-w-2xl">
+				<SheetHeader className="p-0">
+					<SheetTitle className="flex items-center gap-2">{isEditing ? virtualKey?.name : "Create Virtual Key"}</SheetTitle>
+					<SheetDescription>
 						{isEditing
 							? "Update the virtual key configuration and permissions."
 							: "Create a new virtual key with specific permissions, budgets, and rate limits."}
-					</DialogDescription>
-				</DialogHeader>
+					</SheetDescription>
+				</SheetHeader>
 
 				<Form {...form}>
-					<form onSubmit={form.handleSubmit(onSubmit)} className="px-6">
+					<form onSubmit={form.handleSubmit(onSubmit)} className="flex h-full flex-col gap-6">
 						<div className="space-y-4">
 							{/* Basic Information */}
 							<div className="space-y-4">
@@ -364,7 +421,10 @@ export default function VirtualKeyDialog({ virtualKey, teams, customers, onSave,
 													onValueChange={field.onChange}
 													placeholder="Select keys..."
 													variant="inverted"
-													className="hover:bg-accent bg-white dark:bg-zinc-800"
+													className="hover:bg-accent w-full bg-white dark:bg-zinc-800"
+													popoverClassName="z-[60] max-h-[300px] overflow-y-auto w-full"
+													modalPopover={true}
+													animation={0}
 													animationConfig={{
 														badgeAnimation: "none",
 														popoverAnimation: "none",
@@ -504,6 +564,145 @@ export default function VirtualKeyDialog({ virtualKey, teams, customers, onSave,
 								{/* Display validation errors for provider configurations */}
 								{form.formState.errors.providerConfigs && (
 									<div className="text-destructive text-sm">{form.formState.errors.providerConfigs.message}</div>
+								)}
+							</div>
+
+							{/* MCP Client Configurations */}
+							<div className="mt-6 space-y-2">
+								<div className="flex items-center gap-2">
+									<Label className="text-sm font-medium">MCP Client Configurations</Label>
+									<TooltipProvider>
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<span>
+													<Info className="text-muted-foreground h-3 w-3" />
+												</span>
+											</TooltipTrigger>
+											<TooltipContent>
+												<p>
+													Configure which MCP clients this virtual key can use and their allowed tools. Leave empty to allow all MCP clients
+													and tools.
+												</p>
+											</TooltipContent>
+										</Tooltip>
+									</TooltipProvider>
+								</div>
+
+								{/* Add MCP Client Dropdown */}
+								{mcpClientsData && mcpClientsData.length > 0 && (
+									<div className="flex gap-2">
+										<Select
+											value={selectedMCPClient}
+											onValueChange={(mcpClientId) => {
+												handleAddMCPClient(mcpClientId);
+												setSelectedMCPClient(""); // Reset to placeholder state
+											}}
+										>
+											<SelectTrigger className="flex-1">
+												<SelectValue placeholder="Select an MCP client to add" />
+											</SelectTrigger>
+											<SelectContent>
+												{mcpClientsData.filter((client) => !mcpConfigs.some((config) => config.mcp_client_name === client.name)).length >
+												0 ? (
+													mcpClientsData
+														.filter((client) => !mcpConfigs.some((config) => config.mcp_client_name === client.name))
+														.map((client, index) => {
+															const client_tools = client.tools || [];
+															const totalTools = client.config.tools_to_execute?.includes("*")
+																? client_tools.length
+																: client_tools.filter((tool) => client.config.tools_to_execute?.includes(tool.name)).length;
+															return (
+																<SelectItem key={index} value={client.name}>
+																	<div className="flex items-center gap-2">
+																		{client.name}
+																		<span className="text-muted-foreground text-xs">
+																			({totalTools} {totalTools === 1 ? "tool" : "tools"})
+																		</span>
+																	</div>
+																</SelectItem>
+															);
+														})
+												) : (
+													<div className="text-muted-foreground px-2 py-1.5 text-sm">All MCP clients configured</div>
+												)}
+											</SelectContent>
+										</Select>
+									</div>
+								)}
+
+								{/* MCP Configurations Table */}
+								{mcpConfigs.length > 0 && (
+									<div className="rounded-md border">
+										<Table>
+											<TableHeader>
+												<TableRow>
+													<TableHead>MCP Client</TableHead>
+													<TableHead>Allowed Tools</TableHead>
+													<TableHead className="w-[50px]"></TableHead>
+												</TableRow>
+											</TableHeader>
+											<TableBody>
+												{mcpConfigs.map((config, index) => {
+													const mcpClient = mcpClientsData?.find((client) => client.name === config.mcp_client_name);
+
+													// Handle new wildcard semantics for client-level filtering
+													const clientToolsToExecute = mcpClient?.config?.tools_to_execute;
+													let availableTools: any[] = [];
+
+													if (!clientToolsToExecute || clientToolsToExecute.length === 0) {
+														// nil/undefined or empty array - no tools available from client config
+														availableTools = [];
+													} else if (clientToolsToExecute.includes("*")) {
+														// Wildcard - all tools available
+														availableTools = mcpClient?.tools || [];
+													} else {
+														// Specific tools listed
+														availableTools = (mcpClient?.tools || []).filter((tool) => clientToolsToExecute.includes(tool.name)) || [];
+													}
+
+													const enabledToolsByConfig =
+														(mcpClient?.tools || []).filter((tool) => config.tools_to_execute?.includes(tool.name)) || [];
+													const selectedTools = config.tools_to_execute || [];
+
+													return (
+														<TableRow key={`${config.mcp_client_name}-${index}`}>
+															<TableCell className="w-[150px]">{config.mcp_client_name}</TableCell>
+															<TableCell>
+																<MultiSelect
+																	options={[...availableTools, ...enabledToolsByConfig]
+																		.filter((tool, index, arr) => arr.findIndex((t) => t.name === tool.name) === index)
+																		.map((tool) => ({
+																			label: tool.name,
+																			value: tool.name,
+																			description: tool.description,
+																		}))}
+																	defaultValue={selectedTools}
+																	onValueChange={(tools: string[]) => handleUpdateMCPConfig(index, "tools_to_execute", tools)}
+																	placeholder={
+																		selectedTools.length === 0
+																			? "No tools selected"
+																			: selectedTools.includes("*")
+																				? "All tools selected"
+																				: "Select tools..."
+																	}
+																	variant="inverted"
+																	className="hover:bg-accent w-full bg-white dark:bg-zinc-800"
+																	commandClassName="w-full max-w-96"
+																	modalPopover={true}
+																	animation={0}
+																/>
+															</TableCell>
+															<TableCell>
+																<Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveMCPClient(index)}>
+																	<Trash2 className="h-4 w-4" />
+																</Button>
+															</TableCell>
+														</TableRow>
+													);
+												})}
+											</TableBody>
+										</Table>
+									</div>
 								)}
 							</div>
 
@@ -718,7 +917,7 @@ export default function VirtualKeyDialog({ virtualKey, teams, customers, onSave,
 						</div>
 					</form>
 				</Form>
-			</DialogContent>
-		</Dialog>
+			</SheetContent>
+		</Sheet>
 	);
 }

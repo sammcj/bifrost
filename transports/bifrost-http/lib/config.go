@@ -358,7 +358,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 				if err := config.processMCPEnvVars(); err != nil {
 					logger.Warn("failed to process MCP env vars: %v", err)
 				}
-				if config.ConfigStore != nil {
+				if config.ConfigStore != nil && config.MCPConfig != nil {
 					for _, clientConfig := range config.MCPConfig.ClientConfigs {
 						if err := config.ConfigStore.CreateMCPClientConfig(ctx, clientConfig, config.EnvKeys); err != nil {
 							logger.Warn("failed to create MCP client config: %v", err)
@@ -1968,6 +1968,7 @@ func (c *Config) autoDetectProviders(ctx context.Context) {
 					Keys: []schemas.Key{
 						{
 							ID:     keyID,
+							Name:   fmt.Sprintf("%s_auto_detected", envVar),
 							Value:  apiKey,
 							Models: []string{}, // Empty means all supported models
 							Weight: 1.0,

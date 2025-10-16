@@ -94,11 +94,13 @@ func main() {
                     Command: "node",
                     Args:    []string{"filesystem-mcp-server.js"},
                 },
+                ToolsToExecute: []string{"read_file", "write_file"},
             },
             {
                 Name:             "web-search",
                 ConnectionType:   schemas.MCPConnectionTypeHTTP,
                 ConnectionString: bifrost.Ptr("http://localhost:3001/mcp"),
+                ToolsToExecute: []string{"*"}, // Allow all tools from this client
             },
         },
     }
@@ -124,7 +126,6 @@ func main() {
    - **Name**: Unique identifier for the MCP client
    - **Connection Type**: STDIO, HTTP, or SSE
    - **Connection Details**: Command/URL based on connection type
-   - **Tool Filtering**: Optional whitelist/blacklist of tools
 
 The UI automatically validates configurations and shows connection status in real-time.
 
@@ -154,7 +155,8 @@ curl -X POST http://localhost:8080/api/mcp/client \
   -d '{
     "name": "web-search",
     "connection_type": "http",
-    "connection_string": "http://localhost:3001/mcp"
+    "connection_string": "http://localhost:3001/mcp",
+    "tools_to_execute": ["*"]
   }'
 ```
 
@@ -181,7 +183,7 @@ Configure MCP clients in your `config.json`:
         "name": "web-search",
         "connection_type": "http", 
         "connection_string": "env.WEB_SEARCH_MCP_URL",
-        "tools_to_skip": ["internal_debug_tool"]
+        "tools_to_execute": ["*"]
       },
       {
         "name": "real-time-data",

@@ -99,7 +99,7 @@ type BifrostContextKey string
 const (
 	BifrostContextKeyVirtualKey         BifrostContextKey = "x-bf-vk"
 	BifrostContextKeyRequestID          BifrostContextKey = "request-id"
-	BifrostContextKeyFallbackRequestID  BifrostContextKey = "fallback-request-id"	
+	BifrostContextKeyFallbackRequestID  BifrostContextKey = "fallback-request-id"
 	BifrostContextKeyDirectKey          BifrostContextKey = "bifrost-direct-key"
 	BifrostContextKeySelectedKey        BifrostContextKey = "bifrost-key-selected" // To store the selected key ID (set by bifrost)
 	BifrostContextKeyStreamEndIndicator BifrostContextKey = "bifrost-stream-end-indicator"

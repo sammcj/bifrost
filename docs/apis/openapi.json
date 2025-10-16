@@ -19,6 +19,40 @@
       "description": "Local development server"
     }
   ],
+  "tags": [
+    {
+      "name": "Bifrost Core",
+      "description": "Core functionalities of the Bifrost Gateway."
+    },
+    {
+      "name": "Chat Completions",
+      "description": "Endpoints for generating chat-based model responses."
+    },
+    {
+      "name": "Text Completions",
+      "description": "Endpoints for generating text-based model responses."
+    },
+    {
+      "name": "Embeddings",
+      "description": "Endpoints for creating vector embeddings from text."
+    },
+    {
+      "name": "Audio",
+      "description": "Endpoints for audio processing, including speech synthesis and transcription."
+    },
+    {
+      "name": "Management",
+      "description": "Endpoints for managing Bifrost providers and keys."
+    },
+    {
+      "name": "Plugins",
+      "description": "Endpoints for managing Bifrost plugins."
+    },
+    {
+      "name": "MCP",
+      "description": "Endpoints for Model Context Protocol (MCP) integrations."
+    }
+  ],
   "paths": {
     "/v1/chat/completions": {
       "post": {
@@ -279,7 +313,7 @@
             "description": "Service unavailable. One or more required stores (config store, log store, or vector store) are not available."
           }
         }
-      }      
+      }
     },
     "/metrics": {
       "get": {
@@ -300,6 +334,278 @@
                 "example": "# HELP http_requests_total Total number of HTTP requests\n# TYPE http_requests_total counter\nhttp_requests_total{method=\"POST\",handler=\"/v1/chat/completions\",code=\"200\"} 42\n"
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/mcp/tool/execute": {
+      "post": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "Execute an MCP tool",
+        "description": "Executes a tool call from the Model Context Protocol (MCP) and returns the result.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatAssistantMessageToolCall"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tool execution result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request format"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/mcp/clients": {
+      "get": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "Get all MCP clients",
+        "description": "Retrieves a list of all configured MCP clients and their connection status.",
+        "responses": {
+          "200": {
+            "description": "A list of MCP clients",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MCPClient"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/mcp/client": {
+      "post": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "Add a new MCP client",
+        "description": "Adds and connects a new MCP client configuration.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPClientConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Client added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "MCP client added successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request format"
+          },
+          "500": {
+            "description": "Failed to add MCP client"
+          }
+        }
+      }
+    },
+    "/api/mcp/client/{name}": {
+      "put": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "Edit MCP client tools",
+        "description": "Edits the list of tools to be executed for a specific MCP client.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The name of the MCP client to edit."
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tools_to_execute": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Include-only list of tools. '*' means all tools, [] means no tools."
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Client tools edited successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "MCP client tools edited successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request format or name"
+          },
+          "500": {
+            "description": "Failed to edit MCP client tools"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "Remove an MCP client",
+        "description": "Removes an MCP client configuration and disconnects it.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The name of the MCP client to remove."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Client removed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "MCP client removed successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name"
+          },
+          "500": {
+            "description": "Failed to remove MCP client"
+          }
+        }
+      }
+    },
+    "/api/mcp/client/{name}/reconnect": {
+      "post": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "Reconnect an MCP client",
+        "description": "Attempts to reconnect a disconnected MCP client.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The name of the MCP client to reconnect."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Client reconnected successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "MCP client reconnected successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name"
+          },
+          "500": {
+            "description": "Failed to reconnect MCP client"
           }
         }
       }
@@ -3860,7 +4166,8 @@
         "enum": [
           "http",
           "stdio",
-          "sse"
+          "sse",
+          "inprocess"
         ],
         "description": "Communication protocol for MCP connections",
         "example": "stdio"
@@ -5413,19 +5720,51 @@
       "VirtualKeyProviderConfig": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Not to be provided when creating a new provider config"
+          },
           "provider": {
-            "type": "string"
+            "type": "string",
+            "description": "Provider name"
           },
           "weight": {
-            "type": "number"
+            "type": "number",
+            "description": "Weight of the provider (0.0 to 1.0)"
           },
           "allowed_models": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "description": "Model name"
             }
           }
         }
+      },
+      "VirtualKeyMCPConfig": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Not to be provided when creating a new MCP config"
+          },
+          "mcp_client_name": {
+            "type": "string",
+            "description": "Name of the MCP client"
+          },
+          "tools_to_execute": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Tool name"
+            },
+            "description": "Tools to execute"
+          }
+        },
+        "required": [
+          "mcp_client_name",
+          "tools_to_execute"
+        ]
       },
       "Team": {
         "type": "object",
@@ -5516,30 +5855,16 @@
           "description": {
             "type": "string"
           },
-          "allowed_models": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
           "provider_configs": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "provider": {
-                  "type": "string"
-                },
-                "weight": {
-                  "type": "number"
-                },
-                "allowed_models": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
+              "$ref": "#/components/schemas/VirtualKeyProviderConfig"
+            }
+          },
+          "mcp_configs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VirtualKeyMCPConfig"
             }
           },
           "team_id": {
@@ -5571,33 +5896,16 @@
           "description": {
             "type": "string"
           },
-          "allowed_models": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
           "provider_configs": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "integer"
-                },
-                "provider": {
-                  "type": "string"
-                },
-                "weight": {
-                  "type": "number"
-                },
-                "allowed_models": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
+              "$ref": "#/components/schemas/VirtualKeyProviderConfig"
+            }
+          },
+          "mcp_configs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VirtualKeyMCPConfig"
             }
           },
           "team_id": {
@@ -5959,6 +6267,104 @@
             "format": "int64"
           }
         }
+      },
+      "ChatAssistantMessageToolCallFunction": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "string",
+            "description": "Stringified JSON arguments for the function call."
+          }
+        },
+        "required": [
+          "name",
+          "arguments"
+        ]
+      },
+      "ChatAssistantMessageToolCall": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "function"
+          },
+          "id": {
+            "type": "string"
+          },
+          "function": {
+            "$ref": "#/components/schemas/ChatAssistantMessageToolCallFunction"
+          }
+        },
+        "required": [
+          "function"
+        ]
+      },
+      "ToolFunctionParameters": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "object"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "enum": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ChatToolFunction": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ToolFunctionParameters"
+          },
+          "strict": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ChatMessageRole": {
+        "type": "string",
+        "enum": [
+          "assistant",
+          "user",
+          "system",
+          "tool",
+          "developer"
+        ]
       }
     },
     "responses": {
@@ -6035,59 +6441,5 @@
         }
       }
     }
-  },
-  "tags": [
-    {
-      "name": "Bifrost Core",
-      "description": "Core endpoints for interacting with AI models."
-    },
-    {
-      "name": "Providers",
-      "description": "Endpoints for managing provider configurations."
-    },
-    {
-      "name": "Logging",
-      "description": "Endpoints for searching and managing logs."
-    },
-    {
-      "name": "Plugins",
-      "description": "Endpoints for managing plugins."
-    },
-    {
-      "name": "Governance",
-      "description": "Endpoints for managing virtual keys, teams, and customers."
-    },
-    {
-      "name": "Cache",
-      "description": "Endpoints for managing the semantic cache."
-    },
-    {
-      "name": "Configuration",
-      "description": "Endpoints for managing server configuration."
-    },
-    {
-      "name": "Monitoring",
-      "description": "Monitoring and observability endpoint"
-    },
-    {
-      "name": "Integration - OpenAI",
-      "description": "OpenAI-compatible endpoints."
-    },
-    {
-      "name": "Integration - Anthropic",
-      "description": "Anthropic-compatible endpoints."
-    },
-    {
-      "name": "Integration - Gemini",
-      "description": "Google Gemini-compatible endpoints."
-    },
-    {
-      "name": "Integration - LiteLLM",
-      "description": "LiteLLM-compatible endpoints."
-    },
-    {
-      "name": "Integration - LangChain",
-      "description": "LangChain-compatible endpoints."
-    }
-  ]
+  }
 }

@@ -21,6 +21,19 @@ func (TableVirtualKeyProviderConfig) TableName() string {
 	return "governance_virtual_key_provider_configs"
 }
 
+type TableVirtualKeyMCPConfig struct {
+	ID             uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	VirtualKeyID   string         `gorm:"type:varchar(255);not null;uniqueIndex:idx_vk_mcpclient" json:"virtual_key_id"`
+	MCPClientID    uint           `gorm:"not null;uniqueIndex:idx_vk_mcpclient" json:"mcp_client_id"`
+	MCPClient      TableMCPClient `gorm:"foreignKey:MCPClientID" json:"mcp_client"`
+	ToolsToExecute []string       `gorm:"type:text;serializer:json" json:"tools_to_execute"`
+}
+
+// TableName sets the table name for each model
+func (TableVirtualKeyMCPConfig) TableName() string {
+	return "governance_virtual_key_mcp_configs"
+}
+
 // TableVirtualKey represents a virtual key with budget, rate limits, and team/customer association
 type TableVirtualKey struct {
 	ID              string                          `gorm:"primaryKey;type:varchar(255)" json:"id"`
@@ -29,6 +42,7 @@ type TableVirtualKey struct {
 	Value           string                          `gorm:"uniqueIndex:idx_virtual_key_value;type:varchar(255);not null" json:"value"` // The virtual key value
 	IsActive        bool                            `gorm:"default:true" json:"is_active"`
 	ProviderConfigs []TableVirtualKeyProviderConfig `gorm:"foreignKey:VirtualKeyID;constraint:OnDelete:CASCADE" json:"provider_configs"` // Empty means all providers allowed
+	MCPConfigs      []TableVirtualKeyMCPConfig      `gorm:"foreignKey:VirtualKeyID;constraint:OnDelete:CASCADE" json:"mcp_configs"`
 
 	// Foreign key relationships (mutually exclusive: either TeamID or CustomerID, not both)
 	TeamID      *string    `gorm:"type:varchar(255);index" json:"team_id,omitempty"`

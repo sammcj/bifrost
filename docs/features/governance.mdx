@@ -104,8 +104,18 @@ curl -X POST http://localhost:8080/api/governance/virtual-keys \
   -d '{
     "name": "Engineering Team API",
     "description": "Main API key for engineering team",
-    "allowed_models": ["gpt-4o-mini", "claude-3-sonnet-20240229"],
-    "allowed_providers": ["openai", "anthropic"],
+    "provider_configs": [
+      {
+        "provider": "openai",
+        "weight": 0.5,
+        "allowed_models": ["gpt-4o-mini"]
+      },
+      {
+        "provider": "anthropic",
+        "weight": 0.5,
+        "allowed_models": ["claude-3-sonnet-20240229"]
+      }
+    ],
     "team_id": "team-eng-001",
     "budget": {
       "max_limit": 100.00,
@@ -129,8 +139,18 @@ curl -X POST http://localhost:8080/api/governance/virtual-keys \
   -d '{
     "name": "Executive API Key",
     "description": "Direct customer-level API access",
-    "allowed_models": ["gpt-4o", "claude-3-opus-20240229"],
-    "allowed_providers": ["openai", "anthropic"],
+    "provider_configs": [
+      {
+        "provider": "openai",
+        "weight": 0.5,
+        "allowed_models": ["gpt-4o"]
+      },
+      {
+        "provider": "anthropic",
+        "weight": 0.5,
+        "allowed_models": ["claude-3-opus-20240229"]
+      }
+    ],
     "customer_id": "customer-acme-corp",
     "budget": {
       "max_limit": 500.00,
@@ -150,7 +170,6 @@ curl -X PUT http://localhost:8080/api/governance/virtual-keys/{vk_id} \
   -H "Content-Type: application/json" \
   -d '{
     "description": "Updated description",
-    "allowed_models": ["gpt-4o", "claude-3-opus-20240229"],
     "budget": {
       "max_limit": 150.00,
       "reset_duration": "1M"
@@ -189,8 +208,18 @@ curl -X DELETE http://localhost:8080/api/governance/virtual-keys/{vk_id}
         "value": "vk-engineering-main",
         "description": "Main API key for engineering team",
         "is_active": true,
-        "allowed_models": ["gpt-4o-mini", "claude-3-sonnet-20240229"],
-        "allowed_providers": ["openai", "anthropic"],
+        "provider_configs": [
+          {
+            "provider": "openai",
+            "weight": 0.5,
+            "allowed_models": ["gpt-4o-mini"]
+          },
+          {
+            "provider": "anthropic",
+            "weight": 0.5,
+            "allowed_models": ["claude-3-sonnet-20240229"]
+          }
+        ],
         "team_id": "team-eng-001",
         "budget_id": "budget-eng-vk",
         "rate_limit_id": "rate-limit-eng-vk",
@@ -204,8 +233,18 @@ curl -X DELETE http://localhost:8080/api/governance/virtual-keys/{vk_id}
         "value": "vk-executive-direct",
         "description": "Direct customer-level API access",
         "is_active": true,
-        "allowed_models": ["gpt-4o", "claude-3-opus-20240229"],
-        "allowed_providers": ["openai", "anthropic"],
+        "provider_configs": [
+          {
+            "provider": "openai",
+            "weight": 0.5,
+            "allowed_models": ["gpt-4o"]
+          },
+          {
+            "provider": "anthropic",
+            "weight": 0.5,
+            "allowed_models": ["claude-3-opus-20240229"]
+          }
+        ],
         "customer_id": "customer-acme-corp",
         "budget_id": "budget-exec-vk",
         "keys": [
