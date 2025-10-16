@@ -43,6 +43,11 @@ func (s *RDBConfigStore) UpdateClientConfig(ctx context.Context, config *ClientC
 	})
 }
 
+// Ping checks if the database is reachable.
+func (s *RDBConfigStore) Ping(ctx context.Context) error {
+	return s.db.WithContext(ctx).Exec("SELECT 1").Error
+}
+
 // DB returns the underlying database connection.
 func (s *RDBConfigStore) DB() *gorm.DB {
 	return s.db

@@ -108,7 +108,7 @@
             "group": "Enterprise Features",
             "icon": "building",
             "pages": [
-              "enterprise/guardrails",              
+              "enterprise/guardrails",
               "enterprise/clustering",
               "enterprise/governance",
               "enterprise/mcp-with-fa",
@@ -127,17 +127,17 @@
         "icon": "server",
         "pages": [
           {
-            "group":"Common setup instructions",
-            "icon": "book",
-            "pages": [
-              "deployment-guides/how-to/install-make"
-            ]
-          },
-          {
-            "group":"Platform specific guides",
+            "group": "Platform specific guides",
             "icon": "swatchbook",
             "pages": [
               "deployment-guides/fly"
+            ]
+          },
+          {
+            "group": "Common setup instructions",
+            "icon": "book",
+            "pages": [
+              "deployment-guides/how-to/install-make"
             ]
           }
         ]
