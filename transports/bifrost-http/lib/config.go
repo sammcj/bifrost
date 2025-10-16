@@ -358,14 +358,19 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 				if err := config.processMCPEnvVars(); err != nil {
 					logger.Warn("failed to process MCP env vars: %v", err)
 				}
-				if err := config.ConfigStore.UpdateMCPConfig(ctx, config.MCPConfig, config.EnvKeys); err != nil {
-					return nil, fmt.Errorf("failed to update MCP config: %w", err)
+				if config.ConfigStore != nil {
+					for _, clientConfig := range config.MCPConfig.ClientConfigs {
+						if err := config.ConfigStore.CreateMCPClientConfig(ctx, clientConfig, config.EnvKeys); err != nil {
+							logger.Warn("failed to create MCP client config: %v", err)
+							continue
+						}
+					}
+					// Refresh from store to ensure parity with persisted state
+					if mcpConfig, err = config.ConfigStore.GetMCPConfig(ctx); err != nil {
+						return nil, fmt.Errorf("failed to get MCP config after update: %w", err)
+					}
+					config.MCPConfig = mcpConfig
 				}
-				// Refresh from store to ensure parity with persisted state
-				if mcpConfig, err = config.ConfigStore.GetMCPConfig(ctx); err != nil {
-					return nil, fmt.Errorf("failed to get MCP config after update: %w", err)
-				}
-				config.MCPConfig = mcpConfig
 			} else {
 				// Use the saved config from the store
 				config.MCPConfig = mcpConfig
@@ -677,11 +682,13 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		if err := config.processMCPEnvVars(); err != nil {
 			logger.Warn("failed to process MCP env vars: %v", err)
 		}
-		if config.ConfigStore != nil {
+		if config.ConfigStore != nil && config.MCPConfig != nil {
 			logger.Debug("updating MCP config in store")
-			err = config.ConfigStore.UpdateMCPConfig(ctx, config.MCPConfig, config.EnvKeys)
-			if err != nil {
-				logger.Warn("failed to update MCP config: %v", err)
+			for _, clientConfig := range config.MCPConfig.ClientConfigs {
+				if err := config.ConfigStore.CreateMCPClientConfig(ctx, clientConfig, config.EnvKeys); err != nil {
+					logger.Warn("failed to create MCP client config: %v", err)
+					continue
+				}
 			}
 		}
 	}
@@ -1522,8 +1529,8 @@ func (c *Config) AddMCPClient(ctx context.Context, clientConfig schemas.MCPClien
 	}
 
 	if c.ConfigStore != nil {
-		if err := c.ConfigStore.UpdateMCPConfig(ctx, c.MCPConfig, c.EnvKeys); err != nil {
-			return fmt.Errorf("failed to update MCP config in store: %w", err)
+		if err := c.ConfigStore.CreateMCPClientConfig(ctx, clientConfig, c.EnvKeys); err != nil {
+			return fmt.Errorf("failed to create MCP client config in store: %w", err)
 		}
 		if err := c.ConfigStore.UpdateEnvKeys(ctx, c.EnvKeys); err != nil {
 			logger.Warn("failed to update env keys: %v", err)
@@ -1566,8 +1573,8 @@ func (c *Config) RemoveMCPClient(ctx context.Context, name string) error {
 	c.cleanupEnvKeys("", name, nil)
 
 	if c.ConfigStore != nil {
-		if err := c.ConfigStore.UpdateMCPConfig(ctx, c.MCPConfig, c.EnvKeys); err != nil {
-			return fmt.Errorf("failed to update MCP config in store: %w", err)
+		if err := c.ConfigStore.DeleteMCPClientConfig(ctx, name); err != nil {
+			return fmt.Errorf("failed to delete MCP client config from store: %w", err)
 		}
 		if err := c.ConfigStore.UpdateEnvKeys(ctx, c.EnvKeys); err != nil {
 			logger.Warn("failed to update env keys: %v", err)
@@ -1582,9 +1589,8 @@ func (c *Config) RemoveMCPClient(ctx context.Context, name string) error {
 //
 // Parameters:
 //   - name: Name of the client to edit
-//   - toolsToAdd: Tools to add to the client
-//   - toolsToRemove: Tools to remove from the client
-func (c *Config) EditMCPClientTools(ctx context.Context, name string, toolsToAdd []string, toolsToRemove []string) error {
+//   - toolsToExecute: Tools to execute from the client
+func (c *Config) EditMCPClientTools(ctx context.Context, name string, toolsToExecute []string) error {
 	if c.client == nil {
 		return fmt.Errorf("bifrost client not set")
 	}
@@ -1596,21 +1602,29 @@ func (c *Config) EditMCPClientTools(ctx context.Context, name string, toolsToAdd
 		return fmt.Errorf("no MCP config found")
 	}
 
-	if err := c.client.EditMCPClientTools(name, toolsToAdd, toolsToRemove); err != nil {
+	if err := c.client.EditMCPClientTools(name, toolsToExecute); err != nil {
 		return fmt.Errorf("failed to edit MCP client tools: %w", err)
 	}
 
+	// Find the client config and create an updated version
+	var updatedClientConfig schemas.MCPClientConfig
+	var found bool
 	for i, clientConfig := range c.MCPConfig.ClientConfigs {
 		if clientConfig.Name == name {
-			c.MCPConfig.ClientConfigs[i].ToolsToExecute = toolsToAdd
-			c.MCPConfig.ClientConfigs[i].ToolsToSkip = toolsToRemove
+			c.MCPConfig.ClientConfigs[i].ToolsToExecute = toolsToExecute
+			updatedClientConfig = c.MCPConfig.ClientConfigs[i]
+			found = true
 			break
 		}
 	}
 
+	if !found {
+		return fmt.Errorf("MCP client '%s' not found", name)
+	}
+
 	if c.ConfigStore != nil {
-		if err := c.ConfigStore.UpdateMCPConfig(ctx, c.MCPConfig, c.EnvKeys); err != nil {
-			return fmt.Errorf("failed to update MCP config in store: %w", err)
+		if err := c.ConfigStore.UpdateMCPClientConfig(ctx, name, updatedClientConfig, c.EnvKeys); err != nil {
+			return fmt.Errorf("failed to update MCP client config in store: %w", err)
 		}
 		if err := c.ConfigStore.UpdateEnvKeys(ctx, c.EnvKeys); err != nil {
 			logger.Warn("failed to update env keys: %v", err)
@@ -1630,7 +1644,6 @@ func (c *Config) RedactMCPClientConfig(config schemas.MCPClientConfig) schemas.M
 		ConnectionString: config.ConnectionString,
 		StdioConfig:      config.StdioConfig,
 		ToolsToExecute:   append([]string{}, config.ToolsToExecute...),
-		ToolsToSkip:      append([]string{}, config.ToolsToSkip...),
 	}
 
 	// Handle connection string if present

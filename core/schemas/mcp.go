@@ -19,8 +19,12 @@ type MCPClientConfig struct {
 	ConnectionString *string           `json:"connection_string,omitempty"` // HTTP or SSE URL (required for HTTP or SSE connections)
 	StdioConfig      *MCPStdioConfig   `json:"stdio_config,omitempty"`      // STDIO configuration (required for STDIO connections)
 	InProcessServer  MCPServerInstance `json:"-"`                           // MCP server instance for in-process connections (Go package only)
-	ToolsToSkip      []string          `json:"tools_to_skip,omitempty"`     // Tools to exclude from this client
-	ToolsToExecute   []string          `json:"tools_to_execute,omitempty"`  // Tools to include from this client (if specified, only these are used)
+	ToolsToExecute   []string          `json:"tools_to_execute,omitempty"`  // Include-only list.
+	// ToolsToExecute semantics:
+	// - ["*"] => all tools are included
+	// - []    => no tools are included (deny-by-default)
+	// - nil/omitted => treated as [] (no tools)
+	// - ["tool1", "tool2"] => include only the specified tools
 }
 
 // MCPConnectionType defines the communication protocol for MCP connections
@@ -54,6 +58,6 @@ const (
 type MCPClient struct {
 	Name   string             `json:"name"`   // Unique name for this client
 	Config MCPClientConfig    `json:"config"` // Tool filtering settings
-	Tools  []string           `json:"tools"`  // Available tools mapped by name
+	Tools  []ChatToolFunction `json:"tools"`  // Available tools
 	State  MCPConnectionState `json:"state"`  // Connection state
 }

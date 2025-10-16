@@ -542,7 +542,6 @@ func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, 
 			ConnectionString: processedConnectionString,
 			StdioConfig:      dbClient.StdioConfig,
 			ToolsToExecute:   dbClient.ToolsToExecute,
-			ToolsToSkip:      dbClient.ToolsToSkip,
 		}
 	}
 	return &schemas.MCPConfig{
@@ -550,47 +549,96 @@ func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, 
 	}, nil
 }
 
-// UpdateMCPConfig updates the MCP configuration in the database.
-func (s *RDBConfigStore) UpdateMCPConfig(ctx context.Context, config *schemas.MCPConfig, envKeys map[string][]EnvKeyInfo) error {
+// GetMCPClientByName retrieves an MCP client by name from the database.
+func (s *RDBConfigStore) GetMCPClientByName(ctx context.Context, name string) (*tables.TableMCPClient, error) {
+	var mcpClient tables.TableMCPClient
+	if err := s.db.WithContext(ctx).Where("name = ?", name).First(&mcpClient).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &mcpClient, nil
+}
+
+// CreateMCPClientConfig creates a new MCP client configuration in the database.
+func (s *RDBConfigStore) CreateMCPClientConfig(ctx context.Context, clientConfig schemas.MCPClientConfig, envKeys map[string][]EnvKeyInfo) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		// Removing existing MCP clients
-		if err := tx.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&tables.TableMCPClient{}).Error; err != nil {
+		// Check if client already exists
+		var existingClient tables.TableMCPClient
+		if err := tx.WithContext(ctx).Where("name = ?", clientConfig.Name).First(&existingClient).Error; err == nil {
+			return fmt.Errorf("MCP client with name '%s' already exists", clientConfig.Name)
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
 
-		if config == nil {
-			return nil
-		}
-
-		// Create a deep copy of the config to avoid modifying the original
-		configCopy, err := deepCopy(config)
+		// Create a deep copy to avoid modifying the original
+		clientConfigCopy, err := deepCopy(clientConfig)
 		if err != nil {
 			return err
 		}
+
 		// Substitute environment variables back to their original form
-		substituteMCPEnvVars(configCopy, envKeys)
+		substituteMCPClientEnvVars(&clientConfigCopy, envKeys)
 
-		dbClients := make([]tables.TableMCPClient, 0, len(configCopy.ClientConfigs))
-		for _, clientConfig := range configCopy.ClientConfigs {
-			dbClient := tables.TableMCPClient{
-				Name:             clientConfig.Name,
-				ConnectionType:   string(clientConfig.ConnectionType),
-				ConnectionString: clientConfig.ConnectionString,
-				StdioConfig:      clientConfig.StdioConfig,
-				ToolsToExecute:   clientConfig.ToolsToExecute,
-				ToolsToSkip:      clientConfig.ToolsToSkip,
-			}
-
-			dbClients = append(dbClients, dbClient)
+		// Create new client
+		dbClient := tables.TableMCPClient{
+			Name:             clientConfigCopy.Name,
+			ConnectionType:   string(clientConfigCopy.ConnectionType),
+			ConnectionString: clientConfigCopy.ConnectionString,
+			StdioConfig:      clientConfigCopy.StdioConfig,
+			ToolsToExecute:   clientConfigCopy.ToolsToExecute,
 		}
 
-		if len(dbClients) > 0 {
-			if err := tx.WithContext(ctx).CreateInBatches(dbClients, 100).Error; err != nil {
-				return err
+		return tx.WithContext(ctx).Create(&dbClient).Error
+	})
+}
+
+// UpdateMCPClientConfig updates an existing MCP client configuration in the database.
+func (s *RDBConfigStore) UpdateMCPClientConfig(ctx context.Context, name string, clientConfig schemas.MCPClientConfig, envKeys map[string][]EnvKeyInfo) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// Find existing client
+		var existingClient tables.TableMCPClient
+		if err := tx.WithContext(ctx).Where("name = ?", name).First(&existingClient).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("MCP client with name '%s' not found", name)
 			}
+			return err
 		}
 
-		return nil
+		// Create a deep copy to avoid modifying the original
+		clientConfigCopy, err := deepCopy(clientConfig)
+		if err != nil {
+			return err
+		}
+
+		// Substitute environment variables back to their original form
+		substituteMCPClientEnvVars(&clientConfigCopy, envKeys)
+
+		// Update existing client
+		existingClient.ConnectionType = string(clientConfigCopy.ConnectionType)
+		existingClient.ConnectionString = clientConfigCopy.ConnectionString
+		existingClient.StdioConfig = clientConfigCopy.StdioConfig
+		existingClient.ToolsToExecute = clientConfigCopy.ToolsToExecute
+
+		return tx.WithContext(ctx).Save(&existingClient).Error
+	})
+}
+
+// DeleteMCPClientConfig deletes an MCP client configuration from the database.
+func (s *RDBConfigStore) DeleteMCPClientConfig(ctx context.Context, name string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// Find existing client
+		var existingClient tables.TableMCPClient
+		if err := tx.WithContext(ctx).Where("name = ?", name).First(&existingClient).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("MCP client with name '%s' not found", name)
+			}
+			return err
+		}
+
+		// Delete the client (this will also handle foreign key cascades)
+		return tx.WithContext(ctx).Delete(&existingClient).Error
 	})
 }
 
@@ -886,6 +934,22 @@ func (s *RDBConfigStore) GetVirtualKey(ctx context.Context, id string) (*tables.
 	return &virtualKey, nil
 }
 
+// GetVirtualKeyByValue retrieves a virtual key by its value
+func (s *RDBConfigStore) GetVirtualKeyByValue(ctx context.Context, value string) (*tables.TableVirtualKey, error) {
+	var virtualKey tables.TableVirtualKey
+	if err := s.db.WithContext(ctx).Preload("Team").
+		Preload("Customer").
+		Preload("Budget").
+		Preload("RateLimit").
+		Preload("ProviderConfigs").
+		Preload("Keys", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, name, key_id, models_json, provider")
+		}).First(&virtualKey, "value = ?", value).Error; err != nil {
+		return nil, err
+	}
+	return &virtualKey, nil
+}
+
 func (s *RDBConfigStore) CreateVirtualKey(ctx context.Context, virtualKey *tables.TableVirtualKey, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
@@ -1007,22 +1071,6 @@ func (s *RDBConfigStore) DeleteVirtualKeyProviderConfig(ctx context.Context, id 
 		txDB = s.db
 	}
 	return txDB.WithContext(ctx).Delete(&tables.TableVirtualKeyProviderConfig{}, "id = ?", id).Error
-}
-
-// GetVirtualKeyByValue retrieves a virtual key by its value
-func (s *RDBConfigStore) GetVirtualKeyByValue(ctx context.Context, value string) (*tables.TableVirtualKey, error) {
-	var virtualKey tables.TableVirtualKey
-	if err := s.db.WithContext(ctx).Preload("Team").
-		Preload("Customer").
-		Preload("Budget").
-		Preload("RateLimit").
-		Preload("ProviderConfigs").
-		Preload("Keys", func(db *gorm.DB) *gorm.DB {
-			return db.Select("id, name, key_id, models_json, provider")
-		}).First(&virtualKey, "value = ?", value).Error; err != nil {
-		return nil, err
-	}
-	return &virtualKey, nil
 }
 
 // GetTeams retrieves all teams from the database.

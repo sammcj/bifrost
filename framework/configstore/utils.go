@@ -27,7 +27,6 @@ func processEnvValue(value string, logger schemas.Logger) (string, error) {
 	return "", fmt.Errorf("environment variable %s not found", envKey)
 }
 
-
 // marshalToString marshals the given value to a JSON string.
 func marshalToString(v any) (string, error) {
 	if v == nil {
@@ -175,6 +174,27 @@ func substituteMCPEnvVars(config *schemas.MCPConfig, envKeys map[string][]EnvKey
 		if clientConfig.ConnectionString != nil {
 			if envVar, exists := envVarMap[fmt.Sprintf("%s.connection_string", clientPrefix)]; exists {
 				config.ClientConfigs[i].ConnectionString = &[]string{fmt.Sprintf("env.%s", envVar)}[0]
+			}
+		}
+	}
+}
+
+// substituteMCPClientEnvVars replaces resolved environment variable values with their original env.VAR_NAME references for a single MCP client config
+func substituteMCPClientEnvVars(clientConfig *schemas.MCPClientConfig, envKeys map[string][]EnvKeyInfo) {
+	// Find the environment variable for this client's connection string
+	for envVar, keyInfos := range envKeys {
+		for _, keyInfo := range keyInfos {
+			// For MCP connection strings
+			if keyInfo.KeyType == "connection_string" {
+				// Extract client name from config path like "mcp.client_configs.clientName.connection_string"
+				pathParts := strings.Split(keyInfo.ConfigPath, ".")
+				if len(pathParts) >= 3 && pathParts[0] == "mcp" && pathParts[1] == "client_configs" {
+					clientName := pathParts[2]
+					// If this environment variable is for the current client
+					if clientName == clientConfig.Name && clientConfig.ConnectionString != nil {
+						clientConfig.ConnectionString = &[]string{fmt.Sprintf("env.%s", envVar)}[0]
+					}
+				}
 			}
 		}
 	}

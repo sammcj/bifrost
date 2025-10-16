@@ -1,3 +1,5 @@
+import { Function as ToolFunction } from "./logs";
+
 export type MCPConnectionType = "http" | "stdio" | "sse";
 
 export type MCPConnectionState = "connected" | "disconnected" | "error";
@@ -13,14 +15,13 @@ export interface MCPClientConfig {
 	connection_type: MCPConnectionType;
 	connection_string?: string;
 	stdio_config?: MCPStdioConfig;
-	tools_to_skip?: string[];
 	tools_to_execute?: string[];
 }
 
 export interface MCPClient {
 	name: string;
 	config: MCPClientConfig;
-	tools: string[];
+	tools: ToolFunction[];
 	state: MCPConnectionState;
 }
 
@@ -29,11 +30,9 @@ export interface CreateMCPClientRequest {
 	connection_type: MCPConnectionType;
 	connection_string?: string;
 	stdio_config?: MCPStdioConfig;
-	tools_to_skip?: string[];
 	tools_to_execute?: string[];
 }
 
 export interface UpdateMCPClientRequest {
 	tools_to_execute?: string[];
-	tools_to_skip?: string[];
 }

@@ -131,7 +131,7 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefr
 								<TableHead>Allowed Keys</TableHead>
 								<TableHead>Budget</TableHead>
 								<TableHead>Status</TableHead>
-								<TableHead className="text-right">Actions</TableHead>
+								<TableHead className="text-right"></TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>

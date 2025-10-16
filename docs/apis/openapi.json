@@ -3842,17 +3842,6 @@
           "stdio_config": {
             "$ref": "#/components/schemas/MCPStdioConfig"
           },
-          "tools_to_skip": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Tools to exclude from this client",
-            "example": [
-              "delete_file",
-              "write_file"
-            ]
-          },
           "tools_to_execute": {
             "type": "array",
             "items": {
@@ -3934,17 +3923,6 @@
             "example": [
               "read_file",
               "list_directory"
-            ]
-          },
-          "tools_to_skip": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Tools to block from this client (blacklist)",
-            "example": [
-              "delete_file",
-              "write_file"
             ]
           }
         }
