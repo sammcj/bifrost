@@ -362,7 +362,7 @@ func (p *GovernancePlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 
 	// Extract governance information
 	headers := extractHeadersFromContext(*ctx)
-	virtualKey := getStringFromContext(*ctx, ContextKey(schemas.BifrostContextKeyVirtualKeyHeader))
+	virtualKey := getStringFromContext(*ctx, schemas.BifrostContextKeyVirtualKeyHeader)
 	requestID := getStringFromContext(*ctx, schemas.BifrostContextKeyRequestID)
 
 	// Skip if no virtual key
