@@ -18,7 +18,8 @@ const (
 )
 
 // LogStore is the interface for the log store.
-type LogStore interface {
+type LogStore interface {	
+	Ping(ctx context.Context) error
 	Create(ctx context.Context, entry *Log) error
 	FindFirst(ctx context.Context, query any, fields ...string) (*Log, error)
 	FindAll(ctx context.Context, query any, fields ...string) ([]*Log, error)

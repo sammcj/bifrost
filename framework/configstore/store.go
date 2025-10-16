@@ -15,6 +15,8 @@ import (
 
 // ConfigStore is the interface for the config store.
 type ConfigStore interface {
+	// Health check
+	Ping(ctx context.Context) error
 
 	// Client config CRUD
 	UpdateClientConfig(ctx context.Context, config *ClientConfig) error

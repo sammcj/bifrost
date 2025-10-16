@@ -2212,8 +2212,8 @@ func (c *Config) GetVectorStoreConfigRedacted(ctx context.Context) (*vectorstore
 		// Create a copy to avoid modifying the original
 		redactedWeaviateConfig := *weaviateConfig
 		// Redact password if it exists
-		if redactedWeaviateConfig.ApiKey != "" {
-			redactedWeaviateConfig.ApiKey = RedactKey(redactedWeaviateConfig.ApiKey)
+		if redactedWeaviateConfig.APIKey != "" {
+			redactedWeaviateConfig.APIKey = RedactKey(redactedWeaviateConfig.APIKey)
 		}
 		redactedVectorStoreConfig := *vectorStoreConfig
 		redactedVectorStoreConfig.Config = &redactedWeaviateConfig

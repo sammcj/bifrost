@@ -38,7 +38,7 @@ func getWeaviateConfigFromEnv() vectorstore.WeaviateConfig {
 	return vectorstore.WeaviateConfig{
 		Scheme:  scheme,
 		Host:    host,
-		ApiKey:  apiKey,
+		APIKey:  apiKey,
 		Timeout: time.Duration(timeout) * time.Second,
 	}
 }

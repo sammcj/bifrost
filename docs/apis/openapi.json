@@ -250,6 +250,37 @@
         }
       }
     },
+    "/health": {
+      "get": {
+        "summary": "Get Health",
+        "description": "Returns the health of the server. This endpoint can be safely used as liveness probe and readiness probe for Kubernetes. It also internally validates connection to config store, log store, vector store",
+        "operationId": "getHealth",
+        "tags": [
+          "Health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Server is healthy and all stores are available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable. One or more required stores (config store, log store, or vector store) are not available."
+          }
+        }
+      }      
+    },
     "/metrics": {
       "get": {
         "summary": "Get Prometheus Metrics",

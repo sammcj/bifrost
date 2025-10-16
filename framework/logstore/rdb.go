@@ -22,6 +22,11 @@ func (s *RDBLogStore) Create(ctx context.Context, entry *Log) error {
 	return s.db.WithContext(ctx).Create(entry).Error
 }
 
+// Ping checks if the database is reachable.
+func (s *RDBLogStore) Ping(ctx context.Context) error {
+	return s.db.WithContext(ctx).Exec("SELECT 1").Error
+}
+
 // Update updates a log entry in the database.
 func (s *RDBLogStore) Update(ctx context.Context, id string, entry any) error {
 	tx := s.db.WithContext(ctx).Model(&Log{}).Where("id = ?", id).Updates(entry)
