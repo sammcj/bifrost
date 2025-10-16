@@ -52,7 +52,7 @@ func TestEncryptDecrypt(t *testing.T) {
 
 			// For empty strings, encryption should return empty
 			if tc.plaintext == "" {
-				if encrypted == "" {
+				if encrypted != "" {
 					t.Errorf("Expected empty string for empty input, got: %s", encrypted)
 				}
 				return
