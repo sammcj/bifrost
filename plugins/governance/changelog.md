@@ -1,4 +1,5 @@
 <!-- The pattern we follow here is to keep the changelog for the latest version -->
 <!-- Old changelogs are automatically attached to the GitHub releases -->
 
-- Chore: taking context key from core package instead of governance package
+- Upgrade dependency: core to 1.2.8
+- Chore: Moves all context key types to schemas.BifrostContextKey

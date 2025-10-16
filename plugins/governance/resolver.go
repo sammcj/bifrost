@@ -37,12 +37,12 @@ type EvaluationRequest struct {
 
 // EvaluationResult contains the complete result of governance evaluation
 type EvaluationResult struct {
-	Decision      Decision                     `json:"decision"`
-	Reason        string                       `json:"reason"`
+	Decision      Decision                           `json:"decision"`
+	Reason        string                             `json:"reason"`
 	VirtualKey    *configstoreTables.TableVirtualKey `json:"virtual_key,omitempty"`
 	RateLimitInfo *configstoreTables.TableRateLimit  `json:"rate_limit_info,omitempty"`
 	BudgetInfo    []*configstoreTables.TableBudget   `json:"budget_info,omitempty"` // All budgets in hierarchy
-	UsageInfo     *UsageInfo                   `json:"usage_info,omitempty"`
+	UsageInfo     *UsageInfo                         `json:"usage_info,omitempty"`
 }
 
 // UsageInfo represents current usage levels for rate limits and budgets

@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Utility function to parse duration strings
+// ParseDuration function to parse duration strings
 func ParseDuration(duration string) (time.Duration, error) {
 	if duration == "" {
 		return 0, fmt.Errorf("duration is empty")
