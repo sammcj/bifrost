@@ -10,8 +10,8 @@ fix_permissions() {
         CURRENT_GID=$(id -g)
         
         # Get directory ownership
-        DATA_UID=$(stat -c %u /app/data 2>/dev/null || echo "0")
-        DATA_GID=$(stat -c %g /app/data 2>/dev/null || echo "0")
+        DATA_UID=$(stat -c '%u' /app/data 2>/dev/null || echo "0")
+        DATA_GID=$(stat -c '%g' /app/data 2>/dev/null || echo "0")
         
         # If ownership doesn't match current user, try to fix it
         if [ "$DATA_UID" != "$CURRENT_UID" ] || [ "$DATA_GID" != "$CURRENT_GID" ]; then
