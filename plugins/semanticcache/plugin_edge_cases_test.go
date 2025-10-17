@@ -124,7 +124,7 @@ func TestToolVariations(t *testing.T) {
 						Description: bifrost.Ptr("Get the current weather"),
 						Parameters: &schemas.ToolFunctionParameters{
 							Type: "object",
-							Properties: map[string]interface{}{
+							Properties: &map[string]interface{}{
 								"location": map[string]interface{}{
 									"type":        "string",
 									"description": "The city and state",
@@ -161,7 +161,7 @@ func TestToolVariations(t *testing.T) {
 						Description: bifrost.Ptr("Get current weather information"),
 						Parameters: &schemas.ToolFunctionParameters{
 							Type: "object",
-							Properties: map[string]interface{}{
+							Properties: &map[string]interface{}{
 								"city": map[string]interface{}{ // Different parameter name
 									"type":        "string",
 									"description": "The city name",
