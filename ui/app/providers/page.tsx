@@ -78,7 +78,7 @@ export default function Providers() {
 				});
 			});
 		return;
-	}, [provider]);
+	}, [provider, isLoadingProviders]);
 
 	useEffect(() => {
 		if (selectedProvider || !allProviders || allProviders.length === 0 || provider) return;
