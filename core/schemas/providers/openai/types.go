@@ -65,7 +65,7 @@ func (r *OpenAIResponsesRequestInput) UnmarshalJSON(data []byte) error {
 		r.OpenAIResponsesRequestInputArray = array
 		return nil
 	}
-	return fmt.Errorf("invalid responses request input")
+	return fmt.Errorf("openai responses request input is neither a string nor an array of responses messages")
 }
 
 // MarshalJSON implements custom JSON marshalling for ResponsesRequestInput.
