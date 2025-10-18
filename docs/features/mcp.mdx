@@ -632,14 +632,14 @@ Use context values to filter clients and tools per request:
 // Include only specific clients
 ctx := context.WithValue(context.Background(), "mcp-include-clients", []string{"filesystem", "web-search"})
 
-// Exclude specific tools  
-ctx = context.WithValue(ctx, "mcp-exclude-tools", "debug_tool,internal_tool")
+// Include only specific tools (use clientName/toolName format)
+ctx = context.WithValue(ctx, "mcp-include-tools", []string{"web-search/search", "filesystem/read_file"})
 
-// Include only specific tools
-ctx = context.WithValue(ctx, "mcp-include-tools", "search,read_file")
+// Use wildcard to include all tools from a specific client
+ctx = context.WithValue(ctx, "mcp-include-tools", []string{"web-search/*", "filesystem/read_file"})
 
-// Exclude specific clients
-ctx = context.WithValue(ctx, "mcp-exclude-clients", "admin-tools")
+// Use wildcard to include all clients
+ctx = context.WithValue(ctx, "mcp-include-clients", []string{"*"})
 
 response, err := client.ChatCompletionRequest(ctx, request)
 ```
@@ -653,7 +653,7 @@ Use headers to filter clients and tools per request:
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "x-bf-mcp-include-clients: filesystem,web-search" \
-  -H "x-bf-mcp-exclude-tools: debug_tool,internal_tool" \
+  -H "x-bf-mcp-include-tools: web-search/search,filesystem/read_file" \
   -d '{
     "model": "openai/gpt-4o",
     "messages": [
@@ -665,15 +665,13 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   }'
 
 # Alternative filtering options:
-# -H "x-bf-mcp-include-tools: search,read_file"     # Whitelist specific tools
-# -H "x-bf-mcp-exclude-clients: admin-tools"       # Blacklist specific clients
+# -H "x-bf-mcp-include-clients: *"                                      # Include all clients
+# -H "x-bf-mcp-include-tools: web-search/*,filesystem/read_file"        # Include all tools from the web-search client and read_file from the filesystem client
 ```
 
 **Available MCP Headers:**
-- `x-bf-mcp-include-clients`: Comma-separated list of clients to include
-- `x-bf-mcp-exclude-clients`: Comma-separated list of clients to exclude  
-- `x-bf-mcp-include-tools`: Comma-separated list of tools to include
-- `x-bf-mcp-exclude-tools`: Comma-separated list of tools to exclude
+- `x-bf-mcp-include-clients`: Comma-separated list of clients to include (use "*" for all clients)
+- `x-bf-mcp-include-tools`: Comma-separated list of tools to include in `clientName/toolName` format (use "*" for all tools)
 
 </Tab>
 </Tabs>
@@ -682,9 +680,10 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 1. **Request-Level vs Config-Level**: Request-level filtering (context/headers) takes priority over config-level filtering and can override it
 
-2. **Include vs Exclude Priority**: 
+2. **Include-Only Whitelist Filtering**: 
    - **Include lists are strict whitelists**: If `include-clients`/`include-tools` is specified, ONLY those clients/tools are allowed
-   - **Whitelist priority**: When both include and exclude are specified and a tool/client is in both, include takes priority
+   - **Wildcard support**: Use "*" to include all clients or tools
+   - **Empty array behavior**: An empty array `[]` means no clients/tools are included
 
 **Client Configuration Filtering:**
 ```json
@@ -692,8 +691,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   "name": "external-api",
   "connection_type": "http",
   "connection_string": "https://api.example.com/mcp",
-  "tools_to_execute": ["search", "summarize"],      // Whitelist specific tools
-  "tools_to_skip": ["delete", "admin_action"]       // Blacklist specific tools
+  "tools_to_execute": ["search", "summarize"]       // Whitelist specific tools (use "*" for all tools)
 }
 ```
 
@@ -777,7 +775,6 @@ curl -X PUT http://localhost:8080/api/mcp/client/filesystem-tools \
   -H "Content-Type: application/json" \
   -d '{
     "tools_to_add": ["read_file", "write_file"],
-    "tools_to_remove": ["delete_file"]
   }'
 
 # Remove client

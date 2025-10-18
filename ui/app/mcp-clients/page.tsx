@@ -1,6 +1,6 @@
 "use client";
 
-import MCPClientsList from "@/app/config/views/mcpClientsLists";
+import MCPClientsTable from "@/app/mcp-clients/views/mcpClientsTable";
 import FullPageLoader from "@/components/fullPageLoader";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage, useGetMCPClientsQuery } from "@/lib/store";
@@ -27,7 +27,7 @@ export default function MCPServersPage() {
 
 	return (
 		<div>
-			<MCPClientsList mcpClients={mcpClients || []} />
+			<MCPClientsTable mcpClients={mcpClients || []} />
 		</div>
 	);
 }

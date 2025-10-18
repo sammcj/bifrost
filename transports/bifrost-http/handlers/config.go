@@ -96,7 +96,7 @@ func (h *ConfigHandler) getConfig(ctx *fasthttp.RequestCtx) {
 				PricingURL:          bifrost.Ptr(pricing.DefaultPricingURL),
 				PricingSyncInterval: bifrost.Ptr(int64(pricing.DefaultPricingSyncInterval.Seconds())),
 			}
-		} else if h.store.FrameworkConfig.Pricing != nil {
+		} else if h.store.FrameworkConfig.Pricing != nil && h.store.FrameworkConfig.Pricing.PricingURL != nil {
 			mapConfig["framework_config"] = configstoreTables.TableFrameworkConfig{
 				PricingURL:          h.store.FrameworkConfig.Pricing.PricingURL,
 				PricingSyncInterval: bifrost.Ptr(int64(*h.store.FrameworkConfig.Pricing.PricingSyncInterval)),

@@ -34,8 +34,11 @@ type ConfigStore interface {
 	GetProvidersConfig(ctx context.Context) (map[schemas.ModelProvider]ProviderConfig, error)
 
 	// MCP config CRUD
-	UpdateMCPConfig(ctx context.Context, config *schemas.MCPConfig, envKeys map[string][]EnvKeyInfo) error
 	GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, error)
+	GetMCPClientByName(ctx context.Context, name string) (*tables.TableMCPClient, error)
+	CreateMCPClientConfig(ctx context.Context, clientConfig schemas.MCPClientConfig, envKeys map[string][]EnvKeyInfo) error
+	UpdateMCPClientConfig(ctx context.Context, name string, clientConfig schemas.MCPClientConfig, envKeys map[string][]EnvKeyInfo) error
+	DeleteMCPClientConfig(ctx context.Context, name string) error
 
 	// Vector store config CRUD
 	UpdateVectorStoreConfig(ctx context.Context, config *vectorstore.Config) error
@@ -77,7 +80,7 @@ type ConfigStore interface {
 	// Team CRUD
 	GetTeams(ctx context.Context, customerID string) ([]tables.TableTeam, error)
 	GetTeam(ctx context.Context, id string) (*tables.TableTeam, error)
-		CreateTeam(ctx context.Context, team *tables.TableTeam, tx ...*gorm.DB) error
+	CreateTeam(ctx context.Context, team *tables.TableTeam, tx ...*gorm.DB) error
 	UpdateTeam(ctx context.Context, team *tables.TableTeam, tx ...*gorm.DB) error
 	DeleteTeam(ctx context.Context, id string) error
 

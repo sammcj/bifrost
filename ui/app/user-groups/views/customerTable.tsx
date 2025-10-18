@@ -97,7 +97,7 @@ export default function CustomersTable({ customers, teams, virtualKeys, onRefres
 								<TableHead>Budget</TableHead>
 								<TableHead>Reset Period</TableHead>
 								<TableHead>Virtual Keys</TableHead>
-								<TableHead className="text-right">Actions</TableHead>
+								<TableHead className="text-right"></TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>

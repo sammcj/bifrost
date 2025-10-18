@@ -5,6 +5,8 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
+	"sort"
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
@@ -99,11 +101,17 @@ func (h *MCPHandler) getMCPClients(ctx *fasthttp.RequestCtx) {
 
 	for _, configClient := range configsInStore.ClientConfigs {
 		if connectedClient, exists := connectedClientsMap[configClient.Name]; exists {
-			// Client is connected, use the actual client data
+			// Sort tools alphabetically by name
+			sortedTools := make([]schemas.ChatToolFunction, len(connectedClient.Tools))
+			copy(sortedTools, connectedClient.Tools)
+			sort.Slice(sortedTools, func(i, j int) bool {
+				return sortedTools[i].Name < sortedTools[j].Name
+			})
+
 			clients = append(clients, schemas.MCPClient{
 				Name:   connectedClient.Name,
 				Config: h.store.RedactMCPClientConfig(connectedClient.Config),
-				Tools:  connectedClient.Tools,
+				Tools:  sortedTools,
 				State:  connectedClient.State,
 			})
 		} else {
@@ -111,7 +119,7 @@ func (h *MCPHandler) getMCPClients(ctx *fasthttp.RequestCtx) {
 			clients = append(clients, schemas.MCPClient{
 				Name:   configClient.Name,
 				Config: h.store.RedactMCPClientConfig(configClient),
-				Tools:  []string{}, // No tools available since connection failed
+				Tools:  []schemas.ChatToolFunction{}, // No tools available since connection failed
 				State:  schemas.MCPConnectionStateError,
 			})
 		}
@@ -147,6 +155,11 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	if err := validateToolsToExecute(req.ToolsToExecute); err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid tools_to_execute: %v", err), h.logger)
+		return
+	}
+
 	if err := h.store.AddMCPClient(ctx, req); err != nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to add MCP client: %v", err), h.logger)
 		return
@@ -168,14 +181,19 @@ func (h *MCPHandler) editMCPClientTools(ctx *fasthttp.RequestCtx) {
 
 	var req struct {
 		ToolsToExecute []string `json:"tools_to_execute,omitempty"`
-		ToolsToSkip    []string `json:"tools_to_skip,omitempty"`
 	}
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid request format: %v", err), h.logger)
 		return
 	}
 
-	if err := h.store.EditMCPClientTools(ctx, name, req.ToolsToExecute, req.ToolsToSkip); err != nil {
+	// Validate tools_to_execute
+	if err := validateToolsToExecute(req.ToolsToExecute); err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid tools_to_execute: %v", err), h.logger)
+		return
+	}
+
+	if err := h.store.EditMCPClientTools(ctx, name, req.ToolsToExecute); err != nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to edit MCP client tools: %v", err), h.logger)
 		return
 	}
@@ -216,4 +234,25 @@ func getNameFromCtx(ctx *fasthttp.RequestCtx) (string, error) {
 	}
 
 	return nameStr, nil
+}
+
+func validateToolsToExecute(toolsToExecute []string) error {
+	if len(toolsToExecute) > 0 {
+		// Check if wildcard "*" is combined with other tool names
+		hasWildcard := slices.Contains(toolsToExecute, "*")
+		if hasWildcard && len(toolsToExecute) > 1 {
+			return fmt.Errorf("invalid tools_to_execute: wildcard '*' cannot be combined with other tool names")
+		}
+
+		// Check for duplicate entries
+		seen := make(map[string]bool)
+		for _, tool := range toolsToExecute {
+			if seen[tool] {
+				return fmt.Errorf("invalid tools_to_execute: duplicate tool name '%s'", tool)
+			}
+			seen[tool] = true
+		}
+	}
+
+	return nil
 }

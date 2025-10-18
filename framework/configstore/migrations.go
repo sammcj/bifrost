@@ -42,6 +42,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddFrameworkConfigsTable(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationCleanupMCPClientToolsConfig(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -494,6 +497,65 @@ func migrationAddKeyNameColumn(ctx context.Context, db *gorm.DB) error {
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while running db migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationCleanupMCPClientToolsConfig removes ToolsToSkipJSON column and converts empty ToolsToExecuteJSON to wildcard
+func migrationCleanupMCPClientToolsConfig(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "cleanup_mcp_client_tools_config",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			// Step 1: Remove ToolsToSkipJSON column if it exists (cleanup from old versions)
+			if migrator.HasColumn(&tables.TableMCPClient{}, "tools_to_skip_json") {
+				if err := migrator.DropColumn(&tables.TableMCPClient{}, "tools_to_skip_json"); err != nil {
+					return fmt.Errorf("failed to drop tools_to_skip_json column: %w", err)
+				}
+			}
+
+			// Alternative column name variations that might exist
+			if migrator.HasColumn(&tables.TableMCPClient{}, "ToolsToSkipJSON") {
+				if err := migrator.DropColumn(&tables.TableMCPClient{}, "ToolsToSkipJSON"); err != nil {
+					return fmt.Errorf("failed to drop ToolsToSkipJSON column: %w", err)
+				}
+			}
+
+			// Step 2: Update empty ToolsToExecuteJSON arrays to wildcard ["*"]
+			// Convert "[]" (empty array) to "[\"*\"]" (wildcard array) for backward compatibility
+			updateSQL := `
+				UPDATE config_mcp_clients 
+				SET tools_to_execute_json = '["*"]' 
+				WHERE tools_to_execute_json = '[]' OR tools_to_execute_json = '' OR tools_to_execute_json IS NULL
+			`
+			if err := tx.Exec(updateSQL).Error; err != nil {
+				return fmt.Errorf("failed to update empty ToolsToExecuteJSON to wildcard: %w", err)
+			}
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			// For rollback, we could add the column back, but since we're moving away from this
+			// functionality, we'll just revert the wildcard changes back to empty arrays
+			tx = tx.WithContext(ctx)
+
+			revertSQL := `
+				UPDATE config_mcp_clients 
+				SET tools_to_execute_json = '[]' 
+				WHERE tools_to_execute_json = '["*"]'
+			`
+			if err := tx.Exec(revertSQL).Error; err != nil {
+				return fmt.Errorf("failed to revert wildcard ToolsToExecuteJSON to empty arrays: %w", err)
+			}
+
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running MCP client tools cleanup migration: %s", err.Error())
 	}
 	return nil
 }

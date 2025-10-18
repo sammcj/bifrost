@@ -32,10 +32,11 @@ const (
 	MCPClientConnectionEstablishTimeout = 30 * time.Second   // Timeout for MCP client connection establishment
 
 	// Context keys for client filtering in requests
+	// NOTE: []string is used for both keys, and by default all clients/tools are included (when nil).
+	// If "*" is present, all clients/tools are included, and [] means no clients/tools are included.
+	// Request context filtering takes priority over client config - context can override client exclusions.
 	MCPContextKeyIncludeClients = "mcp-include-clients" // Context key for whitelist client filtering
-	MCPContextKeyExcludeClients = "mcp-exclude-clients" // Context key for blacklist client filtering
-	MCPContextKeyIncludeTools   = "mcp-include-tools"   // Context key for whitelist tool filtering
-	MCPContextKeyExcludeTools   = "mcp-exclude-tools"   // Context key for blacklist tool filtering
+	MCPContextKeyIncludeTools   = "mcp-include-tools"   // Context key for whitelist tool filtering (Note: toolName should be in "clientName/toolName" format)
 )
 
 // ============================================================================
@@ -234,7 +235,7 @@ func (m *MCPManager) removeClientUnsafe(name string) error {
 	return nil
 }
 
-func (m *MCPManager) EditClientTools(name string, toolsToAdd []string, toolsToRemove []string) error {
+func (m *MCPManager) EditClientTools(name string, toolsToExecute []string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -249,8 +250,7 @@ func (m *MCPManager) EditClientTools(name string, toolsToAdd []string, toolsToRe
 
 	// Update the client's execution config with new tool filters
 	config := client.ExecutionConfig
-	config.ToolsToExecute = toolsToAdd
-	config.ToolsToSkip = toolsToRemove
+	config.ToolsToExecute = toolsToExecute
 
 	// Store the updated config
 	client.ExecutionConfig = config
@@ -293,26 +293,33 @@ func (m *MCPManager) getAvailableTools(ctx context.Context) []schemas.ChatTool {
 	defer m.mu.RUnlock()
 
 	var includeClients []string
-	var excludeClients []string
 
 	// Extract client filtering from request context
 	if existingIncludeClients, ok := ctx.Value(MCPContextKeyIncludeClients).([]string); ok && existingIncludeClients != nil {
 		includeClients = existingIncludeClients
 	}
-	if existingExcludeClients, ok := ctx.Value(MCPContextKeyExcludeClients).([]string); ok && existingExcludeClients != nil {
-		excludeClients = existingExcludeClients
-	}
 
 	tools := make([]schemas.ChatTool, 0)
 	for clientName, client := range m.clientMap {
 		// Apply client filtering logic
-		if !m.shouldIncludeClient(clientName, includeClients, excludeClients) {
+		if !m.shouldIncludeClient(clientName, includeClients) {
+			m.logger.Debug(fmt.Sprintf("%s Skipping MCP client %s: not in include clients list", MCPLogPrefix, clientName))
 			continue
 		}
 
+		m.logger.Debug(fmt.Sprintf("Checking tools for MCP client %s with tools to execute: %v", clientName, client.ExecutionConfig.ToolsToExecute))
+
 		// Add all tools from this client
 		for toolName, tool := range client.ToolMap {
-			if m.shouldSkipToolForRequest(toolName, ctx) {
+			// Check if tool should be skipped based on client configuration
+			if m.shouldSkipToolForConfig(toolName, client.ExecutionConfig) {
+				m.logger.Debug(fmt.Sprintf("%s Skipping MCP tool %s: not in tools to execute list", MCPLogPrefix, toolName))
+				continue
+			}
+
+			// Check if tool should be skipped based on request context
+			if m.shouldSkipToolForRequest(clientName, toolName, ctx) {
+				m.logger.Debug(fmt.Sprintf("%s Skipping MCP tool %s: not in include tools list", MCPLogPrefix, toolName))
 				continue
 			}
 
@@ -730,15 +737,12 @@ func (m *MCPManager) retrieveExternalTools(ctx context.Context, client *client.C
 		return make(map[string]schemas.ChatTool), nil // No tools available
 	}
 
+	m.logger.Debug(fmt.Sprintf("%s Retrieved %d tools from %s", MCPLogPrefix, len(toolsResponse.Tools), config.Name))
+
 	tools := make(map[string]schemas.ChatTool)
 
 	// toolsResponse is already a ListToolsResult
 	for _, mcpTool := range toolsResponse.Tools {
-		// Check if tool should be skipped based on configuration
-		if m.shouldSkipToolForConfig(mcpTool.Name, config) {
-			continue
-		}
-
 		// Convert MCP tool schema to Bifrost format
 		bifrostTool := m.convertMCPToolToBifrostSchema(&mcpTool)
 		tools[mcpTool.Name] = bifrostTool
@@ -749,8 +753,19 @@ func (m *MCPManager) retrieveExternalTools(ctx context.Context, client *client.C
 
 // shouldSkipToolForConfig checks if a tool should be skipped based on client configuration (without accessing clientMap).
 func (m *MCPManager) shouldSkipToolForConfig(toolName string, config schemas.MCPClientConfig) bool {
-	// If ToolsToExecute is specified, only execute tools in that list
-	if len(config.ToolsToExecute) > 0 {
+	// If ToolsToExecute is specified (not nil), apply filtering
+	if config.ToolsToExecute != nil {
+		// Handle empty array [] - means no tools are allowed
+		if len(config.ToolsToExecute) == 0 {
+			return true // No tools allowed
+		}
+
+		// Handle wildcard "*" - if present, all tools are allowed
+		if slices.Contains(config.ToolsToExecute, "*") {
+			return false // All tools allowed
+		}
+
+		// Check if specific tool is in the allowed list
 		for _, allowedTool := range config.ToolsToExecute {
 			if allowedTool == toolName {
 				return false // Tool is allowed
@@ -759,40 +774,38 @@ func (m *MCPManager) shouldSkipToolForConfig(toolName string, config schemas.MCP
 		return true // Tool not in allowed list
 	}
 
-	// Check if tool is in skip list
-	for _, skipTool := range config.ToolsToSkip {
-		if skipTool == toolName {
-			return true // Tool should be skipped
-		}
-	}
-
-	return false // Tool is allowed
+	return true // Tool is skipped (nil is treated as [] - no tools)
 }
 
 // shouldSkipToolForRequest checks if a tool should be skipped based on the request context.
-func (m *MCPManager) shouldSkipToolForRequest(toolName string, ctx context.Context) bool {
+func (m *MCPManager) shouldSkipToolForRequest(clientName, toolName string, ctx context.Context) bool {
 	includeTools := ctx.Value(MCPContextKeyIncludeTools)
-	excludeTools := ctx.Value(MCPContextKeyExcludeTools)
 
 	if includeTools != nil {
-		if includeStr, ok := includeTools.(string); ok && includeStr != "" {
-			includeToolsList := strings.Split(includeStr, ",")
-			if slices.Contains(includeToolsList, toolName) {
-				return false // Tool is allowed
+		// Try []string first (preferred type)
+		if includeToolsList, ok := includeTools.([]string); ok {
+			// Handle empty array [] - means no tools are included
+			if len(includeToolsList) == 0 {
+				return true // No tools allowed
 			}
+
+			// Handle wildcard "*" - if present, all tools are included
+			if slices.Contains(includeToolsList, "*") {
+				return false // All tools allowed
+			}
+
+			// Check if specific tool is in the list (format: clientName/toolName)
+			fullToolName := fmt.Sprintf("%s/%s", clientName, toolName)
+			if slices.Contains(includeToolsList, fullToolName) {
+				return false // Tool is explicitly allowed
+			}
+
+			// If includeTools is specified but this tool is not in it, skip it
+			return true
 		}
 	}
 
-	if excludeTools != nil {
-		if excludeStr, ok := excludeTools.(string); ok && excludeStr != "" {
-			excludeToolsList := strings.Split(excludeStr, ",")
-			if slices.Contains(excludeToolsList, toolName) {
-				return true // Tool should be skipped
-			}
-		}
-	}
-
-	return false // Tool is allowed
+	return false // Tool is allowed (default when no filtering specified)
 }
 
 // convertMCPToolToBifrostSchema converts an MCP tool definition to Bifrost format.
@@ -867,6 +880,7 @@ func (m *MCPManager) createToolResponseMessage(toolCall schemas.ChatAssistantMes
 func (m *MCPManager) addMCPToolsToBifrostRequest(ctx context.Context, req *schemas.BifrostRequest) *schemas.BifrostRequest {
 	mcpTools := m.getAvailableTools(ctx)
 	if len(mcpTools) > 0 {
+		m.logger.Debug(fmt.Sprintf("%s Adding %d MCP tools to request", MCPLogPrefix, len(mcpTools)))
 		switch req.RequestType {
 		case schemas.ChatCompletionRequest, schemas.ChatCompletionStreamRequest:
 			// Only allocate new Params if it's nil to preserve caller-supplied settings
@@ -971,25 +985,6 @@ func validateMCPClientConfig(config *schemas.MCPClientConfig) error {
 		return fmt.Errorf("unknown connection type '%s' in client '%s'", config.ConnectionType, config.Name)
 	}
 
-	// Check for overlapping tools between ToolsToSkip and ToolsToExecute
-	if len(config.ToolsToSkip) > 0 && len(config.ToolsToExecute) > 0 {
-		skipMap := make(map[string]bool)
-		for _, tool := range config.ToolsToSkip {
-			skipMap[tool] = true
-		}
-
-		var overlapping []string
-		for _, tool := range config.ToolsToExecute {
-			if skipMap[tool] {
-				overlapping = append(overlapping, tool)
-			}
-		}
-
-		if len(overlapping) > 0 {
-			return fmt.Errorf("tools cannot be both included and excluded in client '%s': %v", config.Name, overlapping)
-		}
-	}
-
 	return nil
 }
 
@@ -1011,18 +1006,24 @@ func (m *MCPManager) findMCPClientForTool(toolName string) *MCPClient {
 }
 
 // shouldIncludeClient determines if a client should be included based on filtering rules.
-func (m *MCPManager) shouldIncludeClient(clientName string, includeClients, excludeClients []string) bool {
-	// If includeClients is specified, only include those clients (whitelist mode)
-	if len(includeClients) > 0 {
+func (m *MCPManager) shouldIncludeClient(clientName string, includeClients []string) bool {
+	// If includeClients is specified (not nil), apply whitelist filtering
+	if includeClients != nil {
+		// Handle empty array [] - means no clients are included
+		if len(includeClients) == 0 {
+			return false // No clients allowed
+		}
+
+		// Handle wildcard "*" - if present, all clients are included
+		if slices.Contains(includeClients, "*") {
+			return true // All clients allowed
+		}
+
+		// Check if specific client is in the list
 		return slices.Contains(includeClients, clientName)
 	}
 
-	// If excludeClients is specified, exclude those clients (blacklist mode)
-	if len(excludeClients) > 0 {
-		return !slices.Contains(excludeClients, clientName)
-	}
-
-	// Default: include all clients
+	// Default: include all clients when no filtering specified (nil case)
 	return true
 }
 

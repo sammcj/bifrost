@@ -242,7 +242,7 @@ const renderMessage = (message: ResponsesMessage, index: number) => {
 				<div className="border-b last:border-b-0">
 					<div className="bg-muted/50 text-muted-foreground px-6 py-2 text-xs font-medium">Encrypted Reasoning Content</div>
 					<div className="px-6 py-2">
-						<div className="font-mono text-xs whitespace-pre-wrap">{message.encrypted_content}</div>
+						<div className="font-mono text-xs break-words whitespace-pre-wrap">{message.encrypted_content}</div>
 					</div>
 				</div>
 			)}
@@ -280,24 +280,24 @@ const renderMessage = (message: ResponsesMessage, index: number) => {
 			{(message.call_id || message.name || message.arguments) && (
 				<div className="border-b last:border-b-0">
 					<div className="bg-muted/50 text-muted-foreground px-6 py-2 text-xs font-medium">Tool Details</div>
-						<CodeEditor
-							className="z-0 w-full"
-							shouldAdjustInitialHeight={true}
-							maxHeight={200}
-							wrap={true}
-							code={JSON.stringify(
-								{
-									...(message.call_id && { call_id: message.call_id }),
-									...(message.name && { name: message.name }),
-									...(message.arguments && { arguments: isJson(message.arguments) ? cleanJson(message.arguments) : message.arguments }),
-								},
-								null,
-								2,
-							)}
-							lang="json"
-							readonly={true}
-							options={{ scrollBeyondLastLine: false, collapsibleBlocks: true, lineNumbers: "off", alwaysConsumeMouseWheel: false }}
-						/>
+					<CodeEditor
+						className="z-0 w-full"
+						shouldAdjustInitialHeight={true}
+						maxHeight={200}
+						wrap={true}
+						code={JSON.stringify(
+							{
+								...(message.call_id && { call_id: message.call_id }),
+								...(message.name && { name: message.name }),
+								...(message.arguments && { arguments: isJson(message.arguments) ? cleanJson(message.arguments) : message.arguments }),
+							},
+							null,
+							2,
+						)}
+						lang="json"
+						readonly={true}
+						options={{ scrollBeyondLastLine: false, collapsibleBlocks: true, lineNumbers: "off", alwaysConsumeMouseWheel: false }}
+					/>
 				</div>
 			)}
 
@@ -307,27 +307,27 @@ const renderMessage = (message: ResponsesMessage, index: number) => {
 			) && (
 				<div className="border-b last:border-b-0">
 					<div className="bg-muted/50 text-muted-foreground px-6 py-2 text-xs font-medium">Additional Fields</div>
-						<CodeEditor
-							className="z-0 w-full"
-							shouldAdjustInitialHeight={true}
-							maxHeight={200}
-							wrap={true}
-							code={JSON.stringify(
-								Object.fromEntries(
-									Object.entries(message).filter(
-										([key]) =>
-											!["id", "type", "status", "role", "content", "call_id", "name", "arguments", "summary", "encrypted_content"].includes(
-												key,
-											),
-									),
+					<CodeEditor
+						className="z-0 w-full"
+						shouldAdjustInitialHeight={true}
+						maxHeight={200}
+						wrap={true}
+						code={JSON.stringify(
+							Object.fromEntries(
+								Object.entries(message).filter(
+									([key]) =>
+										!["id", "type", "status", "role", "content", "call_id", "name", "arguments", "summary", "encrypted_content"].includes(
+											key,
+										),
 								),
-								null,
-								2,
-							)}
-							lang="json"
-							readonly={true}
-							options={{ scrollBeyondLastLine: false, collapsibleBlocks: true, lineNumbers: "off", alwaysConsumeMouseWheel: false }}
-						/>
+							),
+							null,
+							2,
+						)}
+						lang="json"
+						readonly={true}
+						options={{ scrollBeyondLastLine: false, collapsibleBlocks: true, lineNumbers: "off", alwaysConsumeMouseWheel: false }}
+					/>
 				</div>
 			)}
 		</div>

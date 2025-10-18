@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -838,10 +839,16 @@ func (bifrost *Bifrost) GetMCPClients() ([]schemas.MCPClient, error) {
 
 	clientsInConfig := make([]schemas.MCPClient, 0, len(clients))
 	for _, client := range clients {
-		tools := make([]string, 0, len(client.ToolMap))
-		for toolName := range client.ToolMap {
-			tools = append(tools, toolName)
+		tools := make([]schemas.ChatToolFunction, 0, len(client.ToolMap))
+		for _, tool := range client.ToolMap {
+			if tool.Function != nil {
+				tools = append(tools, *tool.Function)
+			}
 		}
+
+		sort.Slice(tools, func(i, j int) bool {
+			return tools[i].Name < tools[j].Name
+		})
 
 		state := schemas.MCPConnectionStateConnected
 		if client.Conn == nil {
@@ -917,24 +924,23 @@ func (bifrost *Bifrost) RemoveMCPClient(name string) error {
 //
 // Parameters:
 //   - name: Name of the client to edit
-//   - toolsToAdd: Tools to add to the client
-//   - toolsToRemove: Tools to remove from the client
+//   - toolsToExecute: Tools to execute for this client (['*'] = all tools; [] = no tools)
 //
 // Returns:
 //   - error: Any edit error
 //
 // Example:
 //
-//	err := bifrost.EditMCPClientTools("my-mcp-client", []string{"tool1", "tool2"}, []string{"tool3"})
+//	err := bifrost.EditMCPClientTools("my-mcp-client", []string{"tool1", "tool2"})
 //	if err != nil {
 //	    log.Fatalf("Failed to edit MCP client tools: %v", err)
 //	}
-func (bifrost *Bifrost) EditMCPClientTools(name string, toolsToAdd []string, toolsToRemove []string) error {
+func (bifrost *Bifrost) EditMCPClientTools(name string, toolsToExecute []string) error {
 	if bifrost.mcpManager == nil {
 		return fmt.Errorf("MCP is not configured in this Bifrost instance")
 	}
 
-	return bifrost.mcpManager.EditClientTools(name, toolsToAdd, toolsToRemove)
+	return bifrost.mcpManager.EditClientTools(name, toolsToExecute)
 }
 
 // ReconnectMCPClient attempts to reconnect an MCP client if it is disconnected.
