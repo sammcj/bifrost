@@ -409,8 +409,8 @@ func (cm *ChatMessage) ToResponsesMessages() []ResponsesMessage {
 
 		// If tool output content exists, add it to function_call_output
 		if rm.Content != nil && rm.Content.ContentStr != nil && *rm.Content.ContentStr != "" {
-			rm.ResponsesToolMessage.ResponsesFunctionToolCallOutput = &ResponsesFunctionToolCallOutput{
-				ResponsesFunctionToolCallOutputStr: rm.Content.ContentStr,
+			rm.ResponsesToolMessage.Output = &ResponsesToolMessageOutputStruct{
+				ResponsesToolCallOutputStr: rm.Content.ContentStr,
 			}
 		}
 	}
@@ -501,16 +501,16 @@ func ToChatMessages(rms []ResponsesMessage) []ChatMessage {
 					// Extract content from ResponsesFunctionToolCallOutput if present
 					// This is needed because OpenAI Responses API uses an "output" field
 					// which is stored in ResponsesFunctionToolCallOutput
-					if rm.ResponsesToolMessage.ResponsesFunctionToolCallOutput != nil {
+					if rm.ResponsesToolMessage.Output != nil {
 						if rm.Content == nil {
 							rm.Content = &ResponsesMessageContent{}
 						}
 						// If Content is not already set, extract from ResponsesFunctionToolCallOutput
 						if rm.Content.ContentStr == nil && rm.Content.ContentBlocks == nil {
-							if rm.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputStr != nil {
-								rm.Content.ContentStr = rm.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputStr
-							} else if rm.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputBlocks != nil {
-								rm.Content.ContentBlocks = rm.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputBlocks
+							if rm.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil {
+								rm.Content.ContentStr = rm.ResponsesToolMessage.Output.ResponsesToolCallOutputStr
+							} else if rm.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
+								rm.Content.ContentBlocks = rm.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks
 							}
 						}
 					}
@@ -927,7 +927,7 @@ func (cr *BifrostChatResponse) ToBifrostResponsesStreamResponse() *BifrostRespon
 				}
 			}
 		}
-		
+
 	case delta.Role != nil:
 		// Role initialization - typically the first chunk
 		streamResp.Type = ResponsesStreamResponseTypeOutputItemAdded

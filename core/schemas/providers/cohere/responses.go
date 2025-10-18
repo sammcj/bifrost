@@ -241,12 +241,12 @@ func convertResponsesMessagesToCohereMessages(messages []schemas.ResponsesMessag
 				// Extract content from ResponsesFunctionToolCallOutput if Content is not set
 				// This is needed for OpenAI Responses API which uses an "output" field
 				content := msg.Content
-				if content == nil && msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput != nil {
+				if content == nil && msg.ResponsesToolMessage.Output != nil {
 					content = &schemas.ResponsesMessageContent{}
-					if msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputStr != nil {
-						content.ContentStr = msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputStr
-					} else if msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputBlocks != nil {
-						content.ContentBlocks = msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputBlocks
+					if msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil {
+						content.ContentStr = msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr
+					} else if msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
+						content.ContentBlocks = msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks
 					}
 				}
 
