@@ -35,8 +35,8 @@ const (
 	// NOTE: []string is used for both keys, and by default all clients/tools are included (when nil).
 	// If "*" is present, all clients/tools are included, and [] means no clients/tools are included.
 	// Request context filtering takes priority over client config - context can override client exclusions.
-	MCPContextKeyIncludeClients = "mcp-include-clients" // Context key for whitelist client filtering
-	MCPContextKeyIncludeTools   = "mcp-include-tools"   // Context key for whitelist tool filtering (Note: toolName should be in "clientName/toolName" format)
+	MCPContextKeyIncludeClients schemas.BifrostContextKey = "mcp-include-clients" // Context key for whitelist client filtering
+	MCPContextKeyIncludeTools   schemas.BifrostContextKey = "mcp-include-tools"   // Context key for whitelist tool filtering (Note: toolName should be in "clientName/toolName" format)
 )
 
 // ============================================================================
@@ -789,8 +789,8 @@ func (m *MCPManager) shouldSkipToolForRequest(clientName, toolName string, ctx c
 				return true // No tools allowed
 			}
 
-			// Handle wildcard "*" - if present, all tools are included
-			if slices.Contains(includeToolsList, "*") {
+			// Handle wildcard "clientName/*" - if present, all tools are included for this client
+			if slices.Contains(includeToolsList, fmt.Sprintf("%s/*", clientName)) {
 				return false // All tools allowed
 			}
 

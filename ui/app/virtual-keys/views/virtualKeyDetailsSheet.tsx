@@ -1,8 +1,8 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { DottedSeparator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
 import { ProviderLabels, ProviderName } from "@/lib/constants/logs";
@@ -10,12 +10,12 @@ import { VirtualKey } from "@/lib/types/governance";
 import { calculateUsagePercentage, formatCurrency, getUsageVariant, parseResetPeriod } from "@/lib/utils/governance";
 import { formatDistanceToNow } from "date-fns";
 
-interface VirtualKeyDetailDialogProps {
+interface VirtualKeyDetailSheetProps {
 	virtualKey: VirtualKey;
 	onClose: () => void;
 }
 
-export default function VirtualKeyDetailDialog({ virtualKey, onClose }: VirtualKeyDetailDialogProps) {
+export default function VirtualKeyDetailSheet({ virtualKey, onClose }: VirtualKeyDetailSheetProps) {
 	const getEntityInfo = () => {
 		if (virtualKey.team) {
 			return { type: "Team", name: virtualKey.team.name };
@@ -38,14 +38,14 @@ export default function VirtualKeyDetailDialog({ virtualKey, onClose }: VirtualK
 			virtualKey.rate_limit.request_current_usage >= virtualKey.rate_limit.request_max_limit);
 
 	return (
-		<Dialog open onOpenChange={onClose}>
-			<DialogContent className="max-h-[80vh] max-w-4xl overflow-y-auto p-0" showCloseButton={true}>
-				<DialogHeader className="z-10 border-b bg-transparent px-6 pt-6">
-					<DialogTitle>{virtualKey.name}</DialogTitle>
-					<DialogDescription>{virtualKey.description || "Virtual key details and usage information"}</DialogDescription>
-				</DialogHeader>
+		<Sheet open onOpenChange={onClose}>
+			<SheetContent className="dark:bg-card flex w-full flex-col overflow-x-hidden bg-white p-8 sm:max-w-2xl">
+				<SheetHeader className="p-0">
+					<SheetTitle>{virtualKey.name}</SheetTitle>
+					<SheetDescription>{virtualKey.description || "Virtual key details and usage information"}</SheetDescription>
+				</SheetHeader>
 
-				<div className="space-y-6 px-6 pb-6">
+				<div className="space-y-6">
 					{/* Basic Information */}
 					<div className="space-y-4">
 						<h3 className="font-semibold">Basic Information</h3>
@@ -69,25 +69,20 @@ export default function VirtualKeyDetailDialog({ virtualKey, onClose }: VirtualK
 								<span className="text-muted-foreground text-sm">Last Updated</span>
 								<div className="col-span-2 text-sm">{formatDistanceToNow(new Date(virtualKey.updated_at), { addSuffix: true })}</div>
 							</div>
+
+							{entityInfo.type !== "None" && (
+								<div className="grid grid-cols-3 items-center gap-4">
+									<span className="text-muted-foreground text-sm">Assigned To</span>
+									<div className="col-span-2 flex items-center gap-2">
+										<Badge variant={entityInfo.type === "None" ? "outline" : "secondary"}>{entityInfo.type}</Badge>
+										<span className="text-sm">{entityInfo.name}</span>
+									</div>
+								</div>
+							)}
 						</div>
 					</div>
 
-					<Separator />
-
-					{/* Entity Assignment */}
-					<div className="space-y-4">
-						<h3 className="font-semibold">Entity Assignment</h3>
-
-						<div className="grid grid-cols-3 items-center gap-4">
-							<span className="text-muted-foreground text-sm">Assigned To</span>
-							<div className="col-span-2 flex items-center gap-2">
-								<Badge variant={entityInfo.type === "None" ? "outline" : "secondary"}>{entityInfo.type}</Badge>
-								<span className="text-sm">{entityInfo.name}</span>
-							</div>
-						</div>
-					</div>
-
-					<Separator />
+					<DottedSeparator />
 
 					{/* Allowed Keys */}
 					<div className="space-y-4">
@@ -135,8 +130,6 @@ export default function VirtualKeyDetailDialog({ virtualKey, onClose }: VirtualK
 							)}
 						</div>
 					</div>
-
-					<Separator />
 
 					{/* Provider Configurations */}
 					<div className="space-y-4">
@@ -189,7 +182,51 @@ export default function VirtualKeyDetailDialog({ virtualKey, onClose }: VirtualK
 						</div>
 					</div>
 
-					<Separator />
+					{/* MCP Client Configurations */}
+					<div className="space-y-4">
+						<h3 className="font-semibold">MCP Client Configurations</h3>
+
+						<div className="space-y-3">
+							{!virtualKey.mcp_configs || virtualKey.mcp_configs.length === 0 ? (
+								<span className="text-muted-foreground text-sm">All MCP clients allowed with default settings</span>
+							) : (
+								<div className="rounded-md border">
+									<Table>
+										<TableHeader>
+											<TableRow>
+												<TableHead>MCP Client</TableHead>
+												<TableHead>Allowed Tools</TableHead>
+											</TableRow>
+										</TableHeader>
+										<TableBody>
+											{virtualKey.mcp_configs.map((config, index) => (
+												<TableRow key={`${config.mcp_client?.name || config.id}-${index}`}>
+													<TableCell>{config.mcp_client?.name || "Unknown Client"}</TableCell>
+													<TableCell>
+														{config.tools_to_execute?.includes("*") ? (
+															<span className="text-muted-foreground text-sm">All tools allowed</span>
+														) : config.tools_to_execute && config.tools_to_execute.length > 0 ? (
+															<div className="flex flex-wrap gap-1">
+																{config.tools_to_execute.map((tool) => (
+																	<Badge key={tool} variant="secondary" className="text-xs">
+																		{tool}
+																	</Badge>
+																))}
+															</div>
+														) : (
+															<span className="text-muted-foreground text-sm">No tools selected</span>
+														)}
+													</TableCell>
+												</TableRow>
+											))}
+										</TableBody>
+									</Table>
+								</div>
+							)}
+						</div>
+					</div>
+
+					<DottedSeparator />
 
 					{/* Budget Information */}
 					<div className="space-y-4">
@@ -230,8 +267,6 @@ export default function VirtualKeyDetailDialog({ virtualKey, onClose }: VirtualK
 							<p className="text-muted-foreground text-sm">No budget limits configured</p>
 						)}
 					</div>
-
-					<Separator />
 
 					{/* Rate Limits */}
 					<div className="space-y-4">
@@ -339,7 +374,7 @@ export default function VirtualKeyDetailDialog({ virtualKey, onClose }: VirtualK
 						)}
 					</div>
 				</div>
-			</DialogContent>
-		</Dialog>
+			</SheetContent>
+		</Sheet>
 	);
 }

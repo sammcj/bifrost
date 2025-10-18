@@ -57,6 +57,7 @@ export interface VirtualKey {
 	value: string; // The actual key value
 	description?: string;
 	provider_configs?: VirtualKeyProviderConfig[];
+	mcp_configs?: VirtualKeyMCPConfig[];
 	team_id?: string;
 	customer_id?: string;
 	budget_id?: string;
@@ -79,6 +80,29 @@ export interface VirtualKeyProviderConfig {
 	allowed_models: string[];
 }
 
+export interface VirtualKeyMCPConfig {
+	id?: number;
+	virtual_key_id?: string;
+	mcp_client_id?: number;
+	mcp_client?: {
+		id: number;
+		name: string;
+		connection_type: string;
+		connection_string?: string;
+		tools_to_execute: string[];
+		created_at: string;
+		updated_at: string;
+	};
+	tools_to_execute?: string[];
+}
+
+// Request interfaces for create/update operations (still use mcp_client_name)
+export interface VirtualKeyMCPConfigRequest {
+	id?: number;
+	mcp_client_name: string;
+	tools_to_execute?: string[];
+}
+
 export interface UsageStats {
 	virtual_key_id: string;
 	provider?: string;
@@ -94,6 +118,7 @@ export interface CreateVirtualKeyRequest {
 	name: string;
 	description?: string;
 	provider_configs?: VirtualKeyProviderConfig[];
+	mcp_configs?: VirtualKeyMCPConfigRequest[];
 	team_id?: string;
 	customer_id?: string;
 	budget?: CreateBudgetRequest;
@@ -105,6 +130,7 @@ export interface CreateVirtualKeyRequest {
 export interface UpdateVirtualKeyRequest {
 	description?: string;
 	provider_configs?: VirtualKeyProviderConfig[];
+	mcp_configs?: VirtualKeyMCPConfigRequest[];
 	team_id?: string;
 	customer_id?: string;
 	budget?: UpdateBudgetRequest;
