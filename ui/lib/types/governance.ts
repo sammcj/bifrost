@@ -1,5 +1,7 @@
 // Governance types that match the Go backend structures
 
+import { ModelProviderName } from "./config";
+
 export interface Budget {
 	id: string;
 	max_limit: number; // In dollars
@@ -43,8 +45,10 @@ export interface Customer {
 
 export interface DBKey {
 	key_id: string; // UUID identifier for the key
+	name: string; // Name of the key
 	provider_id: string; // identifier for the provider
 	models: string[]; // List of models this key can access
+	provider: ModelProviderName; // Provider name
 }
 
 export interface VirtualKey {
