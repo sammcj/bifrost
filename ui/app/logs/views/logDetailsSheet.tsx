@@ -76,7 +76,7 @@ export function LogDetailSheet({ log, open, onOpenChange }: LogDetailSheetProps)
 					<DottedSeparator />
 					<div className="space-y-4">
 						<BlockHeader title="Request Details" icon={<FileText className="h-5 w-5 text-gray-600" />} />
-						<div className="grid w-full grid-cols-3 items-center justify-between gap-4">
+						<div className="grid w-full grid-cols-3 items-start justify-between gap-4">
 							<LogEntryDetailsView
 								className="w-full"
 								label="Provider"
@@ -323,19 +323,19 @@ export function LogDetailSheet({ log, open, onOpenChange }: LogDetailSheetProps)
 								</div>
 							</>
 						)}
-					{log.error_details?.error.error && (
-						<>
-							<div className="mt-4 w-full text-left text-sm font-medium">Error Details</div>
-							<div className="w-full rounded-sm border">
-								<div className="border-b px-6 py-2 text-sm font-medium">Details</div>
-								<div className="px-6 py-2 font-mono text-xs whitespace-pre-wrap break-words">
-									{typeof log.error_details?.error.error === "string"
-										? (log.error_details.error.error)
-										: JSON.stringify(log.error_details?.error.error, null, 2)}
+						{log.error_details?.error.error && (
+							<>
+								<div className="mt-4 w-full text-left text-sm font-medium">Error Details</div>
+								<div className="w-full rounded-sm border">
+									<div className="border-b px-6 py-2 text-sm font-medium">Details</div>
+									<div className="px-6 py-2 font-mono text-xs break-words whitespace-pre-wrap">
+										{typeof log.error_details?.error.error === "string"
+											? log.error_details.error.error
+											: JSON.stringify(log.error_details?.error.error, null, 2)}
+									</div>
 								</div>
-							</div>
-						</>
-					)}
+							</>
+						)}
 					</>
 				)}
 			</SheetContent>

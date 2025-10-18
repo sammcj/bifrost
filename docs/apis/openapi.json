@@ -1581,7 +1581,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LogSearchResult"
+                  "$ref": "#/components/schemas/SearchResult"
                 }
               }
             }
@@ -4889,31 +4889,6 @@
           }
         }
       },
-      "SearchStats": {
-        "type": "object",
-        "properties": {
-          "total_requests": {
-            "type": "integer",
-            "description": "Total number of requests"
-          },
-          "success_rate": {
-            "type": "number",
-            "description": "Percentage of successful requests"
-          },
-          "average_latency": {
-            "type": "number",
-            "description": "Average latency in milliseconds"
-          },
-          "total_tokens": {
-            "type": "integer",
-            "description": "Total tokens used"
-          },
-          "total_cost": {
-            "type": "number",
-            "description": "Total cost in dollars"
-          }
-        }
-      },
       "EmbeddingRequest": {
         "type": "object",
         "required": [
@@ -6148,109 +6123,186 @@
       "Log": {
         "type": "object",
         "properties": {
-          "ID": {
-            "type": "integer"
+          "id": { "type": "string" },
+          "parent_request_id": { "type": "string", "nullable": true },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "object": { "type": "string" },
+          "provider": { "type": "string" },
+          "model": { "type": "string" },
+          "latency": { "type": "number", "format": "double", "nullable": true },
+          "cost": { "type": "number", "format": "double", "nullable": true },
+          "status": { "type": "string" },
+          "stream": { "type": "boolean" },
+          "raw_response": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "input_history": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChatMessage" }
           },
-          "CreatedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "UpdatedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "DeletedAt": {
-            "type": "string",
-            "format": "date-time",
+          "output_message": {
+            "type": "object",
+            "$ref": "#/components/schemas/ChatMessage",
             "nullable": true
           },
-          "request_id": {
-            "type": "string"
+          "responses_output": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ResponsesMessage" }
           },
-          "provider": {
-            "type": "string"
+          "embedding_output": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/EmbeddingData" }
           },
-          "model": {
-            "type": "string"
+          "params": { "type": "object", "nullable": true },
+          "tools": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChatTool" }
           },
-          "object": {
-            "type": "string"
+          "tool_calls": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChatAssistantMessageToolCall" }
           },
-          "status": {
-            "type": "string"
-          },
-          "request_body": {
-            "type": "string"
-          },
-          "response_body": {
-            "type": "string"
-          },
-          "latency": {
-            "type": "integer",
-            "description": "in nanoseconds"
-          },
-          "is_streaming": {
-            "type": "boolean"
-          },
-          "stream_channel": {
-            "type": "string"
-          },
-          "prompt_tokens": {
-            "type": "integer"
-          },
-          "completion_tokens": {
-            "type": "integer"
-          },
-          "total_tokens": {
-            "type": "integer"
-          },
-          "cost": {
-            "type": "number"
-          },
-          "billed_tokens": {
-            "type": "integer"
-          },
-          "billed_cost": {
-            "type": "number"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "virtual_key": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "custom_id": {
-            "type": "string"
-          },
-          "user": {
-            "type": "string"
-          },
-          "is_fallback": {
-            "type": "boolean"
-          },
-          "retry_count": {
-            "type": "integer"
-          },
-          "target": {
-            "type": "string"
-          },
-          "plugin_execution": {
-            "type": "string"
-          },
-          "plugin_short_circuit": {
-            "type": "boolean"
-          },
-          "semantic_cache_hit": {
-            "type": "boolean"
-          },
-          "metadata": {
+          "token_usage": {
             "type": "object",
-            "additionalProperties": true
+            "$ref": "#/components/schemas/BifrostLLMUsage",
+            "nullable": true
+          },
+          "error_details": {
+            "type": "object",
+            "$ref": "#/components/schemas/BifrostError",
+            "nullable": true
+          },
+          "speech_input": {
+            "type": "object",
+            "$ref": "#/components/schemas/SpeechInput",
+            "nullable": true
+          },
+          "transcription_input": {
+            "type": "object",
+            "$ref": "#/components/schemas/TranscriptionInput",
+            "nullable": true
+          },
+          "speech_output": {
+            "type": "object",
+            "$ref": "#/components/schemas/BifrostSpeechResponse",
+            "nullable": true
+          },
+          "transcription_output": {
+            "type": "object",
+            "$ref": "#/components/schemas/BifrostTranscriptionResponse",
+            "nullable": true
+          },
+          "cache_debug": {
+            "type": "object",
+            "$ref": "#/components/schemas/BifrostCacheDebug",
+            "nullable": true
           }
+        }
+      },
+      "EmbeddingData": {
+        "type": "object",
+        "properties": {
+          "index": { "type": "integer" },
+          "object": { "type": "string", "example": "embedding" },
+          "embedding": { "$ref": "#/components/schemas/EmbeddingStruct" }
+        }
+      },
+      "EmbeddingStruct": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "array", "items": { "type": "number", "format": "float" } },
+          { "type": "array", "items": { "type": "array", "items": { "type": "number", "format": "float" } } }
+        ],
+        "description": "The embedding vector, which can be a string, a list of floats, or a list of lists of floats."
+      },
+      "BifrostLLMUsage": {
+        "type": "object",
+        "properties": {
+          "prompt_tokens": { "type": "integer" },
+          "completion_tokens": { "type": "integer" },
+          "total_tokens": { "type": "integer" }
+        }
+      },
+      "SpeechInput": {
+        "type": "object",
+        "properties": {
+          "input": { "type": "string" }
+        }
+      },
+      "TranscriptionInput": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "byte",
+            "description": "The audio file to transcribe."
+          }
+        }
+      },
+      "BifrostSpeechResponse": {
+        "type": "object",
+        "properties": {
+          "audio": { "type": "string", "format": "byte", "description": "The generated audio file." },
+          "usage": { "$ref": "#/components/schemas/SpeechUsage", "nullable": true }
+        }
+      },
+      "SpeechUsage": {
+        "type": "object",
+        "properties": {
+          "input_tokens": { "type": "integer" },
+          "output_tokens": { "type": "integer" },
+          "total_tokens": { "type": "integer" }
+        }
+      },
+      "BifrostTranscriptionResponse": {
+        "type": "object",
+        "properties": {
+          "duration": { "type": "number", "format": "double", "nullable": true },
+          "language": { "type": "string", "nullable": true },
+          "text": { "type": "string" },
+          "words": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TranscriptionWord" }
+          },
+          "segments": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TranscriptionSegment" }
+          }
+        }
+      },
+      "TranscriptionWord": {
+        "type": "object",
+        "properties": {
+          "word": { "type": "string" },
+          "start": { "type": "number", "format": "double" },
+          "end": { "type": "number", "format": "double" }
+        }
+      },
+      "TranscriptionSegment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "seek": { "type": "integer" },
+          "start": { "type": "number", "format": "double" },
+          "end": { "type": "number", "format": "double" },
+          "text": { "type": "string" },
+          "tokens": { "type": "array", "items": { "type": "integer" } },
+          "temperature": { "type": "number", "format": "float" },
+          "avg_logprob": { "type": "number", "format": "double" },
+          "compression_ratio": { "type": "number", "format": "double" },
+          "no_speech_prob": { "type": "number", "format": "double" }
+        }
+      },
+      "BifrostCacheDebug": {
+        "type": "object",
+        "properties": {
+          "cache_hit": { "type": "boolean" },
+          "cache_id": { "type": "string", "nullable": true },
+          "hit_type": { "type": "string", "nullable": true },
+          "provider_used": { "type": "string", "nullable": true },
+          "model_used": { "type": "string", "nullable": true },
+          "input_tokens": { "type": "integer", "nullable": true },
+          "threshold": { "type": "number", "format": "double", "nullable": true },
+          "similarity": { "type": "number", "format": "double", "nullable": true }
         }
       },
       "LogSearchResult": {
@@ -6262,9 +6314,24 @@
               "$ref": "#/components/schemas/Log"
             }
           },
-          "total": {
-            "type": "integer",
-            "format": "int64"
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "limit": { "type": "integer" },
+              "offset": { "type": "integer" },
+              "sort_by": { "type": "string" },
+              "order": { "type": "string" }
+            }
+          },
+          "stats": {
+            "type": "object",
+            "properties": {
+              "total_requests": { "type": "integer", "format": "int64" },
+              "success_rate": { "type": "number", "format": "double" },
+              "average_latency": { "type": "number", "format": "double" },
+              "total_tokens": { "type": "integer", "format": "int64" },
+              "total_cost": { "type": "number", "format": "double" }
+            }
           }
         }
       },
@@ -6365,6 +6432,65 @@
           "tool",
           "developer"
         ]
+      },
+      "PaginationOptions": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "sort_by": {
+            "type": "string"
+          },
+          "order": {
+            "type": "string"
+          }
+        }
+      },
+      "SearchStats": {
+        "type": "object",
+        "properties": {
+          "total_requests": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "success_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "average_latency": {
+            "type": "number",
+            "format": "double"
+          },
+          "total_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_cost": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "properties": {
+          "logs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Log"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationOptions"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/SearchStats"
+          }
+        }
       }
     },
     "responses": {
