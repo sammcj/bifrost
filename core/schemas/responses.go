@@ -504,7 +504,7 @@ type ResponsesToolMessageOutputStruct struct {
 
 func (output ResponsesToolMessageOutputStruct) MarshalJSON() ([]byte, error) {
 	if output.ResponsesToolCallOutputStr != nil {
-		return sonic.Marshal(output.ResponsesToolCallOutputStr)
+		return sonic.Marshal(*output.ResponsesToolCallOutputStr)
 	}
 	if output.ResponsesFunctionToolCallOutputBlocks != nil {
 		return sonic.Marshal(output.ResponsesFunctionToolCallOutputBlocks)
