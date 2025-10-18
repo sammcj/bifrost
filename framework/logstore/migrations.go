@@ -22,6 +22,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddResponsesOutputColumn(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddCostAndCacheDebugColumn(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -227,6 +230,45 @@ func migrationAddResponsesOutputColumn(ctx context.Context, db *gorm.DB) error {
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while adding responses_output column: %s", err.Error())
+	}
+	return nil
+}
+
+func migrationAddCostAndCacheDebugColumn(ctx context.Context, db *gorm.DB) error {
+	opts := *migrator.DefaultOptions
+	opts.UseTransaction = true
+	m := migrator.New(db, &opts, []*migrator.Migration{{
+		ID: "logs_init_add_cost_and_cache_debug_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasColumn(&Log{}, "cost") {
+				if err := migrator.AddColumn(&Log{}, "cost"); err != nil {
+					return err
+				}
+			}
+			if !migrator.HasColumn(&Log{}, "cache_debug") {
+				if err := migrator.AddColumn(&Log{}, "cache_debug"); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if err := migrator.DropColumn(&Log{}, "cost"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&Log{}, "cache_debug"); err != nil {
+				return err
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while adding cost column: %s", err.Error())
 	}
 	return nil
 }
