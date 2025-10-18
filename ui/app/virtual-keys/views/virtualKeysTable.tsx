@@ -21,8 +21,8 @@ import { formatCurrency } from "@/lib/utils/governance";
 import { Copy, Edit, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import VirtualKeyDetailDialog from "./virtualKeyDetailsDialog";
-import VirtualKeyDialog from "./virtualKeyDialog";
+import VirtualKeyDetailSheet from "./virtualKeyDetailsSheet";
+import VirtualKeySheet from "./virtualKeySheet";
 
 interface VirtualKeysTableProps {
 	virtualKeys: VirtualKey[];
@@ -32,7 +32,7 @@ interface VirtualKeysTableProps {
 }
 
 export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefresh }: VirtualKeysTableProps) {
-	const [showVirtualKeyDialog, setShowVirtualKeyDialog] = useState(false);
+	const [showVirtualKeySheet, setShowVirtualKeySheet] = useState(false);
 	const [editingVirtualKey, setEditingVirtualKey] = useState<VirtualKey | null>(null);
 	const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
 	const [selectedVirtualKey, setSelectedVirtualKey] = useState<VirtualKey | null>(null);
@@ -52,17 +52,17 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefr
 
 	const handleAddVirtualKey = () => {
 		setEditingVirtualKey(null);
-		setShowVirtualKeyDialog(true);
+		setShowVirtualKeySheet(true);
 	};
 
 	const handleEditVirtualKey = (vk: VirtualKey, e: React.MouseEvent) => {
 		e.stopPropagation(); // Prevent row click
 		setEditingVirtualKey(vk);
-		setShowVirtualKeyDialog(true);
+		setShowVirtualKeySheet(true);
 	};
 
 	const handleVirtualKeySaved = () => {
-		setShowVirtualKeyDialog(false);
+		setShowVirtualKeySheet(false);
 		setEditingVirtualKey(null);
 		onRefresh();
 	};
@@ -99,17 +99,17 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefr
 
 	return (
 		<>
-			{showVirtualKeyDialog && (
-				<VirtualKeyDialog
+			{showVirtualKeySheet && (
+				<VirtualKeySheet
 					virtualKey={editingVirtualKey}
 					teams={teams}
 					customers={customers}
 					onSave={handleVirtualKeySaved}
-					onCancel={() => setShowVirtualKeyDialog(false)}
+					onCancel={() => setShowVirtualKeySheet(false)}
 				/>
 			)}
 
-			{showDetailSheet && selectedVirtualKey && <VirtualKeyDetailDialog virtualKey={selectedVirtualKey} onClose={handleDetailSheetClose} />}
+			{showDetailSheet && selectedVirtualKey && <VirtualKeyDetailSheet virtualKey={selectedVirtualKey} onClose={handleDetailSheetClose} />}
 
 			<div className="space-y-4">
 				<div className="flex items-center justify-between">

@@ -264,6 +264,9 @@ func Init(ctx context.Context, config *Config, logger schemas.Logger, store vect
 	if config == nil {
 		return nil, fmt.Errorf("config is required")
 	}
+	if store == nil {
+		return nil, fmt.Errorf("store is required")
+	}
 	// Set plugin-specific defaults
 	if config.VectorStoreNamespace == "" {
 		logger.Debug(PluginLoggerPrefix + " Vector store namespace is not set, using default of " + DefaultVectorStoreNamespace)
