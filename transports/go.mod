@@ -10,13 +10,13 @@ require (
 	github.com/fasthttp/websocket v1.5.12
 	github.com/google/uuid v1.6.0
 	github.com/maximhq/bifrost/core v1.2.10
-	github.com/maximhq/bifrost/framework v1.1.10
-	github.com/maximhq/bifrost/plugins/governance v1.3.11
-	github.com/maximhq/bifrost/plugins/logging v1.3.10
-	github.com/maximhq/bifrost/plugins/maxim v1.4.10
-	github.com/maximhq/bifrost/plugins/otel v1.0.10
-	github.com/maximhq/bifrost/plugins/semanticcache v1.3.10
-	github.com/maximhq/bifrost/plugins/telemetry v1.3.10
+	github.com/maximhq/bifrost/framework v1.1.11
+	github.com/maximhq/bifrost/plugins/governance v1.3.12
+	github.com/maximhq/bifrost/plugins/logging v1.3.11
+	github.com/maximhq/bifrost/plugins/maxim v1.4.11
+	github.com/maximhq/bifrost/plugins/otel v1.0.11
+	github.com/maximhq/bifrost/plugins/semanticcache v1.3.11
+	github.com/maximhq/bifrost/plugins/telemetry v1.3.11
 	github.com/prometheus/client_golang v1.23.0
 	github.com/valyala/fasthttp v1.65.0
 	gorm.io/gorm v1.31.0
