@@ -1,6 +1,6 @@
 "use client";
 
-import ClientForm from "@/app/config/views/mcpClientForm";
+import ClientForm from "@/app/mcp-clients/views/mcpClientForm";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -22,14 +22,16 @@ import { getErrorMessage, useDeleteMCPClientMutation, useGetMCPClientsQuery, use
 import { MCPClient } from "@/lib/types/mcp";
 import { Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import MCPClientSheet from "./mcpClientSheet";
 
-interface MCPClientsListProps {
+interface MCPClientsTableProps {
 	mcpClients: MCPClient[];
 }
 
-export default function MCPClientsList({ mcpClients }: MCPClientsListProps) {
-	const [selected, setSelected] = useState<MCPClient | null>(null);
+export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 	const [formOpen, setFormOpen] = useState(false);
+	const [selectedMCPClient, setSelectedMCPClient] = useState<MCPClient | null>(null);
+	const [showDetailSheet, setShowDetailSheet] = useState(false);
 	const { toast } = useToast();
 
 	// RTK Query hooks
@@ -48,19 +50,13 @@ export default function MCPClientsList({ mcpClients }: MCPClientsListProps) {
 	}, []);
 
 	const handleCreate = () => {
-		setSelected(null);
-		setFormOpen(true);
-	};
-
-	const handleEdit = (client: MCPClient) => {
-		setSelected(client);
 		setFormOpen(true);
 	};
 
 	const handleReconnect = async (client: MCPClient) => {
 		try {
 			await reconnectMCPClient(client.name).unwrap();
-			toast({ title: "Reconnected", description: "Client reconnected." });
+			toast({ title: "Reconnected", description: `Client ${client.name} reconnected successfully.` });
 			loadClients();
 		} catch (error) {
 			toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
@@ -70,7 +66,7 @@ export default function MCPClientsList({ mcpClients }: MCPClientsListProps) {
 	const handleDelete = async (client: MCPClient) => {
 		try {
 			await deleteMCPClient(client.name).unwrap();
-			toast({ title: "Deleted", description: "Client removed." });
+			toast({ title: "Deleted", description: `Client ${client.name} removed successfully.` });
 			loadClients();
 		} catch (error) {
 			toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
@@ -102,8 +98,28 @@ export default function MCPClientsList({ mcpClients }: MCPClientsListProps) {
 		}
 	};
 
+	const handleRowClick = (mcpClient: MCPClient) => {
+		setSelectedMCPClient(mcpClient);
+		setShowDetailSheet(true);
+	};
+
+	const handleDetailSheetClose = () => {
+		setShowDetailSheet(false);
+		setSelectedMCPClient(null);
+	};
+
+	const handleEditTools = () => {
+		setShowDetailSheet(false);
+		setSelectedMCPClient(null);
+		loadClients();
+	};
+
 	return (
 		<div className="space-y-4">
+			{showDetailSheet && selectedMCPClient && (
+				<MCPClientSheet mcpClient={selectedMCPClient} onClose={handleDetailSheetClose} onSubmitSuccess={handleEditTools} />
+			)}
+
 			<CardHeader className="mb-4 px-0">
 				<CardTitle className="flex items-center justify-between">
 					<div className="flex items-center gap-2">Registered MCP Clients</div>
@@ -121,7 +137,7 @@ export default function MCPClientsList({ mcpClients }: MCPClientsListProps) {
 							<TableHead>Connection Type</TableHead>
 							<TableHead>Connection Info</TableHead>
 							<TableHead>State</TableHead>
-							<TableHead className="text-right">Actions</TableHead>
+							<TableHead className="w-20 text-right"></TableHead>
 						</TableRow>
 					</TableHeader>
 					<TableBody>
@@ -133,24 +149,18 @@ export default function MCPClientsList({ mcpClients }: MCPClientsListProps) {
 							</TableRow>
 						)}
 						{clients.map((c: MCPClient) => (
-							<TableRow key={c.name}>
+							<TableRow key={c.name} className="hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => handleRowClick(c)}>
 								<TableCell className="font-medium">{c.name}</TableCell>
 								<TableCell>{getConnectionTypeDisplay(c.config.connection_type)}</TableCell>
 								<TableCell className="max-w-72 overflow-hidden text-ellipsis whitespace-nowrap">{getConnectionDisplay(c)}</TableCell>
 								<TableCell>
 									<Badge className={MCP_STATUS_COLORS[c.state]}>{c.state}</Badge>
 								</TableCell>
-								<TableCell className="space-x-2 text-right">
-									{c.state === "disconnected" ? (
+								<TableCell className="space-x-2 text-right" onClick={(e) => e.stopPropagation()}>
+									{c.state === "disconnected" && (
 										<Button variant="ghost" size="icon" onClick={() => handleReconnect(c)}>
 											<RefreshCcw className="h-4 w-4" />
 										</Button>
-									) : (
-										c.state === "connected" && (
-											<Button variant="ghost" size="icon" onClick={() => handleEdit(c)}>
-												<Pencil className="h-4 w-4" />
-											</Button>
-										)
 									)}
 
 									<AlertDialog>
@@ -178,7 +188,7 @@ export default function MCPClientsList({ mcpClients }: MCPClientsListProps) {
 					</TableBody>
 				</Table>
 			</div>
-			{formOpen && <ClientForm open={formOpen} client={selected} onClose={() => setFormOpen(false)} onSaved={handleSaved} />}
+			{formOpen && <ClientForm open={formOpen} onClose={() => setFormOpen(false)} onSaved={handleSaved} />}
 		</div>
 	);
 }

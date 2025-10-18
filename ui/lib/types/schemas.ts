@@ -447,8 +447,30 @@ export const maximFormSchema = z.object({
 	maxim_config: maximConfigSchema,
 });
 
-// Export type inference helpers
+// MCP Client update schema
+export const mcpClientUpdateSchema = z.object({
+	tools_to_execute: z
+		.array(z.string())
+		.optional()
+		.refine(
+			(tools) => {
+				if (!tools || tools.length === 0) return true;
+				const hasWildcard = tools.includes("*");
+				return !hasWildcard || tools.length === 1;
+			},
+			{ message: "Wildcard '*' cannot be combined with other tool names" },
+		)
+		.refine(
+			(tools) => {
+				if (!tools) return true;
+				return tools.length === new Set(tools).size;
+			},
+			{ message: "Duplicate tool names are not allowed" },
+		),
+});
 
+// Export type inference helpers
+export type MCPClientUpdateSchema = z.infer<typeof mcpClientUpdateSchema>;
 export type ModelProviderKeySchema = z.infer<typeof modelProviderKeySchema>;
 export type NetworkConfigSchema = z.infer<typeof networkConfigSchema>;
 export type NetworkFormConfigSchema = z.infer<typeof networkFormConfigSchema>;

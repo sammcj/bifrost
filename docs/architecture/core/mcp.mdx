@@ -249,12 +249,12 @@ flowchart TD
 ```bash
 # Include only specific MCP clients
 curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "mcp-include-clients: filesystem,websearch" \
+  -H "x-bf-mcp-include-clients: filesystem,websearch" \
   -d '{"model": "gpt-4o-mini", "messages": [...]}'
 
-# Exclude dangerous tools
+# Include only specific tools 
 curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "mcp-exclude-tools: delete_file,format_disk" \
+  -H "x-bf-mcp-include-tools: filesystem/read_file,websearch/search" \
   -d '{"model": "gpt-4o-mini", "messages": [...]}'
 ```
 

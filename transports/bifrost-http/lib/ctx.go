@@ -34,7 +34,7 @@ import (
 //   - Values are stored using Maxim's context keys for consistency
 //
 // 3. MCP Headers (x-bf-mcp-*):
-//   - Specifically handles 'x-bf-mcp-include-clients', 'x-bf-mcp-exclude-clients', 'x-bf-mcp-include-tools', and 'x-bf-mcp-exclude-tools'
+//   - Specifically handles 'x-bf-mcp-include-clients' and 'x-bf-mcp-include-tools' (include-only filtering)
 //   - These headers enable MCP client and tool filtering
 //   - Values are stored using MCP context keys for consistency
 //
@@ -105,17 +105,24 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 			}
 			return true
 		}
-		// MCP control headers
+		// MCP control headers (include-only filtering)
 		if labelName, ok := strings.CutPrefix(keyStr, "x-bf-mcp-"); ok {
 			switch labelName {
 			case "include-clients":
 				fallthrough
-			case "exclude-clients":
-				fallthrough
 			case "include-tools":
-				fallthrough
-			case "exclude-tools":
-				bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey("mcp-"+labelName), string(value))
+				// Parse comma-separated values into []string
+				valueStr := string(value)
+				var parsedValues []string
+				if valueStr != "" {
+					// Split by comma and trim whitespace
+					for _, v := range strings.Split(valueStr, ",") {
+						if trimmed := strings.TrimSpace(v); trimmed != "" {
+							parsedValues = append(parsedValues, trimmed)
+						}
+					}
+				}
+				bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey("mcp-"+labelName), parsedValues)
 				return true
 			}
 		}
