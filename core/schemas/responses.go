@@ -2,7 +2,6 @@ package schemas
 
 import (
 	"fmt"
-	"maps"
 
 	"github.com/bytedance/sonic"
 )
@@ -298,275 +297,6 @@ type ResponsesMessage struct {
 	*ResponsesReasoning
 }
 
-// UnmarshalJSON implements custom JSON unmarshalling for ResponsesMessage.
-// It handles the embedded pointer fields by initializing them based on the message type.
-func (rm *ResponsesMessage) UnmarshalJSON(data []byte) error {
-	// First unmarshal into a temporary struct to avoid recursion and get the type
-	type tempResponsesMessage struct {
-		ID      *string                   `json:"id,omitempty"`
-		Type    *ResponsesMessageType     `json:"type,omitempty"`
-		Status  *string                   `json:"status,omitempty"`
-		Role    *ResponsesMessageRoleType `json:"role,omitempty"`
-		Content *ResponsesMessageContent  `json:"content,omitempty"`
-	}
-
-	var temp tempResponsesMessage
-	if err := sonic.Unmarshal(data, &temp); err != nil {
-		return err
-	}
-
-	// Assign the basic fields
-	rm.ID = temp.ID
-	rm.Type = temp.Type
-	rm.Status = temp.Status
-	rm.Role = temp.Role
-	rm.Content = temp.Content
-
-	// Based on the message type, initialize the appropriate embedded struct
-	if temp.Type != nil {
-		switch *temp.Type {
-		case ResponsesMessageTypeFileSearchCall:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesFileSearchToolCall: &ResponsesFileSearchToolCall{},
-			}
-		case ResponsesMessageTypeComputerCall:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesComputerToolCall: &ResponsesComputerToolCall{},
-			}
-		case ResponsesMessageTypeComputerCallOutput:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesComputerToolCallOutput: &ResponsesComputerToolCallOutput{},
-			}
-		case ResponsesMessageTypeWebSearchCall:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesWebSearchToolCall: &ResponsesWebSearchToolCall{},
-			}
-		case ResponsesMessageTypeFunctionCall:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{}
-		case ResponsesMessageTypeFunctionCallOutput:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesFunctionToolCallOutput: &ResponsesFunctionToolCallOutput{},
-			}
-		case ResponsesMessageTypeCodeInterpreterCall:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesCodeInterpreterToolCall: &ResponsesCodeInterpreterToolCall{},
-			}
-		case ResponsesMessageTypeLocalShellCall:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesLocalShellCall: &ResponsesLocalShellCall{},
-			}
-		case ResponsesMessageTypeLocalShellCallOutput:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesLocalShellCallOutput: &ResponsesLocalShellCallOutput{},
-			}
-		case ResponsesMessageTypeMCPCall:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesMCPToolCall: &ResponsesMCPToolCall{},
-			}
-		case ResponsesMessageTypeCustomToolCall:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesCustomToolCall: &ResponsesCustomToolCall{},
-			}
-		case ResponsesMessageTypeCustomToolCallOutput:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesCustomToolCallOutput: &ResponsesCustomToolCallOutput{},
-			}
-		case ResponsesMessageTypeImageGenerationCall:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesImageGenerationCall: &ResponsesImageGenerationCall{},
-			}
-		case ResponsesMessageTypeMCPListTools:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesMCPListTools: &ResponsesMCPListTools{},
-			}
-		case ResponsesMessageTypeMCPApprovalRequest:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesMCPApprovalRequest: &ResponsesMCPApprovalRequest{},
-			}
-		case ResponsesMessageTypeMCPApprovalResponses:
-			rm.ResponsesToolMessage = &ResponsesToolMessage{
-				ResponsesMCPApprovalResponse: &ResponsesMCPApprovalResponse{},
-			}
-		case ResponsesMessageTypeReasoning:
-			rm.ResponsesReasoning = &ResponsesReasoning{}
-		case ResponsesMessageTypeMessage, ResponsesMessageTypeItemReference, ResponsesMessageTypeRefusal:
-			// Regular message types, no embedded structs needed
-			return nil
-		default:
-			// Unknown type, try to unmarshal basic tool message fields if present
-			rm.ResponsesToolMessage = &ResponsesToolMessage{}
-		}
-
-		// Now unmarshal the tool message fields
-		if rm.ResponsesToolMessage != nil {
-			// First unmarshal basic tool message fields (call_id, name, arguments)
-			if err := sonic.Unmarshal(data, rm.ResponsesToolMessage); err != nil {
-				return fmt.Errorf("failed to unmarshal tool message: %v", err)
-			}
-
-			// Then unmarshal into specific embedded structs based on message type
-			switch *temp.Type {
-			case ResponsesMessageTypeFileSearchCall:
-				if rm.ResponsesToolMessage.ResponsesFileSearchToolCall != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesFileSearchToolCall); err != nil {
-						return fmt.Errorf("failed to unmarshal file search tool call: %v", err)
-					}
-				}
-			case ResponsesMessageTypeComputerCall:
-				if rm.ResponsesToolMessage.ResponsesComputerToolCall != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesComputerToolCall); err != nil {
-						return fmt.Errorf("failed to unmarshal computer tool call: %v", err)
-					}
-				}
-			case ResponsesMessageTypeComputerCallOutput:
-				if rm.ResponsesToolMessage.ResponsesComputerToolCallOutput != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesComputerToolCallOutput); err != nil {
-						return fmt.Errorf("failed to unmarshal computer tool call output: %v", err)
-					}
-				}
-			case ResponsesMessageTypeWebSearchCall:
-				if rm.ResponsesToolMessage.ResponsesWebSearchToolCall != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesWebSearchToolCall); err != nil {
-						return fmt.Errorf("failed to unmarshal web search tool call: %v", err)
-					}
-				}
-			case ResponsesMessageTypeFunctionCallOutput:
-				if rm.ResponsesToolMessage.ResponsesFunctionToolCallOutput != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesFunctionToolCallOutput); err != nil {
-						return fmt.Errorf("failed to unmarshal function tool call output: %v", err)
-					}
-				}
-			case ResponsesMessageTypeCodeInterpreterCall:
-				if rm.ResponsesToolMessage.ResponsesCodeInterpreterToolCall != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesCodeInterpreterToolCall); err != nil {
-						return fmt.Errorf("failed to unmarshal code interpreter tool call: %v", err)
-					}
-				}
-			case ResponsesMessageTypeLocalShellCall:
-				if rm.ResponsesToolMessage.ResponsesLocalShellCall != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesLocalShellCall); err != nil {
-						return fmt.Errorf("failed to unmarshal local shell call: %v", err)
-					}
-				}
-			case ResponsesMessageTypeLocalShellCallOutput:
-				if rm.ResponsesToolMessage.ResponsesLocalShellCallOutput != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesLocalShellCallOutput); err != nil {
-						return fmt.Errorf("failed to unmarshal local shell call output: %v", err)
-					}
-				}
-			case ResponsesMessageTypeMCPCall:
-				if rm.ResponsesToolMessage.ResponsesMCPToolCall != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesMCPToolCall); err != nil {
-						return fmt.Errorf("failed to unmarshal MCP tool call: %v", err)
-					}
-				}
-			case ResponsesMessageTypeCustomToolCall:
-				if rm.ResponsesToolMessage.ResponsesCustomToolCall != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesCustomToolCall); err != nil {
-						return fmt.Errorf("failed to unmarshal custom tool call: %v", err)
-					}
-				}
-			case ResponsesMessageTypeCustomToolCallOutput:
-				if rm.ResponsesToolMessage.ResponsesCustomToolCallOutput != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesCustomToolCallOutput); err != nil {
-						return fmt.Errorf("failed to unmarshal custom tool call output: %v", err)
-					}
-				}
-			case ResponsesMessageTypeImageGenerationCall:
-				if rm.ResponsesToolMessage.ResponsesImageGenerationCall != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesImageGenerationCall); err != nil {
-						return fmt.Errorf("failed to unmarshal image generation call: %v", err)
-					}
-				}
-			case ResponsesMessageTypeMCPListTools:
-				if rm.ResponsesToolMessage.ResponsesMCPListTools != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesMCPListTools); err != nil {
-						return fmt.Errorf("failed to unmarshal MCP list tools: %v", err)
-					}
-				}
-			case ResponsesMessageTypeMCPApprovalRequest:
-				if rm.ResponsesToolMessage.ResponsesMCPApprovalRequest != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesMCPApprovalRequest); err != nil {
-						return fmt.Errorf("failed to unmarshal MCP approval request: %v", err)
-					}
-				}
-			case ResponsesMessageTypeMCPApprovalResponses:
-				if rm.ResponsesToolMessage.ResponsesMCPApprovalResponse != nil {
-					if err := sonic.Unmarshal(data, rm.ResponsesToolMessage.ResponsesMCPApprovalResponse); err != nil {
-						return fmt.Errorf("failed to unmarshal MCP approval response: %v", err)
-					}
-				}
-				// Note: ResponsesMessageTypeFunctionCall only needs basic fields (handled above)
-			}
-		}
-
-		if rm.ResponsesReasoning != nil {
-			if err := sonic.Unmarshal(data, rm.ResponsesReasoning); err != nil {
-				return fmt.Errorf("failed to unmarshal reasoning: %v", err)
-			}
-		}
-	}
-
-	return nil
-}
-
-// MarshalJSON implements custom JSON marshalling for ResponsesMessage.
-// It handles the embedded pointer fields by only marshaling non-nil fields.
-func (rm ResponsesMessage) MarshalJSON() ([]byte, error) {
-	// Start with the base fields
-	result := make(map[string]interface{})
-
-	if rm.ID != nil {
-		result["id"] = *rm.ID
-	}
-	if rm.Type != nil {
-		result["type"] = *rm.Type
-	}
-	if rm.Status != nil {
-		result["status"] = *rm.Status
-	}
-	if rm.Role != nil {
-		result["role"] = *rm.Role
-	}
-	if rm.Content != nil {
-		result["content"] = rm.Content
-	}
-
-	// Add tool message fields if present
-	if rm.ResponsesToolMessage != nil {
-		toolData, err := sonic.Marshal(rm.ResponsesToolMessage)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal tool message: %v", err)
-		}
-
-		var toolFields map[string]interface{}
-		if err := sonic.Unmarshal(toolData, &toolFields); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal tool data: %v", err)
-		}
-
-		// Merge tool fields into result
-		maps.Copy(result, toolFields)
-	}
-
-	// Add reasoning fields if present
-	if rm.ResponsesReasoning != nil {
-		reasoningData, err := sonic.Marshal(rm.ResponsesReasoning)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal reasoning: %v", err)
-		}
-
-		var reasoningFields map[string]interface{}
-		if err := sonic.Unmarshal(reasoningData, &reasoningFields); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal reasoning data: %v", err)
-		}
-
-		// Merge reasoning fields into result
-		maps.Copy(result, reasoningFields)
-	}
-
-	return sonic.Marshal(result)
-}
-
 type ResponsesMessageRoleType string
 
 const (
@@ -698,175 +428,109 @@ type ResponsesOutputMessageContentRefusal struct {
 }
 
 type ResponsesToolMessage struct {
-	CallID    *string `json:"call_id,omitempty"` // Common call ID for tool calls and outputs
-	Name      *string `json:"name,omitempty"`    // Common name field for tool calls
-	Arguments *string `json:"arguments,omitempty"`
+	CallID    *string                           `json:"call_id,omitempty"` // Common call ID for tool calls and outputs
+	Name      *string                           `json:"name,omitempty"`    // Common name field for tool calls
+	Arguments *string                           `json:"arguments,omitempty"`
+	Output    *ResponsesToolMessageOutputStruct `json:"output,omitempty"`
+	Action    *ResponsesToolMessageActionStruct `json:"action,omitempty"`
+	Error     *string                           `json:"error,omitempty"`
 
 	// Tool calls and outputs
 	*ResponsesFileSearchToolCall
 	*ResponsesComputerToolCall
 	*ResponsesComputerToolCallOutput
-	*ResponsesWebSearchToolCall
-	*ResponsesFunctionToolCallOutput
 	*ResponsesCodeInterpreterToolCall
-	*ResponsesLocalShellCall
-	*ResponsesLocalShellCallOutput
 	*ResponsesMCPToolCall
 	*ResponsesCustomToolCall
-	*ResponsesCustomToolCallOutput
 	*ResponsesImageGenerationCall
 
 	// MCP-specific
 	*ResponsesMCPListTools
-	*ResponsesMCPApprovalRequest
 	*ResponsesMCPApprovalResponse
 }
 
-// UnmarshalJSON implements custom JSON unmarshalling for ResponsesToolMessage.
-// This prevents embedded pointer fields from interfering with basic field unmarshaling.
-func (rtm *ResponsesToolMessage) UnmarshalJSON(data []byte) error {
-	// Use a simple struct to unmarshal basic fields without embedded interference
-	type basicToolMessage struct {
-		CallID    *string `json:"call_id,omitempty"`
-		Name      *string `json:"name,omitempty"`
-		Arguments *string `json:"arguments,omitempty"`
-	}
-
-	var basic basicToolMessage
-	if err := sonic.Unmarshal(data, &basic); err != nil {
-		return err
-	}
-
-	// Assign the basic fields
-	rtm.CallID = basic.CallID
-	rtm.Name = basic.Name
-	rtm.Arguments = basic.Arguments
-
-	// Embedded field unmarshaling is handled by the parent ResponsesMessage.UnmarshalJSON
-	// based on the message type - no need to duplicate logic here
-
-	return nil
+type ResponsesToolMessageActionStruct struct {
+	ResponsesComputerToolCallAction   *ResponsesComputerToolCallAction
+	ResponsesWebSearchToolCallAction  *ResponsesWebSearchToolCallAction
+	ResponsesLocalShellToolCallAction *ResponsesLocalShellToolCallAction
+	ResponsesMCPApprovalRequestAction *ResponsesMCPApprovalRequestAction
 }
 
-// MarshalJSON implements custom JSON marshalling for ResponsesToolMessage.
-// It only marshals the basic fields and skips nil embedded pointers to prevent auto-generated
-// marshalling from dereferencing them. The parent ResponsesMessage.MarshalJSON already handles
-// merging embedded struct fields using the same pattern.
-func (rtm ResponsesToolMessage) MarshalJSON() ([]byte, error) {
-	result := make(map[string]interface{})
+func (action ResponsesToolMessageActionStruct) MarshalJSON() ([]byte, error) {
+	if action.ResponsesComputerToolCallAction != nil {
+		return sonic.Marshal(action.ResponsesComputerToolCallAction)
+	}
+	if action.ResponsesWebSearchToolCallAction != nil {
+		return sonic.Marshal(action.ResponsesWebSearchToolCallAction)
+	}
+	if action.ResponsesLocalShellToolCallAction != nil {
+		return sonic.Marshal(action.ResponsesLocalShellToolCallAction)
+	}
+	if action.ResponsesMCPApprovalRequestAction != nil {
+		return sonic.Marshal(action.ResponsesMCPApprovalRequestAction)
+	}
+	return nil, fmt.Errorf("responses tool message action struct is neither a computer tool call action nor a web search tool call action nor a local shell tool call action nor a mcp approval request action")
+}
 
-	// Only marshal basic fields
-	if rtm.CallID != nil {
-		result["call_id"] = *rtm.CallID
-	}
-	if rtm.Name != nil {
-		result["name"] = *rtm.Name
-	}
-	if rtm.Arguments != nil {
-		result["arguments"] = *rtm.Arguments
-	}
-
-	// Helper to marshal and merge embedded struct
-	mergeEmbedded := func(v interface{}) error {
-		data, err := sonic.Marshal(v)
-		if err != nil {
-			return err
-		}
-		var fields map[string]interface{}
-		if err := sonic.Unmarshal(data, &fields); err != nil {
-			return err
-		}
-		maps.Copy(result, fields)
+func (action *ResponsesToolMessageActionStruct) UnmarshalJSON(data []byte) error {
+	var computerToolCallAction ResponsesComputerToolCallAction
+	if err := sonic.Unmarshal(data, &computerToolCallAction); err == nil {
+		action.ResponsesComputerToolCallAction = &computerToolCallAction
 		return nil
 	}
+	var webSearchToolCallAction ResponsesWebSearchToolCallAction
+	if err := sonic.Unmarshal(data, &webSearchToolCallAction); err == nil {
+		action.ResponsesWebSearchToolCallAction = &webSearchToolCallAction
+		return nil
+	}
+	var localShellToolCallAction ResponsesLocalShellToolCallAction
+	if err := sonic.Unmarshal(data, &localShellToolCallAction); err == nil {
+		action.ResponsesLocalShellToolCallAction = &localShellToolCallAction
+		return nil
+	}
+	var mcpApprovalRequestAction ResponsesMCPApprovalRequestAction
+	if err := sonic.Unmarshal(data, &mcpApprovalRequestAction); err == nil {
+		action.ResponsesMCPApprovalRequestAction = &mcpApprovalRequestAction
+		return nil
+	}
+	return fmt.Errorf("responses tool message action struct is neither a computer tool call action nor a web search tool call action nor a local shell tool call action nor a mcp approval request action")
+}
 
-	// Marshal each embedded pointer field only if non-nil
-	// Note: We check each field explicitly because nil pointers in interface{} don't compare to nil
-	if rtm.ResponsesFileSearchToolCall != nil {
-		if err := mergeEmbedded(rtm.ResponsesFileSearchToolCall); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesComputerToolCall != nil {
-		if err := mergeEmbedded(rtm.ResponsesComputerToolCall); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesComputerToolCallOutput != nil {
-		if err := mergeEmbedded(rtm.ResponsesComputerToolCallOutput); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesWebSearchToolCall != nil {
-		if err := mergeEmbedded(rtm.ResponsesWebSearchToolCall); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesFunctionToolCallOutput != nil {
-		// Special case: ResponsesFunctionToolCallOutput marshals to a raw value (string or array),
-		// not an object, so we need to add it as an "output" field directly
-		outputData, err := sonic.Marshal(rtm.ResponsesFunctionToolCallOutput)
-		if err != nil {
-			return nil, err
-		}
-		var output interface{}
-		if err := sonic.Unmarshal(outputData, &output); err != nil {
-			return nil, err
-		}
-		result["output"] = output
-	}
-	if rtm.ResponsesCodeInterpreterToolCall != nil {
-		if err := mergeEmbedded(rtm.ResponsesCodeInterpreterToolCall); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesLocalShellCall != nil {
-		if err := mergeEmbedded(rtm.ResponsesLocalShellCall); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesLocalShellCallOutput != nil {
-		if err := mergeEmbedded(rtm.ResponsesLocalShellCallOutput); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesMCPToolCall != nil {
-		if err := mergeEmbedded(rtm.ResponsesMCPToolCall); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesCustomToolCall != nil {
-		if err := mergeEmbedded(rtm.ResponsesCustomToolCall); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesCustomToolCallOutput != nil {
-		if err := mergeEmbedded(rtm.ResponsesCustomToolCallOutput); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesImageGenerationCall != nil {
-		if err := mergeEmbedded(rtm.ResponsesImageGenerationCall); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesMCPListTools != nil {
-		if err := mergeEmbedded(rtm.ResponsesMCPListTools); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesMCPApprovalRequest != nil {
-		if err := mergeEmbedded(rtm.ResponsesMCPApprovalRequest); err != nil {
-			return nil, err
-		}
-	}
-	if rtm.ResponsesMCPApprovalResponse != nil {
-		if err := mergeEmbedded(rtm.ResponsesMCPApprovalResponse); err != nil {
-			return nil, err
-		}
-	}
+type ResponsesToolMessageOutputStruct struct {
+	ResponsesToolCallOutputStr            *string // Common output string for tool calls and outputs (used by function, custom and local shell tool calls)
+	ResponsesFunctionToolCallOutputBlocks []ResponsesMessageContentBlock
+	ResponsesComputerToolCallOutput       *ResponsesComputerToolCallOutputData
+}
 
-	return sonic.Marshal(result)
+func (output ResponsesToolMessageOutputStruct) MarshalJSON() ([]byte, error) {
+	if output.ResponsesToolCallOutputStr != nil {
+		return sonic.Marshal(*output.ResponsesToolCallOutputStr)
+	}
+	if output.ResponsesFunctionToolCallOutputBlocks != nil {
+		return sonic.Marshal(output.ResponsesFunctionToolCallOutputBlocks)
+	}
+	if output.ResponsesComputerToolCallOutput != nil {
+		return sonic.Marshal(output.ResponsesComputerToolCallOutput)
+	}
+	return nil, fmt.Errorf("responses tool message output struct is neither a string nor an array of responses message content blocks nor a computer tool call output data")
+}
+func (output *ResponsesToolMessageOutputStruct) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := sonic.Unmarshal(data, &str); err == nil {
+		output.ResponsesToolCallOutputStr = &str
+		return nil
+	}
+	var array []ResponsesMessageContentBlock
+	if err := sonic.Unmarshal(data, &array); err == nil {
+		output.ResponsesFunctionToolCallOutputBlocks = array
+		return nil
+	}
+	var computerToolCallOutput ResponsesComputerToolCallOutputData
+	if err := sonic.Unmarshal(data, &computerToolCallOutput); err == nil {
+		output.ResponsesComputerToolCallOutput = &computerToolCallOutput
+		return nil
+	}
+	return fmt.Errorf("responses tool message output struct is neither a string nor an array of responses message content blocks nor a computer tool call output data")
 }
 
 // =============================================================================
@@ -892,7 +556,6 @@ type ResponsesFileSearchToolCallResult struct {
 
 // ResponsesComputerToolCall represents a computer tool call
 type ResponsesComputerToolCall struct {
-	Action              ResponsesComputerToolCallAction               `json:"action"`
 	PendingSafetyChecks []ResponsesComputerToolCallPendingSafetyCheck `json:"pending_safety_checks"`
 }
 
@@ -923,7 +586,6 @@ type ResponsesComputerToolCallActionPath struct {
 
 // ResponsesComputerToolCallOutput represents a computer tool call output
 type ResponsesComputerToolCallOutput struct {
-	Output                   ResponsesComputerToolCallOutputData                `json:"output"`
 	AcknowledgedSafetyChecks []ResponsesComputerToolCallAcknowledgedSafetyCheck `json:"acknowledged_safety_checks,omitempty"`
 }
 
@@ -945,22 +607,17 @@ type ResponsesComputerToolCallAcknowledgedSafetyCheck struct {
 // Web Search Tool
 // -----------------------------------------------------------------------------
 
-// ResponsesWebSearchToolCall represents a web search tool call
-type ResponsesWebSearchToolCall struct {
-	Action ResponsesWebSearchAction `json:"action"`
+// ResponsesWebSearchToolCallAction represents the different types of web search actions
+type ResponsesWebSearchToolCallAction struct {
+	Type    string                                         `json:"type"`          // "search" | "open_page" | "find"
+	URL     *string                                        `json:"url,omitempty"` // Common URL field (OpenPage, Find)
+	Query   *string                                        `json:"query,omitempty"`
+	Sources []ResponsesWebSearchToolCallActionSearchSource `json:"sources,omitempty"`
+	Pattern *string                                        `json:"pattern,omitempty"`
 }
 
-// ResponsesWebSearchAction represents the different types of web search actions
-type ResponsesWebSearchAction struct {
-	Type    string                                 `json:"type"`          // "search" | "open_page" | "find"
-	URL     *string                                `json:"url,omitempty"` // Common URL field (OpenPage, Find)
-	Query   *string                                `json:"query,omitempty"`
-	Sources []ResponsesWebSearchActionSearchSource `json:"sources,omitempty"`
-	Pattern *string                                `json:"pattern,omitempty"`
-}
-
-// ResponsesWebSearchActionSearchSource represents a web search action search source
-type ResponsesWebSearchActionSearchSource struct {
+// ResponsesWebSearchToolCallActionSearchSource represents a web search action search source
+type ResponsesWebSearchToolCallActionSearchSource struct {
 	Type string `json:"type"` // always "url"
 	URL  string `json:"url"`
 }
@@ -1159,24 +816,14 @@ type ResponsesCodeInterpreterOutputImage struct {
 // Local Shell Tool
 // -----------------------------------------------------------------------------
 
-// ResponsesLocalShellCall represents a local shell tool call
-type ResponsesLocalShellCall struct {
-	Action ResponsesLocalShellCallAction `json:"action"`
-}
-
 // ResponsesLocalShellCallAction represents the different types of local shell actions
-type ResponsesLocalShellCallAction struct {
+type ResponsesLocalShellToolCallAction struct {
 	Command          []string `json:"command"`
 	Env              []string `json:"env"`
 	Type             string   `json:"type"` // always "exec"
 	TimeoutMS        *int     `json:"timeout_ms,omitempty"`
 	User             *string  `json:"user,omitempty"`
 	WorkingDirectory *string  `json:"working_directory,omitempty"`
-}
-
-// ResponsesLocalShellCallOutput represents a local shell tool call output
-type ResponsesLocalShellCallOutput struct {
-	Output string `json:"output"`
 }
 
 // -----------------------------------------------------------------------------
@@ -1187,7 +834,6 @@ type ResponsesLocalShellCallOutput struct {
 type ResponsesMCPListTools struct {
 	ServerLabel string             `json:"server_label"`
 	Tools       []ResponsesMCPTool `json:"tools"`
-	Error       *string            `json:"error,omitempty"`
 }
 
 // ResponsesMCPTool represents an MCP tool
@@ -1196,11 +842,6 @@ type ResponsesMCPTool struct {
 	InputSchema map[string]any  `json:"input_schema"`
 	Description *string         `json:"description,omitempty"`
 	Annotations *map[string]any `json:"annotations,omitempty"`
-}
-
-// ResponsesMCPApprovalRequest represents a MCP approval request
-type ResponsesMCPApprovalRequest struct {
-	Action ResponsesMCPApprovalRequestAction `json:"action"`
 }
 
 // ResponsesMCPApprovalRequestAction represents the different types of MCP approval request actions
@@ -1221,19 +862,12 @@ type ResponsesMCPApprovalResponse struct {
 
 // ResponsesMCPToolCall represents a MCP tool call
 type ResponsesMCPToolCall struct {
-	ServerLabel string  `json:"server_label"`     // The label of the MCP server running the tool
-	Error       *string `json:"error,omitempty"`  // The error from the tool call, if any
-	Output      *string `json:"output,omitempty"` // The output from the tool call
+	ServerLabel string `json:"server_label"` // The label of the MCP server running the tool
 }
 
 // -----------------------------------------------------------------------------
 // Custom Tools
 // -----------------------------------------------------------------------------
-
-// ResponsesCustomToolCallOutput represents a custom tool call output
-type ResponsesCustomToolCallOutput struct {
-	Output string `json:"output"` // The output from the custom tool call generated by your code
-}
 
 // ResponsesCustomToolCall represents a custom tool call
 type ResponsesCustomToolCall struct {
