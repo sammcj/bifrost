@@ -133,6 +133,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 					Provider:         dbProvider.Name,
 					ProviderID:       dbProvider.ID,
 					KeyID:            key.ID,
+					Name:             key.Name,
 					Value:            key.Value,
 					Models:           key.Models,
 					Weight:           key.Weight,
@@ -243,6 +244,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 				Provider:         dbProvider.Name,
 				ProviderID:       dbProvider.ID,
 				KeyID:            key.ID,
+				Name:             key.Name,
 				Value:            key.Value,
 				Models:           key.Models,
 				Weight:           key.Weight,
@@ -341,6 +343,7 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 				Provider:         dbProvider.Name,
 				ProviderID:       dbProvider.ID,
 				KeyID:            key.ID,
+				Name:             key.Name,
 				Value:            key.Value,
 				Models:           key.Models,
 				Weight:           key.Weight,
@@ -489,6 +492,7 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 
 			keys[i] = schemas.Key{
 				ID:               dbKey.KeyID,
+				Name:             dbKey.Name,
 				Value:            processedValue,
 				Models:           dbKey.Models,
 				Weight:           dbKey.Weight,
@@ -858,7 +862,7 @@ func (s *RDBConfigStore) GetVirtualKeys(ctx context.Context) ([]tables.TableVirt
 		Preload("RateLimit").
 		Preload("ProviderConfigs").
 		Preload("Keys", func(db *gorm.DB) *gorm.DB {
-			return db.Select("id, key_id, models_json")
+			return db.Select("id, name, key_id, models_json, provider")
 		}).Find(&virtualKeys).Error; err != nil {
 		return nil, err
 	}
@@ -875,7 +879,7 @@ func (s *RDBConfigStore) GetVirtualKey(ctx context.Context, id string) (*tables.
 		Preload("RateLimit").
 		Preload("ProviderConfigs").
 		Preload("Keys", func(db *gorm.DB) *gorm.DB {
-			return db.Select("id, key_id, models_json")
+			return db.Select("id, name, key_id, models_json, provider")
 		}).First(&virtualKey, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
@@ -1014,7 +1018,7 @@ func (s *RDBConfigStore) GetVirtualKeyByValue(ctx context.Context, value string)
 		Preload("RateLimit").
 		Preload("ProviderConfigs").
 		Preload("Keys", func(db *gorm.DB) *gorm.DB {
-			return db.Select("id, key_id, models_json")
+			return db.Select("id, name, key_id, models_json, provider")
 		}).First(&virtualKey, "value = ?", value).Error; err != nil {
 		return nil, err
 	}

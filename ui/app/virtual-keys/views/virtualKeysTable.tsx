@@ -128,7 +128,7 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefr
 							<TableRow>
 								<TableHead>Name</TableHead>
 								<TableHead>Key</TableHead>
-								<TableHead>DB Keys</TableHead>
+								<TableHead>Allowed Keys</TableHead>
 								<TableHead>Budget</TableHead>
 								<TableHead>Status</TableHead>
 								<TableHead className="text-right">Actions</TableHead>
@@ -170,31 +170,9 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefr
 												</div>
 											</TableCell>
 											<TableCell>
-												<div className="flex flex-wrap gap-1">
-													{vk.keys && vk.keys.length > 0 ? (
-														vk.keys.slice(0, 2).map((dbKey) => (
-															<Badge
-																key={dbKey.key_id}
-																variant="outline"
-																className="text-xs"
-																title={`${dbKey.key_id} — ${dbKey.provider_id}`}
-															>
-																{dbKey.key_id.substring(0, 8)}...
-															</Badge>
-														))
-													) : (
-														<span className="text-muted-foreground text-sm">All keys</span>
-													)}
-													{vk.keys && vk.keys.length > 2 && (
-														<Badge
-															variant="outline"
-															className="text-xs"
-															title={`${vk.keys.length} total keys — Providers: ${[...new Set(vk.keys.map((k) => k.provider_id))].join(", ")}`}
-														>
-															+{vk.keys.length - 2} more
-														</Badge>
-													)}
-												</div>
+												<Badge variant="outline" className="text-xs">
+													{vk.keys && vk.keys.length > 0 ? vk.keys.length : "All"} keys
+												</Badge>
 											</TableCell>
 											<TableCell>
 												{vk.budget ? (

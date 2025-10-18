@@ -37,17 +37,6 @@ export default function ModelProviderKeysTableView({ provider, className }: Prop
 		setShowAddNewKeyDialog({ show: true, keyIndex: keyIndex });
 	}
 
-	function getKey(provider: ModelProvider, key: ModelProviderKey) {
-		switch (provider.name) {
-			case KnownProvidersNames[5]:
-				return key.vertex_key_config?.auth_credentials || "unknown";
-			case KnownProvidersNames[3]:
-				return key.value || key.bedrock_key_config?.access_key || "system IAM";
-			default:
-				return key.value;
-		}
-	}
-
 	return (
 		<div className={cn("w-full", className)}>
 			{showDeleteKeyDialog && (
@@ -127,7 +116,7 @@ export default function ModelProviderKeysTableView({ provider, className }: Prop
 								<TableRow key={index} className="text-sm transition-colors hover:bg-white" onClick={() => {}}>
 									<TableCell>
 										<div className="flex items-center space-x-2">
-											<span className="font-mono text-sm">{getKey(provider, key)}</span>
+											<span className="font-mono text-sm">{key.name}</span>
 										</div>
 									</TableCell>
 									<TableCell>

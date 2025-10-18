@@ -3,6 +3,7 @@ package configstore
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/migrator"
@@ -23,9 +24,6 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddVirtualKeyProviderConfigTable(ctx, db); err != nil {
 		return err
 	}
-	if err := migrationAddOpenAIUseResponsesAPIColumn(ctx, db); err != nil {
-		return err
-	}
 	if err := migrationAddAllowedOriginsJSONColumn(ctx, db); err != nil {
 		return err
 	}
@@ -36,6 +34,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 		return err
 	}
 	if err := migrationTeamsTableUpdates(ctx, db); err != nil {
+		return err
+	}
+	if err := migrationAddKeyNameColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := migrationAddFrameworkConfigsTable(ctx, db); err != nil {
@@ -304,29 +305,6 @@ func migrationAddVirtualKeyProviderConfigTable(ctx context.Context, db *gorm.DB)
 	return nil
 }
 
-// migrationAddOpenAIUseResponsesAPIColumn adds the open_ai_use_responses_api column to the key table
-func migrationAddOpenAIUseResponsesAPIColumn(ctx context.Context, db *gorm.DB) error {
-	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
-		ID: "add_open_ai_use_responses_api_column",
-		Migrate: func(tx *gorm.DB) error {
-			tx = tx.WithContext(ctx)
-			migrator := tx.Migrator()
-
-			if !migrator.HasColumn(&tables.TableKey{}, "open_ai_use_responses_api") {
-				if err := migrator.AddColumn(&tables.TableKey{}, "open_ai_use_responses_api"); err != nil {
-					return err
-				}
-			}
-			return nil
-		},
-	}})
-	err := m.Migrate()
-	if err != nil {
-		return fmt.Errorf("error while running db migration: %s", err.Error())
-	}
-	return nil
-}
-
 // migrationAddAllowedOriginsJSONColumn adds the allowed_origins_json column to the client config table
 func migrationAddAllowedOriginsJSONColumn(ctx context.Context, db *gorm.DB) error {
 	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
@@ -447,6 +425,68 @@ func migrationAddFrameworkConfigsTable(ctx context.Context, db *gorm.DB) error {
 				if err := migrator.CreateTable(&tables.TableFrameworkConfig{}); err != nil {
 					return err
 				}
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running db migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddKeyNameColumn adds the name column to the key table and populates unique names
+func migrationAddKeyNameColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_key_name_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasColumn(&tables.TableKey{}, "name") {
+				// Step 1: Add the column as nullable first
+				if err := tx.Exec("ALTER TABLE config_keys ADD COLUMN name VARCHAR(255)").Error; err != nil {
+					return fmt.Errorf("failed to add name column: %w", err)
+				}
+
+				// Step 2: Populate unique names for all existing keys
+				var keys []tables.TableKey
+				if err := tx.Find(&keys).Error; err != nil {
+					return fmt.Errorf("failed to fetch keys: %w", err)
+				}
+
+				for _, key := range keys {
+					// Create unique name: provider_name-key-{first8chars_of_key_id}-{key_index}
+					keyIDShort := key.KeyID
+					if len(keyIDShort) > 8 {
+						keyIDShort = keyIDShort[:8]
+					}
+					keyName := keyIDShort + "-" + strconv.Itoa(int(key.ID))
+					uniqueName := fmt.Sprintf("%s-key-%s", key.Provider, keyName)
+
+					// Update the key with the unique name
+					if err := tx.Model(&key).Update("name", uniqueName).Error; err != nil {
+						return fmt.Errorf("failed to update key %s with name %s: %w", key.KeyID, uniqueName, err)
+					}
+				}
+
+				// Step 3: Add unique index (SQLite compatible)
+				if err := tx.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_key_name ON config_keys (name)").Error; err != nil {
+					return fmt.Errorf("failed to create unique index on name: %w", err)
+				}
+			}
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			// Drop the unique index first to avoid orphaned index artifacts
+			if err := tx.Exec("DROP INDEX IF EXISTS idx_key_name").Error; err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TableKey{}, "name"); err != nil {
+				return err
 			}
 			return nil
 		},

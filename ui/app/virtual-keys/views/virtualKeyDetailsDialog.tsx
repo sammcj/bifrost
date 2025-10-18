@@ -99,15 +99,18 @@ export default function VirtualKeyDetailDialog({ virtualKey, onClose }: VirtualK
 									<Table>
 										<TableHeader>
 											<TableRow>
-												<TableHead>Key ID</TableHead>
+												<TableHead>Name</TableHead>
 												<TableHead>Allowed Models</TableHead>
 											</TableRow>
 										</TableHeader>
 										<TableBody>
 											{virtualKey.keys.map((key) => (
 												<TableRow key={key.key_id}>
-													<TableCell className="max-w-[200px] truncate">
-														<span className="font-mono text-sm">{key.key_id}</span>
+													<TableCell className="max-w-[200px]">
+														<span className="flex items-center font-mono text-sm">
+															<RenderProviderIcon provider={key.provider as ProviderIconType} size="sm" className="mr-2 h-4 w-4 shrink-0" />
+															<span className="truncate">{key.name}</span>
+														</span>
 													</TableCell>
 													<TableCell>
 														{key.models && key.models.length > 0 ? (

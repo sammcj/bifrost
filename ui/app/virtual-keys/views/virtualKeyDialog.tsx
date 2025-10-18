@@ -349,9 +349,16 @@ export default function VirtualKeyDialog({ virtualKey, teams, customers, onSave,
 											<FormControl>
 												<MultiSelect
 													options={availableKeys.map((key) => ({
-														label: key.key_id,
+														label: key.name,
 														value: key.key_id,
 														description: key.models.join(", "),
+														icon: ({ className }: { className?: string }) => (
+															<RenderProviderIcon
+																provider={key.provider as ProviderIconType}
+																size="sm"
+																className={className || "h-4 w-4"}
+															/>
+														),
 													}))}
 													defaultValue={field.value || []}
 													onValueChange={field.onChange}
