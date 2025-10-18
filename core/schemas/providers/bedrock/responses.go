@@ -370,7 +370,7 @@ func convertResponsesItemsToBedrockMessages(messages []schemas.ResponsesMessage)
 
 		case schemas.ResponsesMessageTypeFunctionCallOutput:
 			// Handle function call outputs from Responses
-			if msg.ResponsesToolMessage != nil && msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput != nil {
+			if msg.ResponsesToolMessage != nil && msg.ResponsesToolMessage.Output != nil && msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil {
 				var toolUseID string
 				if msg.ResponsesToolMessage.CallID != nil {
 					toolUseID = *msg.ResponsesToolMessage.CallID
@@ -381,8 +381,8 @@ func convertResponsesItemsToBedrockMessages(messages []schemas.ResponsesMessage)
 					},
 				}
 				// Set content based on available data
-				if msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputStr != nil {
-					raw := *msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputStr
+				if msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil {
+					raw := *msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr
 					var parsed interface{}
 					if err := json.Unmarshal([]byte(raw), &parsed); err == nil {
 						toolResultBlock.ToolResult.Content = []BedrockContentBlock{
@@ -393,9 +393,9 @@ func convertResponsesItemsToBedrockMessages(messages []schemas.ResponsesMessage)
 							{Text: &raw},
 						}
 					}
-				} else if msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputBlocks != nil {
+				} else if msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
 					toolResultContent, err := convertBifrostResponsesMessageContentBlocksToBedrockContentBlocks(schemas.ResponsesMessageContent{
-						ContentBlocks: msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputBlocks,
+						ContentBlocks: msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks,
 					})
 					if err != nil {
 						return nil, nil, fmt.Errorf("failed to convert tool result content blocks: %w", err)
@@ -516,8 +516,8 @@ func convertBedrockMessageToResponsesMessages(bedrockMsg BedrockMessage) []schem
 				Type: schemas.Ptr(schemas.ResponsesMessageTypeFunctionCallOutput),
 				ResponsesToolMessage: &schemas.ResponsesToolMessage{
 					CallID: &toolResultID,
-					ResponsesFunctionToolCallOutput: &schemas.ResponsesFunctionToolCallOutput{
-						ResponsesFunctionToolCallOutputStr: &resultContent,
+					Output: &schemas.ResponsesToolMessageOutputStruct{
+						ResponsesToolCallOutputStr: &resultContent,
 					},
 				},
 			}

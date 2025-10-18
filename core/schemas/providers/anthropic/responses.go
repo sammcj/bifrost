@@ -663,10 +663,10 @@ func convertAnthropicMessageToBifrostResponsesMessages(msg *AnthropicMessage) []
 							},
 						}
 						// Initialize the nested struct before any writes
-						bifrostMsg.ResponsesToolMessage.ResponsesFunctionToolCallOutput = &schemas.ResponsesFunctionToolCallOutput{}
+						bifrostMsg.ResponsesToolMessage.Output = &schemas.ResponsesToolMessageOutputStruct{}
 
 						if block.Content.ContentStr != nil {
-							bifrostMsg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputStr = block.Content.ContentStr
+							bifrostMsg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr = block.Content.ContentStr
 						} else if block.Content.ContentBlocks != nil {
 							var toolMsgContentBlocks []schemas.ResponsesMessageContentBlock
 							for _, contentBlock := range block.Content.ContentBlocks {
@@ -684,7 +684,7 @@ func convertAnthropicMessageToBifrostResponsesMessages(msg *AnthropicMessage) []
 									}
 								}
 							}
-							bifrostMsg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputBlocks = toolMsgContentBlocks
+							bifrostMsg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks = toolMsgContentBlocks
 						}
 						bifrostMessages = append(bifrostMessages, bifrostMsg)
 					}
@@ -931,11 +931,11 @@ func convertResponsesMessagesToAnthropicMessages(messages []schemas.ResponsesMes
 				}
 
 				// Convert tool output content
-				if msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput != nil {
-					output := msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput
-					if output.ResponsesFunctionToolCallOutputStr != nil {
+				if msg.ResponsesToolMessage.Output != nil {
+					output := msg.ResponsesToolMessage.Output
+					if output.ResponsesToolCallOutputStr != nil {
 						toolResultBlock.Content = &AnthropicContent{
-							ContentStr: output.ResponsesFunctionToolCallOutputStr,
+							ContentStr: output.ResponsesToolCallOutputStr,
 						}
 					} else if output.ResponsesFunctionToolCallOutputBlocks != nil {
 						var resultContentBlocks []AnthropicContentBlock
@@ -1020,13 +1020,9 @@ func convertResponsesMessagesToAnthropicMessages(messages []schemas.ResponsesMes
 				var outputText string
 				// Try to extract output text based on tool type
 				switch msgType {
-				case schemas.ResponsesMessageTypeLocalShellCallOutput:
-					if msg.ResponsesToolMessage.ResponsesLocalShellCallOutput != nil {
-						outputText = msg.ResponsesToolMessage.ResponsesLocalShellCallOutput.Output
-					}
-				case schemas.ResponsesMessageTypeCustomToolCallOutput:
-					if msg.ResponsesToolMessage.ResponsesCustomToolCallOutput != nil {
-						outputText = msg.ResponsesToolMessage.ResponsesCustomToolCallOutput.Output
+				case schemas.ResponsesMessageTypeLocalShellCallOutput, schemas.ResponsesMessageTypeCustomToolCallOutput:
+					if msg.ResponsesToolMessage.Output != nil && msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil {
+						outputText = *msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr
 					}
 				}
 
@@ -1199,11 +1195,11 @@ func convertAnthropicContentBlocksToResponsesMessages(content []AnthropicContent
 					},
 				}
 				// Initialize nested output struct
-				msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput = &schemas.ResponsesFunctionToolCallOutput{}
+				msg.ResponsesToolMessage.Output = &schemas.ResponsesToolMessageOutputStruct{}
 				if block.Content != nil {
 					if block.Content.ContentStr != nil {
-						msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.
-							ResponsesFunctionToolCallOutputStr = block.Content.ContentStr
+						msg.ResponsesToolMessage.Output.
+							ResponsesToolCallOutputStr = block.Content.ContentStr
 					} else if block.Content.ContentBlocks != nil {
 						var outBlocks []schemas.ResponsesMessageContentBlock
 						for _, cb := range block.Content.ContentBlocks {
@@ -1221,7 +1217,7 @@ func convertAnthropicContentBlocksToResponsesMessages(content []AnthropicContent
 								}
 							}
 						}
-						msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.
+						msg.ResponsesToolMessage.Output.
 							ResponsesFunctionToolCallOutputBlocks = outBlocks
 					}
 				}
@@ -1293,15 +1289,14 @@ func convertBifrostMessagesToAnthropicContent(messages []schemas.ResponsesMessag
 						resultBlock.Content = &AnthropicContent{
 							ContentStr: msg.Content.ContentStr,
 						}
-					} else if msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput != nil {
-						// Guard access to ResponsesFunctionToolCallOutput
-						if msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputStr != nil {
+					} else if msg.ResponsesToolMessage.Output != nil {
+						if msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil {
 							resultBlock.Content = &AnthropicContent{
-								ContentStr: msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputStr,
+								ContentStr: msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr,
 							}
-						} else if msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputBlocks != nil {
+						} else if msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
 							var resultBlocks []AnthropicContentBlock
-							for _, block := range msg.ResponsesToolMessage.ResponsesFunctionToolCallOutput.ResponsesFunctionToolCallOutputBlocks {
+							for _, block := range msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks {
 								if block.Type == schemas.ResponsesInputMessageContentBlockTypeText {
 									resultBlocks = append(resultBlocks, AnthropicContentBlock{
 										Type: AnthropicContentBlockTypeText,
