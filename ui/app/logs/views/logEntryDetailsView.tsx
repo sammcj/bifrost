@@ -28,7 +28,7 @@ export default function LogEntryDetailsView(props: Props) {
 			<div className={props.containerClassName}>
 				{props.label !== "" && (
 					<div className="text-muted-foreground flex shrink-0 flex-row items-center gap-2 pb-2 text-xs font-medium">
-						{props.label.toUpperCase()}
+						{props.label.toUpperCase().replace(/_/g, " ")}
 					</div>
 				)}
 				<div
@@ -39,7 +39,7 @@ export default function LogEntryDetailsView(props: Props) {
 						"text-end": props.align === "right",
 					})}
 				>
-					{props.value}
+					<div className="text-bifrost-gray-300 flex-1 text-sm">{typeof props.value === "boolean" ? String(props.value) : props.value}</div>
 				</div>
 			</div>
 		</div>
