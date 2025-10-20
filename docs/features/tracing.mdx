@@ -210,12 +210,29 @@ Choose the right storage backend for your scale and requirements:
 }
 ```
 
-### **Planned Support**
-
-**PostgreSQL** (Coming Soon)
+**PostgreSQL**
 - **Best for**: High-volume production deployments
 - **Performance**: Excellent concurrent writes and complex queries
 - **Features**: Advanced indexing, partitioning, replication
+
+```json
+{
+    "logs_store": {
+        "enabled": true,
+        "type": "postgres",
+        "config": {
+            "host": "localhost",
+            "port": "5432",
+            "user": "bifrost",
+            "password": "postgres",
+            "db_name": "bifrost",
+            "ssl_mode": "disable"
+        }
+    }
+}
+```
+
+### **Planned Support**
 
 **MySQL** (Coming Soon)
 - **Best for**: Traditional MySQL environments

@@ -1622,7 +1622,7 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 		for attempts = 0; attempts <= config.NetworkConfig.MaxRetries; attempts++ {
 			if attempts > 0 {
 				// Log retry attempt
-				bifrost.logger.Info("retrying request (attempt %d/%d) for model %s: %s", attempts, config.NetworkConfig.MaxRetries, model, bifrostError.Error.Message)
+				bifrost.logger.Debug("retrying request (attempt %d/%d) for model %s: %s", attempts, config.NetworkConfig.MaxRetries, model, bifrostError.Error.Message)
 
 				// Calculate and apply backoff
 				backoff := calculateBackoff(attempts-1, config)
@@ -1658,7 +1658,7 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 		if bifrostError != nil {
 			// Add retry information to error
 			if attempts > 0 {
-				bifrost.logger.Warn("request failed after %d %s", attempts, map[bool]string{true: "retries", false: "retry"}[attempts > 1])
+				bifrost.logger.Debug("request failed after %d %s", attempts, map[bool]string{true: "retries", false: "retry"}[attempts > 1])
 			}
 			bifrostError.ExtraFields = schemas.BifrostErrorExtraFields{
 				Provider:       provider.GetProviderKey(),
