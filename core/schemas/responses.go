@@ -110,19 +110,20 @@ type ResponsesTextConfig struct {
 }
 
 type ResponsesTextConfigFormat struct {
-	Type       string                               `json:"type"`                  // "text" | "json_schema" | "json_object"
-	Name       *string                              `json:"name,omitempty"`        // Name of the format
-	JSONSchema *ResponsesTextConfigFormatJSONSchema `json:"json_schema,omitempty"` // when type == "json_schema"
+	Type       string                               `json:"type"`             // "text" | "json_schema" | "json_object"
+	Name       *string                              `json:"name,omitempty"`   // Name of the format
+	JSONSchema *ResponsesTextConfigFormatJSONSchema `json:"schema,omitempty"` // when type == "json_schema"
+	Strict     *bool                                `json:"strict,omitempty"`
 }
 
 // ResponsesTextConfigFormatJSONSchema represents a JSON schema specification
 type ResponsesTextConfigFormatJSONSchema struct {
-	Name        string         `json:"name"`
-	Schema      map[string]any `json:"schema"` // JSON Schema (subset)
-	Type        string         `json:"type"`   // always "json_schema"
-	Description *string        `json:"description,omitempty"`
-	Strict      *bool          `json:"strict,omitempty"`
+	AdditionalProperties *bool           `json:"additionalProperties,omitempty"`
+	Properties           *map[string]any `json:"properties,omitempty"`
+	Required             *[]string       `json:"required,omitempty"`
+	Type                 *string         `json:"type,omitempty"`
 }
+
 type ResponsesResponseConversation struct {
 	ResponsesResponseConversationStr    *string
 	ResponsesResponseConversationStruct *ResponsesResponseConversationStruct

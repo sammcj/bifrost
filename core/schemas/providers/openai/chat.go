@@ -31,5 +31,25 @@ func ToOpenAIChatRequest(bifrostReq *schemas.BifrostChatRequest) *OpenAIChatRequ
 		openaiReq.ChatParameters = *bifrostReq.Params
 	}
 
+	if bifrostReq.Provider != schemas.OpenAI {
+		openaiReq.filterOpenAISpecificParameters()
+	}
+
 	return openaiReq
+}
+
+// Filter OpenAI Specific Parameters
+func (request *OpenAIChatRequest) filterOpenAISpecificParameters() {
+	if request.ChatParameters.ReasoningEffort != nil && *request.ChatParameters.ReasoningEffort == "minimal" {
+		request.ChatParameters.ReasoningEffort = schemas.Ptr("low")
+	}
+	if request.ChatParameters.PromptCacheKey != nil {
+		request.ChatParameters.PromptCacheKey = nil
+	}
+	if request.ChatParameters.Verbosity != nil {
+		request.ChatParameters.Verbosity = nil
+	}
+	if request.ChatParameters.Store != nil {
+		request.ChatParameters.Store = nil
+	}
 }
