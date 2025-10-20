@@ -100,7 +100,7 @@ func (provider *GeminiProvider) ChatCompletion(ctx context.Context, key schemas.
 	jsonBody, err := sonic.Marshal(reqBody)
 	if err != nil {
 		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, providerName)
-	}
+	}	
 
 	// Create request
 	req := fasthttp.AcquireRequest()
