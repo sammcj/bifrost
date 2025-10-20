@@ -92,11 +92,11 @@ export default function PricingConfigView() {
 						placeholder="https://example.com/pricing.json"
 						{...register("pricing_datasheet_url", {
 							pattern: {
-								value: /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/,
-								message: "Please enter a valid URL",
+								value: /^(https?:\/\/)?((localhost|(\d{1,3}\.){3}\d{1,3})(:\d+)?|([\da-z\.-]+)\.([a-z\.]{2,6}))([\/\w \.-]*)*\/?$/,
+								message: "Please enter a valid URL.",
 							},
 							validate: {
-								validProtocol: (value) => {
+								checkIfHttp: (value) => {
 									if (!value) return true; // Allow empty
 									return value.startsWith("http://") || value.startsWith("https://") || "URL must start with http:// or https://";
 								},
@@ -104,9 +104,7 @@ export default function PricingConfigView() {
 						})}
 						className={errors.pricing_datasheet_url ? "border-destructive" : ""}
 					/>
-					{errors.pricing_datasheet_url && (
-						<p className="text-destructive text-sm">{errors.pricing_datasheet_url.message}</p>
-					)}
+					{errors.pricing_datasheet_url && <p className="text-destructive text-sm">{errors.pricing_datasheet_url.message}</p>}
 				</div>
 
 				{/* Pricing Sync Interval */}
@@ -133,9 +131,7 @@ export default function PricingConfigView() {
 								valueAsNumber: true,
 							})}
 						/>
-						{errors.pricing_sync_interval_hours && (
-							<p className="text-destructive text-sm">{errors.pricing_sync_interval_hours.message}</p>
-						)}
+						{errors.pricing_sync_interval_hours && <p className="text-destructive text-sm">{errors.pricing_sync_interval_hours.message}</p>}
 					</div>
 				</div>
 			</div>
