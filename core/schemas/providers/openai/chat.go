@@ -31,11 +31,19 @@ func ToOpenAIChatRequest(bifrostReq *schemas.BifrostChatRequest) *OpenAIChatRequ
 		openaiReq.ChatParameters = *bifrostReq.Params
 	}
 
-	if bifrostReq.Provider != schemas.OpenAI {
+	switch bifrostReq.Provider {
+	case schemas.OpenAI:
+		return openaiReq
+	case schemas.Gemini:
 		openaiReq.filterOpenAISpecificParameters()
+		// Removing extra parameters that are not supported by Gemini
+		openaiReq.ServiceTier = nil
+		return openaiReq
+	default:
+		openaiReq.filterOpenAISpecificParameters()
+		return openaiReq
 	}
 
-	return openaiReq
 }
 
 // Filter OpenAI Specific Parameters
