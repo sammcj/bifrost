@@ -5,7 +5,7 @@ package tables
 type TableFrameworkConfig struct {
 	ID                  uint    `gorm:"primaryKey;autoIncrement" json:"id"`
 	PricingURL          *string `gorm:"type:text" json:"pricing_url"`
-	PricingSyncInterval *int64   `gorm:"type:int64" json:"pricing_sync_interval"`
+	PricingSyncInterval *int64  `gorm:"" json:"pricing_sync_interval"`
 }
 
 // TableName sets the table name for each model

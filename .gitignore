@@ -24,6 +24,7 @@ node_modules
 **/tmp/
 temp*/
 tmp/
+tmp-*
 
 # Go workspaces (local only)
 go.work
