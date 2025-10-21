@@ -9,7 +9,7 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
-// ToResponsesBifrostRequest converts an Anthropic message request to Bifrost format
+// ToBifrostResponsesRequest converts an Anthropic message request to Bifrost format
 func (request *AnthropicMessageRequest) ToBifrostResponsesRequest() *schemas.BifrostResponsesRequest {
 	provider, model := schemas.ParseModelString(request.Model, schemas.Anthropic)
 

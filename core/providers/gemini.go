@@ -100,7 +100,7 @@ func (provider *GeminiProvider) ChatCompletion(ctx context.Context, key schemas.
 	jsonBody, err := sonic.Marshal(reqBody)
 	if err != nil {
 		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, providerName)
-	}
+	}	
 
 	// Create request
 	req := fasthttp.AcquireRequest()
@@ -126,9 +126,26 @@ func (provider *GeminiProvider) ChatCompletion(ctx context.Context, key schemas.
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
-		var errorResp map[string]interface{}
+		var errorResp []struct {
+			Error struct {
+				Code    int    `json:"code"`
+				Message string `json:"message"`
+				Status  string `json:"status"`
+				Details []struct {
+					Type            string `json:"@type"`
+					FieldViolations []struct {
+						Description string `json:"description"`
+					} `json:"fieldViolations"`
+				} `json:"details"`
+			} `json:"error"`
+		}
+
 		bifrostErr := handleProviderAPIError(resp, &errorResp)
-		bifrostErr.Error.Message = fmt.Sprintf("%s error: %v", providerName, errorResp)
+		errorMessage := ""
+		for _, error := range errorResp {
+			errorMessage += error.Error.Message + "\n"
+		}
+		bifrostErr.Error.Message = errorMessage
 		return nil, bifrostErr
 	}
 
@@ -376,7 +393,7 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 		scanner := bufio.NewScanner(resp.Body)
 		// Increase buffer size to handle large chunks (especially for audio data)
 		buf := make([]byte, 0, 256*1024) // 256KB buffer
-		scanner.Buffer(buf, 1024*1024)  // Allow up to 1MB tokens
+		scanner.Buffer(buf, 1024*1024)   // Allow up to 1MB tokens
 		chunkIndex := -1
 		usage := &schemas.SpeechUsage{}
 		startTime := time.Now()
