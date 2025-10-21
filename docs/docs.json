@@ -191,6 +191,7 @@
         "tab": "Changelogs",
         "icon": "bolt",
         "pages": [
+          "changelogs/v1.3.9",
           "changelogs/v1.3.8",
           "changelogs/v1.3.7",
           "changelogs/v1.3.6",
