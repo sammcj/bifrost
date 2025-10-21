@@ -1066,7 +1066,7 @@ func (c *Config) GetProviderConfigRedacted(provider schemas.ModelProvider) (*con
 			if envVar, ok := envVarsByPath[path]; ok {
 				azureConfig.Endpoint = "env." + envVar
 			} else if !strings.HasPrefix(key.AzureKeyConfig.Endpoint, "env.") {
-				azureConfig.Endpoint = RedactKey(key.AzureKeyConfig.Endpoint)
+				azureConfig.Endpoint = key.AzureKeyConfig.Endpoint
 			}
 
 			// Redact APIVersion if present

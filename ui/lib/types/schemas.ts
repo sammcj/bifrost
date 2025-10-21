@@ -13,11 +13,40 @@ export const customProviderNameSchema = z.string().min(1, "Custom provider name 
 export const modelProviderNameSchema = z.union([knownProviderSchema, customProviderNameSchema]);
 
 // Azure key config schema
-export const azureKeyConfigSchema = z.object({
-	endpoint: z.url("Must be a valid URL"),
-	deployments: z.union([z.record(z.string(), z.string()), z.string()]).optional(),
-	api_version: z.string().optional(),
-});
+export const azureKeyConfigSchema = z
+	.object({
+		endpoint: z.url("Must be a valid URL"),
+		deployments: z.union([z.record(z.string(), z.string()), z.string()]).optional(),
+		api_version: z.string().optional(),
+	})
+	.refine(
+		(data) => {
+			// If deployments is not provided, it's valid
+			if (!data.deployments) return true
+			// If it's already an object, it's valid
+			if (typeof data.deployments === 'object') return true
+			// If it's a string, check if it's valid JSON or an env variable
+			if (typeof data.deployments === 'string') {
+				const trimmed = data.deployments.trim()
+				// Allow empty string
+				if (trimmed === '') return true
+				// Allow env variables
+				if (trimmed.startsWith('env.')) return true
+				// Validate JSON format
+				try {
+					const parsed = JSON.parse(trimmed)
+					return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+				} catch {
+					return false
+				}
+			}
+			return false
+		},
+		{
+			message: 'Deployments must be a valid JSON object or an environment variable reference',
+			path: ['deployments'],
+		}
+	);
 
 // Vertex key config schema
 export const vertexKeyConfigSchema = z.object({
@@ -27,14 +56,43 @@ export const vertexKeyConfigSchema = z.object({
 });
 
 // Bedrock key config schema
-export const bedrockKeyConfigSchema = z.object({
-	access_key: z.string().min(1, "Access key is required").optional(),
-	secret_key: z.string().min(1, "Secret key is required").optional(),
-	session_token: z.string().optional(),
-	region: z.string().min(1, "Region is required"),
-	arn: z.string().optional(),
-	deployments: z.union([z.record(z.string(), z.string()), z.string()]).optional(),
-});
+export const bedrockKeyConfigSchema = z
+	.object({
+		access_key: z.string().min(1, "Access key is required").optional(),
+		secret_key: z.string().min(1, "Secret key is required").optional(),
+		session_token: z.string().optional(),
+		region: z.string().min(1, "Region is required"),
+		arn: z.string().optional(),
+		deployments: z.union([z.record(z.string(), z.string()), z.string()]).optional(),
+	})
+	.refine(
+		(data) => {
+			// If deployments is not provided, it's valid
+			if (!data.deployments) return true
+			// If it's already an object, it's valid
+			if (typeof data.deployments === 'object') return true
+			// If it's a string, check if it's valid JSON or an env variable
+			if (typeof data.deployments === 'string') {
+				const trimmed = data.deployments.trim()
+				// Allow empty string
+				if (trimmed === '') return true
+				// Allow env variables
+				if (trimmed.startsWith('env.')) return true
+				// Validate JSON format
+				try {
+					const parsed = JSON.parse(trimmed)
+					return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+				} catch {
+					return false
+				}
+			}
+			return false
+		},
+		{
+			message: 'Deployments must be a valid JSON object or an environment variable reference',
+			path: ['deployments'],
+		}
+	);
 
 // Model provider key schema
 export const modelProviderKeySchema = z
