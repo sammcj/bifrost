@@ -6,6 +6,7 @@ import { ModelProvider } from "@/lib/types/config";
 import { modelProviderKeySchema } from "@/lib/types/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Save } from "lucide-react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { v4 as uuid } from "uuid";
@@ -25,10 +26,12 @@ const providerKeyFormSchema = z.object({
 
 export default function ProviderKeyForm({ provider, keyIndex, onCancel, onSave }: Props) {
 	const [updateProvider, { isLoading: isUpdatingProvider }] = useUpdateProviderMutation();
+	const isEditing = provider?.keys?.[keyIndex] !== undefined;
+	
 	const form = useForm({
 		resolver: zodResolver(providerKeyFormSchema),
-		mode: "onChange",
-		reValidateMode: "onChange",
+		mode: "onBlur",
+		reValidateMode: "onBlur",
 		defaultValues: {
 			key: provider?.keys?.[keyIndex] ?? {
 				id: uuid(),
@@ -39,6 +42,13 @@ export default function ProviderKeyForm({ provider, keyIndex, onCancel, onSave }
 			},
 		},
 	});
+
+	// Trigger validation on mount when editing existing data
+	useEffect(() => {
+		if (isEditing) {
+			form.trigger();
+		}
+	}, [isEditing, form]);
 
 	const onSubmit = (value: any) => {
 		const keys = provider.keys ?? [];
@@ -57,6 +67,8 @@ export default function ProviderKeyForm({ provider, keyIndex, onCancel, onSave }
 				});
 			});
 	};
+
+
 	return (
 		<Form {...form}>
 			<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">

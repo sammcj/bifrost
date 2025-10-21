@@ -84,8 +84,6 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 									className="w-[220px]"
 									value={field.value === undefined || field.value === null ? "" : String(field.value)}
 									onChange={(e) => {
-										// Clear error while typing
-										form.clearErrors("key.weight");
 										// Keep as string during typing to allow partial input
 										field.onChange(e.target.value === "" ? "" : e.target.value);
 									}}
@@ -95,8 +93,6 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 											const num = parseFloat(v);
 											if (!isNaN(num)) {
 												field.onChange(num);
-											} else {
-												form.setError("key.weight", { message: "Weight must be a valid number" });
 											}
 										}
 										field.onBlur();
@@ -193,6 +189,7 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 										placeholder='{"gpt-4": "my-gpt4-deployment", "gpt-3.5-turbo": "my-gpt35-deployment"}'
 										value={typeof field.value === "string" ? field.value : JSON.stringify(field.value || {}, null, 2)}
 										onChange={(e) => {
+											form.clearErrors("key.azure_key_config.deployments");
 											// Store as string during editing to allow intermediate invalid states
 											field.onChange(e.target.value);
 										}}
