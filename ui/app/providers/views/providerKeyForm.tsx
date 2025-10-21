@@ -69,7 +69,6 @@ export default function ProviderKeyForm({ provider, keyIndex, onCancel, onSave }
 	};
 
 
-	console.log(JSON.stringify(form.formState.errors), form.formState.isValid, form.formState.isDirty);
 	return (
 		<Form {...form}>
 			<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
