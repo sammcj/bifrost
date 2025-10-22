@@ -4,6 +4,9 @@ package otel
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -49,9 +52,10 @@ const ProtocolHTTP Protocol = "http"
 const ProtocolGRPC Protocol = "grpc"
 
 type Config struct {
-	CollectorURL string    `json:"collector_url"`
-	TraceType    TraceType `json:"trace_type"`
-	Protocol     Protocol  `json:"protocol"`
+	CollectorURL string            `json:"collector_url"`
+	Headers      map[string]string `json:"headers"`
+	TraceType    TraceType         `json:"trace_type"`
+	Protocol     Protocol          `json:"protocol"`
 }
 
 // OtelPlugin is the plugin for OpenTelemetry
@@ -60,6 +64,7 @@ type OtelPlugin struct {
 	cancel context.CancelFunc
 
 	url       string
+	headers   map[string]string
 	traceType TraceType
 	protocol  Protocol
 
@@ -69,6 +74,8 @@ type OtelPlugin struct {
 
 	pricingManager *pricing.PricingManager
 	accumulator    *streaming.Accumulator // Accumulator for streaming chunks
+
+	emitWg         sync.WaitGroup         // Track in-flight emissions
 }
 
 // Init function for the OTEL plugin
@@ -78,23 +85,37 @@ func Init(ctx context.Context, config *Config, _logger schemas.Logger, pricingMa
 	}
 	logger = _logger
 	var err error
+	// If headers are present , and any of them start with env., we will replace the value with the environment variable
+	if config.Headers != nil {
+		for key, value := range config.Headers {
+			if newValue, ok := strings.CutPrefix(value, "env."); ok {
+				config.Headers[key] = os.Getenv(newValue)
+				if config.Headers[key] == "" {
+					logger.Warn("environment variable %s not found", newValue)
+					return nil, fmt.Errorf("environment variable %s not found", newValue)
+				}
+			}
+		}
+	}
 	p := &OtelPlugin{
 		url:            config.CollectorURL,
 		traceType:      config.TraceType,
+		headers:        config.Headers,
 		ongoingSpans:   NewTTLSyncMap(20*time.Minute, 1*time.Minute),
 		protocol:       config.Protocol,
 		pricingManager: pricingManager,
 		accumulator:    streaming.NewAccumulator(pricingManager, logger),
+		emitWg:         sync.WaitGroup{},
 	}
 	p.ctx, p.cancel = context.WithCancel(ctx)
 	if config.Protocol == ProtocolGRPC {
-		p.client, err = NewOtelClientGRPC(config.CollectorURL)
+		p.client, err = NewOtelClientGRPC(config.CollectorURL, config.Headers)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if config.Protocol == ProtocolHTTP {
-		p.client, err = NewOtelClientHTTP(config.CollectorURL)
+		p.client, err = NewOtelClientHTTP(config.CollectorURL, config.Headers)
 		if err != nil {
 			return nil, err
 		}
@@ -207,14 +228,23 @@ func (p *OtelPlugin) PostHook(ctx *context.Context, resp *schemas.BifrostRespons
 			}
 			return resp, bifrostErr, nil
 		}
-		defer p.ongoingSpans.Delete(traceID)
-		p.client.Emit(p.ctx, []*ResourceSpan{completeResourceSpan(span, time.Now(), resp, bifrostErr, p.pricingManager)})
+		rs := completeResourceSpan(span, time.Now(), resp, bifrostErr, p.pricingManager)
+		p.emitWg.Add(1)
+		go func(resourceSpan *ResourceSpan) {
+			defer p.ongoingSpans.Delete(traceID)
+			defer p.emitWg.Done()
+			err := p.client.Emit(p.ctx, []*ResourceSpan{resourceSpan})
+			if err != nil {
+				logger.Error("failed to emit response span: %v", err)
+			}
+		}(rs)
 	}
 	return resp, bifrostErr, nil
 }
 
 // Cleanup function for the OTEL plugin
 func (p *OtelPlugin) Cleanup() error {
+	p.emitWg.Wait()
 	if p.cancel != nil {
 		p.cancel()
 	}
