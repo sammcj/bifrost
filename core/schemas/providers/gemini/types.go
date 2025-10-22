@@ -1335,3 +1335,17 @@ type GeminiChatRequestErrorStruct struct {
 	Message string `json:"message"` // Error message
 	Status  string `json:"status"`  // Error status string (e.g., "INVALID_REQUEST")
 }
+
+type GeminiGenerationError struct {
+	Error struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Status  string `json:"status"`
+		Details []struct {
+			Type            string `json:"@type"`
+			FieldViolations []struct {
+				Description string `json:"description"`
+			} `json:"fieldViolations"`
+		} `json:"details"`
+	} `json:"error"`
+}

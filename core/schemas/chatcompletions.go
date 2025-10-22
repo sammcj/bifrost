@@ -545,7 +545,21 @@ type ContentLogProb struct {
 
 // BifrostLLMUsage represents token usage information
 type BifrostLLMUsage struct {
-	PromptTokens     int `json:"prompt_tokens,omitempty"`
-	CompletionTokens int `json:"completion_tokens,omitempty"`
-	TotalTokens      int `json:"total_tokens"`
+	PromptTokens            int                          `json:"prompt_tokens,omitempty"`
+	PromptTokensDetails     *ChatPromptTokensDetails     `json:"prompt_tokens_details,omitempty"`
+	CompletionTokens        int                          `json:"completion_tokens,omitempty"`
+	CompletionTokensDetails *ChatCompletionTokensDetails `json:"completion_tokens_details,omitempty"`
+	TotalTokens             int                          `json:"total_tokens"`
+}
+
+type ChatPromptTokensDetails struct {
+	AudioTokens  int `json:"audio_tokens,omitempty"`
+	CachedTokens int `json:"cached_tokens,omitempty"`
+}
+
+type ChatCompletionTokensDetails struct {
+	AcceptedPredictionTokens int `json:"accepted_prediction_tokens,omitempty"`
+	AudioTokens              int `json:"audio_tokens,omitempty"`
+	ReasoningTokens          int `json:"reasoning_tokens,omitempty"`
+	RejectedPredictionTokens int `json:"rejected_prediction_tokens,omitempty"`
 }

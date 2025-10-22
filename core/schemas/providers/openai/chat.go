@@ -43,7 +43,6 @@ func ToOpenAIChatRequest(bifrostReq *schemas.BifrostChatRequest) *OpenAIChatRequ
 		openaiReq.filterOpenAISpecificParameters()
 		return openaiReq
 	}
-
 }
 
 // Filter OpenAI Specific Parameters
