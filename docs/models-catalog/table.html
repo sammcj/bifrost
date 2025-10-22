@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Models Catalog</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: transparent;
+    }
+
+    .search-container {
+      margin-bottom: 20px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+
+    .search-input:focus {
+      border-color: #0C3B43;
+    }
+
+    .search-info {
+      margin-top: 8px;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .table-container {
+      overflow-x: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: white;
+    }
+
+    .models-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      min-width: 800px;
+    }
+
+    .models-table thead tr {
+      background-color: #f7fafc;
+    }
+
+    .models-table th {
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: #2d3748;
+      border-bottom: 2px solid #e2e8f0;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      background-color: #f7fafc;
+      z-index: 10;
+    }
+
+    .models-table tbody tr {
+      transition: background-color 0.2s;
+    }
+
+    .models-table tbody tr:nth-child(even) {
+      background-color: #f7fafc;
+    }
+
+    .models-table tbody tr:hover {
+      background-color: #edf2f7;
+    }
+
+    .models-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #4a5568;
+    }
+
+    .loading, .error, .empty, .no-results {
+      padding: 40px;
+      text-align: center;
+      font-size: 16px;
+      color: #666;
+    }
+
+    .error {
+      color: #e53e3e;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #0C3B43;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="loading">
+      <div class="spinner"></div>
+      <div>Loading models...</div>
+    </div>
+  </div>
+
+  <script>
+    let models = []
+    let searchTerm = ''
+
+    function formatColumnName (name) {
+      return name.replace(/([A-Z])/g, ' $1').trim()
+    }
+
+    function filterModels () {
+      if (!searchTerm) return models
+      const term = searchTerm.toLowerCase()
+      return models.filter(model =>
+        Object.values(model).some(value =>
+          String(value).toLowerCase().includes(term)
+        )
+      )
+    }
+
+    function render () {
+      const root = document.getElementById('root')
+      if (!root) return
+
+      const filteredModels = filterModels()
+      const columns = models.length > 0 ? Object.keys(models[0]) : []
+
+      root.innerHTML = `
+        <div class="search-container">
+          <input
+            type="text"
+            class="search-input"
+            placeholder="Search models, providers, or any field..."
+            value="${searchTerm}"
+            id="model-search-input"
+          />
+          <div class="search-info">
+            Showing ${filteredModels.length} of ${models.length} models
+          </div>
+        </div>
+        <div class="table-container">
+          <table class="models-table">
+            <thead>
+              <tr>
+                ${columns.map(col => `<th>${formatColumnName(col)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredModels.length === 0 && searchTerm
+                ? `<tr><td colspan="${columns.length}" class="no-results">No models found matching "${searchTerm}"</td></tr>`
+                : filteredModels.map(model => `
+                  <tr>
+                    ${columns.map(col => `
+                      <td>${typeof model[col] === 'number' ? model[col].toLocaleString() : String(model[col])}</td>
+                    `).join('')}
+                  </tr>
+                `).join('')
+              }
+            </tbody>
+          </table>
+        </div>
+      `
+
+      const searchInput = document.getElementById('model-search-input')
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          searchTerm = e.target.value
+          render()
+        })
+      }
+    }
+
+    async function init () {
+      const root = document.getElementById('root')
+      if (!root) return
+
+      try {
+        const response = await fetch('https://getbifrost.ai/datasheet')
+        if (!response.ok) {
+          throw new Error('Failed to fetch models')
+        }
+        models = await response.json()
+        
+        if (models.length === 0) {
+          root.innerHTML = '<div class="empty">No models available</div>'
+          return
+        }
+        
+        render()
+      } catch (error) {
+        root.innerHTML = `<div class="error">Error: ${error.message}</div>`
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init)
+    } else {
+      init()
+    }
+  </script>
+</body>
+</html>
+
