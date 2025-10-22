@@ -1,0 +1,638 @@
+---
+title: "Kubernetes Deployment"
+description: "Deploy Bifrost as a service in Kubernetes clusters across AWS, Azure, and GCP using Terraform"
+icon: "cloud"
+---
+
+- Here is the terraform script for Bifrost service 
+
+<Note>If you are using Postgres/MySQL for config and log store, then you can exclude permission changes for mounted volumes</Note>
+
+<Tabs>
+
+<Tab title="AWS">
+```terraform
+locals {
+  service_name = "bifrost-service"
+}
+
+# Creating a volume and volume claim
+resource "aws_ebs_volume" "bifrost_disk" {
+  availability_zone = "${var.region}${var.main_zone}"
+  size              = var.volume_size_gb
+  type              = "gp3"
+  encrypted         = true
+
+  tags = {
+    Name = "bifrost-disk"
+  }
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
+}
+
+resource "kubernetes_persistent_volume" "bifrost_volume" {
+  metadata {
+    name = "bifrost-volume"
+  }
+  spec {
+    capacity = {
+      storage = "${var.volume_size_gb}Gi"
+    }
+    access_modes                     = ["ReadWriteOnce"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "gp3"
+    persistent_volume_source {
+      aws_elastic_block_store {
+        volume_id = aws_ebs_volume.bifrost_disk.id
+        fs_type   = "ext4"
+      }
+    }
+  }
+  depends_on = [aws_ebs_volume.bifrost_disk]
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "kubernetes_persistent_volume_claim" "bifrost_volume_claim" {
+  metadata {
+    name      = "bifrost-volume-claim"
+    namespace = var.namespace
+  }
+  spec {
+    access_modes = ["ReadWriteOnce"]
+    resources {
+      requests = {
+        storage = "${var.volume_size_gb}Gi"
+      }
+    }
+    storage_class_name = "gp3"
+    volume_name        = "bifrost-volume"
+  }
+  depends_on = [kubernetes_persistent_volume.bifrost_volume]
+}
+
+# Create deployment
+resource "kubernetes_deployment" "bifrost_deployment" {
+  metadata {
+    name      = local.service_name
+    namespace = kubernetes_namespace.bifrost_namespace.metadata[0].name
+    labels = {
+      app = local.service_name
+      env = var.env
+    }
+  }
+
+  spec {
+    replicas = var.replica_count
+
+    selector {
+      match_labels = {
+        app = local.service_name
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app = local.service_name
+          env = var.env
+        }
+      }
+
+      spec {
+        # Set fsGroup to match the container user's GID
+        # This tells Kubernetes to change the volume's group ownership to 1000
+        # and apply group write permissions
+        security_context {
+          fs_group               = 1000
+          fs_group_change_policy = "OnRootMismatch"
+        }
+
+        init_container {
+          name    = "fix-permissions"
+          image   = "busybox:latest"
+          command = ["sh", "-c", "chown -R 1000:1000 /app/data && chmod -R 755 /app/data"]
+
+          security_context {
+            run_as_user = 0
+          }
+
+          volume_mount {
+            name       = "bifrost-volume"
+            mount_path = "/app/data"
+          }
+        }
+
+        container {
+          name  = "bifrost-service"
+          image = "maximhq/bifrost:${var.image_tag}"
+
+          port {
+            container_port = 8080
+            name           = "http"
+          }
+
+          security_context {
+            run_as_user                = 1000
+            run_as_group               = 1000
+            run_as_non_root            = true
+            allow_privilege_escalation = false
+          }
+
+          resources {
+            requests = {
+              cpu    = "250m"
+              memory = "512Mi"
+            }
+            limits = {
+              cpu    = "500m"
+              memory = "1Gi"
+            }
+          }
+
+          volume_mount {
+            name       = "bifrost-volume"
+            mount_path = "/app/data"
+          }
+
+          liveness_probe {
+            http_get {
+              path = "/health"
+              port = 8080
+            }
+            initial_delay_seconds = 30
+            period_seconds        = 10
+            timeout_seconds       = 5
+            failure_threshold     = 3
+          }
+
+          readiness_probe {
+            http_get {
+              path = "/health"
+              port = 8080
+            }
+            initial_delay_seconds = 10
+            period_seconds        = 5
+            timeout_seconds       = 3
+            failure_threshold     = 3
+          }
+        }
+
+        volume {
+          name = "bifrost-volume"
+          persistent_volume_claim {
+            claim_name = "bifrost-volume-claim"
+          }
+        }
+      }
+    }
+  }
+}
+
+# Create Kubernetes service
+resource "kubernetes_service" "bifrost_service" {
+  metadata {
+    name      = local.service_name
+    namespace = kubernetes_namespace.bifrost_namespace.metadata[0].name
+    labels = {
+      app = local.service_name
+    }
+  }
+
+  spec {
+    selector = {
+      app = local.service_name
+    }
+
+    port {
+      name        = "http"
+      port        = 80
+      target_port = 8080
+      protocol    = "TCP"
+    }
+
+    type = "ClusterIP"
+  }
+}
+```
+</Tab>
+
+<Tab title="Azure">
+```terraform
+locals {
+  service_name = "bifrost-service"
+}
+
+# Creating a volume and volume claim
+resource "azurerm_managed_disk" "bifrost_disk" {
+  name                 = "bifrost-disk"
+  location             = var.region
+  resource_group_name  = var.resource_group_name
+  storage_account_type = "Premium_LRS"
+  create_option        = "Empty"
+  disk_size_gb         = var.volume_size_gb
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
+}
+
+resource "kubernetes_persistent_volume" "bifrost_volume" {
+  metadata {
+    name = "bifrost-volume"
+  }
+  spec {
+    capacity = {
+      storage = "${var.volume_size_gb}Gi"
+    }
+    access_modes                     = ["ReadWriteOnce"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "managed-premium"
+    persistent_volume_source {
+      azure_disk {
+        disk_name     = azurerm_managed_disk.bifrost_disk.name
+        data_disk_uri = azurerm_managed_disk.bifrost_disk.id
+        kind          = "Managed"
+      }
+    }
+  }
+  depends_on = [azurerm_managed_disk.bifrost_disk]
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "kubernetes_persistent_volume_claim" "bifrost_volume_claim" {
+  metadata {
+    name      = "bifrost-volume-claim"
+    namespace = var.namespace
+  }
+  spec {
+    access_modes = ["ReadWriteOnce"]
+    resources {
+      requests = {
+        storage = "${var.volume_size_gb}Gi"
+      }
+    }
+    storage_class_name = "managed-premium"
+    volume_name        = "bifrost-volume"
+  }
+  depends_on = [kubernetes_persistent_volume.bifrost_volume]
+}
+
+# Create deployment
+resource "kubernetes_deployment" "bifrost_deployment" {
+  metadata {
+    name      = local.service_name
+    namespace = kubernetes_namespace.bifrost_namespace.metadata[0].name
+    labels = {
+      app = local.service_name
+      env = var.env
+    }
+  }
+
+  spec {
+    replicas = var.replica_count
+
+    selector {
+      match_labels = {
+        app = local.service_name
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app = local.service_name
+          env = var.env
+        }
+      }
+
+      spec {
+        # Set fsGroup to match the container user's GID
+        # This tells Kubernetes to change the volume's group ownership to 1000
+        # and apply group write permissions
+        security_context {
+          fs_group               = 1000
+          fs_group_change_policy = "OnRootMismatch"
+        }
+
+        init_container {
+          name    = "fix-permissions"
+          image   = "busybox:latest"
+          command = ["sh", "-c", "chown -R 1000:1000 /app/data && chmod -R 755 /app/data"]
+
+          security_context {
+            run_as_user = 0
+          }
+
+          volume_mount {
+            name       = "bifrost-volume"
+            mount_path = "/app/data"
+          }
+        }
+
+        container {
+          name  = "bifrost-service"
+          image = "maximhq/bifrost:${var.image_tag}"
+
+          port {
+            container_port = 8080
+            name           = "http"
+          }
+
+          security_context {
+            run_as_user                = 1000
+            run_as_group               = 1000
+            run_as_non_root            = true
+            allow_privilege_escalation = false
+          }
+
+          resources {
+            requests = {
+              cpu    = "250m"
+              memory = "512Mi"
+            }
+            limits = {
+              cpu    = "500m"
+              memory = "1Gi"
+            }
+          }
+
+          volume_mount {
+            name       = "bifrost-volume"
+            mount_path = "/app/data"
+          }
+
+          liveness_probe {
+            http_get {
+              path = "/health"
+              port = 8080
+            }
+            initial_delay_seconds = 30
+            period_seconds        = 10
+            timeout_seconds       = 5
+            failure_threshold     = 3
+          }
+
+          readiness_probe {
+            http_get {
+              path = "/health"
+              port = 8080
+            }
+            initial_delay_seconds = 10
+            period_seconds        = 5
+            timeout_seconds       = 3
+            failure_threshold     = 3
+          }
+        }
+
+        volume {
+          name = "bifrost-volume"
+          persistent_volume_claim {
+            claim_name = "bifrost-volume-claim"
+          }
+        }
+      }
+    }
+  }
+}
+
+# Create Kubernetes service
+resource "kubernetes_service" "bifrost_service" {
+  metadata {
+    name      = local.service_name
+    namespace = kubernetes_namespace.bifrost_namespace.metadata[0].name
+    labels = {
+      app = local.service_name
+    }
+  }
+
+  spec {
+    selector = {
+      app = local.service_name
+    }
+
+    port {
+      name        = "http"
+      port        = 80
+      target_port = 8080
+      protocol    = "TCP"
+    }
+
+    type = "ClusterIP"
+  }
+}
+```
+</Tab>
+<Tab title="GCP">
+```terraform
+locals {
+  service_name = "bifrost-service"
+}
+
+# Creating a volume and volume claim
+resource "google_compute_disk" "bifrost_disk" {
+  name = "bifrost-disk"
+  size = var.volume_size_gb
+  type = "pd-ssd"
+  zone = "${var.region}-${var.main_zone}"
+
+  lifecycle {
+    ignore_changes = [labels]
+  }
+}
+
+resource "kubernetes_persistent_volume" "bifrost_volume" {
+  metadata {
+    name = "bifrost-volume"
+  }
+  spec {
+    capacity = {
+      storage = "${var.volume_size_gb}Gi"
+    }
+    access_modes                     = ["ReadWriteOnce"]
+    persistent_volume_reclaim_policy = "Retain"
+    storage_class_name               = "premium-rwo"
+    persistent_volume_source {
+      gce_persistent_disk {
+        pd_name = "bifrost-disk"
+      }
+    }
+  }
+  depends_on = [google_compute_disk.bifrost_disk]
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "kubernetes_persistent_volume_claim" "bifrost_volume_claim" {
+  metadata {
+    name      = "bifrost-volume-claim"
+    namespace = var.namespace
+  }
+  spec {
+    access_modes = ["ReadWriteOnce"]
+    resources {
+      requests = {
+        storage = "${var.volume_size_gb}Gi"
+      }
+    }
+    storage_class_name = "premium-rwo"
+    volume_name        = "bifrost-volume"
+  }
+  depends_on = [kubernetes_persistent_volume.bifrost_volume]
+}
+
+# Create deployment
+resource "kubernetes_deployment" "bifrost_deployment" {
+  metadata {
+    name      = local.service_name
+    namespace = kubernetes_namespace.bifrost_namespace.metadata[0].name
+    labels = {
+      app = local.service_name
+      env = var.env
+    }
+  }
+
+  spec {
+    replicas = var.replica_count
+
+    selector {
+      match_labels = {
+        app = local.service_name
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app = local.service_name
+          env = var.env
+        }
+      }
+
+      spec {
+        # Set fsGroup to match the container user's GID
+        # This tells Kubernetes to change the volume's group ownership to 1000
+        # and apply group write permissions
+        security_context {
+          fs_group               = 1000
+          fs_group_change_policy = "OnRootMismatch"
+        }
+
+        init_container {
+          name    = "fix-permissions"
+          image   = "busybox:latest"
+          command = ["sh", "-c", "chown -R 1000:1000 /app/data && chmod -R 755 /app/data"]
+
+          security_context {
+            run_as_user = 0
+          }
+
+          volume_mount {
+            name       = "bifrost-volume"
+            mount_path = "/app/data"
+          }
+        }
+
+        container {
+          name  = "bifrost-service"
+          image = "maximhq/bifrost:${var.image_tag}"
+
+          port {
+            container_port = 8080
+            name           = "http"
+          }
+
+          security_context {
+            run_as_user                = 1000
+            run_as_group               = 1000
+            run_as_non_root            = true
+            allow_privilege_escalation = false
+          }
+
+          resources {
+            requests = {
+              cpu    = "250m"
+              memory = "512Mi"
+            }
+            limits = {
+              cpu    = "500m"
+              memory = "1Gi"
+            }
+          }
+
+          volume_mount {
+            name       = "bifrost-volume"
+            mount_path = "/app/data"
+          }
+
+          liveness_probe {
+            http_get {
+              path = "/health"
+              port = 8080
+            }
+            initial_delay_seconds = 30
+            period_seconds        = 10
+            timeout_seconds       = 5
+            failure_threshold     = 3
+          }
+
+          readiness_probe {
+            http_get {
+              path = "/health"
+              port = 8080
+            }
+            initial_delay_seconds = 10
+            period_seconds        = 5
+            timeout_seconds       = 3
+            failure_threshold     = 3
+          }
+        }
+
+        volume {
+          name = "bifrost-volume"
+          persistent_volume_claim {
+            claim_name = "bifrost-volume-claim"
+          }
+        }
+      }
+    }
+  }
+}
+
+# Create Kubernetes service
+resource "kubernetes_service" "bifrost_service" {
+  metadata {
+    name      = local.service_name
+    namespace = kubernetes_namespace.bifrost_namespace.metadata[0].name
+    labels = {
+      app = local.service_name
+    }
+  }
+
+  spec {
+    selector = {
+      app = local.service_name
+    }
+
+    port {
+      name        = "http"
+      port        = 80
+      target_port = 8080
+      protocol    = "TCP"
+    }
+
+    type = "ClusterIP"
+  }
+}
+```
+</Tab>
+</Tabs>
