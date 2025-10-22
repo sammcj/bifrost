@@ -64,6 +64,9 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: "grafana-pyroscope-app,grafana-exploretraces-app,grafana-metricsdrilldown-app"
+      GF_PLUGINS_ENABLE_ALPHA: "true"
+      GF_INSTALL_PLUGINS: ""
     ports:
       - "4000:3000"
     volumes:
@@ -197,6 +200,7 @@ configs:
           isDefault: true
           editable: true
         - name: Tempo
+          uid: tempo
           type: tempo
           access: proxy
           orgId: 1
@@ -205,23 +209,8 @@ configs:
           jsonData:
             tracesToMetrics:
               datasourceUid: prometheus
-              spanStartTimeShift: '-1h'
-              spanEndTimeShift: '1h'
-              tags: 
-                - { key: 'service.name', value: 'service' }
-                - { key: 'http.method', value: 'method' }
-                - { key: 'http.status_code', value: 'status_code' }
             nodeGraph:
               enabled: true
-            search:
-              hide: false
-            traceQuery:
-              timeShiftEnabled: true
-              spanStartTimeShift: '-1h'
-              spanEndTimeShift: '1h'
-            spanBar:
-              type: 'Tag'
-              tag: 'http.path'
 
 volumes:
   prometheus-data:
