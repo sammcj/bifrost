@@ -90,7 +90,21 @@
               "features/mcp",
               "features/tracing",
               "features/telemetry",
-              "features/observability",
+              {
+                "group": "Observability",
+                "icon": "binoculars",
+                "pages": [
+                  "features/observability/default",
+                  {
+                    "group": "Connectors",
+                    "icon": "arrows-left-right-to-line",
+                    "pages": [
+                      "features/observability/maxim",
+                      "features/observability/otel"
+                    ]
+                  }
+                ]
+              },
               "features/governance",
               "features/semantic-caching",
               "features/custom-providers",
