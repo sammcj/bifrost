@@ -335,7 +335,7 @@ func (response *GenerateContentResponse) ToBifrostChatResponse() *schemas.Bifros
 	}
 
 	// Extract usage metadata
-	inputTokens, outputTokens, totalTokens := response.extractUsageMetadata()
+	inputTokens, outputTokens, totalTokens, cachedTokens, reasoningTokens := response.extractUsageMetadata()
 
 	// Process candidates to extract text content
 	if len(response.Candidates) > 0 {
@@ -380,6 +380,12 @@ func (response *GenerateContentResponse) ToBifrostChatResponse() *schemas.Bifros
 		PromptTokens:     inputTokens,
 		CompletionTokens: outputTokens,
 		TotalTokens:      totalTokens,
+		PromptTokensDetails: &schemas.ChatPromptTokensDetails{
+			CachedTokens: cachedTokens,
+		},
+		CompletionTokensDetails: &schemas.ChatCompletionTokensDetails{
+			ReasoningTokens: reasoningTokens,
+		},
 	}
 
 	return bifrostResp
@@ -468,6 +474,12 @@ func ToGeminiChatResponse(bifrostResp *schemas.BifrostChatResponse) *GenerateCon
 			PromptTokenCount:     int32(bifrostResp.Usage.PromptTokens),
 			CandidatesTokenCount: int32(bifrostResp.Usage.CompletionTokens),
 			TotalTokenCount:      int32(bifrostResp.Usage.TotalTokens),
+		}
+		if bifrostResp.Usage.PromptTokensDetails != nil {
+			genaiResp.UsageMetadata.CachedContentTokenCount = int32(bifrostResp.Usage.PromptTokensDetails.CachedTokens)
+		}
+		if bifrostResp.Usage.CompletionTokensDetails != nil {
+			genaiResp.UsageMetadata.ThoughtsTokenCount = int32(bifrostResp.Usage.CompletionTokensDetails.ReasoningTokens)
 		}
 	}
 

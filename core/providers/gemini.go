@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -100,7 +101,7 @@ func (provider *GeminiProvider) ChatCompletion(ctx context.Context, key schemas.
 	jsonBody, err := sonic.Marshal(reqBody)
 	if err != nil {
 		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, providerName)
-	}	
+	}
 
 	// Create request
 	req := fasthttp.AcquireRequest()
@@ -126,19 +127,7 @@ func (provider *GeminiProvider) ChatCompletion(ctx context.Context, key schemas.
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
-		var errorResp []struct {
-			Error struct {
-				Code    int    `json:"code"`
-				Message string `json:"message"`
-				Status  string `json:"status"`
-				Details []struct {
-					Type            string `json:"@type"`
-					FieldViolations []struct {
-						Description string `json:"description"`
-					} `json:"fieldViolations"`
-				} `json:"details"`
-			} `json:"error"`
-		}
+		var errorResp []gemini.GeminiGenerationError
 
 		bifrostErr := handleProviderAPIError(resp, &errorResp)
 		errorMessage := ""
@@ -907,29 +896,50 @@ func parseStreamGeminiError(providerName schemas.ModelProvider, resp *http.Respo
 	}
 
 	// Try to parse as JSON first
-	var errorResp map[string]interface{}
+	var errorResp gemini.GeminiGenerationError
 	if err := sonic.Unmarshal(body, &errorResp); err == nil {
-		// Successfully parsed as JSON
-		return newBifrostOperationError(fmt.Sprintf("Gemini streaming error: %v", errorResp), fmt.Errorf("HTTP %d", resp.StatusCode), providerName)
+		bifrostErr := &schemas.BifrostError{
+			IsBifrostError: false,
+			StatusCode:     schemas.Ptr(resp.StatusCode),
+			Error: &schemas.ErrorField{
+				Code:    schemas.Ptr(strconv.Itoa(errorResp.Error.Code)),
+				Message: errorResp.Error.Message,
+			},
+		}
+		return bifrostErr
 	}
 
-	// If JSON parsing fails, treat as plain text
-	bodyStr := string(body)
-	if bodyStr == "" {
-		bodyStr = "empty response body"
+	// If JSON parsing fails, use the raw response body
+	var rawResponse interface{}
+	if err := sonic.Unmarshal(body, &rawResponse); err != nil {
+		return newBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
 	}
 
-	return newBifrostOperationError(fmt.Sprintf("Gemini streaming error (HTTP %d): %s", resp.StatusCode, bodyStr), fmt.Errorf("HTTP %d", resp.StatusCode), providerName)
+	return newBifrostOperationError(fmt.Sprintf("Gemini streaming error (HTTP %d): %v", resp.StatusCode, rawResponse), fmt.Errorf("HTTP %d", resp.StatusCode), providerName)
 }
 
 // parseGeminiError parses Gemini error responses
 func parseGeminiError(providerName schemas.ModelProvider, resp *fasthttp.Response) *schemas.BifrostError {
-	var errorResp map[string]interface{}
 	body := resp.Body()
 
-	if err := sonic.Unmarshal(body, &errorResp); err != nil {
+	// Try to parse as JSON first
+	var errorResp gemini.GeminiGenerationError
+	if err := sonic.Unmarshal(body, &errorResp); err == nil {
+		bifrostErr := &schemas.BifrostError{
+			IsBifrostError: false,
+			StatusCode:     schemas.Ptr(resp.StatusCode()),
+			Error: &schemas.ErrorField{
+				Code:    schemas.Ptr(strconv.Itoa(errorResp.Error.Code)),
+				Message: errorResp.Error.Message,
+			},
+		}
+		return bifrostErr
+	}
+
+	var rawResponse map[string]interface{}
+	if err := sonic.Unmarshal(body, &rawResponse); err != nil {
 		return newBifrostOperationError("failed to parse error response", err, providerName)
 	}
 
-	return newBifrostOperationError(fmt.Sprintf("Gemini error: %v", errorResp), fmt.Errorf("HTTP %d", resp.StatusCode()), providerName)
+	return newBifrostOperationError(fmt.Sprintf("Gemini error: %v", rawResponse), fmt.Errorf("HTTP %d", resp.StatusCode()), providerName)
 }

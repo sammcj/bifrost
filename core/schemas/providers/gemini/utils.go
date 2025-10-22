@@ -153,14 +153,16 @@ func ensureExtraParams(bifrostReq *schemas.BifrostChatRequest) {
 }
 
 // extractUsageMetadata extracts usage metadata from the Gemini response
-func (r *GenerateContentResponse) extractUsageMetadata() (int, int, int) {
-	var inputTokens, outputTokens, totalTokens int
+func (r *GenerateContentResponse) extractUsageMetadata() (int, int, int, int, int) {
+	var inputTokens, outputTokens, totalTokens, cachedTokens, reasoningTokens int
 	if r.UsageMetadata != nil {
 		inputTokens = int(r.UsageMetadata.PromptTokenCount)
 		outputTokens = int(r.UsageMetadata.CandidatesTokenCount)
 		totalTokens = int(r.UsageMetadata.TotalTokenCount)
+		cachedTokens = int(r.UsageMetadata.CachedContentTokenCount)
+		reasoningTokens = int(r.UsageMetadata.ThoughtsTokenCount)
 	}
-	return inputTokens, outputTokens, totalTokens
+	return inputTokens, outputTokens, totalTokens, cachedTokens, reasoningTokens
 }
 
 // convertParamsToGenerationConfig converts Bifrost parameters to Gemini GenerationConfig
