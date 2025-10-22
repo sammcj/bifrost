@@ -105,9 +105,18 @@
                   }
                 ]
               },
-              "features/governance",
               "features/semantic-caching",
               "features/custom-providers",
+              {
+                "group": "Governance",
+                "icon": "user-lock",
+                "pages": [
+                  "features/governance/virtual-keys",
+                  "features/governance/budget-and-limits",
+                  "features/governance/routing",
+                  "features/governance/mcp-tools"
+                ]
+              },
               {
                 "group": "Plugins",
                 "icon": "puzzle-piece",
@@ -124,7 +133,7 @@
             "pages": [
               "enterprise/guardrails",
               "enterprise/clustering",
-              "enterprise/governance",
+              "enterprise/advanced-governance",
               "enterprise/mcp-with-fa",
               "enterprise/vault-support",
               "enterprise/invpc-deployments",
