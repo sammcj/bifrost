@@ -26,7 +26,7 @@ services:
       - source: tempo-config
         target: /etc/tempo.yaml
     ports:
-      - "3200:3200"   # tempo HTTP API
+      - "3200:3200"   # tempo HTTP/gRPC API (multiplexed)
     expose:
       - "4317"        # OTLP gRPC (internal)
     volumes:
@@ -67,6 +67,8 @@ services:
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: "grafana-pyroscope-app,grafana-exploretraces-app,grafana-metricsdrilldown-app"
       GF_PLUGINS_ENABLE_ALPHA: "true"
       GF_INSTALL_PLUGINS: ""
+      GF_LOG_LEVEL: "warn"
+      GF_FEATURE_TOGGLES_ENABLE: ""
     ports:
       - "4000:3000"
     volumes:
@@ -138,6 +140,7 @@ configs:
     content: |
       server:
         http_listen_port: 3200
+        grpc_listen_port: 3200
         log_level: info
 
       distributor:
@@ -207,10 +210,18 @@ configs:
           url: http://tempo:3200
           editable: true
           jsonData:
-            tracesToMetrics:
-              datasourceUid: prometheus
             nodeGraph:
               enabled: true
+            tracesToLogs:
+              datasourceUid: prometheus
+            tracesToMetrics:
+              datasourceUid: prometheus
+            serviceMap:
+              datasourceUid: prometheus
+            search:
+              hide: false
+            lokiSearch:
+              datasourceUid: prometheus
 
 volumes:
   prometheus-data:
