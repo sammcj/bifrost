@@ -75,15 +75,17 @@ func hexToBytes(hexStr string, length int) []byte {
 func getSpeechRequestParams(req *schemas.BifrostSpeechRequest) []*KeyValue {
 	params := []*KeyValue{}
 	if req.Params != nil {
-		if req.Params.VoiceConfig.Voice != nil {
-			params = append(params, kvStr("gen_ai.request.voice", *req.Params.VoiceConfig.Voice))
-		}
-		if len(req.Params.VoiceConfig.MultiVoiceConfig) > 0 {
-			multiVoiceConfigParams := []*KeyValue{}
-			for _, voiceConfig := range req.Params.VoiceConfig.MultiVoiceConfig {
-				multiVoiceConfigParams = append(multiVoiceConfigParams, kvStr("gen_ai.request.voice", voiceConfig.Voice))
+		if req.Params.VoiceConfig != nil {
+			if req.Params.VoiceConfig.Voice != nil {
+				params = append(params, kvStr("gen_ai.request.voice", *req.Params.VoiceConfig.Voice))
 			}
-			params = append(params, kvAny("gen_ai.request.multi_voice_config", arrValue(listValue(multiVoiceConfigParams...))))
+			if len(req.Params.VoiceConfig.MultiVoiceConfig) > 0 {
+				multiVoiceConfigParams := []*KeyValue{}
+				for _, voiceConfig := range req.Params.VoiceConfig.MultiVoiceConfig {
+					multiVoiceConfigParams = append(multiVoiceConfigParams, kvStr("gen_ai.request.voice", voiceConfig.Voice))
+				}
+				params = append(params, kvAny("gen_ai.request.multi_voice_config", arrValue(listValue(multiVoiceConfigParams...))))
+			}
 		}
 		params = append(params, kvStr("gen_ai.request.instructions", req.Params.Instructions))
 		params = append(params, kvStr("gen_ai.request.response_format", req.Params.ResponseFormat))
@@ -91,7 +93,9 @@ func getSpeechRequestParams(req *schemas.BifrostSpeechRequest) []*KeyValue {
 			params = append(params, kvDbl("gen_ai.request.speed", *req.Params.Speed))
 		}
 	}
-	params = append(params, kvStr("gen_ai.input.speech", req.Input.Input))
+	if req.Input != nil {
+		params = append(params, kvStr("gen_ai.input.speech", req.Input.Input))
+	}
 	return params
 }
 
@@ -226,6 +230,9 @@ func getChatRequestParams(req *schemas.BifrostChatRequest) []*KeyValue {
 	if req.Input != nil {
 		messages := []*AnyValue{}
 		for _, message := range req.Input {
+			if message.Content == nil {
+				continue
+			}
 			switch message.Role {
 			case schemas.ChatMessageRoleUser:
 				kvs := []*KeyValue{kvStr("role", "user")}
@@ -504,18 +511,20 @@ func completeResourceSpan(span *ResourceSpan, timestamp time.Time, resp *schemas
 					continue
 				}
 				kvs := []*KeyValue{kvStr("role", string(*message.Role))}
-				if message.Content.ContentStr != nil && *message.Content.ContentStr != "" {
-					kvs = append(kvs, kvStr("content", *message.Content.ContentStr))
-				} else if message.Content.ContentBlocks != nil {
-					blockText := ""
-					for _, block := range message.Content.ContentBlocks {
-						if block.Text != nil {
-							blockText += *block.Text
+				if message.Content != nil {
+					if message.Content.ContentStr != nil && *message.Content.ContentStr != "" {
+						kvs = append(kvs, kvStr("content", *message.Content.ContentStr))
+					} else if message.Content.ContentBlocks != nil {
+						blockText := ""
+						for _, block := range message.Content.ContentBlocks {
+							if block.Text != nil {
+								blockText += *block.Text
+							}
 						}
+						kvs = append(kvs, kvStr("content", blockText))
 					}
-					kvs = append(kvs, kvStr("content", blockText))
 				}
-				if message.ResponsesReasoning != nil {
+				if message.ResponsesReasoning != nil && message.ResponsesReasoning.Summary != nil {
 					reasoningText := ""
 					for _, block := range message.ResponsesReasoning.Summary {
 						if block.Text != "" {
@@ -620,18 +629,20 @@ func completeResourceSpan(span *ResourceSpan, timestamp time.Time, resp *schemas
 			kvs := []*KeyValue{kvStr("text", resp.TranscriptionResponse.Text)}
 			outputMessages = append(outputMessages, listValue(kvs...))
 			params = append(params, kvAny("gen_ai.transcribe.output_messages", arrValue(outputMessages...)))
-			if resp.TranscriptionResponse.Usage.InputTokens != nil {
-				params = append(params, kvInt("gen_ai.usage.input_tokens", int64(*resp.TranscriptionResponse.Usage.InputTokens)))
-			}
-			if resp.TranscriptionResponse.Usage.OutputTokens != nil {
-				params = append(params, kvInt("gen_ai.usage.completion_tokens", int64(*resp.TranscriptionResponse.Usage.OutputTokens)))
-			}
-			if resp.TranscriptionResponse.Usage.TotalTokens != nil {
-				params = append(params, kvInt("gen_ai.usage.total_tokens", int64(*resp.TranscriptionResponse.Usage.TotalTokens)))
-			}
-			if resp.TranscriptionResponse.Usage.InputTokenDetails != nil {
-				params = append(params, kvInt("gen_ai.usage.input_token_details.text_tokens", int64(resp.TranscriptionResponse.Usage.InputTokenDetails.TextTokens)))
-				params = append(params, kvInt("gen_ai.usage.input_token_details.audio_tokens", int64(resp.TranscriptionResponse.Usage.InputTokenDetails.AudioTokens)))
+			if resp.TranscriptionResponse.Usage != nil {
+				if resp.TranscriptionResponse.Usage.InputTokens != nil {
+					params = append(params, kvInt("gen_ai.usage.input_tokens", int64(*resp.TranscriptionResponse.Usage.InputTokens)))
+				}
+				if resp.TranscriptionResponse.Usage.OutputTokens != nil {
+					params = append(params, kvInt("gen_ai.usage.completion_tokens", int64(*resp.TranscriptionResponse.Usage.OutputTokens)))
+				}
+				if resp.TranscriptionResponse.Usage.TotalTokens != nil {
+					params = append(params, kvInt("gen_ai.usage.total_tokens", int64(*resp.TranscriptionResponse.Usage.TotalTokens)))
+				}
+				if resp.TranscriptionResponse.Usage.InputTokenDetails != nil {
+					params = append(params, kvInt("gen_ai.usage.input_token_details.text_tokens", int64(resp.TranscriptionResponse.Usage.InputTokenDetails.TextTokens)))
+					params = append(params, kvInt("gen_ai.usage.input_token_details.audio_tokens", int64(resp.TranscriptionResponse.Usage.InputTokenDetails.AudioTokens)))
+				}
 			}
 		}
 	}
