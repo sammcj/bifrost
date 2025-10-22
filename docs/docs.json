@@ -137,6 +137,13 @@
         ]
       },
       {
+        "tab": "Models catalog",
+        "icon": "box",
+        "pages": [
+          "models-catalog/list"
+        ]
+      },
+      {
         "tab": "Deployment Guides",
         "icon": "server",
         "pages": [
@@ -144,6 +151,7 @@
             "group": "Platform specific guides",
             "icon": "swatchbook",
             "pages": [
+               "deployment-guides/k8s",
               "deployment-guides/fly"
             ]
           },
