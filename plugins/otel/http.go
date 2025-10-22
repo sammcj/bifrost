@@ -16,18 +16,20 @@ import (
 type OtelClientHTTP struct {
 	client   *http.Client
 	endpoint string
+	headers  map[string]string
 }
 
 // NewOtelClientHTTP creates a new OpenTelemetry client for HTTP
-func NewOtelClientHTTP(endpoint string) (*OtelClientHTTP, error) {
+func NewOtelClientHTTP(endpoint string, headers map[string]string) (*OtelClientHTTP, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConns = 100
 	transport.MaxIdleConnsPerHost = 10
 	transport.IdleConnTimeout = 120 * time.Second
+
 	return &OtelClientHTTP{client: &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout:   30 * time.Second,
 		Transport: transport,
-	}, endpoint: endpoint}, nil
+	}, endpoint: endpoint, headers: headers}, nil
 }
 
 // Emit sends a trace to the OpenTelemetry collector
@@ -45,6 +47,14 @@ func (c *OtelClientHTTP) Emit(ctx context.Context, rs []*ResourceSpan) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-protobuf")
+	if c.headers != nil {
+		for key, value := range c.headers {
+			if key == "Content-Type" {
+				continue
+			}
+			req.Header.Set(key, value)
+		}
+	}
 	resp, err := c.client.Do(req)
 	if err != nil {
 		logger.Error("[otel] failed to send request to %s: %v", c.endpoint, err)

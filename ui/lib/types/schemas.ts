@@ -422,6 +422,7 @@ export const otelConfigSchema = z
 				message: "Please select a trace type",
 			})
 			.default("otel"),
+		headers: z.record(z.string(), z.string()).optional(),
 		protocol: z
 			.enum(["http", "grpc"], {
 				message: "Please select a protocol",
