@@ -203,10 +203,19 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 		return nil, newConfigurationError("region is not set in key config", schemas.Vertex)
 	}
 
-	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1beta1/projects/%s/locations/%s/endpoints/openapi/chat/completions", region, projectID, region)
-
+	var url string
 	if strings.Contains(request.Model, "claude") {
-		url = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:rawPredict", region, projectID, region, request.Model)
+		if region == "global" {
+			url = fmt.Sprintf("https://aiplatform.googleapis.com/v1/projects/%s/locations/global/publishers/anthropic/models/%s:rawPredict", projectID, request.Model)
+		} else {
+			url = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:rawPredict", region, projectID, region, request.Model)
+		}
+	} else {
+		if region == "global" {
+			url = fmt.Sprintf("https://aiplatform.googleapis.com/v1beta1/projects/%s/locations/global/endpoints/openapi/chat/completions", projectID)
+		} else {
+			url = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1beta1/projects/%s/locations/%s/endpoints/openapi/chat/completions", region, projectID, region)
+		}
 	}
 
 	// Create request
@@ -286,12 +295,19 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 		}
 
 		var openAIErr schemas.BifrostError
-		var vertexErr []VertexError
 
+		var vertexErr []VertexError
 		if err := sonic.Unmarshal(body, &openAIErr); err != nil {
 			// Try Vertex error format if OpenAI format fails
 			if err := sonic.Unmarshal(body, &vertexErr); err != nil {
-				return nil, newBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, schemas.Vertex)
+
+				//try with single Vertex error format
+				var vertexErr VertexError
+				if err := sonic.Unmarshal(body, &vertexErr); err != nil {
+					return nil, newBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, schemas.Vertex)
+				}
+
+				return nil, newProviderAPIError(vertexErr.Error.Message, nil, resp.StatusCode, schemas.Vertex, nil, nil)
 			}
 
 			if len(vertexErr) > 0 {
@@ -395,7 +411,12 @@ func (provider *VertexProvider) ChatCompletionStream(ctx context.Context, postHo
 		delete(requestBody, "model")
 		delete(requestBody, "region")
 
-		url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:streamRawPredict", region, projectID, region, request.Model)
+		var url string
+		if region == "global" {
+			url = fmt.Sprintf("https://aiplatform.googleapis.com/v1/projects/%s/locations/global/publishers/anthropic/models/%s:streamRawPredict", projectID, request.Model)
+		} else {
+			url = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:streamRawPredict", region, projectID, region, request.Model)
+		}
 
 		// Prepare headers for Vertex Anthropic
 		headers := map[string]string{
@@ -418,7 +439,12 @@ func (provider *VertexProvider) ChatCompletionStream(ctx context.Context, postHo
 			provider.logger,
 		)
 	} else {
-		url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1beta1/projects/%s/locations/%s/endpoints/openapi/chat/completions", region, projectID, region)
+		var url string
+		if region == "global" {
+			url = fmt.Sprintf("https://aiplatform.googleapis.com/v1beta1/projects/%s/locations/global/endpoints/openapi/chat/completions", projectID)
+		} else {
+			url = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1beta1/projects/%s/locations/%s/endpoints/openapi/chat/completions", region, projectID, region)
+		}
 		authHeader := map[string]string{}
 		if key.Value != "" {
 			authHeader["Authorization"] = "Bearer " + key.Value

@@ -47,7 +47,7 @@ func ToGeminiTranscriptionRequest(bifrostReq *schemas.BifrostTranscriptionReques
 	}
 
 	// Create parts for the transcription request
-	parts := []*CustomPart{
+	parts := []*Part{
 		{
 			Text: prompt,
 		},
@@ -55,15 +55,15 @@ func ToGeminiTranscriptionRequest(bifrostReq *schemas.BifrostTranscriptionReques
 
 	// Add audio file if present
 	if len(bifrostReq.Input.File) > 0 {
-		parts = append(parts, &CustomPart{
-			InlineData: &CustomBlob{
+		parts = append(parts, &Part{
+			InlineData: &Blob{
 				MIMEType: detectAudioMimeType(bifrostReq.Input.File),
 				Data:     bifrostReq.Input.File,
 			},
 		})
 	}
 
-	geminiReq.Contents = []CustomContent{
+	geminiReq.Contents = []Content{
 		{
 			Parts: parts,
 		},
