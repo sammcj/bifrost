@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	collectorpb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -49,7 +50,7 @@ func (c *OtelClientHTTP) Emit(ctx context.Context, rs []*ResourceSpan) error {
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	if c.headers != nil {
 		for key, value := range c.headers {
-			if key == "Content-Type" {
+			if strings.ToLower(key) == "content-type" {
 				continue
 			}
 			req.Header.Set(key, value)
