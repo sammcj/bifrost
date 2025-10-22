@@ -6,7 +6,7 @@ mode: "wide"
 ---
 
 export const ModelDialog = React.memo(({ model, onClose }) => {
-  const modelString = `model: "${model.provider || 'unknown'}/${model.model || 'unknown'}"`
+  const modelString = `model: "${model.model || 'unknown'}"`
   const jsonString = JSON.stringify(model, null, 2)
 
   const copyModelString = useCallback(() => {
