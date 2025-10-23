@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/oauth2/google"
 
@@ -245,6 +246,8 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 		return nil, newBifrostOperationError("error creating auth client", err, schemas.Vertex)
 	}
 
+	startTime := time.Now()
+
 	// Make request
 	resp, err := client.Do(req)
 	if err != nil {
@@ -266,6 +269,8 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, schemas.Vertex)
 	}
 	defer resp.Body.Close()
+
+	latency := time.Since(startTime)
 
 	// Handle error response
 	// Read response body
@@ -314,6 +319,7 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 			RequestType:    schemas.ChatCompletionRequest,
 			Provider:       schemas.Vertex,
 			ModelRequested: request.Model,
+			Latency:        latency.Milliseconds(),
 		}
 
 		if provider.sendBackRawResponse {
@@ -322,10 +328,7 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 
 		return response, nil
 	} else {
-		// Pre-allocate response structs from pools
-		// response := acquireOpenAIResponse()
 		response := &schemas.BifrostChatResponse{}
-		// defer releaseOpenAIResponse(response)
 
 		// Use enhanced response handler with pre-allocated response
 		rawResponse, bifrostErr := handleProviderResponse(body, response, provider.sendBackRawResponse)
@@ -336,6 +339,7 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 		response.ExtraFields.RequestType = schemas.ChatCompletionRequest
 		response.ExtraFields.Provider = schemas.Vertex
 		response.ExtraFields.ModelRequested = request.Model
+		response.ExtraFields.Latency = latency.Milliseconds()
 
 		if provider.sendBackRawResponse {
 			response.ExtraFields.RawResponse = rawResponse
@@ -484,22 +488,15 @@ func (provider *VertexProvider) Embedding(ctx context.Context, key schemas.Key, 
 		return nil, newConfigurationError("embedding input texts are empty", schemas.Vertex)
 	}
 
-	// All Vertex AI embedding models use the same native Vertex embedding API
-	return provider.handleVertexEmbedding(ctx, request.Model, key, reqBody, request.Params)
-}
-
-// handleVertexEmbedding handles embedding requests using Vertex's native embedding API
-// This is used for all Vertex AI embedding models as they all use the same response format
-func (provider *VertexProvider) handleVertexEmbedding(ctx context.Context, model string, key schemas.Key, vertexReq *vertex.VertexEmbeddingRequest, params *schemas.EmbeddingParameters) (*schemas.BifrostEmbeddingResponse, *schemas.BifrostError) {
 	// Use the typed request directly
-	jsonBody, err := sonic.Marshal(vertexReq)
+	jsonBody, err := sonic.Marshal(reqBody)
 	if err != nil {
 		return nil, newBifrostOperationError(schemas.ErrProviderJSONMarshaling, err, schemas.Vertex)
 	}
 
 	// Build the native Vertex embedding API endpoint
 	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:predict",
-		key.VertexKeyConfig.Region, key.VertexKeyConfig.ProjectID, key.VertexKeyConfig.Region, model)
+		key.VertexKeyConfig.Region, key.VertexKeyConfig.ProjectID, key.VertexKeyConfig.Region, request.Model)
 
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
@@ -532,6 +529,8 @@ func (provider *VertexProvider) handleVertexEmbedding(ctx context.Context, model
 		return nil, newBifrostOperationError("error creating auth client", err, schemas.Vertex)
 	}
 
+	startTime := time.Now()
+
 	// Make request
 	resp, err := client.Do(req)
 	if err != nil {
@@ -553,6 +552,8 @@ func (provider *VertexProvider) handleVertexEmbedding(ctx context.Context, model
 		return nil, newBifrostOperationError(schemas.ErrProviderRequest, err, schemas.Vertex)
 	}
 	defer resp.Body.Close()
+
+	latency := time.Since(startTime)
 
 	// Handle error response
 	body, err := io.ReadAll(resp.Body)
@@ -598,8 +599,9 @@ func (provider *VertexProvider) handleVertexEmbedding(ctx context.Context, model
 
 	// Set ExtraFields
 	bifrostResponse.ExtraFields.Provider = schemas.Vertex
-	bifrostResponse.ExtraFields.ModelRequested = model
+	bifrostResponse.ExtraFields.ModelRequested = request.Model
 	bifrostResponse.ExtraFields.RequestType = schemas.EmbeddingRequest
+	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
 
 	// Set raw response if enabled
 	if provider.sendBackRawResponse {

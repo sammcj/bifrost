@@ -77,7 +77,7 @@ func (response *GenerateContentResponse) ToBifrostTranscriptionResponse() *schem
 	bifrostResp := &schemas.BifrostTranscriptionResponse{}
 
 	// Extract usage metadata
-	inputTokens, outputTokens, totalTokens := response.extractUsageMetadata()
+	inputTokens, outputTokens, totalTokens, _, _ := response.extractUsageMetadata()
 
 	// Process candidates to extract text content
 	if len(response.Candidates) > 0 {
