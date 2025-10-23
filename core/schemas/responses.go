@@ -567,7 +567,7 @@ type ResponsesComputerToolCall struct {
 // ResponsesComputerToolCallPendingSafetyCheck represents a pending safety check
 type ResponsesComputerToolCallPendingSafetyCheck struct {
 	ID      string `json:"id"`
-	Context string `json:"context"`
+	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 

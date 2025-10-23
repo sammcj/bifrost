@@ -381,8 +381,8 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 
 		scanner := bufio.NewScanner(resp.Body)
 		// Increase buffer size to handle large chunks (especially for audio data)
-		buf := make([]byte, 0, 256*1024) // 256KB buffer
-		scanner.Buffer(buf, 1024*1024)   // Allow up to 1MB tokens
+		buf := make([]byte, 0, 1024*1024) // 1MB initial buffer
+		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB tokens
 		chunkIndex := -1
 		usage := &schemas.SpeechUsage{}
 		startTime := time.Now()
@@ -658,6 +658,9 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 		defer resp.Body.Close()
 
 		scanner := bufio.NewScanner(resp.Body)
+		// Increase buffer size to handle large chunks (especially for audio data)
+		buf := make([]byte, 0, 1024*1024) // 1MB initial buffer
+		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB tokens
 		chunkIndex := -1
 		usage := &schemas.TranscriptionUsage{}
 		startTime := time.Now()
@@ -674,8 +677,8 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 			}
 			var jsonData string
 			// Parse SSE data
-			if strings.HasPrefix(line, "data: ") {
-				jsonData = strings.TrimPrefix(line, "data: ")
+			if after, ok := strings.CutPrefix(line, "data: "); ok {
+				jsonData = after
 			} else {
 				// Handle raw JSON errors (without "data: " prefix)
 				jsonData = line
