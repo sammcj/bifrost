@@ -352,21 +352,21 @@ func addSpeechConfigToGenerationConfig(config *GenerationConfig, voiceConfig *sc
 }
 
 // convertBifrostMessagesToGemini converts Bifrost messages to Gemini format
-func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []CustomContent {
-	var contents []CustomContent
+func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []Content {
+	var contents []Content
 
 	for _, message := range messages {
-		var parts []*CustomPart
+		var parts []*Part
 
 		// Handle content
 		if message.Content.ContentStr != nil && *message.Content.ContentStr != "" {
-			parts = append(parts, &CustomPart{
+			parts = append(parts, &Part{
 				Text: *message.Content.ContentStr,
 			})
 		} else if message.Content.ContentBlocks != nil {
 			for _, block := range message.Content.ContentBlocks {
 				if block.Text != nil {
-					parts = append(parts, &CustomPart{
+					parts = append(parts, &Part{
 						Text: *block.Text,
 					})
 				}
@@ -389,7 +389,7 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []CustomCont
 					if toolCall.ID != nil && strings.TrimSpace(*toolCall.ID) != "" {
 						callID = *toolCall.ID
 					}
-					parts = append(parts, &CustomPart{
+					parts = append(parts, &Part{
 						FunctionCall: &FunctionCall{
 							ID:   callID,
 							Name: *toolCall.Function.Name,
@@ -442,7 +442,7 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []CustomCont
 				callID = *message.ChatToolMessage.ToolCallID
 			}
 
-			parts = append(parts, &CustomPart{
+			parts = append(parts, &Part{
 				FunctionResponse: &FunctionResponse{
 					ID:       callID,
 					Name:     callID, // Gemini uses name for correlation
@@ -452,7 +452,7 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []CustomCont
 		}
 
 		if len(parts) > 0 {
-			content := CustomContent{
+			content := Content{
 				Parts: parts,
 				Role:  string(message.Role),
 			}
