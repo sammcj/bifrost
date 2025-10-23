@@ -16,6 +16,7 @@ type BifrostChatRequest struct {
 	Fallbacks []Fallback      `json:"fallbacks,omitempty"`
 }
 
+// BifrostChatResponse represents the complete result from a chat completion request.
 type BifrostChatResponse struct {
 	ID                string                     `json:"id"`
 	Choices           []BifrostResponseChoice    `json:"choices"`
@@ -203,12 +204,12 @@ type ChatToolFunction struct {
 
 // ToolFunctionParameters represents the parameters for a function definition.
 type ToolFunctionParameters struct {
-	Type                 string                 `json:"type"`                           // Type of the parameters
-	Description          *string                `json:"description,omitempty"`          // Description of the parameters
-	Required             []string               `json:"required,omitempty"`             // Required parameter names
+	Type                 string                  `json:"type"`                           // Type of the parameters
+	Description          *string                 `json:"description,omitempty"`          // Description of the parameters
+	Required             []string                `json:"required,omitempty"`             // Required parameter names
 	Properties           *map[string]interface{} `json:"properties,omitempty"`           // Parameter properties
-	Enum                 []string               `json:"enum,omitempty"`                 // Enum values for the parameters
-	AdditionalProperties *bool                  `json:"additionalProperties,omitempty"` // Whether to allow additional properties
+	Enum                 []string                `json:"enum,omitempty"`                 // Enum values for the parameters
+	AdditionalProperties *bool                   `json:"additionalProperties,omitempty"` // Whether to allow additional properties
 }
 
 type ChatToolCustom struct {
