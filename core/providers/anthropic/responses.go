@@ -315,7 +315,9 @@ func ToAnthropicResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *A
 				anthropicReq.StopSequences = stop
 			}
 			if thinking, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "thinking"); ok {
-				if thinkingMap, ok := thinking.(map[string]interface{}); ok {
+				if anthropicThinking, ok := thinking.(*AnthropicThinking); ok {
+					anthropicReq.Thinking = anthropicThinking
+				} else if thinkingMap, ok := thinking.(map[string]interface{}); ok {
 					anthropicThinking := &AnthropicThinking{}
 					if thinkingType, ok := thinkingMap["type"].(string); ok {
 						anthropicThinking.Type = thinkingType
@@ -457,6 +459,8 @@ func ToAnthropicResponsesResponse(bifrostResp *schemas.BifrostResponsesResponse)
 
 	if len(contentBlocks) > 0 {
 		anthropicResp.Content = contentBlocks
+	} else {
+		anthropicResp.Content = []AnthropicContentBlock{}
 	}
 
 	// Set default stop reason - could be enhanced based on additional context
@@ -642,6 +646,7 @@ func (chunk *AnthropicStreamEvent) ToBifrostResponsesStream(ctx context.Context,
 					Type:           schemas.ResponsesStreamResponseTypeOutputItemAdded,
 					SequenceNumber: sequenceNumber,
 					OutputIndex:    schemas.Ptr(outputIndex),
+					ContentIndex:   chunk.Index,
 					Item:           item,
 				}}, nil, false
 
@@ -676,6 +681,7 @@ func (chunk *AnthropicStreamEvent) ToBifrostResponsesStream(ctx context.Context,
 					Type:           schemas.ResponsesStreamResponseTypeOutputItemAdded,
 					SequenceNumber: sequenceNumber,
 					OutputIndex:    schemas.Ptr(outputIndex),
+					ContentIndex:   chunk.Index,
 					Item:           item,
 				}}, nil, false
 
