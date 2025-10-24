@@ -2,8 +2,8 @@ package openai
 
 import "github.com/maximhq/bifrost/core/schemas"
 
-// ToBifrostRequest converts an OpenAI chat request to Bifrost format
-func (request *OpenAIChatRequest) ToBifrostRequest() *schemas.BifrostChatRequest {
+// ToBifrostChatRequest converts an OpenAI chat request to Bifrost format
+func (request *OpenAIChatRequest) ToBifrostChatRequest() *schemas.BifrostChatRequest {
 	provider, model := schemas.ParseModelString(request.Model, schemas.OpenAI)
 
 	bifrostReq := &schemas.BifrostChatRequest{

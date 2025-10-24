@@ -2,7 +2,8 @@ package openai
 
 import "github.com/maximhq/bifrost/core/schemas"
 
-func (request *OpenAIResponsesRequest) ToBifrostRequest() *schemas.BifrostResponsesRequest {
+// ToBifrostResponsesRequest converts an OpenAI responses request to Bifrost format
+func (request *OpenAIResponsesRequest) ToBifrostResponsesRequest() *schemas.BifrostResponsesRequest {
 	if request == nil {
 		return nil
 	}
@@ -27,6 +28,7 @@ func (request *OpenAIResponsesRequest) ToBifrostRequest() *schemas.BifrostRespon
 	}
 }
 
+// ToOpenAIResponsesRequest converts a Bifrost responses request to OpenAI format
 func ToOpenAIResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *OpenAIResponsesRequest {
 	if bifrostReq == nil || bifrostReq.Input == nil {
 		return nil
