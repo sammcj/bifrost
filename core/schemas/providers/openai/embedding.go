@@ -4,8 +4,8 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
-// ToBifrostRequest converts an OpenAI embedding request to Bifrost format
-func (request *OpenAIEmbeddingRequest) ToBifrostRequest() *schemas.BifrostEmbeddingRequest {
+// ToBifrostEmbeddingRequest converts an OpenAI embedding request to Bifrost format
+func (request *OpenAIEmbeddingRequest) ToBifrostEmbeddingRequest() *schemas.BifrostEmbeddingRequest {
 	provider, model := schemas.ParseModelString(request.Model, schemas.OpenAI)
 
 	bifrostReq := &schemas.BifrostEmbeddingRequest{
