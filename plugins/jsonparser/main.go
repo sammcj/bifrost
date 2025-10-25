@@ -2,7 +2,6 @@ package jsonparser
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"sync"
 	"time"
@@ -120,10 +119,17 @@ func (p *JsonParserPlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 		return result, err, nil
 	}
 
+	// Create a deep copy of the result to avoid modifying the original pointer
+	// This ensures other plugins using the same pointer don't get corrupted data
+	resultCopy := p.deepCopyBifrostResponse(result)
+	if resultCopy == nil || resultCopy.ChatResponse == nil {
+		return result, err, nil
+	}
+
 	// Process only streaming choices to accumulate and fix partial JSON
-	if len(result.ChatResponse.Choices) > 0 {
-		for i := range result.ChatResponse.Choices {
-			choice := &result.ChatResponse.Choices[i]
+	if len(resultCopy.ChatResponse.Choices) > 0 {
+		for i := range resultCopy.ChatResponse.Choices {
+			choice := &resultCopy.ChatResponse.Choices[i]
 
 			// Handle only streaming response
 			if choice.ChatStreamResponseChoice != nil {
@@ -165,72 +171,8 @@ func (p *JsonParserPlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 		}
 	}
 
-	return result, err, nil
-}
-
-// getRequestID extracts a unique identifier for the request to maintain state
-func (p *JsonParserPlugin) getRequestID(ctx *context.Context, result *schemas.BifrostResponse) string {
-
-	// Try to get from result
-	if result != nil && result.ChatResponse != nil && result.ChatResponse.ID != "" {
-		return result.ChatResponse.ID
-	}
-
-	// Try to get from context if not available in result
-	if ctx != nil {
-		if requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string); ok && requestID != "" {
-			return requestID
-		}
-	}
-
-	return ""
-}
-
-// accumulateContent adds new content to the accumulated content for a specific request
-func (p *JsonParserPlugin) accumulateContent(requestID, newContent string) string {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
-	// Get existing accumulated content
-	existing := p.accumulatedContent[requestID]
-
-	if existing != nil {
-		// Append to existing builder
-		existing.Content.WriteString(newContent)
-		return existing.Content.String()
-	} else {
-		// Create new builder
-		builder := &strings.Builder{}
-		builder.WriteString(newContent)
-		p.accumulatedContent[requestID] = &AccumulatedContent{
-			Content:   builder,
-			Timestamp: time.Now(),
-		}
-		return builder.String()
-	}
-}
-
-// shouldRun determines if the plugin should process the request based on usage type
-func (p *JsonParserPlugin) shouldRun(ctx *context.Context, requestType schemas.RequestType) bool {
-	// Run only for chat completion stream requests
-	if requestType != schemas.ChatCompletionStreamRequest {
-		return false
-	}
-
-	switch p.usage {
-	case AllRequests:
-		return true
-	case PerRequest:
-		// Check if the context contains the plugin-specific key
-		if ctx != nil {
-			if value, ok := (*ctx).Value(EnableStreamingJSONParser).(bool); ok {
-				return value
-			}
-		}
-		return false
-	default:
-		return false
-	}
+	// Return the modified copy instead of the original
+	return resultCopy, err, nil
 }
 
 // Cleanup performs plugin cleanup and clears accumulated content
@@ -254,139 +196,7 @@ func (p *JsonParserPlugin) ClearRequestState(requestID string) {
 	delete(p.accumulatedContent, requestID)
 }
 
-// parsePartialJSON parses a JSON string that may be missing closing braces
-func (p *JsonParserPlugin) parsePartialJSON(s string) string {
-	// Trim whitespace
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return "{}"
-	}
-
-	// Quick check: if it starts with { or [, it might be JSON
-	if s[0] != '{' && s[0] != '[' {
-		return s
-	}
-
-	// First, try to parse the string as-is (fast path)
-	if p.isValidJSON(s) {
-		return s
-	}
-
-	// Use a more efficient approach: build the completion directly
-	return p.completeJSON(s)
-}
-
-// isValidJSON checks if a string is valid JSON
-func (p *JsonParserPlugin) isValidJSON(s string) bool {
-	// Trim whitespace
-	s = strings.TrimSpace(s)
-
-	// Empty string after trimming is not valid JSON
-	if s == "" {
-		return false
-	}
-
-	return json.Valid([]byte(s))
-}
-
-// completeJSON completes partial JSON with O(n) time complexity
-func (p *JsonParserPlugin) completeJSON(s string) string {
-	// Pre-allocate buffer with estimated capacity
-	capacity := len(s) + 10 // Estimate max 10 closing characters needed
-	result := make([]byte, 0, capacity)
-
-	var stack []byte
-	inString := false
-	escaped := false
-
-	// Process the string once
-	for i := 0; i < len(s); i++ {
-		char := s[i]
-		result = append(result, char)
-
-		if escaped {
-			escaped = false
-			continue
-		}
-
-		if char == '\\' {
-			escaped = true
-			continue
-		}
-
-		if char == '"' {
-			inString = !inString
-			continue
-		}
-
-		if inString {
-			continue
-		}
-
-		switch char {
-		case '{', '[':
-			if char == '{' {
-				stack = append(stack, '}')
-			} else {
-				stack = append(stack, ']')
-			}
-		case '}', ']':
-			if len(stack) > 0 && stack[len(stack)-1] == char {
-				stack = stack[:len(stack)-1]
-			}
-		}
-	}
-
-	// Close any unclosed strings
-	if inString {
-		if escaped {
-			// Remove the trailing backslash
-			if len(result) > 0 {
-				result = result[:len(result)-1]
-			}
-		}
-		result = append(result, '"')
-	}
-
-	// Add closing characters in reverse order
-	for i := len(stack) - 1; i >= 0; i-- {
-		result = append(result, stack[i])
-	}
-
-	// Validate the result
-	if p.isValidJSON(string(result)) {
-		return string(result)
-	}
-
-	// If still invalid, try progressive truncation (but more efficiently)
-	return p.progressiveTruncation(s, result)
-}
-
-// progressiveTruncation efficiently tries different truncation points
-func (p *JsonParserPlugin) progressiveTruncation(original string, completed []byte) string {
-	// Try removing characters from the end until we get valid JSON
-	// Use binary search for better performance
-	left, right := 0, len(completed)
-
-	for left < right {
-		mid := (left + right) / 2
-		candidate := completed[:mid]
-
-		if p.isValidJSON(string(candidate)) {
-			left = mid + 1
-		} else {
-			right = mid
-		}
-	}
-
-	// Try the best candidate
-	if left > 0 && p.isValidJSON(string(completed[:left-1])) {
-		return string(completed[:left-1])
-	}
-
-	// Fallback to original
-	return original
-}
+// CLEANUP METHODS
 
 // startCleanupGoroutine starts a goroutine that periodically cleans up old accumulated content
 func (p *JsonParserPlugin) startCleanupGoroutine() {
