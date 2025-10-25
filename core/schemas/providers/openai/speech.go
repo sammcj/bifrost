@@ -2,8 +2,8 @@ package openai
 
 import "github.com/maximhq/bifrost/core/schemas"
 
-// ToBifrostRequest converts an OpenAI speech request to Bifrost format
-func (request *OpenAISpeechRequest) ToBifrostRequest() *schemas.BifrostSpeechRequest {
+// ToBifrostSpeechRequest converts an OpenAI speech request to Bifrost format
+func (request *OpenAISpeechRequest) ToBifrostSpeechRequest() *schemas.BifrostSpeechRequest {
 	provider, model := schemas.ParseModelString(request.Model, schemas.OpenAI)
 
 	bifrostReq := &schemas.BifrostSpeechRequest{

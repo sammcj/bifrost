@@ -24,7 +24,8 @@ func ToOpenAITextCompletionRequest(bifrostReq *schemas.BifrostTextCompletionRequ
 	return openaiReq
 }
 
-func (request *OpenAITextCompletionRequest) ToBifrostRequest() *schemas.BifrostTextCompletionRequest {
+// ToBifrostTextCompletionRequest converts an OpenAI text completion request to Bifrost format
+func (request *OpenAITextCompletionRequest) ToBifrostTextCompletionRequest() *schemas.BifrostTextCompletionRequest {
 	if request == nil {
 		return nil
 	}

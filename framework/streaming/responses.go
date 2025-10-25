@@ -10,6 +10,420 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
+// deepCopyResponsesStreamResponse creates a deep copy of BifrostResponsesStreamResponse
+// to prevent shared data mutation between different plugin accumulators
+func deepCopyResponsesStreamResponse(original *schemas.BifrostResponsesStreamResponse) *schemas.BifrostResponsesStreamResponse {
+	if original == nil {
+		return nil
+	}
+
+	copy := &schemas.BifrostResponsesStreamResponse{
+		Type:           original.Type,
+		SequenceNumber: original.SequenceNumber,
+		ExtraFields:    original.ExtraFields, // ExtraFields can be safely shared as they're typically read-only
+	}
+
+	// Deep copy Response if present
+	if original.Response != nil {
+		copy.Response = &schemas.BifrostResponsesResponse{}
+		*copy.Response = *original.Response // Shallow copy the struct
+
+		// Deep copy the Output slice if present
+		if original.Response.Output != nil {
+			copy.Response.Output = make([]schemas.ResponsesMessage, len(original.Response.Output))
+			for i, msg := range original.Response.Output {
+				copy.Response.Output[i] = deepCopyResponsesMessage(msg)
+			}
+		}
+
+		// Copy Usage if present (Usage can be shallow copied as it's typically immutable)
+		if original.Response.Usage != nil {
+			copyUsage := *original.Response.Usage
+			copy.Response.Usage = &copyUsage
+		}
+	}
+
+	// Copy pointer fields
+	if original.OutputIndex != nil {
+		copyOutputIndex := *original.OutputIndex
+		copy.OutputIndex = &copyOutputIndex
+	}
+
+	if original.Item != nil {
+		copyItem := deepCopyResponsesMessage(*original.Item)
+		copy.Item = &copyItem
+	}
+
+	if original.ContentIndex != nil {
+		copyContentIndex := *original.ContentIndex
+		copy.ContentIndex = &copyContentIndex
+	}
+
+	if original.ItemID != nil {
+		copyItemID := *original.ItemID
+		copy.ItemID = &copyItemID
+	}
+
+	if original.Part != nil {
+		copyPart := deepCopyResponsesMessageContentBlock(*original.Part)
+		copy.Part = &copyPart
+	}
+
+	if original.Delta != nil {
+		copyDelta := *original.Delta
+		copy.Delta = &copyDelta
+	}
+
+	// Deep copy LogProbs slice if present
+	if original.LogProbs != nil {
+		copy.LogProbs = make([]schemas.ResponsesOutputMessageContentTextLogProb, len(original.LogProbs))
+		for i, logProb := range original.LogProbs {
+			copiedLogProb := schemas.ResponsesOutputMessageContentTextLogProb{
+				LogProb: logProb.LogProb,
+				Token:   logProb.Token,
+			}
+			// Deep copy Bytes slice
+			if logProb.Bytes != nil {
+				copiedLogProb.Bytes = make([]int, len(logProb.Bytes))
+				for j, byteValue := range logProb.Bytes {
+					copiedLogProb.Bytes[j] = byteValue
+				}
+			}
+			// Deep copy TopLogProbs slice
+			if logProb.TopLogProbs != nil {
+				copiedLogProb.TopLogProbs = make([]schemas.LogProb, len(logProb.TopLogProbs))
+				for j, topLogProb := range logProb.TopLogProbs {
+					copiedLogProb.TopLogProbs[j] = schemas.LogProb{
+						Bytes:   topLogProb.Bytes,
+						LogProb: topLogProb.LogProb,
+						Token:   topLogProb.Token,
+					}
+				}
+			}
+			copy.LogProbs[i] = copiedLogProb
+		}
+	}
+
+	if original.Text != nil {
+		copyText := *original.Text
+		copy.Text = &copyText
+	}
+
+	if original.Refusal != nil {
+		copyRefusal := *original.Refusal
+		copy.Refusal = &copyRefusal
+	}
+
+	if original.Arguments != nil {
+		copyArguments := *original.Arguments
+		copy.Arguments = &copyArguments
+	}
+
+	if original.PartialImageB64 != nil {
+		copyPartialImageB64 := *original.PartialImageB64
+		copy.PartialImageB64 = &copyPartialImageB64
+	}
+
+	if original.PartialImageIndex != nil {
+		copyPartialImageIndex := *original.PartialImageIndex
+		copy.PartialImageIndex = &copyPartialImageIndex
+	}
+
+	if original.Annotation != nil {
+		copyAnnotation := *original.Annotation
+		copy.Annotation = &copyAnnotation
+	}
+
+	if original.AnnotationIndex != nil {
+		copyAnnotationIndex := *original.AnnotationIndex
+		copy.AnnotationIndex = &copyAnnotationIndex
+	}
+
+	if original.Code != nil {
+		copyCode := *original.Code
+		copy.Code = &copyCode
+	}
+
+	if original.Message != nil {
+		copyMessage := *original.Message
+		copy.Message = &copyMessage
+	}
+
+	if original.Param != nil {
+		copyParam := *original.Param
+		copy.Param = &copyParam
+	}
+
+	return copy
+}
+
+// deepCopyResponsesMessage creates a deep copy of a ResponsesMessage
+func deepCopyResponsesMessage(original schemas.ResponsesMessage) schemas.ResponsesMessage {
+	copy := schemas.ResponsesMessage{}
+
+	if original.ID != nil {
+		copyID := *original.ID
+		copy.ID = &copyID
+	}
+
+	if original.Type != nil {
+		copyType := *original.Type
+		copy.Type = &copyType
+	}
+
+	if original.Role != nil {
+		copyRole := *original.Role
+		copy.Role = &copyRole
+	}
+
+	if original.Content != nil {
+		copy.Content = &schemas.ResponsesMessageContent{}
+
+		if original.Content.ContentStr != nil {
+			copyContentStr := *original.Content.ContentStr
+			copy.Content.ContentStr = &copyContentStr
+		}
+
+		if original.Content.ContentBlocks != nil {
+			copy.Content.ContentBlocks = make([]schemas.ResponsesMessageContentBlock, len(original.Content.ContentBlocks))
+			for i, block := range original.Content.ContentBlocks {
+				copy.Content.ContentBlocks[i] = deepCopyResponsesMessageContentBlock(block)
+			}
+		}
+	}
+
+	if original.ResponsesToolMessage != nil {
+		copy.ResponsesToolMessage = &schemas.ResponsesToolMessage{}
+
+		// Deep copy primitive fields
+		if original.ResponsesToolMessage.CallID != nil {
+			copyCallID := *original.ResponsesToolMessage.CallID
+			copy.ResponsesToolMessage.CallID = &copyCallID
+		}
+
+		if original.ResponsesToolMessage.Name != nil {
+			copyName := *original.ResponsesToolMessage.Name
+			copy.ResponsesToolMessage.Name = &copyName
+		}
+
+		if original.ResponsesToolMessage.Arguments != nil {
+			copyArguments := *original.ResponsesToolMessage.Arguments
+			copy.ResponsesToolMessage.Arguments = &copyArguments
+		}
+
+		if original.ResponsesToolMessage.Error != nil {
+			copyError := *original.ResponsesToolMessage.Error
+			copy.ResponsesToolMessage.Error = &copyError
+		}
+
+		// Deep copy Output
+		if original.ResponsesToolMessage.Output != nil {
+			copy.ResponsesToolMessage.Output = &schemas.ResponsesToolMessageOutputStruct{}
+
+			if original.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil {
+				copyStr := *original.ResponsesToolMessage.Output.ResponsesToolCallOutputStr
+				copy.ResponsesToolMessage.Output.ResponsesToolCallOutputStr = &copyStr
+			}
+
+			if original.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
+				copy.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks = make([]schemas.ResponsesMessageContentBlock, len(original.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks))
+				for i, block := range original.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks {
+					copy.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks[i] = deepCopyResponsesMessageContentBlock(block)
+				}
+			}
+
+			if original.ResponsesToolMessage.Output.ResponsesComputerToolCallOutput != nil {
+				copyOutput := *original.ResponsesToolMessage.Output.ResponsesComputerToolCallOutput
+				copy.ResponsesToolMessage.Output.ResponsesComputerToolCallOutput = &copyOutput
+			}
+		}
+
+		// Deep copy Action
+		if original.ResponsesToolMessage.Action != nil {
+			copy.ResponsesToolMessage.Action = &schemas.ResponsesToolMessageActionStruct{}
+
+			if original.ResponsesToolMessage.Action.ResponsesComputerToolCallAction != nil {
+				copyAction := *original.ResponsesToolMessage.Action.ResponsesComputerToolCallAction
+				// Deep copy Path slice
+				if copyAction.Path != nil {
+					copyAction.Path = make([]schemas.ResponsesComputerToolCallActionPath, len(copyAction.Path))
+					for i, path := range original.ResponsesToolMessage.Action.ResponsesComputerToolCallAction.Path {
+						copyAction.Path[i] = path // struct copy is fine for simple structs
+					}
+				}
+				// Deep copy Keys slice
+				if copyAction.Keys != nil {
+					copyAction.Keys = make([]string, len(copyAction.Keys))
+					for i, key := range original.ResponsesToolMessage.Action.ResponsesComputerToolCallAction.Keys {
+						copyAction.Keys[i] = key
+					}
+				}
+				copy.ResponsesToolMessage.Action.ResponsesComputerToolCallAction = &copyAction
+			}
+
+			if original.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction != nil {
+				copyAction := *original.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction
+				copy.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction = &copyAction
+			}
+
+			if original.ResponsesToolMessage.Action.ResponsesLocalShellToolCallAction != nil {
+				copyAction := *original.ResponsesToolMessage.Action.ResponsesLocalShellToolCallAction
+				copy.ResponsesToolMessage.Action.ResponsesLocalShellToolCallAction = &copyAction
+			}
+
+			if original.ResponsesToolMessage.Action.ResponsesMCPApprovalRequestAction != nil {
+				copyAction := *original.ResponsesToolMessage.Action.ResponsesMCPApprovalRequestAction
+				copy.ResponsesToolMessage.Action.ResponsesMCPApprovalRequestAction = &copyAction
+			}
+		}
+
+		// Deep copy embedded tool call structs
+		if original.ResponsesToolMessage.ResponsesFileSearchToolCall != nil {
+			copyToolCall := *original.ResponsesToolMessage.ResponsesFileSearchToolCall
+			// Deep copy Queries slice
+			if copyToolCall.Queries != nil {
+				copyToolCall.Queries = make([]string, len(copyToolCall.Queries))
+				for i, query := range original.ResponsesToolMessage.ResponsesFileSearchToolCall.Queries {
+					copyToolCall.Queries[i] = query
+				}
+			}
+			// Deep copy Results slice
+			if copyToolCall.Results != nil {
+				copyToolCall.Results = make([]schemas.ResponsesFileSearchToolCallResult, len(copyToolCall.Results))
+				for i, result := range original.ResponsesToolMessage.ResponsesFileSearchToolCall.Results {
+					copyResult := result
+					// Deep copy Attributes map if present
+					if result.Attributes != nil {
+						copyAttrs := make(map[string]any, len(*result.Attributes))
+						for k, v := range *result.Attributes {
+							copyAttrs[k] = v
+						}
+						copyResult.Attributes = &copyAttrs
+					}
+					copyToolCall.Results[i] = copyResult
+				}
+			}
+			copy.ResponsesToolMessage.ResponsesFileSearchToolCall = &copyToolCall
+		}
+
+		if original.ResponsesToolMessage.ResponsesComputerToolCall != nil {
+			copyToolCall := *original.ResponsesToolMessage.ResponsesComputerToolCall
+			// Deep copy PendingSafetyChecks slice
+			if copyToolCall.PendingSafetyChecks != nil {
+				copyToolCall.PendingSafetyChecks = make([]schemas.ResponsesComputerToolCallPendingSafetyCheck, len(copyToolCall.PendingSafetyChecks))
+				for i, check := range original.ResponsesToolMessage.ResponsesComputerToolCall.PendingSafetyChecks {
+					copyToolCall.PendingSafetyChecks[i] = check
+				}
+			}
+			copy.ResponsesToolMessage.ResponsesComputerToolCall = &copyToolCall
+		}
+
+		if original.ResponsesToolMessage.ResponsesComputerToolCallOutput != nil {
+			copyOutput := *original.ResponsesToolMessage.ResponsesComputerToolCallOutput
+			// Deep copy AcknowledgedSafetyChecks slice
+			if copyOutput.AcknowledgedSafetyChecks != nil {
+				copyOutput.AcknowledgedSafetyChecks = make([]schemas.ResponsesComputerToolCallAcknowledgedSafetyCheck, len(copyOutput.AcknowledgedSafetyChecks))
+				for i, check := range original.ResponsesToolMessage.ResponsesComputerToolCallOutput.AcknowledgedSafetyChecks {
+					copyOutput.AcknowledgedSafetyChecks[i] = check
+				}
+			}
+			copy.ResponsesToolMessage.ResponsesComputerToolCallOutput = &copyOutput
+		}
+
+		if original.ResponsesToolMessage.ResponsesCodeInterpreterToolCall != nil {
+			copyToolCall := *original.ResponsesToolMessage.ResponsesCodeInterpreterToolCall
+			// Deep copy Outputs slice
+			if copyToolCall.Outputs != nil {
+				copyToolCall.Outputs = make([]schemas.ResponsesCodeInterpreterOutput, len(copyToolCall.Outputs))
+				for i, output := range original.ResponsesToolMessage.ResponsesCodeInterpreterToolCall.Outputs {
+					copyToolCall.Outputs[i] = output
+				}
+			}
+			copy.ResponsesToolMessage.ResponsesCodeInterpreterToolCall = &copyToolCall
+		}
+
+		if original.ResponsesToolMessage.ResponsesMCPToolCall != nil {
+			copyToolCall := *original.ResponsesToolMessage.ResponsesMCPToolCall
+			copy.ResponsesToolMessage.ResponsesMCPToolCall = &copyToolCall
+		}
+
+		if original.ResponsesToolMessage.ResponsesCustomToolCall != nil {
+			copyToolCall := *original.ResponsesToolMessage.ResponsesCustomToolCall
+			copy.ResponsesToolMessage.ResponsesCustomToolCall = &copyToolCall
+		}
+
+		if original.ResponsesToolMessage.ResponsesImageGenerationCall != nil {
+			copyCall := *original.ResponsesToolMessage.ResponsesImageGenerationCall
+			copy.ResponsesToolMessage.ResponsesImageGenerationCall = &copyCall
+		}
+
+		if original.ResponsesToolMessage.ResponsesMCPListTools != nil {
+			copyListTools := *original.ResponsesToolMessage.ResponsesMCPListTools
+			// Deep copy Tools slice
+			if copyListTools.Tools != nil {
+				copyListTools.Tools = make([]schemas.ResponsesMCPTool, len(copyListTools.Tools))
+				for i, tool := range original.ResponsesToolMessage.ResponsesMCPListTools.Tools {
+					copyListTools.Tools[i] = tool
+				}
+			}
+			copy.ResponsesToolMessage.ResponsesMCPListTools = &copyListTools
+		}
+
+		if original.ResponsesToolMessage.ResponsesMCPApprovalResponse != nil {
+			copyApproval := *original.ResponsesToolMessage.ResponsesMCPApprovalResponse
+			copy.ResponsesToolMessage.ResponsesMCPApprovalResponse = &copyApproval
+		}
+	}
+
+	return copy
+}
+
+// deepCopyResponsesMessageContentBlock creates a deep copy of a ResponsesMessageContentBlock
+func deepCopyResponsesMessageContentBlock(original schemas.ResponsesMessageContentBlock) schemas.ResponsesMessageContentBlock {
+	copy := schemas.ResponsesMessageContentBlock{
+		Type: original.Type,
+	}
+
+	if original.Text != nil {
+		copyText := *original.Text
+		copy.Text = &copyText
+	}
+
+	// Copy other specific content type fields as needed
+	if original.ResponsesOutputMessageContentText != nil {
+		t := *original.ResponsesOutputMessageContentText
+		// Annotations
+		if t.Annotations != nil {
+			t.Annotations = append([]schemas.ResponsesOutputMessageContentTextAnnotation(nil), t.Annotations...)
+		}
+		// LogProbs (and their inner slices)
+		if t.LogProbs != nil {
+			newLP := make([]schemas.ResponsesOutputMessageContentTextLogProb, len(t.LogProbs))
+			for i := range t.LogProbs {
+				lp := t.LogProbs[i]
+				if lp.Bytes != nil {
+					lp.Bytes = append([]int(nil), lp.Bytes...)
+				}
+				if lp.TopLogProbs != nil {
+					lp.TopLogProbs = append([]schemas.LogProb(nil), lp.TopLogProbs...)
+				}
+				newLP[i] = lp
+			}
+			t.LogProbs = newLP
+		}
+		copy.ResponsesOutputMessageContentText = &t
+	}
+
+	if original.ResponsesOutputMessageContentRefusal != nil {
+		copyRefusal := schemas.ResponsesOutputMessageContentRefusal{
+			Refusal: original.ResponsesOutputMessageContentRefusal.Refusal,
+		}
+		copy.ResponsesOutputMessageContentRefusal = &copyRefusal
+	}
+
+	return copy
+}
+
 // buildCompleteMessageFromResponsesStreamChunks builds complete messages from accumulated responses stream chunks
 func (a *Accumulator) buildCompleteMessageFromResponsesStreamChunks(chunks []*ResponsesStreamChunk) []schemas.ResponsesMessage {
 	var messages []schemas.ResponsesMessage
@@ -276,9 +690,9 @@ func (a *Accumulator) processResponsesStreamingResponse(ctx *context.Context, re
 	endTimestamp := accumulator.FinalTimestamp
 	accumulator.mu.Unlock()
 
-	// For OpenAI provider, the last chunk already contains the whole accumulated response
+	// For OpenAI-compatible providers, the last chunk already contains the whole accumulated response
 	// so just return it as is
-	if provider == "openai" {
+	if provider == schemas.OpenAI || provider == schemas.OpenRouter || provider == schemas.Azure {
 		isFinalChunk := bifrost.IsFinalChunk(ctx)
 		if isFinalChunk {
 			// For OpenAI, the final chunk contains the complete response
@@ -348,8 +762,8 @@ func (a *Accumulator) processResponsesStreamingResponse(ctx *context.Context, re
 	if bifrostErr != nil {
 		chunk.FinishReason = bifrost.Ptr("error")
 	} else if result != nil && result.ResponsesStreamResponse != nil {
-		// Store the stream response
-		chunk.StreamResponse = result.ResponsesStreamResponse
+		// Store a deep copy of the stream response to prevent shared data mutation between plugins
+		chunk.StreamResponse = deepCopyResponsesStreamResponse(result.ResponsesStreamResponse)
 
 		// Extract token usage from stream response if available
 		if result.ResponsesStreamResponse.Response != nil &&

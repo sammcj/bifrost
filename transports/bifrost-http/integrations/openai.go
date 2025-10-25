@@ -112,7 +112,7 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if openaiReq, ok := req.(*openai.OpenAITextCompletionRequest); ok {
 					return &schemas.BifrostRequest{
-						TextCompletionRequest: openaiReq.ToBifrostRequest(),
+						TextCompletionRequest: openaiReq.ToBifrostTextCompletionRequest(),
 					}, nil
 				}
 				return nil, errors.New("invalid request type")
@@ -151,7 +151,7 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if openaiReq, ok := req.(*openai.OpenAIChatRequest); ok {
 					return &schemas.BifrostRequest{
-						ChatRequest: openaiReq.ToBifrostRequest(),
+						ChatRequest: openaiReq.ToBifrostChatRequest(),
 					}, nil
 				}
 				return nil, errors.New("invalid request type")
@@ -190,7 +190,7 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if openaiReq, ok := req.(*openai.OpenAIResponsesRequest); ok {
 					return &schemas.BifrostRequest{
-						ResponsesRequest: openaiReq.ToBifrostRequest(),
+						ResponsesRequest: openaiReq.ToBifrostResponsesRequest(),
 					}, nil
 
 				}
@@ -230,7 +230,7 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if embeddingReq, ok := req.(*openai.OpenAIEmbeddingRequest); ok {
 					return &schemas.BifrostRequest{
-						EmbeddingRequest: embeddingReq.ToBifrostRequest(),
+						EmbeddingRequest: embeddingReq.ToBifrostEmbeddingRequest(),
 					}, nil
 				}
 				return nil, errors.New("invalid embedding request type")
@@ -261,7 +261,7 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if speechReq, ok := req.(*openai.OpenAISpeechRequest); ok {
 					return &schemas.BifrostRequest{
-						SpeechRequest: speechReq.ToBifrostRequest(),
+						SpeechRequest: speechReq.ToBifrostSpeechRequest(),
 					}, nil
 				}
 				return nil, errors.New("invalid speech request type")
@@ -298,7 +298,7 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 			RequestConverter: func(req interface{}) (*schemas.BifrostRequest, error) {
 				if transcriptionReq, ok := req.(*openai.OpenAITranscriptionRequest); ok {
 					return &schemas.BifrostRequest{
-						TranscriptionRequest: transcriptionReq.ToBifrostRequest(),
+						TranscriptionRequest: transcriptionReq.ToBifrostTranscriptionRequest(),
 					}, nil
 				}
 				return nil, errors.New("invalid transcription request type")

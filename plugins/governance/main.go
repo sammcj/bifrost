@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
@@ -38,6 +39,7 @@ type InMemoryStore interface {
 type GovernancePlugin struct {
 	ctx        context.Context
 	cancelFunc context.CancelFunc
+	wg         sync.WaitGroup // Track active goroutines
 
 	// Core components with clear separation of concerns
 	store    *GovernanceStore // Pure data access layer
@@ -432,22 +434,18 @@ func (p *GovernancePlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 		}
 	}
 
-	// Extract team/customer info for audit trail
-	var teamID, customerID *string
-	if teamIDValue := headers["x-bf-team"]; teamIDValue != "" {
-		teamID = &teamIDValue
-	}
-	if customerIDValue := headers["x-bf-customer"]; customerIDValue != "" {
-		customerID = &customerIDValue
-	}
-
-	go p.postHookWorker(result, provider, model, requestType, virtualKey, requestID, teamID, customerID, isCacheRead, isBatch, bifrost.IsFinalChunk(ctx))
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		p.postHookWorker(result, provider, model, requestType, virtualKey, requestID, headers, isCacheRead, isBatch, bifrost.IsFinalChunk(ctx))
+	}()
 
 	return result, err, nil
 }
 
 // Cleanup shuts down all components gracefully
 func (p *GovernancePlugin) Cleanup() error {
+	p.wg.Wait() // Wait for all background workers to complete
 	if p.cancelFunc != nil {
 		p.cancelFunc()
 	}
@@ -458,9 +456,18 @@ func (p *GovernancePlugin) Cleanup() error {
 	return nil
 }
 
-func (p *GovernancePlugin) postHookWorker(result *schemas.BifrostResponse, provider schemas.ModelProvider, model string, requestType schemas.RequestType, virtualKey, requestID string, teamID, customerID *string, isCacheRead, isBatch bool, isFinalChunk bool) {
+func (p *GovernancePlugin) postHookWorker(result *schemas.BifrostResponse, provider schemas.ModelProvider, model string, requestType schemas.RequestType, virtualKey, requestID string, headers map[string]string, isCacheRead, isBatch bool, isFinalChunk bool) {
 	// Determine if request was successful
 	success := (result != nil)
+
+	// Extract team/customer info for audit trail
+	var teamID, customerID *string
+	if teamIDValue := headers["x-bf-team"]; teamIDValue != "" {
+		teamID = &teamIDValue
+	}
+	if customerIDValue := headers["x-bf-customer"]; customerIDValue != "" {
+		customerID = &customerIDValue
+	}
 
 	// Streaming detection
 	isStreaming := bifrost.IsStreamRequestType(requestType)
