@@ -21,6 +21,7 @@ import { ProviderLabels, ProviderName, ProviderNames } from "@/lib/constants/log
 import {
 	getErrorMessage,
 	useCreateVirtualKeyMutation,
+	useGetProvidersQuery,
 	useGetAllKeysQuery,
 	useGetMCPClientsQuery,
 	useUpdateVirtualKeyMutation,
@@ -39,6 +40,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { KnownProvider } from "@/lib/types/config";
 
 interface VirtualKeySheetProps {
 	virtualKey?: VirtualKey | null;
@@ -108,6 +110,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 	const isEditing = !!virtualKey;
 
 	// RTK Query hooks
+	const { data: providersData, error: providersError, isLoading: providersLoading } = useGetProvidersQuery();
 	const { data: keysData, error: keysError, isLoading: keysLoading } = useGetAllKeysQuery();
 	const [createVirtualKey, { isLoading: isCreating }] = useCreateVirtualKeyMutation();
 	const [updateVirtualKey, { isLoading: isUpdating }] = useUpdateVirtualKeyMutation();
@@ -115,6 +118,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 	const isLoading = isCreating || isUpdating;
 
 	const availableKeys = keysData || [];
+	const availableProviders = providersData || [];
 
 	// Form setup
 	const form = useForm<FormData>({
@@ -149,6 +153,20 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 			toast.error(`Failed to load available keys: ${getErrorMessage(keysError)}`);
 		}
 	}, [keysError]);
+
+	// Handle providers loading error
+	useEffect(() => {
+		if (providersError) {
+			toast.error(`Failed to load available providers: ${getErrorMessage(providersError)}`);
+		}
+	}, [providersError]);
+
+	// Handle mcp clients loading error
+	useEffect(() => {
+		if (mcpClientsError) {
+			toast.error(`Failed to load available MCP clients: ${getErrorMessage(mcpClientsError)}`);
+		}
+	}, [mcpClientsError]);
 
 	// Provider configuration state
 	const [selectedProvider, setSelectedProvider] = useState<string>("");
@@ -472,18 +490,44 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 											<SelectValue placeholder="Select a provider to add" />
 										</SelectTrigger>
 										<SelectContent>
-											{ProviderNames.filter((provider) => !providerConfigs.some((config) => config.provider === provider)).length > 0 ? (
-												ProviderNames.filter((provider) => !providerConfigs.some((config) => config.provider === provider)).map(
-													(provider) => (
-														<SelectItem key={provider} value={provider}>
-															<RenderProviderIcon provider={provider as ProviderIconType} size="sm" className="h-4 w-4" />
-															{ProviderLabels[provider]}
-														</SelectItem>
-													),
-												)
-											) : (
-												<div className="text-muted-foreground px-2 py-1.5 text-sm">All providers configured</div>
-											)}
+											{(() => {
+												// Filter out already configured providers
+												const unconfiguredProviders = availableProviders.filter(
+													(provider) => !providerConfigs.some((config) => config.provider === provider.name),
+												);
+
+												if (unconfiguredProviders.length === 0) {
+													return <div className="text-muted-foreground px-2 py-1.5 text-sm">All providers configured</div>;
+												}
+
+												// Separate base providers and custom providers
+												const baseProviders = unconfiguredProviders.filter((provider) => !provider.custom_provider_config);
+												const customProviders = unconfiguredProviders.filter((provider) => provider.custom_provider_config);
+
+												return (
+													<>
+														{/* Base providers first */}
+														{baseProviders.map((provider, index) => (
+															<SelectItem key={`base-${index}`} value={provider.name}>
+																<RenderProviderIcon provider={provider.name as KnownProvider} size="sm" className="h-4 w-4" />
+																{ProviderLabels[provider.name as ProviderName]}
+															</SelectItem>
+														))}
+
+														{/* Custom providers second */}
+														{customProviders.map((provider, index) => (
+															<SelectItem key={`custom-${index}`} value={provider.name}>
+																<RenderProviderIcon
+																	provider={provider.custom_provider_config?.base_provider_type || (provider.name as KnownProvider)}
+																	size="sm"
+																	className="h-4 w-4"
+																/>
+																{provider.name}
+															</SelectItem>
+														))}
+													</>
+												);
+											})()}
 										</SelectContent>
 									</Select>
 								</div>
@@ -501,61 +545,72 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 												</TableRow>
 											</TableHeader>
 											<TableBody>
-												{providerConfigs.map((config, index) => (
-													<TableRow key={`${config.provider}-${index}`}>
-														<TableCell>
-															<div className="flex items-center gap-2">
-																<RenderProviderIcon provider={config.provider as ProviderIconType} size="sm" className="h-4 w-4" />
-																{ProviderLabels[config.provider as ProviderName]}
-															</div>
-														</TableCell>
-														<TableCell className="max-w-[100px]">
-															<Input
-																placeholder="0.5"
-																className="w-full border-none"
-																value={config.weight}
-																onChange={(e) => {
-																	const inputValue = e.target.value;
-																	// Allow empty string, numbers, and partial decimal inputs like "0."
-																	if (inputValue === "" || !isNaN(parseFloat(inputValue)) || inputValue.endsWith(".")) {
-																		handleUpdateProviderConfig(index, "weight", inputValue);
-																	}
-																}}
-																onBlur={(e) => {
-																	const inputValue = e.target.value.trim();
-																	if (inputValue === "") {
-																		handleUpdateProviderConfig(index, "weight", "");
-																	} else {
-																		const num = parseFloat(inputValue);
-																		if (!isNaN(num)) {
-																			handleUpdateProviderConfig(index, "weight", String(num));
-																		} else {
-																			handleUpdateProviderConfig(index, "weight", "");
+												{providerConfigs.map((config, index) => {
+													const providerConfig = availableProviders.find((provider) => provider.name === config.provider);
+													return (
+														<TableRow key={`${config.provider}-${index}`}>
+															<TableCell>
+																<div className="flex items-center gap-2">
+																	<RenderProviderIcon
+																		provider={
+																			providerConfig?.custom_provider_config?.base_provider_type || (config.provider as ProviderIconType)
 																		}
+																		size="sm"
+																		className="h-4 w-4"
+																	/>
+																	{providerConfig?.custom_provider_config
+																		? providerConfig.name
+																		: ProviderLabels[config.provider as ProviderName]}
+																</div>
+															</TableCell>
+															<TableCell className="max-w-[100px]">
+																<Input
+																	placeholder="0.5"
+																	className="w-full border-none"
+																	value={config.weight}
+																	onChange={(e) => {
+																		const inputValue = e.target.value;
+																		// Allow empty string, numbers, and partial decimal inputs like "0."
+																		if (inputValue === "" || !isNaN(parseFloat(inputValue)) || inputValue.endsWith(".")) {
+																			handleUpdateProviderConfig(index, "weight", inputValue);
+																		}
+																	}}
+																	onBlur={(e) => {
+																		const inputValue = e.target.value.trim();
+																		if (inputValue === "") {
+																			handleUpdateProviderConfig(index, "weight", "");
+																		} else {
+																			const num = parseFloat(inputValue);
+																			if (!isNaN(num)) {
+																				handleUpdateProviderConfig(index, "weight", String(num));
+																			} else {
+																				handleUpdateProviderConfig(index, "weight", "");
+																			}
+																		}
+																	}}
+																	type="text"
+																/>
+															</TableCell>
+															<TableCell className="max-w-[500px]">
+																<TagInput
+																	placeholder={
+																		config.provider
+																			? ModelPlaceholders[config.provider as keyof typeof ModelPlaceholders] || ModelPlaceholders.default
+																			: ModelPlaceholders.default
 																	}
-																}}
-																type="text"
-															/>
-														</TableCell>
-														<TableCell className="max-w-[500px]">
-															<TagInput
-																placeholder={
-																	config.provider
-																		? ModelPlaceholders[config.provider as keyof typeof ModelPlaceholders]
-																		: ModelPlaceholders.openai
-																}
-																value={config.allowed_models || []}
-																onValueChange={(models: string[]) => handleUpdateProviderConfig(index, "allowed_models", models)}
-																className="max-w-[500px] min-w-[200px] border-none"
-															/>
-														</TableCell>
-														<TableCell>
-															<Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveProvider(index)}>
-																<Trash2 className="h-4 w-4" />
-															</Button>
-														</TableCell>
-													</TableRow>
-												))}
+																	value={config.allowed_models || []}
+																	onValueChange={(models: string[]) => handleUpdateProviderConfig(index, "allowed_models", models)}
+																	className="max-w-[500px] min-w-[200px] border-none"
+																/>
+															</TableCell>
+															<TableCell>
+																<Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveProvider(index)}>
+																	<Trash2 className="h-4 w-4" />
+																</Button>
+															</TableCell>
+														</TableRow>
+													);
+												})}
 											</TableBody>
 										</Table>
 									</div>

@@ -2,8 +2,8 @@ import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ProviderNames, RequestTypeLabels, RequestTypes, Statuses } from "@/lib/constants/logs";
-import { useGetAvailableModelsQuery } from "@/lib/store";
+import { RequestTypeLabels, RequestTypes, Statuses } from "@/lib/constants/logs";
+import { useGetAvailableModelsQuery, useGetProvidersQuery } from "@/lib/store";
 import type { LogFilters } from "@/lib/types/logs";
 import { cn } from "@/lib/utils";
 import { Check, FilterIcon, Search } from "lucide-react";
@@ -20,7 +20,10 @@ export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
 	const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
 	// Use RTK Query to fetch available models
+	const { data: providersData, isLoading: providersLoading } = useGetProvidersQuery();
 	const { data: modelsData, isLoading: modelsLoading } = useGetAvailableModelsQuery();
+
+	const availableProviders = providersData || [];
 	const availableModels = modelsData?.models || [];
 
 	// Cleanup timeout on unmount
@@ -91,18 +94,18 @@ export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
 
 	const FILTER_OPTIONS = {
 		Status: Statuses,
-		Providers: ProviderNames,
+		Providers: providersLoading ? ["Loading providers..."] : availableProviders.map((provider) => provider.name),
 		Type: RequestTypes,
 		Models: modelsLoading ? ["Loading models..."] : availableModels,
 	} as const;
 
 	return (
 		<div className="flex items-center justify-between space-x-4">
-			<div className="border-input flex flex-1 items-center gap-2 border rounded-sm">
-				<Search className="size-4 ml-2 mr-0.5" />
+			<div className="border-input flex flex-1 items-center gap-2 rounded-sm border">
+				<Search className="mr-0.5 ml-2 size-4" />
 				<Input
 					type="text"
-					className="border-none bg-slate-50 shadow-none outline-none focus-visible:ring-0 rounded-tr-sm rounded-br-sm rounded-tl-none rounded-bl-none"
+					className="rounded-tl-none rounded-tr-sm rounded-br-sm rounded-bl-none border-none bg-slate-50 shadow-none outline-none focus-visible:ring-0"
 					placeholder="Search logs"
 					value={localSearch}
 					onChange={(e) => handleSearchChange(e.target.value)}
@@ -131,11 +134,13 @@ export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
 									{values.map((value) => {
 										const selected = isSelected(category as keyof typeof FILTER_OPTIONS, value);
 										const isModelLoading = category === "Models" && value === "Loading models...";
+										const isProviderLoading = category === "Providers" && value === "Loading providers...";
+										const isLoading = isModelLoading || isProviderLoading;
 										return (
 											<CommandItem
 												key={value}
-												onSelect={() => !isModelLoading && handleFilterSelect(category as keyof typeof FILTER_OPTIONS, value)}
-												disabled={isModelLoading}
+												onSelect={() => !isLoading && handleFilterSelect(category as keyof typeof FILTER_OPTIONS, value)}
+												disabled={isLoading}
 											>
 												<div
 													className={cn(
@@ -143,13 +148,13 @@ export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
 														selected ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible",
 													)}
 												>
-													{isModelLoading ? (
+													{isLoading ? (
 														<div className="border-primary h-3 w-3 animate-spin rounded-full border border-t-transparent" />
 													) : (
 														<Check className="text-primary-foreground size-3" />
 													)}
 												</div>
-												<span className={cn("lowercase", isModelLoading && "text-muted-foreground")}>
+												<span className={cn("lowercase", isLoading && "text-muted-foreground")}>
 													{category === "Type" ? RequestTypeLabels[value as keyof typeof RequestTypeLabels] : value}
 												</span>
 											</CommandItem>
