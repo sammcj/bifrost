@@ -348,7 +348,7 @@ func newProviderAPIError(message string, err error, statusCode int, providerType
 	}
 }
 
-func sendCreatedEventResponsesChunk(ctx context.Context, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream) {
+func sendCreatedEventResponsesChunk(ctx context.Context, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream, logger schemas.Logger) {
 	firstChunk := &schemas.BifrostResponsesStreamResponse{
 		Type:           schemas.ResponsesStreamResponseTypeCreated,
 		SequenceNumber: 0,
@@ -365,11 +365,11 @@ func sendCreatedEventResponsesChunk(ctx context.Context, postHookRunner schemas.
 	bifrostResponse := &schemas.BifrostResponse{
 		ResponsesStreamResponse: firstChunk,
 	}
-	processAndSendResponse(ctx, postHookRunner, bifrostResponse, responseChan)
+	processAndSendResponse(ctx, postHookRunner, bifrostResponse, responseChan, logger)
 }
 
 // sendInProgressResponsesChunk sends a ResponsesStreamResponseTypeInProgress event
-func sendInProgressEventResponsesChunk(ctx context.Context, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream) {
+func sendInProgressEventResponsesChunk(ctx context.Context, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream, logger schemas.Logger) {
 	chunk := &schemas.BifrostResponsesStreamResponse{
 		Type:           schemas.ResponsesStreamResponseTypeInProgress,
 		SequenceNumber: 1,
@@ -386,7 +386,7 @@ func sendInProgressEventResponsesChunk(ctx context.Context, postHookRunner schem
 	bifrostResponse := &schemas.BifrostResponse{
 		ResponsesStreamResponse: chunk,
 	}
-	processAndSendResponse(ctx, postHookRunner, bifrostResponse, responseChan)
+	processAndSendResponse(ctx, postHookRunner, bifrostResponse, responseChan, logger)
 }
 
 // processAndSendResponse handles post-hook processing and sends the response to the channel.
@@ -398,9 +398,14 @@ func processAndSendResponse(
 	postHookRunner schemas.PostHookRunner,
 	response *schemas.BifrostResponse,
 	responseChan chan *schemas.BifrostStream,
+	logger schemas.Logger,
 ) {
 	// Run post hooks on the response
 	processedResponse, processedError := postHookRunner(&ctx, response, nil)
+
+	if handleStreamControlSkip(logger, processedError) {
+		return
+	}
 
 	streamResponse := &schemas.BifrostStream{}
 	if processedResponse != nil {
@@ -574,9 +579,10 @@ func handleStreamEndWithSuccess(
 	response *schemas.BifrostResponse,
 	postHookRunner schemas.PostHookRunner,
 	responseChan chan *schemas.BifrostStream,
+	logger schemas.Logger,
 ) {
 	ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
-	processAndSendResponse(ctx, postHookRunner, response, responseChan)
+	processAndSendResponse(ctx, postHookRunner, response, responseChan, logger)
 }
 
 func handleStreamControlSkip(logger schemas.Logger, bifrostErr *schemas.BifrostError) bool {
