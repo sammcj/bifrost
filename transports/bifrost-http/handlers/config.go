@@ -13,7 +13,7 @@ import (
 	"github.com/maximhq/bifrost/framework"
 	"github.com/maximhq/bifrost/framework/configstore"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
-	"github.com/maximhq/bifrost/framework/pricing"
+	"github.com/maximhq/bifrost/framework/modelcatalog"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 )
@@ -85,16 +85,16 @@ func (h *ConfigHandler) getConfig(ctx *fasthttp.RequestCtx) {
 			mapConfig["framework_config"] = *fc
 		} else {
 			mapConfig["framework_config"] = configstoreTables.TableFrameworkConfig{
-				PricingURL:          bifrost.Ptr(pricing.DefaultPricingURL),
-				PricingSyncInterval: bifrost.Ptr(int64(pricing.DefaultPricingSyncInterval.Seconds())),
+				PricingURL:          bifrost.Ptr(modelcatalog.DefaultPricingURL),
+				PricingSyncInterval: bifrost.Ptr(int64(modelcatalog.DefaultPricingSyncInterval.Seconds())),
 			}
 		}
 	} else {
 		mapConfig["client_config"] = h.store.ClientConfig
 		if h.store.FrameworkConfig == nil {
 			mapConfig["framework_config"] = configstoreTables.TableFrameworkConfig{
-				PricingURL:          bifrost.Ptr(pricing.DefaultPricingURL),
-				PricingSyncInterval: bifrost.Ptr(int64(pricing.DefaultPricingSyncInterval.Seconds())),
+				PricingURL:          bifrost.Ptr(modelcatalog.DefaultPricingURL),
+				PricingSyncInterval: bifrost.Ptr(int64(modelcatalog.DefaultPricingSyncInterval.Seconds())),
 			}
 		} else if h.store.FrameworkConfig.Pricing != nil && h.store.FrameworkConfig.Pricing.PricingURL != nil {
 			mapConfig["framework_config"] = configstoreTables.TableFrameworkConfig{
@@ -130,7 +130,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Validating framework config
-	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != pricing.DefaultPricingURL {
+	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != modelcatalog.DefaultPricingURL {
 		// Checking the accessibility of the pricing URL
 		resp, err := http.Get(*payload.FrameworkConfig.PricingURL)
 		if err != nil {
@@ -203,16 +203,16 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	if frameworkConfig == nil {
 		frameworkConfig = &configstoreTables.TableFrameworkConfig{
 			ID:                  0,
-			PricingURL:          bifrost.Ptr(pricing.DefaultPricingURL),
-			PricingSyncInterval: bifrost.Ptr(int64(pricing.DefaultPricingSyncInterval.Seconds())),
+			PricingURL:          bifrost.Ptr(modelcatalog.DefaultPricingURL),
+			PricingSyncInterval: bifrost.Ptr(int64(modelcatalog.DefaultPricingSyncInterval.Seconds())),
 		}
 	}
 	// Handling individual nil cases
 	if frameworkConfig.PricingURL == nil {
-		frameworkConfig.PricingURL = bifrost.Ptr(pricing.DefaultPricingURL)
+		frameworkConfig.PricingURL = bifrost.Ptr(modelcatalog.DefaultPricingURL)
 	}
 	if frameworkConfig.PricingSyncInterval == nil {
-		frameworkConfig.PricingSyncInterval = bifrost.Ptr(int64(pricing.DefaultPricingSyncInterval.Seconds()))
+		frameworkConfig.PricingSyncInterval = bifrost.Ptr(int64(modelcatalog.DefaultPricingSyncInterval.Seconds()))
 	}
 	// Updating framework config
 	shouldReloadFrameworkConfig := false
@@ -245,10 +245,10 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		if frameworkConfig.PricingSyncInterval != nil {
 			syncDuration = time.Duration(*frameworkConfig.PricingSyncInterval) * time.Second
 		} else {
-			syncDuration = pricing.DefaultPricingSyncInterval
+			syncDuration = modelcatalog.DefaultPricingSyncInterval
 		}
 		h.store.FrameworkConfig = &framework.FrameworkConfig{
-			Pricing: &pricing.Config{
+			Pricing: &modelcatalog.Config{
 				PricingURL:          frameworkConfig.PricingURL,
 				PricingSyncInterval: &syncDuration,
 			},

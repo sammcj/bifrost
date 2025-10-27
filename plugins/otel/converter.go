@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/framework/pricing"
+	"github.com/maximhq/bifrost/framework/modelcatalog"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
@@ -427,7 +427,7 @@ func createResourceSpan(traceID, spanID string, timestamp time.Time, req *schema
 }
 
 // completeResourceSpan completes a resource span for a Bifrost response
-func completeResourceSpan(span *ResourceSpan, timestamp time.Time, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError, pricingManager *pricing.PricingManager) *ResourceSpan {
+func completeResourceSpan(span *ResourceSpan, timestamp time.Time, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError, pricingManager *modelcatalog.ModelCatalog) *ResourceSpan {
 	params := []*KeyValue{}
 
 	if resp != nil {

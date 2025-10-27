@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/maximhq/bifrost/core/schemas"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
@@ -111,8 +112,8 @@ func (r *BudgetResolver) EvaluateRequest(ctx *context.Context, evaluationRequest
 		}
 	}
 
-	// 4. Check rate limits (VK level only)
-	if rateLimitResult := r.checkRateLimits(vk); rateLimitResult != nil {
+	// 4. Check rate limits (Provider level first, then VK level)
+	if rateLimitResult := r.checkRateLimits(vk, string(evaluationRequest.Provider)); rateLimitResult != nil {
 		return rateLimitResult
 	}
 
@@ -175,16 +176,39 @@ func (r *BudgetResolver) isProviderAllowed(vk *configstoreTables.TableVirtualKey
 	return false
 }
 
-// checkRateLimits checks the VK's rate limits using flexible approach
-func (r *BudgetResolver) checkRateLimits(vk *configstoreTables.TableVirtualKey) *EvaluationResult {
-	// No rate limits defined
-	if vk.RateLimit == nil {
-		return nil
+// checkRateLimits checks provider-level rate limits first, then VK rate limits using flexible approach
+func (r *BudgetResolver) checkRateLimits(vk *configstoreTables.TableVirtualKey, provider string) *EvaluationResult {
+	// First check provider-level rate limits
+	if providerRateLimitResult := r.checkProviderRateLimits(vk, provider); providerRateLimitResult != nil {
+		return providerRateLimitResult
 	}
 
-	rateLimit := vk.RateLimit
+	// Then check VK-level rate limits
+	if vk.RateLimit == nil {
+		return nil // No VK rate limits defined
+	}
 
-	// Check if any rate limits are exceeded
+	return r.checkSingleRateLimit(vk.RateLimit, "virtual key", vk)
+}
+
+// checkProviderRateLimits checks rate limits for a specific provider config
+func (r *BudgetResolver) checkProviderRateLimits(vk *configstoreTables.TableVirtualKey, provider string) *EvaluationResult {
+	if vk.ProviderConfigs == nil {
+		return nil // No provider configs defined
+	}
+
+	// Find the specific provider config
+	for _, pc := range vk.ProviderConfigs {
+		if pc.Provider == provider && pc.RateLimit != nil {
+			return r.checkSingleRateLimit(pc.RateLimit, fmt.Sprintf("provider '%s'", provider), vk)
+		}
+	}
+
+	return nil // No rate limits for this provider
+}
+
+// checkSingleRateLimit checks a single rate limit and returns evaluation result if violated
+func (r *BudgetResolver) checkSingleRateLimit(rateLimit *configstoreTables.TableRateLimit, rateLimitName string, vk *configstoreTables.TableVirtualKey) *EvaluationResult {
 	var violations []string
 
 	// Token limits
@@ -220,7 +244,7 @@ func (r *BudgetResolver) checkRateLimits(vk *configstoreTables.TableVirtualKey) 
 
 		return &EvaluationResult{
 			Decision:      decision,
-			Reason:        fmt.Sprintf("Rate limits exceeded: %v", violations),
+			Reason:        fmt.Sprintf("%s rate limits exceeded: %v", rateLimitName, violations),
 			VirtualKey:    vk,
 			RateLimitInfo: rateLimit,
 		}
@@ -243,4 +267,77 @@ func (r *BudgetResolver) checkBudgetHierarchy(ctx context.Context, vk *configsto
 	}
 
 	return nil // No budget violations
+}
+
+// Helper methods for provider config validation (used by TransportInterceptor)
+
+// isProviderBudgetViolated checks if a provider config's budget is violated
+func (r *BudgetResolver) isProviderBudgetViolated(config configstoreTables.TableVirtualKeyProviderConfig) bool {
+	if config.Budget == nil {
+		return false
+	}
+
+	// Check if budget needs reset
+	if config.Budget.ResetDuration != "" {
+		if duration, err := configstoreTables.ParseDuration(config.Budget.ResetDuration); err == nil {
+			if time.Since(config.Budget.LastReset).Round(time.Millisecond) >= duration {
+				// Budget expired but hasn't been reset yet - not violated
+				return false
+			}
+		}
+	}
+
+	// Check if current usage exceeds budget limit
+	return config.Budget.CurrentUsage > config.Budget.MaxLimit
+}
+
+// isProviderRateLimitViolated checks if a provider config's rate limit is violated
+func (r *BudgetResolver) isProviderRateLimitViolated(config configstoreTables.TableVirtualKeyProviderConfig) bool {
+	if config.RateLimit == nil {
+		return false
+	}
+
+	// Check token limits
+	if config.RateLimit.TokenMaxLimit != nil && config.RateLimit.TokenCurrentUsage >= *config.RateLimit.TokenMaxLimit {
+		// Check if token limit needs reset
+		if config.RateLimit.TokenResetDuration != nil {
+			if duration, err := configstoreTables.ParseDuration(*config.RateLimit.TokenResetDuration); err == nil {
+				if time.Since(config.RateLimit.TokenLastReset).Round(time.Millisecond) >= duration {
+					// Token limit expired but hasn't been reset yet - not violated
+				} else {
+					// Token limit exceeded and not expired
+					return true
+				}
+			} else {
+				// Parse error - assume violated
+				return true
+			}
+		} else {
+			// No reset duration - violated
+			return true
+		}
+	}
+
+	// Check request limits
+	if config.RateLimit.RequestMaxLimit != nil && config.RateLimit.RequestCurrentUsage >= *config.RateLimit.RequestMaxLimit {
+		// Check if request limit needs reset
+		if config.RateLimit.RequestResetDuration != nil {
+			if duration, err := configstoreTables.ParseDuration(*config.RateLimit.RequestResetDuration); err == nil {
+				if time.Since(config.RateLimit.RequestLastReset).Round(time.Millisecond) >= duration {
+					// Request limit expired but hasn't been reset yet - not violated
+				} else {
+					// Request limit exceeded and not expired
+					return true
+				}
+			} else {
+				// Parse error - assume violated
+				return true
+			}
+		} else {
+			// No reset duration - violated
+			return true
+		}
+	}
+
+	return false // No violations
 }

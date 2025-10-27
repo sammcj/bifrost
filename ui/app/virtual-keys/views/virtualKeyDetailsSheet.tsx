@@ -29,7 +29,9 @@ export default function VirtualKeyDetailSheet({ virtualKey, onClose }: VirtualKe
 	const entityInfo = getEntityInfo();
 
 	const isExhausted =
+		// VK-level budget exhausted
 		(virtualKey.budget?.current_usage && virtualKey.budget?.max_limit && virtualKey.budget.current_usage >= virtualKey.budget.max_limit) ||
+		// VK-level rate limits exhausted
 		(virtualKey.rate_limit?.token_current_usage &&
 			virtualKey.rate_limit?.token_max_limit &&
 			virtualKey.rate_limit.token_current_usage >= virtualKey.rate_limit.token_max_limit) ||
@@ -139,28 +141,25 @@ export default function VirtualKeyDetailSheet({ virtualKey, onClose }: VirtualKe
 							{!virtualKey.provider_configs || virtualKey.provider_configs.length === 0 ? (
 								<span className="text-muted-foreground text-sm">All providers allowed with default settings</span>
 							) : (
-								<div className="rounded-md border">
-									<Table>
-										<TableHeader>
-											<TableRow>
-												<TableHead>Provider</TableHead>
-												<TableHead>Weight</TableHead>
-												<TableHead>Allowed Models</TableHead>
-											</TableRow>
-										</TableHeader>
-										<TableBody>
-											{virtualKey.provider_configs.map((config, index) => (
-												<TableRow key={`${config.provider}-${index}`}>
-													<TableCell>
-														<div className="flex items-center gap-2">
-															<RenderProviderIcon provider={config.provider as ProviderIconType} size="sm" className="h-4 w-4" />
-															{ProviderLabels[config.provider as ProviderName] || config.provider}
-														</div>
-													</TableCell>
-													<TableCell>
-														<span className="font-mono text-sm">{config.weight}</span>
-													</TableCell>
-													<TableCell>
+								<div className="space-y-4">
+									{virtualKey.provider_configs.map((config, index) => (
+										<div key={`${config.provider}-${index}`} className="rounded-lg border p-4">
+											{/* Provider Header */}
+											<div className="mb-4 flex items-center justify-between">
+												<div className="flex items-center gap-2">
+													<RenderProviderIcon provider={config.provider as ProviderIconType} size="sm" className="h-5 w-5" />
+													<span className="font-medium">{ProviderLabels[config.provider as ProviderName] || config.provider}</span>
+												</div>
+												<Badge variant="outline" className="font-mono text-xs">
+													Weight: {config.weight}
+												</Badge>
+											</div>
+
+											{/* Basic Config */}
+											<div className="space-y-3">
+												<div className="grid grid-cols-3 items-start gap-4">
+													<span className="text-muted-foreground text-sm">Allowed Models</span>
+													<div className="col-span-2">
 														{config.allowed_models && config.allowed_models.length > 0 ? (
 															<div className="flex flex-wrap gap-1">
 																{config.allowed_models.map((model) => (
@@ -172,11 +171,149 @@ export default function VirtualKeyDetailSheet({ virtualKey, onClose }: VirtualKe
 														) : (
 															<span className="text-muted-foreground text-sm">All models allowed</span>
 														)}
-													</TableCell>
-												</TableRow>
-											))}
-										</TableBody>
-									</Table>
+													</div>
+												</div>
+
+												{/* Provider Budget */}
+												{config.budget && (
+													<>
+														<DottedSeparator />
+														<div className="space-y-2">
+															<h4 className="text-sm font-medium">Provider Budget</h4>
+															<div className="grid grid-cols-3 items-center gap-4">
+																<span className="text-muted-foreground text-sm">Usage</span>
+																<div className="col-span-2">
+																	<div className="flex items-center gap-2">
+																		<span className="font-mono text-sm">
+																			{formatCurrency(config.budget.current_usage)} / {formatCurrency(config.budget.max_limit)}
+																		</span>
+																		<Badge
+																			variant={config.budget.current_usage >= config.budget.max_limit ? "destructive" : "default"}
+																			className="text-xs"
+																		>
+																			{Math.round((config.budget.current_usage / config.budget.max_limit) * 100)}%
+																		</Badge>
+																	</div>
+																</div>
+															</div>
+															<div className="grid grid-cols-3 items-center gap-4">
+																<span className="text-muted-foreground text-sm">Reset Period</span>
+																<div className="col-span-2 text-sm">{parseResetPeriod(config.budget.reset_duration)}</div>
+															</div>
+															<div className="grid grid-cols-3 items-center gap-4">
+																<span className="text-muted-foreground text-sm">Last Reset</span>
+																<div className="col-span-2 text-sm">
+																	{formatDistanceToNow(new Date(config.budget.last_reset), { addSuffix: true })}
+																</div>
+															</div>
+														</div>
+													</>
+												)}
+
+												{/* Provider Rate Limits */}
+												{config.rate_limit && (
+													<>
+														<DottedSeparator />
+														<div className="space-y-3">
+															<h4 className="text-sm font-medium">Provider Rate Limits</h4>
+
+															{/* Token Limits */}
+															{config.rate_limit.token_max_limit && (
+																<div className="space-y-2">
+																	<span className="text-muted-foreground text-xs font-medium">TOKEN LIMITS</span>
+																	<div className="grid grid-cols-3 items-center gap-4">
+																		<span className="text-muted-foreground text-sm">Usage</span>
+																		<div className="col-span-2">
+																			<div className="flex items-center gap-2">
+																				<span className="font-mono text-sm">
+																					{config.rate_limit.token_current_usage} / {config.rate_limit.token_max_limit}
+																				</span>
+																				<Badge
+																					variant={getUsageVariant(
+																						calculateUsagePercentage(
+																							config.rate_limit.token_current_usage,
+																							config.rate_limit.token_max_limit,
+																						),
+																					)}
+																					className="text-xs"
+																				>
+																					{calculateUsagePercentage(
+																						config.rate_limit.token_current_usage,
+																						config.rate_limit.token_max_limit,
+																					)}
+																					%
+																				</Badge>
+																			</div>
+																		</div>
+																	</div>
+																	<div className="grid grid-cols-3 items-center gap-4">
+																		<span className="text-muted-foreground text-sm">Reset Period</span>
+																		<div className="col-span-2 text-sm">
+																			{parseResetPeriod(config.rate_limit.token_reset_duration || "")}
+																		</div>
+																	</div>
+																	<div className="grid grid-cols-3 items-center gap-4">
+																		<span className="text-muted-foreground text-sm">Last Reset</span>
+																		<div className="col-span-2 text-sm">
+																			{formatDistanceToNow(new Date(config.rate_limit.token_last_reset), { addSuffix: true })}
+																		</div>
+																	</div>
+																</div>
+															)}
+
+															{/* Request Limits */}
+															{config.rate_limit.request_max_limit && (
+																<div className="space-y-2">
+																	<span className="text-muted-foreground text-xs font-medium">REQUEST LIMITS</span>
+																	<div className="grid grid-cols-3 items-center gap-4">
+																		<span className="text-muted-foreground text-sm">Usage</span>
+																		<div className="col-span-2">
+																			<div className="flex items-center gap-2">
+																				<span className="font-mono text-sm">
+																					{config.rate_limit.request_current_usage} / {config.rate_limit.request_max_limit}
+																				</span>
+																				<Badge
+																					variant={getUsageVariant(
+																						calculateUsagePercentage(
+																							config.rate_limit.request_current_usage,
+																							config.rate_limit.request_max_limit,
+																						),
+																					)}
+																					className="text-xs"
+																				>
+																					{calculateUsagePercentage(
+																						config.rate_limit.request_current_usage,
+																						config.rate_limit.request_max_limit,
+																					)}
+																					%
+																				</Badge>
+																			</div>
+																		</div>
+																	</div>
+																	<div className="grid grid-cols-3 items-center gap-4">
+																		<span className="text-muted-foreground text-sm">Reset Period</span>
+																		<div className="col-span-2 text-sm">
+																			{parseResetPeriod(config.rate_limit.request_reset_duration || "")}
+																		</div>
+																	</div>
+																	<div className="grid grid-cols-3 items-center gap-4">
+																		<span className="text-muted-foreground text-sm">Last Reset</span>
+																		<div className="col-span-2 text-sm">
+																			{formatDistanceToNow(new Date(config.rate_limit.request_last_reset), { addSuffix: true })}
+																		</div>
+																	</div>
+																</div>
+															)}
+
+															{!config.rate_limit.token_max_limit && !config.rate_limit.request_max_limit && (
+																<p className="text-muted-foreground text-sm">No rate limits configured for this provider</p>
+															)}
+														</div>
+													</>
+												)}
+											</div>
+										</div>
+									))}
 								</div>
 							)}
 						</div>

@@ -12,7 +12,7 @@ import (
 	"github.com/bytedance/sonic"
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/framework/pricing"
+	"github.com/maximhq/bifrost/framework/modelcatalog"
 	"github.com/maximhq/bifrost/framework/streaming"
 )
 
@@ -72,14 +72,14 @@ type OtelPlugin struct {
 
 	client OtelClient
 
-	pricingManager *pricing.PricingManager
+	pricingManager *modelcatalog.ModelCatalog
 	accumulator    *streaming.Accumulator // Accumulator for streaming chunks
 
 	emitWg sync.WaitGroup // Track in-flight emissions
 }
 
 // Init function for the OTEL plugin
-func Init(ctx context.Context, config *Config, _logger schemas.Logger, pricingManager *pricing.PricingManager) (*OtelPlugin, error) {
+func Init(ctx context.Context, config *Config, _logger schemas.Logger, pricingManager *modelcatalog.ModelCatalog) (*OtelPlugin, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is required")
 	}
