@@ -720,7 +720,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 						response.ExtraFields.RawResponse = string(message.Payload)
 					}
 
-					processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, response, nil, nil, nil), responseChan)
+					processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, response, nil, nil, nil), responseChan, provider.logger)
 				}
 				if bifrostErr != nil {
 					bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -737,7 +737,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 		// Send final response
 		response := createBifrostChatCompletionChunkResponse(messageID, usage, finishReason, chunkIndex, schemas.ChatCompletionStreamRequest, providerName, request.Model)
 		response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-		handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, response, nil, nil, nil), postHookRunner, responseChan)
+		handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, response, nil, nil, nil), postHookRunner, responseChan, provider.logger)
 	}()
 
 	return responseChan, nil
@@ -880,8 +880,8 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 				}
 
 				if chunkIndex == 0 {
-					sendCreatedEventResponsesChunk(ctx, postHookRunner, provider.GetProviderKey(), request.Model, startTime, responseChan)
-					sendInProgressEventResponsesChunk(ctx, postHookRunner, provider.GetProviderKey(), request.Model, startTime, responseChan)
+					sendCreatedEventResponsesChunk(ctx, postHookRunner, provider.GetProviderKey(), request.Model, startTime, responseChan, provider.logger)
+					sendInProgressEventResponsesChunk(ctx, postHookRunner, provider.GetProviderKey(), request.Model, startTime, responseChan, provider.logger)
 					chunkIndex = 2
 				}
 
@@ -910,7 +910,7 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 						response.ExtraFields.RawResponse = string(message.Payload)
 					}
 
-					processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, response, nil, nil), responseChan)
+					processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, response, nil, nil), responseChan, provider.logger)
 				}
 				if bifrostErr != nil {
 					bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -939,7 +939,7 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 				Latency:        time.Since(startTime).Milliseconds(),
 			},
 		}
-		handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, nil, response, nil, nil), postHookRunner, responseChan)
+		handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, nil, response, nil, nil), postHookRunner, responseChan, provider.logger)
 	}()
 
 	return responseChan, nil

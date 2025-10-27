@@ -540,7 +540,7 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 				}
 
 				// Process response through post-hooks and send to channel
-				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, response, nil), responseChan)
+				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, response, nil), responseChan, provider.logger)
 			}
 		}
 
@@ -562,7 +562,7 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 			}
 
 			ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
-			handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, nil, nil, response, nil), postHookRunner, responseChan)
+			handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, nil, nil, response, nil), postHookRunner, responseChan, provider.logger)
 		}
 	}()
 
@@ -827,7 +827,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 				}
 
 				// Process response through post-hooks and send to channel
-				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, nil, response), responseChan)
+				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, nil, response), responseChan, provider.logger)
 			}
 		}
 
@@ -855,7 +855,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 			}
 
 			ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
-			handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, nil, nil, nil, response), postHookRunner, responseChan)
+			handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, nil, nil, nil, response), postHookRunner, responseChan, provider.logger)
 		}
 	}()
 

@@ -413,19 +413,20 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	// Add generation to the effective log repository
 	logger.AddGenerationToTrace(traceID, &generationConfig)
 
+	var requestID string
 	if ctx != nil {
 		if _, ok := (*ctx).Value(TraceIDKey).(string); !ok {
 			*ctx = context.WithValue(*ctx, TraceIDKey, traceID)
 		}
 		*ctx = context.WithValue(*ctx, GenerationIDKey, generationID)
-	}
 
-	// Extract request ID from context
-	requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)
-	if !ok || requestID == "" {
-		// Log error but don't fail the request
-		plugin.logger.Error("%s request id not found in context or is empty, please set schemas.BifrostContextKeyRequestID in ctx", PluginLoggerPrefix)
-		return req, nil, nil
+		// Extract request ID from context, if not present, create a new one
+		var ok bool
+		requestID, ok = (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)
+		if !ok || requestID == "" {
+			requestID = uuid.New().String()
+			*ctx = context.WithValue(*ctx, schemas.BifrostContextKeyRequestID, requestID)
+		}
 	}
 
 	if bifrost.IsStreamRequestType(req.RequestType) {

@@ -83,6 +83,10 @@ func TestJsonParserPluginEndToEnd(t *testing.T) {
 
 	// Make a test responses request with streaming enabled
 	// Request JSON output to test the parser
+	var responseFormat interface{} = map[string]interface{}{
+		"type": "json_object",
+	}
+
 	request := &schemas.BifrostChatRequest{
 		Provider: schemas.OpenAI,
 		Model:    "gpt-4o-mini",
@@ -95,12 +99,7 @@ func TestJsonParserPluginEndToEnd(t *testing.T) {
 			},
 		},
 		Params: &schemas.ChatParameters{
-			ExtraParams: map[string]any{
-				"stream": true,
-				"response_format": map[string]any{
-					"type": "json_object",
-				},
-			},
+			ResponseFormat: &responseFormat,
 		},
 	}
 	// Make the streaming request
@@ -182,6 +181,10 @@ func TestJsonParserPluginPerRequest(t *testing.T) {
 	defer client.Shutdown()
 
 	// Test request with plugin enabled via context
+	var responseFormat interface{} = map[string]interface{}{
+		"type": "json_object",
+	}
+
 	request := &schemas.BifrostChatRequest{
 		Provider: schemas.OpenAI,
 		Model:    "gpt-4o-mini",
@@ -194,12 +197,7 @@ func TestJsonParserPluginPerRequest(t *testing.T) {
 			},
 		},
 		Params: &schemas.ChatParameters{
-			ExtraParams: map[string]any{
-				"stream": true,
-				"response_format": map[string]any{
-					"type": "json_object",
-				},
-			},
+			ResponseFormat: &responseFormat,
 		},
 	}
 

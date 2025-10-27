@@ -516,7 +516,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 					response.ExtraFields.RawResponse = jsonData
 				}
 
-				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, response, nil, nil, nil), responseChan)
+				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, response, nil, nil, nil), responseChan, provider.logger)
 
 				// End stream after message-end
 				if event.Type == cohere.StreamEventMessageEnd {
@@ -700,8 +700,8 @@ func (provider *CohereProvider) ResponsesStream(ctx context.Context, postHookRun
 			}
 
 			if chunkIndex == 0 {
-				sendCreatedEventResponsesChunk(ctx, postHookRunner, providerName, request.Model, startTime, responseChan)
-				sendInProgressEventResponsesChunk(ctx, postHookRunner, providerName, request.Model, startTime, responseChan)
+				sendCreatedEventResponsesChunk(ctx, postHookRunner, providerName, request.Model, startTime, responseChan, provider.logger)
+				sendInProgressEventResponsesChunk(ctx, postHookRunner, providerName, request.Model, startTime, responseChan, provider.logger)
 				chunkIndex = 2
 			}
 
@@ -727,10 +727,10 @@ func (provider *CohereProvider) ResponsesStream(ctx context.Context, postHookRun
 						response.Response = &schemas.BifrostResponsesResponse{}
 					}
 					response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-					handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, nil, response, nil, nil), postHookRunner, responseChan)
+					handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, nil, response, nil, nil), postHookRunner, responseChan, provider.logger)
 					break
 				}
-				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, response, nil, nil), responseChan)
+				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, response, nil, nil), responseChan, provider.logger)
 			}
 			if bifrostErr != nil {
 				bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
