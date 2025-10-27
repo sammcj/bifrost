@@ -45,7 +45,6 @@ jobs:
       core-version: ${{ steps.detect.outputs.core-version }}
       framework-version: ${{ steps.detect.outputs.framework-version }}
       transport-version: ${{ steps.detect.outputs.transport-version }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -83,7 +82,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.24.1"
-
       - name: Configure Git
         run: |
           git config user.name "GitHub Actions Bot"
@@ -93,6 +91,29 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          MAXIM_API_KEY: ${{ secrets.MAXIM_API_KEY }}
+          MAXIM_LOGGER_ID: ${{ secrets.MAXIM_LOG_REPO_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_ARN: ${{ secrets.AWS_ARN }}
+          BEDROCK_API_KEY: ${{ secrets.BEDROCK_API_KEY }}
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
+          AZURE_EMB_API_KEY: ${{ secrets.AZURE_EMB_API_KEY }}
+          AZURE_EMB_ENDPOINT: ${{ secrets.AZURE_EMB_ENDPOINT }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PARASAIL_API_KEY: ${{ secrets.PARASAIL_API_KEY }}
+          SGL_API_KEY: ${{ secrets.SGL_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          VERTEX_CREDENTIALS: ${{ secrets.VERTEX_CREDENTIALS }}
+          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
         run: ./.github/workflows/scripts/release-core.sh "${{ needs.detect-changes.outputs.core-version }}"
 
   framework-release:
@@ -141,6 +162,29 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          MAXIM_API_KEY: ${{ secrets.MAXIM_API_KEY }}
+          MAXIM_LOGGER_ID: ${{ secrets.MAXIM_LOG_REPO_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_ARN: ${{ secrets.AWS_ARN }}
+          BEDROCK_API_KEY: ${{ secrets.BEDROCK_API_KEY }}
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
+          AZURE_EMB_API_KEY: ${{ secrets.AZURE_EMB_API_KEY }}
+          AZURE_EMB_ENDPOINT: ${{ secrets.AZURE_EMB_ENDPOINT }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PARASAIL_API_KEY: ${{ secrets.PARASAIL_API_KEY }}
+          SGL_API_KEY: ${{ secrets.SGL_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          VERTEX_CREDENTIALS: ${{ secrets.VERTEX_CREDENTIALS }}
+          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
         run: ./.github/workflows/scripts/release-framework.sh "${{ needs.detect-changes.outputs.framework-version }}"
 
   plugins-release:
@@ -195,7 +239,27 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           MAXIM_API_KEY: ${{ secrets.MAXIM_API_KEY }}
           MAXIM_LOGGER_ID: ${{ secrets.MAXIM_LOG_REPO_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_ARN: ${{ secrets.AWS_ARN }}
+          BEDROCK_API_KEY: ${{ secrets.BEDROCK_API_KEY }}
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
+          AZURE_EMB_API_KEY: ${{ secrets.AZURE_EMB_API_KEY }}
+          AZURE_EMB_ENDPOINT: ${{ secrets.AZURE_EMB_ENDPOINT }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PARASAIL_API_KEY: ${{ secrets.PARASAIL_API_KEY }}
+          SGL_API_KEY: ${{ secrets.SGL_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          VERTEX_CREDENTIALS: ${{ secrets.VERTEX_CREDENTIALS }}
+          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
         run: ./.github/workflows/scripts/release-all-plugins.sh '${{ needs.detect-changes.outputs.changed-plugins }}'
 
   bifrost-http-release:
@@ -249,10 +313,33 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          MAXIM_API_KEY: ${{ secrets.MAXIM_API_KEY }}
+          MAXIM_LOGGER_ID: ${{ secrets.MAXIM_LOG_REPO_ID }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_ARN: ${{ secrets.AWS_ARN }}
+          BEDROCK_API_KEY: ${{ secrets.BEDROCK_API_KEY }}
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
+          AZURE_EMB_API_KEY: ${{ secrets.AZURE_EMB_API_KEY }}
+          AZURE_EMB_ENDPOINT: ${{ secrets.AZURE_EMB_ENDPOINT }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PARASAIL_API_KEY: ${{ secrets.PARASAIL_API_KEY }}
+          SGL_API_KEY: ${{ secrets.SGL_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          VERTEX_CREDENTIALS: ${{ secrets.VERTEX_CREDENTIALS }}
+          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
         run: ./.github/workflows/scripts/release-bifrost-http.sh "${{ needs.detect-changes.outputs.transport-version }}"
 
   # Docker build amd64
