@@ -5,7 +5,7 @@
     "dark": "/media/bifrost-logo-dark.png",
     "light": "/media/bifrost-logo.png"
   },
-  "theme": "palm",
+  "theme": "maple",
   "colors": {
     "primary": "#0C3B43",
     "light": "#07C983"
@@ -51,7 +51,8 @@
                   "quickstart/gateway/streaming",
                   "quickstart/gateway/tool-calling",
                   "quickstart/gateway/multimodal",
-                  "quickstart/gateway/integrations"
+                  "quickstart/gateway/integrations",
+                  "quickstart/gateway/cli-agents"
                 ]
               },
               {
@@ -65,6 +66,13 @@
                   "quickstart/go-sdk/multimodal"
                 ]
               }
+            ]
+          },
+          {
+            "group": "Models Catalog",
+            "icon": "box",
+            "pages": [
+              "models-catalog/list"
             ]
           },
           {
@@ -88,8 +96,16 @@
               "features/fallbacks",
               "features/keys-management",
               "features/mcp",
-              "features/tracing",
-              "features/telemetry",
+              {
+                "group": "Governance",
+                "icon": "user-lock",
+                "pages": [
+                  "features/governance/virtual-keys",
+                  "features/governance/routing",
+                  "features/governance/budget-and-limits",
+                  "features/governance/mcp-tools"
+                ]
+              },
               {
                 "group": "Observability",
                 "icon": "binoculars",
@@ -105,18 +121,9 @@
                   }
                 ]
               },
+              "features/telemetry",
               "features/semantic-caching",
               "features/custom-providers",
-              {
-                "group": "Governance",
-                "icon": "user-lock",
-                "pages": [
-                  "features/governance/virtual-keys",
-                  "features/governance/budget-and-limits",
-                  "features/governance/routing",
-                  "features/governance/mcp-tools"
-                ]
-              },
               {
                 "group": "Plugins",
                 "icon": "puzzle-piece",
@@ -146,10 +153,16 @@
         ]
       },
       {
-        "tab": "Models catalog",
-        "icon": "box",
-        "pages": [
-          "models-catalog/list"
+        "tab": "Developer Guides",
+        "icon": "wrench",
+        "groups": [
+          {
+            "group": "Contributing",
+            "icon": "code",
+            "pages": [
+              "contributing/setting-up-repo"
+            ]
+          }
         ]
       },
       {
@@ -202,8 +215,11 @@
             "icon": "screwdriver-wrench",
             "pages": [
               "architecture/framework/what-is-framework",
-              "architecture/framework/pricing",
-              "architecture/framework/vector-store"
+              "architecture/framework/model-catalog",
+              "architecture/framework/config-store",
+              "architecture/framework/log-store",
+              "architecture/framework/vector-store",
+              "architecture/framework/streaming"
             ]
           }
         ]

@@ -380,44 +380,6 @@ graph TD
 
 ---
 
-## Plugin Discovery & Configuration
-
-### **Configuration Methods**
-
-**Current: Command-Line Plugin Loading**
-
-```bash
-# Docker deployment
-docker run -p 8080:8080 \
-  -e APP_PLUGINS="maxim,custom-plugin" \
-  maximhq/bifrost
-
-# NPM deployment
-npx -y @maximhq/bifrost -plugins "maxim"
-```
-
-**Future: JSON Configuration System**
-
-```json
-{
-  "plugins": [
-    {
-      "name": "maxim",
-      "source": "../../plugins/maxim",
-      "type": "local",
-      "config": {
-        "api_key": "env.MAXIM_API_KEY",
-        "log_repo_id": "env.MAXIM_LOG_REPO_ID"
-      }
-    }
-  ]
-}
-```
-
-> **Plugin Configuration:** [Plugin Setup →](../../enterprise/custom-plugins)
-
----
-
 ## Security & Validation
 
 ### **Multi-Layer Security Model**
