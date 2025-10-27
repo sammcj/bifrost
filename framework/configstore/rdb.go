@@ -909,6 +909,8 @@ func (s *RDBConfigStore) GetVirtualKeys(ctx context.Context) ([]tables.TableVirt
 		Preload("Budget").
 		Preload("RateLimit").
 		Preload("ProviderConfigs").
+		Preload("ProviderConfigs.Budget").
+		Preload("ProviderConfigs.RateLimit").
 		Preload("MCPConfigs").
 		Preload("MCPConfigs.MCPClient").
 		Preload("Keys", func(db *gorm.DB) *gorm.DB {
@@ -928,6 +930,8 @@ func (s *RDBConfigStore) GetVirtualKey(ctx context.Context, id string) (*tables.
 		Preload("Budget").
 		Preload("RateLimit").
 		Preload("ProviderConfigs").
+		Preload("ProviderConfigs.Budget").
+		Preload("ProviderConfigs.RateLimit").
 		Preload("MCPConfigs").
 		Preload("MCPConfigs.MCPClient").
 		Preload("Keys", func(db *gorm.DB) *gorm.DB {
@@ -946,6 +950,8 @@ func (s *RDBConfigStore) GetVirtualKeyByValue(ctx context.Context, value string)
 		Preload("Budget").
 		Preload("RateLimit").
 		Preload("ProviderConfigs").
+		Preload("ProviderConfigs.Budget").
+		Preload("ProviderConfigs.RateLimit").
 		Preload("MCPConfigs").
 		Preload("MCPConfigs.MCPClient").
 		Preload("Keys", func(db *gorm.DB) *gorm.DB {

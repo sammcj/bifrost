@@ -320,7 +320,8 @@ func (bifrost *Bifrost) ListAllModels(ctx context.Context, request *schemas.Bifr
 			if bifrostErr != nil {
 				// Log the error but continue with other providers
 				// Skip logging "no keys found" and "not supported" errors as they are expected when a provider is not configured
-				if !strings.Contains(bifrostErr.Error.Message, "no keys found") && !strings.Contains(bifrostErr.Error.Message, "not supported") {
+				if !strings.Contains(bifrostErr.Error.Message, "no keys found") &&
+					!strings.Contains(bifrostErr.Error.Message, "not supported") {
 					bifrost.logger.Warn(fmt.Sprintf("failed to list models for provider %s: %v", providerKey, bifrostErr.Error.Message))
 				}
 				if firstError == nil {

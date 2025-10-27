@@ -78,6 +78,8 @@ export interface VirtualKeyProviderConfig {
 	provider: string;
 	weight: number;
 	allowed_models: string[];
+	budget?: Budget;
+	rate_limit?: RateLimit;
 }
 
 export interface VirtualKeyMCPConfig {
@@ -113,11 +115,29 @@ export interface UsageStats {
 	requests_last_reset: string;
 }
 
+// Request interfaces for provider config operations
+export interface VirtualKeyProviderConfigRequest {
+	provider: string;
+	weight?: number;
+	allowed_models?: string[];
+	budget?: CreateBudgetRequest;
+	rate_limit?: CreateRateLimitRequest;
+}
+
+export interface VirtualKeyProviderConfigUpdateRequest {
+	id?: number;
+	provider: string;
+	weight?: number;
+	allowed_models?: string[];
+	budget?: UpdateBudgetRequest;
+	rate_limit?: UpdateRateLimitRequest;
+}
+
 // Request types for API calls
 export interface CreateVirtualKeyRequest {
 	name: string;
 	description?: string;
-	provider_configs?: VirtualKeyProviderConfig[];
+	provider_configs?: VirtualKeyProviderConfigRequest[];
 	mcp_configs?: VirtualKeyMCPConfigRequest[];
 	team_id?: string;
 	customer_id?: string;
@@ -129,7 +149,7 @@ export interface CreateVirtualKeyRequest {
 
 export interface UpdateVirtualKeyRequest {
 	description?: string;
-	provider_configs?: VirtualKeyProviderConfig[];
+	provider_configs?: VirtualKeyProviderConfigUpdateRequest[];
 	mcp_configs?: VirtualKeyMCPConfigRequest[];
 	team_id?: string;
 	customer_id?: string;

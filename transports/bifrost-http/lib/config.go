@@ -22,7 +22,7 @@ import (
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/encrypt"
 	"github.com/maximhq/bifrost/framework/logstore"
-	"github.com/maximhq/bifrost/framework/pricing"
+	"github.com/maximhq/bifrost/framework/modelcatalog"
 	"github.com/maximhq/bifrost/framework/vectorstore"
 	"github.com/maximhq/bifrost/plugins/semanticcache"
 	"gorm.io/gorm"
@@ -161,7 +161,7 @@ type Config struct {
 	PluginConfigs []*schemas.PluginConfig
 
 	// Pricing manager
-	PricingManager *pricing.PricingManager
+	PricingManager *modelcatalog.ModelCatalog
 }
 
 var DefaultClientConfig = configstore.ClientConfig{
@@ -424,29 +424,35 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 			if err != nil {
 				logger.Warn("failed to get framework config from store: %v", err)
 			}
-			pricingConfig := &pricing.Config{}
+			pricingConfig := &modelcatalog.Config{}
 			if frameworkConfig != nil && frameworkConfig.PricingURL != nil {
 				pricingConfig.PricingURL = frameworkConfig.PricingURL
 			} else {
-				pricingConfig.PricingURL = bifrost.Ptr(pricing.DefaultPricingURL)
+				pricingConfig.PricingURL = bifrost.Ptr(modelcatalog.DefaultPricingURL)
 			}
 			if frameworkConfig != nil && frameworkConfig.PricingSyncInterval != nil && *frameworkConfig.PricingSyncInterval > 0 {
 				syncDuration := time.Duration(*frameworkConfig.PricingSyncInterval) * time.Second
 				pricingConfig.PricingSyncInterval = &syncDuration
 			} else {
-				pricingConfig.PricingSyncInterval = bifrost.Ptr(pricing.DefaultPricingSyncInterval)
+				pricingConfig.PricingSyncInterval = bifrost.Ptr(modelcatalog.DefaultPricingSyncInterval)
 			}
 			// Updating DB with latest config
 			configID := uint(0)
 			if frameworkConfig != nil {
 				configID = frameworkConfig.ID
 			}
-			duration := pricingConfig.PricingSyncInterval.Seconds()
-			logger.Debug("updating framework config with duration: %d", duration)
+			var durationSec int64
+			if pricingConfig.PricingSyncInterval != nil {
+				durationSec = int64((*pricingConfig.PricingSyncInterval).Seconds())
+			} else {
+				d := modelcatalog.DefaultPricingSyncInterval
+				durationSec = int64(d.Seconds())
+			}
+			logger.Debug("updating framework config with duration: %d", durationSec)
 			err = config.ConfigStore.UpdateFrameworkConfig(ctx, &configstoreTables.TableFrameworkConfig{
 				ID:                  configID,
 				PricingURL:          pricingConfig.PricingURL,
-				PricingSyncInterval: bifrost.Ptr(int64(duration)),
+				PricingSyncInterval: bifrost.Ptr(durationSec),
 			})
 			if err != nil {
 				return nil, fmt.Errorf("failed to update framework config: %w", err)
@@ -455,7 +461,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 				Pricing: pricingConfig,
 			}
 			// Initializing pricing manager
-			pricingManager, err := pricing.Init(ctx, pricingConfig, config.ConfigStore, logger)
+			pricingManager, err := modelcatalog.Init(ctx, pricingConfig, config.ConfigStore, logger)
 			if err != nil {
 				logger.Warn("failed to initialize pricing manager: %v", err)
 			}
@@ -854,7 +860,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 	}
 
 	// Initializing pricing manager
-	pricingConfig := &pricing.Config{}
+	pricingConfig := &modelcatalog.Config{}
 	if config.ConfigStore != nil {
 		frameworkConfig, err := config.ConfigStore.GetFrameworkConfig(ctx)
 		if err != nil {
@@ -877,7 +883,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		Pricing: pricingConfig,
 	}
 	// Creating pricing manager
-	pricingManager, err := pricing.Init(ctx, pricingConfig, config.ConfigStore, logger)
+	pricingManager, err := modelcatalog.Init(ctx, pricingConfig, config.ConfigStore, logger)
 	if err != nil {
 		logger.Warn("failed to initialize pricing manager: %v", err)
 	}

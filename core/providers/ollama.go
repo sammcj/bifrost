@@ -70,6 +70,9 @@ func (provider *OllamaProvider) GetProviderKey() schemas.ModelProvider {
 
 // ListModels performs a list models request to Ollama's API.
 func (provider *OllamaProvider) ListModels(ctx context.Context, key schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
+	if provider.networkConfig.BaseURL == "" {
+		return nil, newConfigurationError("base_url is not set", provider.GetProviderKey())
+	}
 	return handleOpenAIListModelsRequest(ctx, provider.client, request, provider.networkConfig.BaseURL+"/v1/models", key, provider.networkConfig.ExtraHeaders, provider.GetProviderKey(), provider.sendBackRawResponse, provider.logger)
 }
 
@@ -200,4 +203,3 @@ func (provider *OllamaProvider) Transcription(ctx context.Context, key schemas.K
 func (provider *OllamaProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, newUnsupportedOperationError("transcription stream", "ollama")
 }
-
