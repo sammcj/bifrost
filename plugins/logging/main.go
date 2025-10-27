@@ -13,7 +13,7 @@ import (
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/logstore"
-	"github.com/maximhq/bifrost/framework/pricing"
+	"github.com/maximhq/bifrost/framework/modelcatalog"
 	"github.com/maximhq/bifrost/framework/streaming"
 )
 
@@ -76,7 +76,7 @@ type LogCallback func(*logstore.Log)
 type LoggerPlugin struct {
 	ctx             context.Context
 	store           logstore.LogStore
-	pricingManager  *pricing.PricingManager
+	pricingManager  *modelcatalog.ModelCatalog
 	mu              sync.Mutex
 	done            chan struct{}
 	wg              sync.WaitGroup
@@ -90,12 +90,12 @@ type LoggerPlugin struct {
 }
 
 // Init creates new logger plugin with given log store
-func Init(ctx context.Context, logger schemas.Logger, logsStore logstore.LogStore, pricingManager *pricing.PricingManager) (*LoggerPlugin, error) {
+func Init(ctx context.Context, logger schemas.Logger, logsStore logstore.LogStore, pricingManager *modelcatalog.ModelCatalog) (*LoggerPlugin, error) {
 	if logsStore == nil {
 		return nil, fmt.Errorf("logs store cannot be nil")
 	}
 	if pricingManager == nil {
-		logger.Warn("logging plugin requires pricing manager to calculate cost, all cost calculations will be skipped.")
+		logger.Warn("logging plugin requires model catalog to calculate cost, all cost calculations will be skipped.")
 	}
 
 	plugin := &LoggerPlugin{

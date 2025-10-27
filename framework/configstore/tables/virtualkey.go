@@ -14,6 +14,12 @@ type TableVirtualKeyProviderConfig struct {
 	Provider      string   `gorm:"type:varchar(50);not null" json:"provider"`
 	Weight        float64  `gorm:"default:1.0" json:"weight"`
 	AllowedModels []string `gorm:"type:text;serializer:json" json:"allowed_models"` // Empty means all models allowed
+	BudgetID      *string  `gorm:"type:varchar(255);index" json:"budget_id,omitempty"`
+	RateLimitID   *string  `gorm:"type:varchar(255);index" json:"rate_limit_id,omitempty"`
+
+	// Relationships
+	Budget    *TableBudget    `gorm:"foreignKey:BudgetID;onDelete:CASCADE" json:"budget,omitempty"`
+	RateLimit *TableRateLimit `gorm:"foreignKey:RateLimitID;onDelete:CASCADE" json:"rate_limit,omitempty"`
 }
 
 // TableName sets the table name for each model
@@ -54,8 +60,8 @@ type TableVirtualKey struct {
 	// Relationships
 	Team      *TableTeam      `gorm:"foreignKey:TeamID" json:"team,omitempty"`
 	Customer  *TableCustomer  `gorm:"foreignKey:CustomerID" json:"customer,omitempty"`
-	Budget    *TableBudget    `gorm:"foreignKey:BudgetID" json:"budget,omitempty"`
-	RateLimit *TableRateLimit `gorm:"foreignKey:RateLimitID" json:"rate_limit,omitempty"`
+	Budget    *TableBudget    `gorm:"foreignKey:BudgetID;onDelete:CASCADE" json:"budget,omitempty"`
+	RateLimit *TableRateLimit `gorm:"foreignKey:RateLimitID;onDelete:CASCADE" json:"rate_limit,omitempty"`
 
 	CreatedAt time.Time `gorm:"index;not null" json:"created_at"`
 	UpdatedAt time.Time `gorm:"index;not null" json:"updated_at"`

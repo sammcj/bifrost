@@ -83,9 +83,9 @@ func (t *UsageTracker) UpdateUsage(ctx context.Context, update *UsageUpdate) {
 	shouldUpdateRequests := !update.IsStreaming || (update.IsStreaming && update.IsFinalChunk)
 	shouldUpdateBudget := !update.IsStreaming || (update.IsStreaming && update.HasUsageData)
 
-	// Update VK rate limit usage if applicable
-	if vk.RateLimit != nil {
-		if err := t.store.UpdateRateLimitUsage(ctx, update.VirtualKey, update.TokensUsed, shouldUpdateTokens, shouldUpdateRequests); err != nil {
+	// Update rate limit usage (both provider-level and VK-level) if applicable
+	if vk.RateLimit != nil || len(vk.ProviderConfigs) > 0 {
+		if err := t.store.UpdateRateLimitUsage(ctx, update.VirtualKey, string(update.Provider), update.TokensUsed, shouldUpdateTokens, shouldUpdateRequests); err != nil {
 			t.logger.Error("failed to update rate limit usage for VK %s: %v", vk.ID, err)
 		}
 	}
