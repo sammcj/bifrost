@@ -66,7 +66,7 @@ type GovernancePlugin struct {
 // Behavior and defaults:
 //   - Enables all governance features with optimized defaults.
 //   - If `store` is nil, the plugin runs in-memory only (no persistence).
-//   - If `modelCatalog` is nil, cost calculation and vk level provider routing is skipped.
+//   - If `modelCatalog` is nil, cost calculation is skipped.
 //   - `config.IsVkMandatory` controls whether `x-bf-vk` is required in PreHook.
 //   - `inMemoryStore` is used by TransportInterceptor to validate configured providers
 //     and build provider-prefixed models; it may be nil. When nil, transport-level
@@ -80,7 +80,7 @@ type GovernancePlugin struct {
 //   - logger: logger used by all subcomponents.
 //   - store: configuration store used for persistence; may be nil.
 //   - governanceConfig: initial/seed governance configuration for the store.
-//   - modelCatalog: optional model catalog to compute request cost and vk level provider routing.
+//   - modelCatalog: optional model catalog to compute request cost.
 //   - inMemoryStore: provider registry used for routing/validation in transports.
 //
 // Returns:
