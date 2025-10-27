@@ -477,7 +477,7 @@ func handleOpenAITextCompletionStreaming(
 					response.ExtraFields.RawResponse = jsonData
 				}
 
-				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(&response, nil, nil, nil, nil), responseChan)
+				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(&response, nil, nil, nil, nil), responseChan, logger)
 			}
 		}
 
@@ -488,7 +488,7 @@ func handleOpenAITextCompletionStreaming(
 		} else {
 			response := createBifrostTextCompletionChunkResponse(messageID, usage, finishReason, chunkIndex, schemas.TextCompletionStreamRequest, providerName, request.Model)
 			response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-			handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(response, nil, nil, nil, nil), postHookRunner, responseChan)
+			handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(response, nil, nil, nil, nil), postHookRunner, responseChan, logger)
 		}
 	}()
 
@@ -836,7 +836,7 @@ func handleOpenAIChatCompletionStreaming(
 					response.ExtraFields.RawResponse = jsonData
 				}
 
-				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, &response, nil, nil, nil), responseChan)
+				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, &response, nil, nil, nil), responseChan, logger)
 			}
 		}
 
@@ -847,7 +847,7 @@ func handleOpenAIChatCompletionStreaming(
 		} else {
 			response := createBifrostChatCompletionChunkResponse(messageID, usage, finishReason, chunkIndex, schemas.ChatCompletionStreamRequest, providerName, request.Model)
 			response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-			handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, response, nil, nil, nil), postHookRunner, responseChan)
+			handleStreamEndWithSuccess(ctx, getBifrostResponseForStreamResponse(nil, response, nil, nil, nil), postHookRunner, responseChan, logger)
 		}
 	}()
 
@@ -1158,14 +1158,14 @@ func handleOpenAIResponsesStreaming(
 			if response.Type == schemas.ResponsesStreamResponseTypeCompleted {
 				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
 				response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, &response, nil, nil), responseChan)
+				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, &response, nil, nil), responseChan, logger)
 				return
 			}
 
 			response.ExtraFields.Latency = time.Since(lastChunkTime).Milliseconds()
 			lastChunkTime = time.Now()
 
-			processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, &response, nil, nil), responseChan)
+			processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, &response, nil, nil), responseChan, logger)
 		}
 		// Handle scanner errors first
 		if err := scanner.Err(); err != nil {
@@ -1509,11 +1509,11 @@ func (provider *OpenAIProvider) SpeechStream(ctx context.Context, postHookRunner
 			if response.Usage != nil {
 				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
 				response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, &response, nil), responseChan)
+				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, &response, nil), responseChan, provider.logger)
 				return
 			}
 
-			processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, &response, nil), responseChan)
+			processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, &response, nil), responseChan, provider.logger)
 		}
 
 		// Handle scanner errors
@@ -1770,11 +1770,11 @@ func (provider *OpenAIProvider) TranscriptionStream(ctx context.Context, postHoo
 			if response.Usage != nil {
 				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
 				response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, nil, &response), responseChan)
+				processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, nil, &response), responseChan, provider.logger)
 				return
 			}
 
-			processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, nil, &response), responseChan)
+			processAndSendResponse(ctx, postHookRunner, getBifrostResponseForStreamResponse(nil, nil, nil, nil, &response), responseChan, provider.logger)
 		}
 
 		// Handle scanner errors
