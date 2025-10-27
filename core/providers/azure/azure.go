@@ -21,7 +21,6 @@ const AzureAuthorizationTokenKey schemas.BifrostContextKey = "azure-authorizatio
 type AzureProvider struct {
 	logger              schemas.Logger        // Logger for provider operations
 	client              *fasthttp.Client      // HTTP client for API requests
-	streamClient        *http.Client          // HTTP client for streaming requests
 	networkConfig       schemas.NetworkConfig // Network configuration including extra headers
 	sendBackRawResponse bool                  // Whether to include raw response in BifrostResponse
 }
@@ -33,14 +32,11 @@ func NewAzureProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*A
 	config.CheckAndSetDefaults()
 
 	client := &fasthttp.Client{
-		ReadTimeout:     time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
-		WriteTimeout:    time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
-		MaxConnsPerHost: config.ConcurrencyAndBufferSize.Concurrency,
-	}
-
-	// Initialize streaming HTTP client
-	streamClient := &http.Client{
-		Timeout: time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
+		ReadTimeout:         time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
+		WriteTimeout:        time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
+		MaxConnsPerHost:     10000,
+		MaxIdleConnDuration: 60 * time.Second,
+		MaxConnWaitTimeout:  10 * time.Second,
 	}
 
 	// Configure proxy if provided
@@ -49,7 +45,6 @@ func NewAzureProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*A
 	return &AzureProvider{
 		logger:              logger,
 		client:              client,
-		streamClient:        streamClient,
 		networkConfig:       config.NetworkConfig,
 		sendBackRawResponse: config.SendBackRawResponse,
 	}, nil
@@ -291,7 +286,7 @@ func (provider *AzureProvider) TextCompletionStream(ctx context.Context, postHoo
 
 	return openai.HandleOpenAITextCompletionStreaming(
 		ctx,
-		provider.streamClient,
+		provider.client,
 		url,
 		request,
 		authHeader,
@@ -380,7 +375,7 @@ func (provider *AzureProvider) ChatCompletionStream(ctx context.Context, postHoo
 	// Use shared streaming logic from OpenAI
 	return openai.HandleOpenAIChatCompletionStreaming(
 		ctx,
-		provider.streamClient,
+		provider.client,
 		url,
 		request,
 		authHeader,
@@ -500,11 +495,15 @@ func (provider *AzureProvider) ResponsesStream(ctx context.Context, postHookRunn
 		return req
 	}
 
+	azureVersion := key.AzureKeyConfig.APIVersion
+	if azureVersion == nil {
+		azureVersion = schemas.Ptr(AzureAPIVersionDefault)
+	}
 	// Use shared streaming logic from OpenAI
 	return openai.HandleOpenAIResponsesStreaming(
 		ctx,
-		provider.streamClient,
-		key.AzureKeyConfig.Endpoint+providerUtils.GetPathFromContext(ctx, "/openai/v1/responses?api-version=preview"),
+		provider.client,
+		key.AzureKeyConfig.Endpoint+providerUtils.GetPathFromContext(ctx, fmt.Sprintf("/openai/v1/responses?api-version=%s", *azureVersion)),
 		request,
 		authHeader,
 		provider.networkConfig.ExtraHeaders,
