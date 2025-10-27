@@ -1,6 +1,5 @@
-// Package providers implements various LLM providers and their utility functions.
-// This file contains the Mistral provider implementation.
-package providers
+// Package mistral implements the Mistral provider.
+package mistral
 
 import (
 	"context"
@@ -8,8 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/maximhq/bifrost/core/providers/openai"
+	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	schemas "github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/core/schemas/providers/mistral"
 	"github.com/valyala/fasthttp"
 )
 
@@ -45,7 +45,7 @@ func NewMistralProvider(config *schemas.ProviderConfig, logger schemas.Logger) *
 	// }
 
 	// Configure proxy if provided
-	client = configureProxy(client, config.ProxyConfig, logger)
+	client = providerUtils.ConfigureProxy(client, config.ProxyConfig, logger)
 
 	// Set default BaseURL if not provided
 	if config.NetworkConfig.BaseURL == "" {
@@ -89,14 +89,14 @@ func (provider *MistralProvider) listModelsByKey(ctx context.Context, key schema
 	}
 
 	// Make request
-	latency, bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
-		bifrostErr := parseOpenAIError(resp, schemas.ListModelsRequest, providerName, "")
+		bifrostErr := openai.ParseOpenAIError(resp, schemas.ListModelsRequest, providerName, "")
 		return nil, bifrostErr
 	}
 
@@ -126,7 +126,7 @@ func (provider *MistralProvider) listModelsByKey(ctx context.Context, key schema
 // ListModels performs a list models request to Mistral's API.
 // Requests are made concurrently for improved performance.
 func (provider *MistralProvider) ListModels(ctx context.Context, keys []schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
-	return handleMultipleListModelsRequests(
+	return providerUtils.HandleMultipleListModelsRequests(
 		ctx,
 		keys,
 		request,
@@ -149,7 +149,7 @@ func (provider *MistralProvider) TextCompletionStream(ctx context.Context, postH
 
 // ChatCompletion performs a chat completion request to the Mistral API.
 func (provider *MistralProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
-	return handleOpenAIChatCompletionRequest(
+	return openai.HandleOpenAIChatCompletionRequest(
 		ctx,
 		provider.client,
 		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
@@ -172,7 +172,7 @@ func (provider *MistralProvider) ChatCompletionStream(ctx context.Context, postH
 		authHeader = map[string]string{"Authorization": "Bearer " + key.Value}
 	}
 	// Use shared OpenAI-compatible streaming logic
-	return handleOpenAIChatCompletionStreaming(
+	return openai.HandleOpenAIChatCompletionStreaming(
 		ctx,
 		provider.streamClient,
 		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
@@ -205,7 +205,7 @@ func (provider *MistralProvider) Responses(ctx context.Context, key schemas.Key,
 func (provider *MistralProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,
-		getResponsesChunkConverterCombinedPostHookRunner(postHookRunner),
+		providerUtils.GetResponsesChunkConverterCombinedPostHookRunner(postHookRunner),
 		key,
 		request.ToChatRequest(),
 	)
@@ -215,7 +215,7 @@ func (provider *MistralProvider) ResponsesStream(ctx context.Context, postHookRu
 // Supports Mistral's embedding models and returns a BifrostResponse containing the embedding(s).
 func (provider *MistralProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostEmbeddingResponse, *schemas.BifrostError) {
 	// Use the shared embedding request handler
-	return handleOpenAIEmbeddingRequest(
+	return openai.HandleOpenAIEmbeddingRequest(
 		ctx,
 		provider.client,
 		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/embeddings"),
