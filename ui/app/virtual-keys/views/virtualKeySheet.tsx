@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ModelPlaceholders } from "@/lib/constants/config";
 import { resetDurationOptions } from "@/lib/constants/governance";
 import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
-import { ProviderLabels, ProviderName, ProviderNames } from "@/lib/constants/logs";
+import { ProviderLabels, ProviderName } from "@/lib/constants/logs";
 import {
 	getErrorMessage,
 	useCreateVirtualKeyMutation,
@@ -26,14 +26,7 @@ import {
 	useGetMCPClientsQuery,
 	useUpdateVirtualKeyMutation,
 } from "@/lib/store";
-import {
-	CreateVirtualKeyRequest,
-	Customer,
-	Team,
-	UpdateVirtualKeyRequest,
-	VirtualKey,
-	VirtualKeyProviderConfig,
-} from "@/lib/types/governance";
+import { CreateVirtualKeyRequest, Customer, Team, UpdateVirtualKeyRequest, VirtualKey } from "@/lib/types/governance";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Building, Info, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -41,6 +34,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { KnownProvider } from "@/lib/types/config";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 interface VirtualKeySheetProps {
 	virtualKey?: VirtualKey | null;
@@ -56,6 +50,22 @@ const providerConfigSchema = z.object({
 	provider: z.string().min(1, "Provider is required"),
 	weight: z.union([z.number().min(0, "Weight must be at least 0").max(1, "Weight must be at most 1"), z.string()]),
 	allowed_models: z.array(z.string()).optional(),
+	// Provider-level budget
+	budget: z
+		.object({
+			max_limit: z.string().optional(),
+			reset_duration: z.string().optional(),
+		})
+		.optional(),
+	// Provider-level rate limits
+	rate_limit: z
+		.object({
+			token_max_limit: z.string().optional(),
+			token_reset_duration: z.string().optional(),
+			request_max_limit: z.string().optional(),
+			request_reset_duration: z.string().optional(),
+		})
+		.optional(),
 });
 
 const mcpConfigSchema = z.object({
@@ -65,44 +75,26 @@ const mcpConfigSchema = z.object({
 });
 
 // Main form schema
-const formSchema = z
-	.object({
-		name: z.string().min(1, "Virtual key name is required"),
-		description: z.string().optional(),
-		providerConfigs: z.array(providerConfigSchema).optional(),
-		mcpConfigs: z.array(mcpConfigSchema).optional(),
-		entityType: z.enum(["team", "customer", "none"]),
-		teamId: z.string().optional(),
-		customerId: z.string().optional(),
-		isActive: z.boolean(),
-		selectedDBKeys: z.array(z.string()).optional(),
-		// Budget
-		budgetMaxLimit: z.string().optional(),
-		budgetResetDuration: z.string().optional(),
-		// Token limits
-		tokenMaxLimit: z.string().optional(),
-		tokenResetDuration: z.string().optional(),
-		// Request limits
-		requestMaxLimit: z.string().optional(),
-		requestResetDuration: z.string().optional(),
-	})
-	.refine(
-		(data) => {
-			// Validate that sum of provider weights equals 1 (only when there are multiple providers)
-			if (data.providerConfigs && data.providerConfigs.length > 1) {
-				const totalWeight = data.providerConfigs.reduce((sum, config) => {
-					const weight = typeof config.weight === "string" ? parseFloat(config.weight) : config.weight;
-					return sum + (isNaN(weight) ? 0 : weight);
-				}, 0);
-				return Math.abs(totalWeight - 1) < 0.001; // Allow small floating point errors
-			}
-			return true;
-		},
-		{
-			message: "Sum of all provider weights must equal 1 when multiple providers are configured",
-			path: ["providerConfigs"],
-		},
-	);
+const formSchema = z.object({
+	name: z.string().min(1, "Virtual key name is required"),
+	description: z.string().optional(),
+	providerConfigs: z.array(providerConfigSchema).optional(),
+	mcpConfigs: z.array(mcpConfigSchema).optional(),
+	entityType: z.enum(["team", "customer", "none"]),
+	teamId: z.string().optional(),
+	customerId: z.string().optional(),
+	isActive: z.boolean(),
+	selectedDBKeys: z.array(z.string()).optional(),
+	// Budget
+	budgetMaxLimit: z.string().optional(),
+	budgetResetDuration: z.string().optional(),
+	// Token limits
+	tokenMaxLimit: z.string().optional(),
+	tokenResetDuration: z.string().optional(),
+	// Request limits
+	requestMaxLimit: z.string().optional(),
+	requestResetDuration: z.string().optional(),
+});
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -126,7 +118,24 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 		defaultValues: {
 			name: virtualKey?.name || "",
 			description: virtualKey?.description || "",
-			providerConfigs: virtualKey?.provider_configs || [],
+			providerConfigs:
+				virtualKey?.provider_configs?.map((config) => ({
+					...config,
+					budget: config.budget
+						? {
+								max_limit: String(config.budget.max_limit),
+								reset_duration: config.budget.reset_duration,
+							}
+						: undefined,
+					rate_limit: config.rate_limit
+						? {
+								token_max_limit: config.rate_limit.token_max_limit ? String(config.rate_limit.token_max_limit) : undefined,
+								token_reset_duration: config.rate_limit.token_reset_duration,
+								request_max_limit: config.rate_limit.request_max_limit ? String(config.rate_limit.request_max_limit) : undefined,
+								request_reset_duration: config.rate_limit.request_reset_duration,
+							}
+						: undefined,
+				})) || [],
 			mcpConfigs:
 				virtualKey?.mcp_configs?.map((config) => ({
 					id: config.id,
@@ -188,7 +197,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 			return;
 		}
 
-		const newConfig: VirtualKeyProviderConfig = {
+		const newConfig = {
 			provider: provider,
 			weight: 0.5, // Default weight, user can adjust
 			allowed_models: [],
@@ -204,7 +213,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 	};
 
 	// Handle updating provider configuration
-	const handleUpdateProviderConfig = (index: number, field: keyof VirtualKeyProviderConfig, value: any) => {
+	const handleUpdateProviderConfig = (index: number, field: string, value: any) => {
 		const updatedConfigs = [...providerConfigs];
 		updatedConfigs[index] = { ...updatedConfigs[index], [field]: value };
 		form.setValue("providerConfigs", updatedConfigs, { shouldDirty: true });
@@ -239,11 +248,28 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 		form.setValue("mcpConfigs", updatedConfigs, { shouldDirty: true });
 	};
 
-	// Helper function to convert string weights to numbers
-	const normalizeProviderConfigs = (configs: (VirtualKeyProviderConfig & { weight: string | number })[]): VirtualKeyProviderConfig[] => {
+	// Helper function to convert string weights to numbers and normalize budget/rate limit fields
+	const normalizeProviderConfigs = (configs: any[]): any[] => {
 		return configs.map((config) => ({
 			...config,
 			weight: typeof config.weight === "string" ? parseFloat(config.weight) || 0 : config.weight,
+			budget: config.budget?.max_limit
+				? {
+						max_limit: parseFloat(config.budget.max_limit) || 0,
+						reset_duration: config.budget.reset_duration || "1M",
+					}
+				: undefined,
+			rate_limit:
+				config.rate_limit?.token_max_limit || config.rate_limit?.request_max_limit
+					? {
+							token_max_limit: config.rate_limit.token_max_limit ? parseInt(config.rate_limit.token_max_limit) || undefined : undefined,
+							token_reset_duration: config.rate_limit.token_reset_duration || "1h",
+							request_max_limit: config.rate_limit.request_max_limit
+								? parseInt(config.rate_limit.request_max_limit) || undefined
+								: undefined,
+							request_reset_duration: config.rate_limit.request_reset_duration || "1h",
+						}
+					: undefined,
 		}));
 	};
 
@@ -257,10 +283,8 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 	// Handle form submission
 	const onSubmit = async (data: FormData) => {
 		try {
-			// Normalize provider configs to ensure weights are numbers
-			const normalizedProviderConfigs = data.providerConfigs
-				? normalizeProviderConfigs(data.providerConfigs as (VirtualKeyProviderConfig & { weight: string | number })[])
-				: [];
+			// Normalize provider configs to ensure weights are numbers and handle budget/rate limits
+			const normalizedProviderConfigs = data.providerConfigs ? normalizeProviderConfigs(data.providerConfigs) : [];
 
 			if (isEditing && virtualKey) {
 				// Update existing virtual key
@@ -534,23 +558,15 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 
 								{/* Provider Configurations Table */}
 								{providerConfigs.length > 0 && (
-									<div className="rounded-md border">
-										<Table>
-											<TableHeader>
-												<TableRow>
-													<TableHead>Provider</TableHead>
-													<TableHead>Weight</TableHead>
-													<TableHead>Allowed Models</TableHead>
-													<TableHead className="w-[50px]"></TableHead>
-												</TableRow>
-											</TableHeader>
-											<TableBody>
-												{providerConfigs.map((config, index) => {
-													const providerConfig = availableProviders.find((provider) => provider.name === config.provider);
-													return (
-														<TableRow key={`${config.provider}-${index}`}>
-															<TableCell>
-																<div className="flex items-center gap-2">
+									<div className="rounded-md border px-2">
+										<Accordion type="multiple" className="w-full">
+											{providerConfigs.map((config, index) => {
+												const providerConfig = availableProviders.find((provider) => provider.name === config.provider);
+												return (
+													<AccordionItem key={index} className="w-full" value={`${config.provider}-${index}`}>
+														<AccordionTrigger className="flex h-12 items-center gap-0 px-1">
+															<div className="flex w-full items-center justify-between">
+																<div className="flex w-fit items-center gap-2">
 																	<RenderProviderIcon
 																		provider={
 																			providerConfig?.custom_provider_config?.base_provider_type || (config.provider as ProviderIconType)
@@ -562,60 +578,145 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 																		? providerConfig.name
 																		: ProviderLabels[config.provider as ProviderName]}
 																</div>
-															</TableCell>
-															<TableCell className="max-w-[100px]">
-																<Input
-																	placeholder="0.5"
-																	className="w-full border-none"
-																	value={config.weight}
-																	onChange={(e) => {
-																		const inputValue = e.target.value;
-																		// Allow empty string, numbers, and partial decimal inputs like "0."
-																		if (inputValue === "" || !isNaN(parseFloat(inputValue)) || inputValue.endsWith(".")) {
-																			handleUpdateProviderConfig(index, "weight", inputValue);
-																		}
-																	}}
-																	onBlur={(e) => {
-																		const inputValue = e.target.value.trim();
-																		if (inputValue === "") {
-																			handleUpdateProviderConfig(index, "weight", "");
-																		} else {
-																			const num = parseFloat(inputValue);
-																			if (!isNaN(num)) {
-																				handleUpdateProviderConfig(index, "weight", String(num));
-																			} else {
-																				handleUpdateProviderConfig(index, "weight", "");
-																			}
-																		}
-																	}}
-																	type="text"
-																/>
-															</TableCell>
-															<TableCell className="max-w-[500px]">
-																<TagInput
-																	placeholder={
-																		config.provider
-																			? ModelPlaceholders[config.provider as keyof typeof ModelPlaceholders] || ModelPlaceholders.default
-																			: ModelPlaceholders.default
-																	}
-																	value={config.allowed_models || []}
-																	onValueChange={(models: string[]) => handleUpdateProviderConfig(index, "allowed_models", models)}
-																	className="max-w-[500px] min-w-[200px] border-none"
-																/>
-															</TableCell>
-															<TableCell>
 																<Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveProvider(index)}>
-																	<Trash2 className="h-4 w-4" />
+																	<Trash2 className="h-4 w-4 opacity-75" />
 																</Button>
-															</TableCell>
-														</TableRow>
-													);
-												})}
-											</TableBody>
-										</Table>
+															</div>
+														</AccordionTrigger>
+														<AccordionContent className="flex flex-col gap-4 text-balance">
+															<div className="flex w-full items-start gap-2">
+																<div className="w-1/4 space-y-2">
+																	<Label className="text-sm font-medium">Weight</Label>
+																	<Input
+																		placeholder="0.5"
+																		className="h-10 w-full border-none"
+																		value={config.weight}
+																		onChange={(e) => {
+																			const inputValue = e.target.value;
+																			// Allow empty string, numbers, and partial decimal inputs like "0."
+																			if (inputValue === "" || !isNaN(parseFloat(inputValue)) || inputValue.endsWith(".")) {
+																				handleUpdateProviderConfig(index, "weight", inputValue);
+																			}
+																		}}
+																		onBlur={(e) => {
+																			const inputValue = e.target.value.trim();
+																			if (inputValue === "") {
+																				handleUpdateProviderConfig(index, "weight", "");
+																			} else {
+																				const num = parseFloat(inputValue);
+																				if (!isNaN(num)) {
+																					handleUpdateProviderConfig(index, "weight", String(num));
+																				} else {
+																					handleUpdateProviderConfig(index, "weight", "");
+																				}
+																			}
+																		}}
+																		type="text"
+																	/>
+																</div>
+																<div className="w-3/4 space-y-2">
+																	<Label className="text-sm font-medium">Allowed Models</Label>
+																	<TagInput
+																		placeholder={
+																			config.provider
+																				? ModelPlaceholders[config.provider as keyof typeof ModelPlaceholders] || ModelPlaceholders.default
+																				: ModelPlaceholders.default
+																		}
+																		value={config.allowed_models || []}
+																		onValueChange={(models: string[]) => handleUpdateProviderConfig(index, "allowed_models", models)}
+																		className="min-h-10 max-w-[500px] min-w-[200px] border-none"
+																	/>
+																</div>
+															</div>
+
+															<DottedSeparator />
+
+															{/* Provider Budget Configuration */}
+															<div className="space-y-4">
+																<Label className="text-sm font-medium">Provider Budget</Label>
+																<NumberAndSelect
+																	id={`providerBudget-${index}`}
+																	labelClassName="font-normal"
+																	label="Maximum Spend (USD)"
+																	value={config.budget?.max_limit || ""}
+																	selectValue={config.budget?.reset_duration || "1M"}
+																	onChangeNumber={(value) => {
+																		const currentBudget = config.budget || {};
+																		handleUpdateProviderConfig(index, "budget", {
+																			...currentBudget,
+																			max_limit: value,
+																		});
+																	}}
+																	onChangeSelect={(value) => {
+																		const currentBudget = config.budget || {};
+																		handleUpdateProviderConfig(index, "budget", {
+																			...currentBudget,
+																			reset_duration: value,
+																		});
+																	}}
+																	options={resetDurationOptions}
+																/>
+															</div>
+
+															<DottedSeparator />
+
+															{/* Provider Rate Limit Configuration */}
+															<div className="space-y-4">
+																<Label className="text-sm font-medium">Provider Rate Limits</Label>
+
+																<NumberAndSelect
+																	id={`providerTokenLimit-${index}`}
+																	labelClassName="font-normal"
+																	label="Maximum Tokens"
+																	value={config.rate_limit?.token_max_limit || ""}
+																	selectValue={config.rate_limit?.token_reset_duration || "1h"}
+																	onChangeNumber={(value) => {
+																		const currentRateLimit = config.rate_limit || {};
+																		handleUpdateProviderConfig(index, "rate_limit", {
+																			...currentRateLimit,
+																			token_max_limit: value,
+																		});
+																	}}
+																	onChangeSelect={(value) => {
+																		const currentRateLimit = config.rate_limit || {};
+																		handleUpdateProviderConfig(index, "rate_limit", {
+																			...currentRateLimit,
+																			token_reset_duration: value,
+																		});
+																	}}
+																	options={resetDurationOptions}
+																/>
+
+																<NumberAndSelect
+																	id={`providerRequestLimit-${index}`}
+																	labelClassName="font-normal"
+																	label="Maximum Requests"
+																	value={config.rate_limit?.request_max_limit || ""}
+																	selectValue={config.rate_limit?.request_reset_duration || "1h"}
+																	onChangeNumber={(value) => {
+																		const currentRateLimit = config.rate_limit || {};
+																		handleUpdateProviderConfig(index, "rate_limit", {
+																			...currentRateLimit,
+																			request_max_limit: value,
+																		});
+																	}}
+																	onChangeSelect={(value) => {
+																		const currentRateLimit = config.rate_limit || {};
+																		handleUpdateProviderConfig(index, "rate_limit", {
+																			...currentRateLimit,
+																			request_reset_duration: value,
+																		});
+																	}}
+																	options={resetDurationOptions}
+																/>
+															</div>
+														</AccordionContent>
+													</AccordionItem>
+												);
+											})}
+										</Accordion>
 									</div>
 								)}
-
 								{/* Display validation errors for provider configurations */}
 								{form.formState.errors.providerConfigs && (
 									<div className="text-destructive text-sm">{form.formState.errors.providerConfigs.message}</div>
@@ -671,7 +772,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 																	<div className="flex items-center gap-2">
 																		{client.name}
 																		<span className="text-muted-foreground text-xs">
-																			({totalTools} {totalTools === 1 ? "tool" : "tools"})
+																			({totalTools} {totalTools === 1 ? "enabled tool" : "enabled tools"})
 																		</span>
 																	</div>
 																</SelectItem>

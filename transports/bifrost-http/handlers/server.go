@@ -398,7 +398,7 @@ func (s *BifrostHTTPServer) ReloadPricingManager() error {
 	if s.Config.FrameworkConfig == nil || s.Config.FrameworkConfig.Pricing == nil {
 		return fmt.Errorf("framework config not found")
 	}
-	return s.Config.PricingManager.Reload(context.Background(), s.Config.FrameworkConfig.Pricing)
+	return s.Config.PricingManager.ReloadPricing(context.Background(), s.Config.FrameworkConfig.Pricing)
 }
 
 // RemovePlugin removes a plugin from the server.
@@ -570,6 +570,18 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize bifrost: %v", err)
 	}
+	logger.Info("bifrost client initialized")
+	// List all models and add to model catalog
+	logger.Info("listing all models and adding to model catalog")
+	modelData, listModelsErr := s.Client.ListAllModels(ctx, nil)
+	if listModelsErr != nil {
+		if listModelsErr.Error != nil {
+			return fmt.Errorf("failed to list all models: %s", listModelsErr.Error.Message)
+		}
+		return fmt.Errorf("failed to list all models: %v", listModelsErr)
+	}
+	s.Config.PricingManager.AddModelDataToPool(modelData)
+	logger.Info("models added to catalog")
 	s.Config.SetBifrostClient(s.Client)
 	// Initialize routes
 	s.Router = router.New()

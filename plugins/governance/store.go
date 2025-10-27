@@ -173,8 +173,8 @@ func (gs *GovernanceStore) UpdateBudget(ctx context.Context, vk *configstoreTabl
 	})
 }
 
-// UpdateRateLimitUsage updates rate limit counters (lock-free)
-func (gs *GovernanceStore) UpdateRateLimitUsage(ctx context.Context, vkValue string, tokensUsed int64, shouldUpdateTokens bool, shouldUpdateRequests bool) error {
+// UpdateRateLimitUsage updates rate limit counters for both provider-level and VK-level rate limits (lock-free)
+func (gs *GovernanceStore) UpdateRateLimitUsage(ctx context.Context, vkValue string, provider string, tokensUsed int64, shouldUpdateTokens bool, shouldUpdateRequests bool) error {
 	if vkValue == "" {
 		return fmt.Errorf("virtual key value cannot be empty")
 	}
@@ -188,11 +188,40 @@ func (gs *GovernanceStore) UpdateRateLimitUsage(ctx context.Context, vkValue str
 	if !ok || vk == nil {
 		return fmt.Errorf("invalid virtual key type for: %s", vkValue)
 	}
-	if vk.RateLimit == nil {
-		return nil // No rate limit configured, nothing to update
+
+	var rateLimitsToUpdate []*configstoreTables.TableRateLimit
+
+	// First, update provider-level rate limits if they exist
+	if provider != "" && vk.ProviderConfigs != nil {
+		for _, pc := range vk.ProviderConfigs {
+			if pc.Provider == provider && pc.RateLimit != nil {
+				if gs.updateSingleRateLimit(pc.RateLimit, tokensUsed, shouldUpdateTokens, shouldUpdateRequests) {
+					rateLimitsToUpdate = append(rateLimitsToUpdate, pc.RateLimit)
+				}
+				break
+			}
+		}
 	}
 
-	rateLimit := vk.RateLimit
+	// Then, update VK-level rate limits if they exist
+	if vk.RateLimit != nil {
+		if gs.updateSingleRateLimit(vk.RateLimit, tokensUsed, shouldUpdateTokens, shouldUpdateRequests) {
+			rateLimitsToUpdate = append(rateLimitsToUpdate, vk.RateLimit)
+		}
+	}
+
+	// Save all updated rate limits to database
+	if len(rateLimitsToUpdate) > 0 && gs.configStore != nil {
+		if err := gs.configStore.UpdateRateLimits(ctx, rateLimitsToUpdate); err != nil {
+			return fmt.Errorf("failed to update rate limit usage: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// updateSingleRateLimit updates a single rate limit's counters and returns true if any changes were made
+func (gs *GovernanceStore) updateSingleRateLimit(rateLimit *configstoreTables.TableRateLimit, tokensUsed int64, shouldUpdateTokens bool, shouldUpdateRequests bool) bool {
 	now := time.Now()
 	updated := false
 
@@ -229,14 +258,7 @@ func (gs *GovernanceStore) UpdateRateLimitUsage(ctx context.Context, vkValue str
 		updated = true
 	}
 
-	// Save to database only if something changed
-	if updated && gs.configStore != nil {
-		if err := gs.configStore.UpdateRateLimit(ctx, rateLimit); err != nil {
-			return fmt.Errorf("failed to update rate limit usage: %w", err)
-		}
-	}
-
-	return nil
+	return updated
 }
 
 // checkAndResetSingleRateLimit checks and resets a single rate limit's counters if expired
@@ -268,7 +290,7 @@ func (gs *GovernanceStore) checkAndResetSingleRateLimit(ctx context.Context, rat
 	return updated
 }
 
-// ResetExpiredRateLimits performs background reset of expired rate limits (lock-free)
+// ResetExpiredRateLimits performs background reset of expired rate limits for both provider-level and VK-level (lock-free)
 func (gs *GovernanceStore) ResetExpiredRateLimits(ctx context.Context) error {
 	now := time.Now()
 	var resetRateLimits []*configstoreTables.TableRateLimit
@@ -276,16 +298,28 @@ func (gs *GovernanceStore) ResetExpiredRateLimits(ctx context.Context) error {
 	gs.virtualKeys.Range(func(key, value interface{}) bool {
 		// Type-safe conversion
 		vk, ok := value.(*configstoreTables.TableVirtualKey)
-		if !ok || vk == nil || vk.RateLimit == nil {
+		if !ok || vk == nil {
 			return true // continue
 		}
 
-		rateLimit := vk.RateLimit
-
-		// Use helper method to check and reset rate limit
-		if gs.checkAndResetSingleRateLimit(ctx, rateLimit, now) {
-			resetRateLimits = append(resetRateLimits, rateLimit)
+		// Check provider-level rate limits
+		if vk.ProviderConfigs != nil {
+			for _, pc := range vk.ProviderConfigs {
+				if pc.RateLimit != nil {
+					if gs.checkAndResetSingleRateLimit(ctx, pc.RateLimit, now) {
+						resetRateLimits = append(resetRateLimits, pc.RateLimit)
+					}
+				}
+			}
 		}
+
+		// Check VK-level rate limits
+		if vk.RateLimit != nil {
+			if gs.checkAndResetSingleRateLimit(ctx, vk.RateLimit, now) {
+				resetRateLimits = append(resetRateLimits, vk.RateLimit)
+			}
+		}
+
 		return true // continue
 	})
 
@@ -466,7 +500,7 @@ func (gs *GovernanceStore) rebuildInMemoryStructures(ctx context.Context, custom
 
 // UTILITY FUNCTIONS
 
-// collectBudgetsFromHierarchy collects budgets and their metadata from the hierarchy (VK → Team → Customer)
+// collectBudgetsFromHierarchy collects budgets and their metadata from the hierarchy (Provider Configs → VK → Team → Customer)
 func (gs *GovernanceStore) collectBudgetsFromHierarchy(ctx context.Context, vk *configstoreTables.TableVirtualKey) ([]*configstoreTables.TableBudget, []string) {
 	if vk == nil {
 		return nil, nil
@@ -475,7 +509,18 @@ func (gs *GovernanceStore) collectBudgetsFromHierarchy(ctx context.Context, vk *
 	var budgets []*configstoreTables.TableBudget
 	var budgetNames []string
 
-	// Collect all budgets in hierarchy order using lock-free sync.Map access (VK → Team → Customer)
+	// Collect all budgets in hierarchy order using lock-free sync.Map access (Provider Configs → VK → Team → Customer)
+	for _, pc := range vk.ProviderConfigs {
+		if pc.BudgetID != nil {
+			if budgetValue, exists := gs.budgets.Load(*pc.BudgetID); exists && budgetValue != nil {
+				if budget, ok := budgetValue.(*configstoreTables.TableBudget); ok && budget != nil {
+					budgets = append(budgets, budget)
+					budgetNames = append(budgetNames, pc.Provider)
+				}
+			}
+		}
+	}
+
 	if vk.BudgetID != nil {
 		if budgetValue, exists := gs.budgets.Load(*vk.BudgetID); exists && budgetValue != nil {
 			if budget, ok := budgetValue.(*configstoreTables.TableBudget); ok && budget != nil {

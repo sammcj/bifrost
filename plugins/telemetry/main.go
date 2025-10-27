@@ -10,7 +10,7 @@ import (
 
 	bifrost "github.com/maximhq/bifrost/core"
 	schemas "github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/framework/pricing"
+	"github.com/maximhq/bifrost/framework/modelcatalog"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -28,7 +28,7 @@ const (
 //   - Request latency
 //   - Error counts
 type PrometheusPlugin struct {
-	pricingManager *pricing.PricingManager
+	pricingManager *modelcatalog.ModelCatalog
 
 	// Metrics are defined using promauto for automatic registration
 	UpstreamRequestsTotal   *prometheus.CounterVec
@@ -44,9 +44,9 @@ type PrometheusPlugin struct {
 }
 
 // Init creates a new PrometheusPlugin with initialized metrics.
-func Init(pricingManager *pricing.PricingManager, logger schemas.Logger) (*PrometheusPlugin, error) {
+func Init(pricingManager *modelcatalog.ModelCatalog, logger schemas.Logger) (*PrometheusPlugin, error) {
 	if pricingManager == nil {
-		logger.Warn("telemetry plugin requires pricing manager to calculate cost, all cost calculations will be skipped.")
+		logger.Warn("telemetry plugin requires model catalog to calculate cost, all cost calculations will be skipped.")
 	}
 
 	return &PrometheusPlugin{

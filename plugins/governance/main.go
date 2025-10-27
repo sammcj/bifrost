@@ -14,7 +14,7 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
-	"github.com/maximhq/bifrost/framework/pricing"
+	"github.com/maximhq/bifrost/framework/modelcatalog"
 )
 
 // PluginName is the name of the governance plugin
@@ -47,9 +47,9 @@ type GovernancePlugin struct {
 	tracker  *UsageTracker    // Business logic owner (updates, resets, persistence)
 
 	// Dependencies
-	configStore    configstore.ConfigStore
-	pricingManager *pricing.PricingManager
-	logger         schemas.Logger
+	configStore  configstore.ConfigStore
+	modelCatalog *modelcatalog.ModelCatalog
+	logger       schemas.Logger
 
 	// Transport dependencies
 	inMemoryStore InMemoryStore
@@ -66,7 +66,7 @@ type GovernancePlugin struct {
 // Behavior and defaults:
 //   - Enables all governance features with optimized defaults.
 //   - If `store` is nil, the plugin runs in-memory only (no persistence).
-//   - If `pricingManager` is nil, cost calculation is skipped.
+//   - If `modelCatalog` is nil, cost calculation and vk level provider routing is skipped.
 //   - `config.IsVkMandatory` controls whether `x-bf-vk` is required in PreHook.
 //   - `inMemoryStore` is used by TransportInterceptor to validate configured providers
 //     and build provider-prefixed models; it may be nil. When nil, transport-level
@@ -80,7 +80,7 @@ type GovernancePlugin struct {
 //   - logger: logger used by all subcomponents.
 //   - store: configuration store used for persistence; may be nil.
 //   - governanceConfig: initial/seed governance configuration for the store.
-//   - pricingManager: optional pricing manager to compute request cost.
+//   - modelCatalog: optional model catalog to compute request cost and vk level provider routing.
 //   - inMemoryStore: provider registry used for routing/validation in transports.
 //
 // Returns:
@@ -96,14 +96,14 @@ func Init(
 	logger schemas.Logger,
 	store configstore.ConfigStore,
 	governanceConfig *configstore.GovernanceConfig,
-	pricingManager *pricing.PricingManager,
+	modelCatalog *modelcatalog.ModelCatalog,
 	inMemoryStore InMemoryStore,
 ) (*GovernancePlugin, error) {
 	if store == nil {
 		logger.Warn("governance plugin requires config store to persist data, running in memory only mode")
 	}
-	if pricingManager == nil {
-		logger.Warn("governance plugin requires pricing manager to calculate cost, all cost calculations will be skipped.")
+	if modelCatalog == nil {
+		logger.Warn("governance plugin requires model catalog to calculate cost, all cost calculations will be skipped.")
 	}
 
 	// Handle nil config - use safe default for IsVkMandatory
@@ -132,16 +132,16 @@ func Init(
 	}
 	ctx, cancelFunc := context.WithCancel(ctx)
 	plugin := &GovernancePlugin{
-		ctx:            ctx,
-		cancelFunc:     cancelFunc,
-		store:          governanceStore,
-		resolver:       resolver,
-		tracker:        tracker,
-		configStore:    store,
-		pricingManager: pricingManager,
-		logger:         logger,
-		isVkMandatory:  isVkMandatory,
-		inMemoryStore:  inMemoryStore,
+		ctx:           ctx,
+		cancelFunc:    cancelFunc,
+		store:         governanceStore,
+		resolver:      resolver,
+		tracker:       tracker,
+		configStore:   store,
+		modelCatalog:  modelCatalog,
+		logger:        logger,
+		isVkMandatory: isVkMandatory,
+		inMemoryStore: inMemoryStore,
 	}
 	return plugin, nil
 }
@@ -218,6 +218,12 @@ func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *
 	allowedProviderConfigs := make([]configstoreTables.TableVirtualKeyProviderConfig, 0)
 	for _, config := range providerConfigs {
 		if len(config.AllowedModels) == 0 || slices.Contains(config.AllowedModels, modelStr) {
+			// Check if the provider's budget or rate limits are violated using resolver helper methods
+			if p.resolver.isProviderBudgetViolated(config) || p.resolver.isProviderRateLimitViolated(config) {
+				// Provider config violated budget or rate limits, skip this provider
+				continue
+			}
+
 			allowedProviderConfigs = append(allowedProviderConfigs, config)
 		}
 	}
@@ -474,8 +480,8 @@ func (p *GovernancePlugin) postHookWorker(result *schemas.BifrostResponse, provi
 
 	if !isStreaming || (isStreaming && isFinalChunk) {
 		var cost float64
-		if p.pricingManager != nil && result != nil {
-			cost = p.pricingManager.CalculateCost(result)
+		if p.modelCatalog != nil && result != nil {
+			cost = p.modelCatalog.CalculateCostWithCacheDebug(result)
 		}
 		tokensUsed := 0
 		if result != nil {

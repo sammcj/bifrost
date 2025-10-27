@@ -32,8 +32,8 @@ export interface AnimationConfig {
 const multiSelectVariants = cva("m-1", {
 	variants: {
 		variant: {
-			default: "border-foreground/10 text-foreground bg-card hover:bg-card/80",
-			secondary: "border-foreground/10 bg-secondary text-secondary-foreground hover:bg-secondary/80",
+			default: "border-foreground/30 text-foreground bg-card hover:bg-card/80",
+			secondary: "border-foreground/30 bg-secondary text-secondary-foreground hover:bg-secondary/80",
 			destructive: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
 			inverted: "inverted",
 		},
@@ -732,11 +732,11 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 														className={cn(
 															getBadgeAnimationClass(),
 															multiSelectVariants({ variant }),
-															customStyle?.gradient && "border-transparent text-white",
 															responsiveSettings.compactMode && "px-1.5 py-0.5 text-xs",
 															screenSize === "mobile" && "max-w-[120px] truncate",
 															singleLine && "flex-shrink-0 whitespace-nowrap",
 															"[&>svg]:pointer-events-auto",
+															"bg-primary-foreground text-foreground",
 														)}
 														style={badgeStyle}
 													>
@@ -819,7 +819,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 											<XIcon className="h-4 w-4" />
 										</div>
 										<Separator orientation="vertical" className="flex h-full min-h-6" />
-										<ChevronDown className="text-muted-foreground mx-2 h-4 cursor-pointer" aria-hidden="true" />
+										<ChevronDown className="text-foreground/30 mx-2 h-4 cursor-pointer" aria-hidden="true" />
 									</div>
 								</div>
 							) : (
