@@ -57,7 +57,9 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -d '{"model": "openai/gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
 ```
 
-<Note>This routing wont trigger when allowed models array is empty (all models allowed). You need to explicitly mention the models in allowed models array to trigger this routing.</Note>
+<Info>
+Weights are automatically normalized to a sum 1.0 based on the weights of all providers available on the VK for the given model.
+</Info>
 
 ## Automatic Fallbacks
 

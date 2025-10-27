@@ -1,0 +1,109 @@
+---
+title: "CLI Agents"
+description: "Use Bifrost with CLI agents like Claude Code, Codex CLI and Qwen Code by just changing the base URL and unlock advanced features."
+icon: "robot"
+---
+
+## Overview
+
+Bifrost provides **100% compatible endpoints** for OpenAI, Anthropic, and Gemini APIs, making it seamless to integrate with any CLI agent that uses these providers. By simply pointing your CLI agent's base URL to Bifrost, you unlock powerful features like:
+
+- **Universal Model Access**: Use **any provider/model** configured in Bifrost with any agent (e.g., use GPT-5 with Claude Code, or Claude Sonnet 4.5 with Codex CLI)
+- **MCP Tools Integration**: All Model Context Protocol tools configured in Bifrost become available to your CLI agents
+- **Built-in Observability**: Monitor all agent interactions in real-time through Bifrost's logging dashboard
+- **Load Balancing**: Automatically distribute requests across multiple providers and regions
+- **Advanced Features**: Governance, caching, failover, and more - all transparent to your CLI agent
+
+## Example CLI Agents
+
+### Claude Code
+
+[Claude Code](https://www.claude.com/product/claude-code) brings Sonnet 4.5 directly to your terminal with powerful coding capabilities.
+
+**Setup:**
+
+1. **Install Claude Code**
+   ```bash
+   npm install -g @anthropic-ai/claude-code
+   ```
+
+2. **Configure Environment Variables**
+   ```bash
+   export ANTHROPIC_API_KEY=dummy-key  # Handled by Bifrost
+   export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic
+   ```
+
+3. **Run Claude Code**
+   ```bash
+   claude
+   ```
+
+Now all Claude Code traffic flows through Bifrost, giving you access to any provider/model configured in your Bifrost setup, plus MCP tools and observability.
+
+### Codex CLI
+
+OpenAI's Codex CLI provides powerful code generation and completion capabilities.
+
+**Setup:**
+
+1. **Install Codex CLI**
+   ```bash
+   npm install -g @openai/codex
+   ```
+
+2. **Configure Base URL**
+   ```bash
+   export OPENAI_BASE_URL=http://localhost:8080/openai
+   ```
+
+3. **Run Codex**
+   ```bash
+   codex
+   ```
+
+### Qwen Code
+
+[Qwen Code](https://github.com/QwenLM/qwen-code) is Alibaba's powerful coding assistant with advanced reasoning capabilities.
+
+**Setup:**
+
+1. **Install Qwen Code**
+   ```bash
+    npm install -g @qwen-code/qwen-code
+   ```
+
+2. **Configure Base URL**
+   ```bash
+   export OPENAI_BASE_URL=http://localhost:8080/openai
+   ```
+
+3. **Run Qwen Code**
+   ```bash
+   qwen
+   ```
+
+## Configuration
+
+CLI agents work with your existing Bifrost configuration. Ensure you have:
+
+- **Providers configured**: See [Provider Configuration](./provider-configuration) for setup details
+- **Optional: MCP tools**: See [MCP Integration](../../features/mcp) to enhance agent capabilities
+
+## Monitoring CLI Agent Traffic
+
+All CLI agent interactions are automatically logged and can be monitored at `http://localhost:8080/logs`. You can filter by provider, model, or search through conversation content to track your agents' performance.
+
+![CLI Agent Monitoring](../../media/ui-live-log-stream.gif)
+For complete monitoring capabilities, see [Built-in Observability](../../features/observability/default).
+
+## MCP Tools Integration
+
+Bifrost automatically sends all configured MCP tools to your CLI agents. This means your agents can access filesystem operations, database queries, web search, and more without any additional configuration.
+
+For setup and available tools, see [MCP Integration](../../features/mcp).
+
+## Next Steps
+
+- **[Provider Configuration](./provider-configuration)** - Configure AI providers for your agents
+- **[Governance](../../features/governance)** - Set usage limits and policies for your agents
+- **[Integrations](../../integrations/what-is-an-integration)** - Understand how Bifrost works with existing AI provider SDKs
