@@ -8,6 +8,7 @@ import (
 
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
+	"github.com/maximhq/bifrost/framework/envutils"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/framework/migrator"
 	"github.com/maximhq/bifrost/framework/vectorstore"
@@ -425,7 +426,7 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 		keys := make([]schemas.Key, len(dbProvider.Keys))
 		for i, dbKey := range dbProvider.Keys {
 			// Process main key value
-			processedValue, err := processEnvValue(dbKey.Value, s.logger)
+			processedValue, err := envutils.ProcessEnvValue(dbKey.Value)
 			if err != nil {
 				// If env var not found, keep the original value
 				processedValue = dbKey.Value
@@ -435,11 +436,11 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 			azureConfig := dbKey.AzureKeyConfig
 			if azureConfig != nil {
 				azureConfigCopy := *azureConfig
-				if processedEndpoint, err := processEnvValue(azureConfig.Endpoint, s.logger); err == nil {
+				if processedEndpoint, err := envutils.ProcessEnvValue(azureConfig.Endpoint); err == nil {
 					azureConfigCopy.Endpoint = processedEndpoint
 				}
 				if azureConfig.APIVersion != nil {
-					if processedAPIVersion, err := processEnvValue(*azureConfig.APIVersion, s.logger); err == nil {
+					if processedAPIVersion, err := envutils.ProcessEnvValue(*azureConfig.APIVersion); err == nil {
 						azureConfigCopy.APIVersion = &processedAPIVersion
 					}
 				}
@@ -450,13 +451,13 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 			vertexConfig := dbKey.VertexKeyConfig
 			if vertexConfig != nil {
 				vertexConfigCopy := *vertexConfig
-				if processedProjectID, err := processEnvValue(vertexConfig.ProjectID, s.logger); err == nil {
+				if processedProjectID, err := envutils.ProcessEnvValue(vertexConfig.ProjectID); err == nil {
 					vertexConfigCopy.ProjectID = processedProjectID
 				}
-				if processedRegion, err := processEnvValue(vertexConfig.Region, s.logger); err == nil {
+				if processedRegion, err := envutils.ProcessEnvValue(vertexConfig.Region); err == nil {
 					vertexConfigCopy.Region = processedRegion
 				}
-				if processedAuthCredentials, err := processEnvValue(vertexConfig.AuthCredentials, s.logger); err == nil {
+				if processedAuthCredentials, err := envutils.ProcessEnvValue(vertexConfig.AuthCredentials); err == nil {
 					vertexConfigCopy.AuthCredentials = processedAuthCredentials
 				}
 				vertexConfig = &vertexConfigCopy
@@ -466,24 +467,24 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 			bedrockConfig := dbKey.BedrockKeyConfig
 			if bedrockConfig != nil {
 				bedrockConfigCopy := *bedrockConfig
-				if processedAccessKey, err := processEnvValue(bedrockConfig.AccessKey, s.logger); err == nil {
+				if processedAccessKey, err := envutils.ProcessEnvValue(bedrockConfig.AccessKey); err == nil {
 					bedrockConfigCopy.AccessKey = processedAccessKey
 				}
-				if processedSecretKey, err := processEnvValue(bedrockConfig.SecretKey, s.logger); err == nil {
+				if processedSecretKey, err := envutils.ProcessEnvValue(bedrockConfig.SecretKey); err == nil {
 					bedrockConfigCopy.SecretKey = processedSecretKey
 				}
 				if bedrockConfig.SessionToken != nil {
-					if processedSessionToken, err := processEnvValue(*bedrockConfig.SessionToken, s.logger); err == nil {
+					if processedSessionToken, err := envutils.ProcessEnvValue(*bedrockConfig.SessionToken); err == nil {
 						bedrockConfigCopy.SessionToken = &processedSessionToken
 					}
 				}
 				if bedrockConfig.Region != nil {
-					if processedRegion, err := processEnvValue(*bedrockConfig.Region, s.logger); err == nil {
+					if processedRegion, err := envutils.ProcessEnvValue(*bedrockConfig.Region); err == nil {
 						bedrockConfigCopy.Region = &processedRegion
 					}
 				}
 				if bedrockConfig.ARN != nil {
-					if processedARN, err := processEnvValue(*bedrockConfig.ARN, s.logger); err == nil {
+					if processedARN, err := envutils.ProcessEnvValue(*bedrockConfig.ARN); err == nil {
 						bedrockConfigCopy.ARN = &processedARN
 					}
 				}
@@ -528,7 +529,7 @@ func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, 
 		// Process connection string for environment variables
 		var processedConnectionString *string
 		if dbClient.ConnectionString != nil {
-			processedValue, err := processEnvValue(*dbClient.ConnectionString, s.logger)
+			processedValue, err := envutils.ProcessEnvValue(*dbClient.ConnectionString)
 			if err != nil {
 				// If env var not found, keep the original value
 				processedValue = *dbClient.ConnectionString
