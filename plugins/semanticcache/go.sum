@@ -197,8 +197,8 @@ github.com/mattn/go-sqlite3 v1.14.32 h1:JD12Ag3oLy1zQA+BNn74xRgaBbdhbNIDYvQUEuuE
 github.com/mattn/go-sqlite3 v1.14.32/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/maximhq/bifrost/core v1.2.15 h1:H7jK8+OnZQ+62g1fusnDgPkX0LiT+eRY26Tt5ZsVz5w=
 github.com/maximhq/bifrost/core v1.2.15/go.mod h1:RCyChXNiw50vP6nf4NBAHxKs9NFOIXo7L7XTONR6fy4=
-github.com/maximhq/bifrost/framework v1.1.17 h1:XARqsLE69ZCnNDA/RUmVUUaEJ0ehfFbfVRR+SkcHvB8=
-github.com/maximhq/bifrost/framework v1.1.17/go.mod h1:9ECksTKh2gzyzSxafmKXnDDUY7qO3r/RhxqmJ3gWnzA=
+github.com/maximhq/bifrost/framework v1.1.18 h1:nS85sRqWmpABx1oZNsyB6GdM+XuRs1YeBnDLxy5PTUk=
+github.com/maximhq/bifrost/framework v1.1.18/go.mod h1:9ECksTKh2gzyzSxafmKXnDDUY7qO3r/RhxqmJ3gWnzA=
 github.com/maximhq/bifrost/plugins/mocker v1.3.14 h1:rZwjeRR5yobYaMnLoeCSJ7FjA0lbtRlPSOtLumdGjtQ=
 github.com/maximhq/bifrost/plugins/mocker v1.3.14/go.mod h1:QzN1O3NUokFkMyiRG53RHLjdPobK1Rm6XZhV0WrNIwc=
 github.com/mitchellh/mapstructure v1.3.3/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
