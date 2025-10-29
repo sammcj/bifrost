@@ -1370,19 +1370,26 @@ The Makefile automatically creates the CloudWatch log group `/ecs/bifrost-task`,
 
 ### Without Load Balancer
 
-When deployed without a load balancer, the ECS task gets a public IP address. Use the Makefile to find it:
+When deployed without a load balancer, the ECS task gets a public IP address. You can find it using AWS CLI:
 
 ```bash
-# Get the service URL
-make get-ecs-url
+# Get the public IP address of your running task
+aws ec2 describe-network-interfaces \
+  --network-interface-ids $(aws ecs describe-tasks \
+    --cluster bifrost-cluster \
+    --tasks $(aws ecs list-tasks \
+      --cluster bifrost-cluster \
+      --service-name bifrost-service \
+      --region us-east-1 \
+      --query 'taskArns[0]' \
+      --output text) \
+    --region us-east-1 \
+    --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' \
+    --output text) \
+  --region us-east-1 \
+  --query 'NetworkInterfaces[0].Association.PublicIp' \
+  --output text
 ```
-
-This will show you:
-- The public IP address of your running task
-- The full URL to access your service (e.g., `http://1.2.3.4:8080`)
-- The health check endpoint URL
-
-The `deploy-ecs` command also automatically displays the public IP at the end of deployment.
 
 <Warning>
 **Important Notes:**
@@ -1394,10 +1401,7 @@ The `deploy-ecs` command also automatically displays the public IP at the end of
 **Testing your deployment:**
 
 ```bash
-# Get the URL
-make get-ecs-url
-
-# Test health endpoint (replace IP with your actual IP)
+# Test health endpoint (replace YOUR_PUBLIC_IP with the IP from above)
 curl http://YOUR_PUBLIC_IP:8080/health
 
 # Expected response
@@ -1409,10 +1413,18 @@ curl http://YOUR_PUBLIC_IP:8080/health
 If you deployed with `TARGET_GROUP_ARN`, your service is accessible via the load balancer's DNS name:
 
 ```bash
-# Get the load balancer URL
-make get-ecs-url
+# Get the load balancer DNS name (replace YOUR_TARGET_GROUP_ARN with your actual ARN)
+aws elbv2 describe-load-balancers \
+  --load-balancer-arns $(aws elbv2 describe-target-groups \
+    --target-group-arns YOUR_TARGET_GROUP_ARN \
+    --region us-east-1 \
+    --query 'TargetGroups[0].LoadBalancerArns[0]' \
+    --output text) \
+  --region us-east-1 \
+  --query 'LoadBalancers[0].DNSName' \
+  --output text
 
-# Test via load balancer
+# Test via load balancer (replace YOUR_ALB_DNS with the DNS from above)
 curl http://YOUR_ALB_DNS/health
 ```
 
