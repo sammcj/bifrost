@@ -24,4 +24,4 @@ jobs:
 
           This PR can be tested by a repository admin.
 
-          [Run tests for PR #${{ github.event.pull_request.number }}](https://github.com/${{ github.repository }}/actions/workflows/pr-tests.yml)
+          [Run tests for PR #${{ github.event.pull_request.number }}](https://github.com/${{ github.repository }}/actions/workflows/pr-tests.yml)"
