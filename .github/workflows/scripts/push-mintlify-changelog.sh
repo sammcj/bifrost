@@ -30,8 +30,12 @@ append_section () {
   label=$1
   path=$2
   if [ -f "$path" ]; then
-    content=$(get_changelog_content "$path") || return 0
-    CHANGELOG_BODY+=$'\n'"<Update label=\"$label\" description=\"$VERSION\">"$'\n'"$content"$'\n\n'"</Update>"
+    content=$(get_changelog_content "$path")
+    if [ -n "$content" ]; then
+      CHANGELOG_BODY+=$'\n'"<Update label=\"$label\" description=\"$VERSION\">"$'\n'"$content"$'\n\n'"</Update>"
+    fi
+    # Clear the changelog file after processing
+    > "$path"
   fi
 }
 
