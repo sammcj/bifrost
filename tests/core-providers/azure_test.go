@@ -10,6 +10,7 @@ import (
 )
 
 func TestAzure(t *testing.T) {
+	t.Parallel()
 	t.Skip("Skipping Azure tests because Azure.")
 
 	if os.Getenv("AZURE_API_KEY") == "" {

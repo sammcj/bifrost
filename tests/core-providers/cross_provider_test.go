@@ -10,6 +10,7 @@ import (
 )
 
 func TestCrossProviderScenarios(t *testing.T) {
+	t.Parallel()
 	t.Skip("Skipping cross provider scenarios test")
 	return
 
@@ -113,6 +114,7 @@ func TestCrossProviderScenarios(t *testing.T) {
 }
 
 func TestCrossProviderConsistency(t *testing.T) {
+	t.Parallel()
 	t.Skip("Skipping cross provider consistency test")
 	return
 
