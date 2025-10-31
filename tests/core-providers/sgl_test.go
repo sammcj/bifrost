@@ -10,6 +10,7 @@ import (
 )
 
 func TestSGL(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("SGL_BASE_URL") == "" {
 		t.Skip("Skipping SGL tests because SGL_BASE_URL is not set")
 	}

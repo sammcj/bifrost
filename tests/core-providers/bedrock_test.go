@@ -10,6 +10,7 @@ import (
 )
 
 func TestBedrock(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("AWS_ACCESS_KEY_ID") == "" || os.Getenv("AWS_SECRET_ACCESS_KEY") == "" {
 		t.Skip("Skipping Bedrock embedding: AWS credentials not set")
 	}
