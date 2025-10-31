@@ -79,7 +79,7 @@ func (provider *MistralProvider) listModelsByKey(ctx context.Context, key schema
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	req.SetRequestURI(provider.networkConfig.BaseURL + "/v1/models")
 	req.Header.SetMethod(http.MethodGet)
@@ -150,7 +150,7 @@ func (provider *MistralProvider) ChatCompletion(ctx context.Context, key schemas
 	return handleOpenAIChatCompletionRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+"/v1/chat/completions",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
@@ -169,7 +169,7 @@ func (provider *MistralProvider) ChatCompletionStream(ctx context.Context, postH
 	return handleOpenAIChatCompletionStreaming(
 		ctx,
 		provider.streamClient,
-		provider.networkConfig.BaseURL+"/v1/chat/completions",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
 		request,
 		map[string]string{"Authorization": "Bearer " + key.Value},
 		provider.networkConfig.ExtraHeaders,
@@ -212,7 +212,7 @@ func (provider *MistralProvider) Embedding(ctx context.Context, key schemas.Key,
 	return handleOpenAIEmbeddingRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+"/v1/embeddings",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/embeddings"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,

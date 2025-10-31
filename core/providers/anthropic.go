@@ -138,7 +138,7 @@ func (provider *AnthropicProvider) completeRequest(ctx context.Context, requestB
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod(http.MethodPost)
@@ -184,10 +184,10 @@ func (provider *AnthropicProvider) listModelsByKey(ctx context.Context, key sche
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	// Build URL using centralized URL construction
-	req.SetRequestURI(fmt.Sprintf("%s/v1/models?limit=%d", provider.networkConfig.BaseURL, schemas.DefaultPageSize))
+	req.SetRequestURI(provider.networkConfig.BaseURL + getPathFromContext(ctx, fmt.Sprintf("/v1/models?limit=%d", schemas.DefaultPageSize)))
 	req.Header.SetMethod(http.MethodGet)
 	req.Header.SetContentType("application/json")
 	req.Header.Set("x-api-key", key.Value)
@@ -259,7 +259,7 @@ func (provider *AnthropicProvider) TextCompletion(ctx context.Context, key schem
 	}
 
 	// Use struct directly for JSON marshaling
-	responseBody, latency, err := provider.completeRequest(ctx, reqBody, provider.networkConfig.BaseURL+"/v1/complete", key.Value)
+	responseBody, latency, err := provider.completeRequest(ctx, jsonData, provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/complete"), key.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +311,7 @@ func (provider *AnthropicProvider) ChatCompletion(ctx context.Context, key schem
 	}
 
 	// Use struct directly for JSON marshaling
-	responseBody, latency, err := provider.completeRequest(ctx, reqBody, provider.networkConfig.BaseURL+"/v1/messages", key.Value)
+	responseBody, latency, err := provider.completeRequest(ctx, jsonData, provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/messages"), key.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +370,7 @@ func (provider *AnthropicProvider) ChatCompletionStream(ctx context.Context, pos
 	return handleAnthropicChatCompletionStreaming(
 		ctx,
 		provider.streamClient,
-		provider.networkConfig.BaseURL+"/v1/messages",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/messages"),
 		reqBody,
 		headers,
 		provider.networkConfig.ExtraHeaders,
@@ -425,7 +425,7 @@ func handleAnthropicChatCompletionStreaming(
 	}
 
 	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, extraHeaders, nil)
+	setExtraHeadersHTTP(ctx, req, extraHeaders, nil)
 
 	// Make the request
 	resp, err := httpClient.Do(req)
@@ -590,7 +590,7 @@ func (provider *AnthropicProvider) Responses(ctx context.Context, key schemas.Ke
 	}
 
 	// Use struct directly for JSON marshaling
-	responseBody, latency, err := provider.completeRequest(ctx, reqBody, provider.networkConfig.BaseURL+"/v1/messages", key.Value)
+	responseBody, latency, err := provider.completeRequest(ctx, jsonData, provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/messages"), key.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -649,7 +649,7 @@ func (provider *AnthropicProvider) ResponsesStream(ctx context.Context, postHook
 	}
 
 	// Create HTTP request for streaming
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.networkConfig.BaseURL+"/v1/messages", bytes.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/messages"), bytes.NewReader(jsonData))
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, &schemas.BifrostError{
@@ -673,7 +673,7 @@ func (provider *AnthropicProvider) ResponsesStream(ctx context.Context, postHook
 	}
 
 	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeadersHTTP(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	// Make the request
 	resp, err := provider.streamClient.Do(req)
