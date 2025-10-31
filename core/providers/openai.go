@@ -84,7 +84,16 @@ func (provider *OpenAIProvider) ListModels(ctx context.Context, keys []schemas.K
 
 	providerName := provider.GetProviderKey()
 
-	return handleOpenAIListModelsRequest(ctx, provider.client, request, provider.networkConfig.BaseURL+"/v1/models", keys, provider.networkConfig.ExtraHeaders, providerName, provider.sendBackRawResponse, provider.logger)
+	return handleOpenAIListModelsRequest(ctx,
+		provider.client,
+		request,
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/models"),
+		keys,
+		provider.networkConfig.ExtraHeaders,
+		providerName,
+		provider.sendBackRawResponse,
+		provider.logger,
+	)
 }
 
 // listModelsByKeyOpenAI performs a list models request for a single key.
@@ -105,7 +114,7 @@ func listModelsByKeyOpenAI(
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, extraHeaders, nil)
+	setExtraHeaders(ctx, req, extraHeaders, nil)
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod(http.MethodGet)
@@ -180,7 +189,7 @@ func (provider *OpenAIProvider) TextCompletion(ctx context.Context, key schemas.
 	return handleOpenAITextCompletionRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+"/v1/completions",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/completions"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
@@ -217,7 +226,7 @@ func handleOpenAITextCompletionRequest(
 	}
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, extraHeaders, nil)
+	setExtraHeaders(ctx, req, extraHeaders, nil)
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod(http.MethodPost)
@@ -272,7 +281,7 @@ func (provider *OpenAIProvider) TextCompletionStream(ctx context.Context, postHo
 	return handleOpenAITextCompletionStreaming(
 		ctx,
 		provider.streamClient,
-		provider.networkConfig.BaseURL+"/v1/completions",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/completions"),
 		request,
 		map[string]string{"Authorization": "Bearer " + key.Value},
 		provider.networkConfig.ExtraHeaders,
@@ -343,7 +352,7 @@ func handleOpenAITextCompletionStreaming(
 	}
 
 	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, extraHeaders, nil)
+	setExtraHeadersHTTP(ctx, req, extraHeaders, nil)
 
 	// Set headers
 	for key, value := range headers {
@@ -525,7 +534,7 @@ func (provider *OpenAIProvider) ChatCompletion(ctx context.Context, key schemas.
 	return handleOpenAIChatCompletionRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+"/v1/chat/completions",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
@@ -564,7 +573,7 @@ func handleOpenAIChatCompletionRequest(
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, extraHeaders, nil)
+	setExtraHeaders(ctx, req, extraHeaders, nil)
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod(http.MethodPost)
@@ -627,7 +636,7 @@ func (provider *OpenAIProvider) ChatCompletionStream(ctx context.Context, postHo
 	return handleOpenAIChatCompletionStreaming(
 		ctx,
 		provider.streamClient,
-		provider.networkConfig.BaseURL+"/v1/chat/completions",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
 		request,
 		map[string]string{"Authorization": "Bearer " + key.Value},
 		provider.networkConfig.ExtraHeaders,
@@ -698,7 +707,7 @@ func handleOpenAIChatCompletionStreaming(
 	}
 
 	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, extraHeaders, nil)
+	setExtraHeadersHTTP(ctx, req, extraHeaders, nil)
 
 	// Set headers
 	for key, value := range headers {
@@ -882,7 +891,7 @@ func (provider *OpenAIProvider) Responses(ctx context.Context, key schemas.Key, 
 	return handleOpenAIResponsesRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+"/v1/responses",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/responses"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
@@ -921,7 +930,7 @@ func handleOpenAIResponsesRequest(
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, extraHeaders, nil)
+	setExtraHeaders(ctx, req, extraHeaders, nil)
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod(http.MethodPost)
@@ -982,7 +991,7 @@ func (provider *OpenAIProvider) ResponsesStream(ctx context.Context, postHookRun
 	return handleOpenAIResponsesStreaming(
 		ctx,
 		provider.streamClient,
-		provider.networkConfig.BaseURL+"/v1/responses",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/responses"),
 		request,
 		map[string]string{"Authorization": "Bearer " + key.Value},
 		provider.networkConfig.ExtraHeaders,
@@ -1055,7 +1064,7 @@ func handleOpenAIResponsesStreaming(
 	}
 
 	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, extraHeaders, nil)
+	setExtraHeadersHTTP(ctx, req, extraHeaders, nil)
 
 	// Set headers
 	for key, value := range headers {
@@ -1208,7 +1217,7 @@ func (provider *OpenAIProvider) Embedding(ctx context.Context, key schemas.Key, 
 	return handleOpenAIEmbeddingRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+"/v1/embeddings",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/embeddings"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
@@ -1249,7 +1258,7 @@ func handleOpenAIEmbeddingRequest(
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, extraHeaders, nil)
+	setExtraHeaders(ctx, req, extraHeaders, nil)
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod(http.MethodPost)
@@ -1324,9 +1333,9 @@ func (provider *OpenAIProvider) Speech(ctx context.Context, key schemas.Key, req
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
-	req.SetRequestURI(provider.networkConfig.BaseURL + "/v1/audio/speech")
+	req.SetRequestURI(provider.networkConfig.BaseURL + getPathFromContext(ctx, "/v1/audio/speech"))
 	req.Header.SetMethod(http.MethodPost)
 	req.Header.SetContentType("application/json")
 	req.Header.Set("Authorization", "Bearer "+key.Value)
@@ -1395,7 +1404,7 @@ func (provider *OpenAIProvider) SpeechStream(ctx context.Context, postHookRunner
 	}
 
 	// Create HTTP request for streaming
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.networkConfig.BaseURL+"/v1/audio/speech", bytes.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/audio/speech"), bytes.NewReader(jsonData))
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, &schemas.BifrostError{
@@ -1414,7 +1423,7 @@ func (provider *OpenAIProvider) SpeechStream(ctx context.Context, postHookRunner
 	}
 
 	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeadersHTTP(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	// Set headers
 	for key, value := range headers {
@@ -1575,9 +1584,9 @@ func (provider *OpenAIProvider) Transcription(ctx context.Context, key schemas.K
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
-	req.SetRequestURI(provider.networkConfig.BaseURL + "/v1/audio/transcriptions")
+	req.SetRequestURI(provider.networkConfig.BaseURL + getPathFromContext(ctx, "/v1/audio/transcriptions"))
 	req.Header.SetMethod(http.MethodPost)
 	req.Header.SetContentType(writer.FormDataContentType()) // This sets multipart/form-data with boundary
 	req.Header.Set("Authorization", "Bearer "+key.Value)
@@ -1658,7 +1667,7 @@ func (provider *OpenAIProvider) TranscriptionStream(ctx context.Context, postHoo
 	}
 
 	// Create HTTP request for streaming
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.networkConfig.BaseURL+"/v1/audio/transcriptions", &body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/audio/transcriptions"), &body)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, &schemas.BifrostError{
@@ -1677,7 +1686,7 @@ func (provider *OpenAIProvider) TranscriptionStream(ctx context.Context, postHoo
 	}
 
 	// Set any extra headers from network config
-	setExtraHeadersHTTP(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeadersHTTP(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	// Set headers
 	for key, value := range headers {

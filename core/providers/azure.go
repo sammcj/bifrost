@@ -90,7 +90,7 @@ func (provider *AzureProvider) completeRequest(ctx context.Context, requestBody 
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod(http.MethodPost)
@@ -152,7 +152,7 @@ func (provider *AzureProvider) listModelsByKey(ctx context.Context, key schemas.
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod(http.MethodGet)
@@ -420,7 +420,7 @@ func (provider *AzureProvider) Responses(ctx context.Context, key schemas.Key, r
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(req, provider.networkConfig.ExtraHeaders, nil)
+	setExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod("POST")
