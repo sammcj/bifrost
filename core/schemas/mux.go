@@ -1057,6 +1057,8 @@ func (cr *BifrostChatResponse) ToBifrostResponsesStreamResponse() *BifrostRespon
 		}
 	}
 
+	streamResp.ExtraFields.RequestType = ResponsesStreamRequest
+
 	// Return the created stream response
 	return streamResp
 }
