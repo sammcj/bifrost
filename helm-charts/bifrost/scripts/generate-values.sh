@@ -104,6 +104,17 @@ fi
 echo ""
 read -p "5. Enter encryption key (leave empty to skip): " ENCRYPTION_KEY
 
+# Check if output file already exists
+if [[ -f "$OUTPUT_FILE" ]]; then
+    echo ""
+    print_warning "File '$OUTPUT_FILE' already exists."
+    read -p "Do you want to overwrite it? (y/n): " overwrite_choice
+    if [[ ! "$overwrite_choice" =~ ^[Yy]$ ]]; then
+        print_info "Generation aborted. No files were modified."
+        exit 0
+    fi
+fi
+
 # Generate the file
 print_info "Generating values file..."
 

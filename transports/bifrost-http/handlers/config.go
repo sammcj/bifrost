@@ -13,6 +13,7 @@ import (
 	"github.com/maximhq/bifrost/framework"
 	"github.com/maximhq/bifrost/framework/configstore"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
+	"github.com/maximhq/bifrost/framework/encrypt"
 	"github.com/maximhq/bifrost/framework/modelcatalog"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
@@ -20,10 +21,11 @@ import (
 
 // ConfigManager is the interface for the config manager
 type ConfigManager interface {
+	UpdateAuthConfig(ctx context.Context, authConfig *configstore.AuthConfig) error
 	ReloadClientConfigFromConfigStore() error
 	ReloadPricingManager() error
 	UpdateDropExcessRequests(value bool)
-	ReloadPlugin(ctx context.Context, name string,path *string, pluginConfig any) error
+	ReloadPlugin(ctx context.Context, name string, path *string, pluginConfig any) error
 }
 
 // ConfigHandler manages runtime configuration updates for Bifrost.
@@ -101,6 +103,38 @@ func (h *ConfigHandler) getConfig(ctx *fasthttp.RequestCtx) {
 			}
 		}
 	}
+	if h.store.ConfigStore != nil {
+		// Fetching governance config
+		authConfig, err := h.store.ConfigStore.GetAuthConfig(ctx)
+		if err != nil {
+			logger.Warn(fmt.Sprintf("failed to get auth config from store: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to get auth config from store: %v", err))
+			return
+		}
+		// Getting username and password from auth config
+		// This username password is for the dashboard authentication
+		if authConfig != nil {
+			password := ""
+			if authConfig.AdminPassword != "" {
+				password = "<redacted>"
+			}
+			// Password we will hash it
+			mapConfig["auth_config"] = map[string]any{
+				"admin_username": authConfig.AdminUserName,
+				"admin_password": password,
+				"is_enabled":     authConfig.IsEnabled,
+			}
+			// Computing token
+			token, err := encrypt.Hash(authConfig.AdminPassword)
+			if err != nil {
+				logger.Warn(fmt.Sprintf("failed to hash password: %v", err))
+				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to hash password: %v", err))
+				return
+			}
+
+			mapConfig["auth_token"] = string(token)
+		}
+	}
 	mapConfig["is_db_connected"] = h.store.ConfigStore != nil
 	mapConfig["is_cache_connected"] = h.store.VectorStore != nil
 	mapConfig["is_logs_connected"] = h.store.LogsStore != nil
@@ -120,6 +154,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	payload := struct {
 		ClientConfig    configstore.ClientConfig               `json:"client_config"`
 		FrameworkConfig configstoreTables.TableFrameworkConfig `json:"framework_config"`
+		AuthConfig      *configstore.AuthConfig                `json:"auth_config"`
 	}{}
 
 	if err := json.Unmarshal(ctx.PostBody(), &payload); err != nil {
@@ -241,6 +276,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 			shouldReloadFrameworkConfig = true
 		}
 	}
+	// Reload config if required
 	if shouldReloadFrameworkConfig {
 		var syncDuration time.Duration
 		if frameworkConfig.PricingSyncInterval != nil {
@@ -272,6 +308,43 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		// 	SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to reload telemetry plugin: %v", err))
 		// 	return
 		// }
+	}
+	// Checking auth config and trying to update if required
+	if payload.AuthConfig != nil {
+		// Getting current governance config
+		authConfig, err := h.store.ConfigStore.GetAuthConfig(ctx)
+		if err != nil {
+			logger.Warn(fmt.Sprintf("failed to get auth config from store: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to get auth config from store: %v", err))
+			return
+		}
+		// Fetching current Auth config
+		if payload.AuthConfig.AdminUserName != "" {
+			if payload.AuthConfig.AdminPassword == "<redacted>" {
+				if authConfig.AdminPassword == "" {
+					SendError(ctx, fasthttp.StatusBadRequest, "auth password must be provided")
+					return
+				}
+				// Assuming that password hasn't been changed
+				payload.AuthConfig.AdminPassword = authConfig.AdminPassword
+			} else {
+				// Password has been changed
+				// We will hash the password
+				hashedPassword, err := encrypt.Hash(payload.AuthConfig.AdminPassword)
+				if err != nil {
+					logger.Warn(fmt.Sprintf("failed to hash password: %v", err))
+					SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to hash password: %v", err))
+					return
+				}
+				payload.AuthConfig.AdminPassword = string(hashedPassword)
+			}
+			err := h.configManager.UpdateAuthConfig(ctx, payload.AuthConfig)
+			if err != nil {
+				logger.Warn(fmt.Sprintf("failed to update auth config: %v", err))
+				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update auth config: %v", err))
+				return
+			}
+		}
 	}
 	ctx.SetStatusCode(fasthttp.StatusOK)
 	SendJSON(ctx, map[string]any{

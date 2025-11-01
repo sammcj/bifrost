@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"plugin"
 	"strings"
+	"time"
 
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/valyala/fasthttp"
@@ -62,23 +62,54 @@ func loadDynamicPlugin(path string, config any) (schemas.Plugin, error) {
 	// Checking if path is URL or file path
 	if strings.HasPrefix(dp.Path, "http") {
 		// Download the file
+		req := fasthttp.AcquireRequest()
+		defer fasthttp.ReleaseRequest(req)
 		response := fasthttp.AcquireResponse()
 		defer fasthttp.ReleaseResponse(response)
-		statusCode, body, err := fasthttp.Get(nil, dp.Path)
+
+		req.SetRequestURI(dp.Path)
+		req.SetTimeout(1 * time.Minute)
+		req.Header.SetMethod(fasthttp.MethodGet)
+		req.Header.Set("User-Agent", "Bifrost")
+		req.Header.Set("Accept", "application/octet-stream")
+		req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		req.Header.Set("Accept-Charset", "utf-8")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		err := fasthttp.Do(req, response)
 		if err != nil {
 			return nil, err
 		}
-		if statusCode != fasthttp.StatusOK {
-			return nil, fmt.Errorf("failed to download plugin: %d", statusCode)
+		if response.StatusCode() != fasthttp.StatusOK {
+			return nil, fmt.Errorf("failed to download plugin: %d", response.StatusCode())
 		}
-		// Saving the file to a temporary directory
-		tempDir := os.TempDir()
-		tempFile := filepath.Join(tempDir, "bifrost-plugin.zip")
-		err = os.WriteFile(tempFile, body, 0644)
+		// Create a unique temporary file for the plugin
+		tempFile, err := os.CreateTemp(os.TempDir(), "bifrost-plugin-*.so")
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create temporary file: %w", err)
 		}
-		dp.Path = tempFile
+		tempPath := tempFile.Name()
+		// Write the downloaded body to the temporary file
+		_, err = tempFile.Write(response.Body())
+		if err != nil {
+			tempFile.Close()
+			os.Remove(tempPath)
+			return nil, fmt.Errorf("failed to write plugin to temporary file: %w", err)
+		}
+		// Close the file
+		err = tempFile.Close()
+		if err != nil {
+			os.Remove(tempPath)
+			return nil, fmt.Errorf("failed to close temporary file: %w", err)
+		}
+		// Set file permissions to be executable
+		err = os.Chmod(tempPath, 0755)
+		if err != nil {
+			os.Remove(tempPath)
+			return nil, fmt.Errorf("failed to set executable permissions on plugin: %w", err)
+		}
+		dp.Path = tempPath
 	}
 	plugin, err := plugin.Open(dp.Path)
 	if err != nil {

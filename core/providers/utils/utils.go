@@ -58,7 +58,6 @@ func MakeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *f
 			},
 		}
 	case err := <-errChan:
-
 		// The fasthttp.Do call completed.
 		// Calculate latency for both successful and failed requests
 		latency := time.Since(startTime)

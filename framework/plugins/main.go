@@ -20,6 +20,9 @@ type Config struct {
 // LoadPlugins loads the plugins from the config
 func LoadPlugins(config *Config) ([]schemas.Plugin, error) {
 	plugins := []schemas.Plugin{}
+	if config == nil {
+		return plugins, nil
+	}
 	for _, dp := range config.Plugins {
 		if !dp.Enabled {
 			continue

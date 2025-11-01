@@ -33,9 +33,9 @@ print_banner() {
     echo ""
 }
 
-# Change to chart directory
+# Set explicit chart directory (parent of scripts directory)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR/.."
+CHART_DIR="$SCRIPT_DIR/.."
 
 print_banner
 
@@ -49,7 +49,7 @@ print_success "Helm is installed"
 
 # Lint the chart
 print_info "Linting Helm chart..."
-if helm lint .; then
+if helm lint "$CHART_DIR"; then
     print_success "Chart linting passed"
 else
     print_error "Chart linting failed"
@@ -58,7 +58,7 @@ fi
 
 # Template the chart with default values
 print_info "Templating chart with default values..."
-if helm template test-release . > /dev/null; then
+if helm template test-release "$CHART_DIR" > /dev/null; then
     print_success "Default values template successful"
 else
     print_error "Default values template failed"
@@ -67,10 +67,10 @@ fi
 
 # Test all example configurations
 print_info "Testing example configurations..."
-for config in values-examples/*.yaml; do
+for config in "$CHART_DIR"/values-examples/*.yaml; do
     config_name=$(basename "$config")
     print_info "  Testing $config_name..."
-    if helm template test-release . -f "$config" > /dev/null; then
+    if helm template test-release "$CHART_DIR" -f "$config" > /dev/null; then
         print_success "  $config_name: OK"
     else
         print_error "  $config_name: FAILED"
@@ -80,7 +80,7 @@ done
 
 # Dry run install
 print_info "Performing dry-run installation..."
-if helm install test-release . --dry-run --debug > /dev/null 2>&1; then
+if helm install test-release "$CHART_DIR" --dry-run --debug > /dev/null 2>&1; then
     print_success "Dry-run installation successful"
 else
     print_error "Dry-run installation failed"

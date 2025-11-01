@@ -4,6 +4,7 @@ package providers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -31,7 +32,7 @@ func NewOpenRouterProvider(config *schemas.ProviderConfig, logger schemas.Logger
 	client := &fasthttp.Client{
 		ReadTimeout:         time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
 		WriteTimeout:        time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
-		MaxConnsPerHost:     10000,
+		MaxConnsPerHost:     5000,
 		MaxIdleConnDuration: 60 * time.Second,
 		MaxConnWaitTimeout:  10 * time.Second,
 	}
@@ -76,7 +77,7 @@ func (provider *OpenRouterProvider) listModelsByKey(ctx context.Context, key sch
 	req.Header.SetMethod(http.MethodGet)
 	req.Header.SetContentType("application/json")
 	if key.Value != "" {
-		req.Header.Set("Authorization", "Bearer "+key.Value)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key.Value))
 	}
 
 	// Make request
