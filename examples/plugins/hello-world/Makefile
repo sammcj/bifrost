@@ -1,4 +1,7 @@
-.PHONY: build clean install help
+.PHONY: all build clean install help test
+
+# Note: Go plugins only support Linux and macOS (Darwin)
+# Cross-compilation is not supported for plugins
 
 # Plugin name
 PLUGIN_NAME = hello-world
@@ -13,10 +16,6 @@ endif
 ifeq ($(UNAME_S),Darwin)
 	PLUGIN_EXT = .so
 	PLATFORM = darwin
-endif
-ifeq ($(UNAME_S),Windows_NT)
-	PLUGIN_EXT = .dll
-	PLATFORM = windows
 endif
 
 # Architecture detection

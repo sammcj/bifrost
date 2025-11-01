@@ -7,6 +7,8 @@ APP_DIR ?=
 PROMETHEUS_LABELS ?=
 LOG_STYLE ?= json
 LOG_LEVEL ?= info
+TEST_REPORTS_DIR ?= test-reports
+GOTESTSUM_FORMAT ?= testname
 
 # Colors for output
 RED=\033[0;31m
@@ -201,7 +203,9 @@ test: install-gotestsum ## Run tests for bifrost-http
 test-core: install-gotestsum ## Run core tests (Usage: make test-core PROVIDER=anthropic TESTCASE=SimpleChat)
 	@echo "$(GREEN)Running core tests...$(NC)"
 	@mkdir -p $(TEST_REPORTS_DIR)
-	@if [ -n "$(PROVIDER)" ]; then \
+	@TEST_FAILED=0; \
+	REPORT_FILE=""; \
+	if [ -n "$(PROVIDER)" ]; then \
 		echo "$(CYAN)Running tests for provider: $(PROVIDER)$(NC)"; \
 		if [ ! -f "tests/core-providers/$(PROVIDER)_test.go" ]; then \
 			echo "$(RED)Error: Provider test file '$(PROVIDER)_test.go' not found$(NC)"; \
@@ -218,45 +222,51 @@ test-core: install-gotestsum ## Run core tests (Usage: make test-core PROVIDER=a
 		PROVIDER_TEST_NAME=$$(echo "$(PROVIDER)" | awk '{print toupper(substr($$0,1,1)) tolower(substr($$0,2))}' | sed 's/openai/OpenAI/i; s/sgl/SGL/i'); \
 		if [ -n "$(TESTCASE)" ]; then \
 			echo "$(CYAN)Running Test$${PROVIDER_TEST_NAME}/$${PROVIDER_TEST_NAME}Tests/$(TESTCASE)...$(NC)"; \
+			REPORT_FILE="$(TEST_REPORTS_DIR)/core-$(PROVIDER)-$(TESTCASE).xml"; \
 			cd tests/core-providers && GOWORK=off gotestsum \
 				--format=$(GOTESTSUM_FORMAT) \
-				--junitfile=../../$(TEST_REPORTS_DIR)/core-$(PROVIDER)-$(TESTCASE).xml \
-				-- -v -run "^Test$${PROVIDER_TEST_NAME}$$/.*Tests/$(TESTCASE)$$"; \
+				--junitfile=../../$$REPORT_FILE \
+				-- -v -run "^Test$${PROVIDER_TEST_NAME}$$/.*Tests/$(TESTCASE)$$" || TEST_FAILED=1; \
+			cd ../..; \
+			$(MAKE) cleanup-junit-xml REPORT_FILE=$$REPORT_FILE; \
 			if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
 				if which junit-viewer > /dev/null 2>&1; then \
 					echo "$(YELLOW)Generating HTML report...$(NC)"; \
-					junit-viewer --results=../../$(TEST_REPORTS_DIR)/core-$(PROVIDER)-$(TESTCASE).xml --save=../../$(TEST_REPORTS_DIR)/core-$(PROVIDER)-$(TESTCASE).html 2>/dev/null || true; \
+					junit-viewer --results=$$REPORT_FILE --save=$${REPORT_FILE%.xml}.html 2>/dev/null || true; \
 					echo ""; \
-					echo "$(CYAN)HTML report: $(TEST_REPORTS_DIR)/core-$(PROVIDER)-$(TESTCASE).html$(NC)"; \
-					echo "$(CYAN)Open with: open $(TEST_REPORTS_DIR)/core-$(PROVIDER)-$(TESTCASE).html$(NC)"; \
+					echo "$(CYAN)HTML report: $${REPORT_FILE%.xml}.html$(NC)"; \
+					echo "$(CYAN)Open with: open $${REPORT_FILE%.xml}.html$(NC)"; \
 				else \
 					echo ""; \
-					echo "$(CYAN)JUnit XML report: $(TEST_REPORTS_DIR)/core-$(PROVIDER)-$(TESTCASE).xml$(NC)"; \
+					echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
 				fi; \
 			else \
 				echo ""; \
-				echo "$(CYAN)JUnit XML report: $(TEST_REPORTS_DIR)/core-$(PROVIDER)-$(TESTCASE).xml$(NC)"; \
+				echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
 			fi; \
 		else \
 			echo "$(CYAN)Running Test$${PROVIDER_TEST_NAME}...$(NC)"; \
+			REPORT_FILE="$(TEST_REPORTS_DIR)/core-$(PROVIDER).xml"; \
 			cd tests/core-providers && GOWORK=off gotestsum \
 				--format=$(GOTESTSUM_FORMAT) \
-				--junitfile=../../$(TEST_REPORTS_DIR)/core-$(PROVIDER).xml \
-				-- -v -run "^Test$${PROVIDER_TEST_NAME}$$"; \
+				--junitfile=../../$$REPORT_FILE \
+				-- -v -run "^Test$${PROVIDER_TEST_NAME}$$" || TEST_FAILED=1; \
+			cd ../..; \
+			$(MAKE) cleanup-junit-xml REPORT_FILE=$$REPORT_FILE; \
 			if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
 				if which junit-viewer > /dev/null 2>&1; then \
 					echo "$(YELLOW)Generating HTML report...$(NC)"; \
-					junit-viewer --results=../../$(TEST_REPORTS_DIR)/core-$(PROVIDER).xml --save=../../$(TEST_REPORTS_DIR)/core-$(PROVIDER).html 2>/dev/null || true; \
+					junit-viewer --results=$$REPORT_FILE --save=$${REPORT_FILE%.xml}.html 2>/dev/null || true; \
 					echo ""; \
-					echo "$(CYAN)HTML report: $(TEST_REPORTS_DIR)/core-$(PROVIDER).html$(NC)"; \
-					echo "$(CYAN)Open with: open $(TEST_REPORTS_DIR)/core-$(PROVIDER).html$(NC)"; \
+					echo "$(CYAN)HTML report: $${REPORT_FILE%.xml}.html$(NC)"; \
+					echo "$(CYAN)Open with: open $${REPORT_FILE%.xml}.html$(NC)"; \
 				else \
 					echo ""; \
-					echo "$(CYAN)JUnit XML report: $(TEST_REPORTS_DIR)/core-$(PROVIDER).xml$(NC)"; \
+					echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
 				fi; \
 			else \
 				echo ""; \
-				echo "$(CYAN)JUnit XML report: $(TEST_REPORTS_DIR)/core-$(PROVIDER).xml$(NC)"; \
+				echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
 			fi; \
 		fi \
 	else \
@@ -265,24 +275,91 @@ test-core: install-gotestsum ## Run core tests (Usage: make test-core PROVIDER=a
 			echo "$(YELLOW)Usage: make test-core PROVIDER=anthropic TESTCASE=SimpleChat$(NC)"; \
 			exit 1; \
 		fi; \
+		REPORT_FILE="$(TEST_REPORTS_DIR)/core-all.xml"; \
 		cd tests/core-providers && GOWORK=off gotestsum \
 			--format=$(GOTESTSUM_FORMAT) \
-			--junitfile=../../$(TEST_REPORTS_DIR)/core-all.xml \
-			-- -v ./...; \
+			--junitfile=../../$$REPORT_FILE \
+			-- -v ./... || TEST_FAILED=1; \
+		cd ../..; \
+		$(MAKE) cleanup-junit-xml REPORT_FILE=$$REPORT_FILE; \
 		if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
 			if which junit-viewer > /dev/null 2>&1; then \
 				echo "$(YELLOW)Generating HTML report...$(NC)"; \
-				junit-viewer --results=../../$(TEST_REPORTS_DIR)/core-all.xml --save=../../$(TEST_REPORTS_DIR)/core-all.html 2>/dev/null || true; \
+				junit-viewer --results=$$REPORT_FILE --save=$${REPORT_FILE%.xml}.html 2>/dev/null || true; \
 				echo ""; \
-				echo "$(CYAN)HTML report: $(TEST_REPORTS_DIR)/core-all.html$(NC)"; \
-				echo "$(CYAN)Open with: open $(TEST_REPORTS_DIR)/core-all.html$(NC)"; \
+				echo "$(CYAN)HTML report: $${REPORT_FILE%.xml}.html$(NC)"; \
+				echo "$(CYAN)Open with: open $${REPORT_FILE%.xml}.html$(NC)"; \
 			else \
 				echo ""; \
-				echo "$(CYAN)JUnit XML report: $(TEST_REPORTS_DIR)/core-all.xml$(NC)"; \
+				echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
 			fi; \
 		else \
 			echo ""; \
-			echo "$(CYAN)JUnit XML report: $(TEST_REPORTS_DIR)/core-all.xml$(NC)"; \
+			echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
+		fi; \
+	fi; \
+	if [ -f "$$REPORT_FILE" ]; then \
+		ALL_FAILED=$$(grep -B 1 '<failure' "$$REPORT_FILE" 2>/dev/null | \
+			grep '<testcase' | \
+			sed 's/.*name="\([^"]*\)".*/\1/' | \
+			sort -u); \
+		MAX_DEPTH=$$(echo "$$ALL_FAILED" | awk -F'/' '{print NF}' | sort -n | tail -1); \
+		FAILED_TESTS=$$(echo "$$ALL_FAILED" | awk -F'/' -v max="$$MAX_DEPTH" 'NF == max'); \
+		FAILURES=$$(echo "$$FAILED_TESTS" | grep -v '^$$' | wc -l | tr -d ' '); \
+		if [ "$$FAILURES" -gt 0 ]; then \
+			echo ""; \
+			echo "$(RED)═══════════════════════════════════════════════════════════$(NC)"; \
+			echo "$(RED)                    FAILED TEST CASES                      $(NC)"; \
+			echo "$(RED)═══════════════════════════════════════════════════════════$(NC)"; \
+			echo ""; \
+			printf "$(YELLOW)%-60s %-20s$(NC)\n" "Test Name" "Status"; \
+			printf "$(YELLOW)%-60s %-20s$(NC)\n" "─────────────────────────────────────────────────────────────" "────────────────────"; \
+			echo "$$FAILED_TESTS" | while read -r testname; do \
+				if [ -n "$$testname" ]; then \
+					printf "$(RED)%-60s %-20s$(NC)\n" "$$testname" "FAILED"; \
+				fi; \
+			done; \
+			echo ""; \
+			echo "$(RED)Total Failures: $$FAILURES$(NC)"; \
+			echo ""; \
+		else \
+			echo ""; \
+			echo "$(GREEN)═══════════════════════════════════════════════════════════$(NC)"; \
+			echo "$(GREEN)                 ALL TESTS PASSED ✓                       $(NC)"; \
+			echo "$(GREEN)═══════════════════════════════════════════════════════════$(NC)"; \
+			echo ""; \
+		fi; \
+	fi; \
+	if [ $$TEST_FAILED -eq 1 ]; then \
+		exit 1; \
+	fi
+
+cleanup-junit-xml: ## Internal: Clean up JUnit XML to remove parent test cases with child failures
+	@if [ -z "$(REPORT_FILE)" ]; then \
+		echo "$(RED)Error: REPORT_FILE not specified$(NC)"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(REPORT_FILE)" ]; then \
+		exit 0; \
+	fi
+	@ALL_FAILED=$$(grep -B 1 '<failure' "$(REPORT_FILE)" 2>/dev/null | \
+		grep '<testcase' | \
+		sed 's/.*name="\([^"]*\)".*/\1/' | \
+		sort -u); \
+	if [ -n "$$ALL_FAILED" ]; then \
+		MAX_DEPTH=$$(echo "$$ALL_FAILED" | awk -F'/' '{print NF}' | sort -n | tail -1); \
+		PARENT_TESTS=$$(echo "$$ALL_FAILED" | awk -F'/' -v max="$$MAX_DEPTH" 'NF < max'); \
+		if [ -n "$$PARENT_TESTS" ]; then \
+			cp "$(REPORT_FILE)" "$(REPORT_FILE).tmp"; \
+			echo "$$PARENT_TESTS" | while IFS= read -r parent; do \
+				if [ -n "$$parent" ]; then \
+					ESCAPED=$$(echo "$$parent" | sed 's/[\/&]/\\&/g'); \
+					perl -i -pe 'BEGIN{undef $$/;} s/<testcase[^>]*name="'"$$ESCAPED"'"[^>]*>.*?<failure.*?<\/testcase>//gs' "$(REPORT_FILE).tmp" 2>/dev/null || true; \
+				fi; \
+			done; \
+			if [ -f "$(REPORT_FILE).tmp" ]; then \
+				mv "$(REPORT_FILE).tmp" "$(REPORT_FILE)"; \
+			fi; \
 		fi; \
 	fi
 

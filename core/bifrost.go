@@ -89,7 +89,7 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 	if config.Logger == nil {
 		config.Logger = NewDefaultLogger(schemas.LogLevelInfo)
 	}
-	
+
 	providerUtils.SetLogger(config.Logger)
 
 	bifrost := &Bifrost{

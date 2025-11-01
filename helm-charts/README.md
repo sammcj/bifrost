@@ -45,7 +45,7 @@ For detailed documentation, see the [Bifrost chart README](./bifrost/README.md).
 
 ## Repository Structure
 
-```
+```bash
 helm-charts/
 ├── README.md                          # This file
 └── bifrost/
@@ -68,7 +68,8 @@ helm-charts/
         ├── sqlite-weaviate.yaml
         ├── sqlite-redis.yaml
         ├── external-postgres.yaml
-        └── production-ha.yaml
+        ├── production-ha.yaml
+        └── semantic-cache-secret-example.yaml  # Secret example for API keys
 ```
 
 ## Prerequisites
@@ -101,12 +102,20 @@ helm install bifrost ./bifrost \
 
 ### Semantic Caching Setup
 
+For semantic caching, create a Kubernetes Secret for your OpenAI API key:
+
 ```bash
-# PostgreSQL with Weaviate for semantic caching
+# Create secret for semantic cache API key
+kubectl create secret generic bifrost-semantic-cache \
+  --from-literal=openai-key=sk-YOUR_OPENAI_API_KEY \
+  -n default
+
+# Install with semantic caching enabled
 helm install bifrost ./bifrost \
-  -f bifrost/values-examples/postgres-weaviate.yaml \
-  --set bifrost.plugins.semanticCache.config.keys[0]="sk-your-embedding-key"
+  -f bifrost/values-examples/postgres-weaviate.yaml
 ```
+
+The values examples now use `secretRef` to reference the secret instead of inline keys for better security.
 
 ## Customization
 
@@ -153,9 +162,9 @@ helm uninstall bifrost
 
 ## Support
 
-- Documentation: https://www.getbifrost.ai/docs
-- GitHub: https://github.com/maxim-ai/bifrost
-- Issues: https://github.com/maxim-ai/bifrost/issues
+- Documentation: [https://www.getbifrost.ai/docs](https://www.getbifrost.ai/docs)
+- GitHub: [https://github.com/maxim-ai/bifrost](https://github.com/maxim-ai/bifrost)
+- Issues: [https://github.com/maxim-ai/bifrost/issues](https://github.com/maxim-ai/bifrost/issues)
 
 ## License
 

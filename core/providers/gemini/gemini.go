@@ -34,7 +34,7 @@ func NewGeminiProvider(config *schemas.ProviderConfig, logger schemas.Logger) *G
 	client := &fasthttp.Client{
 		ReadTimeout:         time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
 		WriteTimeout:        time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
-		MaxConnsPerHost:     10000,
+		MaxConnsPerHost:     5000,
 		MaxIdleConnDuration: 60 * time.Second,
 		MaxConnWaitTimeout:  10 * time.Second,
 	}
@@ -439,10 +439,7 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 	req.Header.SetContentType("application/json")
 
 	// Set headers for streaming
-	req.Header.Set("Content-Type", "application/json")
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
-	}
+	req.Header.Set("x-goog-api-key", key.Value)
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Cache-Control", "no-cache")
 
@@ -694,10 +691,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	// Set headers for streaming
-	req.Header.Set("Content-Type", "application/json")
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
-	}
+	req.Header.Set("x-goog-api-key", key.Value)
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Cache-Control", "no-cache")
 

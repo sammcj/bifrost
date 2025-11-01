@@ -81,10 +81,13 @@ func NewCohereProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*
 	client := &fasthttp.Client{
 		ReadTimeout:         time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
 		WriteTimeout:        time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
-		MaxConnsPerHost:     10000,
+		MaxConnsPerHost:     5000,
 		MaxIdleConnDuration: 60 * time.Second,
 		MaxConnWaitTimeout:  10 * time.Second,
 	}
+
+	// Setting proxy if provided
+	client = providerUtils.ConfigureProxy(client, config.ProxyConfig, logger)
 
 	// Pre-warm response pools
 	for i := 0; i < config.ConcurrencyAndBufferSize.Concurrency; i++ {
@@ -202,7 +205,7 @@ func (provider *CohereProvider) listModelsByKey(ctx context.Context, key schemas
 	req.Header.SetMethod(http.MethodGet)
 	req.Header.SetContentType("application/json")
 	if key.Value != "" {
-		req.Header.Set("Authorization", "Bearer "+key.Value)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key.Value))
 	}
 
 	// Make request
@@ -360,10 +363,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	if key.Value != "" {
-		req.Header.Set("Authorization", "Bearer "+key.Value)
-	}
+	req.Header.Set("Authorization", "Bearer "+key.Value)
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Cache-Control", "no-cache")
 
@@ -404,8 +404,9 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 		defer fasthttp.ReleaseResponse(resp)
 
 		scanner := bufio.NewScanner(resp.BodyStream())
+		buf := make([]byte, 0, 1024*1024)
+		scanner.Buffer(buf, 10*1024*1024)
 		chunkIndex := 0
-
 		startTime := time.Now()
 		lastChunkTime := startTime
 
@@ -570,10 +571,7 @@ func (provider *CohereProvider) ResponsesStream(ctx context.Context, postHookRun
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	if key.Value != "" {
-		req.Header.Set("Authorization", "Bearer "+key.Value)
-	}
+	req.Header.Set("Authorization", "Bearer "+key.Value)
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Cache-Control", "no-cache")
 
@@ -614,6 +612,9 @@ func (provider *CohereProvider) ResponsesStream(ctx context.Context, postHookRun
 		defer fasthttp.ReleaseResponse(resp)
 
 		scanner := bufio.NewScanner(resp.BodyStream())
+		buf := make([]byte, 0, 1024*1024)
+		scanner.Buffer(buf, 10*1024*1024)
+
 		chunkIndex := 0
 
 		startTime := time.Now()

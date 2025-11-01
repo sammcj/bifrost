@@ -141,9 +141,24 @@ install_chart() {
     local values_file=""
     
     if [[ "$CONFIG" == "custom" ]]; then
+        # Validate that CUSTOM_VALUES is non-empty
+        if [[ -z "$CUSTOM_VALUES" ]]; then
+            print_error "Custom values file path is empty"
+            exit 1
+        fi
         values_file="$CUSTOM_VALUES"
+        # Validate that the custom values file exists and is a regular file
+        if [[ ! -f "$values_file" ]]; then
+            print_error "Custom values file does not exist or is not a regular file: $values_file"
+            exit 1
+        fi
     else
-        values_file="values-examples/${CONFIG}.yaml"
+        values_file="${CHART_DIR}/values-examples/${CONFIG}.yaml"
+        # Validate that the predefined values file exists
+        if [[ ! -f "$values_file" ]]; then
+            print_error "Values file does not exist: $values_file"
+            exit 1
+        fi
     fi
     
     print_info "Installing Bifrost..."
@@ -159,8 +174,8 @@ install_chart() {
         exit 0
     fi
     
-    # Run helm install
-    if helm install "$RELEASE_NAME" . \
+    # Run helm install with explicit chart directory
+    if helm install "$RELEASE_NAME" "$CHART_DIR" \
         --namespace "$NAMESPACE" \
         -f "$values_file" \
         --create-namespace; then
@@ -202,9 +217,9 @@ main() {
         get_custom_values
     fi
     
-    # Change to chart directory
+    # Set explicit chart directory (parent of scripts directory)
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    cd "$SCRIPT_DIR/.."
+    CHART_DIR="$SCRIPT_DIR/.."
     
     install_chart
 }
