@@ -1,11 +1,16 @@
 package schemas
 
 type BifrostTranscriptionRequest struct {
-	Provider  ModelProvider            `json:"provider"`
-	Model     string                   `json:"model"`
-	Input     *TranscriptionInput      `json:"input,omitempty"`
-	Params    *TranscriptionParameters `json:"params,omitempty"`
-	Fallbacks []Fallback               `json:"fallbacks,omitempty"`
+	Provider       ModelProvider            `json:"provider"`
+	Model          string                   `json:"model"`
+	Input          *TranscriptionInput      `json:"input,omitempty"`
+	Params         *TranscriptionParameters `json:"params,omitempty"`
+	Fallbacks      []Fallback               `json:"fallbacks,omitempty"`
+	RawRequestBody []byte                   `json:"-"` // set bifrost-use-raw-request-body to true in ctx to use the raw request body. Bifrost will directly send this to the downstream provider.
+}
+
+func (r *BifrostTranscriptionRequest) GetRawRequestBody() []byte {
+	return r.RawRequestBody
 }
 
 type BifrostTranscriptionResponse struct {

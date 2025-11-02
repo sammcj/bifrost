@@ -141,7 +141,7 @@ type RequestParser func(ctx *fasthttp.RequestCtx, req interface{}) error
 // It can be used to modify the request object (e.g., extract model from URL parameters)
 // or perform validation. If it returns an error, the request processing stops.
 // It can also modify the bifrost context based on the request context before it is given to Bifrost.
-type PreRequestCallback func(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}, rawBody []byte) error
+type PreRequestCallback func(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}) error
 
 // PostRequestCallback is called after processing the request but before sending the response.
 // It can be used to modify the response or perform additional logging/metrics.
@@ -317,11 +317,14 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		// Execute the request through Bifrost
 		bifrostCtx := lib.ConvertToBifrostContext(ctx, g.handlerStore.ShouldAllowDirectKeys())
 
+		// Set send back raw response flag for all integration requests
+		*bifrostCtx = context.WithValue(*bifrostCtx, schemas.BifrostContextKeySendBackRawResponse, true)
+
 		// Execute pre-request callback if configured
 		// This is typically used for extracting data from URL parameters
 		// or performing request validation after parsing
 		if config.PreCallback != nil {
-			if err := config.PreCallback(ctx, bifrostCtx, req, rawBody); err != nil {
+			if err := config.PreCallback(ctx, bifrostCtx, req); err != nil {
 				g.sendError(ctx, config.ErrorConverter, newBifrostError(err, "failed to execute pre-request callback: "+err.Error()))
 				return
 			}
@@ -336,6 +339,9 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		if bifrostReq == nil {
 			g.sendError(ctx, config.ErrorConverter, newBifrostError(nil, "Invalid request"))
 			return
+		}
+		if sendRawRequestBody, ok := (*bifrostCtx).Value(schemas.BifrostContextKeyUseRawRequestBody).(bool); ok && sendRawRequestBody {
+			bifrostReq.SetRawRequestBody(rawBody)
 		}
 
 		// Extract and parse fallbacks from the request if present

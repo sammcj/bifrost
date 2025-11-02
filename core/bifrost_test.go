@@ -233,8 +233,8 @@ func TestExecuteRequestWithRetries_RetryableConditions(t *testing.T) {
 			error: createBifrostError("too many requests", Ptr(429), nil, false),
 		},
 		{
-			name:  "ErrProviderRequest",
-			error: createBifrostError(schemas.ErrProviderRequest, nil, nil, false),
+			name:  "ErrProviderDoRequest",
+			error: createBifrostError(schemas.ErrProviderDoRequest, nil, nil, false),
 		},
 		{
 			name:  "RateLimitMessage",
