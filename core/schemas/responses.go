@@ -30,11 +30,16 @@ import (
 // =============================================================================
 
 type BifrostResponsesRequest struct {
-	Provider  ModelProvider        `json:"provider"`
-	Model     string               `json:"model"`
-	Input     []ResponsesMessage   `json:"input,omitempty"`
-	Params    *ResponsesParameters `json:"params,omitempty"`
-	Fallbacks []Fallback           `json:"fallbacks,omitempty"`
+	Provider       ModelProvider        `json:"provider"`
+	Model          string               `json:"model"`
+	Input          []ResponsesMessage   `json:"input,omitempty"`
+	Params         *ResponsesParameters `json:"params,omitempty"`
+	Fallbacks      []Fallback           `json:"fallbacks,omitempty"`
+	RawRequestBody []byte               `json:"-"` // set bifrost-use-raw-request-body to true in ctx to use the raw request body. Bifrost will directly send this to the downstream provider.
+}
+
+func (r *BifrostResponsesRequest) GetRawRequestBody() []byte {
+	return r.RawRequestBody
 }
 
 type BifrostResponsesResponse struct {
@@ -94,7 +99,7 @@ type ResponsesParameters struct {
 	ToolChoice         *ResponsesToolChoice          `json:"tool_choice,omitempty"` // Whether to call a tool
 	Tools              []ResponsesTool               `json:"tools,omitempty"`       // Tools to use
 	Truncation         *string                       `json:"truncation,omitempty"`
-
+	User               *string                       `json:"user,omitempty"`
 	// Dynamic parameters that can be provider-specific, they are directly
 	// added to the request as is.
 	ExtraParams map[string]interface{} `json:"-"`

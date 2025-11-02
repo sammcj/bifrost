@@ -68,6 +68,11 @@ func createAnthropicMessagesRouteConfig(pathPrefix string) []RouteConfig {
 				return nil, errors.New("invalid request type")
 			},
 			ResponsesResponseConverter: func(resp *schemas.BifrostResponsesResponse) (interface{}, error) {
+				if resp.ExtraFields.Provider == schemas.Anthropic {
+					if resp.ExtraFields.RawResponse != nil {
+						return resp.ExtraFields.RawResponse, nil
+					}
+				}
 				return anthropic.ToAnthropicResponsesResponse(resp), nil
 			},
 			ErrorConverter: func(err *schemas.BifrostError) interface{} {
@@ -125,7 +130,7 @@ func CreateAnthropicListModelsRouteConfigs(pathPrefix string, handlerStore lib.H
 // checkAnthropicPassthrough pre-callback checks if the request is for a claude model.
 // If it is, it attaches the raw request body for direct use by the provider.
 // It also checks for anthropic oauth headers and sets the bifrost context.
-func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}, rawBody []byte) error {
+func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}) error {
 	var provider schemas.ModelProvider
 	var model string
 
@@ -133,15 +138,15 @@ func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *context.Con
 	case *anthropic.AnthropicTextRequest:
 		provider, model = schemas.ParseModelString(r.Model, "")
 		// Check if model parameter explicitly has `anthropic/` prefix
-		if after, ok := strings.CutPrefix(model, "anthropic/"); ok {
-			r.Model = after
+		if provider == schemas.Anthropic {
+			r.Model = model
 		}
 
 	case *anthropic.AnthropicMessageRequest:
 		provider, model = schemas.ParseModelString(r.Model, "")
 		// Check if model parameter explicitly has `anthropic/` prefix
-		if after, ok := strings.CutPrefix(model, "anthropic/"); ok {
-			r.Model = after
+		if provider == schemas.Anthropic {
+			r.Model = model
 		}
 	}
 
@@ -161,15 +166,13 @@ func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *context.Con
 		*bifrostCtx = context.WithValue(*bifrostCtx, schemas.BifrostContextKeyExtraHeaders, headers)
 		*bifrostCtx = context.WithValue(*bifrostCtx, schemas.BifrostContextKeyURLPath, url)
 		*bifrostCtx = context.WithValue(*bifrostCtx, schemas.BifrostContextKeySkipKeySelection, true)
+		*bifrostCtx = context.WithValue(*bifrostCtx, schemas.BifrostContextKeyUseRawRequestBody, true)
 	}
-
-	// Set the request body in the context
-	*bifrostCtx = context.WithValue(*bifrostCtx, schemas.BifrostContextKeyRequestBody, rawBody)
 	return nil
 }
 
 // extractAnthropicListModelsParams extracts query parameters for list models request
-func extractAnthropicListModelsParams(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}, rawBody []byte) error {
+func extractAnthropicListModelsParams(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}) error {
 	if listModelsReq, ok := req.(*schemas.BifrostListModelsRequest); ok {
 		// Set provider to Anthropic
 		listModelsReq.Provider = schemas.Anthropic

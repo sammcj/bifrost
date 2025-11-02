@@ -29,7 +29,7 @@ Bifrost provides **100% compatible endpoints** for OpenAI, Anthropic, and Gemini
 
 2. **Configure Environment Variables**
    ```bash
-   export ANTHROPIC_API_KEY=dummy-key  # Handled by Bifrost
+   export ANTHROPIC_API_KEY=dummy-key  # Handled by Bifrost (only set when using API key authentication)
    export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic
    ```
 
@@ -39,6 +39,10 @@ Bifrost provides **100% compatible endpoints** for OpenAI, Anthropic, and Gemini
    ```
 
 Now all Claude Code traffic flows through Bifrost, giving you access to any provider/model configured in your Bifrost setup, plus MCP tools and observability.
+
+<Note>
+This setup automatically detects if you're using Anthropic MAX account instead of a regular API key authentication :)
+</Note>
 
 ### Codex CLI
 

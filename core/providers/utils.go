@@ -72,7 +72,7 @@ func makeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *f
 			return latency, &schemas.BifrostError{
 				IsBifrostError: false,
 				Error: &schemas.ErrorField{
-					Message: schemas.ErrProviderRequest,
+					Message: schemas.ErrProviderDoRequest,
 					Error:   err,
 				},
 			}
@@ -206,6 +206,40 @@ func getPathFromContext(ctx context.Context, defaultPath string) string {
 	return defaultPath
 }
 
+type RequestBodyGetter interface {
+	GetRawRequestBody() []byte
+}
+
+// checkAndGetRawRequestBody checks if the raw request body should be used, and returns it if it exists.
+func checkAndGetRawRequestBody(ctx context.Context, request RequestBodyGetter) ([]byte, bool) {
+	if rawBody, ok := ctx.Value(schemas.BifrostContextKeyUseRawRequestBody).(bool); ok && rawBody {
+		return request.GetRawRequestBody(), true
+	}
+	return nil, false
+}
+
+type RequestBodyConverter func() (any, error)
+
+func checkContextAndGetRequestBody(ctx context.Context, request RequestBodyGetter, requestConverter RequestBodyConverter, providerType schemas.ModelProvider) ([]byte, *schemas.BifrostError) {
+	rawBody, ok := checkAndGetRawRequestBody(ctx, request)
+	if !ok {
+		convertedBody, err := requestConverter()
+		if err != nil {
+			return nil, newBifrostOperationError(schemas.ErrRequestBodyConversion, err, providerType)
+		}
+		if convertedBody == nil {
+			return nil, newBifrostOperationError("request body is not provided", nil, providerType)
+		}
+		jsonBody, err := sonic.Marshal(convertedBody)
+		if err != nil {
+			return nil, newBifrostOperationError(schemas.ErrProviderRequestMarshal, err, providerType)
+		}
+		return jsonBody, nil
+	} else {
+		return rawBody, nil
+	}
+}
+
 // setExtraHeadersHTTP sets additional headers from NetworkConfig to the standard HTTP request.
 // This allows users to configure custom headers for their provider requests.
 // Header keys are canonicalized using textproto.CanonicalMIMEHeaderKey to avoid duplicates.
@@ -295,7 +329,7 @@ func handleProviderResponse[T any](responseBody []byte, response *T, sendBackRaw
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: &schemas.ErrorField{
-				Message: schemas.ErrProviderDecodeStructured,
+				Message: schemas.ErrProviderResponseUnmarshal,
 				Error:   structuredErr,
 			},
 		}
@@ -306,7 +340,7 @@ func handleProviderResponse[T any](responseBody []byte, response *T, sendBackRaw
 			return nil, &schemas.BifrostError{
 				IsBifrostError: true,
 				Error: &schemas.ErrorField{
-					Message: schemas.ErrProviderDecodeRaw,
+					Message: schemas.ErrProviderRawResponseUnmarshal,
 					Error:   rawErr,
 				},
 			}
@@ -320,15 +354,15 @@ func handleProviderResponse[T any](responseBody []byte, response *T, sendBackRaw
 
 // newUnsupportedOperationError creates a standardized error for unsupported operations.
 // This helper reduces code duplication across providers that don't support certain operations.
-func newUnsupportedOperationError(operation string, providerName string) *schemas.BifrostError {
+func newUnsupportedOperationError(requestType schemas.RequestType, providerName schemas.ModelProvider) *schemas.BifrostError {
 	return &schemas.BifrostError{
 		IsBifrostError: false,
 		Error: &schemas.ErrorField{
-			Message: fmt.Sprintf("%s is not supported by %s provider", operation, providerName),
+			Message: fmt.Sprintf("%s is not supported by %s provider", requestType, providerName),
 		},
 		ExtraFields: schemas.BifrostErrorExtraFields{
-			Provider:    schemas.ModelProvider(providerName),
-			RequestType: schemas.RequestType(operation),
+			Provider:    providerName,
+			RequestType: requestType,
 		},
 	}
 }
@@ -348,7 +382,17 @@ func checkOperationAllowed(defaultProvider schemas.ModelProvider, config *schema
 	}
 	// Gated and not allowed
 	resolved := getProviderName(defaultProvider, config)
-	return newUnsupportedOperationError(string(operation), string(resolved))
+	return newUnsupportedOperationError(operation, resolved)
+}
+
+func checkAndDecodeBody(resp *fasthttp.Response) ([]byte, error) {
+	contentEncoding := strings.ToLower(strings.TrimSpace(string(resp.Header.Peek("Content-Encoding"))))
+	switch contentEncoding {
+	case "gzip":
+		return resp.BodyGunzip()
+	default:
+		return resp.Body(), nil
+	}
 }
 
 // newConfigurationError creates a standardized error for configuration errors.
@@ -397,6 +441,13 @@ func newProviderAPIError(message string, err error, statusCode int, providerType
 			Provider: providerType,
 		},
 	}
+}
+
+func shouldSendBackRawResponse(ctx context.Context, defaultSendBackRawResponse bool) bool {
+	if sendBackRawResponse, ok := ctx.Value(schemas.BifrostContextKeySendBackRawResponse).(bool); ok && sendBackRawResponse {
+		return sendBackRawResponse
+	}
+	return defaultSendBackRawResponse
 }
 
 func sendCreatedEventResponsesChunk(ctx context.Context, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream, logger schemas.Logger) {

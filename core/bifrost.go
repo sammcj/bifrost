@@ -327,10 +327,10 @@ func (bifrost *Bifrost) ListAllModels(ctx context.Context, request *schemas.Bifr
 			for {
 				// check for context cancellation
 				select {
-					case <-ctx.Done():
-						bifrost.logger.Warn(fmt.Sprintf("context cancelled for provider %s", providerKey))
-						return
-					default:
+				case <-ctx.Done():
+					bifrost.logger.Warn(fmt.Sprintf("context cancelled for provider %s", providerKey))
+					return
+				default:
 				}
 
 				iterations++
@@ -1963,7 +1963,7 @@ func executeRequestWithRetries[T any](
 		// Check if we should retry based on status code or error message
 		shouldRetry := false
 
-		if bifrostError.Error != nil && bifrostError.Error.Message == schemas.ErrProviderRequest {
+		if bifrostError.Error != nil && bifrostError.Error.Message == schemas.ErrProviderDoRequest {
 			shouldRetry = true
 			logger.Debug("detected request HTTP error, will retry: %s", bifrostError.Error.Message)
 		}
