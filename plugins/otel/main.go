@@ -132,7 +132,7 @@ func (p *OtelPlugin) GetName() string {
 }
 
 // TransportInterceptor is not used for this plugin
-func (p *OtelPlugin) TransportInterceptor(url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+func (p *OtelPlugin) TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	return headers, body, nil
 }
 
