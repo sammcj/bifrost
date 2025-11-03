@@ -94,7 +94,7 @@ func (h *SessionHandler) login(ctx *fasthttp.RequestCtx) {
 	}
 	compare, err := encrypt.CompareHash(authConfig.AdminPassword, payload.Password)
 	if err != nil {
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to compare password: %v", err))
+		SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
 		return
 	}
 	if !compare {
