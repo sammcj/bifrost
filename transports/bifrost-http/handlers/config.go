@@ -10,7 +10,6 @@ import (
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
-	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework"
 	"github.com/maximhq/bifrost/framework/configstore"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
@@ -30,17 +29,15 @@ type ConfigManager interface {
 // ConfigHandler manages runtime configuration updates for Bifrost.
 // It provides endpoints to update and retrieve settings persisted via the ConfigStore backed by sql database.
 type ConfigHandler struct {
-	logger        schemas.Logger
 	store         *lib.Config
 	configManager ConfigManager
 }
 
 // NewConfigHandler creates a new handler for configuration management.
 // It requires the Bifrost client, a logger, and the config store.
-func NewConfigHandler(configManager ConfigManager, logger schemas.Logger, store *lib.Config) *ConfigHandler {
+func NewConfigHandler(configManager ConfigManager, store *lib.Config) *ConfigHandler {
 	return &ConfigHandler{
 		configManager: configManager,
-		logger:        logger,
 		store:         store,
 	}
 }
@@ -55,7 +52,7 @@ func (h *ConfigHandler) RegisterRoutes(r *router.Router, middlewares ...lib.Bifr
 
 // getVersion handles GET /api/version - Get the current version
 func (h *ConfigHandler) getVersion(ctx *fasthttp.RequestCtx) {
-	SendJSON(ctx, version, h.logger)
+	SendJSON(ctx, version)
 }
 
 // getConfig handles GET /config - Get the current configuration
@@ -64,13 +61,13 @@ func (h *ConfigHandler) getConfig(ctx *fasthttp.RequestCtx) {
 
 	if query := string(ctx.QueryArgs().Peek("from_db")); query == "true" {
 		if h.store.ConfigStore == nil {
-			SendError(ctx, fasthttp.StatusServiceUnavailable, "config store not available", h.logger)
+			SendError(ctx, fasthttp.StatusServiceUnavailable, "config store not available")
 			return
 		}
 		cc, err := h.store.ConfigStore.GetClientConfig(ctx)
 		if err != nil {
 			SendError(ctx, fasthttp.StatusInternalServerError,
-				fmt.Sprintf("failed to fetch config from db: %v", err), h.logger)
+				fmt.Sprintf("failed to fetch config from db: %v", err))
 			return
 		}
 		if cc != nil {
@@ -79,7 +76,7 @@ func (h *ConfigHandler) getConfig(ctx *fasthttp.RequestCtx) {
 		// Fetching framework config
 		fc, err := h.store.ConfigStore.GetFrameworkConfig(ctx)
 		if err != nil {
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to fetch framework config from db: %v", err), h.logger)
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to fetch framework config from db: %v", err))
 			return
 		}
 		if fc != nil {
@@ -108,7 +105,7 @@ func (h *ConfigHandler) getConfig(ctx *fasthttp.RequestCtx) {
 	mapConfig["is_cache_connected"] = h.store.VectorStore != nil
 	mapConfig["is_logs_connected"] = h.store.LogsStore != nil
 
-	SendJSON(ctx, mapConfig, h.logger)
+	SendJSON(ctx, mapConfig)
 }
 
 // updateConfig updates the core configuration settings.
@@ -116,7 +113,7 @@ func (h *ConfigHandler) getConfig(ctx *fasthttp.RequestCtx) {
 // Note that settings like `prometheus_labels` cannot be changed at runtime.
 func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	if h.store.ConfigStore == nil {
-		SendError(ctx, fasthttp.StatusInternalServerError, "Config store not initialized", h.logger)
+		SendError(ctx, fasthttp.StatusInternalServerError, "Config store not initialized")
 		return
 	}
 
@@ -126,7 +123,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	}{}
 
 	if err := json.Unmarshal(ctx.PostBody(), &payload); err != nil {
-		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid request format: %v", err), h.logger)
+		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid request format: %v", err))
 		return
 	}
 
@@ -135,22 +132,22 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		// Checking the accessibility of the pricing URL
 		resp, err := http.Get(*payload.FrameworkConfig.PricingURL)
 		if err != nil {
-			h.logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err))
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err), h.logger)
+			logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err))
 			return
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			h.logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode))
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode), h.logger)
+			logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode))
 			return
 		}
 	}
 
 	// Checking the pricing sync interval
 	if payload.FrameworkConfig.PricingSyncInterval != nil && *payload.FrameworkConfig.PricingSyncInterval <= 0 {
-		h.logger.Warn("pricing sync interval must be greater than 0")
-		SendError(ctx, fasthttp.StatusBadRequest, "pricing sync interval must be greater than 0", h.logger)
+		logger.Warn("pricing sync interval must be greater than 0")
+		SendError(ctx, fasthttp.StatusBadRequest, "pricing sync interval must be greater than 0")
 		return
 	}
 
@@ -186,21 +183,21 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	h.store.ClientConfig = updatedConfig
 
 	if err := h.store.ConfigStore.UpdateClientConfig(ctx, &updatedConfig); err != nil {
-		h.logger.Warn(fmt.Sprintf("failed to save configuration: %v", err))
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to save configuration: %v", err), h.logger)
+		logger.Warn(fmt.Sprintf("failed to save configuration: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to save configuration: %v", err))
 		return
 	}
 	// Reloading client config from config store
 	if err := h.configManager.ReloadClientConfigFromConfigStore(); err != nil {
-		h.logger.Warn(fmt.Sprintf("failed to reload client config from config store: %v", err))
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to reload client config from config store: %v", err), h.logger)
+		logger.Warn(fmt.Sprintf("failed to reload client config from config store: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to reload client config from config store: %v", err))
 		return
 	}
 	// Fetching existing framework config
 	frameworkConfig, err := h.store.ConfigStore.GetFrameworkConfig(ctx)
 	if err != nil {
-		h.logger.Warn(fmt.Sprintf("failed to get framework config from store: %v", err))
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to get framework config from store: %v", err), h.logger)
+		logger.Warn(fmt.Sprintf("failed to get framework config from store: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to get framework config from store: %v", err))
 		return
 	}
 	// if framework config is nil, we will use the default pricing config
@@ -224,14 +221,14 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		// Checking the accessibility of the pricing URL
 		resp, err := http.Get(*payload.FrameworkConfig.PricingURL)
 		if err != nil {
-			h.logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err))
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err), h.logger)
+			logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", err))
 			return
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			h.logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode))
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode), h.logger)
+			logger.Warn(fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to check the accessibility of the pricing URL: %v", resp.StatusCode))
 			return
 		}
 		frameworkConfig.PricingURL = payload.FrameworkConfig.PricingURL
@@ -259,8 +256,8 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		}
 		// Saving framework config
 		if err := h.store.ConfigStore.UpdateFrameworkConfig(ctx, frameworkConfig); err != nil {
-			h.logger.Warn(fmt.Sprintf("failed to save framework configuration: %v", err))
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to save framework configuration: %v", err), h.logger)
+			logger.Warn(fmt.Sprintf("failed to save framework configuration: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to save framework configuration: %v", err))
 			return
 		}
 		// Reloading pricing manager
@@ -271,8 +268,8 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		// if err := h.configManager.ReloadPlugin(ctx, telemetry.PluginName, map[string]any{
 		// 	"custom_labels": updatedConfig.PrometheusLabels,
 		// }); err != nil {
-		// 	h.logger.Warn(fmt.Sprintf("failed to reload telemetry plugin: %v", err))
-		// 	SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to reload telemetry plugin: %v", err), h.logger)
+		// 	logger.Warn(fmt.Sprintf("failed to reload telemetry plugin: %v", err))
+		// 	SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to reload telemetry plugin: %v", err))
 		// 	return
 		// }
 	}
@@ -280,5 +277,5 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, map[string]any{
 		"status":  "success",
 		"message": "configuration updated successfully",
-	}, h.logger)
+	})
 }
