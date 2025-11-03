@@ -1,24 +1,60 @@
 ---
-title: "CLI Agents"
-description: "Use Bifrost with CLI agents like Claude Code, Codex CLI and Qwen Code by just changing the base URL and unlock advanced features."
+title: "Tools & CLI Agents"
+description: "Use Bifrost with tools like LibreChat, Claude Code, Codex CLI and Qwen Code by just changing the base URL and unlock advanced features."
 icon: "robot"
 ---
 
 ## Overview
 
-Bifrost provides **100% compatible endpoints** for OpenAI, Anthropic, and Gemini APIs, making it seamless to integrate with any CLI agent that uses these providers. By simply pointing your CLI agent's base URL to Bifrost, you unlock powerful features like:
+Bifrost provides **100% compatible endpoints** for OpenAI, Anthropic, and Gemini APIs, making it seamless to integrate with any agent that uses these providers. By simply pointing your agent's base URL to Bifrost, you unlock powerful features like:
 
 - **Universal Model Access**: Use **any provider/model** configured in Bifrost with any agent (e.g., use GPT-5 with Claude Code, or Claude Sonnet 4.5 with Codex CLI)
-- **MCP Tools Integration**: All Model Context Protocol tools configured in Bifrost become available to your CLI agents
+- **MCP Tools Integration**: All Model Context Protocol tools configured in Bifrost become available to your agents
 - **Built-in Observability**: Monitor all agent interactions in real-time through Bifrost's logging dashboard
 - **Load Balancing**: Automatically distribute requests across multiple providers and regions
-- **Advanced Features**: Governance, caching, failover, and more - all transparent to your CLI agent
+- **Advanced Features**: Governance, caching, failover, and more - all transparent to your agent
 
-## Example CLI Agents
+## Example Integrations
 
-### Claude Code
+### [LibreChat](https://github.com/danny-avila/LibreChat)
 
-[Claude Code](https://www.claude.com/product/claude-code) brings Sonnet 4.5 directly to your terminal with powerful coding capabilities.
+It is a modern, open-source chat client that supports multiple providers.
+
+**Setup:**
+
+1. **Install LibreChat:** There are multiple ways of local setup, please follow the [LibreChat documentation](https://www.librechat.ai/docs/local) for more details.
+
+2. **Add Bifrost as a custom provider**: Now that you have LibreChat installed, you can add Bifrost as a custom provider.
+
+   Add the following to your `librechat.yaml` file:
+   ```yaml
+   custom:
+    - name: "Bifrost"
+      apiKey: "dummy" # Add the authentication key if login is enabled, otherwise add a placeholder
+      baseURL: "http://host.docker.internal:8080/v1" # Or localhost:8080 if running locally, or {your-bifrost-container}:8080 if running in the same docker network
+      models:
+        default: ["openai/gpt-4o"] # Replace with the model you want to use
+        fetch: true
+      titleConvo: true
+      titleModel: "openai/gpt-4o" # Replace with the model you want to use for chat title generation
+      summarize: false # Set to true if you want to enable chat summary generation
+      summaryModel: "openai/gpt-4o" # Replace with the model you want to use for chat summary generation
+      forcePrompt: false # Set to true if you want to enable force prompt generation
+      modelDisplayLabel: "Bifrost" 
+      iconURL: https://getbifrost.ai/bifrost-logo.png
+   ```
+
+   <Note>
+   If you're running LibreChat in a docker container, LibreChat does not automatically use the `librechat.yaml` file, please check the Step 1 of the [LibreChat documentation](https://www.librechat.ai/docs/quick_start/custom_endpoints#step-1-create-or-edit-a-docker-override-file) for more details.
+   </Note>
+
+3. **Run LibreChat**
+
+   Now you can start using Bifrost as a provider in LibreChat, with all the features of Bifrost.
+
+### [Claude Code](https://www.claude.com/product/claude-code)
+
+It brings Sonnet 4.5 directly to your terminal with powerful coding capabilities.
 
 **Setup:**
 
@@ -44,9 +80,9 @@ Now all Claude Code traffic flows through Bifrost, giving you access to any prov
 This setup automatically detects if you're using Anthropic MAX account instead of a regular API key authentication :)
 </Note>
 
-### Codex CLI
+### [Codex CLI](https://developers.openai.com/codex/cli/)
 
-OpenAI's Codex CLI provides powerful code generation and completion capabilities.
+It provides powerful code generation and completion capabilities.
 
 **Setup:**
 
@@ -65,9 +101,9 @@ OpenAI's Codex CLI provides powerful code generation and completion capabilities
    codex
    ```
 
-### Qwen Code
+### [Qwen Code](https://github.com/QwenLM/qwen-code)
 
-[Qwen Code](https://github.com/QwenLM/qwen-code) is Alibaba's powerful coding assistant with advanced reasoning capabilities.
+It is Alibaba's powerful coding assistant with advanced reasoning capabilities.
 
 **Setup:**
 
@@ -88,21 +124,21 @@ OpenAI's Codex CLI provides powerful code generation and completion capabilities
 
 ## Configuration
 
-CLI agents work with your existing Bifrost configuration. Ensure you have:
+Agent integrations work with your existing Bifrost configuration. Ensure you have:
 
 - **Providers configured**: See [Provider Configuration](./provider-configuration) for setup details
 - **Optional: MCP tools**: See [MCP Integration](../../features/mcp) to enhance agent capabilities
 
-## Monitoring CLI Agent Traffic
+## Monitoring Agent Traffic
 
-All CLI agent interactions are automatically logged and can be monitored at `http://localhost:8080/logs`. You can filter by provider, model, or search through conversation content to track your agents' performance.
+All agent interactions are automatically logged and can be monitored at `http://localhost:8080/logs`. You can filter by provider, model, or search through conversation content to track your agents' performance.
 
-![CLI Agent Monitoring](../../media/ui-live-log-stream.gif)
+![Agent Monitoring](../../media/ui-live-log-stream.gif)
 For complete monitoring capabilities, see [Built-in Observability](../../features/observability/default).
 
 ## MCP Tools Integration
 
-Bifrost automatically sends all configured MCP tools to your CLI agents. This means your agents can access filesystem operations, database queries, web search, and more without any additional configuration.
+Bifrost automatically sends all configured MCP tools to your agents. This means your agents can access filesystem operations, database queries, web search, and more without any additional configuration.
 
 For setup and available tools, see [MCP Integration](../../features/mcp).
 

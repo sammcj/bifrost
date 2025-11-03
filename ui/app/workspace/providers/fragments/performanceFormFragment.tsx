@@ -134,7 +134,14 @@ export function PerformanceFormFragment({ provider }: PerformanceFormFragmentPro
 											</p>
 										</div>
 										<FormControl>
-											<Switch size="md" checked={field.value} onCheckedChange={field.onChange} />
+											<Switch
+												size="md"
+												checked={field.value}
+												onCheckedChange={(checked) => {
+													field.onChange(checked);
+													form.trigger("send_back_raw_response");
+												}}
+											/>
 										</FormControl>
 									</div>
 									<FormMessage />

@@ -199,6 +199,13 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) (*c
 			}
 			return true
 		}
+		// Send back raw response header
+		if keyStr == "x-bf-send-back-raw-response" {
+			if valueStr := string(value); valueStr == "true" {
+				bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeySendBackRawResponse, true)
+			}
+			return true
+		}
 		return true
 	})
 
