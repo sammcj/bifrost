@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/maximhq/bifrost/core v1.2.17
 	github.com/maximhq/bifrost/framework v1.1.20
-	github.com/maximhq/bifrost/plugins/mocker v1.3.14
+	github.com/maximhq/bifrost/plugins/mocker v1.3.20
 )
 
 require (
