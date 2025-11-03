@@ -451,7 +451,12 @@ func (provider *AzureProvider) Responses(ctx context.Context, key schemas.Key, r
 
 	response := &schemas.BifrostResponsesResponse{}
 
-	rawResponse, bifrostErr := providerUtils.HandleProviderResponse(resp.Body(), response, provider.sendBackRawResponse)
+	body, err := providerUtils.CheckAndDecodeBody(resp)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, provider.GetProviderKey())
+	}
+
+	rawResponse, bifrostErr := providerUtils.HandleProviderResponse(body, response, providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}

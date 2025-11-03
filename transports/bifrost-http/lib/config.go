@@ -793,7 +793,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					logger.Warn("failed to update auth config: %v", err)
 				}
 			}
-		}else if governanceConfig != nil && governanceConfig.AuthConfig == nil {
+		} else if governanceConfig != nil && governanceConfig.AuthConfig == nil {
 			// Adding this config
 			governanceConfig.AuthConfig = configData.AuthConfig
 		}
