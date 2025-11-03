@@ -50,21 +50,31 @@ import (
 //   - Keys are extracted and stored in the context using schemas.BifrostContextKey
 //   - This enables explicit key usage for requests via headers
 //
+// 6. Cancellable Context:
+//   - Creates a cancellable context that can be used to cancel upstream requests when clients disconnect
+//   - This is critical for streaming requests where write errors indicate client disconnects
+//   - Also useful for non-streaming requests to allow provider-level cancellation
 
 // Parameters:
 //   - ctx: The FastHTTP request context containing the original headers
+//   - allowDirectKeys: Whether to allow direct API key usage from headers
 //
 // Returns:
-//   - *context.Context: A new context.Context containing the propagated values
+//   - *context.Context: A new cancellable context.Context containing the propagated values
+//   - context.CancelFunc: Function to cancel the context (should be called when request completes)
 //
 // Example Usage:
 //
 //	fastCtx := &fasthttp.RequestCtx{...}
-//	bifrostCtx := ConvertToBifrostContext(fastCtx)
+//	bifrostCtx, cancel := ConvertToBifrostContext(fastCtx, true)
+//	defer cancel() // Ensure cleanup
 //	// bifrostCtx now contains any prometheus and maxim header values
 
-func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *context.Context {
-	bifrostCtx := context.Background()
+func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) (*context.Context, context.CancelFunc) {
+	// Create cancellable context for all requests
+	// This enables proper cleanup when clients disconnect or requests are cancelled
+	baseCtx := context.Background()
+	bifrostCtx, cancel := context.WithCancel(baseCtx)
 
 	// First, check if x-request-id header exists
 	requestID := string(ctx.Request.Header.Peek("x-request-id"))
@@ -240,5 +250,5 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) *co
 		bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey("x-litellm-fallback"), "true")
 	}
 
-	return &bifrostCtx
+	return &bifrostCtx, cancel
 }

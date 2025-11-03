@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/fasthttp/router"
-	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
 )
@@ -14,14 +13,12 @@ import (
 // HealthHandler manages HTTP requests for health checks.
 type HealthHandler struct {
 	config *lib.Config
-	logger schemas.Logger
 }
 
 // NewHealthHandler creates a new health handler instance.
-func NewHealthHandler(config *lib.Config, logger schemas.Logger) *HealthHandler {
+func NewHealthHandler(config *lib.Config) *HealthHandler {
 	return &HealthHandler{
 		config: config,
-		logger: logger,
 	}
 }
 
@@ -80,8 +77,8 @@ func (h *HealthHandler) getHealth(ctx *fasthttp.RequestCtx) {
 	wg.Wait()
 
 	if len(errors) > 0 {
-		SendError(ctx, fasthttp.StatusServiceUnavailable, errors[0], h.logger)
+		SendError(ctx, fasthttp.StatusServiceUnavailable, errors[0])
 		return
 	}
-	SendJSON(ctx, map[string]any{"status": "ok"}, h.logger)
+	SendJSON(ctx, map[string]any{"status": "ok"})
 }

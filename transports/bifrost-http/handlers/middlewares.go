@@ -103,7 +103,7 @@ func TransportInterceptorMiddleware(config *lib.Config) lib.BifrostHTTPMiddlewar
 			// Marshal the body back to JSON
 			updatedBody, err := json.Marshal(requestBody)
 			if err != nil {
-				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("TransportInterceptor: Failed to marshal request body: %v", err), logger)
+				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("TransportInterceptor: Failed to marshal request body: %v", err))
 				return
 			}
 			ctx.Request.SetBody(updatedBody)

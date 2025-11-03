@@ -315,7 +315,7 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		}
 
 		// Execute the request through Bifrost
-		bifrostCtx := lib.ConvertToBifrostContext(ctx, g.handlerStore.ShouldAllowDirectKeys())
+		bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, g.handlerStore.ShouldAllowDirectKeys())
 
 		// Set send back raw response flag for all integration requests
 		*bifrostCtx = context.WithValue(*bifrostCtx, schemas.BifrostContextKeySendBackRawResponse, true)
@@ -364,8 +364,9 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		}
 
 		if isStreaming {
-			g.handleStreamingRequest(ctx, config, bifrostReq, bifrostCtx)
+			g.handleStreamingRequest(ctx, config, bifrostReq, bifrostCtx, cancel)
 		} else {
+			defer cancel() // Ensure cleanup on function exit
 			g.handleNonStreamingRequest(ctx, config, req, bifrostReq, bifrostCtx)
 		}
 	}
@@ -373,12 +374,19 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 
 // handleNonStreamingRequest handles regular (non-streaming) requests
 func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, config RouteConfig, req interface{}, bifrostReq *schemas.BifrostRequest, bifrostCtx *context.Context) {
+	// Use the cancellable context from ConvertToBifrostContext
+	// While we can't detect client disconnects until we try to write, having a cancellable context
+	// allows providers that check ctx.Done() to cancel early if needed. This is less critical than
+	// streaming requests (where we actively detect write errors), but still provides a mechanism
+	// for providers to respect cancellation.
+	requestCtx := *bifrostCtx
+
 	var response interface{}
 	var err error
 
 	switch {
 	case bifrostReq.ListModelsRequest != nil:
-		listModelsResponse, bifrostErr := g.client.ListModelsRequest(*bifrostCtx, bifrostReq.ListModelsRequest)
+		listModelsResponse, bifrostErr := g.client.ListModelsRequest(requestCtx, bifrostReq.ListModelsRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, config.ErrorConverter, bifrostErr)
 			return
@@ -398,7 +406,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 
 		response, err = config.ListModelsResponseConverter(listModelsResponse)
 	case bifrostReq.TextCompletionRequest != nil:
-		textCompletionResponse, bifrostErr := g.client.TextCompletionRequest(*bifrostCtx, bifrostReq.TextCompletionRequest)
+		textCompletionResponse, bifrostErr := g.client.TextCompletionRequest(requestCtx, bifrostReq.TextCompletionRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, config.ErrorConverter, bifrostErr)
 			return
@@ -421,7 +429,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 		// Convert Bifrost response to integration-specific format and send
 		response, err = config.TextResponseConverter(textCompletionResponse)
 	case bifrostReq.ChatRequest != nil:
-		chatResponse, bifrostErr := g.client.ChatCompletionRequest(*bifrostCtx, bifrostReq.ChatRequest)
+		chatResponse, bifrostErr := g.client.ChatCompletionRequest(requestCtx, bifrostReq.ChatRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, config.ErrorConverter, bifrostErr)
 			return
@@ -444,7 +452,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 		// Convert Bifrost response to integration-specific format and send
 		response, err = config.ChatResponseConverter(chatResponse)
 	case bifrostReq.ResponsesRequest != nil:
-		responsesResponse, bifrostErr := g.client.ResponsesRequest(*bifrostCtx, bifrostReq.ResponsesRequest)
+		responsesResponse, bifrostErr := g.client.ResponsesRequest(requestCtx, bifrostReq.ResponsesRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, config.ErrorConverter, bifrostErr)
 			return
@@ -467,7 +475,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 		// Convert Bifrost response to integration-specific format and send
 		response, err = config.ResponsesResponseConverter(responsesResponse)
 	case bifrostReq.EmbeddingRequest != nil:
-		embeddingResponse, bifrostErr := g.client.EmbeddingRequest(*bifrostCtx, bifrostReq.EmbeddingRequest)
+		embeddingResponse, bifrostErr := g.client.EmbeddingRequest(requestCtx, bifrostReq.EmbeddingRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, config.ErrorConverter, bifrostErr)
 			return
@@ -490,7 +498,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 		// Convert Bifrost response to integration-specific format and send
 		response, err = config.EmbeddingResponseConverter(embeddingResponse)
 	case bifrostReq.SpeechRequest != nil:
-		speechResponse, bifrostErr := g.client.SpeechRequest(*bifrostCtx, bifrostReq.SpeechRequest)
+		speechResponse, bifrostErr := g.client.SpeechRequest(requestCtx, bifrostReq.SpeechRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, config.ErrorConverter, bifrostErr)
 			return
@@ -502,7 +510,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 		ctx.Response.SetBody(speechResponse.Audio)
 		return
 	case bifrostReq.TranscriptionRequest != nil:
-		transcriptionResponse, bifrostErr := g.client.TranscriptionRequest(*bifrostCtx, bifrostReq.TranscriptionRequest)
+		transcriptionResponse, bifrostErr := g.client.TranscriptionRequest(requestCtx, bifrostReq.TranscriptionRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, config.ErrorConverter, bifrostErr)
 			return
@@ -538,44 +546,61 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 }
 
 // handleStreamingRequest handles streaming requests using Server-Sent Events (SSE)
-func (g *GenericRouter) handleStreamingRequest(ctx *fasthttp.RequestCtx, config RouteConfig, bifrostReq *schemas.BifrostRequest, bifrostCtx *context.Context) {
+func (g *GenericRouter) handleStreamingRequest(ctx *fasthttp.RequestCtx, config RouteConfig, bifrostReq *schemas.BifrostRequest, bifrostCtx *context.Context, cancel context.CancelFunc) {
 	// Set common SSE headers
 	ctx.SetContentType("text/event-stream")
 	ctx.Response.Header.Set("Cache-Control", "no-cache")
 	ctx.Response.Header.Set("Connection", "keep-alive")
 	ctx.Response.Header.Set("Access-Control-Allow-Origin", "*")
 
+	// Use the cancellable context from ConvertToBifrostContext
+	// ctx.Done() never fires here in practice: fasthttp.RequestCtx.Done only closes when the whole server shuts down, not when an individual connection drops.
+	// As a result we'll leave the provider stream running until it naturally completes, even if the client went away (write error, network drop, etc.).
+	// That keeps goroutines and upstream tokens alive long after the SSE writer has exited.
+	//
+	// We now get a cancellable context from ConvertToBifrostContext so we can cancel the upstream stream immediately when the client disconnects.
+	streamCtx := *bifrostCtx
+
 	var stream chan *schemas.BifrostStream
 	var bifrostErr *schemas.BifrostError
 
 	// Handle different request types
 	if bifrostReq.TextCompletionRequest != nil {
-		stream, bifrostErr = g.client.TextCompletionStreamRequest(*bifrostCtx, bifrostReq.TextCompletionRequest)
+		stream, bifrostErr = g.client.TextCompletionStreamRequest(streamCtx, bifrostReq.TextCompletionRequest)
 	} else if bifrostReq.ChatRequest != nil {
-		stream, bifrostErr = g.client.ChatCompletionStreamRequest(*bifrostCtx, bifrostReq.ChatRequest)
+		stream, bifrostErr = g.client.ChatCompletionStreamRequest(streamCtx, bifrostReq.ChatRequest)
 	} else if bifrostReq.ResponsesRequest != nil {
-		stream, bifrostErr = g.client.ResponsesStreamRequest(*bifrostCtx, bifrostReq.ResponsesRequest)
+		stream, bifrostErr = g.client.ResponsesStreamRequest(streamCtx, bifrostReq.ResponsesRequest)
 	} else if bifrostReq.SpeechRequest != nil {
-		stream, bifrostErr = g.client.SpeechStreamRequest(*bifrostCtx, bifrostReq.SpeechRequest)
+		stream, bifrostErr = g.client.SpeechStreamRequest(streamCtx, bifrostReq.SpeechRequest)
 	} else if bifrostReq.TranscriptionRequest != nil {
-		stream, bifrostErr = g.client.TranscriptionStreamRequest(*bifrostCtx, bifrostReq.TranscriptionRequest)
+		stream, bifrostErr = g.client.TranscriptionStreamRequest(streamCtx, bifrostReq.TranscriptionRequest)
 	}
 
 	// Get the streaming channel from Bifrost
 	if bifrostErr != nil {
-		// Send error in SSE format
+		// Send error in SSE format and cancel stream context since we're not proceeding
+		cancel()
 		g.sendStreamError(ctx, config, bifrostErr)
 		return
 	}
 
 	// Check if streaming is configured for this route
 	if config.StreamConfig == nil {
+		// Cancel stream context since we're not proceeding, and close the stream channel to prevent goroutine leaks
+		cancel()
+		// Drain the stream channel to prevent goroutine leaks
+		go func() {
+			for range stream {
+			}
+		}()
 		g.sendStreamError(ctx, config, newBifrostError(nil, "streaming is not supported for this integration"))
 		return
 	}
 
 	// Handle streaming using the centralized approach
-	g.handleStreaming(ctx, config, stream)
+	// Pass cancel function so it can be called when the writer exits (errors, completion, etc.)
+	g.handleStreaming(ctx, config, stream, cancel)
 }
 
 // handleStreaming processes a stream of BifrostResponse objects and sends them as Server-Sent Events (SSE).
@@ -622,7 +647,13 @@ func (g *GenericRouter) handleStreamingRequest(ctx *fasthttp.RequestCtx, config 
 // - Include data: lines with JSON content
 // - End with \n\n for proper SSE formatting
 // - Follow the provider's specific SSE event specification
-func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, config RouteConfig, streamChan chan *schemas.BifrostStream) {
+//
+// CONTEXT CANCELLATION:
+//
+// The cancel function is called ONLY when client disconnects are detected via write errors.
+// Bifrost handles cleanup internally for normal completion and errors, so we only cancel
+// upstream streams when write errors indicate the client has disconnected.
+func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, config RouteConfig, streamChan chan *schemas.BifrostStream, cancel context.CancelFunc) {
 	// Use streaming response writer
 	ctx.Response.SetBodyStreamWriter(func(w *bufio.Writer) {
 		defer w.Flush()
@@ -640,12 +671,9 @@ func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, config RouteCo
 				includeEventType = true
 			}
 
-			// Check for context cancellation
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
+			// Note: We no longer check ctx.Done() here because fasthttp.RequestCtx.Done()
+			// only closes when the whole server shuts down, not when an individual client disconnects.
+			// Client disconnects are detected via write errors, which trigger the defer cancel() above.
 
 			// Handle errors
 			if chunk.BifrostError != nil {
@@ -674,6 +702,7 @@ func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, config RouteCo
 					// This is used by providers like Anthropic that need custom event types
 					// Example: "event: error\ndata: {...}\n\n"
 					if _, err := fmt.Fprint(w, sseErrorString); err != nil {
+						cancel() // Client disconnected (write error), cancel upstream stream
 						return
 					}
 				} else {
@@ -690,21 +719,24 @@ func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, config RouteCo
 							},
 						}
 						if errorJSON, err = sonic.Marshal(basicError); err != nil {
-							return // Can't even send basic error
+							cancel() // Can't send error (client likely disconnected), cancel upstream stream
+							return
 						}
 					}
 
 					// Send error as SSE data
 					if _, err := fmt.Fprintf(w, "data: %s\n\n", errorJSON); err != nil {
+						cancel() // Client disconnected (write error), cancel upstream stream
 						return
 					}
 				}
 
 				// Flush and return on error
 				if err := w.Flush(); err != nil {
+					cancel() // Client disconnected (write error), cancel upstream stream
 					return
 				}
-				return // End stream on error
+				return // End stream on error, Bifrost handles cleanup internally
 			} else {
 				// Handle successful responses
 				// Convert response to integration-specific streaming format
@@ -739,7 +771,8 @@ func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, config RouteCo
 					// This is used by providers like Anthropic that need custom event types
 					// Example: "event: content_block_delta\ndata: {...}\n\n"
 					if _, err := fmt.Fprint(w, sseString); err != nil {
-						return // Network error, stop streaming
+						cancel() // Client disconnected (write error), cancel upstream stream
+						return
 					}
 				} else {
 					// Handle different streaming formats based on request type
@@ -753,7 +786,8 @@ func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, config RouteCo
 						// Send event line if available
 						if eventType != "" {
 							if _, err := fmt.Fprintf(w, "event: %s\n", eventType); err != nil {
-								return // Network error, stop streaming
+								cancel() // Client disconnected (write error), cancel upstream stream
+								return
 							}
 						}
 
@@ -766,7 +800,8 @@ func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, config RouteCo
 						}
 
 						if _, err := fmt.Fprintf(w, "data: %s\n\n", responseJSON); err != nil {
-							return // Network error, stop streaming
+							cancel() // Client disconnected (write error), cancel upstream stream
+							return
 						}
 					} else {
 						// STANDARD SSE FORMAT: The converter returned an object
@@ -781,14 +816,16 @@ func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, config RouteCo
 
 						// Send as SSE data
 						if _, err := fmt.Fprintf(w, "data: %s\n\n", responseJSON); err != nil {
-							return // Network error, stop streaming
+							cancel() // Client disconnected (write error), cancel upstream stream
+							return
 						}
 					}
 				}
 
 				// Flush immediately to send the chunk
 				if err := w.Flush(); err != nil {
-					return // Network error, stop streaming
+					cancel() // Client disconnected (write error), cancel upstream stream
+					return
 				}
 			}
 		}
@@ -797,8 +834,11 @@ func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, config RouteCo
 		if !includeEventType && config.Type != RouteConfigTypeGenAI {
 			if _, err := fmt.Fprint(w, "data: [DONE]\n\n"); err != nil {
 				log.Printf("Failed to write SSE done marker: %v", err)
+				cancel() // Client disconnected (write error), cancel upstream stream
+				return
 			}
 		}
 		// Note: OpenAI responses API doesn't use [DONE] marker, it ends when the stream closes
+		// Stream completed normally, Bifrost handles cleanup internally
 	})
 }
