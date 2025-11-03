@@ -32,8 +32,8 @@ type OpenAIRouter struct {
 	*GenericRouter
 }
 
-func AzureEndpointPreHook(handlerStore lib.HandlerStore) func(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}, rawBody []byte) error {
-	return func(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}, rawBody []byte) error {
+func AzureEndpointPreHook(handlerStore lib.HandlerStore) func(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}) error {
+	return func(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}) error {
 		azureKey := ctx.Request.Header.Peek("authorization")
 		deploymentEndpoint := ctx.Request.Header.Peek("x-bf-azure-endpoint")
 		deploymentID := ctx.UserValue("deployment-id")
@@ -119,6 +119,11 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 				return nil, errors.New("invalid request type")
 			},
 			TextResponseConverter: func(resp *schemas.BifrostTextCompletionResponse) (interface{}, error) {
+				if resp.ExtraFields.Provider == schemas.OpenAI {
+					if resp.ExtraFields.RawResponse != nil {
+						return resp.ExtraFields.RawResponse, nil
+					}
+				}
 				return resp, nil
 			},
 			ErrorConverter: func(err *schemas.BifrostError) interface{} {
@@ -158,6 +163,11 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 				return nil, errors.New("invalid request type")
 			},
 			ChatResponseConverter: func(resp *schemas.BifrostChatResponse) (interface{}, error) {
+				if resp.ExtraFields.Provider == schemas.OpenAI {
+					if resp.ExtraFields.RawResponse != nil {
+						return resp.ExtraFields.RawResponse, nil
+					}
+				}
 				return resp, nil
 			},
 			ErrorConverter: func(err *schemas.BifrostError) interface{} {
@@ -198,6 +208,11 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 				return nil, errors.New("invalid request type")
 			},
 			ResponsesResponseConverter: func(resp *schemas.BifrostResponsesResponse) (interface{}, error) {
+				if resp.ExtraFields.Provider == schemas.OpenAI {
+					if resp.ExtraFields.RawResponse != nil {
+						return resp.ExtraFields.RawResponse, nil
+					}
+				}
 				return resp, nil
 			},
 			ErrorConverter: func(err *schemas.BifrostError) interface{} {
@@ -237,6 +252,11 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 				return nil, errors.New("invalid embedding request type")
 			},
 			EmbeddingResponseConverter: func(resp *schemas.BifrostEmbeddingResponse) (interface{}, error) {
+				if resp.ExtraFields.Provider == schemas.OpenAI {
+					if resp.ExtraFields.RawResponse != nil {
+						return resp.ExtraFields.RawResponse, nil
+					}
+				}
 				return resp, nil
 			},
 			ErrorConverter: func(err *schemas.BifrostError) interface{} {
@@ -305,6 +325,11 @@ func CreateOpenAIRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) 
 				return nil, errors.New("invalid transcription request type")
 			},
 			TranscriptionResponseConverter: func(resp *schemas.BifrostTranscriptionResponse) (interface{}, error) {
+				if resp.ExtraFields.Provider == schemas.OpenAI {
+					if resp.ExtraFields.RawResponse != nil {
+						return resp.ExtraFields.RawResponse, nil
+					}
+				}
 				return resp, nil
 			},
 			ErrorConverter: func(err *schemas.BifrostError) interface{} {
@@ -367,10 +392,10 @@ func CreateOpenAIListModelsRouteConfigs(pathPrefix string, handlerStore lib.Hand
 func setQueryParamsAndAzureEndpointPreHook(handlerStore lib.HandlerStore) PreRequestCallback {
 	azureHook := AzureEndpointPreHook(handlerStore)
 
-	return func(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}, rawBody []byte) error {
+	return func(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}) error {
 		// First run the Azure endpoint pre-hook if needed
 		if azureHook != nil {
-			if err := azureHook(ctx, bifrostCtx, req, rawBody); err != nil {
+			if err := azureHook(ctx, bifrostCtx, req); err != nil {
 				return err
 			}
 		}

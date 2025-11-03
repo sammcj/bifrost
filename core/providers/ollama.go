@@ -73,7 +73,17 @@ func (provider *OllamaProvider) ListModels(ctx context.Context, keys []schemas.K
 	if provider.networkConfig.BaseURL == "" {
 		return nil, newConfigurationError("base_url is not set", provider.GetProviderKey())
 	}
-	return handleOpenAIListModelsRequest(ctx, provider.client, request, provider.networkConfig.BaseURL+"/v1/models", keys, provider.networkConfig.ExtraHeaders, provider.GetProviderKey(), provider.sendBackRawResponse, provider.logger)
+	return handleOpenAIListModelsRequest(
+		ctx,
+		provider.client,
+		request,
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/models"),
+		keys,
+		provider.networkConfig.ExtraHeaders,
+		provider.GetProviderKey(),
+		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+		provider.logger,
+	)
 }
 
 // TextCompletion performs a text completion request to the Ollama API.
@@ -81,12 +91,12 @@ func (provider *OllamaProvider) TextCompletion(ctx context.Context, key schemas.
 	return handleOpenAITextCompletionRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+"/v1/completions",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/completions"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
 		provider.GetProviderKey(),
-		provider.sendBackRawResponse,
+		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.logger,
 	)
 }
@@ -98,11 +108,11 @@ func (provider *OllamaProvider) TextCompletionStream(ctx context.Context, postHo
 	return handleOpenAITextCompletionStreaming(
 		ctx,
 		provider.streamClient,
-		provider.networkConfig.BaseURL+"/v1/completions",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/completions"),
 		request,
 		nil,
 		provider.networkConfig.ExtraHeaders,
-		provider.sendBackRawResponse,
+		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.GetProviderKey(),
 		postHookRunner,
 		provider.logger,
@@ -114,11 +124,11 @@ func (provider *OllamaProvider) ChatCompletion(ctx context.Context, key schemas.
 	return handleOpenAIChatCompletionRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+"/v1/chat/completions",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
-		provider.sendBackRawResponse,
+		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.GetProviderKey(),
 		provider.logger,
 	)
@@ -133,11 +143,11 @@ func (provider *OllamaProvider) ChatCompletionStream(ctx context.Context, postHo
 	return handleOpenAIChatCompletionStreaming(
 		ctx,
 		provider.streamClient,
-		provider.networkConfig.BaseURL+"/v1/chat/completions",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
 		request,
 		nil,
 		provider.networkConfig.ExtraHeaders,
-		provider.sendBackRawResponse,
+		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		schemas.Ollama,
 		postHookRunner,
 		provider.logger,
@@ -174,32 +184,32 @@ func (provider *OllamaProvider) Embedding(ctx context.Context, key schemas.Key, 
 	return handleOpenAIEmbeddingRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+"/v1/embeddings",
+		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/embeddings"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
 		provider.GetProviderKey(),
-		provider.sendBackRawResponse,
+		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.logger,
 	)
 }
 
 // Speech is not supported by the Ollama provider.
 func (provider *OllamaProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError("speech", "ollama")
+	return nil, newUnsupportedOperationError(schemas.SpeechRequest, provider.GetProviderKey())
 }
 
 // SpeechStream is not supported by the Ollama provider.
 func (provider *OllamaProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError("speech stream", "ollama")
+	return nil, newUnsupportedOperationError(schemas.SpeechStreamRequest, provider.GetProviderKey())
 }
 
 // Transcription is not supported by the Ollama provider.
 func (provider *OllamaProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError("transcription", "ollama")
+	return nil, newUnsupportedOperationError(schemas.TranscriptionRequest, provider.GetProviderKey())
 }
 
 // TranscriptionStream is not supported by the Ollama provider.
 func (provider *OllamaProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError("transcription stream", "ollama")
+	return nil, newUnsupportedOperationError(schemas.TranscriptionStreamRequest, provider.GetProviderKey())
 }

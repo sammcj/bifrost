@@ -8,11 +8,16 @@ import (
 
 // BifrostTextCompletionRequest is the request struct for text completion requests
 type BifrostTextCompletionRequest struct {
-	Provider  ModelProvider             `json:"provider"`
-	Model     string                    `json:"model"`
-	Input     *TextCompletionInput      `json:"input,omitempty"`
-	Params    *TextCompletionParameters `json:"params,omitempty"`
-	Fallbacks []Fallback                `json:"fallbacks,omitempty"`
+	Provider       ModelProvider             `json:"provider"`
+	Model          string                    `json:"model"`
+	Input          *TextCompletionInput      `json:"input,omitempty"`
+	Params         *TextCompletionParameters `json:"params,omitempty"`
+	Fallbacks      []Fallback                `json:"fallbacks,omitempty"`
+	RawRequestBody []byte                    `json:"-"` // set bifrost-use-raw-request-body to true in ctx to use the raw request body. Bifrost will directly send this to the downstream provider.
+}
+
+func (r *BifrostTextCompletionRequest) GetRawRequestBody() []byte {
+	return r.RawRequestBody
 }
 
 // ToBifrostChatRequest converts a Bifrost text completion request to a Bifrost chat completion request

@@ -1,4 +1,4 @@
-	// Package schemas defines the core schemas and types used by the Bifrost system.
+// Package schemas defines the core schemas and types used by the Bifrost system.
 package schemas
 
 import (
@@ -19,14 +19,16 @@ const (
 
 // Pre-defined errors for provider operations
 const (
-	ErrProviderRequestTimedOut   = "request timed out (default is 30 seconds). You can increase it by setting the default_request_timeout_in_seconds in the network_config or in UI - Providers > Provider Name > Network Config."
-	ErrRequestCancelled          = "request cancelled by caller"
-	ErrProviderRequest           = "failed to make HTTP request to provider API"
-	ErrProviderResponseUnmarshal = "failed to unmarshal response from provider API"
-	ErrProviderJSONMarshaling    = "failed to marshal request body to JSON"
-	ErrProviderDecodeStructured  = "failed to decode provider's structured response"
-	ErrProviderDecodeRaw         = "failed to decode provider's raw response"
-	ErrProviderDecompress        = "failed to decompress provider's response"
+	ErrProviderRequestTimedOut      = "request timed out (default is 30 seconds). You can increase it by setting the default_request_timeout_in_seconds in the network_config or in UI - Providers > Provider Name > Network Config."
+	ErrRequestCancelled             = "request cancelled by caller"
+	ErrRequestBodyConversion        = "failed to convert bifrost request to the expected provider request body"
+	ErrProviderRequestMarshal       = "failed to marshal request body to JSON"
+	ErrProviderCreateRequest        = "failed to create HTTP request to provider API"
+	ErrProviderDoRequest            = "failed to execute HTTP request to provider API"
+	ErrProviderResponseDecode       = "failed to decode response body from provider API"
+	ErrProviderResponseUnmarshal    = "failed to unmarshal response from provider API"
+	ErrProviderRawResponseUnmarshal = "failed to unmarshal raw response from provider API"
+	ErrProviderResponseDecompress   = "failed to decompress provider's response"
 )
 
 // NetworkConfig represents the network configuration for provider connections.
