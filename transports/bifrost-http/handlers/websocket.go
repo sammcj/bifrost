@@ -11,7 +11,6 @@ import (
 
 	"github.com/fasthttp/router"
 	"github.com/fasthttp/websocket"
-	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/plugins/logging"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
@@ -28,7 +27,6 @@ type WebSocketClient struct {
 type WebSocketHandler struct {
 	ctx            context.Context
 	logManager     logging.LogManager
-	logger         schemas.Logger
 	allowedOrigins []string
 	clients        map[*websocket.Conn]*WebSocketClient
 	mu             sync.RWMutex
@@ -37,11 +35,10 @@ type WebSocketHandler struct {
 }
 
 // NewWebSocketHandler creates a new WebSocket handler instance
-func NewWebSocketHandler(ctx context.Context, logManager logging.LogManager, logger schemas.Logger, allowedOrigins []string) *WebSocketHandler {
+func NewWebSocketHandler(ctx context.Context, logManager logging.LogManager, allowedOrigins []string) *WebSocketHandler {
 	return &WebSocketHandler{
 		ctx:            ctx,
 		logManager:     logManager,
-		logger:         logger,
 		allowedOrigins: allowedOrigins,
 		clients:        make(map[*websocket.Conn]*WebSocketClient),
 		stopChan:       make(chan struct{}),
@@ -129,7 +126,7 @@ func (h *WebSocketHandler) connectStream(ctx *fasthttp.RequestCtx) {
 					websocket.CloseGoingAway,
 					websocket.CloseAbnormalClosure,
 					websocket.CloseNoStatusReceived) {
-					h.logger.Error("websocket read error: %v", err)
+					logger.Error("websocket read error: %v", err)
 				}
 				break
 			}
@@ -137,7 +134,7 @@ func (h *WebSocketHandler) connectStream(ctx *fasthttp.RequestCtx) {
 	})
 
 	if err != nil {
-		h.logger.Error("websocket upgrade error: %v", err)
+		logger.Error("websocket upgrade error: %v", err)
 		return
 	}
 }
@@ -170,7 +167,7 @@ func (h *WebSocketHandler) BroadcastLogUpdate(logEntry *logstore.Log) {
 	// Add panic recovery to prevent server crashes
 	defer func() {
 		if r := recover(); r != nil {
-			h.logger.Error("panic in BroadcastLogUpdate: %v", r)
+			logger.Error("panic in BroadcastLogUpdate: %v", r)
 		}
 	}()
 
@@ -192,7 +189,7 @@ func (h *WebSocketHandler) BroadcastLogUpdate(logEntry *logstore.Log) {
 
 	data, err := json.Marshal(message)
 	if err != nil {
-		h.logger.Error("failed to marshal log entry: %v", err)
+		logger.Error("failed to marshal log entry: %v", err)
 		return
 	}
 
@@ -212,7 +209,7 @@ func (h *WebSocketHandler) BroadcastMarshaledMessage(data []byte) {
 	// Send message to each client safely
 	for _, client := range clients {
 		if err := h.sendMessageSafely(client, websocket.TextMessage, data); err != nil {
-			h.logger.Error("failed to send message to client: %v", err)
+			logger.Error("failed to send message to client: %v", err)
 		}
 	}
 }
@@ -229,7 +226,7 @@ func (h *WebSocketHandler) StartHeartbeat() {
 		for {
 			select {
 			case <-h.ctx.Done():
-				h.logger.Info("got context cancel(), stopping webserver")
+				logger.Info("got context cancel(), stopping webserver")
 				return
 			case <-ticker.C:
 				// Get a snapshot of clients to avoid holding the lock during writes
@@ -243,7 +240,7 @@ func (h *WebSocketHandler) StartHeartbeat() {
 				// Send heartbeat to each client safely
 				for _, client := range clients {
 					if err := h.sendMessageSafely(client, websocket.PingMessage, nil); err != nil {
-						h.logger.Error("failed to send heartbeat: %v", err)
+						logger.Error("failed to send heartbeat: %v", err)
 					}
 				}
 			case <-h.stopChan:

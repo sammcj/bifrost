@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/fasthttp/router"
-	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/plugins/logging"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
@@ -19,14 +18,12 @@ import (
 // LoggingHandler manages HTTP requests for logging operations
 type LoggingHandler struct {
 	logManager logging.LogManager
-	logger     schemas.Logger
 }
 
 // NewLoggingHandler creates a new logging handler instance
-func NewLoggingHandler(logManager logging.LogManager, logger schemas.Logger) *LoggingHandler {
+func NewLoggingHandler(logManager logging.LogManager) *LoggingHandler {
 	return &LoggingHandler{
 		logManager: logManager,
-		logger:     logger,
 	}
 }
 
@@ -106,11 +103,11 @@ func (h *LoggingHandler) getLogs(ctx *fasthttp.RequestCtx) {
 	if limit := string(ctx.QueryArgs().Peek("limit")); limit != "" {
 		if i, err := strconv.Atoi(limit); err == nil {
 			if i <= 0 {
-				SendError(ctx, fasthttp.StatusBadRequest, "limit must be greater than 0", h.logger)
+				SendError(ctx, fasthttp.StatusBadRequest, "limit must be greater than 0")
 				return
 			}
 			if i > 1000 {
-				SendError(ctx, fasthttp.StatusBadRequest, "limit cannot exceed 1000", h.logger)
+				SendError(ctx, fasthttp.StatusBadRequest, "limit cannot exceed 1000")
 				return
 			}
 			pagination.Limit = i
@@ -121,7 +118,7 @@ func (h *LoggingHandler) getLogs(ctx *fasthttp.RequestCtx) {
 	if offset := string(ctx.QueryArgs().Peek("offset")); offset != "" {
 		if i, err := strconv.Atoi(offset); err == nil {
 			if i < 0 {
-				SendError(ctx, fasthttp.StatusBadRequest, "offset cannot be negative", h.logger)
+				SendError(ctx, fasthttp.StatusBadRequest, "offset cannot be negative")
 				return
 			}
 			pagination.Offset = i
@@ -145,23 +142,23 @@ func (h *LoggingHandler) getLogs(ctx *fasthttp.RequestCtx) {
 
 	result, err := h.logManager.Search(ctx, filters, pagination)
 	if err != nil {
-		h.logger.Error("failed to search logs: %v", err)
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Search failed: %v", err), h.logger)
+		logger.Error("failed to search logs: %v", err)
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Search failed: %v", err))
 		return
 	}
-	SendJSON(ctx, result, h.logger)
+	SendJSON(ctx, result)
 }
 
 // getDroppedRequests handles GET /api/logs/dropped - Get the number of dropped requests
 func (h *LoggingHandler) getDroppedRequests(ctx *fasthttp.RequestCtx) {
 	droppedRequests := h.logManager.GetDroppedRequests(ctx)
-	SendJSON(ctx, map[string]int64{"dropped_requests": droppedRequests}, h.logger)
+	SendJSON(ctx, map[string]int64{"dropped_requests": droppedRequests})
 }
 
 // getAvailableModels handles GET /api/logs/models - Get all unique models from logs
 func (h *LoggingHandler) getAvailableModels(ctx *fasthttp.RequestCtx) {
 	models := h.logManager.GetAvailableModels(ctx)
-	SendJSON(ctx, map[string]interface{}{"models": models}, h.logger)
+	SendJSON(ctx, map[string]interface{}{"models": models})
 }
 
 // Helper functions
