@@ -103,7 +103,7 @@ const (
 	BifrostContextKeyFallbackRequestID   BifrostContextKey = "fallback-request-id"            // string
 	BifrostContextKeyDirectKey           BifrostContextKey = "bifrost-direct-key"             // Key struct
 	BifrostContextKeySelectedKey         BifrostContextKey = "bifrost-key-selected"           // string (to store the selected key ID (set by bifrost))
-	BifrostContextKeyStreamEndIndicator  BifrostContextKey = "bifrost-stream-end-indicator"   // bool
+	BifrostContextKeyStreamEndIndicator  BifrostContextKey = "bifrost-stream-end-indicator"   // bool (set by bifrost)
 	BifrostContextKeySkipKeySelection    BifrostContextKey = "bifrost-skip-key-selection"     // bool (will pass an empty key to the provider)
 	BifrostContextKeyExtraHeaders        BifrostContextKey = "bifrost-extra-headers"          // map[string]string
 	BifrostContextKeyURLPath             BifrostContextKey = "bifrost-extra-url-path"         // string
