@@ -1,6 +1,7 @@
 "use client";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +11,8 @@ import { getErrorMessage, useGetCoreConfigQuery, useUpdateCoreConfigMutation } f
 import { AuthConfig, CoreConfig } from "@/lib/types/config";
 import { parseArrayFromText } from "@/lib/utils/array";
 import { validateOrigins } from "@/lib/utils/validation";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -83,13 +85,34 @@ export default function SecurityView() {
 		setNeedsRestart(requiresRestart);
 	}, []);
 
+	const checkAuthNeedsRestart = useCallback(
+		(newAuthConfig: AuthConfig) => {
+			const originalAuth = bifrostConfig?.auth_config;
+			const hasChanged =
+				newAuthConfig.is_enabled !== (originalAuth?.is_enabled ?? false) ||
+				newAuthConfig.admin_username !== (originalAuth?.admin_username ?? '') ||
+				newAuthConfig.admin_password !== (originalAuth?.admin_password ?? '');
+			setAuthNeedsRestart(hasChanged);
+		},
+		[bifrostConfig?.auth_config],
+	);
+
 	const handleAuthToggle = useCallback(
 		(checked: boolean) => {
-			setAuthConfig((prev) => ({ ...prev, is_enabled: checked }));
-			const originalAuthEnabled = bifrostConfig?.auth_config?.is_enabled ?? false;
-			setAuthNeedsRestart(checked !== originalAuthEnabled);
+			const newAuthConfig = { ...authConfig, is_enabled: checked };
+			setAuthConfig(newAuthConfig);
+			checkAuthNeedsRestart(newAuthConfig);
 		},
-		[bifrostConfig?.auth_config?.is_enabled],
+		[authConfig, checkAuthNeedsRestart],
+	);
+
+	const handleAuthFieldChange = useCallback(
+		(field: 'admin_username' | 'admin_password', value: string) => {
+			const newAuthConfig = { ...authConfig, [field]: value };
+			setAuthConfig(newAuthConfig);
+			checkAuthNeedsRestart(newAuthConfig);
+		},
+		[authConfig, checkAuthNeedsRestart],
 	);
 
 	const handleSave = useCallback(async () => {
@@ -133,13 +156,22 @@ export default function SecurityView() {
 
 			<div className="space-y-4">
 				{authNeedsRestart && <RestartWarning />}
+				{ authConfig.is_enabled && (
+					<Alert variant="default" className="bg-blue-50 border-blue-200 ">
+						<Info className="h-4 w-4" />
+						<AlertDescription>You will need to use Basic Auth for all your inference calls. Check API Keys section for more details. <Link href="/workspace/config?tab=api-keys" className="text-md text-primary underline">
+							API Keys
+						</Link></AlertDescription>
+						
+					</Alert>
+				)}
 				{/* Password Protect the Dashboard */}
 				<div>
 					<div className="space-y-4 rounded-lg border p-4">
 						<div className="flex items-center justify-between">
 							<div className="space-y-0.5">
 								<Label htmlFor="auth-enabled" className="text-sm font-medium">
-									Password protect the dashboard
+									Password protect the dashboard <Badge variant="secondary">BETA</Badge>
 								</Label>
 								<p className="text-muted-foreground text-sm">
 									Set up authentication credentials to protect your Bifrost dashboard. Once configured, use the generated token for all
@@ -157,9 +189,7 @@ export default function SecurityView() {
 									placeholder="Enter admin username"
 									value={authConfig.admin_username}
 									disabled={!authConfig.is_enabled}
-									onChange={(e) => {
-										setAuthConfig((prev) => ({ ...prev, admin_username: e.target.value }));
-									}}
+									onChange={(e) => handleAuthFieldChange('admin_username', e.target.value)}
 								/>
 							</div>
 							<div className="space-y-2">
@@ -170,9 +200,7 @@ export default function SecurityView() {
 									placeholder="Enter admin password"
 									value={authConfig.admin_password}
 									disabled={!authConfig.is_enabled}
-									onChange={(e) => {
-										setAuthConfig((prev) => ({ ...prev, admin_password: e.target.value }));
-									}}
+									onChange={(e) => handleAuthFieldChange('admin_password', e.target.value)}
 								/>
 							</div>
 						</div>
