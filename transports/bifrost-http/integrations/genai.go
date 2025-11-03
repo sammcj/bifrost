@@ -46,9 +46,19 @@ func CreateGenAIRouteConfigs(pathPrefix string) []RouteConfig {
 			return nil, errors.New("invalid request type")
 		},
 		EmbeddingResponseConverter: func(resp *schemas.BifrostEmbeddingResponse) (interface{}, error) {
+			if resp.ExtraFields.Provider == schemas.Gemini {
+				if resp.ExtraFields.RawResponse != nil {
+					return resp.ExtraFields.RawResponse, nil
+				}
+			}
 			return gemini.ToGeminiEmbeddingResponse(resp), nil
 		},
 		ChatResponseConverter: func(resp *schemas.BifrostChatResponse) (interface{}, error) {
+			if resp.ExtraFields.Provider == schemas.Gemini {
+				if resp.ExtraFields.RawResponse != nil {
+					return resp.ExtraFields.RawResponse, nil
+				}
+			}
 			return gemini.ToGeminiChatResponse(resp), nil
 		},
 		ErrorConverter: func(err *schemas.BifrostError) interface{} {
@@ -106,7 +116,7 @@ var embeddingPaths = []string{
 }
 
 // extractAndSetModelFromURL extracts model from URL and sets it in the request
-func extractAndSetModelFromURL(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}, rawBody []byte) error {
+func extractAndSetModelFromURL(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}) error {
 	model := ctx.UserValue("model")
 	if model == nil {
 		return fmt.Errorf("model parameter is required")
@@ -155,7 +165,7 @@ func extractAndSetModelFromURL(ctx *fasthttp.RequestCtx, bifrostCtx *context.Con
 }
 
 // extractGeminiListModelsParams extracts query parameters for list models request
-func extractGeminiListModelsParams(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}, rawBody []byte) error {
+func extractGeminiListModelsParams(ctx *fasthttp.RequestCtx, bifrostCtx *context.Context, req interface{}) error {
 	if listModelsReq, ok := req.(*schemas.BifrostListModelsRequest); ok {
 		// Set provider to Gemini
 		listModelsReq.Provider = schemas.Gemini

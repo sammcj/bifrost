@@ -72,7 +72,7 @@ func makeRequestWithContext(ctx context.Context, client *fasthttp.Client, req *f
 			return latency, &schemas.BifrostError{
 				IsBifrostError: false,
 				Error: &schemas.ErrorField{
-					Message: schemas.ErrProviderRequest,
+					Message: schemas.ErrProviderDoRequest,
 					Error:   err,
 				},
 			}
@@ -136,17 +136,37 @@ func configureProxy(client *fasthttp.Client, proxyConfig *schemas.ProxyConfig, l
 	return client
 }
 
+// hopByHopHeaders are HTTP/1.1 headers that must not be forwarded by proxies.
+var hopByHopHeaders = map[string]bool{
+	"connection":          true,
+	"proxy-connection":    true,
+	"keep-alive":          true,
+	"proxy-authenticate":  true,
+	"proxy-authorization": true,
+	"te":                  true,
+	"trailer":             true,
+	"transfer-encoding":   true,
+	"upgrade":             true,
+}
+
+// filterHeaders filters out hop-by-hop headers and returns only the allowed headers.
+func filterHeaders(headers map[string][]string) map[string][]string {
+	filtered := make(map[string][]string, len(headers))
+	for k, v := range headers {
+		if !hopByHopHeaders[strings.ToLower(k)] {
+			filtered[k] = v
+		}
+	}
+	return filtered
+}
+
 // setExtraHeaders sets additional headers from NetworkConfig to the fasthttp request.
 // This allows users to configure custom headers for their provider requests.
 // Header keys are canonicalized using textproto.CanonicalMIMEHeaderKey to avoid duplicates.
 // The Authorization header is excluded for security reasons.
 // It accepts a list of headers (all canonicalized) to skip for security reasons.
 // Headers are only set if they don't already exist on the request to avoid overwriting important headers.
-func setExtraHeaders(req *fasthttp.Request, extraHeaders map[string]string, skipHeaders []string) {
-	if extraHeaders == nil {
-		return
-	}
-
+func setExtraHeaders(ctx context.Context, req *fasthttp.Request, extraHeaders map[string]string, skipHeaders []string) {
 	for key, value := range extraHeaders {
 		canonicalKey := textproto.CanonicalMIMEHeaderKey(key)
 		// Skip Authorization header for security reasons
@@ -163,6 +183,61 @@ func setExtraHeaders(req *fasthttp.Request, extraHeaders map[string]string, skip
 			req.Header.Set(canonicalKey, value)
 		}
 	}
+
+	// Give priority to extra headers in the context
+	if extraHeaders, ok := (ctx).Value(schemas.BifrostContextKeyExtraHeaders).(map[string][]string); ok {
+		for k, values := range filterHeaders(extraHeaders) {
+			for i, v := range values {
+				if i == 0 {
+					req.Header.Set(k, v)
+				} else {
+					req.Header.Add(k, v)
+				}
+			}
+		}
+	}
+}
+
+// getPathFromContext gets the path from the context, if it exists, otherwise returns the default path.
+func getPathFromContext(ctx context.Context, defaultPath string) string {
+	if pathInContext, ok := ctx.Value(schemas.BifrostContextKeyURLPath).(string); ok {
+		return pathInContext
+	}
+	return defaultPath
+}
+
+type RequestBodyGetter interface {
+	GetRawRequestBody() []byte
+}
+
+// checkAndGetRawRequestBody checks if the raw request body should be used, and returns it if it exists.
+func checkAndGetRawRequestBody(ctx context.Context, request RequestBodyGetter) ([]byte, bool) {
+	if rawBody, ok := ctx.Value(schemas.BifrostContextKeyUseRawRequestBody).(bool); ok && rawBody {
+		return request.GetRawRequestBody(), true
+	}
+	return nil, false
+}
+
+type RequestBodyConverter func() (any, error)
+
+func checkContextAndGetRequestBody(ctx context.Context, request RequestBodyGetter, requestConverter RequestBodyConverter, providerType schemas.ModelProvider) ([]byte, *schemas.BifrostError) {
+	rawBody, ok := checkAndGetRawRequestBody(ctx, request)
+	if !ok {
+		convertedBody, err := requestConverter()
+		if err != nil {
+			return nil, newBifrostOperationError(schemas.ErrRequestBodyConversion, err, providerType)
+		}
+		if convertedBody == nil {
+			return nil, newBifrostOperationError("request body is not provided", nil, providerType)
+		}
+		jsonBody, err := sonic.Marshal(convertedBody)
+		if err != nil {
+			return nil, newBifrostOperationError(schemas.ErrProviderRequestMarshal, err, providerType)
+		}
+		return jsonBody, nil
+	} else {
+		return rawBody, nil
+	}
 }
 
 // setExtraHeadersHTTP sets additional headers from NetworkConfig to the standard HTTP request.
@@ -170,11 +245,7 @@ func setExtraHeaders(req *fasthttp.Request, extraHeaders map[string]string, skip
 // Header keys are canonicalized using textproto.CanonicalMIMEHeaderKey to avoid duplicates.
 // It accepts a list of headers (all canonicalized) to skip for security reasons.
 // Headers are only set if they don't already exist on the request to avoid overwriting important headers.
-func setExtraHeadersHTTP(req *http.Request, extraHeaders map[string]string, skipHeaders []string) {
-	if extraHeaders == nil {
-		return
-	}
-
+func setExtraHeadersHTTP(ctx context.Context, req *http.Request, extraHeaders map[string]string, skipHeaders []string) {
 	for key, value := range extraHeaders {
 		canonicalKey := textproto.CanonicalMIMEHeaderKey(key)
 		// Skip Authorization header for security reasons
@@ -189,6 +260,19 @@ func setExtraHeadersHTTP(req *http.Request, extraHeaders map[string]string, skip
 		// Only set the header if it doesn't already exist to avoid overwriting important headers
 		if req.Header.Get(canonicalKey) == "" {
 			req.Header.Set(canonicalKey, value)
+		}
+	}
+
+	// Give priority to extra headers in the context
+	if extraHeaders, ok := (ctx).Value(schemas.BifrostContextKeyExtraHeaders).(map[string][]string); ok {
+		for k, values := range filterHeaders(extraHeaders) {
+			for i, v := range values {
+				if i == 0 {
+					req.Header.Set(k, v)
+				} else {
+					req.Header.Add(k, v)
+				}
+			}
 		}
 	}
 }
@@ -245,7 +329,7 @@ func handleProviderResponse[T any](responseBody []byte, response *T, sendBackRaw
 		return nil, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: &schemas.ErrorField{
-				Message: schemas.ErrProviderDecodeStructured,
+				Message: schemas.ErrProviderResponseUnmarshal,
 				Error:   structuredErr,
 			},
 		}
@@ -256,7 +340,7 @@ func handleProviderResponse[T any](responseBody []byte, response *T, sendBackRaw
 			return nil, &schemas.BifrostError{
 				IsBifrostError: true,
 				Error: &schemas.ErrorField{
-					Message: schemas.ErrProviderDecodeRaw,
+					Message: schemas.ErrProviderRawResponseUnmarshal,
 					Error:   rawErr,
 				},
 			}
@@ -270,15 +354,15 @@ func handleProviderResponse[T any](responseBody []byte, response *T, sendBackRaw
 
 // newUnsupportedOperationError creates a standardized error for unsupported operations.
 // This helper reduces code duplication across providers that don't support certain operations.
-func newUnsupportedOperationError(operation string, providerName string) *schemas.BifrostError {
+func newUnsupportedOperationError(requestType schemas.RequestType, providerName schemas.ModelProvider) *schemas.BifrostError {
 	return &schemas.BifrostError{
 		IsBifrostError: false,
 		Error: &schemas.ErrorField{
-			Message: fmt.Sprintf("%s is not supported by %s provider", operation, providerName),
+			Message: fmt.Sprintf("%s is not supported by %s provider", requestType, providerName),
 		},
 		ExtraFields: schemas.BifrostErrorExtraFields{
-			Provider:    schemas.ModelProvider(providerName),
-			RequestType: schemas.RequestType(operation),
+			Provider:    providerName,
+			RequestType: requestType,
 		},
 	}
 }
@@ -298,7 +382,17 @@ func checkOperationAllowed(defaultProvider schemas.ModelProvider, config *schema
 	}
 	// Gated and not allowed
 	resolved := getProviderName(defaultProvider, config)
-	return newUnsupportedOperationError(string(operation), string(resolved))
+	return newUnsupportedOperationError(operation, resolved)
+}
+
+func checkAndDecodeBody(resp *fasthttp.Response) ([]byte, error) {
+	contentEncoding := strings.ToLower(strings.TrimSpace(string(resp.Header.Peek("Content-Encoding"))))
+	switch contentEncoding {
+	case "gzip":
+		return resp.BodyGunzip()
+	default:
+		return resp.Body(), nil
+	}
 }
 
 // newConfigurationError creates a standardized error for configuration errors.
@@ -347,6 +441,13 @@ func newProviderAPIError(message string, err error, statusCode int, providerType
 			Provider: providerType,
 		},
 	}
+}
+
+func shouldSendBackRawResponse(ctx context.Context, defaultSendBackRawResponse bool) bool {
+	if sendBackRawResponse, ok := ctx.Value(schemas.BifrostContextKeySendBackRawResponse).(bool); ok && sendBackRawResponse {
+		return sendBackRawResponse
+	}
+	return defaultSendBackRawResponse
 }
 
 func sendCreatedEventResponsesChunk(ctx context.Context, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream, logger schemas.Logger) {

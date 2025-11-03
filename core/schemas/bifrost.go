@@ -98,12 +98,17 @@ type BifrostContextKey string
 
 // BifrostContextKeyRequestType is a context key for the request type.
 const (
-	BifrostContextKeyVirtualKey         BifrostContextKey = "x-bf-vk"
-	BifrostContextKeyRequestID          BifrostContextKey = "request-id"
-	BifrostContextKeyFallbackRequestID  BifrostContextKey = "fallback-request-id"
-	BifrostContextKeyDirectKey          BifrostContextKey = "bifrost-direct-key"
-	BifrostContextKeySelectedKey        BifrostContextKey = "bifrost-key-selected" // To store the selected key ID (set by bifrost)
-	BifrostContextKeyStreamEndIndicator BifrostContextKey = "bifrost-stream-end-indicator"
+	BifrostContextKeyVirtualKey          BifrostContextKey = "x-bf-vk"                        // string
+	BifrostContextKeyRequestID           BifrostContextKey = "request-id"                     // string
+	BifrostContextKeyFallbackRequestID   BifrostContextKey = "fallback-request-id"            // string
+	BifrostContextKeyDirectKey           BifrostContextKey = "bifrost-direct-key"             // Key struct
+	BifrostContextKeySelectedKey         BifrostContextKey = "bifrost-key-selected"           // string (to store the selected key ID (set by bifrost))
+	BifrostContextKeyStreamEndIndicator  BifrostContextKey = "bifrost-stream-end-indicator"   // bool
+	BifrostContextKeySkipKeySelection    BifrostContextKey = "bifrost-skip-key-selection"     // bool (will pass an empty key to the provider)
+	BifrostContextKeyExtraHeaders        BifrostContextKey = "bifrost-extra-headers"          // map[string]string
+	BifrostContextKeyURLPath             BifrostContextKey = "bifrost-extra-url-path"         // string
+	BifrostContextKeyUseRawRequestBody   BifrostContextKey = "bifrost-use-raw-request-body"   // bool
+	BifrostContextKeySendBackRawResponse BifrostContextKey = "bifrost-send-back-raw-response" // bool
 )
 
 // NOTE: for custom plugin implementation dealing with streaming short circuit,
@@ -207,6 +212,23 @@ func (br *BifrostRequest) SetFallbacks(fallbacks []Fallback) {
 		br.SpeechRequest.Fallbacks = fallbacks
 	case br.TranscriptionRequest != nil:
 		br.TranscriptionRequest.Fallbacks = fallbacks
+	}
+}
+
+func (br *BifrostRequest) SetRawRequestBody(rawRequestBody []byte) {
+	switch {
+	case br.TextCompletionRequest != nil:
+		br.TextCompletionRequest.RawRequestBody = rawRequestBody
+	case br.ChatRequest != nil:
+		br.ChatRequest.RawRequestBody = rawRequestBody
+	case br.ResponsesRequest != nil:
+		br.ResponsesRequest.RawRequestBody = rawRequestBody
+	case br.EmbeddingRequest != nil:
+		br.EmbeddingRequest.RawRequestBody = rawRequestBody
+	case br.SpeechRequest != nil:
+		br.SpeechRequest.RawRequestBody = rawRequestBody
+	case br.TranscriptionRequest != nil:
+		br.TranscriptionRequest.RawRequestBody = rawRequestBody
 	}
 }
 
