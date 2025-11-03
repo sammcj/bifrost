@@ -9,14 +9,14 @@ require (
 	github.com/fasthttp/router v1.5.4
 	github.com/fasthttp/websocket v1.5.12
 	github.com/google/uuid v1.6.0
-	github.com/maximhq/bifrost/core v1.2.16
-	github.com/maximhq/bifrost/framework v1.1.19
-	github.com/maximhq/bifrost/plugins/governance v1.3.20
-	github.com/maximhq/bifrost/plugins/logging v1.3.19
-	github.com/maximhq/bifrost/plugins/maxim v1.4.19
-	github.com/maximhq/bifrost/plugins/otel v1.0.19
-	github.com/maximhq/bifrost/plugins/semanticcache v1.3.19
-	github.com/maximhq/bifrost/plugins/telemetry v1.3.19
+	github.com/maximhq/bifrost/core v1.2.17
+	github.com/maximhq/bifrost/framework v1.1.20
+	github.com/maximhq/bifrost/plugins/governance v1.3.21
+	github.com/maximhq/bifrost/plugins/logging v1.3.20
+	github.com/maximhq/bifrost/plugins/maxim v1.4.20
+	github.com/maximhq/bifrost/plugins/otel v1.0.20
+	github.com/maximhq/bifrost/plugins/semanticcache v1.3.20
+	github.com/maximhq/bifrost/plugins/telemetry v1.3.20
 	github.com/prometheus/client_golang v1.23.0
 	github.com/valyala/fasthttp v1.67.0
 	gorm.io/gorm v1.31.0
@@ -88,7 +88,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-sqlite3 v1.14.32 // indirect
-	github.com/maximhq/bifrost/plugins/mocker v1.3.19 // indirect
+	github.com/maximhq/bifrost/plugins/mocker v1.3.20 // indirect
 	github.com/maximhq/maxim-go v0.1.14 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
@@ -110,7 +110,6 @@ require (
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.38.0 // indirect
 	go.opentelemetry.io/otel/metric v1.38.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.38.0 // indirect
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.8.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
