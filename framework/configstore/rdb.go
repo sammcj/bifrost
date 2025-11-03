@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
+	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/envutils"
@@ -771,8 +773,8 @@ func (s *RDBConfigStore) UpdateEnvKeys(ctx context.Context, keys map[string][]En
 }
 
 // GetConfig retrieves a specific config from the database.
-func (s *RDBConfigStore) GetConfig(ctx context.Context, key string) (*tables.TableConfig, error) {
-	var config tables.TableConfig
+func (s *RDBConfigStore) GetConfig(ctx context.Context, key string) (*tables.TableGovernanceConfig, error) {
+	var config tables.TableGovernanceConfig
 	if err := s.db.WithContext(ctx).First(&config, "key = ?", key).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -783,7 +785,7 @@ func (s *RDBConfigStore) GetConfig(ctx context.Context, key string) (*tables.Tab
 }
 
 // UpdateConfig updates a specific config in the database.
-func (s *RDBConfigStore) UpdateConfig(ctx context.Context, config *tables.TableConfig, tx ...*gorm.DB) error {
+func (s *RDBConfigStore) UpdateConfig(ctx context.Context, config *tables.TableGovernanceConfig, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -826,8 +828,8 @@ func (s *RDBConfigStore) DeleteModelPrices(ctx context.Context, tx ...*gorm.DB) 
 
 // PLUGINS METHODS
 
-func (s *RDBConfigStore) GetPlugins(ctx context.Context) ([]tables.TablePlugin, error) {
-	var plugins []tables.TablePlugin
+func (s *RDBConfigStore) GetPlugins(ctx context.Context) ([]*tables.TablePlugin, error) {
+	var plugins []*tables.TablePlugin
 	if err := s.db.WithContext(ctx).Find(&plugins).Error; err != nil {
 		return nil, err
 	}
@@ -852,6 +854,12 @@ func (s *RDBConfigStore) CreatePlugin(ctx context.Context, plugin *tables.TableP
 	} else {
 		txDB = s.db
 	}
+	// Mark plugin as custom if path is not empty
+	if plugin.Path != nil && strings.TrimSpace(*plugin.Path) != "" {
+		plugin.IsCustom = true
+	}else{
+		plugin.IsCustom = false
+	}
 	return txDB.WithContext(ctx).Create(plugin).Error
 }
 
@@ -865,6 +873,13 @@ func (s *RDBConfigStore) UpdatePlugin(ctx context.Context, plugin *tables.TableP
 	} else {
 		txDB = s.db.Begin()
 		localTx = true
+	}
+
+	// Mark plugin as custom if path is not empty
+	if plugin.Path != nil && strings.TrimSpace(*plugin.Path) != "" {
+		plugin.IsCustom = true
+	}else{
+		plugin.IsCustom = false
 	}
 
 	if err := txDB.WithContext(ctx).Delete(&tables.TablePlugin{}, "name = ?", plugin.Name).Error; err != nil {
@@ -1358,6 +1373,7 @@ func (s *RDBConfigStore) GetGovernanceConfig(ctx context.Context) (*GovernanceCo
 	var customers []tables.TableCustomer
 	var budgets []tables.TableBudget
 	var rateLimits []tables.TableRateLimit
+	var governanceConfigs []tables.TableGovernanceConfig
 
 	if err := s.db.WithContext(ctx).Preload("ProviderConfigs").Find(&virtualKeys).Error; err != nil {
 		return nil, err
@@ -1374,18 +1390,121 @@ func (s *RDBConfigStore) GetGovernanceConfig(ctx context.Context) (*GovernanceCo
 	if err := s.db.WithContext(ctx).Find(&rateLimits).Error; err != nil {
 		return nil, err
 	}
-
-	if len(virtualKeys) == 0 && len(teams) == 0 && len(customers) == 0 && len(budgets) == 0 && len(rateLimits) == 0 {
+	// Fetching governance config for username and password
+	if err := s.db.WithContext(ctx).Find(&governanceConfigs).Error; err != nil {
+		return nil, err
+	}
+	// Check if any config is present
+	if len(virtualKeys) == 0 && len(teams) == 0 && len(customers) == 0 && len(budgets) == 0 && len(rateLimits) == 0 && len(governanceConfigs) == 0 {
 		return nil, nil
 	}
-
+	var authConfig *AuthConfig
+	if len(governanceConfigs) > 0 {
+		// Checking if username and password is present
+		var username *string
+		var password *string
+		var isEnabled bool
+		for _, entry := range governanceConfigs {
+			switch entry.Key {
+			case tables.ConfigAdminUsernameKey:
+				username = bifrost.Ptr(entry.Value)
+			case tables.ConfigAdminPasswordKey:
+				password = bifrost.Ptr(entry.Value)
+			case tables.ConfigIsAuthEnabledKey:
+				isEnabled = entry.Value =="true"
+			}
+		}
+		if username != nil && password != nil {
+			authConfig = &AuthConfig{
+				AdminUserName: *username,
+				AdminPassword: *password,
+				IsEnabled:     isEnabled,
+			}
+		}
+	}
 	return &GovernanceConfig{
 		VirtualKeys: virtualKeys,
 		Teams:       teams,
 		Customers:   customers,
 		Budgets:     budgets,
 		RateLimits:  rateLimits,
+		AuthConfig:  authConfig,
 	}, nil
+}
+
+// GetAuthConfig retrieves the auth configuration from the database.
+func (s *RDBConfigStore) GetAuthConfig(ctx context.Context) (*AuthConfig, error) {
+	var username *string
+	var password *string
+	var isEnabled bool
+	if err := s.db.WithContext(ctx).First(&tables.TableGovernanceConfig{}, "key = ?", tables.ConfigAdminUsernameKey).Select("value").Scan(&username).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}		
+	}
+	if err := s.db.WithContext(ctx).First(&tables.TableGovernanceConfig{}, "key = ?", tables.ConfigAdminPasswordKey).Select("value").Scan(&password).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		
+	}
+	if err := s.db.WithContext(ctx).First(&tables.TableGovernanceConfig{}, "key = ?", tables.ConfigIsAuthEnabledKey).Select("value").Scan(&isEnabled).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
+	if username == nil || password == nil  {
+		return nil, nil
+	}
+	return &AuthConfig{
+		AdminUserName: *username,
+		AdminPassword: *password,
+		IsEnabled:     isEnabled,
+	}, nil
+}
+
+// UpdateAuthConfig updates the auth configuration in the database.
+func (s *RDBConfigStore) UpdateAuthConfig(ctx context.Context, config *AuthConfig) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&tables.TableGovernanceConfig{
+			Key:   tables.ConfigAdminUsernameKey,
+			Value: config.AdminUserName,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Save(&tables.TableGovernanceConfig{
+			Key:  tables.ConfigAdminPasswordKey,
+			Value: config.AdminPassword,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Save(&tables.TableGovernanceConfig{
+			Key:   tables.ConfigIsAuthEnabledKey,
+			Value: fmt.Sprintf("%t", config.IsEnabled),
+		}).Error; err != nil {
+			return err
+		}
+		return nil
+	})	
+}
+
+// GetSession retrieves a session from the database.
+func (s *RDBConfigStore) GetSession(ctx context.Context, token string) (*tables.SessionsTable, error) {
+	var session tables.SessionsTable
+	if err := s.db.WithContext(ctx).First(&session, "token = ?", token).Error; err != nil {
+		return nil, err
+	}
+	return &session, nil
+}
+
+// CreateSession creates a new session in the database.
+func (s *RDBConfigStore) CreateSession(ctx context.Context, session *tables.SessionsTable) error {
+	return s.db.WithContext(ctx).Create(session).Error
+}
+
+// DeleteSession deletes a session from the database.
+func (s *RDBConfigStore) DeleteSession(ctx context.Context, token string) error {
+	return s.db.WithContext(ctx).Delete(&tables.SessionsTable{}, "token = ?", token).Error
 }
 
 // ExecuteTransaction executes a transaction.

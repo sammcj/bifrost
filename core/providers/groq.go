@@ -4,10 +4,11 @@ package providers
 
 import (
 	"context"
-	"net/http"
 	"strings"
 	"time"
 
+	"github.com/maximhq/bifrost/core/providers/openai"
+	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/valyala/fasthttp"
 )
@@ -16,7 +17,6 @@ import (
 type GroqProvider struct {
 	logger              schemas.Logger        // Logger for provider operations
 	client              *fasthttp.Client      // HTTP client for API requests
-	streamClient        *http.Client          // HTTP client for streaming requests
 	networkConfig       schemas.NetworkConfig // Network configuration including extra headers
 	sendBackRawResponse bool                  // Whether to include raw response in BifrostResponse
 }
@@ -28,14 +28,11 @@ func NewGroqProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*Gr
 	config.CheckAndSetDefaults()
 
 	client := &fasthttp.Client{
-		ReadTimeout:     time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
-		WriteTimeout:    time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
-		MaxConnsPerHost: config.ConcurrencyAndBufferSize.BufferSize,
-	}
-
-	// Initialize streaming HTTP client
-	streamClient := &http.Client{
-		Timeout: time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
+		ReadTimeout:         time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
+		WriteTimeout:        time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
+		MaxConnsPerHost:     5000,
+		MaxIdleConnDuration: 60 * time.Second,
+		MaxConnWaitTimeout:  10 * time.Second,
 	}
 
 	// // Pre-warm response pools
@@ -44,7 +41,7 @@ func NewGroqProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*Gr
 	// }
 
 	// Configure proxy if provided
-	client = configureProxy(client, config.ProxyConfig, logger)
+	client = providerUtils.ConfigureProxy(client, config.ProxyConfig, logger)
 
 	// Set default BaseURL if not provided
 	if config.NetworkConfig.BaseURL == "" {
@@ -55,7 +52,6 @@ func NewGroqProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*Gr
 	return &GroqProvider{
 		logger:              logger,
 		client:              client,
-		streamClient:        streamClient,
 		networkConfig:       config.NetworkConfig,
 		sendBackRawResponse: config.SendBackRawResponse,
 	}, nil
@@ -68,15 +64,15 @@ func (provider *GroqProvider) GetProviderKey() schemas.ModelProvider {
 
 // ListModels performs a list models request to Groq's API.
 func (provider *GroqProvider) ListModels(ctx context.Context, keys []schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
-	return handleOpenAIListModelsRequest(
+	return openai.HandleOpenAIListModelsRequest(
 		ctx,
 		provider.client,
 		request,
-		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/models"),
+		provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/v1/models"),
 		keys,
 		provider.networkConfig.ExtraHeaders,
 		schemas.Groq,
-		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.logger,
 	)
 }
@@ -85,7 +81,7 @@ func (provider *GroqProvider) ListModels(ctx context.Context, keys []schemas.Key
 func (provider *GroqProvider) TextCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (*schemas.BifrostTextCompletionResponse, *schemas.BifrostError) {
 	// Checking if litellm fallback is set
 	if _, ok := ctx.Value(schemas.BifrostContextKey("x-litellm-fallback")).(string); !ok {
-		return nil, newUnsupportedOperationError("text completion", "groq")
+		return nil, providerUtils.NewUnsupportedOperationError("text completion", "groq")
 	}
 	// Here we will call the chat.completions endpoint and mock it as a text-completion response
 	chatRequest := request.ToBifrostChatRequest()
@@ -114,7 +110,7 @@ func (provider *GroqProvider) TextCompletion(ctx context.Context, key schemas.Ke
 func (provider *GroqProvider) TextCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	// Checking if litellm fallback is set
 	if _, ok := ctx.Value(schemas.BifrostContextKey("x-litellm-fallback")).(string); !ok {
-		return nil, newUnsupportedOperationError("text completion", "groq")
+		return nil, providerUtils.NewUnsupportedOperationError("text completion", "groq")
 	}
 	// Here we will call the chat.completions endpoint and mock it as a text-completion stream response
 	chatRequest := request.ToBifrostChatRequest()
@@ -158,14 +154,14 @@ func (provider *GroqProvider) TextCompletionStream(ctx context.Context, postHook
 
 // ChatCompletion performs a chat completion request to the Groq API.
 func (provider *GroqProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
-	return handleOpenAIChatCompletionRequest(
+	return openai.HandleOpenAIChatCompletionRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
+		provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/v1/chat/completions"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
-		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.GetProviderKey(),
 		provider.logger,
 	)
@@ -181,14 +177,14 @@ func (provider *GroqProvider) ChatCompletionStream(ctx context.Context, postHook
 		authHeader = map[string]string{"Authorization": "Bearer " + key.Value}
 	}
 	// Use shared OpenAI-compatible streaming logic
-	return handleOpenAIChatCompletionStreaming(
+	return openai.HandleOpenAIChatCompletionStreaming(
 		ctx,
-		provider.streamClient,
-		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
+		provider.client,
+		provider.networkConfig.BaseURL+"/v1/chat/completions",
 		request,
 		authHeader,
 		provider.networkConfig.ExtraHeaders,
-		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		schemas.Groq,
 		postHookRunner,
 		provider.logger,
@@ -214,7 +210,7 @@ func (provider *GroqProvider) Responses(ctx context.Context, key schemas.Key, re
 func (provider *GroqProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return provider.ChatCompletionStream(
 		ctx,
-		getResponsesChunkConverterCombinedPostHookRunner(postHookRunner),
+		providerUtils.GetResponsesChunkConverterCombinedPostHookRunner(postHookRunner),
 		key,
 		request.ToChatRequest(),
 	)
@@ -222,25 +218,25 @@ func (provider *GroqProvider) ResponsesStream(ctx context.Context, postHookRunne
 
 // Embedding is not supported by the Groq provider.
 func (provider *GroqProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostEmbeddingResponse, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError(schemas.EmbeddingRequest, provider.GetProviderKey())
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.EmbeddingRequest, provider.GetProviderKey())
 }
 
 // Speech is not supported by the Groq provider.
 func (provider *GroqProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError(schemas.SpeechRequest, provider.GetProviderKey())
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.SpeechRequest, provider.GetProviderKey())
 }
 
 // SpeechStream is not supported by the Groq provider.
 func (provider *GroqProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError(schemas.SpeechStreamRequest, provider.GetProviderKey())
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.SpeechStreamRequest, provider.GetProviderKey())
 }
 
 // Transcription is not supported by the Groq provider.
 func (provider *GroqProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError(schemas.TranscriptionRequest, provider.GetProviderKey())
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.TranscriptionRequest, provider.GetProviderKey())
 }
 
 // TranscriptionStream is not supported by the Groq provider.
 func (provider *GroqProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError(schemas.TranscriptionStreamRequest, provider.GetProviderKey())
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.TranscriptionStreamRequest, provider.GetProviderKey())
 }

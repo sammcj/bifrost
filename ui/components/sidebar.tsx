@@ -1,22 +1,25 @@
 "use client";
 
 import {
-	Binoculars,
 	BookUser,
 	Boxes,
 	BoxIcon,
 	BugIcon,
-	Building2,
+	ChevronsLeftRightEllipsis,
 	Cog,
 	Construction,
+	FolderGit,
 	KeyRound,
+	Landmark,
 	Layers,
 	LogOut,
+	Logs,
+	Puzzle,
 	ScrollText,
 	Settings2Icon,
 	Shuffle,
 	Telescope,
-	Users
+	Users,
 } from "lucide-react";
 
 import {
@@ -35,7 +38,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { IS_ENTERPRISE } from "@/lib/constants/config";
-import { useGetCoreConfigQuery, useGetLatestReleaseQuery, useGetVersionQuery } from "@/lib/store";
+import { useGetCoreConfigQuery, useGetLatestReleaseQuery, useGetVersionQuery, useLogoutMutation } from "@/lib/store";
 import { BooksIcon, DiscordLogoIcon, GithubLogoIcon } from "@phosphor-icons/react";
 import { ChevronRight } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -44,6 +47,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ThemeToggle } from "./themeToggle";
+import { Badge } from "./ui/badge";
 import { PromoCardStack } from "./ui/promoCardStack";
 
 // Custom MCP Icon Component
@@ -68,66 +72,99 @@ const MCPIcon = ({ className }: { className?: string }) => (
 // Main navigation items
 const items = [
 	{
-		title: "Logs",
-		url: "/logs",
+		title: "Observability",
+		url: "/workspace/logs",
 		icon: Telescope,
 		description: "Request logs & monitoring",
+		subItems: [
+			{
+				title: "Logs",
+				url: "/workspace/logs",
+				icon: Logs,
+				description: "Request logs & monitoring",
+			},
+			{
+				title: "Connectors",
+				url: "/workspace/observability",
+				icon: ChevronsLeftRightEllipsis,
+				description: "Log connectors",
+			},
+		],
 	},
 	{
-		title: "Observability",
-		url: "/observability",
-		icon: Binoculars,
-		description: "Observability setup",
+		title: "Prompt Repository",
+		url: "/workspace/prompt-repo",
+		icon: FolderGit,
+		description: "Prompt repository",
 	},
 	{
-		title: "Providers",
-		url: "/providers",
+		title: "Model Providers",
+		url: "/workspace/providers",
 		icon: BoxIcon,
 		description: "Configure models",
 	},
 	{
-		title: "Virtual Keys",
-		url: "/virtual-keys",
-		icon: KeyRound,
-		description: "Manage virtual keys & access",
-	},
-	{
-		title: "Users & Groups",
-		url: "/user-groups",
-		icon: Users,
-		description: "Manage users & groups",
+		title: "Governance",
+		url: "/workspace/governance",
+		icon: Landmark,
+		description: "Govern access",
+		subItems: [
+			{
+				title: "Virtual Keys",
+				url: "/workspace/virtual-keys",
+				icon: KeyRound,
+				description: "Manage virtual keys & access",
+			},
+			{
+				title: "Users & Groups",
+				url: "/workspace/user-groups",
+				icon: Users,
+				description: "Manage users & groups",
+			},
+			{
+				title: "User Provisioning",
+				url: "/workspace/scim",
+				icon: BookUser,
+				description: "User management and provisioning",
+			},
+			{
+				title: "Audit Logs",
+				url: "/workspace/audit-logs",
+				icon: ScrollText,
+				description: "Audit logs and compliance",
+			},
+		],
 	},
 
 	{
-		title: "MCP Clients",
-		url: "/mcp-clients",
+		title: "Plugins",
+		url: "/workspace/plugins",
+		icon: Puzzle,
+		tag: "BETA",
+		description: "Manage custom plugins",
+	},
+
+	{
+		title: "MCP Gateway",
+		url: "/workspace/mcp-clients",
 		icon: MCPIcon,
 		description: "MCP configuration",
 	},
 	{
-		title: "Config",
-		url: "/config",
-		icon: Settings2Icon,
-		description: "Bifrost settings",
-	},
-];
-
-const enterpriseItems = [
-	{
 		title: "Guardrails",
-		url: "/guardrails",
+		url: "/workspace/guardrails",
 		icon: Construction,
 		description: "Guardrails configuration",
 		subItems: [
 			{
 				title: "Configuration",
-				url: "/guardrails/configuration",
+				url: "/workspace/guardrails/configuration",
 				icon: Cog,
 				description: "Guardrail configuration",
 			},
 			{
 				title: "Providers",
-				url: "/guardrails/providers",
+				url: "/workspace/guardrails/providers",
 				icon: Boxes,
 				description: "Guardrail providers configuration",
 			},
@@ -135,28 +172,22 @@ const enterpriseItems = [
 	},
 	{
 		title: "Cluster Config",
-		url: "/cluster",
+		url: "/workspace/cluster",
 		icon: Layers,
 		description: "Manage Bifrost cluster",
 	},
 	{
 		title: "Adaptive Routing",
-		url: "/adaptive-routing",
+		url: "/workspace/adaptive-routing",
 		icon: Shuffle,
 		description: "Manage adaptive load balancer",
 	},
 	{
-		title: "User Provisioning",
-		url: "/scim",
-		icon: BookUser,
-		description: "User management and provisioning",
+		title: "Config",
+		url: "/workspace/config",
+		icon: Settings2Icon,
+		description: "Bifrost settings",
 	},
-	{
-		title: "Audit Logs",
-		url: "/audit-logs",
-		icon: ScrollText,
-		description: "Audit logs and compliance",
-	},	
 ];
 
 // External links
@@ -219,7 +250,7 @@ const SidebarItem = ({
 	pathname,
 	router,
 }: {
-	item: (typeof items)[0] | (typeof enterpriseItems)[0];
+	item: (typeof items)[0];
 	isActive: boolean;
 	isAllowed: boolean;
 	isWebSocketConnected: boolean;
@@ -228,8 +259,8 @@ const SidebarItem = ({
 	pathname: string;
 	router: ReturnType<typeof useRouter>;
 }) => {
-	const hasSubItems = 'subItems' in item && item.subItems && item.subItems.length > 0;
-	const isAnySubItemActive = hasSubItems && item.subItems?.some(subItem => pathname.startsWith(subItem.url));
+	const hasSubItems = "subItems" in item && item.subItems && item.subItems.length > 0;
+	const isAnySubItemActive = hasSubItems && item.subItems?.some((subItem) => pathname.startsWith(subItem.url));
 
 	const handleClick = (e: React.MouseEvent) => {
 		if (hasSubItems && onToggle) {
@@ -253,7 +284,7 @@ const SidebarItem = ({
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<SidebarMenuButton
-							className={`relative h-7.5 rounded-md border px-3 transition-all duration-200 cursor-pointer ${
+							className={`relative h-7.5 cursor-pointer rounded-md border px-3 transition-all duration-200 ${
 								isActive || isAnySubItemActive
 									? "bg-sidebar-accent text-primary border-primary/20"
 									: isAllowed
@@ -263,15 +294,16 @@ const SidebarItem = ({
 							onClick={hasSubItems ? handleClick : () => handleNavigation(item.url)}
 						>
 							<div className="flex w-full items-center justify-between">
-								<div className="flex items-center gap-2">
+								<div className="flex w-full items-center gap-2">
 									<item.icon className={`h-4 w-4 ${isActive || isAnySubItemActive ? "text-primary" : "text-muted-foreground"}`} />
 									<span className={`text-sm ${isActive || isAnySubItemActive ? "font-medium" : "font-normal"}`}>{item.title}</span>
+									{item.tag && (
+										<Badge variant="secondary" className="text-muted-foreground ml-auto text-xs">
+											{item.tag}
+										</Badge>
+									)}
 								</div>
-								{hasSubItems && (
-									<ChevronRight 
-										className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
-									/>
-								)}
+								{hasSubItems && <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />}
 								{!hasSubItems && item.url === "/logs" && isWebSocketConnected && (
 									<div className="h-2 w-2 animate-pulse rounded-full bg-green-800 dark:bg-green-200" />
 								)}
@@ -282,14 +314,14 @@ const SidebarItem = ({
 				</Tooltip>
 			</TooltipProvider>
 			{hasSubItems && isExpanded && (
-				<SidebarMenuSub className="ml-4 border-l border-sidebar-border pl-2 space-y-0.5 mt-1">
-					{item.subItems?.map((subItem) => {
+				<SidebarMenuSub className="border-sidebar-border mt-1 ml-4 space-y-0.5 border-l pl-2">
+					{item.subItems?.map((subItem: any) => {
 						const isSubItemActive = pathname.startsWith(subItem.url);
 						const SubItemIcon = subItem.icon;
 						return (
 							<SidebarMenuSubItem key={subItem.title}>
 								<SidebarMenuSubButton
-									className={`h-7 rounded-md px-2 transition-all duration-200 cursor-pointer ${
+									className={`h-7 cursor-pointer rounded-md px-2 transition-all duration-200 ${
 										isSubItemActive
 											? "bg-sidebar-accent text-primary font-medium"
 											: "hover:bg-sidebar-accent hover:text-accent-foreground text-slate-500 dark:text-zinc-400"
@@ -297,12 +329,8 @@ const SidebarItem = ({
 									onClick={() => handleSubItemClick(subItem.url)}
 								>
 									<div className="flex items-center gap-2">
-										{SubItemIcon && (
-											<SubItemIcon className={`h-3.5 w-3.5 ${isSubItemActive ? "text-primary" : "text-muted-foreground"}`} />
-										)}
-										<span className={`text-sm ${isSubItemActive ? "font-medium" : "font-normal"}`}>
-											{subItem.title}
-										</span>
+										{SubItemIcon && <SubItemIcon className={`h-3.5 w-3.5 ${isSubItemActive ? "text-primary" : "text-muted-foreground"}`} />}
+										<span className={`text-sm ${isSubItemActive ? "font-medium" : "font-normal"}`}>{subItem.title}</span>
 									</div>
 								</SidebarMenuSubButton>
 							</SidebarMenuSubItem>
@@ -359,21 +387,23 @@ export default function AppSidebar() {
 	const router = useRouter();
 	const [mounted, setMounted] = useState(false);
 	const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+	const [areCardsEmpty, setAreCardsEmpty] = useState(false);
 	const { data: latestRelease } = useGetLatestReleaseQuery(undefined, {
 		skip: !mounted, // Only fetch after component is mounted
 	});
 	const { data: version } = useGetVersionQuery();
 	const { resolvedTheme } = useTheme();
+	const [logout] = useLogoutMutation();
 	const showNewReleaseBanner = useMemo(() => {
 		if (latestRelease && version) {
 			return compareVersions(latestRelease.name, version) > 0;
 		}
 		return false;
 	}, [latestRelease, version]);
-
 	// Get governance config from RTK Query
 	const { data: coreConfig } = useGetCoreConfigQuery({});
 	const isGovernanceEnabled = coreConfig?.client_config.enable_governance || false;
+	const isAuthEnabled = coreConfig?.auth_config?.is_enabled || false;
 
 	useEffect(() => {
 		setMounted(true);
@@ -382,23 +412,18 @@ export default function AppSidebar() {
 	// Auto-expand items when their subitems are active
 	useEffect(() => {
 		const newExpandedItems = new Set<string>();
-		
-		enterpriseItems.forEach(item => {
-			if ('subItems' in item && item.subItems && Array.isArray(item.subItems)) {
-				const hasActiveSubItem = item.subItems.some((subItem: { url: string }) => pathname.startsWith(subItem.url));
-				if (hasActiveSubItem) {
-					newExpandedItems.add(item.title);
-				}
+		items.forEach((item) => {
+			if (item.subItems?.some((subItem) => pathname.startsWith(subItem.url))) {
+				newExpandedItems.add(item.title);
 			}
 		});
-		
 		if (newExpandedItems.size > 0) {
-			setExpandedItems(prev => new Set([...prev, ...newExpandedItems]));
+			setExpandedItems((prev) => new Set([...prev, ...newExpandedItems]));
 		}
 	}, [pathname]);
 
 	const toggleItem = (title: string) => {
-		setExpandedItems(prev => {
+		setExpandedItems((prev) => {
 			const next = new Set(prev);
 			if (next.has(title)) {
 				next.delete(title);
@@ -448,6 +473,32 @@ export default function AppSidebar() {
 		return cards;
 	}, [showNewReleaseBanner, latestRelease]);
 
+	// Reset areCardsEmpty when promoCards changes
+	useEffect(() => {
+		if (promoCards.length > 0) {
+			setAreCardsEmpty(false);
+		}
+	}, [promoCards]);
+
+	const hasPromoCards = promoCards.length > 0 && !areCardsEmpty;
+	// When cards are present: 13rem (header 3rem + bottom section ~10rem)
+	// When no cards: 8rem (header 3rem + bottom section without cards ~5rem)
+	const sidebarGroupHeight = hasPromoCards ? "h-[calc(100vh-13rem)]" : "h-[calc(100vh-8rem)]";
+
+	const handleCardsEmpty = () => {
+		setAreCardsEmpty(true);
+	};
+
+	const handleLogout = async () => {
+		try {
+			await logout().unwrap();
+			router.push("/login");
+		} catch (error) {
+			// Even if logout fails on server, redirect to login
+			router.push("/login");
+		}
+	};
+
 	return (
 		<Sidebar className="overflow-y-clip border-none bg-transparent">
 			<SidebarHeader className="mt-1 ml-2 flex h-12 justify-between px-0">
@@ -457,8 +508,8 @@ export default function AppSidebar() {
 					</Link>
 				</div>
 			</SidebarHeader>
-			<SidebarContent className="custom-scrollbar pb-6">
-				<SidebarGroup>
+			<SidebarContent className="overflow-hidden pb-4">
+				<SidebarGroup className={`custom-scrollbar ${sidebarGroupHeight} overflow-scroll`}>
 					<SidebarGroupContent>
 						<SidebarMenu className="space-y-0.5">
 							{items.map((item) => {
@@ -478,33 +529,12 @@ export default function AppSidebar() {
 									/>
 								);
 							})}
-							<div className="text-accent-foreground my-3 flex flex-row items-center gap-2 px-3 text-xs font-medium">
-								<Building2 className="h-4 w-4" />
-								ENTERPRISE
-							</div>
-							{enterpriseItems.map((item) => {
-								const isActive = isActiveRoute(item.url);
-								const isAllowed = item.title === "Governance" ? isGovernanceEnabled : true;
-								return (
-									<SidebarItem
-										key={item.title}
-										item={item}
-										isActive={isActive}
-										isAllowed={isAllowed}
-										isWebSocketConnected={isWebSocketConnected}
-										isExpanded={expandedItems.has(item.title)}
-										onToggle={() => toggleItem(item.title)}
-										pathname={pathname}
-										router={router}
-									/>
-								);
-							})}
 						</SidebarMenu>
 					</SidebarGroupContent>
 				</SidebarGroup>
-				<div className="mt-auto flex flex-col gap-4 px-3">
+				<div className="flex flex-col gap-4 px-3">
 					<div className="mx-1">
-						<PromoCardStack cards={promoCards} />
+						<PromoCardStack cards={promoCards} onCardsEmpty={handleCardsEmpty} />
 					</div>
 					<div className="flex flex-row">
 						<div className="mx-auto flex flex-row gap-4">
@@ -527,16 +557,16 @@ export default function AppSidebar() {
 								</a>
 							))}
 							<ThemeToggle />
-							{IS_ENTERPRISE && (
+							{isAuthEnabled && (
 								<div>
-									<div
-										className="flex items-center space-x-3"
-										onClick={() => {
-											window.location.href = "/api/logout";
-										}}
+									<button
+										className="hover:text-primary text-muted-foreground flex cursor-pointer items-center space-x-3 p-0.5"
+										onClick={handleLogout}
+										type="button"
+										aria-label="Logout"
 									>
-										<LogOut className="hover:text-primary text-muted-foreground h-4.5 w-4.5" size={20} strokeWidth={1.5} />
-									</div>
+										<LogOut className="hover:text-primary text-muted-foreground h-4 w-4" size={20} strokeWidth={2} />
+									</button>
 								</div>
 							)}
 						</div>

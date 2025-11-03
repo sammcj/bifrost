@@ -45,10 +45,16 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationCleanupMCPClientToolsConfig(ctx, db); err != nil {
 		return err
 	}
-	if err := migrationAddVKMCPConfigsTable(ctx, db); err != nil {
+	if err := migrationAddVirtualKeyMCPConfigsTable(ctx, db); err != nil {
+		return err
+	}
+	if err := migrationAddPluginPathColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := migrationAddProviderConfigBudgetRateLimit(ctx, db); err != nil {
+		return err
+	}
+	if err := migrationAddSessionsTable(ctx, db); err != nil {
 		return err
 	}
 	return nil
@@ -135,8 +141,8 @@ func migrationInit(ctx context.Context, db *gorm.DB) error {
 					return err
 				}
 			}
-			if !migrator.HasTable(&tables.TableConfig{}) {
-				if err := migrator.CreateTable(&tables.TableConfig{}); err != nil {
+			if !migrator.HasTable(&tables.TableGovernanceConfig{}) {
+				if err := migrator.CreateTable(&tables.TableGovernanceConfig{}); err != nil {
 					return err
 				}
 			}
@@ -196,7 +202,7 @@ func migrationInit(ctx context.Context, db *gorm.DB) error {
 			if err := migrator.DropTable(&tables.TableLogStoreConfig{}); err != nil {
 				return err
 			}
-			if err := migrator.DropTable(&tables.TableConfig{}); err != nil {
+			if err := migrator.DropTable(&tables.TableGovernanceConfig{}); err != nil {
 				return err
 			}
 			if err := migrator.DropTable(&tables.TableModelPricing{}); err != nil {
@@ -566,7 +572,8 @@ func migrationCleanupMCPClientToolsConfig(ctx context.Context, db *gorm.DB) erro
 	return nil
 }
 
-func migrationAddVKMCPConfigsTable(ctx context.Context, db *gorm.DB) error {
+// migrationAddVirtualKeyMCPConfigsTable adds the virtual_key_mcp_configs table
+func migrationAddVirtualKeyMCPConfigsTable(ctx context.Context, db *gorm.DB) error {
 	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
 		ID: "add_vk_mcp_configs_table",
 		Migrate: func(tx *gorm.DB) error {
@@ -688,6 +695,74 @@ func migrationAddProviderConfigBudgetRateLimit(ctx context.Context, db *gorm.DB)
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while running provider config budget/rate limit migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddPluginPathColumn adds the path column to the plugin table
+func migrationAddPluginPathColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "update_plugins_table_for_custom_plugins",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasColumn(&tables.TablePlugin{}, "path") {
+				if err := migrator.AddColumn(&tables.TablePlugin{}, "path"); err != nil {
+					return err
+				}				
+			}
+			if !migrator.HasColumn(&tables.TablePlugin{}, "is_custom") {
+				if err := migrator.AddColumn(&tables.TablePlugin{}, "is_custom"); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if err := migrator.DropColumn(&tables.TablePlugin{}, "path"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TablePlugin{}, "is_custom"); err != nil {	
+				return err
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running plugin path migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddSessionsTable adds the sessions table
+func migrationAddSessionsTable(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_sessions_table",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasTable(&tables.SessionsTable{}) {
+				if err := migrator.CreateTable(&tables.SessionsTable{}); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if err := migrator.DropTable(&tables.SessionsTable{}); err != nil {
+				return err
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running db migration: %s", err.Error())
 	}
 	return nil
 }
