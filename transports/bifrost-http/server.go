@@ -425,6 +425,9 @@ func (s *BifrostHTTPServer) UpdateAuthConfig(ctx context.Context, authConfig *co
 	if authConfig == nil {
 		return fmt.Errorf("config store not found")
 	}
+	if s.Config == nil || s.Config.ConfigStore == nil {
+		return fmt.Errorf("config store not found")
+	}
 	if authConfig.AdminUserName == "" || authConfig.AdminPassword == "" {
 		return fmt.Errorf("username and password are required")
 	}

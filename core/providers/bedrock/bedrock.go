@@ -65,7 +65,10 @@ func NewBedrockProvider(config *schemas.ProviderConfig, logger schemas.Logger) (
 
 	// Pre-warm response pools
 	for range config.ConcurrencyAndBufferSize.Concurrency {
-		bedrockChatResponsePool.Put(&BedrockConverseResponse{})
+		for i := 0; i < config.ConcurrencyAndBufferSize.Concurrency; i++ {
+			bedrockChatResponsePool.Put(&BedrockConverseResponse{})
+		}
+
 	}
 
 	return &BedrockProvider{

@@ -68,16 +68,11 @@ func loadDynamicPlugin(path string, config any) (schemas.Plugin, error) {
 		defer fasthttp.ReleaseResponse(response)
 
 		req.SetRequestURI(dp.Path)
-		req.SetTimeout(1 * time.Minute)
 		req.Header.SetMethod(fasthttp.MethodGet)
-		req.Header.Set("User-Agent", "Bifrost")
 		req.Header.Set("Accept", "application/octet-stream")
-		req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+		req.Header.Set("Accept-Encoding", "gzip")
 		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-		req.Header.Set("Accept-Charset", "utf-8")
-		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-		err := fasthttp.Do(req, response)
+		err := fasthttp.DoTimeout(req, response, 120*time.Second)
 		if err != nil {
 			return nil, err
 		}

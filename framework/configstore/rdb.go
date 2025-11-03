@@ -1403,18 +1403,22 @@ func (s *RDBConfigStore) GetGovernanceConfig(ctx context.Context) (*GovernanceCo
 		// Checking if username and password is present
 		var username *string
 		var password *string
+		var isEnabled bool
 		for _, entry := range governanceConfigs {
 			switch entry.Key {
 			case tables.ConfigAdminUsernameKey:
 				username = bifrost.Ptr(entry.Value)
 			case tables.ConfigAdminPasswordKey:
 				password = bifrost.Ptr(entry.Value)
+			case tables.ConfigIsAuthEnabledKey:
+				isEnabled = entry.Value =="true"
 			}
 		}
 		if username != nil && password != nil {
 			authConfig = &AuthConfig{
 				AdminUserName: *username,
 				AdminPassword: *password,
+				IsEnabled:     isEnabled,
 			}
 		}
 	}

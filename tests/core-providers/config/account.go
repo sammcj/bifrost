@@ -279,7 +279,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 				DefaultRequestTimeoutInSeconds: 120,
 				MaxRetries:                     4, // Higher retries for Groq (can be flaky)
 				RetryBackoffInitial:            1 * time.Second,
-				RetryBackoffMax:                10 * time.Second,
+				RetryBackoffMax:                10 * time.Second,				
 			},
 			ConcurrencyAndBufferSize: schemas.ConcurrencyAndBufferSize{
 				Concurrency: Concurrency,
