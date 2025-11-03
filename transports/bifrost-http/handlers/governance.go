@@ -10,7 +10,6 @@ import (
 
 	"github.com/fasthttp/router"
 	"github.com/google/uuid"
-	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/plugins/governance"
@@ -24,11 +23,10 @@ type GovernanceHandler struct {
 	plugin      *governance.GovernancePlugin
 	pluginStore *governance.GovernanceStore
 	configStore configstore.ConfigStore
-	logger      schemas.Logger
 }
 
 // NewGovernanceHandler creates a new governance handler instance
-func NewGovernanceHandler(plugin *governance.GovernancePlugin, configStore configstore.ConfigStore, logger schemas.Logger) (*GovernanceHandler, error) {
+func NewGovernanceHandler(plugin *governance.GovernancePlugin, configStore configstore.ConfigStore) (*GovernanceHandler, error) {
 	if configStore == nil {
 		return nil, fmt.Errorf("config store is required")
 	}
@@ -37,7 +35,6 @@ func NewGovernanceHandler(plugin *governance.GovernancePlugin, configStore confi
 		plugin:      plugin,
 		pluginStore: plugin.GetGovernanceStore(),
 		configStore: configStore,
-		logger:      logger,
 	}, nil
 }
 
@@ -173,46 +170,46 @@ func (h *GovernanceHandler) getVirtualKeys(ctx *fasthttp.RequestCtx) {
 	// Preload all relationships for complete information
 	virtualKeys, err := h.configStore.GetVirtualKeys(ctx)
 	if err != nil {
-		h.logger.Error("failed to retrieve virtual keys: %v", err)
-		SendError(ctx, 500, "Failed to retrieve virtual keys", h.logger)
+		logger.Error("failed to retrieve virtual keys: %v", err)
+		SendError(ctx, 500, "Failed to retrieve virtual keys")
 		return
 	}
 
 	SendJSON(ctx, map[string]interface{}{
 		"virtual_keys": virtualKeys,
 		"count":        len(virtualKeys),
-	}, h.logger)
+	})
 }
 
 // createVirtualKey handles POST /api/governance/virtual-keys - Create a new virtual key
 func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 	var req CreateVirtualKeyRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
-		SendError(ctx, 400, "Invalid JSON", h.logger)
+		SendError(ctx, 400, "Invalid JSON")
 		return
 	}
 
 	// Validate required fields
 	if req.Name == "" {
-		SendError(ctx, 400, "Virtual key name is required", h.logger)
+		SendError(ctx, 400, "Virtual key name is required")
 		return
 	}
 
 	// Validate mutually exclusive TeamID and CustomerID
 	if req.TeamID != nil && req.CustomerID != nil {
-		SendError(ctx, 400, "VirtualKey cannot be attached to both Team and Customer", h.logger)
+		SendError(ctx, 400, "VirtualKey cannot be attached to both Team and Customer")
 		return
 	}
 
 	// Validate budget if provided
 	if req.Budget != nil {
 		if req.Budget.MaxLimit < 0 {
-			SendError(ctx, 400, fmt.Sprintf("Budget max_limit cannot be negative: %.2f", req.Budget.MaxLimit), h.logger)
+			SendError(ctx, 400, fmt.Sprintf("Budget max_limit cannot be negative: %.2f", req.Budget.MaxLimit))
 			return
 		}
 		// Validate reset duration format
 		if _, err := configstoreTables.ParseDuration(req.Budget.ResetDuration); err != nil {
-			SendError(ctx, 400, fmt.Sprintf("Invalid reset duration format: %s", req.Budget.ResetDuration), h.logger)
+			SendError(ctx, 400, fmt.Sprintf("Invalid reset duration format: %s", req.Budget.ResetDuration))
 			return
 		}
 	}
@@ -382,17 +379,17 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 	}); err != nil {
 		// Check if this is a duplicate MCPClientName error and return 400 instead of 500
 		if strings.Contains(err.Error(), "duplicate mcp_client_name:") {
-			SendError(ctx, 400, err.Error(), h.logger)
+			SendError(ctx, 400, err.Error())
 			return
 		}
-		SendError(ctx, 500, err.Error(), h.logger)
+		SendError(ctx, 500, err.Error())
 		return
 	}
 
 	// Load relationships for response
 	preloadedVk, err := h.configStore.GetVirtualKey(ctx, vk.ID)
 	if err != nil {
-		h.logger.Error("failed to load relationships for created VK: %v", err)
+		logger.Error("failed to load relationships for created VK: %v", err)
 		// If we can't load the full VK, use the basic one we just created
 		preloadedVk = &vk
 	}
@@ -417,7 +414,7 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, map[string]interface{}{
 		"message":     "Virtual key created successfully",
 		"virtual_key": preloadedVk,
-	}, h.logger)
+	})
 }
 
 // getVirtualKey handles GET /api/governance/virtual-keys/{vk_id} - Get a specific virtual key
@@ -427,16 +424,16 @@ func (h *GovernanceHandler) getVirtualKey(ctx *fasthttp.RequestCtx) {
 	vk, err := h.configStore.GetVirtualKey(ctx, vkID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Virtual key not found", h.logger)
+			SendError(ctx, 404, "Virtual key not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to retrieve virtual key", h.logger)
+		SendError(ctx, 500, "Failed to retrieve virtual key")
 		return
 	}
 
 	SendJSON(ctx, map[string]interface{}{
 		"virtual_key": vk,
-	}, h.logger)
+	})
 }
 
 // updateVirtualKey handles PUT /api/governance/virtual-keys/{vk_id} - Update a virtual key
@@ -445,23 +442,23 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 
 	var req UpdateVirtualKeyRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
-		SendError(ctx, 400, "Invalid JSON", h.logger)
+		SendError(ctx, 400, "Invalid JSON")
 		return
 	}
 
 	// Validate mutually exclusive TeamID and CustomerID
 	if req.TeamID != nil && req.CustomerID != nil {
-		SendError(ctx, 400, "VirtualKey cannot be attached to both Team and Customer", h.logger)
+		SendError(ctx, 400, "VirtualKey cannot be attached to both Team and Customer")
 		return
 	}
 
 	vk, err := h.configStore.GetVirtualKey(ctx, vkID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Virtual key not found", h.logger)
+			SendError(ctx, 404, "Virtual key not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to retrieve virtual key", h.logger)
+		SendError(ctx, 500, "Failed to retrieve virtual key")
 		return
 	}
 
@@ -874,27 +871,27 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 
 		return nil
 	}); err != nil {
-		h.logger.Error("failed to update virtual key: %v", err)
+		logger.Error("failed to update virtual key: %v", err)
 		// Check if this is a duplicate MCPClientName error and return 400 instead of 500
 		if strings.Contains(err.Error(), "duplicate mcp_client_name:") {
-			SendError(ctx, 400, err.Error(), h.logger)
+			SendError(ctx, 400, err.Error())
 			return
 		}
-		SendError(ctx, 500, "Failed to update virtual key", h.logger)
+		SendError(ctx, 500, "Failed to update virtual key")
 		return
 	}
 
 	// Load relationships for response
 	preloadedVk, err := h.configStore.GetVirtualKey(ctx, vk.ID)
 	if err != nil {
-		h.logger.Error("failed to load relationships for updated VK: %v", err)
+		logger.Error("failed to load relationships for updated VK: %v", err)
 		preloadedVk = vk
 	}
 
 	// Update in-memory cache for budget and rate limit changes
 	if req.Budget != nil && preloadedVk.BudgetID != nil {
 		if err := h.pluginStore.UpdateBudgetInMemory(preloadedVk.Budget); err != nil {
-			h.logger.Error("failed to update budget cache: %v", err)
+			logger.Error("failed to update budget cache: %v", err)
 		}
 	}
 
@@ -903,7 +900,7 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 		for _, pc := range preloadedVk.ProviderConfigs {
 			if pc.BudgetID != nil && pc.Budget != nil {
 				if err := h.pluginStore.UpdateBudgetInMemory(pc.Budget); err != nil {
-					h.logger.Error("failed to update provider budget cache: %v", err)
+					logger.Error("failed to update provider budget cache: %v", err)
 				}
 			}
 		}
@@ -915,7 +912,7 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, map[string]interface{}{
 		"message":     "Virtual key updated successfully",
 		"virtual_key": preloadedVk,
-	}, h.logger)
+	})
 }
 
 // deleteVirtualKey handles DELETE /api/governance/virtual-keys/{vk_id} - Delete a virtual key
@@ -926,10 +923,10 @@ func (h *GovernanceHandler) deleteVirtualKey(ctx *fasthttp.RequestCtx) {
 	vk, err := h.configStore.GetVirtualKey(ctx, vkID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Virtual key not found", h.logger)
+			SendError(ctx, 404, "Virtual key not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to retrieve virtual key", h.logger)
+		SendError(ctx, 500, "Failed to retrieve virtual key")
 		return
 	}
 
@@ -937,10 +934,10 @@ func (h *GovernanceHandler) deleteVirtualKey(ctx *fasthttp.RequestCtx) {
 
 	if err := h.configStore.DeleteVirtualKey(ctx, vkID); err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Virtual key not found", h.logger)
+			SendError(ctx, 404, "Virtual key not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to delete virtual key", h.logger)
+		SendError(ctx, 500, "Failed to delete virtual key")
 		return
 	}
 
@@ -954,7 +951,7 @@ func (h *GovernanceHandler) deleteVirtualKey(ctx *fasthttp.RequestCtx) {
 
 	SendJSON(ctx, map[string]interface{}{
 		"message": "Virtual key deleted successfully",
-	}, h.logger)
+	})
 }
 
 // Team CRUD Operations
@@ -966,40 +963,40 @@ func (h *GovernanceHandler) getTeams(ctx *fasthttp.RequestCtx) {
 	// Preload relationships for complete information
 	teams, err := h.configStore.GetTeams(ctx, customerID)
 	if err != nil {
-		h.logger.Error("failed to retrieve teams: %v", err)
-		SendError(ctx, 500, fmt.Sprintf("Failed to retrieve teams: %v", err), h.logger)
+		logger.Error("failed to retrieve teams: %v", err)
+		SendError(ctx, 500, fmt.Sprintf("Failed to retrieve teams: %v", err))
 		return
 	}
 
 	SendJSON(ctx, map[string]interface{}{
 		"teams": teams,
 		"count": len(teams),
-	}, h.logger)
+	})
 }
 
 // createTeam handles POST /api/governance/teams - Create a new team
 func (h *GovernanceHandler) createTeam(ctx *fasthttp.RequestCtx) {
 	var req CreateTeamRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
-		SendError(ctx, 400, "Invalid JSON", h.logger)
+		SendError(ctx, 400, "Invalid JSON")
 		return
 	}
 
 	// Validate required fields
 	if req.Name == "" {
-		SendError(ctx, 400, "Team name is required", h.logger)
+		SendError(ctx, 400, "Team name is required")
 		return
 	}
 
 	// Validate budget if provided
 	if req.Budget != nil {
 		if req.Budget.MaxLimit < 0 {
-			SendError(ctx, 400, fmt.Sprintf("Budget max_limit cannot be negative: %.2f", req.Budget.MaxLimit), h.logger)
+			SendError(ctx, 400, fmt.Sprintf("Budget max_limit cannot be negative: %.2f", req.Budget.MaxLimit))
 			return
 		}
 		// Validate reset duration format
 		if _, err := configstoreTables.ParseDuration(req.Budget.ResetDuration); err != nil {
-			SendError(ctx, 400, fmt.Sprintf("Invalid reset duration format: %s", req.Budget.ResetDuration), h.logger)
+			SendError(ctx, 400, fmt.Sprintf("Invalid reset duration format: %s", req.Budget.ResetDuration))
 			return
 		}
 	}
@@ -1031,15 +1028,15 @@ func (h *GovernanceHandler) createTeam(ctx *fasthttp.RequestCtx) {
 		}
 		return nil
 	}); err != nil {
-		h.logger.Error("failed to create team: %v", err)
-		SendError(ctx, 500, "failed to create team", h.logger)
+		logger.Error("failed to create team: %v", err)
+		SendError(ctx, 500, "failed to create team")
 		return
 	}
 
 	// Load relationships for response
 	preloadedTeam, err := h.configStore.GetTeam(ctx, team.ID)
 	if err != nil {
-		h.logger.Error("failed to load relationships for created team: %v", err)
+		logger.Error("failed to load relationships for created team: %v", err)
 		preloadedTeam = &team
 	}
 
@@ -1054,7 +1051,7 @@ func (h *GovernanceHandler) createTeam(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, map[string]interface{}{
 		"message": "Team created successfully",
 		"team":    preloadedTeam,
-	}, h.logger)
+	})
 }
 
 // getTeam handles GET /api/governance/teams/{team_id} - Get a specific team
@@ -1064,16 +1061,16 @@ func (h *GovernanceHandler) getTeam(ctx *fasthttp.RequestCtx) {
 	team, err := h.configStore.GetTeam(ctx, teamID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Team not found", h.logger)
+			SendError(ctx, 404, "Team not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to retrieve team", h.logger)
+		SendError(ctx, 500, "Failed to retrieve team")
 		return
 	}
 
 	SendJSON(ctx, map[string]interface{}{
 		"team": team,
-	}, h.logger)
+	})
 }
 
 // updateTeam handles PUT /api/governance/teams/{team_id} - Update a team
@@ -1082,17 +1079,17 @@ func (h *GovernanceHandler) updateTeam(ctx *fasthttp.RequestCtx) {
 
 	var req UpdateTeamRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
-		SendError(ctx, 400, "Invalid JSON", h.logger)
+		SendError(ctx, 400, "Invalid JSON")
 		return
 	}
 
 	team, err := h.configStore.GetTeam(ctx, teamID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Team not found", h.logger)
+			SendError(ctx, 404, "Team not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to retrieve team", h.logger)
+		SendError(ctx, 500, "Failed to retrieve team")
 		return
 	}
 
@@ -1148,21 +1145,21 @@ func (h *GovernanceHandler) updateTeam(ctx *fasthttp.RequestCtx) {
 
 		return nil
 	}); err != nil {
-		SendError(ctx, 500, "Failed to update team", h.logger)
+		SendError(ctx, 500, "Failed to update team")
 		return
 	}
 
 	// Update in-memory cache for budget changes
 	if req.Budget != nil && team.BudgetID != nil {
 		if err := h.pluginStore.UpdateBudgetInMemory(team.Budget); err != nil {
-			h.logger.Error("failed to update budget cache: %v", err)
+			logger.Error("failed to update budget cache: %v", err)
 		}
 	}
 
 	// Load relationships for response
 	preloadedTeam, err := h.configStore.GetTeam(ctx, team.ID)
 	if err != nil {
-		h.logger.Error("failed to load relationships for updated team: %v", err)
+		logger.Error("failed to load relationships for updated team: %v", err)
 		preloadedTeam = team
 	}
 
@@ -1172,7 +1169,7 @@ func (h *GovernanceHandler) updateTeam(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, map[string]interface{}{
 		"message": "Team updated successfully",
 		"team":    preloadedTeam,
-	}, h.logger)
+	})
 }
 
 // deleteTeam handles DELETE /api/governance/teams/{team_id} - Delete a team
@@ -1182,10 +1179,10 @@ func (h *GovernanceHandler) deleteTeam(ctx *fasthttp.RequestCtx) {
 	team, err := h.configStore.GetTeam(ctx, teamID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Team not found", h.logger)
+			SendError(ctx, 404, "Team not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to retrieve team", h.logger)
+		SendError(ctx, 500, "Failed to retrieve team")
 		return
 	}
 
@@ -1193,10 +1190,10 @@ func (h *GovernanceHandler) deleteTeam(ctx *fasthttp.RequestCtx) {
 
 	if err := h.configStore.DeleteTeam(ctx, teamID); err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Team not found", h.logger)
+			SendError(ctx, 404, "Team not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to delete team", h.logger)
+		SendError(ctx, 500, "Failed to delete team")
 		return
 	}
 
@@ -1210,7 +1207,7 @@ func (h *GovernanceHandler) deleteTeam(ctx *fasthttp.RequestCtx) {
 
 	SendJSON(ctx, map[string]interface{}{
 		"message": "Team deleted successfully",
-	}, h.logger)
+	})
 }
 
 // Customer CRUD Operations
@@ -1219,40 +1216,40 @@ func (h *GovernanceHandler) deleteTeam(ctx *fasthttp.RequestCtx) {
 func (h *GovernanceHandler) getCustomers(ctx *fasthttp.RequestCtx) {
 	customers, err := h.configStore.GetCustomers(ctx)
 	if err != nil {
-		h.logger.Error("failed to retrieve customers: %v", err)
-		SendError(ctx, 500, "failed to retrieve customers", h.logger)
+		logger.Error("failed to retrieve customers: %v", err)
+		SendError(ctx, 500, "failed to retrieve customers")
 		return
 	}
 
 	SendJSON(ctx, map[string]interface{}{
 		"customers": customers,
 		"count":     len(customers),
-	}, h.logger)
+	})
 }
 
 // createCustomer handles POST /api/governance/customers - Create a new customer
 func (h *GovernanceHandler) createCustomer(ctx *fasthttp.RequestCtx) {
 	var req CreateCustomerRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
-		SendError(ctx, 400, "Invalid JSON", h.logger)
+		SendError(ctx, 400, "Invalid JSON")
 		return
 	}
 
 	// Validate required fields
 	if req.Name == "" {
-		SendError(ctx, 400, "Customer name is required", h.logger)
+		SendError(ctx, 400, "Customer name is required")
 		return
 	}
 
 	// Validate budget if provided
 	if req.Budget != nil {
 		if req.Budget.MaxLimit < 0 {
-			SendError(ctx, 400, fmt.Sprintf("Budget max_limit cannot be negative: %.2f", req.Budget.MaxLimit), h.logger)
+			SendError(ctx, 400, fmt.Sprintf("Budget max_limit cannot be negative: %.2f", req.Budget.MaxLimit))
 			return
 		}
 		// Validate reset duration format
 		if _, err := configstoreTables.ParseDuration(req.Budget.ResetDuration); err != nil {
-			SendError(ctx, 400, fmt.Sprintf("Invalid reset duration format: %s", req.Budget.ResetDuration), h.logger)
+			SendError(ctx, 400, fmt.Sprintf("Invalid reset duration format: %s", req.Budget.ResetDuration))
 			return
 		}
 	}
@@ -1283,14 +1280,14 @@ func (h *GovernanceHandler) createCustomer(ctx *fasthttp.RequestCtx) {
 		}
 		return nil
 	}); err != nil {
-		SendError(ctx, 500, "failed to create customer", h.logger)
+		SendError(ctx, 500, "failed to create customer")
 		return
 	}
 
 	// Load relationships for response
 	preloadedCustomer, err := h.configStore.GetCustomer(ctx, customer.ID)
 	if err != nil {
-		h.logger.Error("failed to load relationships for created customer: %v", err)
+		logger.Error("failed to load relationships for created customer: %v", err)
 		preloadedCustomer = &customer
 	}
 
@@ -1305,7 +1302,7 @@ func (h *GovernanceHandler) createCustomer(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, map[string]interface{}{
 		"message":  "Customer created successfully",
 		"customer": preloadedCustomer,
-	}, h.logger)
+	})
 }
 
 // getCustomer handles GET /api/governance/customers/{customer_id} - Get a specific customer
@@ -1315,16 +1312,16 @@ func (h *GovernanceHandler) getCustomer(ctx *fasthttp.RequestCtx) {
 	customer, err := h.configStore.GetCustomer(ctx, customerID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Customer not found", h.logger)
+			SendError(ctx, 404, "Customer not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to retrieve customer", h.logger)
+		SendError(ctx, 500, "Failed to retrieve customer")
 		return
 	}
 
 	SendJSON(ctx, map[string]interface{}{
 		"customer": customer,
-	}, h.logger)
+	})
 }
 
 // updateCustomer handles PUT /api/governance/customers/{customer_id} - Update a customer
@@ -1333,17 +1330,17 @@ func (h *GovernanceHandler) updateCustomer(ctx *fasthttp.RequestCtx) {
 
 	var req UpdateCustomerRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
-		SendError(ctx, 400, "Invalid JSON", h.logger)
+		SendError(ctx, 400, "Invalid JSON")
 		return
 	}
 
 	customer, err := h.configStore.GetCustomer(ctx, customerID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Customer not found", h.logger)
+			SendError(ctx, 404, "Customer not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to retrieve customer", h.logger)
+		SendError(ctx, 500, "Failed to retrieve customer")
 		return
 	}
 
@@ -1396,21 +1393,21 @@ func (h *GovernanceHandler) updateCustomer(ctx *fasthttp.RequestCtx) {
 
 		return nil
 	}); err != nil {
-		SendError(ctx, 500, "Failed to update customer", h.logger)
+		SendError(ctx, 500, "Failed to update customer")
 		return
 	}
 
 	// Update in-memory cache for budget changes
 	if req.Budget != nil && customer.BudgetID != nil {
 		if err := h.pluginStore.UpdateBudgetInMemory(customer.Budget); err != nil {
-			h.logger.Error("failed to update budget cache: %v", err)
+			logger.Error("failed to update budget cache: %v", err)
 		}
 	}
 
 	// Load relationships for response
 	preloadedCustomer, err := h.configStore.GetCustomer(ctx, customer.ID)
 	if err != nil {
-		h.logger.Error("failed to load relationships for updated customer: %v", err)
+		logger.Error("failed to load relationships for updated customer: %v", err)
 		preloadedCustomer = customer
 	}
 
@@ -1420,7 +1417,7 @@ func (h *GovernanceHandler) updateCustomer(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, map[string]interface{}{
 		"message":  "Customer updated successfully",
 		"customer": preloadedCustomer,
-	}, h.logger)
+	})
 }
 
 // deleteCustomer handles DELETE /api/governance/customers/{customer_id} - Delete a customer
@@ -1430,10 +1427,10 @@ func (h *GovernanceHandler) deleteCustomer(ctx *fasthttp.RequestCtx) {
 	customer, err := h.configStore.GetCustomer(ctx, customerID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Customer not found", h.logger)
+			SendError(ctx, 404, "Customer not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to retrieve customer", h.logger)
+		SendError(ctx, 500, "Failed to retrieve customer")
 		return
 	}
 
@@ -1441,10 +1438,10 @@ func (h *GovernanceHandler) deleteCustomer(ctx *fasthttp.RequestCtx) {
 
 	if err := h.configStore.DeleteCustomer(ctx, customerID); err != nil {
 		if err == gorm.ErrRecordNotFound {
-			SendError(ctx, 404, "Customer not found", h.logger)
+			SendError(ctx, 404, "Customer not found")
 			return
 		}
-		SendError(ctx, 500, "Failed to delete customer", h.logger)
+		SendError(ctx, 500, "Failed to delete customer")
 		return
 	}
 
@@ -1458,7 +1455,7 @@ func (h *GovernanceHandler) deleteCustomer(ctx *fasthttp.RequestCtx) {
 
 	SendJSON(ctx, map[string]interface{}{
 		"message": "Customer deleted successfully",
-	}, h.logger)
+	})
 }
 
 func validateRateLimit(rateLimit *configstoreTables.TableRateLimit) error {

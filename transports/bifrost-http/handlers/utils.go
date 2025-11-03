@@ -13,26 +13,26 @@ import (
 )
 
 // SendJSON sends a JSON response with 200 OK status
-func SendJSON(ctx *fasthttp.RequestCtx, data interface{}, logger schemas.Logger) {
+func SendJSON(ctx *fasthttp.RequestCtx, data interface{}) {
 	ctx.SetContentType("application/json")
 	if err := json.NewEncoder(ctx).Encode(data); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to encode JSON response: %v", err))
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to encode response: %v", err), logger)
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to encode response: %v", err))
 	}
 }
 
 // SendJSONWithStatus sends a JSON response with a custom status code
-func SendJSONWithStatus(ctx *fasthttp.RequestCtx, data interface{}, statusCode int, logger schemas.Logger) {
+func SendJSONWithStatus(ctx *fasthttp.RequestCtx, data interface{}, statusCode int) {
 	ctx.SetContentType("application/json")
 	ctx.SetStatusCode(statusCode)
 	if err := json.NewEncoder(ctx).Encode(data); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to encode JSON response: %v", err))
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to encode response: %v", err), logger)
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to encode response: %v", err))
 	}
 }
 
 // SendError sends a BifrostError response
-func SendError(ctx *fasthttp.RequestCtx, statusCode int, message string, logger schemas.Logger) {
+func SendError(ctx *fasthttp.RequestCtx, statusCode int, message string) {
 	bifrostErr := &schemas.BifrostError{
 		IsBifrostError: false,
 		StatusCode:     &statusCode,
@@ -40,11 +40,11 @@ func SendError(ctx *fasthttp.RequestCtx, statusCode int, message string, logger 
 			Message: message,
 		},
 	}
-	SendBifrostError(ctx, bifrostErr, logger)
+	SendBifrostError(ctx, bifrostErr)
 }
 
 // SendBifrostError sends a BifrostError response
-func SendBifrostError(ctx *fasthttp.RequestCtx, bifrostErr *schemas.BifrostError, logger schemas.Logger) {
+func SendBifrostError(ctx *fasthttp.RequestCtx, bifrostErr *schemas.BifrostError) {
 	if bifrostErr.StatusCode != nil {
 		ctx.SetStatusCode(*bifrostErr.StatusCode)
 	} else if !bifrostErr.IsBifrostError {
@@ -62,7 +62,7 @@ func SendBifrostError(ctx *fasthttp.RequestCtx, bifrostErr *schemas.BifrostError
 }
 
 // SendSSEError sends an error in Server-Sent Events format
-func SendSSEError(ctx *fasthttp.RequestCtx, bifrostErr *schemas.BifrostError, logger schemas.Logger) {
+func SendSSEError(ctx *fasthttp.RequestCtx, bifrostErr *schemas.BifrostError) {
 	errorJSON, err := json.Marshal(map[string]interface{}{
 		"error": bifrostErr,
 	})

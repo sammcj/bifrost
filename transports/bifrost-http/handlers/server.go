@@ -436,12 +436,12 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	var loggingHandler *LoggingHandler
 	loggerPlugin, _ := FindPluginByName[*logging.LoggerPlugin](s.Plugins, logging.PluginName)
 	if loggerPlugin != nil {
-		loggingHandler = NewLoggingHandler(loggerPlugin.GetPluginLogManager(), logger)
+		loggingHandler = NewLoggingHandler(loggerPlugin.GetPluginLogManager())
 	}
 	var governanceHandler *GovernanceHandler
 	governancePlugin, _ := FindPluginByName[*governance.GovernancePlugin](s.Plugins, governance.PluginName)
 	if governancePlugin != nil {
-		governanceHandler, err = NewGovernanceHandler(governancePlugin, s.Config.ConfigStore, logger)
+		governanceHandler, err = NewGovernanceHandler(governancePlugin, s.Config.ConfigStore)
 		if err != nil {
 			return fmt.Errorf("failed to initialize governance handler: %v", err)
 		}
@@ -449,15 +449,15 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	var cacheHandler *CacheHandler
 	semanticCachePlugin, _ := FindPluginByName[*semanticcache.Plugin](s.Plugins, semanticcache.PluginName)
 	if semanticCachePlugin != nil {
-		cacheHandler = NewCacheHandler(semanticCachePlugin, logger)
+		cacheHandler = NewCacheHandler(semanticCachePlugin)
 	}
 	// Websocket handler needs to go below UI handler
 	logger.Debug("initializing websocket server")
 	if loggerPlugin != nil {
-		s.WebSocketHandler = NewWebSocketHandler(ctx, loggerPlugin.GetPluginLogManager(), logger, s.Config.ClientConfig.AllowedOrigins)
+		s.WebSocketHandler = NewWebSocketHandler(ctx, loggerPlugin.GetPluginLogManager(), s.Config.ClientConfig.AllowedOrigins)
 		loggerPlugin.SetLogCallback(s.WebSocketHandler.BroadcastLogUpdate)
 	} else {
-		s.WebSocketHandler = NewWebSocketHandler(ctx, nil, logger, s.Config.ClientConfig.AllowedOrigins)
+		s.WebSocketHandler = NewWebSocketHandler(ctx, nil, s.Config.ClientConfig.AllowedOrigins)
 	}
 	// Start WebSocket heartbeat
 	s.WebSocketHandler.StartHeartbeat()
@@ -474,13 +474,13 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	// Chaining all middlewares
 	// lib.ChainMiddlewares chains multiple middlewares together
 	// Initialize
-	healthHandler := NewHealthHandler(s.Config, logger)
-	providerHandler := NewProviderHandler(s.Config, s.Client, logger)
-	inferenceHandler := NewInferenceHandler(s.Client, s.Config, logger)
-	mcpHandler := NewMCPHandler(s.Client, logger, s.Config)
-	integrationHandler := NewIntegrationHandler(s.Client, s.Config, logger)
-	configHandler := NewConfigHandler(s, logger, s.Config)
-	pluginsHandler := NewPluginsHandler(s, s.Config.ConfigStore, logger)
+	healthHandler := NewHealthHandler(s.Config)
+	providerHandler := NewProviderHandler(s.Config, s.Client)
+	inferenceHandler := NewInferenceHandler(s.Client, s.Config)
+	mcpHandler := NewMCPHandler(s.Client, s.Config)
+	integrationHandler := NewIntegrationHandler(s.Client, s.Config)
+	configHandler := NewConfigHandler(s, s.Config)
+	pluginsHandler := NewPluginsHandler(s, s.Config.ConfigStore)
 	// Register all handler routes
 	healthHandler.RegisterRoutes(s.Router, middlewares...)
 	providerHandler.RegisterRoutes(s.Router, middlewares...)
@@ -514,7 +514,7 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 
 	// 404 handler
 	s.Router.NotFound = func(ctx *fasthttp.RequestCtx) {
-		SendError(ctx, fasthttp.StatusNotFound, "Route not found: "+string(ctx.Path()), logger)
+		SendError(ctx, fasthttp.StatusNotFound, "Route not found: "+string(ctx.Path()))
 	}
 	return nil
 }
