@@ -67,7 +67,7 @@
                 ]
               }
             ]
-          },
+          },          
           {
             "group": "Models Catalog",
             "icon": "box",
@@ -85,6 +85,14 @@
               "integrations/genai-sdk",
               "integrations/litellm-sdk",
               "integrations/langchain-sdk"
+            ]
+          },
+          {
+            "group": "Custom plugins",
+            "icon": "puzzle-piece",
+            "pages": [
+              "plugins/getting-started",
+              "plugins/writing-plugin"              
             ]
           },
           {

@@ -19,7 +19,7 @@ FROM golang:1.24-alpine3.22 AS builder
 WORKDIR /app
 
 # Install dependencies including gcc for CGO and sqlite
-RUN apk add --no-cache upx gcc musl-dev sqlite-dev
+RUN apk add --no-cache upx gcc musl-dev sqlite-dev binutils
 
 # Set environment for CGO-enabled build (required for go-sqlite3)
 ENV CGO_ENABLED=1 GOOS=linux
