@@ -4,3 +4,5 @@
 - feat: Use all keys for list models request
 - refactor: Cohere provider to use completeRequest and response pooling for all requests
 - chore: Added id, object, and model fields to Chat Completion responses from Bedrock and Cohere providers
+- feat: Moved all streaming calls to use fasthttp client for efficiency
+- feat: Adds support for auth
