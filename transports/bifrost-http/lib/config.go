@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -42,6 +43,7 @@ type HandlerStore interface {
 type ConfigData struct {
 	Client            *configstore.ClientConfig             `json:"client"`
 	EncryptionKey     string                                `json:"encryption_key"`
+	AuthConfig        *configstore.AuthConfig               `json:"auth_config,omitempty"`
 	Providers         map[string]configstore.ProviderConfig `json:"providers"`
 	FrameworkConfig   *framework.FrameworkConfig            `json:"framework,omitempty"`
 	MCP               *schemas.MCPConfig                    `json:"mcp,omitempty"`
@@ -52,7 +54,7 @@ type ConfigData struct {
 	Plugins           []*schemas.PluginConfig               `json:"plugins,omitempty"`
 }
 
-// UnmarshalJSON unmarshals the ConfigData from JSON using internal unmarshallers
+// UnmarshalJSON umarshals the ConfigData from JSON using internal unmarshallers
 // for VectorStoreConfig, ConfigStoreConfig, and LogsStoreConfig to ensure proper
 // type safety and configuration parsing.
 func (cd *ConfigData) UnmarshalJSON(data []byte) error {
@@ -61,6 +63,7 @@ func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 		FrameworkConfig   json.RawMessage                       `json:"framework,omitempty"`
 		Client            *configstore.ClientConfig             `json:"client"`
 		EncryptionKey     string                                `json:"encryption_key"`
+		AuthConfig        *configstore.AuthConfig               `json:"auth_config,omitempty"`
 		Providers         map[string]configstore.ProviderConfig `json:"providers"`
 		MCP               *schemas.MCPConfig                    `json:"mcp,omitempty"`
 		Governance        *configstore.GovernanceConfig         `json:"governance,omitempty"`
@@ -78,6 +81,7 @@ func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 	// Set simple fields
 	cd.Client = temp.Client
 	cd.EncryptionKey = temp.EncryptionKey
+	cd.AuthConfig = temp.AuthConfig
 	cd.Providers = temp.Providers
 	cd.MCP = temp.MCP
 	cd.Governance = temp.Governance
@@ -349,6 +353,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 			if governanceConfig != nil {
 				config.GovernanceConfig = governanceConfig
 			}
+			// Updating auth config if present in config
 			// Checking if MCP config already exists
 			mcpConfig, err := config.ConfigStore.GetMCPConfig(ctx)
 			if err != nil {
@@ -389,6 +394,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 						Name:    plugin.Name,
 						Enabled: plugin.Enabled,
 						Config:  plugin.Config,
+						Path:    plugin.Path,
 					}
 					if plugin.Name == semanticcache.PluginName {
 						if err := config.AddProviderKeysToSemanticCacheConfig(pluginConfig); err != nil {
@@ -778,6 +784,21 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		}
 	}
 
+	if configData.AuthConfig != nil {
+		if config.ConfigStore != nil {
+			configStoreAuthConfig, err := config.ConfigStore.GetAuthConfig(ctx)
+			if err == nil && configStoreAuthConfig == nil {
+				// Adding this config
+				if err := config.ConfigStore.UpdateAuthConfig(ctx, configData.AuthConfig); err != nil {
+					logger.Warn("failed to update auth config: %v", err)
+				}
+			}
+		} else if governanceConfig != nil && governanceConfig.AuthConfig == nil {
+			// Adding this config
+			governanceConfig.AuthConfig = configData.AuthConfig
+		}
+	}
+
 	// 5. Check for Plugins
 
 	if config.ConfigStore != nil {
@@ -793,6 +814,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					Name:    plugin.Name,
 					Enabled: plugin.Enabled,
 					Config:  plugin.Config,
+					Path:    plugin.Path,
 				}
 				if plugin.Name == semanticcache.PluginName {
 					if err := config.AddProviderKeysToSemanticCacheConfig(pluginConfig); err != nil {
@@ -804,10 +826,21 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		}
 	}
 
-	// If plugins are not present in the store, we will use the config file
-	if len(config.PluginConfigs) == 0 && len(configData.Plugins) > 0 {
+	// First we are loading plugins from the db
+	if len(configData.Plugins) > 0 {
 		logger.Debug("no plugins found in store, processing from config file")
-		config.PluginConfigs = configData.Plugins
+		if len(config.PluginConfigs) == 0 {
+			config.PluginConfigs = configData.Plugins
+		} else {
+			// Here we will append new plugins to the config.PluginConfigs
+			for _, plugin := range configData.Plugins {
+				if !slices.ContainsFunc(config.PluginConfigs, func(p *schemas.PluginConfig) bool {
+					return p.Name == plugin.Name
+				}) {
+					config.PluginConfigs = append(config.PluginConfigs, plugin)
+				}
+			}
+		}
 
 		for i, plugin := range config.PluginConfigs {
 			if plugin.Name == semanticcache.PluginName {
@@ -831,6 +864,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					Name:    plugin.Name,
 					Enabled: plugin.Enabled,
 					Config:  pluginConfigCopy,
+					Path:    plugin.Path,
 				}
 				if plugin.Name == semanticcache.PluginName {
 					if err := config.RemoveProviderKeysFromSemanticCacheConfig(pluginConfig); err != nil {

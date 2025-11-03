@@ -15,9 +15,10 @@ interface PromoCardItem {
 interface PromoCardStackProps {
 	cards: PromoCardItem[];
 	className?: string;
+	onCardsEmpty?: () => void;
 }
 
-export function PromoCardStack({ cards, className = "" }: PromoCardStackProps) {
+export function PromoCardStack({ cards, className = "", onCardsEmpty }: PromoCardStackProps) {
 	const [items, setItems] = useState(() => {
 		return [...cards].sort((a, b) => {
 			const aDismissible = a.dismissible !== false;
@@ -27,6 +28,7 @@ export function PromoCardStack({ cards, className = "" }: PromoCardStackProps) {
 	});
 	const [removingId, setRemovingId] = useState<string | null>(null);
 	const [isAnimating, setIsAnimating] = useState(false);
+	const prevLenRef = React.useRef(items.length);
 
 	useEffect(() => {
 		const sortedCards = [...cards].sort((a, b) => {
@@ -36,6 +38,14 @@ export function PromoCardStack({ cards, className = "" }: PromoCardStackProps) {
 		});
 		setItems(sortedCards);
 	}, [cards]);
+
+	// Call once when the stack transitions from non-empty to empty
+	useEffect(() => {
+		if (prevLenRef.current > 0 && items.length === 0) {
+			onCardsEmpty?.();
+		}
+		prevLenRef.current = items.length;
+	}, [items.length]);
 
 	const handleDismiss = (cardId: string) => {
 		if (isAnimating) return;
@@ -49,12 +59,12 @@ export function PromoCardStack({ cards, className = "" }: PromoCardStackProps) {
 		}, 400);
 	};
 
-	if (!cards || cards.length === 0) {
-		return null;
-	}
-
 	const MAX_VISIBLE_CARDS = 10;
 	const visibleCards = items.slice(0, MAX_VISIBLE_CARDS);
+
+	if (!cards || cards.length === 0 || visibleCards.length === 0) {
+		return null;
+	}
 
 	return (
 		<div className={`relative ${className}`} style={{ marginBottom: "60px", height: "130px" }}>

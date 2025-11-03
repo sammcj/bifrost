@@ -7,6 +7,8 @@ APP_DIR ?=
 PROMETHEUS_LABELS ?=
 LOG_STYLE ?= json
 LOG_LEVEL ?= info
+TEST_REPORTS_DIR ?= test-reports
+GOTESTSUM_FORMAT ?= testname
 
 # Colors for output
 RED=\033[0;31m
@@ -34,9 +36,13 @@ help: ## Show this help message
 	@echo "  HOST              Server host (default: localhost)"
 	@echo "  PORT              Server port (default: 8080)"
 	@echo "  PROMETHEUS_LABELS Labels for Prometheus metrics"
-	@echo "  LOG_STYLE Logger output format: json|pretty (default: json)"
-	@echo "  LOG_LEVEL Logger level: debug|info|warn|error (default: info)"
+	@echo "  LOG_STYLE         Logger output format: json|pretty (default: json)"
+	@echo "  LOG_LEVEL         Logger level: debug|info|warn|error (default: info)"
 	@echo "  APP_DIR           App data directory inside container (default: /app/data)"
+	@echo ""
+	@echo "$(YELLOW)Test Configuration:$(NC)"
+	@echo "  TEST_REPORTS_DIR  Directory for HTML test reports (default: test-reports)"
+	@echo "  GOTESTSUM_FORMAT  Test output format: testname|dots|pkgname|standard-verbose (default: testname)"
 
 cleanup-enterprise: ## Clean up enterprise directories if present
 	@echo "$(GREEN)Cleaning up enterprise...$(NC)"
@@ -54,6 +60,28 @@ install-ui: cleanup-enterprise
 install-air: ## Install air for hot reloading (if not already installed)
 	@which air > /dev/null || (echo "$(YELLOW)Installing air for hot reloading...$(NC)" && go install github.com/air-verse/air@latest)
 	@echo "$(GREEN)Air is ready$(NC)"
+
+install-gotestsum: ## Install gotestsum for test reporting (if not already installed)
+	@which gotestsum > /dev/null || (echo "$(YELLOW)Installing gotestsum for test reporting...$(NC)" && go install gotest.tools/gotestsum@latest)
+	@echo "$(GREEN)gotestsum is ready$(NC)"
+
+install-junit-viewer: ## Install junit-viewer for HTML report generation (if not already installed)
+	@if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
+		if which junit-viewer > /dev/null 2>&1; then \
+			echo "$(GREEN)junit-viewer is already installed$(NC)"; \
+		else \
+			echo "$(YELLOW)Installing junit-viewer for HTML reports...$(NC)"; \
+			if npm install -g junit-viewer 2>&1; then \
+				echo "$(GREEN)junit-viewer installed successfully$(NC)"; \
+			else \
+				echo "$(RED)Failed to install junit-viewer. HTML reports will be skipped.$(NC)"; \
+				echo "$(YELLOW)You can install it manually: npm install -g junit-viewer$(NC)"; \
+				exit 0; \
+			fi; \
+		fi \
+	else \
+		echo "$(YELLOW)CI environment detected, skipping junit-viewer installation$(NC)"; \
+	fi
 
 dev: install-ui install-air setup-workspace ## Start complete development environment (UI + API with proxy)
 	@echo "$(GREEN)Starting Bifrost complete development environment...$(NC)"
@@ -114,25 +142,280 @@ clean: ## Clean build artifacts and temporary files
 	@rm -rf tmp/
 	@rm -f transports/bifrost-http/build-errors.log
 	@rm -rf transports/bifrost-http/tmp/
+	@rm -rf $(TEST_REPORTS_DIR)/
 	@echo "$(GREEN)Clean complete$(NC)"
 
-test: ## Run tests for bifrost-http
+clean-test-reports: ## Clean test reports only
+	@echo "$(YELLOW)Cleaning test reports...$(NC)"
+	@rm -rf $(TEST_REPORTS_DIR)/
+	@echo "$(GREEN)Test reports cleaned$(NC)"
+
+generate-html-reports: ## Convert existing XML reports to HTML
+	@if ! which junit-viewer > /dev/null 2>&1; then \
+		echo "$(RED)Error: junit-viewer not installed$(NC)"; \
+		echo "$(YELLOW)Install with: make install-junit-viewer$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Converting XML reports to HTML...$(NC)"
+	@if [ ! -d "$(TEST_REPORTS_DIR)" ] || [ -z "$$(ls -A $(TEST_REPORTS_DIR)/*.xml 2>/dev/null)" ]; then \
+		echo "$(YELLOW)No XML reports found in $(TEST_REPORTS_DIR)$(NC)"; \
+		echo "$(YELLOW)Run tests first: make test-all$(NC)"; \
+		exit 0; \
+	fi
+	@for xml in $(TEST_REPORTS_DIR)/*.xml; do \
+		html=$${xml%.xml}.html; \
+		echo "  Converting $$(basename $$xml) → $$(basename $$html)"; \
+		junit-viewer --results=$$xml --save=$$html 2>/dev/null || true; \
+	done
+	@echo ""
+	@echo "$(GREEN)✓ HTML reports generated$(NC)"
+	@echo "$(CYAN)View reports:$(NC)"
+	@ls -1 $(TEST_REPORTS_DIR)/*.html 2>/dev/null | sed 's|$(TEST_REPORTS_DIR)/|  open $(TEST_REPORTS_DIR)/|' || true
+
+test: install-gotestsum ## Run tests for bifrost-http
 	@echo "$(GREEN)Running bifrost-http tests...$(NC)"
-	@cd transports/bifrost-http && GOWORK=off go test -v ./...
+	@mkdir -p $(TEST_REPORTS_DIR)
+	@cd transports/bifrost-http && GOWORK=off gotestsum \
+		--format=$(GOTESTSUM_FORMAT) \
+		--junitfile=../../$(TEST_REPORTS_DIR)/bifrost-http.xml \
+		-- -v ./...
+	@if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
+		if which junit-viewer > /dev/null 2>&1; then \
+			echo "$(YELLOW)Generating HTML report...$(NC)"; \
+			if junit-viewer --results=$(TEST_REPORTS_DIR)/bifrost-http.xml --save=$(TEST_REPORTS_DIR)/bifrost-http.html 2>/dev/null; then \
+				echo ""; \
+				echo "$(CYAN)HTML report: $(TEST_REPORTS_DIR)/bifrost-http.html$(NC)"; \
+				echo "$(CYAN)Open with: open $(TEST_REPORTS_DIR)/bifrost-http.html$(NC)"; \
+			else \
+				echo "$(YELLOW)HTML generation failed. JUnit XML report available.$(NC)"; \
+				echo "$(CYAN)JUnit XML report: $(TEST_REPORTS_DIR)/bifrost-http.xml$(NC)"; \
+			fi; \
+		else \
+			echo ""; \
+			echo "$(YELLOW)junit-viewer not installed. Install with: make install-junit-viewer$(NC)"; \
+			echo "$(CYAN)JUnit XML report: $(TEST_REPORTS_DIR)/bifrost-http.xml$(NC)"; \
+		fi \
+	else \
+		echo ""; \
+		echo "$(CYAN)JUnit XML report: $(TEST_REPORTS_DIR)/bifrost-http.xml$(NC)"; \
+	fi
 
-test-core: ## Run core tests
+test-core: install-gotestsum ## Run core tests (Usage: make test-core PROVIDER=openai TESTCASE=SpeechSynthesisStreamAdvanced/MultipleVoices_Streaming/StreamingVoice_echo)
 	@echo "$(GREEN)Running core tests...$(NC)"
-	@cd core && go test -v ./...
+	@mkdir -p $(TEST_REPORTS_DIR)
+	@TEST_FAILED=0; \
+	REPORT_FILE=""; \
+	if [ -n "$(PROVIDER)" ]; then \
+		echo "$(CYAN)Running tests for provider: $(PROVIDER)$(NC)"; \
+		if [ ! -f "tests/core-providers/$(PROVIDER)_test.go" ]; then \
+			echo "$(RED)Error: Provider test file '$(PROVIDER)_test.go' not found$(NC)"; \
+			echo "$(YELLOW)Available providers:$(NC)"; \
+			ls tests/core-providers/*_test.go 2>/dev/null | grep -v cross_provider | xargs -n 1 basename | sed 's/_test\.go//' | sed 's/^/  - /'; \
+			exit 1; \
+		fi; \
+	fi; \
+	if [ -f .env ]; then \
+		echo "$(YELLOW)Loading environment variables from .env...$(NC)"; \
+		set -a; . ./.env; set +a; \
+	fi; \
+	if [ -n "$(PROVIDER)" ]; then \
+		PROVIDER_TEST_NAME=$$(echo "$(PROVIDER)" | awk '{print toupper(substr($$0,1,1)) tolower(substr($$0,2))}' | sed 's/openai/OpenAI/i; s/sgl/SGL/i'); \
+		if [ -n "$(TESTCASE)" ]; then \
+			CLEAN_TESTCASE="$(TESTCASE)"; \
+			CLEAN_TESTCASE=$${CLEAN_TESTCASE#Test$${PROVIDER_TEST_NAME}/}; \
+			CLEAN_TESTCASE=$${CLEAN_TESTCASE#$${PROVIDER_TEST_NAME}Tests/}; \
+			CLEAN_TESTCASE=$$(echo "$$CLEAN_TESTCASE" | sed 's|^Test[A-Z][A-Za-z]*/[A-Z][A-Za-z]*Tests/||'); \
+			echo "$(CYAN)Running Test$${PROVIDER_TEST_NAME}/$${PROVIDER_TEST_NAME}Tests/$$CLEAN_TESTCASE...$(NC)"; \
+			REPORT_FILE="$(TEST_REPORTS_DIR)/core-$(PROVIDER)-$$(echo $$CLEAN_TESTCASE | sed 's|/|_|g').xml"; \
+			cd tests/core-providers && GOWORK=off gotestsum \
+				--format=$(GOTESTSUM_FORMAT) \
+				--junitfile=../../$$REPORT_FILE \
+				-- -v -run "^Test$${PROVIDER_TEST_NAME}$$/.*Tests/$$CLEAN_TESTCASE$$" || TEST_FAILED=1; \
+			cd ../..; \
+			$(MAKE) cleanup-junit-xml REPORT_FILE=$$REPORT_FILE; \
+			if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
+				if which junit-viewer > /dev/null 2>&1; then \
+					echo "$(YELLOW)Generating HTML report...$(NC)"; \
+					junit-viewer --results=$$REPORT_FILE --save=$${REPORT_FILE%.xml}.html 2>/dev/null || true; \
+					echo ""; \
+					echo "$(CYAN)HTML report: $${REPORT_FILE%.xml}.html$(NC)"; \
+					echo "$(CYAN)Open with: open $${REPORT_FILE%.xml}.html$(NC)"; \
+				else \
+					echo ""; \
+					echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
+				fi; \
+			else \
+				echo ""; \
+				echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
+			fi; \
+		else \
+			echo "$(CYAN)Running Test$${PROVIDER_TEST_NAME}...$(NC)"; \
+			REPORT_FILE="$(TEST_REPORTS_DIR)/core-$(PROVIDER).xml"; \
+			cd tests/core-providers && GOWORK=off gotestsum \
+				--format=$(GOTESTSUM_FORMAT) \
+				--junitfile=../../$$REPORT_FILE \
+				-- -v -run "^Test$${PROVIDER_TEST_NAME}$$" || TEST_FAILED=1; \
+			cd ../..; \
+			$(MAKE) cleanup-junit-xml REPORT_FILE=$$REPORT_FILE; \
+			if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
+				if which junit-viewer > /dev/null 2>&1; then \
+					echo "$(YELLOW)Generating HTML report...$(NC)"; \
+					junit-viewer --results=$$REPORT_FILE --save=$${REPORT_FILE%.xml}.html 2>/dev/null || true; \
+					echo ""; \
+					echo "$(CYAN)HTML report: $${REPORT_FILE%.xml}.html$(NC)"; \
+					echo "$(CYAN)Open with: open $${REPORT_FILE%.xml}.html$(NC)"; \
+				else \
+					echo ""; \
+					echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
+				fi; \
+			else \
+				echo ""; \
+				echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
+			fi; \
+		fi \
+	else \
+		if [ -n "$(TESTCASE)" ]; then \
+			echo "$(RED)Error: TESTCASE requires PROVIDER to be specified$(NC)"; \
+			echo "$(YELLOW)Usage: make test-core PROVIDER=openai TESTCASE=SpeechSynthesisStreamAdvanced/MultipleVoices_Streaming/StreamingVoice_echo$(NC)"; \
+			exit 1; \
+		fi; \
+		REPORT_FILE="$(TEST_REPORTS_DIR)/core-all.xml"; \
+		cd tests/core-providers && GOWORK=off gotestsum \
+			--format=$(GOTESTSUM_FORMAT) \
+			--junitfile=../../$$REPORT_FILE \
+			-- -v ./... || TEST_FAILED=1; \
+		cd ../..; \
+		$(MAKE) cleanup-junit-xml REPORT_FILE=$$REPORT_FILE; \
+		if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
+			if which junit-viewer > /dev/null 2>&1; then \
+				echo "$(YELLOW)Generating HTML report...$(NC)"; \
+				junit-viewer --results=$$REPORT_FILE --save=$${REPORT_FILE%.xml}.html 2>/dev/null || true; \
+				echo ""; \
+				echo "$(CYAN)HTML report: $${REPORT_FILE%.xml}.html$(NC)"; \
+				echo "$(CYAN)Open with: open $${REPORT_FILE%.xml}.html$(NC)"; \
+			else \
+				echo ""; \
+				echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
+			fi; \
+		else \
+			echo ""; \
+			echo "$(CYAN)JUnit XML report: $$REPORT_FILE$(NC)"; \
+		fi; \
+	fi; \
+	if [ -f "$$REPORT_FILE" ]; then \
+		ALL_FAILED=$$(grep -B 1 '<failure' "$$REPORT_FILE" 2>/dev/null | \
+			grep '<testcase' | \
+			sed 's/.*name="\([^"]*\)".*/\1/' | \
+			sort -u); \
+		MAX_DEPTH=$$(echo "$$ALL_FAILED" | awk -F'/' '{print NF}' | sort -n | tail -1); \
+		FAILED_TESTS=$$(echo "$$ALL_FAILED" | awk -F'/' -v max="$$MAX_DEPTH" 'NF == max'); \
+		FAILURES=$$(echo "$$FAILED_TESTS" | grep -v '^$$' | wc -l | tr -d ' '); \
+		if [ "$$FAILURES" -gt 0 ]; then \
+			echo ""; \
+			echo "$(RED)═══════════════════════════════════════════════════════════$(NC)"; \
+			echo "$(RED)                    FAILED TEST CASES                      $(NC)"; \
+			echo "$(RED)═══════════════════════════════════════════════════════════$(NC)"; \
+			echo ""; \
+			printf "$(YELLOW)%-60s %-20s$(NC)\n" "Test Name" "Status"; \
+			printf "$(YELLOW)%-60s %-20s$(NC)\n" "─────────────────────────────────────────────────────────────" "────────────────────"; \
+			echo "$$FAILED_TESTS" | while read -r testname; do \
+				if [ -n "$$testname" ]; then \
+					printf "$(RED)%-60s %-20s$(NC)\n" "$$testname" "FAILED"; \
+				fi; \
+			done; \
+			echo ""; \
+			echo "$(RED)Total Failures: $$FAILURES$(NC)"; \
+			echo ""; \
+		else \
+			echo ""; \
+			echo "$(GREEN)═══════════════════════════════════════════════════════════$(NC)"; \
+			echo "$(GREEN)                 ALL TESTS PASSED ✓                       $(NC)"; \
+			echo "$(GREEN)═══════════════════════════════════════════════════════════$(NC)"; \
+			echo ""; \
+		fi; \
+	fi; \
+	if [ $$TEST_FAILED -eq 1 ]; then \
+		exit 1; \
+	fi
 
-test-plugins: ## Run plugin tests
+cleanup-junit-xml: ## Internal: Clean up JUnit XML to remove parent test cases with child failures
+	@if [ -z "$(REPORT_FILE)" ]; then \
+		echo "$(RED)Error: REPORT_FILE not specified$(NC)"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(REPORT_FILE)" ]; then \
+		exit 0; \
+	fi
+	@ALL_FAILED=$$(grep -B 1 '<failure' "$(REPORT_FILE)" 2>/dev/null | \
+		grep '<testcase' | \
+		sed 's/.*name="\([^"]*\)".*/\1/' | \
+		sort -u); \
+	if [ -n "$$ALL_FAILED" ]; then \
+		MAX_DEPTH=$$(echo "$$ALL_FAILED" | awk -F'/' '{print NF}' | sort -n | tail -1); \
+		PARENT_TESTS=$$(echo "$$ALL_FAILED" | awk -F'/' -v max="$$MAX_DEPTH" 'NF < max'); \
+		if [ -n "$$PARENT_TESTS" ]; then \
+			cp "$(REPORT_FILE)" "$(REPORT_FILE).tmp"; \
+			echo "$$PARENT_TESTS" | while IFS= read -r parent; do \
+				if [ -n "$$parent" ]; then \
+					ESCAPED=$$(echo "$$parent" | sed 's/[\/&]/\\&/g'); \
+					perl -i -pe 'BEGIN{undef $$/;} s/<testcase[^>]*name="'"$$ESCAPED"'"[^>]*>.*?<failure.*?<\/testcase>//gs' "$(REPORT_FILE).tmp" 2>/dev/null || true; \
+				fi; \
+			done; \
+			if [ -f "$(REPORT_FILE).tmp" ]; then \
+				mv "$(REPORT_FILE).tmp" "$(REPORT_FILE)"; \
+			fi; \
+		fi; \
+	fi
+
+test-plugins: install-gotestsum ## Run plugin tests
 	@echo "$(GREEN)Running plugin tests...$(NC)"
+	@mkdir -p $(TEST_REPORTS_DIR)
 	@cd plugins && find . -name "*.go" -path "*/tests/*" -o -name "*_test.go" | head -1 > /dev/null && \
 		for dir in $$(find . -name "*_test.go" -exec dirname {} \; | sort -u); do \
+			plugin_name=$$(echo $$dir | sed 's|^\./||' | sed 's|/|-|g'); \
 			echo "Testing $$dir..."; \
-			cd $$dir && go test -v ./... && cd - > /dev/null; \
+			cd $$dir && gotestsum \
+				--format=$(GOTESTSUM_FORMAT) \
+				--junitfile=../../$(TEST_REPORTS_DIR)/plugin-$$plugin_name.xml \
+				-- -v ./... && cd - > /dev/null; \
+			if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
+				if which junit-viewer > /dev/null 2>&1; then \
+					echo "$(YELLOW)Generating HTML report for $$plugin_name...$(NC)"; \
+					junit-viewer --results=../$(TEST_REPORTS_DIR)/plugin-$$plugin_name.xml --save=../$(TEST_REPORTS_DIR)/plugin-$$plugin_name.html 2>/dev/null || true; \
+				fi; \
+			fi; \
 		done || echo "No plugin tests found"
+	@echo ""
+	@if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
+		echo "$(CYAN)HTML reports saved to $(TEST_REPORTS_DIR)/plugin-*.html$(NC)"; \
+	else \
+		echo "$(CYAN)JUnit XML reports saved to $(TEST_REPORTS_DIR)/plugin-*.xml$(NC)"; \
+	fi
 
 test-all: test-core test-plugins test ## Run all tests
+	@echo ""
+	@echo "$(GREEN)═══════════════════════════════════════════════════════════$(NC)"
+	@echo "$(GREEN)              All Tests Complete - Summary                 $(NC)"
+	@echo "$(GREEN)═══════════════════════════════════════════════════════════$(NC)"
+	@echo ""
+	@if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
+		echo "$(YELLOW)Generating combined HTML report...$(NC)"; \
+		junit-viewer --results=$(TEST_REPORTS_DIR) --save=$(TEST_REPORTS_DIR)/index.html 2>/dev/null || true; \
+		echo ""; \
+		echo "$(CYAN)HTML reports available in $(TEST_REPORTS_DIR)/:$(NC)"; \
+		ls -1 $(TEST_REPORTS_DIR)/*.html 2>/dev/null | sed 's/^/  ✓ /' || echo "  No reports found"; \
+		echo ""; \
+		echo "$(YELLOW)📊 View all test results:$(NC)"; \
+		echo "$(CYAN)  open $(TEST_REPORTS_DIR)/index.html$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)Or view individual reports:$(NC)"; \
+		ls -1 $(TEST_REPORTS_DIR)/*.html 2>/dev/null | grep -v index.html | sed 's|$(TEST_REPORTS_DIR)/|  open $(TEST_REPORTS_DIR)/|' || true; \
+		echo ""; \
+	else \
+		echo "$(CYAN)JUnit XML reports available in $(TEST_REPORTS_DIR)/:$(NC)"; \
+		ls -1 $(TEST_REPORTS_DIR)/*.xml 2>/dev/null | sed 's/^/  ✓ /' || echo "  No reports found"; \
+		echo ""; \
+	fi
 
 # Quick start with example config
 quick-start: ## Quick start with example config and maxim plugin

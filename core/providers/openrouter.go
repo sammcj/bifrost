@@ -4,10 +4,13 @@ package providers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/maximhq/bifrost/core/providers/openai"
+	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/valyala/fasthttp"
 )
@@ -16,7 +19,6 @@ import (
 type OpenRouterProvider struct {
 	logger              schemas.Logger        // Logger for provider operations
 	client              *fasthttp.Client      // HTTP client for API requests
-	streamClient        *http.Client          // HTTP client for streaming requests
 	networkConfig       schemas.NetworkConfig // Network configuration including extra headers
 	sendBackRawResponse bool                  // Whether to include raw response in BifrostResponse
 }
@@ -28,18 +30,15 @@ func NewOpenRouterProvider(config *schemas.ProviderConfig, logger schemas.Logger
 	config.CheckAndSetDefaults()
 
 	client := &fasthttp.Client{
-		ReadTimeout:     time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
-		WriteTimeout:    time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
-		MaxConnsPerHost: config.ConcurrencyAndBufferSize.Concurrency,
-	}
-
-	// Initialize streaming HTTP client
-	streamClient := &http.Client{
-		Timeout: time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
+		ReadTimeout:         time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
+		WriteTimeout:        time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds),
+		MaxConnsPerHost:     5000,
+		MaxIdleConnDuration: 60 * time.Second,
+		MaxConnWaitTimeout:  10 * time.Second,
 	}
 
 	// Configure proxy if provided
-	client = configureProxy(client, config.ProxyConfig, logger)
+	client = providerUtils.ConfigureProxy(client, config.ProxyConfig, logger)
 
 	// Set default BaseURL if not provided
 	if config.NetworkConfig.BaseURL == "" {
@@ -50,7 +49,6 @@ func NewOpenRouterProvider(config *schemas.ProviderConfig, logger schemas.Logger
 	return &OpenRouterProvider{
 		logger:              logger,
 		client:              client,
-		streamClient:        streamClient,
 		networkConfig:       config.NetworkConfig,
 		sendBackRawResponse: config.SendBackRawResponse,
 	}
@@ -73,24 +71,24 @@ func (provider *OpenRouterProvider) listModelsByKey(ctx context.Context, key sch
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Set any extra headers from network config
-	setExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
-	req.SetRequestURI(provider.networkConfig.BaseURL + getPathFromContext(ctx, "/v1/models"))
+	req.SetRequestURI(provider.networkConfig.BaseURL + providerUtils.GetPathFromContext(ctx, "/v1/models"))
 	req.Header.SetMethod(http.MethodGet)
 	req.Header.SetContentType("application/json")
 	if key.Value != "" {
-		req.Header.Set("Authorization", "Bearer "+key.Value)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key.Value))
 	}
 
 	// Make request
-	latency, bifrostErr := makeRequestWithContext(ctx, provider.client, req, resp)
+	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
-		bifrostErr := parseOpenAIError(resp, schemas.ListModelsRequest, providerName, "")
+		bifrostErr := openai.ParseOpenAIError(resp, schemas.ListModelsRequest, providerName, "")
 		return nil, bifrostErr
 	}
 
@@ -98,7 +96,7 @@ func (provider *OpenRouterProvider) listModelsByKey(ctx context.Context, key sch
 	responseBody := append([]byte(nil), resp.Body()...)
 
 	var openrouterResponse schemas.BifrostListModelsResponse
-	rawResponse, bifrostErr := handleProviderResponse(responseBody, &openrouterResponse, shouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
+	rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, &openrouterResponse, providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -110,7 +108,7 @@ func (provider *OpenRouterProvider) listModelsByKey(ctx context.Context, key sch
 	openrouterResponse.ExtraFields.Latency = latency.Milliseconds()
 
 	// Set raw response if enabled
-	if shouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
+	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
 		openrouterResponse.ExtraFields.RawResponse = rawResponse
 	}
 
@@ -120,7 +118,7 @@ func (provider *OpenRouterProvider) listModelsByKey(ctx context.Context, key sch
 // ListModels performs a list models request to OpenRouter's API.
 // Requests are made concurrently for improved performance.
 func (provider *OpenRouterProvider) ListModels(ctx context.Context, keys []schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
-	return handleMultipleListModelsRequests(
+	return providerUtils.HandleMultipleListModelsRequests(
 		ctx,
 		keys,
 		request,
@@ -131,15 +129,15 @@ func (provider *OpenRouterProvider) ListModels(ctx context.Context, keys []schem
 
 // TextCompletion performs a text completion request to the OpenRouter API.
 func (provider *OpenRouterProvider) TextCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (*schemas.BifrostTextCompletionResponse, *schemas.BifrostError) {
-	return handleOpenAITextCompletionRequest(
+	return openai.HandleOpenAITextCompletionRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/completions"),
+		provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/v1/completions"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
 		provider.GetProviderKey(),
-		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.logger,
 	)
 }
@@ -152,14 +150,14 @@ func (provider *OpenRouterProvider) TextCompletionStream(ctx context.Context, po
 	if key.Value != "" {
 		authHeader = map[string]string{"Authorization": "Bearer " + key.Value}
 	}
-	return handleOpenAITextCompletionStreaming(
+	return openai.HandleOpenAITextCompletionStreaming(
 		ctx,
-		provider.streamClient,
-		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/completions"),
+		provider.client,
+		provider.networkConfig.BaseURL+"/v1/completions",
 		request,
 		authHeader,
 		provider.networkConfig.ExtraHeaders,
-		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.GetProviderKey(),
 		postHookRunner,
 		provider.logger,
@@ -168,14 +166,14 @@ func (provider *OpenRouterProvider) TextCompletionStream(ctx context.Context, po
 
 // ChatCompletion performs a chat completion request to the OpenRouter API.
 func (provider *OpenRouterProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
-	return handleOpenAIChatCompletionRequest(
+	return openai.HandleOpenAIChatCompletionRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
+		provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/v1/chat/completions"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
-		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.GetProviderKey(),
 		provider.logger,
 	)
@@ -191,14 +189,14 @@ func (provider *OpenRouterProvider) ChatCompletionStream(ctx context.Context, po
 		authHeader = map[string]string{"Authorization": "Bearer " + key.Value}
 	}
 	// Use shared OpenAI-compatible streaming logic
-	return handleOpenAIChatCompletionStreaming(
+	return openai.HandleOpenAIChatCompletionStreaming(
 		ctx,
-		provider.streamClient,
-		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/v1/chat/completions"),
+		provider.client,
+		provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/v1/chat/completions"),
 		request,
 		authHeader,
 		provider.networkConfig.ExtraHeaders,
-		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		schemas.OpenRouter,
 		postHookRunner,
 		provider.logger,
@@ -207,14 +205,14 @@ func (provider *OpenRouterProvider) ChatCompletionStream(ctx context.Context, po
 
 // Responses performs a responses request to the OpenRouter API.
 func (provider *OpenRouterProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
-	return handleOpenAIResponsesRequest(
+	return openai.HandleOpenAIResponsesRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/alpha/responses"),
+		provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/alpha/responses"),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
-		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.GetProviderKey(),
 		provider.logger,
 	)
@@ -226,14 +224,14 @@ func (provider *OpenRouterProvider) ResponsesStream(ctx context.Context, postHoo
 	if key.Value != "" {
 		authHeader = map[string]string{"Authorization": "Bearer " + key.Value}
 	}
-	return handleOpenAIResponsesStreaming(
+	return openai.HandleOpenAIResponsesStreaming(
 		ctx,
-		provider.streamClient,
-		provider.networkConfig.BaseURL+getPathFromContext(ctx, "/alpha/responses"),
+		provider.client,
+		provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/alpha/responses"),
 		request,
 		authHeader,
 		provider.networkConfig.ExtraHeaders,
-		shouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.GetProviderKey(),
 		postHookRunner,
 		nil,
@@ -243,25 +241,25 @@ func (provider *OpenRouterProvider) ResponsesStream(ctx context.Context, postHoo
 
 // Embedding is not supported by the OpenRouter provider.
 func (provider *OpenRouterProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostEmbeddingResponse, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError(schemas.EmbeddingRequest, provider.GetProviderKey())
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.EmbeddingRequest, provider.GetProviderKey())
 }
 
 // Speech is not supported by the OpenRouter provider.
 func (provider *OpenRouterProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError(schemas.SpeechRequest, provider.GetProviderKey())
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.SpeechRequest, provider.GetProviderKey())
 }
 
 // SpeechStream is not supported by the OpenRouter provider.
 func (provider *OpenRouterProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError(schemas.SpeechStreamRequest, provider.GetProviderKey())
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.SpeechStreamRequest, provider.GetProviderKey())
 }
 
 // Transcription is not supported by the OpenRouter provider.
 func (provider *OpenRouterProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError(schemas.TranscriptionRequest, provider.GetProviderKey())
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.TranscriptionRequest, provider.GetProviderKey())
 }
 
 // TranscriptionStream is not supported by the OpenRouter provider.
 func (provider *OpenRouterProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, newUnsupportedOperationError(schemas.TranscriptionStreamRequest, provider.GetProviderKey())
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.TranscriptionStreamRequest, provider.GetProviderKey())
 }

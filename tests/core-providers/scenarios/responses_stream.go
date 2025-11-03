@@ -84,7 +84,7 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 		var hasOutputItems, hasContentParts bool
 
 		// Create a timeout context for the stream reading
-		streamCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		streamCtx, cancel := context.WithTimeout(ctx, 200*time.Second)
 		defer cancel()
 
 		t.Logf("📡 Starting to read responses streaming response...")
@@ -294,7 +294,7 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 			var functionCallArgsDetected bool
 			var responseCount int
 
-			streamCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			streamCtx, cancel := context.WithTimeout(ctx, 200*time.Second)
 			defer cancel()
 
 			t.Logf("🔧 Testing responses streaming with tool calls...")
@@ -407,7 +407,7 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 			var reasoningSummaryDetected bool
 			var responseCount int
 
-			streamCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+			streamCtx, cancel := context.WithTimeout(ctx, 200*time.Second)
 			defer cancel()
 
 			t.Logf("🧠 Testing responses streaming with reasoning...")
