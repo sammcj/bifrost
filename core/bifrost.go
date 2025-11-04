@@ -1986,8 +1986,8 @@ func executeRequestWithRetries[T any](
 		// Retry if status code or error object indicates rate limiting
 		if (bifrostError.StatusCode != nil && retryableStatusCodes[*bifrostError.StatusCode]) ||
 			(bifrostError.Error != nil &&
-				(isRateLimitError(bifrostError.Error.Message) ||
-					(bifrostError.Error.Type != nil && isRateLimitError(*bifrostError.Error.Type)))) {
+				(IsRateLimitError(bifrostError.Error.Message) ||
+					(bifrostError.Error.Type != nil && IsRateLimitError(*bifrostError.Error.Type)))) {
 			shouldRetry = true
 			logger.Debug("detected rate limit error in message, will retry: %s", bifrostError.Error.Message)
 		}
