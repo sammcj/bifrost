@@ -10,6 +10,7 @@ import (
 )
 
 func TestVertex(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("VERTEX_API_KEY") == "" && (os.Getenv("VERTEX_PROJECT_ID") == "" || os.Getenv("VERTEX_CREDENTIALS") == "") {
 		t.Skip("Skipping Vertex tests because VERTEX_API_KEY is not set and VERTEX_PROJECT_ID or VERTEX_CREDENTIALS is not set")
 	}

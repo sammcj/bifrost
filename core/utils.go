@@ -92,8 +92,8 @@ func validateRequest(req *schemas.BifrostRequest) *schemas.BifrostError {
 	return nil
 }
 
-// IsRateLimitError checks if an error message indicates a rate limit issue
-func IsRateLimitError(errorMessage string) bool {
+// IsRateLimitErrorMessage checks if an error message indicates a rate limit issue
+func IsRateLimitErrorMessage(errorMessage string) bool {
 	if errorMessage == "" {
 		return false
 	}

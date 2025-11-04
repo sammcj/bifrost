@@ -10,6 +10,7 @@ import (
 )
 
 func TestCerebras(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("CEREBRAS_API_KEY") == "" {
 		t.Skip("Skipping Cerebras tests because CEREBRAS_API_KEY is not set")
 	}

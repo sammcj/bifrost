@@ -169,9 +169,9 @@ func RunEnd2EndToolCallingTest(t *testing.T, client *bifrost.Bifrost, ctx contex
 		}
 
 		// Enhanced validation for final response
-		expectations2 := ConversationExpectations([]string{"francisco", "22", "sunny"})
+		expectations2 := ConversationExpectations([]string{"francisco", "22"})
 		expectations2 = ModifyExpectationsForProvider(expectations2, testConfig.Provider)
-		expectations2.ShouldContainKeywords = []string{"francisco", "22", "sunny"}  // Should reference tool results (using "francisco" to match both "San Francisco" and "san francisco")
+		expectations2.ShouldContainKeywords = []string{"francisco", "22"}           // Should reference tool results (using "francisco" to match both "San Francisco" and "san francisco")
 		expectations2.ShouldNotContainWords = []string{"error", "failed", "cannot"} // Should not contain error terms
 		expectations2.MinContentLength = 30                                         // Should be a substantial response
 

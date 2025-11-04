@@ -10,6 +10,7 @@ import (
 )
 
 func TestParasail(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("PARASAIL_API_KEY") == "" {
 		t.Skip("Skipping Parasail tests because PARASAIL_API_KEY is not set")
 	}

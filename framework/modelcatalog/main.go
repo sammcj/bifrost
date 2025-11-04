@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 // Default sync interval and config key
 const (
 	DefaultPricingSyncInterval = 24 * time.Hour
-	ConfigLastPricingSyncKey         = "LastModelPricingSync"
+	ConfigLastPricingSyncKey   = "LastModelPricingSync"
 	DefaultPricingURL          = "https://getbifrost.ai/datasheet"
 	TokenTierAbove128K         = 128000
 )
@@ -215,6 +216,51 @@ func (mc *ModelCatalog) GetProvidersForModel(model string) []schemas.ModelProvid
 			providers = append(providers, provider)
 		}
 	}
+
+	// Handler special provider cases
+	// 1. Handler openrouter models
+	if !slices.Contains(providers, schemas.OpenRouter) {
+		for _, provider := range providers {
+			if openRouterModels, ok := mc.modelPool[schemas.OpenRouter]; ok {
+				if slices.Contains(openRouterModels, string(provider)+"/"+model) {
+					providers = append(providers, schemas.OpenRouter)
+				}
+			}
+		}
+	}
+
+	// 2. Handle vertex models
+	if !slices.Contains(providers, schemas.Vertex) {
+		for _, provider := range providers {
+			if vertexModels, ok := mc.modelPool[schemas.Vertex]; ok {
+				if slices.Contains(vertexModels, string(provider)+"/"+model) {
+					providers = append(providers, schemas.Vertex)
+				}
+			}
+		}
+	}
+
+	// 3. Handle openai models for groq
+	if !slices.Contains(providers, schemas.Groq) && strings.Contains(model, "gpt-") {
+		if groqModels, ok := mc.modelPool[schemas.Groq]; ok {
+			if slices.Contains(groqModels, "openai/"+model) {
+				providers = append(providers, schemas.Groq)
+			}
+		}
+	}
+
+	// 4. Handle anthropic models for bedrock
+	if !slices.Contains(providers, schemas.Bedrock) && strings.Contains(model, "claude") {
+		if bedrockModels, ok := mc.modelPool[schemas.Bedrock]; ok {
+			for _, bedrockModel := range bedrockModels {
+				if strings.Contains(bedrockModel, model) {
+					providers = append(providers, schemas.Bedrock)
+					break
+				}
+			}
+		}
+	}
+
 	return providers
 }
 
@@ -233,6 +279,18 @@ func (mc *ModelCatalog) AddModelDataToPool(modelData *schemas.BifrostListModelsR
 		provider = schemas.ModelProvider(provider)
 		mc.modelPool[provider] = append(mc.modelPool[provider], model)
 	}
+}
+
+// RefineModelForProvider refines the model for a given provider.
+// e.g. "gpt-oss-120b" for groq provider -> "openai/gpt-oss-120b"
+func (mc *ModelCatalog) RefineModelForProvider(provider schemas.ModelProvider, model string) string {
+	switch provider {
+	case schemas.Groq:
+		if model == "gpt-oss-120b" {
+			return "openai/" + model
+		}
+	}
+	return model
 }
 
 // populateModelPool populates the model pool with all available models per provider (thread-safe)

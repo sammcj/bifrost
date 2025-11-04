@@ -353,7 +353,7 @@ func TestCalculateBackoff_MaxBackoffCap(t *testing.T) {
 	}
 }
 
-// Test isRateLimitError - all patterns
+// Test IsRateLimitErrorMessage - all patterns
 func TestIsRateLimitError_AllPatterns(t *testing.T) {
 	// Test all patterns from rateLimitPatterns
 	patterns := []string{
@@ -382,36 +382,36 @@ func TestIsRateLimitError_AllPatterns(t *testing.T) {
 	for _, pattern := range patterns {
 		t.Run(fmt.Sprintf("Pattern_%s", strings.ReplaceAll(pattern, " ", "_")), func(t *testing.T) {
 			// Test exact match
-			if !IsRateLimitError(pattern) {
+			if !IsRateLimitErrorMessage(pattern) {
 				t.Errorf("Pattern '%s' should be detected as rate limit error", pattern)
 			}
 
 			// Test case insensitive - uppercase
-			if !IsRateLimitError(strings.ToUpper(pattern)) {
+			if !IsRateLimitErrorMessage(strings.ToUpper(pattern)) {
 				t.Errorf("Uppercase pattern '%s' should be detected as rate limit error", strings.ToUpper(pattern))
 			}
 
 			// Test case insensitive - mixed case
-			if !IsRateLimitError(strings.Title(pattern)) {
+			if !IsRateLimitErrorMessage(strings.Title(pattern)) {
 				t.Errorf("Title case pattern '%s' should be detected as rate limit error", strings.Title(pattern))
 			}
 
 			// Test as part of larger message
 			message := fmt.Sprintf("Error: %s occurred", pattern)
-			if !IsRateLimitError(message) {
+			if !IsRateLimitErrorMessage(message) {
 				t.Errorf("Pattern '%s' in message '%s' should be detected", pattern, message)
 			}
 
 			// Test with prefix and suffix
 			message = fmt.Sprintf("API call failed due to %s - please retry later", pattern)
-			if !IsRateLimitError(message) {
+			if !IsRateLimitErrorMessage(message) {
 				t.Errorf("Pattern '%s' in complex message should be detected", pattern)
 			}
 		})
 	}
 }
 
-// Test isRateLimitError - negative cases
+// Test IsRateLimitErrorMessage - negative cases
 func TestIsRateLimitError_NegativeCases(t *testing.T) {
 	negativeCases := []string{
 		"",
@@ -431,23 +431,23 @@ func TestIsRateLimitError_NegativeCases(t *testing.T) {
 
 	for _, testCase := range negativeCases {
 		t.Run(fmt.Sprintf("Negative_%s", strings.ReplaceAll(testCase, " ", "_")), func(t *testing.T) {
-			if IsRateLimitError(testCase) {
+			if IsRateLimitErrorMessage(testCase) {
 				t.Errorf("Message '%s' should NOT be detected as rate limit error", testCase)
 			}
 		})
 	}
 }
 
-// Test isRateLimitError - edge cases
+// Test IsRateLimitErrorMessage - edge cases
 func TestIsRateLimitError_EdgeCases(t *testing.T) {
 	t.Run("EmptyString", func(t *testing.T) {
-		if IsRateLimitError("") {
+		if IsRateLimitErrorMessage("") {
 			t.Error("Empty string should not be detected as rate limit error")
 		}
 	})
 
 	t.Run("OnlyWhitespace", func(t *testing.T) {
-		if IsRateLimitError("   \t\n  ") {
+		if IsRateLimitErrorMessage("   \t\n  ") {
 			t.Error("Whitespace-only string should not be detected as rate limit error")
 		}
 	})
@@ -455,7 +455,7 @@ func TestIsRateLimitError_EdgeCases(t *testing.T) {
 	t.Run("UnicodeCharacters", func(t *testing.T) {
 		// Test with unicode characters that might affect case conversion
 		message := "RATE LIMIT exceeded 🚫"
-		if !IsRateLimitError(message) {
+		if !IsRateLimitErrorMessage(message) {
 			t.Error("Message with unicode should still detect rate limit pattern")
 		}
 	})
@@ -544,7 +544,7 @@ func BenchmarkCalculateBackoff(b *testing.B) {
 	}
 }
 
-// Benchmark isRateLimitError performance
+// Benchmark IsRateLimitErrorMessage performance
 func BenchmarkIsRateLimitError(b *testing.B) {
 	messages := []string{
 		"rate limit exceeded",
@@ -559,7 +559,7 @@ func BenchmarkIsRateLimitError(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		IsRateLimitError(messages[i%len(messages)])
+		IsRateLimitErrorMessage(messages[i%len(messages)])
 	}
 }
 

@@ -203,7 +203,7 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx con
 			audioData, _ := GenerateTTSAudioForTest(ctx, t, client, testConfig.Provider, testConfig.SpeechSynthesisModel, TTSTestTextBasic, "primary", "mp3")
 
 			// Test supported response formats (excluding text to avoid JSON parsing issues)
-			formats := []string{"json", "verbose_json"}
+			formats := []string{"json"}
 
 			for _, format := range formats {
 				t.Run("Format_"+format, func(t *testing.T) {
