@@ -63,6 +63,7 @@ import (
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/transports/bifrost-http/handlers"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
+	bifrostServer "github.com/maximhq/bifrost/transports/bifrost-http/server"
 )
 
 //go:embed all:ui
@@ -71,7 +72,7 @@ var uiContent embed.FS
 var Version string
 
 var logger = bifrost.NewDefaultLogger(schemas.LogLevelInfo)
-var server *BifrostHTTPServer
+var server *bifrostServer.BifrostHTTPServer
 
 // init initializes command line flags (but does not parse them).
 // Flag parsing is deferred to main() to avoid conflicts with test flags.
@@ -89,16 +90,16 @@ func init() {
 	// Set default host from environment variable or use localhost
 	defaultHost := os.Getenv("BIFROST_HOST")
 	if defaultHost == "" {
-		defaultHost = DefaultHost
+		defaultHost = bifrostServer.DefaultHost
 	}
 	// Initializing server
-	server = NewBifrostHTTPServer(Version, uiContent)
+	server = bifrostServer.NewBifrostHTTPServer(Version, uiContent)
 	// Updating server properties from flags
-	flag.StringVar(&server.Port, "port", DefaultPort, "Port to run the server on")
+	flag.StringVar(&server.Port, "port", bifrostServer.DefaultPort, "Port to run the server on")
 	flag.StringVar(&server.Host, "host", defaultHost, "Host to bind the server to (default: localhost, override with BIFROST_HOST env var)")
-	flag.StringVar(&server.AppDir, "app-dir", DefaultAppDir, "Application data directory (contains config.json and logs)")
-	flag.StringVar(&server.LogLevel, "log-level", DefaultLogLevel, "Logger level (debug, info, warn, error). Default is info.")
-	flag.StringVar(&server.LogOutputStyle, "log-style", DefaultLogOutputStyle, "Logger output type (json or pretty). Default is JSON.")
+	flag.StringVar(&server.AppDir, "app-dir", bifrostServer.DefaultAppDir, "Application data directory (contains config.json and logs)")
+	flag.StringVar(&server.LogLevel, "log-level", bifrostServer.DefaultLogLevel, "Logger level (debug, info, warn, error). Default is info.")
+	flag.StringVar(&server.LogOutputStyle, "log-style", bifrostServer.DefaultLogOutputStyle, "Logger output type (json or pretty). Default is JSON.")
 }
 
 // main is the entry point of the application.
@@ -134,6 +135,7 @@ func main() {
 	logger.SetLevel(schemas.LogLevel(server.LogLevel))
 	// Setting up logger
 	lib.SetLogger(logger)
+	bifrostServer.SetLogger(logger)
 	handlers.SetLogger(logger)
 
 	ctx := context.Background()

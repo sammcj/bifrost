@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -66,6 +66,13 @@ type BifrostHTTPServer struct {
 	Server           *fasthttp.Server
 	Router           *router.Router
 	WebSocketHandler *handlers.WebSocketHandler
+}
+
+var logger schemas.Logger
+
+// SetLogger sets the logger for the server.
+func SetLogger(l schemas.Logger) {
+	logger = l
 }
 
 // NewBifrostHTTPServer creates a new instance of BifrostHTTPServer.

@@ -1,9 +1,9 @@
 "use client";
 
-import APIKeysView from "@/app/_fallbacks/enterprise/components/api-keys/APIKeysView";
 import FullPageLoader from "@/components/fullPageLoader";
 import { useGetCoreConfigQuery } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import APIKeysView from "@enterprise/components/api-keys/APIKeysView";
 import { Gauge, KeyRound, Landmark, Settings, Shield, Sliders, Zap } from "lucide-react";
 import { useQueryState } from "nuqs";
 import { useEffect } from "react";

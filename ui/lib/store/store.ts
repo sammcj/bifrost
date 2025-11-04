@@ -5,7 +5,7 @@ import { appReducer, pluginReducer, providerReducer } from "./slices";
 // Import enterprise types for TypeScript
 type EnterpriseState = {
 	//@ts-ignore
-} & import("@/app/_fallbacks/enterprise/lib/store/slices").EnterpriseState;
+} & import("@enterprise/lib/store/slices").EnterpriseState;
 
 // Get enterprise reducers if they are available
 let enterpriseReducers = {};
