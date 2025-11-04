@@ -1,21 +1,30 @@
+import { IS_ENTERPRISE } from "@/lib/constants/config";
 import { BifrostErrorResponse } from "@/lib/types/config";
 import { getApiBaseUrl } from "@/lib/utils/port";
+import { createBaseQueryWithRefresh } from "@enterprise/lib/store/utils/baseQueryWithRefresh";
+import { clearOAuthStorage, getAccessToken } from "@enterprise/lib/store/utils/tokenManager";
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
 // Helper function to get token from localStorage
+// If enterprise, use access_token from enterprise tokenManager; otherwise use bifrost-auth-token
 const getTokenFromStorage = (): string | null => {
 	if (typeof window === "undefined") {
 		return null;
 	}
 	try {
-		const token = localStorage.getItem("bifrost-auth-token");
-		return token;
+		if (IS_ENTERPRISE) {
+			// Enterprise OAuth login - use tokenManager
+			return getAccessToken();
+		} else {
+			// Traditional login - use bifrost-auth-token
+			return localStorage.getItem("bifrost-auth-token");
+		}
 	} catch (error) {
 		return null;
 	}
 };
 
-// Helper function to set token in localStorage
+// Helper function to set token in localStorage (non-enterprise only)
 export const setAuthToken = (token: string | null) => {
 	if (typeof window === "undefined") {
 		return;
@@ -23,10 +32,6 @@ export const setAuthToken = (token: string | null) => {
 	try {
 		if (token) {
 			localStorage.setItem("bifrost-auth-token", token);
-			const verification = localStorage.getItem("bifrost-auth-token");
-			if (verification !== token) {
-				throw new Error("Token not stored correctly");
-			}
 		} else {
 			localStorage.removeItem("bifrost-auth-token");
 		}
@@ -35,7 +40,25 @@ export const setAuthToken = (token: string | null) => {
 	}
 };
 
-// Define the base query with error handling
+// Helper function to clear all auth-related storage
+export const clearAuthStorage = () => {
+	if (typeof window === "undefined") {
+		return;
+	}
+	try {
+		// Clear traditional auth token
+		localStorage.removeItem("bifrost-auth-token");
+		
+		// Clear enterprise OAuth tokens using tokenManager
+		if (IS_ENTERPRISE) {
+			clearOAuthStorage();
+		}
+	} catch (error) {
+		console.error("Error clearing auth storage:", error);
+	}
+};
+
+// Define the base query with authentication headers
 const baseQuery = fetchBaseQuery({
 	baseUrl: getApiBaseUrl(),
 	credentials: "include",
@@ -50,28 +73,34 @@ const baseQuery = fetchBaseQuery({
 	},
 });
 
+// Wrap base query with enterprise refresh logic (or passthrough for non-enterprise)
+const baseQueryWithRefresh = createBaseQueryWithRefresh(baseQuery);
+
 // Enhanced base query with error handling
-const baseQueryWithErrorHandling = async (args: any, api: any, extraOptions: any) => {
-	const result = await baseQuery(args, api, extraOptions);
+const baseQueryWithErrorHandling: typeof baseQueryWithRefresh = async (args: any, api: any, extraOptions: any) => {
+	// First apply refresh logic (enterprise-specific, handles 401)
+	const result = await baseQueryWithRefresh(args, api, extraOptions);
+	
+	// Then handle other error types
 	if (result.error) {
-		// Handle 401 Unauthorized - clear token and redirect to login
-		if (result.error.status === 401) {
-			// Clear auth token
-			setAuthToken(null);
-			// Redirect to login page
+		const error = result.error as any;
+		
+		// Handle 401 for non-enterprise (no refresh available)
+		if (error?.status === 401 && !IS_ENTERPRISE) {
+			clearAuthStorage();
 			if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
 				window.location.href = "/login";
 			}
 			return result;
 		}
-
+		
 		// Handle specific error types
-		if (result.error.status === "FETCH_ERROR") {
+		if (error?.status === "FETCH_ERROR") {
 			// Network error
 			return {
 				...result,
 				error: {
-					...result.error,
+					...error,
 					data: {
 						error: {
 							message: "Network error: Unable to connect to the server",
@@ -82,8 +111,8 @@ const baseQueryWithErrorHandling = async (args: any, api: any, extraOptions: any
 		}
 
 		// Handle other errors with proper BifrostErrorResponse format
-		if (result.error.data) {
-			const errorData = result.error.data as BifrostErrorResponse;
+		if (error?.data) {
+			const errorData = error.data as BifrostErrorResponse;
 			if (errorData.error?.message) {
 				return result;
 			}
@@ -93,7 +122,7 @@ const baseQueryWithErrorHandling = async (args: any, api: any, extraOptions: any
 		return {
 			...result,
 			error: {
-				...result.error,
+				...error,
 				data: {
 					error: {
 						message: "An unexpected error occurred",
@@ -129,6 +158,7 @@ export const baseApi = createApi({
 		"SCIMProviders",
 		"User",
 		"Guardrails",
+		"ClusterNodes"
 	],
 	endpoints: () => ({}),
 });
