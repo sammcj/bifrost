@@ -10,6 +10,7 @@ import (
 )
 
 func TestAnthropic(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("ANTHROPIC_API_KEY") == "" {
 		t.Skip("Skipping Anthropic tests because ANTHROPIC_API_KEY is not set")
 	}

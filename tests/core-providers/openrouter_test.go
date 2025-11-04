@@ -10,6 +10,7 @@ import (
 )
 
 func TestOpenRouter(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("OPENROUTER_API_KEY") == "" {
 		t.Skip("Skipping OpenRouter tests because OPENROUTER_API_KEY is not set")
 	}

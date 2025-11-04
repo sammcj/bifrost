@@ -21,6 +21,29 @@ This directory contains comprehensive tests for all Bifrost AI providers, ensuri
 
 ## 🏃‍♂️ Running Tests
 
+### Parallel Test Execution
+
+All provider tests are configured to run in parallel using Go's `t.Parallel()` function. This allows multiple provider tests to execute concurrently, significantly reducing total test execution time.
+
+**Benefits:**
+- Faster test execution when testing multiple providers
+- Better resource utilization
+- Isolated test execution (each test creates its own client instance)
+
+**Usage:**
+```bash
+# Default: Tests run in parallel (up to GOMAXPROCS concurrent tests)
+go test -v ./tests/core-providers/
+
+# Explicitly set number of parallel tests
+go test -v ./tests/core-providers/ -parallel 10
+
+# Run tests sequentially (disable parallel execution)
+go test -v ./tests/core-providers/ -parallel 1
+```
+
+**Note:** Each test function creates its own isolated Bifrost client instance via `config.SetupTest()`, ensuring no shared state between parallel test executions.
+
 ### Development with Local Bifrost Core
 
 To test changes with a forked or local version of bifrost-core:
@@ -91,9 +114,15 @@ export GEMINI_API_KEY="your-gemini-key"
 # Run all tests with verbose output (recommended)
 go test -v ./tests/core-providers/
 
+# Run all tests in parallel (faster execution)
+# Tests are configured to run in parallel by default
+go test -v ./tests/core-providers/ -parallel 10
+
 # Run with debug logs
 go test -v ./tests/core-providers/ -debug
 ```
+
+**Note**: All provider tests are configured to run in parallel using `t.Parallel()`. This means multiple provider tests can execute concurrently, significantly reducing total test execution time. The number of parallel tests can be controlled using the `-parallel` flag (default is the number of CPUs).
 
 ### Run Specific Provider Tests
 
