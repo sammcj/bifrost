@@ -19,9 +19,12 @@ import {
 	Settings2Icon,
 	Shuffle,
 	Telescope,
+	User,
 	Users,
 } from "lucide-react";
 
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import {
 	Sidebar,
 	SidebarContent,
@@ -39,6 +42,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { IS_ENTERPRISE } from "@/lib/constants/config";
 import { useGetCoreConfigQuery, useGetLatestReleaseQuery, useGetVersionQuery, useLogoutMutation } from "@/lib/store";
+import type { UserInfo } from "@enterprise/lib/store/utils/tokenManager";
+import { getUserInfo } from "@enterprise/lib/store/utils/tokenManager";
 import { BooksIcon, DiscordLogoIcon, GithubLogoIcon } from "@phosphor-icons/react";
 import { ChevronRight } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -388,12 +393,24 @@ export default function AppSidebar() {
 	const [mounted, setMounted] = useState(false);
 	const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 	const [areCardsEmpty, setAreCardsEmpty] = useState(false);
+	const [userPopoverOpen, setUserPopoverOpen] = useState(false);
 	const { data: latestRelease } = useGetLatestReleaseQuery(undefined, {
 		skip: !mounted, // Only fetch after component is mounted
 	});
 	const { data: version } = useGetVersionQuery();
 	const { resolvedTheme } = useTheme();
 	const [logout] = useLogoutMutation();
+	
+	// Get user info from localStorage (for enterprise SCIM OAuth)
+	const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+	
+	useEffect(() => {
+		if (IS_ENTERPRISE) {
+			const info = getUserInfo();
+			setUserInfo(info);
+		}
+	}, []);
+
 	const showNewReleaseBanner = useMemo(() => {
 		if (latestRelease && version) {
 			return compareVersions(latestRelease.name, version) > 0;
@@ -401,7 +418,7 @@ export default function AppSidebar() {
 		return false;
 	}, [latestRelease, version]);
 	// Get governance config from RTK Query
-	const { data: coreConfig } = useGetCoreConfigQuery({});
+	const { data: coreConfig } = useGetCoreConfigQuery({});	
 	const isGovernanceEnabled = coreConfig?.client_config.enable_governance || false;
 	const isAuthEnabled = coreConfig?.auth_config?.is_enabled || false;
 
@@ -491,6 +508,7 @@ export default function AppSidebar() {
 
 	const handleLogout = async () => {
 		try {
+			setUserPopoverOpen(false);
 			await logout().unwrap();
 			router.push("/login");
 		} catch (error) {
@@ -557,7 +575,35 @@ export default function AppSidebar() {
 								</a>
 							))}
 							<ThemeToggle />
-							{isAuthEnabled && (
+							{IS_ENTERPRISE && userInfo && (userInfo.name || userInfo.email) ? (
+								<Popover open={userPopoverOpen} onOpenChange={setUserPopoverOpen}>
+									<PopoverTrigger asChild>
+										<button
+											className="hover:text-primary text-muted-foreground flex cursor-pointer items-center space-x-3 p-0.5"
+											type="button"
+											aria-label="User menu"
+										>
+											<User className="hover:text-primary text-muted-foreground h-4 w-4" size={20} strokeWidth={2} />
+										</button>
+									</PopoverTrigger>
+									<PopoverContent side="top" align="start" className="w-56 p-0">
+										<div className="flex flex-col">
+											<div className="px-4 py-3">
+												<p className="text-sm font-medium">{userInfo.name || userInfo.email || 'User'}</p>
+											</div>
+											<Separator />
+											<button
+												onClick={handleLogout}
+												className="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors"
+												type="button"
+											>
+												<LogOut className="h-4 w-4" strokeWidth={2} />
+												<span>Logout</span>
+											</button>
+										</div>
+									</PopoverContent>
+								</Popover>
+							) : isAuthEnabled && !IS_ENTERPRISE ? (
 								<div>
 									<button
 										className="hover:text-primary text-muted-foreground flex cursor-pointer items-center space-x-3 p-0.5"
@@ -568,7 +614,7 @@ export default function AppSidebar() {
 										<LogOut className="hover:text-primary text-muted-foreground h-4 w-4" size={20} strokeWidth={2} />
 									</button>
 								</div>
-							)}
+							) : null}
 						</div>
 					</div>
 					<div className="mx-auto font-mono text-xs">{version ?? ""}</div>
