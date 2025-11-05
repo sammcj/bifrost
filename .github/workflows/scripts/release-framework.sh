@@ -38,6 +38,15 @@ else
   CORE_VERSION=${LATEST_CORE_TAG#core/}
 fi
 
+
+# Before starting the test, we need to update hello-word plugin core dependencies
+echo "🔧 Updating hello-word plugin core dependencies..."
+cd examples/plugins/hello-world
+go_get_with_backoff "github.com/maximhq/bifrost/core@$CORE_VERSION"
+go mod tidy
+git add go.mod go.sum
+cd ../../..
+
 echo "🔧 Using core version: $CORE_VERSION"
 
 # Update framework dependencies
