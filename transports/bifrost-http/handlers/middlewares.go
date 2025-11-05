@@ -92,7 +92,7 @@ func TransportInterceptorMiddleware(config *lib.Config) lib.BifrostHTTPMiddlewar
 			}
 			for _, plugin := range plugins {
 				// Call TransportInterceptor on all plugins
-				pluginCtx, cancel := context.WithTimeout(ctx, 10*time.Second)				
+				pluginCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 				modifiedHeaders, modifiedBody, err := plugin.TransportInterceptor(&pluginCtx, string(ctx.Request.URI().RequestURI()), headers, requestBody)
 				cancel()
 				if err != nil {
@@ -134,6 +134,18 @@ func TransportInterceptorMiddleware(config *lib.Config) lib.BifrostHTTPMiddlewar
 	}
 }
 
+// validateSession checks if a session token is valid
+func validateSession(ctx *fasthttp.RequestCtx, store configstore.ConfigStore, token string) bool {
+	session, err := store.GetSession(context.Background(), token)
+	if err != nil || session == nil {
+		return false
+	}
+	if session.ExpiresAt.Before(time.Now()) {
+		return false
+	}
+	return true
+}
+
 // AuthMiddleware if authConfig is set, it will verify the auth cookie in the header
 // This uses basic auth style username + password based authentication
 // No session tracking is used, so this is not suitable for production environments
@@ -166,6 +178,23 @@ func AuthMiddleware(store configstore.ConfigStore) lib.BifrostHTTPMiddleware {
 			// Get the authorization header
 			authorization := string(ctx.Request.Header.Peek("Authorization"))
 			if authorization == "" {
+				// Check if its a websocket 101 upgrade request
+				if string(ctx.Request.Header.Peek("Upgrade")) == "websocket" {
+					// Here we get the token from query params
+					token := string(ctx.Request.URI().QueryArgs().Peek("token"))
+					if token == "" {
+						SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
+						return
+					}
+					// Verify the session
+					if !validateSession(ctx, store, token) {
+						SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
+						return
+					}
+					// Continue with the next handler
+					next(ctx)
+					return
+				}
 				SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
 				return
 			}
@@ -175,51 +204,42 @@ func AuthMiddleware(store configstore.ConfigStore) lib.BifrostHTTPMiddleware {
 				SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
 				return
 			}
-		// Checking basic auth for inference calls
-		if scheme == "Basic" {
-			// Decode the base64 token
-			decodedBytes, err := base64.StdEncoding.DecodeString(token)
-			if err != nil {
-				SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
-				return
-			}
-			// Split the decoded token into the username and password
-			username, password, ok := strings.Cut(string(decodedBytes), ":")
-			if !ok {
-				SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
-				return
-			}
-			// Verify the username and password
-			if username != authConfig.AdminUserName {
-				SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
-				return
-			}
-			compare, err := encrypt.CompareHash(authConfig.AdminPassword, password)
-			if err != nil {
-				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to compare password: %v", err))
-				return
-			}
-			if !compare {
-				SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
-				return
-			}
-			// Continue with the next handler
-			next(ctx)
-			return
-		}
-			// Checking bearer auth for dashboard calls
-			if scheme == "Bearer" {
-				// Verify the session
-				session, err := store.GetSession(context.Background(), token)
+			// Checking basic auth for inference calls
+			if scheme == "Basic" {
+				// Decode the base64 token
+				decodedBytes, err := base64.StdEncoding.DecodeString(token)
 				if err != nil {
 					SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
 					return
 				}
-				if session == nil {
+				// Split the decoded token into the username and password
+				username, password, ok := strings.Cut(string(decodedBytes), ":")
+				if !ok {
 					SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
 					return
 				}
-				if session.ExpiresAt.Before(time.Now()) {
+				// Verify the username and password
+				if username != authConfig.AdminUserName {
+					SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
+					return
+				}
+				compare, err := encrypt.CompareHash(authConfig.AdminPassword, password)
+				if err != nil {
+					SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to compare password: %v", err))
+					return
+				}
+				if !compare {
+					SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
+					return
+				}
+				// Continue with the next handler
+				next(ctx)
+				return
+			}
+			// Checking bearer auth for dashboard calls
+			if scheme == "Bearer" {
+				// Verify the session
+				if !validateSession(ctx, store, token) {
 					SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
 					return
 				}
