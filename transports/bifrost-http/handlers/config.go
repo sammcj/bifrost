@@ -199,6 +199,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 
 	updatedConfig.InitialPoolSize = payload.ClientConfig.InitialPoolSize
 	updatedConfig.EnableLogging = payload.ClientConfig.EnableLogging
+	updatedConfig.DisableContentLogging = payload.ClientConfig.DisableContentLogging
 	updatedConfig.EnableGovernance = payload.ClientConfig.EnableGovernance
 	updatedConfig.EnforceGovernanceHeader = payload.ClientConfig.EnforceGovernanceHeader
 	updatedConfig.AllowDirectKeys = payload.ClientConfig.AllowDirectKeys

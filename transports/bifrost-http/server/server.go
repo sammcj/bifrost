@@ -209,7 +209,11 @@ func LoadPlugin[T schemas.Plugin](ctx context.Context, name string, path *string
 		}
 		return zero, fmt.Errorf("telemetry plugin type mismatch")
 	case logging.PluginName:
-		plugin, err := logging.Init(ctx, logger, bifrostConfig.LogsStore, bifrostConfig.PricingManager)
+		loggingConfig, err := MarshalPluginConfig[logging.Config](pluginConfig)
+		if err != nil {
+			return zero, fmt.Errorf("failed to marshal logging plugin config: %v", err)
+		}
+		plugin, err := logging.Init(ctx, loggingConfig, logger, bifrostConfig.LogsStore, bifrostConfig.PricingManager)
 		if err != nil {
 			return zero, err
 		}
@@ -303,7 +307,9 @@ func LoadPlugins(ctx context.Context, config *lib.Config) ([]schemas.Plugin, []s
 	var loggingPlugin *logging.LoggerPlugin
 	if config.ClientConfig.EnableLogging && config.LogsStore != nil {
 		// Use dedicated logs database with high-scale optimizations
-		loggingPlugin, err = LoadPlugin[*logging.LoggerPlugin](ctx, logging.PluginName, nil, nil, config)
+		loggingPlugin, err = LoadPlugin[*logging.LoggerPlugin](ctx, logging.PluginName, nil, &logging.Config{
+			DisableContentLogging: &config.ClientConfig.DisableContentLogging,
+		}, config)
 		if err != nil {
 			logger.Error("failed to initialize logging plugin: %v", err)
 			pluginStatus = append(pluginStatus, schemas.PluginStatus{

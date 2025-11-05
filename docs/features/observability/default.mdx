@@ -77,7 +77,8 @@ curl --location 'http://localhost:8080/api/config' \
 --method PUT \
 --data '{
     "client_config": {
-    "enable_logging": true,
+        "enable_logging": true,
+        "disable_content_logging": false,
         "drop_excess_requests": false,
         "initial_pool_size": 300,
         "enable_governance": true,
@@ -99,6 +100,7 @@ curl --location 'http://localhost:8080/api/config'
 {
     "client_config": {
         "enable_logging": true,
+        "disable_content_logging": false,
         "drop_excess_requests": false
     },
     "is_db_connected": true,
@@ -116,6 +118,7 @@ In your `config.json` file, you can enable logging and configure the log store:
 {
     "client": {
         "enable_logging": true,
+        "disable_content_logging": false,
         "drop_excess_requests": false,
         "initial_pool_size": 300,
         "enable_governance": true,
@@ -131,6 +134,7 @@ In your `config.json` file, you can enable logging and configure the log store:
 }
 ```
 - **`enable_logging`**: Master toggle for request tracing.
+- **`disable_content_logging`**: Disable logging of request/response content, but still log usage metadata (latency, cost, token count, etc.).
 - **`logs_store`**: Check [Log Store Options](#log-store-options) for more details.
 
 </Tab>

@@ -32,6 +32,7 @@ type ClientConfig struct {
 	InitialPoolSize         int      `json:"initial_pool_size"`         // The initial pool size for the bifrost client
 	PrometheusLabels        []string `json:"prometheus_labels"`         // The labels to be used for prometheus metrics
 	EnableLogging           bool     `json:"enable_logging"`            // Enable logging of requests and responses
+	DisableContentLogging   bool     `json:"disable_content_logging"`   // Disable logging of content
 	EnableGovernance        bool     `json:"enable_governance"`         // Enable governance on all requests
 	EnforceGovernanceHeader bool     `json:"enforce_governance_header"` // Enforce governance on all requests
 	AllowDirectKeys         bool     `json:"allow_direct_keys"`         // Allow direct keys to be used for requests
