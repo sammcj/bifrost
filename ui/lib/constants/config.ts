@@ -36,6 +36,7 @@ export const isKeyRequiredByProvider: Record<ProviderName, boolean> = {
 	ollama: false,
 	openai: true,
 	vertex: true,
+	perplexity: true,
 };
 
 export const DefaultNetworkConfig = {
