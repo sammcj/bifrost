@@ -86,39 +86,41 @@ func (p *LoggerPlugin) updateLogEntry(
 		}
 	}
 
-	if data.ResponsesOutput != nil {
-		tempEntry.ResponsesOutputParsed = data.ResponsesOutput
-		if err := tempEntry.SerializeFields(); err != nil {
-			p.logger.Error("failed to serialize responses output: %v", err)
-		} else {
-			updates["responses_output"] = tempEntry.ResponsesOutput
+	if p.disableContentLogging == nil || !*p.disableContentLogging {
+		if data.ResponsesOutput != nil {
+			tempEntry.ResponsesOutputParsed = data.ResponsesOutput
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize responses output: %v", err)
+			} else {
+				updates["responses_output"] = tempEntry.ResponsesOutput
+			}
 		}
-	}
 
-	if data.EmbeddingOutput != nil {
-		tempEntry.EmbeddingOutputParsed = data.EmbeddingOutput
-		if err := tempEntry.SerializeFields(); err != nil {
-			p.logger.Error("failed to serialize embedding output: %v", err)
-		} else {
-			updates["embedding_output"] = tempEntry.EmbeddingOutput
+		if data.EmbeddingOutput != nil {
+			tempEntry.EmbeddingOutputParsed = data.EmbeddingOutput
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize embedding output: %v", err)
+			} else {
+				updates["embedding_output"] = tempEntry.EmbeddingOutput
+			}
 		}
-	}
 
-	if data.SpeechOutput != nil {
-		tempEntry.SpeechOutputParsed = data.SpeechOutput
-		if err := tempEntry.SerializeFields(); err != nil {
-			p.logger.Error("failed to serialize speech output: %v", err)
-		} else {
-			updates["speech_output"] = tempEntry.SpeechOutput
+		if data.SpeechOutput != nil {
+			tempEntry.SpeechOutputParsed = data.SpeechOutput
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize speech output: %v", err)
+			} else {
+				updates["speech_output"] = tempEntry.SpeechOutput
+			}
 		}
-	}
 
-	if data.TranscriptionOutput != nil {
-		tempEntry.TranscriptionOutputParsed = data.TranscriptionOutput
-		if err := tempEntry.SerializeFields(); err != nil {
-			p.logger.Error("failed to serialize transcription output: %v", err)
-		} else {
-			updates["transcription_output"] = tempEntry.TranscriptionOutput
+		if data.TranscriptionOutput != nil {
+			tempEntry.TranscriptionOutputParsed = data.TranscriptionOutput
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize transcription output: %v", err)
+			} else {
+				updates["transcription_output"] = tempEntry.TranscriptionOutput
+			}
 		}
 	}
 
@@ -158,7 +160,7 @@ func (p *LoggerPlugin) updateLogEntry(
 		}
 	}
 
-	if data.RawResponse != nil {
+	if p.disableContentLogging == nil || !*p.disableContentLogging && data.RawResponse != nil {
 		rawResponseBytes, err := sonic.Marshal(data.RawResponse)
 		if err != nil {
 			p.logger.Error("failed to marshal raw response: %v", err)
@@ -238,51 +240,54 @@ func (p *LoggerPlugin) updateStreamingLogEntry(
 	if isFinalChunk {
 		updates["status"] = "success"
 	}
-	// Handle transcription output from stream updates
-	if streamResponse.Data.TranscriptionOutput != nil {
-		tempEntry.TranscriptionOutputParsed = streamResponse.Data.TranscriptionOutput
-		// Here we just log error but move one vs breaking the entire logging flow
-		if err := tempEntry.SerializeFields(); err != nil {
-			p.logger.Warn("failed to serialize transcription output: %v", err)
-		} else {
-			updates["transcription_output"] = tempEntry.TranscriptionOutput
+
+	if p.disableContentLogging == nil || !*p.disableContentLogging {
+		// Handle transcription output from stream updates
+		if streamResponse.Data.TranscriptionOutput != nil {
+			tempEntry.TranscriptionOutputParsed = streamResponse.Data.TranscriptionOutput
+			// Here we just log error but move one vs breaking the entire logging flow
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize transcription output: %v", err)
+			} else {
+				updates["transcription_output"] = tempEntry.TranscriptionOutput
+			}
 		}
-	}
-	// Handle speech output from stream updates
-	if streamResponse.Data.AudioOutput != nil {
-		tempEntry.SpeechOutputParsed = streamResponse.Data.AudioOutput
-		if err := tempEntry.SerializeFields(); err != nil {
-			p.logger.Error("failed to serialize speech output: %v", err)
-		} else {
-			updates["speech_output"] = tempEntry.SpeechOutput
+		// Handle speech output from stream updates
+		if streamResponse.Data.AudioOutput != nil {
+			tempEntry.SpeechOutputParsed = streamResponse.Data.AudioOutput
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize speech output: %v", err)
+			} else {
+				updates["speech_output"] = tempEntry.SpeechOutput
+			}
 		}
-	}
-	// Handle cache debug
-	if cacheDebug != nil {
-		tempEntry.CacheDebugParsed = cacheDebug
-		if err := tempEntry.SerializeFields(); err != nil {
-			p.logger.Error("failed to serialize cache debug: %v", err)
-		} else {
-			updates["cache_debug"] = tempEntry.CacheDebug
+		// Handle cache debug
+		if cacheDebug != nil {
+			tempEntry.CacheDebugParsed = cacheDebug
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize cache debug: %v", err)
+			} else {
+				updates["cache_debug"] = tempEntry.CacheDebug
+			}
 		}
-	}
-	// Create content summary
-	if streamResponse.Data.OutputMessage != nil {
-		tempEntry.OutputMessageParsed = streamResponse.Data.OutputMessage
-		if err := tempEntry.SerializeFields(); err != nil {
-			p.logger.Error("failed to serialize output message: %v", err)
-		} else {
-			updates["output_message"] = tempEntry.OutputMessage
-			updates["content_summary"] = tempEntry.ContentSummary
+		// Create content summary
+		if streamResponse.Data.OutputMessage != nil {
+			tempEntry.OutputMessageParsed = streamResponse.Data.OutputMessage
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize output message: %v", err)
+			} else {
+				updates["output_message"] = tempEntry.OutputMessage
+				updates["content_summary"] = tempEntry.ContentSummary
+			}
 		}
-	}
-	// Handle responses output from stream updates
-	if streamResponse.Data.OutputMessages != nil {
-		tempEntry.ResponsesOutputParsed = streamResponse.Data.OutputMessages
-		if err := tempEntry.SerializeFields(); err != nil {
-			p.logger.Error("failed to serialize responses output: %v", err)
-		} else {
-			updates["responses_output"] = tempEntry.ResponsesOutput
+		// Handle responses output from stream updates
+		if streamResponse.Data.OutputMessages != nil {
+			tempEntry.ResponsesOutputParsed = streamResponse.Data.OutputMessages
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize responses output: %v", err)
+			} else {
+				updates["responses_output"] = tempEntry.ResponsesOutput
+			}
 		}
 	}
 	// Only perform update if there's something to update

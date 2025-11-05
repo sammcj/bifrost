@@ -281,7 +281,9 @@ func (provider *GeminiProvider) ChatCompletion(ctx context.Context, key schemas.
 		}
 	}
 
+	response.ExtraFields.RequestType = schemas.ChatCompletionRequest
 	response.ExtraFields.Provider = providerName
+	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.Latency = latency.Milliseconds()
 
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {

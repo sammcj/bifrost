@@ -81,14 +81,14 @@ type InitialLogData struct {
 type LogCallback func(*logstore.Log)
 
 type Config struct {
-	DisableContentLogging bool `json:"disable_content_logging"`
+	DisableContentLogging *bool `json:"disable_content_logging"`
 }
 
 // LoggerPlugin implements the schemas.Plugin interface
 type LoggerPlugin struct {
 	ctx                   context.Context
 	store                 logstore.LogStore
-	disableContentLogging bool
+	disableContentLogging *bool
 	pricingManager        *modelcatalog.ModelCatalog
 	mu                    sync.Mutex
 	done                  chan struct{}
@@ -218,38 +218,34 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 		Object:                string(req.RequestType),
 	}
 
-	if !p.disableContentLogging {
+	if p.disableContentLogging == nil || !*p.disableContentLogging {
 		inputHistory, responsesInputHistory := p.extractInputHistory(req)
 		initialData.InputHistory = inputHistory
 		initialData.ResponsesInputHistory = responsesInputHistory
-	}
 
-	switch req.RequestType {
-	case schemas.TextCompletionRequest, schemas.TextCompletionStreamRequest:
-		initialData.Params = req.TextCompletionRequest.Params
-	case schemas.ChatCompletionRequest, schemas.ChatCompletionStreamRequest:
-		initialData.Params = req.ChatRequest.Params
-		if req.ChatRequest.Params != nil && req.ChatRequest.Params.Tools != nil {
+		switch req.RequestType {
+		case schemas.TextCompletionRequest, schemas.TextCompletionStreamRequest:
+			initialData.Params = req.TextCompletionRequest.Params
+		case schemas.ChatCompletionRequest, schemas.ChatCompletionStreamRequest:
+			initialData.Params = req.ChatRequest.Params
 			initialData.Tools = req.ChatRequest.Params.Tools
-		}
-	case schemas.ResponsesRequest, schemas.ResponsesStreamRequest:
-		initialData.Params = req.ResponsesRequest.Params
-
-		if req.ResponsesRequest.Params != nil && req.ResponsesRequest.Params.Tools != nil {
+		case schemas.ResponsesRequest, schemas.ResponsesStreamRequest:
+			initialData.Params = req.ResponsesRequest.Params
+	
 			var tools []schemas.ChatTool
 			for _, tool := range req.ResponsesRequest.Params.Tools {
 				tools = append(tools, *tool.ToChatTool())
 			}
 			initialData.Tools = tools
+		case schemas.EmbeddingRequest:
+			initialData.Params = req.EmbeddingRequest.Params
+		case schemas.SpeechRequest, schemas.SpeechStreamRequest:
+			initialData.Params = req.SpeechRequest.Params
+			initialData.SpeechInput = req.SpeechRequest.Input
+		case schemas.TranscriptionRequest, schemas.TranscriptionStreamRequest:
+			initialData.Params = req.TranscriptionRequest.Params
+			initialData.TranscriptionInput = req.TranscriptionRequest.Input
 		}
-	case schemas.EmbeddingRequest:
-		initialData.Params = req.EmbeddingRequest.Params
-	case schemas.SpeechRequest, schemas.SpeechStreamRequest:
-		initialData.Params = req.SpeechRequest.Params
-		initialData.SpeechInput = req.SpeechRequest.Input
-	case schemas.TranscriptionRequest, schemas.TranscriptionStreamRequest:
-		initialData.Params = req.TranscriptionRequest.Params
-		initialData.TranscriptionInput = req.TranscriptionRequest.Input
 	}
 
 	// Queue the log creation message (non-blocking) - Using sync.Pool
@@ -471,10 +467,10 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 				updateData.TokenUsage = usage
 				// Extract raw response
 				extraFields := result.GetExtraFields()
-				if extraFields.RawResponse != nil {
-					updateData.RawResponse = extraFields.RawResponse
-				}
-				if !p.disableContentLogging {
+				if p.disableContentLogging == nil || !*p.disableContentLogging {
+					if extraFields.RawResponse != nil {
+						updateData.RawResponse = extraFields.RawResponse
+					}
 					if result.TextCompletionResponse != nil {
 						if len(result.TextCompletionResponse.Choices) > 0 {
 							choice := result.TextCompletionResponse.Choices[0]
