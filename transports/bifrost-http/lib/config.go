@@ -1024,6 +1024,38 @@ func (c *Config) GetLoadedPlugins() []schemas.Plugin {
 	return nil
 }
 
+// AddLoadedPlugin adds a plugin to the loaded plugins list.
+// This method is lock-free and safe for concurrent access from hot paths.
+// It iterates through the plugin slice (typically 5-10 plugins, ~50ns overhead).
+// For small plugin counts, this is faster than maintaining a separate map.
+func (c *Config) AddLoadedPlugin(plugin schemas.Plugin) error {
+	for {
+		oldPlugins := c.Plugins.Load()
+		if oldPlugins == nil {
+			// Initialize with the new plugin
+			newPlugins := []schemas.Plugin{plugin}
+			if c.Plugins.CompareAndSwap(oldPlugins, &newPlugins) {
+				return nil
+			}
+			continue
+		}
+		newPlugins := make([]schemas.Plugin, len(*oldPlugins))
+		copy(newPlugins, *oldPlugins)
+		// Checking if the plugin is already loaded
+		for i, p := range *oldPlugins {
+			if p.GetName() == plugin.GetName() {
+				// Removing the plugin from the list
+				newPlugins = append(newPlugins[:i], newPlugins[i+1:]...)
+				break
+			}
+		}
+		newPlugins = append(newPlugins, plugin)
+		if c.Plugins.CompareAndSwap(oldPlugins, &newPlugins) {
+			return nil
+		}
+	}
+}
+
 // IsPluginLoaded checks if a plugin with the given name is currently loaded.
 // This method is lock-free and safe for concurrent access from hot paths.
 // It iterates through the plugin slice (typically 5-10 plugins, ~50ns overhead).

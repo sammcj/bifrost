@@ -135,6 +135,235 @@
       },
       "additionalProperties": true
     },
+    "auth_config": {
+      "type": "object",
+      "description": "Authentication configuration for governance",
+      "properties": {
+        "api_key": {
+          "type": "string",
+          "description": "API key for authentication"
+        },
+        "jwks_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "JWKS URL for JWT validation"
+        },
+        "jwt_secret": {
+          "type": "string",
+          "description": "JWT secret for token validation"
+        }
+      },
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "api_key"
+          ]
+        },
+        {
+          "required": [
+            "jwks_url"
+          ]
+        },
+        {
+          "required": [
+            "jwt_secret"
+          ]
+        }
+      ]
+    },
+    "governance": {
+      "type": "object",
+      "description": "Governance configuration for budgets, rate limits, customers, teams, and virtual keys",
+      "properties": {
+        "budgets": {
+          "type": "array",
+          "description": "Budget configurations",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Budget ID"
+              },
+              "name": {
+                "type": "string",
+                "description": "Budget name"
+              },
+              "limit": {
+                "type": "number",
+                "description": "Budget limit"
+              },
+              "duration": {
+                "type": "string",
+                "description": "Budget duration (e.g., '1d', '1w', '1m')"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "limit",
+              "duration"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "rate_limits": {
+          "type": "array",
+          "description": "Rate limit configurations",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Rate limit ID"
+              },
+              "name": {
+                "type": "string",
+                "description": "Rate limit name"
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Request limit"
+              },
+              "duration": {
+                "type": "string",
+                "description": "Rate limit duration (e.g., '1m', '1h')"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "limit",
+              "duration"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "customers": {
+          "type": "array",
+          "description": "Customer configurations",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Customer ID"
+              },
+              "name": {
+                "type": "string",
+                "description": "Customer name"
+              },
+              "budget_id": {
+                "type": "string",
+                "description": "Associated budget ID"
+              },
+              "rate_limit_id": {
+                "type": "string",
+                "description": "Associated rate limit ID"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "teams": {
+          "type": "array",
+          "description": "Team configurations",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Team ID"
+              },
+              "name": {
+                "type": "string",
+                "description": "Team name"
+              },
+              "customer_id": {
+                "type": "string",
+                "description": "Associated customer ID"
+              },
+              "budget_id": {
+                "type": "string",
+                "description": "Associated budget ID"
+              },
+              "rate_limit_id": {
+                "type": "string",
+                "description": "Associated rate limit ID"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "virtual_keys": {
+          "type": "array",
+          "description": "Virtual key configurations",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Virtual key ID"
+              },
+              "name": {
+                "type": "string",
+                "description": "Virtual key name"
+              },
+              "key": {
+                "type": "string",
+                "description": "Virtual key value"
+              },
+              "team_id": {
+                "type": "string",
+                "description": "Associated team ID"
+              },
+              "customer_id": {
+                "type": "string",
+                "description": "Associated customer ID"
+              },
+              "budget_id": {
+                "type": "string",
+                "description": "Associated budget ID"
+              },
+              "rate_limit_id": {
+                "type": "string",
+                "description": "Associated rate limit ID"
+              },
+              "keys": {
+                "type": "array",
+                "description": "Provider keys associated with this virtual key",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key_id": {
+                      "type": "string",
+                      "description": "Provider key ID"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "key"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "mcp": {
       "type": "object",
       "description": "Model Context Protocol configuration",

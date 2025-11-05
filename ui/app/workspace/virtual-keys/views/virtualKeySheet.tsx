@@ -1,7 +1,8 @@
 "use client";
 
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { AsyncMultiSelect } from "@/components/ui/asyncMultiselect";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,11 +10,13 @@ import { MultiSelect } from "@/components/ui/multiSelect";
 import NumberAndSelect from "@/components/ui/numberAndSelect";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DottedSeparator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TagInput } from "@/components/ui/tagInput";
 import { Textarea } from "@/components/ui/textarea";
 import Toggle from "@/components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/components/ui/utils";
 import { ModelPlaceholders } from "@/lib/constants/config";
 import { resetDurationOptions } from "@/lib/constants/governance";
 import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
@@ -21,20 +24,20 @@ import { ProviderLabels, ProviderName } from "@/lib/constants/logs";
 import {
 	getErrorMessage,
 	useCreateVirtualKeyMutation,
-	useGetProvidersQuery,
 	useGetAllKeysQuery,
 	useGetMCPClientsQuery,
+	useGetProvidersQuery,
 	useUpdateVirtualKeyMutation,
 } from "@/lib/store";
+import { KnownProvider } from "@/lib/types/config";
 import { CreateVirtualKeyRequest, Customer, Team, UpdateVirtualKeyRequest, VirtualKey } from "@/lib/types/governance";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Building, Info, Trash2, Users } from "lucide-react";
+import { Building, Info, Trash2, Users, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { MultiValueProps, OptionProps } from "react-select";
 import { toast } from "sonner";
 import { z } from "zod";
-import { KnownProvider } from "@/lib/types/config";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 interface VirtualKeySheetProps {
 	virtualKey?: VirtualKey | null;
@@ -115,6 +118,13 @@ const formSchema = z
 	);
 
 type FormData = z.infer<typeof formSchema>;
+
+type VirtualKeyType = {
+	label: string;
+	value: string;
+	description: string;
+	provider: string;
+};
 
 export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, onCancel }: VirtualKeySheetProps) {
 	const isEditing = !!virtualKey;
@@ -316,7 +326,6 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 		try {
 			// Normalize provider configs to ensure weights are numbers and handle budget/rate limits
 			const normalizedProviderConfigs = data.providerConfigs ? normalizeProviderConfigs(data.providerConfigs) : [];
-
 			if (isEditing && virtualKey) {
 				// Update existing virtual key
 				const updateData: UpdateVirtualKeyRequest = {
@@ -475,40 +484,85 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 								<FormField
 									control={form.control}
 									name="selectedDBKeys"
-									render={({ field }) => (
-										<FormItem>
-											<FormControl>
-												<MultiSelect
-													options={availableKeys.map((key) => ({
-														label: key.name,
-														value: key.key_id,
-														description: key.models.join(", "),
-														icon: ({ className }: { className?: string }) => (
-															<RenderProviderIcon
-																provider={key.provider as ProviderIconType}
-																size="sm"
-																className={className || "h-4 w-4"}
-															/>
-														),
-													}))}
-													defaultValue={field.value || []}
-													onValueChange={field.onChange}
-													placeholder="Select keys..."
-													variant="inverted"
-													className="hover:bg-accent w-full bg-white dark:bg-zinc-800"
-													popoverClassName="z-[60] max-h-[300px] overflow-y-auto w-full"
-													modalPopover={true}
-													animation={0}
-													animationConfig={{
-														badgeAnimation: "none",
-														popoverAnimation: "none",
-														optionHoverAnimation: "none",
-													}}
-												/>
-											</FormControl>
-											<FormMessage />
-										</FormItem>
-									)}
+									render={({ field }) => {
+										const selectedKeyValues = availableKeys
+											.filter((key) => field.value?.includes(key.key_id))
+											.map((key) => ({
+												label: key.name,
+												value: key.key_id,
+												description: key.models.join(", "),
+												provider: key.provider,
+											}))
+										
+										return (
+											<FormItem>
+												<FormControl>
+													<AsyncMultiSelect
+														isNonAsync
+														closeMenuOnSelect={false}
+														defaultOptions={availableKeys.map((key) => ({
+															label: key.name,
+															value: key.key_id,
+															description: key.models.join(", "),
+															provider: key.provider,
+														}))}
+														views={{
+															multiValue: (multiValueProps: MultiValueProps<VirtualKeyType>) => {
+																return (
+																	<div
+																		{...multiValueProps.innerProps}
+																		className="bg-accent flex cursor-pointer items-center gap-1 rounded-sm px-1 py-0.5 text-sm"
+																	>
+																		<RenderProviderIcon
+																			provider={multiValueProps.data.provider as ProviderIconType}
+																			size="sm"
+																			className="h-4 w-4"
+																		/>{" "}
+																		{multiValueProps.data.label}{" "}
+																		<X
+																			className="hover:text-foreground text-muted-foreground h-4 w-4 cursor-pointer"
+																			onClick={(e) => {
+																				e.stopPropagation();
+																				multiValueProps.removeProps.onClick?.(e as any);
+																			}}
+																		/>
+																	</div>
+																);
+															},
+															option: (optionProps: OptionProps<VirtualKeyType>) => {
+																return (
+																	<div
+																		{...optionProps.innerProps}
+																		className={cn(
+																			"flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm",
+																			optionProps.isFocused && "bg-accent",
+																			"hover:bg-accent",
+																		)}
+																	>
+																		<RenderProviderIcon
+																			provider={optionProps.data.provider as ProviderIconType}
+																			size="sm"
+																			className="h-4 w-4"
+																		/>
+																		<span className="text-content-primary grow truncate text-sm">{optionProps.data.label}</span>
+																		{optionProps.data.description && (
+																			<span className="text-content-tertiary max-w-[70%] text-sm">{optionProps.data.description}</span>
+																		)}
+																	</div>
+																);
+															},
+														}}
+														value={selectedKeyValues}
+														onChange={(keys) => field.onChange(keys.map((key) => key.value as string))}
+														placeholder="Select keys..."
+														className="hover:bg-accent w-full bg-white dark:bg-zinc-800"
+														menuClassName="z-[60] max-h-[300px] overflow-y-auto w-full cursor-pointer custom-scrollbar"
+													/>
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)
+									}}
 								/>
 							</div>
 
