@@ -88,21 +88,6 @@ func (h *PluginsHandler) getPlugins(ctx *fasthttp.RequestCtx) {
 			}
 		}
 		if pluginInfo == nil {
-			finalPlugins = append(finalPlugins, struct {
-				Name     string               `json:"name"`
-				Enabled  bool                 `json:"enabled"`
-				Config   any                  `json:"config"`
-				IsCustom bool                 `json:"isCustom"`
-				Path     *string              `json:"path"`
-				Status   schemas.PluginStatus `json:"status"`
-			}{
-				Name:     pluginStatus.Name,
-				Enabled:  pluginStatus.Status != schemas.PluginStatusDisabled,
-				Config:   map[string]any{},
-				IsCustom: false,
-				Path:     nil,
-				Status:   pluginStatus,
-			})
 			continue
 		}
 		finalPlugins = append(finalPlugins, struct {
