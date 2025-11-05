@@ -7,7 +7,7 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
 // Helper function to get token from localStorage
 // If enterprise, use access_token from enterprise tokenManager; otherwise use bifrost-auth-token
-const getTokenFromStorage = (): string | null => {
+export const getTokenFromStorage = (): string | null => {
 	if (typeof window === "undefined") {
 		return null;
 	}
