@@ -35,6 +35,47 @@ export const useGetClusterNodesQuery = (_arg?: any, _options?: any) => ({
   error: undefined
 })
 
+// Users API fallbacks
+export const usersApi = null
+
+export const useGetUsersQuery = (_arg?: any, _options?: any) => ({
+  data: {
+    users: [],
+    total: 0,
+    page: 1,
+    limit: 20,
+    total_pages: 0,
+    has_more: false
+  },
+  isLoading: false,
+  error: undefined
+})
+
+export const useLazyGetUsersQuery = () => [
+  () => Promise.resolve({ 
+    data: {
+      users: [],
+      total: 0,
+      page: 1,
+      limit: 20,
+      total_pages: 0,
+      has_more: false
+    }
+  }),
+  { 
+    data: {
+      users: [],
+      total: 0,
+      page: 1,
+      limit: 20,
+      total_pages: 0,
+      has_more: false
+    },
+    isLoading: false, 
+    error: undefined 
+  }
+]
+
 // Empty apis array when enterprise features are not available
 export const apis = []
 

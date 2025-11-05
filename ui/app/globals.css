@@ -75,7 +75,7 @@
 :root {
 	--radius: 0.5rem;
 	--color-cream-100: oklch(0.98 0 0);
-	--background: color-mix(in oklch, var(--color-cream-100) 20%, transparent);
+	--background: #f4f4f5;
 	--foreground: oklch(0.141 0.005 285.823);
 	--card: oklch(1 0 0);
 	--card-foreground: oklch(0.141 0.005 285.823);
@@ -206,4 +206,10 @@
 
 body {
 	overscroll-behavior: none;
+}
+
+.query-builder-wrapper {
+	padding: 1rem;
+	padding-inline: 0.5rem;
+
 }

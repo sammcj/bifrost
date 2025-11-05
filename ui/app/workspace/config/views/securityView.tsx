@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { IS_ENTERPRISE } from "@/lib/constants/config";
 import { getErrorMessage, useGetCoreConfigQuery, useUpdateCoreConfigMutation } from "@/lib/store";
 import { AuthConfig, CoreConfig } from "@/lib/types/config";
 import { parseArrayFromText } from "@/lib/utils/array";
@@ -36,6 +37,7 @@ export default function SecurityView() {
 	const [localConfig, setLocalConfig] = useState<CoreConfig>(defaultConfig);
 	const [needsRestart, setNeedsRestart] = useState<boolean>(false);
 	const [authNeedsRestart, setAuthNeedsRestart] = useState<boolean>(false);
+	const hideAuthDashboard = IS_ENTERPRISE;
 
 	const [localValues, setLocalValues] = useState<{
 		allowed_origins: string;
@@ -90,8 +92,8 @@ export default function SecurityView() {
 			const originalAuth = bifrostConfig?.auth_config;
 			const hasChanged =
 				newAuthConfig.is_enabled !== (originalAuth?.is_enabled ?? false) ||
-				newAuthConfig.admin_username !== (originalAuth?.admin_username ?? '') ||
-				newAuthConfig.admin_password !== (originalAuth?.admin_password ?? '');
+				newAuthConfig.admin_username !== (originalAuth?.admin_username ?? "") ||
+				newAuthConfig.admin_password !== (originalAuth?.admin_password ?? "");
 			setAuthNeedsRestart(hasChanged);
 		},
 		[bifrostConfig?.auth_config],
@@ -107,7 +109,7 @@ export default function SecurityView() {
 	);
 
 	const handleAuthFieldChange = useCallback(
-		(field: 'admin_username' | 'admin_password', value: string) => {
+		(field: "admin_username" | "admin_password", value: string) => {
 			const newAuthConfig = { ...authConfig, [field]: value };
 			setAuthConfig(newAuthConfig);
 			checkAuthNeedsRestart(newAuthConfig);
@@ -156,57 +158,60 @@ export default function SecurityView() {
 
 			<div className="space-y-4">
 				{authNeedsRestart && <RestartWarning />}
-				{ authConfig.is_enabled && (
-					<Alert variant="default" className="bg-blue-50 border-blue-200 ">
+				{authConfig.is_enabled && (
+					<Alert variant="default" className="border-blue-200 bg-blue-50">
 						<Info className="h-4 w-4" />
-						<AlertDescription>You will need to use Basic Auth for all your inference calls. Check API Keys section for more details. <Link href="/workspace/config?tab=api-keys" className="text-md text-primary underline">
-							API Keys
-						</Link></AlertDescription>
-						
+						<AlertDescription>
+							You will need to use Basic Auth for all your inference calls. Check API Keys section for more details.{" "}
+							<Link href="/workspace/config?tab=api-keys" className="text-md text-primary underline">
+								API Keys
+							</Link>
+						</AlertDescription>
 					</Alert>
 				)}
 				{/* Password Protect the Dashboard */}
-				<div>
-					<div className="space-y-4 rounded-lg border p-4">
-						<div className="flex items-center justify-between">
-							<div className="space-y-0.5">
-								<Label htmlFor="auth-enabled" className="text-sm font-medium">
-									Password protect the dashboard <Badge variant="secondary">BETA</Badge>
-								</Label>
-								<p className="text-muted-foreground text-sm">
-									Set up authentication credentials to protect your Bifrost dashboard. Once configured, use the generated token for all
-									admin API calls.
-								</p>
+				{!hideAuthDashboard && (
+					<div>
+						<div className="space-y-4 rounded-lg border p-4">
+							<div className="flex items-center justify-between">
+								<div className="space-y-0.5">
+									<Label htmlFor="auth-enabled" className="text-sm font-medium">
+										Password protect the dashboard <Badge variant="secondary">BETA</Badge>
+									</Label>
+									<p className="text-muted-foreground text-sm">
+										Set up authentication credentials to protect your Bifrost dashboard. Once configured, use the generated token for all
+										admin API calls.
+									</p>
+								</div>
+								<Switch id="auth-enabled" checked={authConfig.is_enabled} onCheckedChange={handleAuthToggle} />
 							</div>
-							<Switch id="auth-enabled" checked={authConfig.is_enabled} onCheckedChange={handleAuthToggle} />
-						</div>
-						<div className="space-y-4">
-							<div className="space-y-2">
-								<Label htmlFor="admin-username">Username</Label>
-								<Input
-									id="admin-username"
-									type="text"
-									placeholder="Enter admin username"
-									value={authConfig.admin_username}
-									disabled={!authConfig.is_enabled}
-									onChange={(e) => handleAuthFieldChange('admin_username', e.target.value)}
-								/>
-							</div>
-							<div className="space-y-2">
-								<Label htmlFor="admin-password">Password</Label>
-								<Input
-									id="admin-password"
-									type="password"
-									placeholder="Enter admin password"
-									value={authConfig.admin_password}
-									disabled={!authConfig.is_enabled}
-									onChange={(e) => handleAuthFieldChange('admin_password', e.target.value)}
-								/>
+							<div className="space-y-4">
+								<div className="space-y-2">
+									<Label htmlFor="admin-username">Username</Label>
+									<Input
+										id="admin-username"
+										type="text"
+										placeholder="Enter admin username"
+										value={authConfig.admin_username}
+										disabled={!authConfig.is_enabled}
+										onChange={(e) => handleAuthFieldChange("admin_username", e.target.value)}
+									/>
+								</div>
+								<div className="space-y-2">
+									<Label htmlFor="admin-password">Password</Label>
+									<Input
+										id="admin-password"
+										type="password"
+										placeholder="Enter admin password"
+										value={authConfig.admin_password}
+										disabled={!authConfig.is_enabled}
+										onChange={(e) => handleAuthFieldChange("admin_password", e.target.value)}
+									/>
+								</div>
 							</div>
 						</div>
 					</div>
-				</div>
-
+				)}
 				{/* Allowed Origins */}
 				<div>
 					<div className="space-y-2 rounded-lg border p-4">
