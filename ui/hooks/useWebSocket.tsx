@@ -1,7 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from "react";
+import { getTokenFromStorage } from "@/lib/store/apis/baseApi";
 import { getWebSocketUrl } from "@/lib/utils/port";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 type MessageHandler = (data: any) => void;
 
@@ -53,7 +54,7 @@ export function WebSocketProvider({ children, path = "/ws" }: WebSocketProviderP
 			try {
 				wsRef.current.send(typeof data === "string" ? data : JSON.stringify(data));
 			} catch (error) {
-				console.error("Failed to send WebSocket message:", error);
+				console.error("Error sending message:", error);
 			}
 		}
 	};
@@ -65,13 +66,13 @@ export function WebSocketProvider({ children, path = "/ws" }: WebSocketProviderP
 			}
 
 			const wsUrl = getWebSocketUrl(path);
-
-			const ws = new WebSocket(wsUrl);
+			const token = getTokenFromStorage();
+			const wsUrlWithAuth = token ? `${wsUrl}?token=${encodeURIComponent(token)}` : wsUrl;
+			const ws = new WebSocket(wsUrlWithAuth);
 			wsRef.current = ws;
 			globalWsRef = ws;
 
 			ws.onopen = () => {
-				console.log("WebSocket connected");
 				setIsConnected(true);
 				retryCountRef.current = 0; // Reset retry count on successful connection
 
@@ -90,7 +91,7 @@ export function WebSocketProvider({ children, path = "/ws" }: WebSocketProviderP
 						try {
 							ws.send("ping");
 						} catch (error) {
-							console.error("Ping failed:", error);
+							console.error("Error sending ping:", error);
 						}
 					}
 				}, 25000); // Ping every 25 seconds
@@ -113,12 +114,11 @@ export function WebSocketProvider({ children, path = "/ws" }: WebSocketProviderP
 						wildcardHandlers.forEach((handler) => handler(data));
 					}
 				} catch (error) {
-					console.error("Failed to parse WebSocket message:", error);
+					console.error("Error parsing message:", error);
 				}
 			};
 
 			ws.onclose = () => {
-				console.log("WebSocket disconnected, attempting to reconnect...");
 				setIsConnected(false);
 
 				// Clear ping timer
@@ -130,13 +130,11 @@ export function WebSocketProvider({ children, path = "/ws" }: WebSocketProviderP
 				// Exponential backoff: 0.5s, 1s, 2s, 4s, 8s, 16s, 32s (max)
 				retryCountRef.current = Math.min(retryCountRef.current + 1, 6);
 				const delay = Math.pow(2, retryCountRef.current) * 500;
-				console.log(`Reconnecting in ${delay}ms...`);
-
+				
 				reconnectTimeoutRef.current = setTimeout(connect, delay);
 			};
 
 			ws.onerror = (error) => {
-				console.error("WebSocket error:", error);
 				setIsConnected(false);
 				ws.close();
 			};
