@@ -167,6 +167,7 @@ func AuthMiddleware(store configstore.ConfigStore) lib.BifrostHTTPMiddleware {
 		"/api/session/is-auth-enabled",
 		"/api/session/login",
 		"/api/session/logout",
+		"/health",
 	}
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
