@@ -63,6 +63,7 @@ type CreateVirtualKeyRequest struct {
 
 // UpdateVirtualKeyRequest represents the request body for updating a virtual key
 type UpdateVirtualKeyRequest struct {
+	Name            *string `json:"name,omitempty"`
 	Description     *string `json:"description,omitempty"`
 	ProviderConfigs []struct {
 		ID            *uint                   `json:"id,omitempty"` // null for new entries
@@ -464,6 +465,9 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 
 	if err := h.configStore.ExecuteTransaction(ctx, func(tx *gorm.DB) error {
 		// Update fields if provided
+		if req.Name != nil {
+			vk.Name = *req.Name
+		}
 		if req.Description != nil {
 			vk.Description = *req.Description
 		}
@@ -871,13 +875,15 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 
 		return nil
 	}); err != nil {
-		logger.Error("failed to update virtual key: %v", err)
+		errMsg := err.Error()
 		// Check if this is a duplicate MCPClientName error and return 400 instead of 500
-		if strings.Contains(err.Error(), "duplicate mcp_client_name:") {
-			SendError(ctx, 400, err.Error())
+		if strings.Contains(errMsg, "duplicate mcp_client_name:") ||
+			strings.Contains(errMsg, "already exists'") ||
+			strings.Contains(errMsg, "duplicate key") {
+			SendError(ctx, 400, fmt.Sprintf("Failed to update virtual key: %v", err))
 			return
 		}
-		SendError(ctx, 500, "Failed to update virtual key")
+		SendError(ctx, 500, fmt.Sprintf("Failed to update virtual key: %v", err))
 		return
 	}
 

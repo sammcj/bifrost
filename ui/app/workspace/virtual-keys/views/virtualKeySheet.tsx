@@ -289,6 +289,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 			if (isEditing && virtualKey) {
 				// Update existing virtual key
 				const updateData: UpdateVirtualKeyRequest = {
+					name: data.name || undefined,
 					description: data.description || undefined,
 					provider_configs: normalizedProviderConfigs,
 					mcp_configs: data.mcpConfigs,
@@ -389,7 +390,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 										<FormItem>
 											<FormLabel>Name *</FormLabel>
 											<FormControl>
-												<Input placeholder="e.g., Production API Key" {...field} disabled={isEditing} />
+												<Input placeholder="e.g., Production API Key" {...field} />
 											</FormControl>
 											<FormMessage />
 										</FormItem>
@@ -1050,9 +1051,11 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 								<TooltipProvider>
 									<Tooltip>
 										<TooltipTrigger asChild>
-											<Button type="submit" disabled={isLoading || !form.formState.isDirty || !form.formState.isValid}>
-												{isLoading ? "Saving..." : isEditing ? "Update" : "Create"}
-											</Button>
+											<span className="inline-block">
+												<Button type="submit" disabled={isLoading || !form.formState.isDirty || !form.formState.isValid}>
+													{isLoading ? "Saving..." : isEditing ? "Update" : "Create"}
+												</Button>
+											</span>
 										</TooltipTrigger>
 										{(isLoading || !form.formState.isDirty || !form.formState.isValid) && (
 											<TooltipContent>
