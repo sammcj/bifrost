@@ -1033,10 +1033,11 @@ func (s *RDBConfigStore) UpdateVirtualKey(ctx context.Context, virtualKey *table
 	keysToAssociate := virtualKey.Keys
 
 	// Update virtual key first (this will clear the Keys field)
-	if err := txDB.WithContext(ctx).Save(virtualKey).Error; err != nil {
+	// Use Select() to explicitly update all fields, including nil pointer fields
+	// This ensures TeamID gets set to NULL when switching from team to customer association
+	if err := txDB.WithContext(ctx).Select("name", "description", "value", "is_active", "team_id", "customer_id", "budget_id", "rate_limit_id", "updated_at").Updates(virtualKey).Error; err != nil {
 		return err
 	}
-
 	// Clear existing key associations
 	if err := txDB.WithContext(ctx).Model(virtualKey).Association("Keys").Clear(); err != nil {
 		return err
