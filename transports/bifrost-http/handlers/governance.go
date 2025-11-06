@@ -479,6 +479,11 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 			vk.CustomerID = req.CustomerID
 			vk.TeamID = nil // Clear TeamID if setting CustomerID
 		}
+		// When both TeamID and CustomerID are nil
+		if req.TeamID == nil && req.CustomerID == nil {
+			vk.TeamID = nil
+			vk.CustomerID = nil
+		}
 		if req.IsActive != nil {
 			vk.IsActive = *req.IsActive
 		}

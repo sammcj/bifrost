@@ -75,26 +75,44 @@ const mcpConfigSchema = z.object({
 });
 
 // Main form schema
-const formSchema = z.object({
-	name: z.string().min(1, "Virtual key name is required"),
-	description: z.string().optional(),
-	providerConfigs: z.array(providerConfigSchema).optional(),
-	mcpConfigs: z.array(mcpConfigSchema).optional(),
-	entityType: z.enum(["team", "customer", "none"]),
-	teamId: z.string().optional(),
-	customerId: z.string().optional(),
-	isActive: z.boolean(),
-	selectedDBKeys: z.array(z.string()).optional(),
-	// Budget
-	budgetMaxLimit: z.string().optional(),
-	budgetResetDuration: z.string().optional(),
-	// Token limits
-	tokenMaxLimit: z.string().optional(),
-	tokenResetDuration: z.string().optional(),
-	// Request limits
-	requestMaxLimit: z.string().optional(),
-	requestResetDuration: z.string().optional(),
-});
+const formSchema = z
+	.object({
+		name: z.string().min(1, "Virtual key name is required"),
+		description: z.string().optional(),
+		providerConfigs: z.array(providerConfigSchema).optional(),
+		mcpConfigs: z.array(mcpConfigSchema).optional(),
+		entityType: z.enum(["team", "customer", "none"]),
+		teamId: z.string().optional(),
+		customerId: z.string().optional(),
+		isActive: z.boolean(),
+		selectedDBKeys: z.array(z.string()).optional(),
+		// Budget
+		budgetMaxLimit: z.string().optional(),
+		budgetResetDuration: z.string().optional(),
+		// Token limits
+		tokenMaxLimit: z.string().optional(),
+		tokenResetDuration: z.string().optional(),
+		// Request limits
+		requestMaxLimit: z.string().optional(),
+		requestResetDuration: z.string().optional(),
+	})
+	.refine(
+		(data) => {
+			// If entityType is "team", teamId must be provided and not empty
+			if (data.entityType === "team") {
+				return data.teamId && data.teamId.trim() !== "";
+			}
+			// If entityType is "customer", customerId must be provided and not empty
+			if (data.entityType === "customer") {
+				return data.customerId && data.customerId.trim() !== "";
+			}
+			return true;
+		},
+		{
+			message: "Please select a valid team or customer when assignment type is chosen",
+			path: ["entityType"], // This will show the error on the entityType field
+		},
+	);
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -176,6 +194,19 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 			toast.error(`Failed to load available MCP clients: ${getErrorMessage(mcpClientsError)}`);
 		}
 	}, [mcpClientsError]);
+
+	// Clear team/customer IDs when entityType changes to "none"
+	useEffect(() => {
+		const entityType = form.watch("entityType");
+		if (entityType === "none") {
+			form.setValue("teamId", "", { shouldDirty: true });
+			form.setValue("customerId", "", { shouldDirty: true });
+		} else if (entityType === "team") {
+			form.setValue("customerId", "", { shouldDirty: true });
+		} else if (entityType === "customer") {
+			form.setValue("teamId", "", { shouldDirty: true });
+		}
+	}, [form.watch("entityType"), form]);
 
 	// Provider configuration state
 	const [selectedProvider, setSelectedProvider] = useState<string>("");
@@ -293,8 +324,8 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 					description: data.description || undefined,
 					provider_configs: normalizedProviderConfigs,
 					mcp_configs: data.mcpConfigs,
-					team_id: data.entityType === "team" ? data.teamId : undefined,
-					customer_id: data.entityType === "customer" ? data.customerId : undefined,
+					team_id: data.entityType === "team" && data.teamId && data.teamId.trim() !== "" ? data.teamId : undefined,
+					customer_id: data.entityType === "customer" && data.customerId && data.customerId.trim() !== "" ? data.customerId : undefined,
 					key_ids: data.selectedDBKeys,
 					is_active: data.isActive,
 				};
@@ -329,8 +360,8 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 					description: data.description || undefined,
 					provider_configs: normalizedProviderConfigs,
 					mcp_configs: data.mcpConfigs,
-					team_id: data.entityType === "team" ? data.teamId : undefined,
-					customer_id: data.entityType === "customer" ? data.customerId : undefined,
+					team_id: data.entityType === "team" && data.teamId && data.teamId.trim() !== "" ? data.teamId : undefined,
+					customer_id: data.entityType === "customer" && data.customerId && data.customerId.trim() !== "" ? data.customerId : undefined,
 					key_ids: data.selectedDBKeys,
 					is_active: data.isActive,
 				};
@@ -955,7 +986,29 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 												render={({ field }) => (
 													<FormItem>
 														<FormLabel className="font-normal">Assignment Type</FormLabel>
-														<Select onValueChange={field.onChange} defaultValue={field.value}>
+														<Select
+															onValueChange={async (value) => {
+																field.onChange(value);
+																// Auto-select first entry when switching to team or customer
+																if (value === "team" && teams && teams.length > 0) {
+																	form.setValue("teamId", teams[0].id, { shouldDirty: true, shouldValidate: true });
+																	form.setValue("customerId", "", { shouldDirty: true, shouldValidate: true });
+																	// Trigger validation after state updates
+																	await form.trigger(["teamId", "customerId", "entityType"]);
+																} else if (value === "customer" && customers && customers.length > 0) {
+																	form.setValue("customerId", customers[0].id, { shouldDirty: true, shouldValidate: true });
+																	form.setValue("teamId", "", { shouldDirty: true, shouldValidate: true });
+																	// Trigger validation after state updates
+																	await form.trigger(["teamId", "customerId", "entityType"]);
+																} else if (value === "none") {
+																	form.setValue("teamId", "", { shouldDirty: true, shouldValidate: true });
+																	form.setValue("customerId", "", { shouldDirty: true, shouldValidate: true });
+																	// Trigger validation after state updates
+																	await form.trigger(["teamId", "customerId", "entityType"]);
+																}
+															}}
+															defaultValue={field.value}
+														>
 															<FormControl className="w-full">
 																<SelectTrigger>
 																	<SelectValue />
