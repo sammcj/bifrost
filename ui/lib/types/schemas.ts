@@ -276,6 +276,8 @@ export const allowedRequestsSchema = z.object({
 	text_completion: z.boolean(),
 	chat_completion: z.boolean(),
 	chat_completion_stream: z.boolean(),
+	responses: z.boolean(),
+	responses_stream: z.boolean(),
 	embedding: z.boolean(),
 	speech: z.boolean(),
 	speech_stream: z.boolean(),

@@ -1,4 +1,4 @@
-import { AllowedRequests, ConcurrencyAndBufferSize, NetworkConfig } from "@/lib/types/config";
+import { AllowedRequests, BaseProvider, ConcurrencyAndBufferSize, NetworkConfig } from "@/lib/types/config";
 import { ProviderName } from "./logs";
 
 // Model placeholders based on provider type
@@ -62,6 +62,8 @@ export const DEFAULT_ALLOWED_REQUESTS = {
 	text_completion: true,
 	chat_completion: true,
 	chat_completion_stream: true,
+	responses: true,
+	responses_stream: true,
 	embedding: true,
 	speech: true,
 	speech_stream: true,
@@ -69,5 +71,62 @@ export const DEFAULT_ALLOWED_REQUESTS = {
 	transcription_stream: true,
 	list_models: true,
 } as const satisfies Required<AllowedRequests>;
+
+// Mapping of what IS supported by each base provider
+export const PROVIDER_SUPPORTED_REQUESTS: Record<BaseProvider, string[]> = {
+	openai: [
+		"list_models",
+        "text_completion",
+        "chat_completion",
+        "chat_completion_stream",
+        "responses",
+        "responses_stream",
+        "embedding",
+        "speech",
+        "speech_stream",
+        "transcription",
+        "transcription_stream",
+    ],
+	anthropic: [
+		"list_models",
+		"text_completion",
+		"chat_completion",
+		"chat_completion_stream",
+		"responses",
+		"responses_stream",
+	],
+	gemini: [
+		"list_models",
+		"text_completion",
+		"chat_completion",
+		"chat_completion_stream",
+		"responses",
+		"responses_stream",
+		"embedding",
+		"transcription",
+		"transcription_stream",
+        "speech",
+        "speech_stream",
+	],
+	cohere: [
+		"list_models",
+		"text_completion",
+		"chat_completion",
+		"chat_completion_stream",
+		"responses",
+		"responses_stream",
+		"embedding",
+	],
+	bedrock: [
+		"list_models",
+		"text_completion",
+		"chat_completion",
+		"chat_completion_stream",
+		"responses",
+		"responses_stream",
+		"embedding",
+	],
+};
+
 
 export const IS_ENTERPRISE = process.env.NEXT_PUBLIC_IS_ENTERPRISE === "true";
