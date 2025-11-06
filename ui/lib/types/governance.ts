@@ -148,6 +148,7 @@ export interface CreateVirtualKeyRequest {
 }
 
 export interface UpdateVirtualKeyRequest {
+	name?: string;
 	description?: string;
 	provider_configs?: VirtualKeyProviderConfigUpdateRequest[];
 	mcp_configs?: VirtualKeyMCPConfigRequest[];
