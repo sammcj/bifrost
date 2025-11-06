@@ -274,6 +274,7 @@ export const proxyFormConfigSchema = z
 // Allowed requests schema
 export const allowedRequestsSchema = z.object({
 	text_completion: z.boolean(),
+	text_completion_stream: z.boolean(),
 	chat_completion: z.boolean(),
 	chat_completion_stream: z.boolean(),
 	responses: z.boolean(),
@@ -290,12 +291,14 @@ export const allowedRequestsSchema = z.object({
 export const customProviderConfigSchema = z.object({
 	base_provider_type: knownProviderSchema,
 	allowed_requests: allowedRequestsSchema.optional(),
+	request_path_overrides: z.record(z.string(), z.string().optional()).optional(),
 });
 
 // Form-specific custom provider config schema
 export const formCustomProviderConfigSchema = z.object({
 	base_provider_type: z.string().min(1, "Base provider type is required"),
 	allowed_requests: allowedRequestsSchema.optional(),
+	request_path_overrides: z.record(z.string(), z.string().optional()).optional(),
 });
 
 // Full model provider config schema

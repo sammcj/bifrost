@@ -572,3 +572,18 @@ export function isRequestTypeDisabled(providerType: BaseProvider | undefined, re
 	return !supportedRequests.includes(requestType);
 }
 
+
+/**
+ * Cleans the path overrides by removing empty values
+ * @param overrides - The path overrides to clean
+ * @returns The cleaned path overrides
+ */
+export function cleanPathOverrides(overrides?: Record<string, string | undefined>) {
+	if (!overrides) return undefined;
+
+	const entries = Object.entries(overrides)
+		.map(([k, v]) => [k, v?.trim()])
+		.filter(([, v]) => v && v !== "");
+
+	return entries.length ? Object.fromEntries(entries) as Record<string, string> : undefined;
+}
