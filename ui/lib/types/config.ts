@@ -5,6 +5,9 @@ import { KnownProvidersNames } from "@/lib/constants/logs";
 // Known provider names - all supported standard providers
 export type KnownProvider = (typeof KnownProvidersNames)[number];
 
+// Base provider names - all supported base providers
+export type BaseProvider = "openai" | "anthropic" | "cohere" | "gemini" | "bedrock";
+
 // Branded type for custom provider names to prevent collision with known providers
 export type CustomProviderName = string & { readonly __brand: "CustomProviderName" };
 
@@ -115,6 +118,8 @@ export interface AllowedRequests {
 	text_completion: boolean;
 	chat_completion: boolean;
 	chat_completion_stream: boolean;
+	responses: boolean;
+	responses_stream: boolean;
 	embedding: boolean;
 	speech: boolean;
 	speech_stream: boolean;
