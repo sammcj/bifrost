@@ -113,9 +113,25 @@ export interface ProxyConfig {
 	password?: string;
 }
 
+// Request types matching Go's schemas.RequestType
+export type RequestType = 
+	| "list_models"
+	| "text_completion"
+	| "text_completion_stream"
+	| "chat_completion"
+	| "chat_completion_stream"
+	| "responses"
+	| "responses_stream"
+	| "embedding"
+	| "speech"
+	| "speech_stream"
+	| "transcription"
+	| "transcription_stream";
+
 // AllowedRequests matching Go's schemas.AllowedRequests
 export interface AllowedRequests {
 	text_completion: boolean;
+	text_completion_stream: boolean;
 	chat_completion: boolean;
 	chat_completion_stream: boolean;
 	responses: boolean;
@@ -132,6 +148,7 @@ export interface AllowedRequests {
 export interface CustomProviderConfig {
 	base_provider_type: KnownProvider;
 	allowed_requests?: AllowedRequests;
+	request_path_overrides?: Record<string, string>;
 }
 
 // ProviderConfig matching Go's lib.ProviderConfig

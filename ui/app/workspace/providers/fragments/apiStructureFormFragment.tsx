@@ -14,6 +14,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { cleanPathOverrides } from "@/lib/utils/validation";
 
 // Type for form data
 type FormCustomProviderConfig = z.infer<typeof formCustomProviderConfigSchema>;
@@ -34,6 +35,7 @@ export function ApiStructureFormFragment({ provider }: Props) {
 			base_provider_type: provider.custom_provider_config?.base_provider_type ?? "openai",
 			allowed_requests: {
 				text_completion: provider.custom_provider_config?.allowed_requests?.text_completion ?? true,
+				text_completion_stream: provider.custom_provider_config?.allowed_requests?.text_completion_stream ?? true,
 				chat_completion: provider.custom_provider_config?.allowed_requests?.chat_completion ?? true,
 				chat_completion_stream: provider.custom_provider_config?.allowed_requests?.chat_completion_stream ?? true,
 				responses: provider.custom_provider_config?.allowed_requests?.responses ?? true,
@@ -45,6 +47,7 @@ export function ApiStructureFormFragment({ provider }: Props) {
 				transcription_stream: provider.custom_provider_config?.allowed_requests?.transcription_stream ?? true,
 				list_models: provider.custom_provider_config?.allowed_requests?.list_models ?? true,
 			},
+			request_path_overrides: provider.custom_provider_config?.request_path_overrides ?? undefined,
 		},
 	});
 
@@ -63,6 +66,7 @@ export function ApiStructureFormFragment({ provider }: Props) {
 			custom_provider_config: {
 				base_provider_type: data.base_provider_type as unknown as BaseProvider,
 				allowed_requests: data.allowed_requests,
+				request_path_overrides: cleanPathOverrides(data.request_path_overrides),
 			},
 		})
 			.unwrap()

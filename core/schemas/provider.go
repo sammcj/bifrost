@@ -140,9 +140,10 @@ func (ar *AllowedRequests) IsOperationAllowed(operation RequestType) bool {
 }
 
 type CustomProviderConfig struct {
-	CustomProviderKey string           `json:"-"`                  // Custom provider key, internally set by Bifrost
-	BaseProviderType  ModelProvider    `json:"base_provider_type"` // Base provider type
-	AllowedRequests   *AllowedRequests `json:"allowed_requests,omitempty"`
+	CustomProviderKey    string                 `json:"-"`                                // Custom provider key, internally set by Bifrost
+	BaseProviderType     ModelProvider          `json:"base_provider_type"`               // Base provider type
+	AllowedRequests      *AllowedRequests       `json:"allowed_requests,omitempty"`       // Allowed requests for the custom provider
+	RequestPathOverrides map[RequestType]string `json:"request_path_overrides,omitempty"` // Mapping of request type to its custom path which will override the default path of the provider
 }
 
 // IsOperationAllowed checks if a specific operation is allowed for this custom provider

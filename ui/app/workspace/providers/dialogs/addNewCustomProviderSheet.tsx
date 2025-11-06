@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getErrorMessage, useCreateProviderMutation } from "@/lib/store";
-import { BaseProvider, KnownProvider, ModelProviderName } from "@/lib/types/config";
+import { BaseProvider, ModelProviderName } from "@/lib/types/config";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -12,12 +12,14 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { AllowedRequestsFields } from "../fragments/allowedRequestsFields";
 import { allowedRequestsSchema } from "@/lib/types/schemas";
+import { cleanPathOverrides } from "@/lib/utils/validation";
 
 const formSchema = z.object({
 	name: z.string().min(1),
 	baseFormat: z.string().min(1),
 	base_url: z.string().min(1, "Base URL is required").url("Must be a valid URL"),
 	allowed_requests: allowedRequestsSchema,
+	request_path_overrides: z.record(z.string(), z.string().optional()).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -38,6 +40,7 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 			base_url: "",
 			allowed_requests: {
 				text_completion: true,
+				text_completion_stream: true,
 				chat_completion: true,
 				chat_completion_stream: true,
 				responses: true,
@@ -49,6 +52,7 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 				transcription_stream: true,
 				list_models: true,
 			},
+			request_path_overrides: undefined,
 		},
 	});
 
@@ -59,11 +63,12 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 	}, [show]);
 
 	const onSubmit = (data: FormData) => {
-		addProvider({
+		const payload = {
 			provider: data.name as ModelProviderName,
 			custom_provider_config: {
-				base_provider_type: data.baseFormat as KnownProvider,
+				base_provider_type: data.baseFormat as BaseProvider,
 				allowed_requests: data.allowed_requests,
+				request_path_overrides: cleanPathOverrides(data.request_path_overrides),
 			},
 			network_config: {
 				base_url: data.base_url,
@@ -73,7 +78,9 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 				retry_backoff_max: 5000,
 			},
 			keys: [],
-		})
+		};
+
+		addProvider(payload)
 			.unwrap()
 			.then((provider) => {
 				onSave(provider.name);
