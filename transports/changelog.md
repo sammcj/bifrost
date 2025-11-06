@@ -2,7 +2,5 @@
 <!-- Old changelogs are automatically attached to the GitHub releases -->
 
 - chore: version update core to 1.2.18 and framework to 1.1.21
-- feat: added Perplexity provider support
-- chore: version update core to 1.2.19 and framework to 1.1.22
-- feat: support for mistralai publisher endpoint in vertex provider
-- enhancement: Anthropic's computer tool in the Responses API stream handling,
+- fix: resolve MCP client deletion when attached to a virtual key
+- chore: allowed changing name when updating a virtual key

@@ -35,7 +35,7 @@ append_section () {
       CHANGELOG_BODY+=$'\n'"<Update label=\"$label\" description=\"$VERSION\">"$'\n'"$content"$'\n\n'"</Update>"
     fi
     # Clear the changelog file after processing
-    > "$path"
+    printf '' > "$path"
   fi
 }
 
