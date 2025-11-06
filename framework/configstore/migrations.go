@@ -709,7 +709,7 @@ func migrationAddPluginPathColumn(ctx context.Context, db *gorm.DB) error {
 			if !migrator.HasColumn(&tables.TablePlugin{}, "path") {
 				if err := migrator.AddColumn(&tables.TablePlugin{}, "path"); err != nil {
 					return err
-				}				
+				}
 			}
 			if !migrator.HasColumn(&tables.TablePlugin{}, "is_custom") {
 				if err := migrator.AddColumn(&tables.TablePlugin{}, "is_custom"); err != nil {
@@ -724,7 +724,7 @@ func migrationAddPluginPathColumn(ctx context.Context, db *gorm.DB) error {
 			if err := migrator.DropColumn(&tables.TablePlugin{}, "path"); err != nil {
 				return err
 			}
-			if err := migrator.DropColumn(&tables.TablePlugin{}, "is_custom"); err != nil {	
+			if err := migrator.DropColumn(&tables.TablePlugin{}, "is_custom"); err != nil {
 				return err
 			}
 			return nil

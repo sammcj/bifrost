@@ -640,6 +640,11 @@ func (s *RDBConfigStore) DeleteMCPClientConfig(ctx context.Context, name string)
 			return err
 		}
 
+		// Delete any virtual key MCP configs that reference this client
+		if err := tx.WithContext(ctx).Where("mcp_client_id = ?", existingClient.ID).Delete(&tables.TableVirtualKeyMCPConfig{}).Error; err != nil {
+			return err
+		}
+
 		// Delete the client (this will also handle foreign key cascades)
 		return tx.WithContext(ctx).Delete(&existingClient).Error
 	})
@@ -857,7 +862,7 @@ func (s *RDBConfigStore) CreatePlugin(ctx context.Context, plugin *tables.TableP
 	// Mark plugin as custom if path is not empty
 	if plugin.Path != nil && strings.TrimSpace(*plugin.Path) != "" {
 		plugin.IsCustom = true
-	}else{
+	} else {
 		plugin.IsCustom = false
 	}
 	return txDB.WithContext(ctx).Create(plugin).Error
@@ -878,7 +883,7 @@ func (s *RDBConfigStore) UpdatePlugin(ctx context.Context, plugin *tables.TableP
 	// Mark plugin as custom if path is not empty
 	if plugin.Path != nil && strings.TrimSpace(*plugin.Path) != "" {
 		plugin.IsCustom = true
-	}else{
+	} else {
 		plugin.IsCustom = false
 	}
 
@@ -986,6 +991,11 @@ func (s *RDBConfigStore) CreateVirtualKey(ctx context.Context, virtualKey *table
 		txDB = s.db
 	}
 
+	// Check if virtual key already exists with the same value or name
+	if err := txDB.WithContext(ctx).Where("value = ? OR name = ?", virtualKey.Value, virtualKey.Name).First(&tables.TableVirtualKey{}).Error; err == nil {
+		return fmt.Errorf("virtual key already exists with the same value or name")
+	}
+
 	// Create virtual key first
 	if err := txDB.WithContext(ctx).Create(virtualKey).Error; err != nil {
 		return err
@@ -1007,6 +1017,16 @@ func (s *RDBConfigStore) UpdateVirtualKey(ctx context.Context, virtualKey *table
 		txDB = tx[0]
 	} else {
 		txDB = s.db
+	}
+
+	// Check if virtual key already exists with the same value or name
+	var existingVirtualKey tables.TableVirtualKey
+	if err := txDB.WithContext(ctx).
+		Where("id <> ? AND (value = ? OR name = ?)", virtualKey.ID, virtualKey.Value, virtualKey.Name).
+		First(&existingVirtualKey).Error; err == nil {
+		return fmt.Errorf("virtual key already exists with the same value or name")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
 	}
 
 	// Store the keys before Save() clears them
@@ -1411,7 +1431,7 @@ func (s *RDBConfigStore) GetGovernanceConfig(ctx context.Context) (*GovernanceCo
 			case tables.ConfigAdminPasswordKey:
 				password = bifrost.Ptr(entry.Value)
 			case tables.ConfigIsAuthEnabledKey:
-				isEnabled = entry.Value =="true"
+				isEnabled = entry.Value == "true"
 			}
 		}
 		if username != nil && password != nil {
@@ -1440,20 +1460,20 @@ func (s *RDBConfigStore) GetAuthConfig(ctx context.Context) (*AuthConfig, error)
 	if err := s.db.WithContext(ctx).First(&tables.TableGovernanceConfig{}, "key = ?", tables.ConfigAdminUsernameKey).Select("value").Scan(&username).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
-		}		
+		}
 	}
 	if err := s.db.WithContext(ctx).First(&tables.TableGovernanceConfig{}, "key = ?", tables.ConfigAdminPasswordKey).Select("value").Scan(&password).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
-		
+
 	}
 	if err := s.db.WithContext(ctx).First(&tables.TableGovernanceConfig{}, "key = ?", tables.ConfigIsAuthEnabledKey).Select("value").Scan(&isEnabled).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
 	}
-	if username == nil || password == nil  {
+	if username == nil || password == nil {
 		return nil, nil
 	}
 	return &AuthConfig{
@@ -1473,7 +1493,7 @@ func (s *RDBConfigStore) UpdateAuthConfig(ctx context.Context, config *AuthConfi
 			return err
 		}
 		if err := tx.Save(&tables.TableGovernanceConfig{
-			Key:  tables.ConfigAdminPasswordKey,
+			Key:   tables.ConfigAdminPasswordKey,
 			Value: config.AdminPassword,
 		}).Error; err != nil {
 			return err
@@ -1485,7 +1505,7 @@ func (s *RDBConfigStore) UpdateAuthConfig(ctx context.Context, config *AuthConfi
 			return err
 		}
 		return nil
-	})	
+	})
 }
 
 // GetSession retrieves a session from the database.
