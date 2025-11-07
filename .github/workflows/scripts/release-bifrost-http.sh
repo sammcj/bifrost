@@ -190,7 +190,7 @@ TEST_BINARY="../tmp/bifrost-http"
 CONFIGS_DIR="../.github/workflows/configs"
 # Running docker compose
 echo "🐳 Starting Docker services (PostgreSQL, Weaviate, Redis)..."
-docker-compose -f "$CONFIGS_DIR/docker-compose.yml" up -d
+docker compose -f "$CONFIGS_DIR/docker-compose.yml" up -d
 
 # Wait for services to be healthy
 echo "⏳ Waiting for Docker services to be ready..."
