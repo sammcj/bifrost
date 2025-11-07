@@ -14,6 +14,7 @@ type MCPConfig struct {
 
 // MCPClientConfig defines tool filtering for an MCP client.
 type MCPClientConfig struct {
+	ID               string            `json:"id"`                          // Client ID
 	Name             string            `json:"name"`                        // Client name
 	ConnectionType   MCPConnectionType `json:"connection_type"`             // How to connect (HTTP, STDIO, SSE, or InProcess)
 	ConnectionString *string           `json:"connection_string,omitempty"` // HTTP or SSE URL (required for HTTP or SSE connections)
@@ -57,7 +58,6 @@ const (
 // and connection information, after it has been initialized.
 // It is returned by GetMCPClients() method.
 type MCPClient struct {
-	Name   string             `json:"name"`   // Unique name for this client
 	Config MCPClientConfig    `json:"config"` // Tool filtering settings
 	Tools  []ChatToolFunction `json:"tools"`  // Available tools
 	State  MCPConnectionState `json:"state"`  // Connection state

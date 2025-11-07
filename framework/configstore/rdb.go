@@ -556,6 +556,7 @@ func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, 
 		}
 
 		clientConfigs[i] = schemas.MCPClientConfig{
+			ID:               dbClient.ClientID,
 			Name:             dbClient.Name,
 			ConnectionType:   schemas.MCPConnectionType(dbClient.ConnectionType),
 			ConnectionString: processedConnectionString,
@@ -603,6 +604,7 @@ func (s *RDBConfigStore) CreateMCPClientConfig(ctx context.Context, clientConfig
 
 		// Create new client
 		dbClient := tables.TableMCPClient{
+			ClientID:         clientConfigCopy.ID,
 			Name:             clientConfigCopy.Name,
 			ConnectionType:   string(clientConfigCopy.ConnectionType),
 			ConnectionString: clientConfigCopy.ConnectionString,
@@ -616,13 +618,13 @@ func (s *RDBConfigStore) CreateMCPClientConfig(ctx context.Context, clientConfig
 }
 
 // UpdateMCPClientConfig updates an existing MCP client configuration in the database.
-func (s *RDBConfigStore) UpdateMCPClientConfig(ctx context.Context, name string, clientConfig schemas.MCPClientConfig, envKeys map[string][]EnvKeyInfo) error {
+func (s *RDBConfigStore) UpdateMCPClientConfig(ctx context.Context, id string, clientConfig schemas.MCPClientConfig, envKeys map[string][]EnvKeyInfo) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Find existing client
 		var existingClient tables.TableMCPClient
-		if err := tx.WithContext(ctx).Where("name = ?", name).First(&existingClient).Error; err != nil {
+		if err := tx.WithContext(ctx).Where("client_id = ?", id).First(&existingClient).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return fmt.Errorf("MCP client with name '%s' not found", name)
+				return fmt.Errorf("MCP client with id '%s' not found", id)
 			}
 			return err
 		}
@@ -637,24 +639,25 @@ func (s *RDBConfigStore) UpdateMCPClientConfig(ctx context.Context, name string,
 		substituteMCPClientEnvVars(&clientConfigCopy, envKeys)
 
 		// Update existing client
+		existingClient.Name = clientConfigCopy.Name
 		existingClient.ConnectionType = string(clientConfigCopy.ConnectionType)
 		existingClient.ConnectionString = clientConfigCopy.ConnectionString
 		existingClient.StdioConfig = clientConfigCopy.StdioConfig
 		existingClient.ToolsToExecute = clientConfigCopy.ToolsToExecute
 		existingClient.Headers = clientConfigCopy.Headers
 
-		return tx.WithContext(ctx).Save(&existingClient).Error
+		return tx.WithContext(ctx).Updates(&existingClient).Error
 	})
 }
 
 // DeleteMCPClientConfig deletes an MCP client configuration from the database.
-func (s *RDBConfigStore) DeleteMCPClientConfig(ctx context.Context, name string) error {
+func (s *RDBConfigStore) DeleteMCPClientConfig(ctx context.Context, id string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Find existing client
 		var existingClient tables.TableMCPClient
-		if err := tx.WithContext(ctx).Where("name = ?", name).First(&existingClient).Error; err != nil {
+		if err := tx.WithContext(ctx).Where("client_id = ?", id).First(&existingClient).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return fmt.Errorf("MCP client with name '%s' not found", name)
+				return fmt.Errorf("MCP client with id '%s' not found", id)
 			}
 			return err
 		}
