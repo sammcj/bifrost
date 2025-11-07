@@ -662,10 +662,7 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	mcpHandler := handlers.NewMCPHandler(s.Client, s.Config)
 	integrationHandler := handlers.NewIntegrationHandler(s.Client, s.Config)
 	configHandler := handlers.NewConfigHandler(s, s.Config)
-	var pluginsHandler *handlers.PluginsHandler
-	if s.Config.ConfigStore != nil {
-		pluginsHandler = handlers.NewPluginsHandler(s, s.Config.ConfigStore)
-	}
+	pluginsHandler := handlers.NewPluginsHandler(s, s.Config.ConfigStore)
 	sessionHandler := handlers.NewSessionHandler(s.Config.ConfigStore)
 	// Register all handler routes
 	healthHandler.RegisterRoutes(s.Router, middlewares...)
@@ -677,7 +674,9 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	if pluginsHandler != nil {
 		pluginsHandler.RegisterRoutes(s.Router, middlewares...)
 	}
-	sessionHandler.RegisterRoutes(s.Router, middlewares...)
+	if sessionHandler != nil {
+		sessionHandler.RegisterRoutes(s.Router, middlewares...)
+	}
 	if cacheHandler != nil {
 		cacheHandler.RegisterRoutes(s.Router, middlewares...)
 	}

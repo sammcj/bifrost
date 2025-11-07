@@ -4,8 +4,16 @@ set -euo pipefail
 # Release bifrost-http component
 # Usage: ./release-bifrost-http.sh <version>
 
+# Get the absolute path of the script directory
+# Use readlink if available (Linux), otherwise use cd/pwd (macOS compatible)
+if command -v readlink >/dev/null 2>&1 && readlink -f "$0" >/dev/null 2>&1; then
+  SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+else
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+fi
+
 # Source Go utilities for exponential backoff
-source "$(dirname "$0")/go-utils.sh"
+source "$SCRIPT_DIR/go-utils.sh"
 
 # Validate input argument
 if [ "${1:-}" = "" ]; then
@@ -138,14 +146,145 @@ go mod tidy
 
 cd ..
 
-# We need to build UI first before we can validate the transport build
+We need to build UI first before we can validate the transport build
 echo "🎨 Building UI..."
 make build-ui
+
+# Building hello-world plugin
+echo "🔨 Building hello-world plugin..."
+cd examples/plugins/hello-world
+make build
+cd ../../..
 
 # Validate transport build
 echo "🔨 Validating transport build..."
 cd transports
+
+# Run unit tests
+echo "🧪 Running unit tests..."
 go test ./...
+
+# Build the binary for integration testing
+echo "🔨 Building binary for integration testing..."
+mkdir -p ../tmp
+cd bifrost-http
+go build -o ../../tmp/bifrost-http .
+cd ..
+
+# Run integration tests with different configurations
+echo "🧪 Running integration tests with different configurations..."
+CONFIGS_TO_TEST=(
+  "default"
+  "emptystate"
+  "noconfigstorenologstore"
+  "witconfigstorelogstorepostgres"
+  "withconfigstore"
+  "withconfigstorelogsstorepostgres"
+  "withconfigstorelogsstoresqlite"
+  "withdynamicplugin"
+  "withobservability"
+  "withsemanticcache"
+)
+
+TEST_BINARY="../tmp/bifrost-http"
+CONFIGS_DIR="../.github/workflows/configs"
+# Running docker compose
+echo "🐳 Starting Docker services (PostgreSQL, Weaviate, Redis)..."
+docker-compose -f "$CONFIGS_DIR/docker-compose.yml" up -d
+
+# Wait for services to be healthy
+echo "⏳ Waiting for Docker services to be ready..."
+sleep 10
+
+# Clean up SQLite database files from all config directories
+echo "🧹 Cleaning up SQLite database files from config directories..."
+find "$CONFIGS_DIR" -type f \( -name "*.db" -o -name "*.db-shm" -o -name "*.db-wal" \) -delete
+echo "✅ Cleanup complete"
+
+for config in "${CONFIGS_TO_TEST[@]}"; do
+  echo "  🔍 Testing with config: $config"
+  config_path="$CONFIGS_DIR/$config"
+  
+  if [ ! -d "$config_path" ]; then
+    echo "    ⚠️  Warning: Config directory not found: $config_path (skipping)"
+    continue
+  fi
+  
+  # Create a temporary log file for server output
+  SERVER_LOG=$(mktemp)
+  
+  # Start the server in background with a timeout, logging to file and console
+  timeout 30s $TEST_BINARY --app-dir "$config_path" --port 18080 --log-level debug 2>&1 | tee "$SERVER_LOG" &
+  SERVER_PID=$!
+  
+  # Wait for server to be ready by looking for the startup message
+  echo "    ⏳ Waiting for server to start..."
+  MAX_WAIT=30
+  ELAPSED=0
+  SERVER_READY=false
+  
+  while [ $ELAPSED -lt $MAX_WAIT ]; do
+    if grep -q "successfully started bifrost, serving UI on http://localhost:18080" "$SERVER_LOG" 2>/dev/null; then
+      SERVER_READY=true
+      echo "    ✅ Server started successfully with config: $config"
+      break
+    fi
+    
+    # Check if server process is still running
+    if ! kill -0 $SERVER_PID 2>/dev/null; then
+      echo "    ❌ Server process died before starting with config: $config"
+      rm -f "$SERVER_LOG"
+      exit 1
+    fi
+    
+    sleep 1
+    ELAPSED=$((ELAPSED + 1))
+  done
+  
+  if [ "$SERVER_READY" = false ]; then
+    echo "    ❌ Server failed to start within ${MAX_WAIT}s with config: $config"
+    kill $SERVER_PID 2>/dev/null || true
+    wait $SERVER_PID 2>/dev/null || true
+    rm -f "$SERVER_LOG"
+    exit 1
+  fi
+  
+  # Run get_curls.sh to test all GET endpoints
+  echo "    🧪 Running API endpoint tests..."
+  echo "    🔍 DEBUG: SCRIPT_DIR=$SCRIPT_DIR"
+  echo "    🔍 DEBUG: PWD=$(pwd)"
+  GET_CURLS_SCRIPT="$SCRIPT_DIR/get_curls.sh"
+  echo "    🔍 DEBUG: GET_CURLS_SCRIPT=$GET_CURLS_SCRIPT"
+  echo "    🔍 DEBUG: File exists check: $([ -f "$GET_CURLS_SCRIPT" ] && echo 'YES' || echo 'NO')"
+  
+  if [ -f "$GET_CURLS_SCRIPT" ]; then
+    BASE_URL="http://localhost:18080" "$GET_CURLS_SCRIPT"
+    CURL_EXIT_CODE=$?
+    
+    if [ $CURL_EXIT_CODE -eq 0 ]; then
+      echo "    ✅ API endpoint tests passed for config: $config"
+    else
+      echo "    ❌ API endpoint tests failed for config: $config (exit code: $CURL_EXIT_CODE)"
+      kill $SERVER_PID 2>/dev/null || true
+      wait $SERVER_PID 2>/dev/null || true
+      rm -f "$SERVER_LOG"
+      exit 1
+    fi
+  else
+    echo "    ⚠️  Warning: get_curls.sh not found at $GET_CURLS_SCRIPT (skipping endpoint tests)"
+  fi
+  
+  # Kill the server
+  kill $SERVER_PID 2>/dev/null || true
+  wait $SERVER_PID 2>/dev/null || true
+  
+  # Clean up log file
+  rm -f "$SERVER_LOG"
+  
+  # Clean up any lingering processes
+  sleep 1
+done
+
 cd ..
 echo "✅ Transport build validation successful"
 
