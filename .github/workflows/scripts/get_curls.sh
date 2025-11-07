@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Bifrost HTTP Transport - GET API Endpoints
 # This script tests all GET endpoints and reports their status
@@ -12,6 +13,10 @@ RED='\033[0;31m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
+# Track failures
+FAILED_TESTS=0
+TOTAL_TESTS=0
+
 echo "Bifrost GET API Endpoints - Status Check"
 echo "========================================"
 echo "Base URL: $BASE_URL"
@@ -20,12 +25,14 @@ echo ""
 # Function to test endpoint
 test_endpoint() {
   local path=$1
+  TOTAL_TESTS=$((TOTAL_TESTS + 1))
   local status=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$BASE_URL$path" -H "Content-Type: application/json")
   
   if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
     echo -e "GET $path - ${GREEN}✓ SUCCESS${NC} ($status)"
   else
     echo -e "GET $path - ${RED}✗ FAILURE${NC} ($status)"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
   fi
 }
 
