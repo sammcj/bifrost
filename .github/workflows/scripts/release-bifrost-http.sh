@@ -146,7 +146,7 @@ go mod tidy
 
 cd ..
 
-We need to build UI first before we can validate the transport build
+# We need to build UI first before we can validate the transport build
 echo "🎨 Building UI..."
 make build-ui
 
