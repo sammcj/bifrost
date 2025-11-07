@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -uo pipefail
 
 # Bifrost HTTP Transport - GET API Endpoints
 # This script tests all GET endpoints and reports their status
@@ -61,3 +61,19 @@ test_endpoint "/v1/models"
 
 echo ""
 echo -e "${YELLOW}Note: WebSocket endpoint (/ws) requires a WebSocket client${NC}"
+echo ""
+echo "========================================"
+echo "Test Summary:"
+echo "  Total tests: $TOTAL_TESTS"
+echo "  Passed: $((TOTAL_TESTS - FAILED_TESTS))"
+echo "  Failed: $FAILED_TESTS"
+echo "========================================"
+
+# Exit with error if any tests failed
+if [ "$FAILED_TESTS" -gt 0 ]; then
+  echo -e "${RED}✗ Some tests failed${NC}"
+  exit 1
+else
+  echo -e "${GREEN}✓ All tests passed${NC}"
+  exit 0
+fi
