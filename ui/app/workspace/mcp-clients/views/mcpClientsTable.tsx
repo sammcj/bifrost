@@ -55,8 +55,8 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 
 	const handleReconnect = async (client: MCPClient) => {
 		try {
-			await reconnectMCPClient(client.name).unwrap();
-			toast({ title: "Reconnected", description: `Client ${client.name} reconnected successfully.` });
+			await reconnectMCPClient(client.config.id).unwrap();
+			toast({ title: "Reconnected", description: `Client ${client.config.name} reconnected successfully.` });
 			loadClients();
 		} catch (error) {
 			toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
@@ -65,8 +65,8 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 
 	const handleDelete = async (client: MCPClient) => {
 		try {
-			await deleteMCPClient(client.name).unwrap();
-			toast({ title: "Deleted", description: `Client ${client.name} removed successfully.` });
+			await deleteMCPClient(client.config.id).unwrap();
+			toast({ title: "Deleted", description: `Client ${client.config.name} removed successfully.` });
 			loadClients();
 		} catch (error) {
 			toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
@@ -149,8 +149,8 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 							</TableRow>
 						)}
 						{clients.map((c: MCPClient) => (
-							<TableRow key={c.name} className="hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => handleRowClick(c)}>
-								<TableCell className="font-medium">{c.name}</TableCell>
+							<TableRow key={c.config.id} className="hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => handleRowClick(c)}>
+								<TableCell className="font-medium">{c.config.name}</TableCell>
 								<TableCell>{getConnectionTypeDisplay(c.config.connection_type)}</TableCell>
 								<TableCell className="max-w-72 overflow-hidden text-ellipsis whitespace-nowrap">{getConnectionDisplay(c)}</TableCell>
 								<TableCell>

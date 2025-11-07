@@ -57,7 +57,7 @@ type MCPManager struct {
 
 // MCPClient represents a connected MCP client with its configuration and tools.
 type MCPClient struct {
-	Name            string                      // Unique name for this client
+	// Name            string                      // Unique name for this client
 	Conn            *client.Client              // Active MCP client connection
 	ExecutionConfig schemas.MCPClientConfig     // Tool filtering settings
 	ToolMap         map[string]schemas.ChatTool // Available tools mapped by name
@@ -124,17 +124,18 @@ func (m *MCPManager) GetClients() ([]MCPClient, error) {
 }
 
 // ReconnectClient attempts to reconnect an MCP client if it is disconnected.
-func (m *MCPManager) ReconnectClient(name string) error {
+func (m *MCPManager) ReconnectClient(id string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
-	client, ok := m.clientMap[name]
+	client, ok := m.clientMap[id]
 	if !ok {
-		return fmt.Errorf("client %s not found", name)
+		m.mu.Unlock()
+		return fmt.Errorf("client %s not found", id)
 	}
 
 	if client.Conn != nil {
-		return fmt.Errorf("client %s is already connected", name)
+		m.mu.Unlock()
+		return fmt.Errorf("client %s is already connected", id)
 	}
 
 	m.mu.Unlock()
@@ -142,7 +143,7 @@ func (m *MCPManager) ReconnectClient(name string) error {
 	// connectToMCPClient handles locking internally
 	err := m.connectToMCPClient(client.ExecutionConfig)
 	if err != nil {
-		return fmt.Errorf("failed to connect to MCP client %s: %w", name, err)
+		return fmt.Errorf("failed to connect to MCP client %s: %w", id, err)
 	}
 
 	return nil
@@ -165,14 +166,13 @@ func (m *MCPManager) AddClient(config schemas.MCPClientConfig) error {
 
 	m.mu.Lock()
 
-	if _, ok := m.clientMap[config.Name]; ok {
+	if _, ok := m.clientMap[config.ID]; ok {
 		m.mu.Unlock()
 		return fmt.Errorf("client %s already exists", config.Name)
 	}
 
 	// Create placeholder entry
-	m.clientMap[config.Name] = &MCPClient{
-		Name:            config.Name,
+	m.clientMap[config.ID] = &MCPClient{
 		ExecutionConfig: config,
 		ToolMap:         make(map[string]schemas.ChatTool),
 	}
@@ -185,7 +185,7 @@ func (m *MCPManager) AddClient(config schemas.MCPClientConfig) error {
 	if err := m.connectToMCPClient(configCopy); err != nil {
 		// Re-lock to clean up the failed entry
 		m.mu.Lock()
-		delete(m.clientMap, config.Name)
+		delete(m.clientMap, config.ID)
 		m.mu.Unlock()
 		return fmt.Errorf("failed to connect to MCP client %s: %w", config.Name, err)
 	}
@@ -197,21 +197,21 @@ func (m *MCPManager) AddClient(config schemas.MCPClientConfig) error {
 // It handles cleanup for all transport types (HTTP, STDIO, SSE).
 //
 // Parameters:
-//   - name: Name of the client to remove
-func (m *MCPManager) RemoveClient(name string) error {
+//   - id: ID of the client to remove
+func (m *MCPManager) RemoveClient(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return m.removeClientUnsafe(name)
+	return m.removeClientUnsafe(id)
 }
 
-func (m *MCPManager) removeClientUnsafe(name string) error {
-	client, ok := m.clientMap[name]
+func (m *MCPManager) removeClientUnsafe(id string) error {
+	client, ok := m.clientMap[id]
 	if !ok {
-		return fmt.Errorf("client %s not found", name)
+		return fmt.Errorf("client %s not found", id)
 	}
 
-	m.logger.Info(fmt.Sprintf("%s Disconnecting MCP client: %s", MCPLogPrefix, name))
+	m.logger.Info(fmt.Sprintf("%s Disconnecting MCP client: %s", MCPLogPrefix, client.ExecutionConfig.Name))
 
 	// Cancel SSE context if present (required for proper SSE cleanup)
 	if client.cancelFunc != nil {
@@ -223,7 +223,7 @@ func (m *MCPManager) removeClientUnsafe(name string) error {
 	// This handles cleanup for all transport types (HTTP, STDIO, SSE)
 	if client.Conn != nil {
 		if err := client.Conn.Close(); err != nil {
-			m.logger.Error("%s Failed to close MCP client %s: %v", MCPLogPrefix, name, err)
+			m.logger.Error("%s Failed to close MCP client %s: %v", MCPLogPrefix, client.ExecutionConfig.Name, err)
 		}
 		client.Conn = nil
 	}
@@ -231,26 +231,28 @@ func (m *MCPManager) removeClientUnsafe(name string) error {
 	// Clear client tool map
 	client.ToolMap = make(map[string]schemas.ChatTool)
 
-	delete(m.clientMap, name)
+	delete(m.clientMap, id)
 	return nil
 }
 
-func (m *MCPManager) EditClientTools(name string, toolsToExecute []string) error {
+func (m *MCPManager) EditClient(id string, updatedConfig schemas.MCPClientConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	client, ok := m.clientMap[name]
+	client, ok := m.clientMap[id]
 	if !ok {
-		return fmt.Errorf("client %s not found", name)
+		return fmt.Errorf("client %s not found", id)
 	}
 
 	if client.Conn == nil {
-		return fmt.Errorf("client %s has no active connection", name)
+		return fmt.Errorf("client %s has no active connection", id)
 	}
 
 	// Update the client's execution config with new tool filters
 	config := client.ExecutionConfig
-	config.ToolsToExecute = toolsToExecute
+	config.Name = updatedConfig.Name
+	config.Headers = updatedConfig.Headers
+	config.ToolsToExecute = updatedConfig.ToolsToExecute
 
 	// Store the updated config
 	client.ExecutionConfig = config
@@ -268,8 +270,8 @@ func (m *MCPManager) EditClientTools(name string, toolsToExecute []string) error
 	m.mu.Lock()
 
 	// Verify client still exists
-	if _, ok := m.clientMap[name]; !ok {
-		return fmt.Errorf("client %s was removed during tool update", name)
+	if _, ok := m.clientMap[id]; !ok {
+		return fmt.Errorf("client %s was removed during tool update", id)
 	}
 
 	if err != nil {
@@ -300,14 +302,14 @@ func (m *MCPManager) getAvailableTools(ctx context.Context) []schemas.ChatTool {
 	}
 
 	tools := make([]schemas.ChatTool, 0)
-	for clientName, client := range m.clientMap {
+	for id, client := range m.clientMap {
 		// Apply client filtering logic
-		if !m.shouldIncludeClient(clientName, includeClients) {
-			m.logger.Debug(fmt.Sprintf("%s Skipping MCP client %s: not in include clients list", MCPLogPrefix, clientName))
+		if !m.shouldIncludeClient(id, includeClients) {
+			m.logger.Debug(fmt.Sprintf("%s Skipping MCP client %s: not in include clients list", MCPLogPrefix, id))
 			continue
 		}
 
-		m.logger.Debug(fmt.Sprintf("Checking tools for MCP client %s with tools to execute: %v", clientName, client.ExecutionConfig.ToolsToExecute))
+		m.logger.Debug(fmt.Sprintf("Checking tools for MCP client %s with tools to execute: %v", id, client.ExecutionConfig.ToolsToExecute))
 
 		// Add all tools from this client
 		for toolName, tool := range client.ToolMap {
@@ -318,7 +320,7 @@ func (m *MCPManager) getAvailableTools(ctx context.Context) []schemas.ChatTool {
 			}
 
 			// Check if tool should be skipped based on request context
-			if m.shouldSkipToolForRequest(clientName, toolName, ctx) {
+			if m.shouldSkipToolForRequest(id, toolName, ctx) {
 				m.logger.Debug(fmt.Sprintf("%s Skipping MCP tool %s: not in include tools list", MCPLogPrefix, toolName))
 				continue
 			}
@@ -456,7 +458,6 @@ func (m *MCPManager) createLocalMCPClient() (*MCPClient, error) {
 	// Don't create the actual client connection here - it will be created
 	// after the server is ready using NewInProcessClient
 	return &MCPClient{
-		Name: BifrostMCPClientName,
 		ExecutionConfig: schemas.MCPClientConfig{
 			Name: BifrostMCPClientName,
 		},
@@ -552,7 +553,7 @@ func (m *MCPManager) executeTool(ctx context.Context, toolCall schemas.ChatAssis
 	}
 
 	if client.Conn == nil {
-		return nil, fmt.Errorf("client '%s' has no active connection", client.Name)
+		return nil, fmt.Errorf("client '%s' has no active connection", client.ExecutionConfig.Name)
 	}
 
 	// Call the tool via MCP client -> MCP server
@@ -566,11 +567,11 @@ func (m *MCPManager) executeTool(ctx context.Context, toolCall schemas.ChatAssis
 		},
 	}
 
-	m.logger.Debug(fmt.Sprintf("%s Starting tool execution: %s via client: %s", MCPLogPrefix, toolName, client.Name))
+	m.logger.Debug(fmt.Sprintf("%s Starting tool execution: %s via client: %s", MCPLogPrefix, toolName, client.ExecutionConfig.Name))
 
 	toolResponse, callErr := client.Conn.CallTool(ctx, callRequest)
 	if callErr != nil {
-		m.logger.Error("%s Tool execution failed for %s via client %s: %v", MCPLogPrefix, toolName, client.Name, callErr)
+		m.logger.Error("%s Tool execution failed for %s via client %s: %v", MCPLogPrefix, toolName, client.ExecutionConfig.Name, callErr)
 		return nil, fmt.Errorf("MCP tool call failed: %v", callErr)
 	}
 
@@ -594,7 +595,7 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 	m.mu.Lock()
 
 	// Initialize or validate client entry
-	if existingClient, exists := m.clientMap[config.Name]; exists {
+	if existingClient, exists := m.clientMap[config.ID]; exists {
 		// Client entry exists from config, check for existing connection
 		if existingClient.Conn != nil {
 			m.mu.Unlock()
@@ -604,8 +605,7 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 		existingClient.ConnectionInfo.Type = config.ConnectionType
 	} else {
 		// Create new client entry with configuration
-		m.clientMap[config.Name] = &MCPClient{
-			Name:            config.Name,
+		m.clientMap[config.ID] = &MCPClient{
 			ExecutionConfig: config,
 			ToolMap:         make(map[string]schemas.ChatTool),
 			ConnectionInfo: MCPClientConnectionInfo{
@@ -694,7 +694,7 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 	defer m.mu.Unlock()
 
 	// Verify client still exists (could have been cleaned up during heavy operations)
-	if client, exists := m.clientMap[config.Name]; exists {
+	if client, exists := m.clientMap[config.ID]; exists {
 		// Store the external client connection and details
 		client.Conn = externalClient
 		client.ConnectionInfo = connectionInfo
@@ -778,7 +778,7 @@ func (m *MCPManager) shouldSkipToolForConfig(toolName string, config schemas.MCP
 }
 
 // shouldSkipToolForRequest checks if a tool should be skipped based on the request context.
-func (m *MCPManager) shouldSkipToolForRequest(clientName, toolName string, ctx context.Context) bool {
+func (m *MCPManager) shouldSkipToolForRequest(clientID, toolName string, ctx context.Context) bool {
 	includeTools := ctx.Value(MCPContextKeyIncludeTools)
 
 	if includeTools != nil {
@@ -790,12 +790,12 @@ func (m *MCPManager) shouldSkipToolForRequest(clientName, toolName string, ctx c
 			}
 
 			// Handle wildcard "clientName/*" - if present, all tools are included for this client
-			if slices.Contains(includeToolsList, fmt.Sprintf("%s/*", clientName)) {
+			if slices.Contains(includeToolsList, fmt.Sprintf("%s/*", clientID)) {
 				return false // All tools allowed
 			}
 
 			// Check if specific tool is in the list (format: clientName/toolName)
-			fullToolName := fmt.Sprintf("%s/%s", clientName, toolName)
+			fullToolName := fmt.Sprintf("%s/%s", clientID, toolName)
 			if slices.Contains(includeToolsList, fullToolName) {
 				return false // Tool is explicitly allowed
 			}
@@ -954,6 +954,10 @@ func (m *MCPManager) addMCPToolsToBifrostRequest(ctx context.Context, req *schem
 }
 
 func validateMCPClientConfig(config *schemas.MCPClientConfig) error {
+	if strings.TrimSpace(config.ID) == "" {
+		return fmt.Errorf("id is required for MCP client config")
+	}
+
 	if strings.TrimSpace(config.Name) == "" {
 		return fmt.Errorf("name is required for MCP client config")
 	}
@@ -1006,7 +1010,7 @@ func (m *MCPManager) findMCPClientForTool(toolName string) *MCPClient {
 }
 
 // shouldIncludeClient determines if a client should be included based on filtering rules.
-func (m *MCPManager) shouldIncludeClient(clientName string, includeClients []string) bool {
+func (m *MCPManager) shouldIncludeClient(clientID string, includeClients []string) bool {
 	// If includeClients is specified (not nil), apply whitelist filtering
 	if includeClients != nil {
 		// Handle empty array [] - means no clients are included
@@ -1020,7 +1024,7 @@ func (m *MCPManager) shouldIncludeClient(clientName string, includeClients []str
 		}
 
 		// Check if specific client is in the list
-		return slices.Contains(includeClients, clientName)
+		return slices.Contains(includeClients, clientID)
 	}
 
 	// Default: include all clients when no filtering specified (nil case)
@@ -1148,9 +1152,9 @@ func (m *MCPManager) cleanup() error {
 	defer m.mu.Unlock()
 
 	// Disconnect all external MCP clients
-	for name := range m.clientMap {
-		if err := m.removeClientUnsafe(name); err != nil {
-			m.logger.Error("%s Failed to remove MCP client %s: %v", MCPLogPrefix, name, err)
+	for id := range m.clientMap {
+		if err := m.removeClientUnsafe(id); err != nil {
+			m.logger.Error("%s Failed to remove MCP client %s: %v", MCPLogPrefix, id, err)
 		}
 	}
 

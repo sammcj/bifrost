@@ -288,7 +288,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 			}
 			// Initializing logs store
 			config.LogsStore, err = logstore.NewLogStore(ctx, logStoreConfig, logger)
-			if err != nil {				
+			if err != nil {
 				if logStoreConfig.Type == logstore.LogStoreTypeSQLite && os.IsNotExist(err) && logStoreConfig.Config.(*logstore.SQLiteConfig).Path != logsDBPath {
 					logger.Warn("failed to locate logstore file at path: %s: %v. Creating new one at path: %s", logStoreConfig.Config, err, logsDBPath)
 					// Then we will try to create a new one
@@ -1554,7 +1554,7 @@ func (c *Config) processMCPEnvVars() error {
 					EnvVar:     envVar,
 					Provider:   "",
 					KeyType:    "connection_string",
-					ConfigPath: fmt.Sprintf("mcp.client_configs.%s.connection_string", clientConfig.Name),
+					ConfigPath: fmt.Sprintf("mcp.client_configs.%s.connection_string", clientConfig.ID),
 					KeyID:      "", // Empty for MCP connection strings
 				})
 			}
@@ -1575,7 +1575,7 @@ func (c *Config) processMCPEnvVars() error {
 						EnvVar:     envVar,
 						Provider:   "",
 						KeyType:    "mcp_header",
-						ConfigPath: fmt.Sprintf("mcp.client_configs.%s.headers.%s", clientConfig.Name, header),
+						ConfigPath: fmt.Sprintf("mcp.client_configs.%s.headers.%s", clientConfig.ID, header),
 						KeyID:      "", // Empty for MCP headers
 					})
 				}
@@ -1621,6 +1621,11 @@ func (c *Config) AddMCPClient(ctx context.Context, clientConfig schemas.MCPClien
 		c.MCPConfig = &schemas.MCPConfig{}
 	}
 
+	// Generate a unique ID for the client if not provided
+	if clientConfig.ID == "" {
+		clientConfig.ID = uuid.NewString()
+	}
+
 	// Track new environment variables
 	newEnvKeys := make(map[string]struct{})
 
@@ -1639,7 +1644,7 @@ func (c *Config) AddMCPClient(ctx context.Context, clientConfig schemas.MCPClien
 				EnvVar:     envVar,
 				Provider:   "",
 				KeyType:    "connection_string",
-				ConfigPath: fmt.Sprintf("mcp.client_configs.%s.connection_string", clientConfig.Name),
+				ConfigPath: fmt.Sprintf("mcp.client_configs.%s.connection_string", clientConfig.ID),
 				KeyID:      "", // Empty for MCP connection strings
 			})
 		}
@@ -1659,7 +1664,7 @@ func (c *Config) AddMCPClient(ctx context.Context, clientConfig schemas.MCPClien
 					EnvVar:     envVar,
 					Provider:   "",
 					KeyType:    "mcp_header",
-					ConfigPath: fmt.Sprintf("mcp.client_configs.%s.headers.%s", clientConfig.Name, header),
+					ConfigPath: fmt.Sprintf("mcp.client_configs.%s.headers.%s", clientConfig.ID, header),
 					KeyID:      "", // Empty for MCP headers
 				})
 			}
@@ -1670,7 +1675,7 @@ func (c *Config) AddMCPClient(ctx context.Context, clientConfig schemas.MCPClien
 	// Config with processed env vars
 	if err := c.client.AddMCPClient(c.MCPConfig.ClientConfigs[len(c.MCPConfig.ClientConfigs)-1]); err != nil {
 		c.MCPConfig.ClientConfigs = c.MCPConfig.ClientConfigs[:len(c.MCPConfig.ClientConfigs)-1]
-		c.cleanupEnvKeys("", clientConfig.Name, newEnvKeys)
+		c.cleanupEnvKeys("", clientConfig.ID, newEnvKeys)
 		return fmt.Errorf("failed to add MCP client: %w", err)
 	}
 
@@ -1693,7 +1698,7 @@ func (c *Config) AddMCPClient(ctx context.Context, clientConfig schemas.MCPClien
 //   - Validates that the MCP client exists
 //   - Removes the MCP client from the configuration
 //   - Removes the MCP client from the Bifrost client
-func (c *Config) RemoveMCPClient(ctx context.Context, name string) error {
+func (c *Config) RemoveMCPClient(ctx context.Context, id string) error {
 	if c.client == nil {
 		return fmt.Errorf("bifrost client not set")
 	}
@@ -1705,21 +1710,21 @@ func (c *Config) RemoveMCPClient(ctx context.Context, name string) error {
 		return fmt.Errorf("no MCP config found")
 	}
 
-	if err := c.client.RemoveMCPClient(name); err != nil {
+	if err := c.client.RemoveMCPClient(id); err != nil {
 		return fmt.Errorf("failed to remove MCP client: %w", err)
 	}
 
 	for i, clientConfig := range c.MCPConfig.ClientConfigs {
-		if clientConfig.Name == name {
+		if clientConfig.ID == id {
 			c.MCPConfig.ClientConfigs = append(c.MCPConfig.ClientConfigs[:i], c.MCPConfig.ClientConfigs[i+1:]...)
 			break
 		}
 	}
 
-	c.cleanupEnvKeys("", name, nil)
+	c.cleanupEnvKeys("", id, nil)
 
 	if c.ConfigStore != nil {
-		if err := c.ConfigStore.DeleteMCPClientConfig(ctx, name); err != nil {
+		if err := c.ConfigStore.DeleteMCPClientConfig(ctx, id); err != nil {
 			return fmt.Errorf("failed to delete MCP client config from store: %w", err)
 		}
 		if err := c.ConfigStore.UpdateEnvKeys(ctx, c.EnvKeys); err != nil {
@@ -1730,13 +1735,13 @@ func (c *Config) RemoveMCPClient(ctx context.Context, name string) error {
 	return nil
 }
 
-// EditMCPClientTools edits the tools of an MCP client.
-// This allows for dynamic MCP client tool management at runtime.
+// EditMCPClient edits an MCP client configuration.
+// This allows for dynamic MCP client management at runtime with proper env var handling.
 //
 // Parameters:
-//   - name: Name of the client to edit
-//   - toolsToExecute: Tools to execute from the client
-func (c *Config) EditMCPClientTools(ctx context.Context, name string, toolsToExecute []string) error {
+//   - id: ID of the client to edit
+//   - updatedConfig: Updated MCP client configuration
+func (c *Config) EditMCPClient(ctx context.Context, id string, updatedConfig schemas.MCPClientConfig) error {
 	if c.client == nil {
 		return fmt.Errorf("bifrost client not set")
 	}
@@ -1748,28 +1753,101 @@ func (c *Config) EditMCPClientTools(ctx context.Context, name string, toolsToExe
 		return fmt.Errorf("no MCP config found")
 	}
 
-	if err := c.client.EditMCPClientTools(name, toolsToExecute); err != nil {
-		return fmt.Errorf("failed to edit MCP client tools: %w", err)
-	}
-
-	// Find the client config and create an updated version
-	var updatedClientConfig schemas.MCPClientConfig
+	// Find the existing client config
+	var oldConfig schemas.MCPClientConfig
 	var found bool
+	var configIndex int
 	for i, clientConfig := range c.MCPConfig.ClientConfigs {
-		if clientConfig.Name == name {
-			c.MCPConfig.ClientConfigs[i].ToolsToExecute = toolsToExecute
-			updatedClientConfig = c.MCPConfig.ClientConfigs[i]
+		if clientConfig.ID == id {
+			oldConfig = clientConfig
+			configIndex = i
 			found = true
 			break
 		}
 	}
 
 	if !found {
-		return fmt.Errorf("MCP client '%s' not found", name)
+		return fmt.Errorf("MCP client '%s' not found", id)
 	}
 
+	// Track new environment variables being added
+	newEnvKeys := make(map[string]struct{})
+
+	// Create a copy of updatedConfig to process env vars
+	processedConfig := updatedConfig
+
+	// Process Headers if present
+	if processedConfig.Headers != nil {
+		processedHeaders := make(map[string]string)
+
+		// Track which headers are in the new config
+		newHeaders := make(map[string]bool)
+		for header := range processedConfig.Headers {
+			newHeaders[header] = true
+		}
+
+		// Clean up env vars for headers that are being removed
+		if oldConfig.Headers != nil {
+			for oldHeader := range oldConfig.Headers {
+				if !newHeaders[oldHeader] {
+					c.cleanupOldMCPEnvVar(id, "mcp_header", oldHeader)
+				}
+			}
+		}
+
+		// Process each header value
+		for header, value := range processedConfig.Headers {
+			newValue, envVar, err := c.processEnvValue(value)
+			if err != nil {
+				// Clean up any env vars we added before the error
+				c.cleanupEnvKeys("", id, newEnvKeys)
+				return fmt.Errorf("failed to process env var in header %s: %w", header, err)
+			}
+
+			if envVar != "" {
+				newEnvKeys[envVar] = struct{}{}
+				// Remove old env var entry for this specific header if it exists
+				c.cleanupOldMCPEnvVar(id, "mcp_header", header)
+				// Add new env var entry
+				c.EnvKeys[envVar] = append(c.EnvKeys[envVar], configstore.EnvKeyInfo{
+					EnvVar:     envVar,
+					Provider:   "",
+					KeyType:    "mcp_header",
+					ConfigPath: fmt.Sprintf("mcp.client_configs.%s.headers.%s", id, header),
+					KeyID:      "",
+				})
+			} else {
+				// If new value is not an env var but old one might have been, clean up
+				c.cleanupOldMCPEnvVar(id, "mcp_header", header)
+			}
+
+			processedHeaders[header] = newValue
+		}
+		processedConfig.Headers = processedHeaders
+	} else if oldConfig.Headers != nil {
+		// If headers are being removed entirely, clean up all old header env vars
+		for oldHeader := range oldConfig.Headers {
+			c.cleanupOldMCPEnvVar(id, "mcp_header", oldHeader)
+		}
+	}
+
+	// Update the in-memory config with the processed values
+	c.MCPConfig.ClientConfigs[configIndex].Name = processedConfig.Name
+	c.MCPConfig.ClientConfigs[configIndex].Headers = processedConfig.Headers
+	c.MCPConfig.ClientConfigs[configIndex].ToolsToExecute = processedConfig.ToolsToExecute
+
+	// Give the PROCESSED config (with actual env var values) to bifrost client
+	if err := c.client.EditMCPClient(id, processedConfig); err != nil {
+		// Rollback in-memory changes
+		c.MCPConfig.ClientConfigs[configIndex] = oldConfig
+		// Clean up any new env vars we added
+		c.cleanupEnvKeys("", id, newEnvKeys)
+		return fmt.Errorf("failed to edit MCP client: %w", err)
+	}
+
+	// Persist changes to config store
 	if c.ConfigStore != nil {
-		if err := c.ConfigStore.UpdateMCPClientConfig(ctx, name, updatedClientConfig, c.EnvKeys); err != nil {
+		if err := c.ConfigStore.UpdateMCPClientConfig(ctx, id, updatedConfig, c.EnvKeys); err != nil {
 			return fmt.Errorf("failed to update MCP client config in store: %w", err)
 		}
 		if err := c.ConfigStore.UpdateEnvKeys(ctx, c.EnvKeys); err != nil {
@@ -1785,6 +1863,7 @@ func (c *Config) EditMCPClientTools(ctx context.Context, name string, toolsToExe
 func (c *Config) RedactMCPClientConfig(config schemas.MCPClientConfig) schemas.MCPClientConfig {
 	// Create a copy with basic fields
 	configCopy := schemas.MCPClientConfig{
+		ID:               config.ID,
 		Name:             config.Name,
 		ConnectionType:   config.ConnectionType,
 		ConnectionString: config.ConnectionString,
@@ -1799,7 +1878,7 @@ func (c *Config) RedactMCPClientConfig(config schemas.MCPClientConfig) schemas.M
 		// Check if this value came from an env var
 		for envVar, infos := range c.EnvKeys {
 			for _, info := range infos {
-				if info.Provider == "" && info.KeyType == "connection_string" && info.ConfigPath == fmt.Sprintf("mcp.client_configs.%s.connection_string", config.Name) {
+				if info.Provider == "" && info.KeyType == "connection_string" && info.ConfigPath == fmt.Sprintf("mcp.client_configs.%s.connection_string", config.ID) {
 					connStr = "env." + envVar
 					break
 				}
@@ -1823,7 +1902,7 @@ func (c *Config) RedactMCPClientConfig(config schemas.MCPClientConfig) schemas.M
 			// Check if this header value came from an env var
 			for envVar, infos := range c.EnvKeys {
 				for _, info := range infos {
-					if info.Provider == "" && info.KeyType == "mcp_header" && info.ConfigPath == fmt.Sprintf("mcp.client_configs.%s.headers.%s", config.Name, header) {
+					if info.Provider == "" && info.KeyType == "mcp_header" && info.ConfigPath == fmt.Sprintf("mcp.client_configs.%s.headers.%s", config.ID, header) {
 						headerValue = "env." + envVar
 						break
 					}
@@ -1893,26 +1972,26 @@ func IsRedacted(key string) bool {
 //
 // Parameters:
 //   - provider: Provider name to clean up (empty string for MCP clients)
-//   - mcpClientName: MCP client name to clean up (empty string for providers)
+//   - mcpClientID: MCP client ID to clean up (empty string for providers)
 //   - envVarsToRemove: Optional map of specific env vars to remove (nil to remove all)
-func (c *Config) cleanupEnvKeys(provider schemas.ModelProvider, mcpClientName string, envVarsToRemove map[string]struct{}) {
+func (c *Config) cleanupEnvKeys(provider schemas.ModelProvider, mcpClientID string, envVarsToRemove map[string]struct{}) {
 	// If envVarsToRemove is provided, only clean those specific vars
 	if envVarsToRemove != nil {
 		for envVar := range envVarsToRemove {
-			c.cleanupEnvVar(envVar, provider, mcpClientName)
+			c.cleanupEnvVar(envVar, provider, mcpClientID)
 		}
 		return
 	}
 
 	// If envVarsToRemove is nil, clean all vars for the provider/client
 	for envVar := range c.EnvKeys {
-		c.cleanupEnvVar(envVar, provider, mcpClientName)
+		c.cleanupEnvVar(envVar, provider, mcpClientID)
 	}
 }
 
 // cleanupEnvVar removes entries for a specific environment variable based on provider/client.
 // This is a helper function to avoid duplicating the filtering logic.
-func (c *Config) cleanupEnvVar(envVar string, provider schemas.ModelProvider, mcpClientName string) {
+func (c *Config) cleanupEnvVar(envVar string, provider schemas.ModelProvider, mcpClientID string) {
 	infos := c.EnvKeys[envVar]
 	if len(infos) == 0 {
 		return
@@ -1924,8 +2003,8 @@ func (c *Config) cleanupEnvVar(envVar string, provider schemas.ModelProvider, mc
 		shouldKeep := false
 		if provider != "" {
 			shouldKeep = info.Provider != provider
-		} else if mcpClientName != "" {
-			shouldKeep = info.Provider != "" || !strings.HasPrefix(info.ConfigPath, fmt.Sprintf("mcp.client_configs.%s", mcpClientName))
+		} else if mcpClientID != "" {
+			shouldKeep = info.Provider != "" || !strings.HasPrefix(info.ConfigPath, fmt.Sprintf("mcp.client_configs.%s", mcpClientID))
 		}
 		if shouldKeep {
 			filteredInfos = append(filteredInfos, info)
@@ -1936,6 +2015,44 @@ func (c *Config) cleanupEnvVar(envVar string, provider schemas.ModelProvider, mc
 		delete(c.EnvKeys, envVar)
 	} else {
 		c.EnvKeys[envVar] = filteredInfos
+	}
+}
+
+// cleanupOldMCPEnvVar removes a specific env var entry for an MCP client field.
+// This is used when updating MCP client fields that may have had env vars.
+//
+// Parameters:
+//   - mcpClientID: The ID of the MCP client
+//   - keyType: The type of field ("connection_string", "mcp_header")
+//   - headerName: The header name (only used for "mcp_header" keyType)
+func (c *Config) cleanupOldMCPEnvVar(mcpClientID string, keyType string, headerName string) {
+	for envVar, infos := range c.EnvKeys {
+		filteredInfos := make([]configstore.EnvKeyInfo, 0, len(infos))
+
+		for _, info := range infos {
+			shouldKeep := true
+			// Only consider MCP-related entries (Provider is empty for MCP)
+			if info.Provider == "" && string(info.KeyType) == keyType {
+				if keyType == "mcp_header" && headerName != "" {
+					// For headers, match by client ID and header name
+					// ConfigPath format: mcp.client_configs.<id>.headers.<header>
+					if strings.Contains(info.ConfigPath, fmt.Sprintf(".headers.%s", headerName)) &&
+						strings.Contains(info.ConfigPath, mcpClientID) {
+						shouldKeep = false
+					}
+				}
+			}
+
+			if shouldKeep {
+				filteredInfos = append(filteredInfos, info)
+			}
+		}
+
+		if len(filteredInfos) == 0 {
+			delete(c.EnvKeys, envVar)
+		} else {
+			c.EnvKeys[envVar] = filteredInfos
+		}
 	}
 }
 
