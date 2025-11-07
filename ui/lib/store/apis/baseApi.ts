@@ -48,7 +48,7 @@ export const clearAuthStorage = () => {
 	try {
 		// Clear traditional auth token
 		localStorage.removeItem("bifrost-auth-token");
-		
+
 		// Clear enterprise OAuth tokens using tokenManager
 		if (IS_ENTERPRISE) {
 			clearOAuthStorage();
@@ -80,11 +80,11 @@ const baseQueryWithRefresh = createBaseQueryWithRefresh(baseQuery);
 const baseQueryWithErrorHandling: typeof baseQueryWithRefresh = async (args: any, api: any, extraOptions: any) => {
 	// First apply refresh logic (enterprise-specific, handles 401)
 	const result = await baseQueryWithRefresh(args, api, extraOptions);
-	
+
 	// Then handle other error types
 	if (result.error) {
 		const error = result.error as any;
-		
+
 		// Handle 401 for non-enterprise (no refresh available)
 		if (error?.status === 401 && !IS_ENTERPRISE) {
 			clearAuthStorage();
@@ -93,7 +93,7 @@ const baseQueryWithErrorHandling: typeof baseQueryWithRefresh = async (args: any
 			}
 			return result;
 		}
-		
+
 		// Handle specific error types
 		if (error?.status === "FETCH_ERROR") {
 			// Network error
@@ -158,7 +158,9 @@ export const baseApi = createApi({
 		"SCIMProviders",
 		"User",
 		"Guardrails",
-		"ClusterNodes"
+		"ClusterNodes",
+		"Users",
+		"GuardrailRules",
 	],
 	endpoints: () => ({}),
 });
