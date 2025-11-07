@@ -6,7 +6,14 @@ icon: "key"
 
 ## Overview
 
-Virtual Keys are the primary governance entity in Bifrost. Users and applications authenticate using the `x-bf-vk` header (*not the `Authorization` header*), which maps to specific access permissions, budgets, and rate limits.
+Virtual Keys are the primary governance entity in Bifrost. Users and applications authenticate using the given headers to access virtual keys and get specific access permissions, budgets, and rate limits.
+
+**Allowed Headers:**
+- `x-bf-vk` - Virtual key header, eg. `sk-bf-*`
+- `Authorization` - Authorization header, eg. `Bearer sk-bf-*` (OpenAI style)
+- `x-api-key` - API key header, eg. `sk-bf-*` (Anthropic style)
+
+<Note>You can also use `Authorization` and `x-api-key` headers to pass direct keys to the provider. Read more about it in [Direct Key Bypass](../keys-management#direct-key-bypass).</Note>
 
 **Key Features:**
 - **Access Control** - Model and provider filtering
