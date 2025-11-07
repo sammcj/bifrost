@@ -22,6 +22,9 @@ type SessionHandler struct {
 
 // NewSessionHandler creates a new session handler instance
 func NewSessionHandler(configStore configstore.ConfigStore) *SessionHandler {
+	if configStore == nil {
+		return nil
+	}
 	return &SessionHandler{
 		configStore: configStore,
 	}
@@ -71,6 +74,10 @@ func (h *SessionHandler) isAuthEnabled(ctx *fasthttp.RequestCtx) {
 
 // login handles POST /api/session/login - Login a user
 func (h *SessionHandler) login(ctx *fasthttp.RequestCtx) {
+	if h.configStore == nil {
+		SendError(ctx, fasthttp.StatusForbidden, "Authentication is not enabled")
+		return
+	}
 	payload := struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -145,6 +152,10 @@ func (h *SessionHandler) login(ctx *fasthttp.RequestCtx) {
 
 // logout handles POST /api/session/logout - Logout a user
 func (h *SessionHandler) logout(ctx *fasthttp.RequestCtx) {
+	if h.configStore == nil {
+		SendError(ctx, fasthttp.StatusForbidden, "Authentication is not enabled")
+		return
+	}
 	// Get token from Authorization header
 	token := string(ctx.Request.Header.Peek("Authorization"))
 	token = strings.TrimPrefix(token, "Bearer ")

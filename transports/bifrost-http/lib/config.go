@@ -275,6 +275,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to get logs store config: %w", err)
 			}
+			// Still consider the back
 			if logStoreConfig == nil {
 				logStoreConfig = &logstore.Config{
 					Enabled: true,
@@ -284,11 +285,28 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					},
 				}
 			}
-			logger.Info("config store initialized; initializing logs store.")
+			// Initializing logs store
 			config.LogsStore, err = logstore.NewLogStore(ctx, logStoreConfig, logger)
-			if err != nil {
-				return nil, fmt.Errorf("failed to initialize logs store: %v", err)
+			if err != nil {				
+				if logStoreConfig.Type == logstore.LogStoreTypeSQLite && os.IsNotExist(err) && logStoreConfig.Config.(*logstore.SQLiteConfig).Path != logsDBPath {
+					logger.Warn("failed to locate logstore file at path: %s: %v. Creating new one at path: %s", logStoreConfig.Config, err, logsDBPath)
+					// Then we will try to create a new one
+					logStoreConfig = &logstore.Config{
+						Enabled: true,
+						Type:    logstore.LogStoreTypeSQLite,
+						Config: &logstore.SQLiteConfig{
+							Path: logsDBPath,
+						},
+					}
+					config.LogsStore, err = logstore.NewLogStore(ctx, logStoreConfig, logger)
+					if err != nil {
+						return nil, fmt.Errorf("failed to initialize logs store: %v", err)
+					}
+				} else {
+					return nil, fmt.Errorf("failed to initialize logs store: %v", err)
+				}
 			}
+			// Checking if path is present and accessible or not
 			logger.Info("logs store initialized.")
 			err = config.ConfigStore.UpdateLogsStoreConfig(ctx, logStoreConfig)
 			if err != nil {
