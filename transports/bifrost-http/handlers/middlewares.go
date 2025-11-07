@@ -152,7 +152,7 @@ func validateSession(ctx *fasthttp.RequestCtx, store configstore.ConfigStore, to
 // These basicauth routes are only used for the dashboard and API routes
 func AuthMiddleware(store configstore.ConfigStore) lib.BifrostHTTPMiddleware {
 	if store == nil {
-		logger.Info("auth middleware is disabled because store is nil")
+		logger.Info("auth middleware is disabled because store is not present")
 		return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 			return next
 		}
