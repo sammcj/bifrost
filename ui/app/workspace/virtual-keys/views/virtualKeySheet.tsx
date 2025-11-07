@@ -492,12 +492,13 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 												value: key.key_id,
 												description: key.models.join(", "),
 												provider: key.provider,
-											}))
-										
+											}));
+
 										return (
 											<FormItem>
 												<FormControl>
 													<AsyncMultiSelect
+														hideSelectedOptions
 														isNonAsync
 														closeMenuOnSelect={false}
 														defaultOptions={availableKeys.map((key) => ({
@@ -511,7 +512,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 																return (
 																	<div
 																		{...multiValueProps.innerProps}
-																		className="bg-accent flex cursor-pointer items-center gap-1 rounded-sm px-1 py-0.5 text-sm"
+																		className="bg-accent dark:!bg-card flex cursor-pointer items-center gap-1 rounded-sm px-1 py-0.5 text-sm"
 																	>
 																		<RenderProviderIcon
 																			provider={multiValueProps.data.provider as ProviderIconType}
@@ -535,7 +536,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 																		{...optionProps.innerProps}
 																		className={cn(
 																			"flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm",
-																			optionProps.isFocused && "bg-accent",
+																			optionProps.isFocused && "bg-accent dark:!bg-card",
 																			"hover:bg-accent",
 																		)}
 																	>
@@ -555,13 +556,13 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 														value={selectedKeyValues}
 														onChange={(keys) => field.onChange(keys.map((key) => key.value as string))}
 														placeholder="Select keys..."
-														className="hover:bg-accent w-full bg-white dark:bg-zinc-800"
+														className="hover:bg-accent w-full"
 														menuClassName="z-[60] max-h-[300px] overflow-y-auto w-full cursor-pointer custom-scrollbar"
 													/>
 												</FormControl>
 												<FormMessage />
 											</FormItem>
-										)
+										);
 									}}
 								/>
 							</div>
