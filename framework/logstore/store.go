@@ -30,7 +30,7 @@ type LogStore interface {
 }
 
 // NewLogStore creates a new log store based on the configuration.
-func NewLogStore(ctx context.Context,config *Config, logger schemas.Logger) (LogStore, error) {
+func NewLogStore(ctx context.Context,config *Config, logger schemas.Logger) (LogStore, error) {	
 	switch config.Type {
 	case LogStoreTypeSQLite:
 		if sqliteConfig, ok := config.Config.(*SQLiteConfig); ok {
