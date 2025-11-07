@@ -36,6 +36,12 @@ func (h *SessionHandler) RegisterRoutes(r *router.Router, middlewares ...lib.Bif
 
 // isAuthEnabled handles GET /api/session/is-auth-enabled - Check if auth is enabled
 func (h *SessionHandler) isAuthEnabled(ctx *fasthttp.RequestCtx) {
+	if h.configStore == nil {
+		SendJSON(ctx, map[string]any{
+			"is_auth_enabled": false,
+		})
+		return
+	}
 	authConfig, err := h.configStore.GetAuthConfig(ctx)
 	if err != nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to get auth config: %v", err))
@@ -55,7 +61,7 @@ func (h *SessionHandler) isAuthEnabled(ctx *fasthttp.RequestCtx) {
 		session, err := h.configStore.GetSession(ctx, token)
 		if err == nil && session != nil && session.ExpiresAt.After(time.Now()) {
 			hasValidToken = true
-		}		
+		}
 	}
 	SendJSON(ctx, map[string]any{
 		"is_auth_enabled": authConfig.IsEnabled,
