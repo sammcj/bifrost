@@ -239,7 +239,7 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 		vk = configstoreTables.TableVirtualKey{
 			ID:          uuid.NewString(),
 			Name:        req.Name,
-			Value:       uuid.NewString(),
+			Value:       governance.VirtualKeyPrefix + uuid.NewString(),
 			Description: req.Description,
 			TeamID:      req.TeamID,
 			CustomerID:  req.CustomerID,
