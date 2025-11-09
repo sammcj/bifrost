@@ -10,7 +10,7 @@ require (
 	github.com/fasthttp/websocket v1.5.12
 	github.com/google/uuid v1.6.0
 	github.com/maximhq/bifrost/core v1.2.20
-	github.com/maximhq/bifrost/framework v1.1.24
+	github.com/maximhq/bifrost/framework v1.1.25
 	github.com/maximhq/bifrost/plugins/governance v1.3.25
 	github.com/maximhq/bifrost/plugins/logging v1.3.24
 	github.com/maximhq/bifrost/plugins/maxim v1.4.24
