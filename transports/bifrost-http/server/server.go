@@ -665,19 +665,22 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	configHandler := handlers.NewConfigHandler(s, s.Config)
 	pluginsHandler := handlers.NewPluginsHandler(s, s.Config.ConfigStore)
 	sessionHandler := handlers.NewSessionHandler(s.Config.ConfigStore)
-	// Register all handler routes
-	authConfig, err := s.Config.ConfigStore.GetAuthConfig(ctx)
-	if err != nil {
-		logger.Error("failed to get auth config: %v", err)
-		return fmt.Errorf("failed to get auth config: %v", err)
-	}	
+	// Determine which middlewares to use for integration/inference routes
+	integrationMiddlewares := middlewaresWithTelemetry
+	authConfig := s.Config.GovernanceConfig.AuthConfig
+	if s.Config.ConfigStore != nil {
+		authConfig, err = s.Config.ConfigStore.GetAuthConfig(ctx)
+		if err != nil {
+			logger.Error("failed to get auth config: %v", err)
+			return fmt.Errorf("failed to get auth config: %v", err)
+		}
+	}
 	if ctx.Value("isEnterprise") == nil {
 		if authConfig != nil && authConfig.IsEnabled {
 			middlewaresWithAuth = append(middlewaresWithAuth, handlers.AuthMiddleware(s.Config.ConfigStore))
 		}
 	}
-	// Determine which middlewares to use for integration/inference routes
-	integrationMiddlewares := middlewaresWithTelemetry
+	// If auth is enabled and disable auth on inference is not enabled, use auth middleware for integration/inference routes
 	if authConfig != nil && authConfig.IsEnabled && !authConfig.DisableAuthOnInference {
 		integrationMiddlewares = middlewaresWithAuth
 	}
