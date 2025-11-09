@@ -1207,7 +1207,7 @@ func (bifrost *Bifrost) RemoveMCPClient(id string) error {
 // This allows for dynamic MCP client tool management at runtime.
 //
 // Parameters:
-//   - id: ID of the client to edit	
+//   - id: ID of the client to edit
 //   - updatedConfig: Updated MCP client configuration
 //
 // Returns:
@@ -1215,10 +1215,10 @@ func (bifrost *Bifrost) RemoveMCPClient(id string) error {
 //
 // Example:
 //
-//  err := bifrost.EditMCPClient("my-mcp-client-id", schemas.MCPClientConfig{
-//      Name:           "my-mcp-client-name",
-//      ToolsToExecute: []string{"tool1", "tool2"},
-//  })
+//	err := bifrost.EditMCPClient("my-mcp-client-id", schemas.MCPClientConfig{
+//	    Name:           "my-mcp-client-name",
+//	    ToolsToExecute: []string{"tool1", "tool2"},
+//	})
 func (bifrost *Bifrost) EditMCPClient(id string, updatedConfig schemas.MCPClientConfig) error {
 	if bifrost.mcpManager == nil {
 		return fmt.Errorf("MCP is not configured in this Bifrost instance")
