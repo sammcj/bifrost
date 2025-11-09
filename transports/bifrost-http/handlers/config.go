@@ -120,9 +120,10 @@ func (h *ConfigHandler) getConfig(ctx *fasthttp.RequestCtx) {
 			}
 			// Password we will hash it
 			mapConfig["auth_config"] = map[string]any{
-				"admin_username": authConfig.AdminUserName,
-				"admin_password": password,
-				"is_enabled":     authConfig.IsEnabled,
+				"admin_username":            authConfig.AdminUserName,
+				"admin_password":            password,
+				"is_enabled":                authConfig.IsEnabled,
+				"disable_auth_on_inference": authConfig.DisableAuthOnInference,
 			}
 		}
 	}
@@ -328,12 +329,12 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 				}
 				payload.AuthConfig.AdminPassword = string(hashedPassword)
 			}
-			err := h.configManager.UpdateAuthConfig(ctx, payload.AuthConfig)
-			if err != nil {
-				logger.Warn(fmt.Sprintf("failed to update auth config: %v", err))
-				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update auth config: %v", err))
-				return
-			}
+		}
+		err = h.configManager.UpdateAuthConfig(ctx, payload.AuthConfig)
+		if err != nil {
+			logger.Warn(fmt.Sprintf("failed to update auth config: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update auth config: %v", err))
+			return
 		}
 	}
 	ctx.SetStatusCode(fasthttp.StatusOK)

@@ -462,6 +462,9 @@ export default function AppSidebar() {
 
 	const { isConnected: isWebSocketConnected } = useWebSocket();
 
+	// New release image - based on theme
+	const newReleaseImage = mounted && resolvedTheme === "dark" ? "/images/new-release-image-dark.png" : "/images/new-release-image.png";
+
 	// Memoize promo cards array to prevent duplicates and unnecessary re-renders
 	const promoCards = useMemo(() => {
 		const cards = [];
@@ -474,7 +477,7 @@ export default function AppSidebar() {
 				title: `${latestRelease.name} is now available.`,
 				description: (
 					<div className="flex h-full flex-col gap-2">
-						<img src={`/images/new-release-image.png`} alt="Bifrost" className="h-[95px] object-cover" />
+						<img src={newReleaseImage} alt="Bifrost" className="h-[95px] object-cover rounded-md" />
 						<Link
 							href={`https://docs.getbifrost.ai/changelogs/${latestRelease.name}`}
 							target="_blank"
@@ -488,7 +491,7 @@ export default function AppSidebar() {
 			});
 		}
 		return cards;
-	}, [showNewReleaseBanner, latestRelease]);
+	}, [showNewReleaseBanner, latestRelease, newReleaseImage]);
 
 	// Reset areCardsEmpty when promoCards changes
 	useEffect(() => {
