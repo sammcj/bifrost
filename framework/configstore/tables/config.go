@@ -4,6 +4,7 @@ const (
 	ConfigAdminUsernameKey = "admin_username"
 	ConfigAdminPasswordKey = "admin_password"
 	ConfigIsAuthEnabledKey = "is_auth_enabled"
+	ConfigDisableAuthOnInferenceKey = "disable_auth_on_inference"
 )
 
 // TableGovernanceConfig represents generic configuration key-value pairs

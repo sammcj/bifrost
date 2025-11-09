@@ -645,14 +645,15 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	s.WebSocketHandler.StartHeartbeat()
 	// Adding telemetry middleware
 	middlewaresWithTelemetry := middlewares
+	middlewaresWithAuth := middlewares
 	prometheusPlugin, err := FindPluginByName[*telemetry.PrometheusPlugin](s.Plugins, telemetry.PluginName)
 	if err == nil {
 		middlewaresWithTelemetry = append(middlewaresWithTelemetry, prometheusPlugin.HTTPMiddleware)
+		middlewaresWithAuth = append(middlewaresWithAuth, prometheusPlugin.HTTPMiddleware)
 	} else {
 		logger.Warn("prometheus plugin not found, skipping telemetry middleware")
 		middlewaresWithTelemetry = middlewares
 	}
-
 	// Chaining all middlewares
 	// lib.ChainMiddlewares chains multiple middlewares together
 	// Initialize
@@ -665,29 +666,45 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	pluginsHandler := handlers.NewPluginsHandler(s, s.Config.ConfigStore)
 	sessionHandler := handlers.NewSessionHandler(s.Config.ConfigStore)
 	// Register all handler routes
-	healthHandler.RegisterRoutes(s.Router, middlewares...)
-	providerHandler.RegisterRoutes(s.Router, middlewares...)
-	inferenceHandler.RegisterRoutes(s.Router, middlewaresWithTelemetry...)
-	mcpHandler.RegisterRoutes(s.Router, middlewares...)
-	integrationHandler.RegisterRoutes(s.Router, middlewaresWithTelemetry...)
-	configHandler.RegisterRoutes(s.Router, middlewares...)
+	authConfig, err := s.Config.ConfigStore.GetAuthConfig(ctx)
+	if err != nil {
+		logger.Error("failed to get auth config: %v", err)
+		return fmt.Errorf("failed to get auth config: %v", err)
+	}	
+	if ctx.Value("isEnterprise") == nil {
+		if authConfig != nil && authConfig.IsEnabled {
+			middlewaresWithAuth = append(middlewaresWithAuth, handlers.AuthMiddleware(s.Config.ConfigStore))
+		}
+	}
+	// Determine which middlewares to use for integration/inference routes
+	integrationMiddlewares := middlewaresWithTelemetry
+	if authConfig != nil && authConfig.IsEnabled && !authConfig.DisableAuthOnInference {
+		integrationMiddlewares = middlewaresWithAuth
+	}
+	integrationHandler.RegisterRoutes(s.Router, integrationMiddlewares...)
+	inferenceHandler.RegisterRoutes(s.Router, integrationMiddlewares...)
+	// Going ahead with API handlers
+	healthHandler.RegisterRoutes(s.Router, middlewaresWithTelemetry...)
+	providerHandler.RegisterRoutes(s.Router, middlewaresWithAuth...)
+	mcpHandler.RegisterRoutes(s.Router, middlewaresWithAuth...)
+	configHandler.RegisterRoutes(s.Router, middlewaresWithAuth...)
 	if pluginsHandler != nil {
-		pluginsHandler.RegisterRoutes(s.Router, middlewares...)
+		pluginsHandler.RegisterRoutes(s.Router, middlewaresWithAuth...)
 	}
 	if sessionHandler != nil {
-		sessionHandler.RegisterRoutes(s.Router, middlewares...)
+		sessionHandler.RegisterRoutes(s.Router, middlewaresWithAuth...)
 	}
 	if cacheHandler != nil {
-		cacheHandler.RegisterRoutes(s.Router, middlewares...)
+		cacheHandler.RegisterRoutes(s.Router, middlewaresWithAuth...)
 	}
 	if governanceHandler != nil {
-		governanceHandler.RegisterRoutes(s.Router, middlewares...)
+		governanceHandler.RegisterRoutes(s.Router, middlewaresWithAuth...)
 	}
 	if loggingHandler != nil {
-		loggingHandler.RegisterRoutes(s.Router, middlewares...)
+		loggingHandler.RegisterRoutes(s.Router, middlewaresWithAuth...)
 	}
 	if s.WebSocketHandler != nil {
-		s.WebSocketHandler.RegisterRoutes(s.Router, middlewares...)
+		s.WebSocketHandler.RegisterRoutes(s.Router, middlewaresWithAuth...)
 	}
 
 	// Add Prometheus /metrics endpoint
@@ -802,16 +819,10 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	}
 	logger.Info("models added to catalog")
 	s.Config.SetBifrostClient(s.Client)
-	// Initializing middlewares
-	// Checking if auth config is set; if yes we will add middleware
-	var middlewares []lib.BifrostHTTPMiddleware
-	if ctx.Value("isEnterprise") == nil {
-		middlewares = append(middlewares, handlers.AuthMiddleware(s.Config.ConfigStore))
-	}
 	// Initialize routes
 	s.Router = router.New()
 	// Register routes
-	err = s.RegisterRoutes(s.ctx, middlewares...)
+	err = s.RegisterRoutes(s.ctx)
 	// Register UI handler
 	s.RegisterUIHandler()
 	if err != nil {

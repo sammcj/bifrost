@@ -20,6 +20,8 @@ import (
 var encryptionKey []byte
 var logger schemas.Logger
 
+var ErrEncryptionKeyNotInitialized = errors.New("encryption key is not initialized")
+
 // Init initializes the encryption key using Argon2id KDF to derive a secure 32-byte key
 // from the provided passphrase. This ensures strong entropy regardless of passphrase length.
 // The function accepts any passphrase but warns if it's too short (< 16 bytes).
@@ -101,7 +103,7 @@ func Encrypt(plaintext string) (string, error) {
 // Decrypt decrypts a base64-encoded ciphertext using AES-256-GCM and returns the plaintext
 func Decrypt(ciphertext string) (string, error) {
 	if encryptionKey == nil {
-		return ciphertext, fmt.Errorf("encryption key is not initialized")
+		return ciphertext, ErrEncryptionKeyNotInitialized
 	}
 	if ciphertext == "" {
 		return ciphertext, nil
