@@ -49,6 +49,7 @@ export default function SecurityView() {
 		admin_username: "",
 		admin_password: "",
 		is_enabled: false,
+		disable_auth_on_inference: false,
 	});
 
 	useEffect(() => {
@@ -72,7 +73,8 @@ export default function SecurityView() {
 		const authChanged =
 			authConfig.is_enabled !== bifrostConfig?.auth_config?.is_enabled ||
 			authConfig.admin_username !== bifrostConfig?.auth_config?.admin_username ||
-			authConfig.admin_password !== bifrostConfig?.auth_config?.admin_password;
+			authConfig.admin_password !== bifrostConfig?.auth_config?.admin_password ||
+			authConfig.disable_auth_on_inference !== bifrostConfig?.auth_config?.disable_auth_on_inference;
 
 		return originsChanged || authChanged;
 	}, [config, localConfig, authConfig, bifrostConfig]);
@@ -93,7 +95,8 @@ export default function SecurityView() {
 			const hasChanged =
 				newAuthConfig.is_enabled !== (originalAuth?.is_enabled ?? false) ||
 				newAuthConfig.admin_username !== (originalAuth?.admin_username ?? "") ||
-				newAuthConfig.admin_password !== (originalAuth?.admin_password ?? "");
+				newAuthConfig.admin_password !== (originalAuth?.admin_password ?? "") ||
+				newAuthConfig.disable_auth_on_inference !== (originalAuth?.disable_auth_on_inference ?? false);
 			setAuthNeedsRestart(hasChanged);
 		},
 		[bifrostConfig?.auth_config],
@@ -102,6 +105,15 @@ export default function SecurityView() {
 	const handleAuthToggle = useCallback(
 		(checked: boolean) => {
 			const newAuthConfig = { ...authConfig, is_enabled: checked };
+			setAuthConfig(newAuthConfig);
+			checkAuthNeedsRestart(newAuthConfig);
+		},
+		[authConfig, checkAuthNeedsRestart],
+	);
+
+	const handleDisableAuthOnInferenceToggle = useCallback(
+		(checked: boolean) => {
+			const newAuthConfig = { ...authConfig, disable_auth_on_inference: checked };
 			setAuthConfig(newAuthConfig);
 			checkAuthNeedsRestart(newAuthConfig);
 		},
@@ -158,14 +170,22 @@ export default function SecurityView() {
 
 			<div className="space-y-4">
 				{authNeedsRestart && <RestartWarning />}
-				{authConfig.is_enabled && (
-					<Alert variant="default" className="border-blue-200 bg-blue-50">
-						<Info className="h-4 w-4" />
+				{authConfig.is_enabled && !authConfig.disable_auth_on_inference && (
+					<Alert variant="default" className="border-blue-20">
+						<Info className="h-4 w-4 text-blue-600" />
 						<AlertDescription>
-							You will need to use Basic Auth for all your inference calls. Check API Keys section for more details.{" "}
+							You will need to use Basic Auth for all your inference calls (including MCP tool execution). You can disable it below. Check{" "}
 							<Link href="/workspace/config?tab=api-keys" className="text-md text-primary underline">
 								API Keys
 							</Link>
+						</AlertDescription>
+					</Alert>
+				)}
+				{authConfig.is_enabled && authConfig.disable_auth_on_inference && (
+					<Alert variant="default" className="border-blue-20">
+						<Info className="h-4 w-4 text-blue-600" />
+						<AlertDescription>
+							Authentication is disabled for inference calls. Only dashboard, admin API and MCP tool execution calls require authentication.
 						</AlertDescription>
 					</Alert>
 				)}
@@ -206,6 +226,24 @@ export default function SecurityView() {
 										value={authConfig.admin_password}
 										disabled={!authConfig.is_enabled}
 										onChange={(e) => handleAuthFieldChange("admin_password", e.target.value)}
+									/>
+								</div>
+								<div className="flex items-center justify-between rounded-lg border p-4">
+									<div className="space-y-0.5">
+										<Label htmlFor="disable-auth-inference" className="text-sm font-medium">
+											Disable authentication on inference calls
+										</Label>
+										<p className="text-muted-foreground text-sm">
+											When enabled, inference API calls (chat completions, embeddings, etc.) will not require authentication. Dashboard and
+											admin API calls will still require authentication.
+										</p>
+									</div>
+									<Switch
+										id="disable-auth-inference"
+										className="ml-5"
+										checked={authConfig.disable_auth_on_inference ?? false}
+										disabled={!authConfig.is_enabled}
+										onCheckedChange={handleDisableAuthOnInferenceToggle}
 									/>
 								</div>
 							</div>
