@@ -667,13 +667,15 @@ func (s *BifrostHTTPServer) RegisterRoutes(ctx context.Context, middlewares ...l
 	sessionHandler := handlers.NewSessionHandler(s.Config.ConfigStore)
 	// Determine which middlewares to use for integration/inference routes
 	integrationMiddlewares := middlewaresWithTelemetry
-	authConfig := s.Config.GovernanceConfig.AuthConfig
+	var authConfig *configstore.AuthConfig
 	if s.Config.ConfigStore != nil {
 		authConfig, err = s.Config.ConfigStore.GetAuthConfig(ctx)
 		if err != nil {
 			logger.Error("failed to get auth config: %v", err)
 			return fmt.Errorf("failed to get auth config: %v", err)
 		}
+	} else if s.Config.GovernanceConfig != nil && s.Config.GovernanceConfig.AuthConfig != nil {
+		authConfig = s.Config.GovernanceConfig.AuthConfig
 	}
 	if ctx.Value("isEnterprise") == nil {
 		if authConfig != nil && authConfig.IsEnabled {
