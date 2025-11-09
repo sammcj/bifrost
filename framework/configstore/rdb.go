@@ -1518,6 +1518,7 @@ func (s *RDBConfigStore) GetAuthConfig(ctx context.Context) (*AuthConfig, error)
 	var username *string
 	var password *string
 	var isEnabled bool
+	var disableAuthOnInference bool
 	if err := s.db.WithContext(ctx).First(&tables.TableGovernanceConfig{}, "key = ?", tables.ConfigAdminUsernameKey).Select("value").Scan(&username).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
@@ -1534,6 +1535,11 @@ func (s *RDBConfigStore) GetAuthConfig(ctx context.Context) (*AuthConfig, error)
 			return nil, err
 		}
 	}
+	if err := s.db.WithContext(ctx).First(&tables.TableGovernanceConfig{}, "key = ?", tables.ConfigDisableAuthOnInferenceKey).Select("value").Scan(&disableAuthOnInference).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
 	if username == nil || password == nil {
 		return nil, nil
 	}
@@ -1541,6 +1547,7 @@ func (s *RDBConfigStore) GetAuthConfig(ctx context.Context) (*AuthConfig, error)
 		AdminUserName: *username,
 		AdminPassword: *password,
 		IsEnabled:     isEnabled,
+		DisableAuthOnInference: disableAuthOnInference,
 	}, nil
 }
 
@@ -1562,6 +1569,12 @@ func (s *RDBConfigStore) UpdateAuthConfig(ctx context.Context, config *AuthConfi
 		if err := tx.Save(&tables.TableGovernanceConfig{
 			Key:   tables.ConfigIsAuthEnabledKey,
 			Value: fmt.Sprintf("%t", config.IsEnabled),
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Save(&tables.TableGovernanceConfig{
+			Key:   tables.ConfigDisableAuthOnInferenceKey,
+			Value: fmt.Sprintf("%t", config.DisableAuthOnInference),
 		}).Error; err != nil {
 			return err
 		}

@@ -203,6 +203,7 @@ export interface AuthConfig {
 	admin_username: string;
 	admin_password: string;
 	is_enabled: boolean;
+	disable_auth_on_inference?: boolean;
 }
 
 // Bifrost Config
