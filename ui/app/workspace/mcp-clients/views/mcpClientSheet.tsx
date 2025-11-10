@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { MCPClient } from "@/lib/types/mcp";
 import { CodeEditor } from "@/app/workspace/logs/views/codeEditor";
 import { MCP_STATUS_COLORS } from "@/lib/constants/config";
@@ -14,6 +14,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { mcpClientUpdateSchema, type MCPClientUpdateSchema } from "@/lib/types/schemas";
 import { useUpdateMCPClientMutation, getErrorMessage } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 interface MCPClientSheetProps {
 	mcpClient: MCPClient;
@@ -29,6 +31,8 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 		resolver: zodResolver(mcpClientUpdateSchema),
 		mode: "onBlur",
 		defaultValues: {
+			name: mcpClient.config.name,
+			headers: mcpClient.config.headers,
 			tools_to_execute: mcpClient.config.tools_to_execute || [],
 		},
 	});
@@ -36,15 +40,19 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 	// Reset form when mcpClient changes
 	useEffect(() => {
 		form.reset({
+			name: mcpClient.config.name,
+			headers: mcpClient.config.headers,
 			tools_to_execute: mcpClient.config.tools_to_execute || [],
 		});
-	}, [form, mcpClient.config.tools_to_execute]);
+	}, [form, mcpClient]);
 
 	const onSubmit = async (data: MCPClientUpdateSchema) => {
 		try {
 			await updateMCPClient({
-				name: mcpClient.name,
+				id: mcpClient.config.id,
 				data: {
+					name: data.name,
+					headers: data.headers,
 					tools_to_execute: data.tools_to_execute,
 				},
 			}).unwrap();
@@ -119,26 +127,93 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 						</SheetHeader>
 
 						<div className="space-y-6">
+							{/* Name and Header Section */}
+							<div className="space-y-4">
+							<h3 className="font-semibold">Basic Information</h3>
+								<FormField
+									control={form.control}
+									name="name"
+									render={({ field }) => (
+										<FormItem className="flex flex-col gap-3">
+											<FormLabel>Name</FormLabel>
+											<div>
+												<FormControl>
+													<Input placeholder="Client name" {...field} value={field.value || ""} />
+												</FormControl>
+												<FormMessage />
+											</div>
+										</FormItem>
+									)}
+								/>
+								<FormField
+									control={form.control}
+									name="headers"
+									render={({ field }) => (
+										<FormItem className="flex flex-col gap-3">
+											<FormLabel>Headers (JSON)</FormLabel>
+											<div>
+												<FormControl>
+													<Textarea
+														placeholder='{"Authorization": "Bearer token", "Content-Type": "application/json"}'
+														value={typeof field.value === "string" ? field.value : JSON.stringify(field.value || {}, null, 2)}
+														onChange={(e) => {
+															// Store as string during editing to allow intermediate invalid states
+															field.onChange(e.target.value);
+														}}
+														onBlur={(e) => {
+															// Try to parse as JSON on blur, but keep as string if invalid
+															const value = e.target.value.trim();
+															if (value) {
+																try {
+																	const parsed = JSON.parse(value);
+																	if (typeof parsed === "object" && parsed !== null) {
+																		field.onChange(parsed);
+																	}
+																} catch {
+																	// Keep as string for validation on submit
+																}
+															} else {
+																field.onChange(undefined);
+															}
+															field.onBlur();
+														}}
+														rows={3}
+														className="max-w-full font-mono text-sm wrap-anywhere"
+													/>
+												</FormControl>
+												<FormMessage />
+											</div>
+										</FormItem>
+									)}
+								/>
+							</div>
 							{/* Client Configuration */}
 							<div className="space-y-4">
 								<h3 className="font-semibold">Configuration</h3>
 								<div className="rounded-sm border">
-									<div className="bg-muted/50 text-muted-foreground border-b px-6 py-2 text-xs font-medium">Client Config</div>
-									<CodeEditor
-										className="z-0 w-full"
-										shouldAdjustInitialHeight={true}
-										maxHeight={300}
-										wrap={true}
-										code={JSON.stringify(mcpClient.config, null, 2)}
-										lang="json"
-										readonly={true}
-										options={{
-											scrollBeyondLastLine: false,
-											collapsibleBlocks: true,
-											lineNumbers: "off",
-											alwaysConsumeMouseWheel: false,
-										}}
-									/>
+									<div className="bg-muted/50 text-muted-foreground border-b px-6 py-2 text-xs font-medium">Client ConnectionConfig</div>
+								<CodeEditor
+									className="z-0 w-full"
+									shouldAdjustInitialHeight={true}
+									maxHeight={300}
+									wrap={true}
+									code={JSON.stringify(
+										(() => {
+											const { id, name, tools_to_execute, headers, ...rest } = mcpClient.config;
+											return rest;
+										})(),
+										null,
+										2
+									)}
+									lang="json"
+									readonly={true}
+									options={{
+										scrollBeyondLastLine: false,
+										collapsibleBlocks: true,
+										lineNumbers: "off",
+										alwaysConsumeMouseWheel: false,
+									}}
+								/>
 								</div>
 							</div>
 							{/* Tools Section */}

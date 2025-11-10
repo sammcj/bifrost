@@ -20,9 +20,9 @@ export const mcpApi = baseApi.injectEndpoints({
 		}),
 
 		// Update existing MCP client
-		updateMCPClient: builder.mutation<null, { name: string; data: UpdateMCPClientRequest }>({
-			query: ({ name, data }) => ({
-				url: `/mcp/client/${name}`,
+		updateMCPClient: builder.mutation<null, { id: string; data: UpdateMCPClientRequest }>({
+			query: ({ id, data }) => ({
+				url: `/mcp/client/${id}`,
 				method: "PUT",
 				body: data,
 			}),
@@ -31,8 +31,8 @@ export const mcpApi = baseApi.injectEndpoints({
 
 		// Delete MCP client
 		deleteMCPClient: builder.mutation<null, string>({
-			query: (name) => ({
-				url: `/mcp/client/${name}`,
+			query: (id) => ({
+				url: `/mcp/client/${id}`,
 				method: "DELETE",
 			}),
 			invalidatesTags: ["MCPClients"],
@@ -40,8 +40,8 @@ export const mcpApi = baseApi.injectEndpoints({
 
 		// Reconnect MCP client
 		reconnectMCPClient: builder.mutation<null, string>({
-			query: (name) => ({
-				url: `/mcp/client/${name}/reconnect`,
+			query: (id) => ({
+				url: `/mcp/client/${id}/reconnect`,
 				method: "POST",
 			}),
 			invalidatesTags: ["MCPClients"],
