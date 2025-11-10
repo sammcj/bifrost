@@ -298,7 +298,7 @@ func (bifrost *Bifrost) ListAllModels(ctx context.Context, request *schemas.Bifr
 		request = &schemas.BifrostListModelsRequest{}
 	}
 
-	providerKeys, err := bifrost.account.GetConfiguredProviders()
+	providerKeys, err := bifrost.GetConfiguredProviders()
 	if err != nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -1520,7 +1520,7 @@ func (bifrost *Bifrost) shouldContinueWithFallbacks(fallback schemas.Fallback, f
 		return false
 	}
 
-	bifrost.logger.Warn(fmt.Sprintf("Fallback provider %s failed: %s", fallback.Provider, fallbackErr.Error.Message))
+	bifrost.logger.Debug(fmt.Sprintf("Fallback provider %s failed: %s", fallback.Provider, fallbackErr.Error.Message))
 	return true
 }
 
@@ -2038,7 +2038,7 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 		}
 
 		key := schemas.Key{}
-		if providerRequiresKey(baseProvider) {
+		if providerRequiresKey(baseProvider, config.CustomProviderConfig) {
 			// Use the custom provider name for actual key selection, but pass base provider type for key validation
 			key, err = bifrost.selectKeyFromProviderForModel(&req.Context, req.RequestType, provider.GetProviderKey(), model, baseProvider)
 			if err != nil {
@@ -2055,7 +2055,6 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 			req.Context = context.WithValue(req.Context, schemas.BifrostContextKeySelectedKeyID, key.ID)
 			req.Context = context.WithValue(req.Context, schemas.BifrostContextKeySelectedKeyName, key.Name)
 		}
-
 		// Create plugin pipeline for streaming requests outside retry loop to prevent leaks
 		var postHookRunner schemas.PostHookRunner
 		var pipeline *PluginPipeline
