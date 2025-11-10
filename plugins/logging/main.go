@@ -115,12 +115,12 @@ func Init(ctx context.Context, config *Config, logger schemas.Logger, logsStore 
 	}
 
 	plugin := &LoggerPlugin{
-		ctx:            ctx,
-		store:          logsStore,
-		pricingManager: pricingManager,
+		ctx:                   ctx,
+		store:                 logsStore,
+		pricingManager:        pricingManager,
 		disableContentLogging: config.DisableContentLogging,
-		done:           make(chan struct{}),
-		logger:         logger,
+		done:                  make(chan struct{}),
+		logger:                logger,
 		logMsgPool: sync.Pool{
 			New: func() interface{} {
 				return &LogMessage{}
@@ -140,8 +140,8 @@ func Init(ctx context.Context, config *Config, logger schemas.Logger, logsStore 
 		plugin.updateDataPool.Put(&UpdateLogData{})
 	}
 
-	// Start cleanup ticker (runs every 30 seconds)
-	plugin.cleanupTicker = time.NewTicker(30 * time.Second)
+	// Start cleanup ticker (runs every 1 minute)
+	plugin.cleanupTicker = time.NewTicker(1 * time.Minute)
 	plugin.wg.Add(1)
 	go plugin.cleanupWorker()
 
@@ -161,13 +161,13 @@ func (p *LoggerPlugin) cleanupWorker() {
 	}
 }
 
-// cleanupOldProcessingLogs removes processing logs older than 5 minutes
+// cleanupOldProcessingLogs removes processing logs older than 30 minutes
 func (p *LoggerPlugin) cleanupOldProcessingLogs() {
-	// Calculate timestamp for 5 minutes ago
-	fiveMinutesAgo := time.Now().Add(-1 * 5 * time.Minute)
-	// Delete processing logs older than 5 minutes using the store
-	if err := p.store.Flush(p.ctx, fiveMinutesAgo); err != nil {
-		p.logger.Error("failed to cleanup old processing logs: %v", err)
+	// Calculate timestamp for 30 minutes ago
+	thirtyMinutesAgo := time.Now().Add(-1 * 30 * time.Minute)
+	// Delete processing logs older than 30 minutes using the store
+	if err := p.store.Flush(p.ctx, thirtyMinutesAgo); err != nil {
+		p.logger.Warn("failed to cleanup old processing logs: %v", err)
 	}
 }
 
@@ -213,9 +213,9 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 	provider, model, _ := req.GetRequestFields()
 
 	initialData := &InitialLogData{
-		Provider:              string(provider),
-		Model:                 model,
-		Object:                string(req.RequestType),
+		Provider: string(provider),
+		Model:    model,
+		Object:   string(req.RequestType),
 	}
 
 	if p.disableContentLogging == nil || !*p.disableContentLogging {
@@ -231,7 +231,7 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 			initialData.Tools = req.ChatRequest.Params.Tools
 		case schemas.ResponsesRequest, schemas.ResponsesStreamRequest:
 			initialData.Params = req.ResponsesRequest.Params
-	
+
 			var tools []schemas.ChatTool
 			for _, tool := range req.ResponsesRequest.Params.Tools {
 				tools = append(tools, *tool.ToChatTool())
@@ -280,7 +280,7 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 			logMsg.FallbackIndex,
 			logMsg.InitialData,
 		); err != nil {
-			p.logger.Error("failed to insert initial log entry for request %s: %v", logMsg.RequestID, err)
+			p.logger.Warn("failed to insert initial log entry for request %s: %v", logMsg.RequestID, err)
 		} else {
 			// Call callback for initial log creation (WebSocket "create" message)
 			// Construct LogEntry directly from data we have to avoid database query
@@ -375,7 +375,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 				)
 			})
 			if processingErr != nil {
-				p.logger.Error("failed to process log update for request %s: %v", logMsg.RequestID, processingErr)
+				p.logger.Warn("failed to process log update for request %s: %v", logMsg.RequestID, processingErr)
 			} else {
 				// Call callback immediately for both streaming and regular updates
 				// UI will handle debouncing if needed
@@ -414,7 +414,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 					)
 				})
 				if processingErr != nil {
-					p.logger.Error("failed to process stream update for request %s: %v", logMsg.RequestID, processingErr)
+					p.logger.Warn("failed to process stream update for request %s: %v", logMsg.RequestID, processingErr)
 				} else {
 					// Call callback immediately for both streaming and regular updates
 					// UI will handle debouncing if needed
@@ -539,7 +539,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 				)
 			})
 			if processingErr != nil {
-				p.logger.Error("failed to process log update for request %s: %v", logMsg.RequestID, processingErr)
+				p.logger.Warn("failed to process log update for request %s: %v", logMsg.RequestID, processingErr)
 			} else {
 				// Call callback immediately for both streaming and regular updates
 				// UI will handle debouncing if needed

@@ -427,7 +427,19 @@ func createResourceSpan(traceID, spanID string, timestamp time.Time, req *schema
 }
 
 // completeResourceSpan completes a resource span for a Bifrost response
-func completeResourceSpan(span *ResourceSpan, timestamp time.Time, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError, pricingManager *modelcatalog.ModelCatalog) *ResourceSpan {
+func completeResourceSpan(
+	span *ResourceSpan,
+	timestamp time.Time,
+	resp *schemas.BifrostResponse,
+	bifrostErr *schemas.BifrostError,
+	pricingManager *modelcatalog.ModelCatalog,
+	virtualKeyID string,
+	virtualKeyName string,
+	selectedKeyID string,
+	selectedKeyName string,
+	numberOfRetries int,
+	fallbackIndex int,
+) *ResourceSpan {
 	params := []*KeyValue{}
 
 	if resp != nil {
@@ -659,6 +671,17 @@ func completeResourceSpan(span *ResourceSpan, timestamp time.Time, resp *schemas
 		}
 		params = append(params, kvStr("gen_ai.error", bifrostErr.Error.Message))
 	}
+	// Adding request metadata to the span
+	if virtualKeyID != "" {
+		params = append(params, kvStr("gen_ai.virtual_key_id", virtualKeyID))
+		params = append(params, kvStr("gen_ai.virtual_key_name", virtualKeyName))
+	}
+	if selectedKeyID != "" {
+		params = append(params, kvStr("gen_ai.selected_key_id", selectedKeyID))
+		params = append(params, kvStr("gen_ai.selected_key_name", selectedKeyName))
+	}
+	params = append(params, kvInt("gen_ai.number_of_retries", int64(numberOfRetries)))
+	params = append(params, kvInt("gen_ai.fallback_index", int64(fallbackIndex)))
 	span.ScopeSpans[0].Spans[0].Attributes = append(span.ScopeSpans[0].Spans[0].Attributes, params...)
 	span.ScopeSpans[0].Spans[0].Status = &tracepb.Status{Code: status}
 	span.ScopeSpans[0].Spans[0].EndTimeUnixNano = uint64(timestamp.UnixNano())

@@ -574,6 +574,142 @@ func detectAudioMimeType(audioData []byte) string {
 	return "audio/mp3"
 }
 
+// convertGeminiSchemaToJSONSchema converts Gemini Schema to JSON Schema format
+// This converts uppercase type values (STRING, NUMBER, etc.) to lowercase (string, number, etc.)
+// and converts the struct to a map[string]interface{} format
+func convertGeminiSchemaToJSONSchema(geminiSchema *Schema) map[string]interface{} {
+	if geminiSchema == nil {
+		return nil
+	}
+
+	// First, marshal the schema to JSON and unmarshal to map to get all fields
+	schemaBytes, err := sonic.Marshal(geminiSchema)
+	if err != nil {
+		return nil
+	}
+
+	var schemaMap map[string]interface{}
+	if err := sonic.Unmarshal(schemaBytes, &schemaMap); err != nil {
+		return nil
+	}
+
+	// Convert type from uppercase to lowercase
+	if typeVal, ok := schemaMap["type"].(string); ok {
+		schemaMap["type"] = convertGeminiTypeToJSONSchemaType(typeVal)
+	}
+
+	// Recursively convert nested properties
+	if properties, ok := schemaMap["properties"].(map[string]interface{}); ok {
+		convertedProps := make(map[string]interface{})
+		for key, prop := range properties {
+			if propMap, ok := prop.(map[string]interface{}); ok {
+				// Check if this is a Schema struct that was marshaled
+				if propType, hasType := propMap["type"].(string); hasType {
+					// Convert the type
+					propMap["type"] = convertGeminiTypeToJSONSchemaType(propType)
+					// Recursively convert nested properties and items
+					convertedProps[key] = convertNestedSchema(propMap)
+				} else {
+					convertedProps[key] = propMap
+				}
+			} else {
+				convertedProps[key] = prop
+			}
+		}
+		schemaMap["properties"] = convertedProps
+	}
+
+	// Recursively convert items
+	if items, ok := schemaMap["items"]; ok {
+		if itemsMap, ok := items.(map[string]interface{}); ok {
+			schemaMap["items"] = convertNestedSchema(itemsMap)
+		}
+	}
+
+	// Recursively convert anyOf
+	if anyOf, ok := schemaMap["anyOf"].([]interface{}); ok {
+		convertedAnyOf := make([]interface{}, 0, len(anyOf))
+		for _, item := range anyOf {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				convertedAnyOf = append(convertedAnyOf, convertNestedSchema(itemMap))
+			} else {
+				convertedAnyOf = append(convertedAnyOf, item)
+			}
+		}
+		schemaMap["anyOf"] = convertedAnyOf
+	}
+
+	return schemaMap
+}
+
+// convertNestedSchema recursively converts nested schema structures
+func convertNestedSchema(schemaMap map[string]interface{}) map[string]interface{} {
+	// Convert type if present
+	if typeVal, ok := schemaMap["type"].(string); ok {
+		schemaMap["type"] = convertGeminiTypeToJSONSchemaType(typeVal)
+	}
+
+	// Recursively convert properties
+	if properties, ok := schemaMap["properties"].(map[string]interface{}); ok {
+		convertedProps := make(map[string]interface{})
+		for key, prop := range properties {
+			if propMap, ok := prop.(map[string]interface{}); ok {
+				convertedProps[key] = convertNestedSchema(propMap)
+			} else {
+				convertedProps[key] = prop
+			}
+		}
+		schemaMap["properties"] = convertedProps
+	}
+
+	// Recursively convert items
+	if items, ok := schemaMap["items"]; ok {
+		if itemsMap, ok := items.(map[string]interface{}); ok {
+			schemaMap["items"] = convertNestedSchema(itemsMap)
+		}
+	}
+
+	// Recursively convert anyOf
+	if anyOf, ok := schemaMap["anyOf"].([]interface{}); ok {
+		convertedAnyOf := make([]interface{}, 0, len(anyOf))
+		for _, item := range anyOf {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				convertedAnyOf = append(convertedAnyOf, convertNestedSchema(itemMap))
+			} else {
+				convertedAnyOf = append(convertedAnyOf, item)
+			}
+		}
+		schemaMap["anyOf"] = convertedAnyOf
+	}
+
+	return schemaMap
+}
+
+// convertGeminiTypeToJSONSchemaType converts Gemini's uppercase type values to JSON Schema lowercase
+func convertGeminiTypeToJSONSchemaType(geminiType string) string {
+	switch geminiType {
+	case "STRING":
+		return "string"
+	case "NUMBER":
+		return "number"
+	case "INTEGER":
+		return "integer"
+	case "BOOLEAN":
+		return "boolean"
+	case "ARRAY":
+		return "array"
+	case "OBJECT":
+		return "object"
+	case "NULL":
+		return "null"
+	case "TYPE_UNSPECIFIED":
+		return "" // Empty string for unspecified
+	default:
+		// If already lowercase or unknown, return as-is
+		return geminiType
+	}
+}
+
 // buildOpenAIResponseFormat builds OpenAI response_format for JSON types
 func buildOpenAIResponseFormat(responseSchema *Schema, responseJsonSchema interface{}) *interface{} {
 	var schema interface{}
@@ -581,16 +717,31 @@ func buildOpenAIResponseFormat(responseSchema *Schema, responseJsonSchema interf
 
 	// Prefer responseSchema over responseJsonSchema
 	if responseSchema != nil {
-		schema = responseSchema
+		// Convert Gemini Schema to JSON Schema format
+		schema = convertGeminiSchemaToJSONSchema(responseSchema)
 		if responseSchema.Title != "" {
 			name = responseSchema.Title
 		}
 	} else if responseJsonSchema != nil {
-		schema = responseJsonSchema
 		if schemaMap, ok := responseJsonSchema.(map[string]interface{}); ok {
-			if title, ok := schemaMap["title"].(string); ok && title != "" {
-				name = title
+			// Create a deep copy to avoid modifying the original
+			schemaBytes, err := sonic.Marshal(schemaMap)
+			if err == nil {
+				var copiedMap map[string]interface{}
+				if err := sonic.Unmarshal(schemaBytes, &copiedMap); err == nil {
+					// Recursively convert the schema to ensure all types are lowercase
+					schema = convertNestedSchema(copiedMap)
+					if title, ok := copiedMap["title"].(string); ok && title != "" {
+						name = title
+					}
+				} else {
+					schema = responseJsonSchema
+				}
+			} else {
+				schema = responseJsonSchema
 			}
+		} else {
+			schema = responseJsonSchema
 		}
 	} else {
 		// No schema provided - use older json_object mode

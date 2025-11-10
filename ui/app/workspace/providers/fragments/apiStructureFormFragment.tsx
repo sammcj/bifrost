@@ -128,7 +128,7 @@ export function ApiStructureFormFragment({ provider }: Props) {
 											<label htmlFor="drop-excess-requests" className="text-sm font-medium">
 												Is Keyless?
 											</label>
-											<p className="text-muted-foreground text-sm">Whether the custom provider requires a key (not allowed for Bedrock)</p>
+											<p className="text-muted-foreground text-sm">Whether the custom provider requires a key</p>
 										</div>
 										<Switch id="drop-excess-requests" size="md" checked={field.value} onCheckedChange={field.onChange} />
 									</div>

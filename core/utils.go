@@ -247,3 +247,23 @@ func GetErrorMessage(err *schemas.BifrostError) string {
 		return "unknown error"
 	}
 }
+
+// GetStringFromContext safely extracts a string value from context
+func GetStringFromContext(ctx context.Context, key any) string {
+	if value := ctx.Value(key); value != nil {
+		if str, ok := value.(string); ok {
+			return str
+		}
+	}
+	return ""
+}
+
+// GetIntFromContext safely extracts an int value from context
+func GetIntFromContext(ctx context.Context, key any) int {
+	if value := ctx.Value(key); value != nil {
+		if intValue, ok := value.(int); ok {
+			return intValue
+		}
+	}
+	return 0
+}

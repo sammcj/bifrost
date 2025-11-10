@@ -210,6 +210,15 @@ func (p *OtelPlugin) PostHook(ctx *context.Context, resp *schemas.BifrostRespons
 		return resp, bifrostErr, nil
 	}
 
+	virtualKeyID := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-virtual-key-id"))
+	virtualKeyName := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-virtual-key-name"))
+
+	selectedKeyID := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKeySelectedKeyID)
+	selectedKeyName := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKeySelectedKeyName)
+
+	numberOfRetries := bifrost.GetIntFromContext(*ctx, schemas.BifrostContextKeyNumberOfRetries)
+	fallbackIndex := bifrost.GetIntFromContext(*ctx, schemas.BifrostContextKeyFallbackIndex)
+
 	// Track every PostHook emission, stream and non-stream.
 	p.emitWg.Add(1)
 	go func() {
@@ -229,14 +238,38 @@ func (p *OtelPlugin) PostHook(ctx *context.Context, resp *schemas.BifrostRespons
 				}
 				if streamResponse != nil && streamResponse.Type == streaming.StreamResponseTypeFinal {
 					defer p.ongoingSpans.Delete(traceID)
-					if err := p.client.Emit(p.ctx, []*ResourceSpan{completeResourceSpan(span, time.Now(), streamResponse.ToBifrostResponse(), bifrostErr, p.pricingManager)}); err != nil {
+					if err := p.client.Emit(p.ctx, []*ResourceSpan{completeResourceSpan(
+						span,
+						time.Now(),
+						streamResponse.ToBifrostResponse(),
+						bifrostErr,
+						p.pricingManager,
+						virtualKeyID,
+						virtualKeyName,
+						selectedKeyID,
+						selectedKeyName,
+						numberOfRetries,
+						fallbackIndex,
+					)}); err != nil {
 						logger.Error("failed to emit response span for request %s: %v", traceID, err)
 					}
 				}
 				return
 			}
 			defer p.ongoingSpans.Delete(traceID)
-			rs := completeResourceSpan(span, time.Now(), resp, bifrostErr, p.pricingManager)
+			rs := completeResourceSpan(
+				span,
+				time.Now(),
+				resp,
+				bifrostErr,
+				p.pricingManager,
+				virtualKeyID,
+				virtualKeyName,
+				selectedKeyID,
+				selectedKeyName,
+				numberOfRetries,
+				fallbackIndex,
+			)
 			if err := p.client.Emit(p.ctx, []*ResourceSpan{rs}); err != nil {
 				logger.Error("failed to emit response span for request %s: %v", traceID, err)
 			}
