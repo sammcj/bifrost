@@ -46,6 +46,24 @@ func (r *GeminiGenerationRequest) convertGenerationConfigToChatParameters() *sch
 	}
 	if config.ResponseMIMEType != "" {
 		params.ExtraParams["response_mime_type"] = config.ResponseMIMEType
+
+		// Convert Gemini's response format to OpenAI's response_format for compatibility
+		switch config.ResponseMIMEType {
+		case "application/json":
+			params.ResponseFormat = buildOpenAIResponseFormat(config.ResponseSchema, config.ResponseJsonSchema)
+		case "text/plain":
+			// Gemini text/plain → OpenAI text format
+			var responseFormat interface{} = map[string]interface{}{
+				"type": "text",
+			}
+			params.ResponseFormat = &responseFormat
+		}
+	}
+	if config.ResponseSchema != nil {
+		params.ExtraParams["response_schema"] = config.ResponseSchema
+	}
+	if config.ResponseJsonSchema != nil {
+		params.ExtraParams["response_json_schema"] = config.ResponseJsonSchema
 	}
 	if config.ResponseLogprobs {
 		params.ExtraParams["response_logprobs"] = config.ResponseLogprobs
@@ -202,11 +220,47 @@ func convertParamsToGenerationConfig(params *schemas.ChatParameters, responseMod
 		config.FrequencyPenalty = &penalty
 	}
 
+	// Handle response_format to response_schema conversion
+	if params.ResponseFormat != nil {
+		formatMap, ok := (*params.ResponseFormat).(map[string]interface{})
+		if ok {
+			formatType, typeOk := formatMap["type"].(string)
+			if typeOk {
+				switch formatType {
+				case "json_schema":
+					// OpenAI Structured Outputs: {"type": "json_schema", "json_schema": {...}}
+					if schema := extractSchemaFromResponseFormat(params.ResponseFormat); schema != nil {
+						config.ResponseMIMEType = "application/json"
+						config.ResponseSchema = schema
+					}
+				case "json_object":
+					// Maps to Gemini's responseMimeType without schema
+					config.ResponseMIMEType = "application/json"
+				}
+			}
+		}
+	}
+
 	if params.ExtraParams != nil {
 		if topK, ok := params.ExtraParams["top_k"]; ok {
 			if val, success := schemas.SafeExtractInt(topK); success {
 				config.TopK = schemas.Ptr(val)
 			}
+		}
+		if responseMimeType, ok := schemas.SafeExtractString(params.ExtraParams["response_mime_type"]); ok {
+			config.ResponseMIMEType = responseMimeType
+		}
+		// Override with explicit response_schema if provided in ExtraParams
+		if responseSchema, ok := params.ExtraParams["response_schema"]; ok {
+			if schemaBytes, err := sonic.Marshal(responseSchema); err == nil {
+				schema := &Schema{}
+				if err := sonic.Unmarshal(schemaBytes, schema); err == nil {
+					config.ResponseSchema = schema
+				}
+			}
+		}
+		if responseJsonSchema, ok := params.ExtraParams["response_json_schema"]; ok {
+			config.ResponseJsonSchema = responseJsonSchema
 		}
 	}
 
@@ -520,37 +574,81 @@ func detectAudioMimeType(audioData []byte) string {
 	return "audio/mp3"
 }
 
-// normalizeAudioMIMEType converts audio format tokens to proper MIME types
-func normalizeAudioMIMEType(format string) string {
-	if format == "" {
-		return "application/octet-stream"
+// buildOpenAIResponseFormat builds OpenAI response_format for JSON types
+func buildOpenAIResponseFormat(responseSchema *Schema, responseJsonSchema interface{}) *interface{} {
+	var schema interface{}
+	name := "response_schema"
+
+	// Prefer responseSchema over responseJsonSchema
+	if responseSchema != nil {
+		schema = responseSchema
+		if responseSchema.Title != "" {
+			name = responseSchema.Title
+		}
+	} else if responseJsonSchema != nil {
+		schema = responseJsonSchema
+		if schemaMap, ok := responseJsonSchema.(map[string]interface{}); ok {
+			if title, ok := schemaMap["title"].(string); ok && title != "" {
+				name = title
+			}
+		}
+	} else {
+		// No schema provided - use older json_object mode
+		var format interface{} = map[string]interface{}{
+			"type": "json_object",
+		}
+		return &format
 	}
 
-	// Normalize to lowercase
-	format = strings.ToLower(format)
+	// Has schema - use json_schema mode (Structured Outputs)
+	var format interface{} = map[string]interface{}{
+		"type": "json_schema",
+		"json_schema": map[string]interface{}{
+			"name":   name,
+			"strict": false,
+			"schema": schema,
+		},
+	}
+	return &format
+}
 
-	// If already a proper MIME type (contains slash), use as-is
-	if strings.Contains(format, "/") {
-		return format
+// extractSchemaFromResponseFormat extracts Gemini Schema from OpenAI's response_format structure
+func extractSchemaFromResponseFormat(responseFormat *interface{}) *Schema {
+	formatMap, ok := (*responseFormat).(map[string]interface{})
+	if !ok {
+		return nil
 	}
 
-	// Map common audio format tokens to MIME types
-	switch format {
-	case "wav":
-		return "audio/wav"
-	case "mp3":
-		return "audio/mpeg"
-	case "m4a":
-		return "audio/mp4"
-	case "aac":
-		return "audio/aac"
-	case "ogg":
-		return "audio/ogg"
-	case "flac":
-		return "audio/flac"
-	case "webm":
-		return "audio/webm"
-	default:
-		return "application/octet-stream"
+	formatType, ok := formatMap["type"].(string)
+	if !ok || formatType != "json_schema" {
+		return nil
 	}
+
+	jsonSchemaObj, ok := formatMap["json_schema"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	schemaObj, ok := jsonSchemaObj["schema"]
+	if !ok {
+		return nil
+	}
+
+	schemaMap, ok := schemaObj.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	// Convert map to Gemini Schema type via JSON marshaling
+	schemaBytes, err := sonic.Marshal(schemaMap)
+	if err != nil {
+		return nil
+	}
+
+	schema := &Schema{}
+	if err := sonic.Unmarshal(schemaBytes, schema); err != nil {
+		return nil
+	}
+
+	return schema
 }
