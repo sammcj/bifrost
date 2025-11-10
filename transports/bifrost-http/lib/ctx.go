@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/plugins/governance"
 	"github.com/maximhq/bifrost/plugins/maxim"
 	"github.com/maximhq/bifrost/plugins/semanticcache"
 	"github.com/valyala/fasthttp"
@@ -141,9 +142,24 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) (*c
 			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(keyStr), string(value))
 			return true
 		}
-		// Handle virtual key header (x-bf-vk)
+		// Handle virtual key header (x-bf-vk, authorization, x-api-key headers)
 		if keyStr == string(schemas.BifrostContextKeyVirtualKey) {
 			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(keyStr), string(value))
+			return true
+		}
+		if keyStr == "authorization" {
+			valueStr := string(value)
+			// Only accept Bearer token format: "Bearer ..."
+			if strings.HasPrefix(strings.ToLower(valueStr), "bearer ") {
+				authHeaderValue := strings.TrimSpace(valueStr[7:]) // Remove "Bearer " prefix
+				if authHeaderValue != "" && strings.HasPrefix(strings.ToLower(authHeaderValue), governance.VirtualKeyPrefix) {
+					bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeyVirtualKey, authHeaderValue)
+					return true
+				}
+			}
+		}
+		if keyStr == "x-api-key" && strings.HasPrefix(strings.ToLower(string(value)), governance.VirtualKeyPrefix) {
+			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeyVirtualKey, string(value))
 			return true
 		}
 		// Handle cache key header (x-bf-cache-key)
@@ -225,7 +241,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) (*c
 			// Only accept Bearer token format: "Bearer ..."
 			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
 				authHeaderValue := strings.TrimSpace(authHeader[7:]) // Remove "Bearer " prefix
-				if authHeaderValue != "" {
+				if authHeaderValue != "" && !strings.HasPrefix(strings.ToLower(authHeaderValue), governance.VirtualKeyPrefix) {
 					apiKey = authHeaderValue
 				}
 			} else {
@@ -236,7 +252,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) (*c
 		// Check x-api-key header if no valid Authorization header found (Anthropic style)
 		if apiKey == "" {
 			xAPIKey := string(ctx.Request.Header.Peek("x-api-key"))
-			if xAPIKey != "" {
+			if xAPIKey != "" && !strings.HasPrefix(strings.ToLower(xAPIKey), governance.VirtualKeyPrefix) {
 				apiKey = strings.TrimSpace(xAPIKey)
 			}
 		}
