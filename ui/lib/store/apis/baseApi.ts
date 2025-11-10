@@ -7,20 +7,20 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
 // Helper function to get token from localStorage
 // If enterprise, use access_token from enterprise tokenManager; otherwise use bifrost-auth-token
-export const getTokenFromStorage = (): string | null => {
+export const getTokenFromStorage = (): Promise<string | null> => {
 	if (typeof window === "undefined") {
-		return null;
+		return Promise.resolve(null);
 	}
 	try {
 		if (IS_ENTERPRISE) {
 			// Enterprise OAuth login - use tokenManager
-			return getAccessToken();
+			return  getAccessToken();
 		} else {
 			// Traditional login - use bifrost-auth-token
-			return localStorage.getItem("bifrost-auth-token");
+			return Promise.resolve(localStorage.getItem("bifrost-auth-token"));
 		}
 	} catch (error) {
-		return null;
+		return Promise.resolve(null);
 	}
 };
 
@@ -62,10 +62,10 @@ export const clearAuthStorage = () => {
 const baseQuery = fetchBaseQuery({
 	baseUrl: getApiBaseUrl(),
 	credentials: "include",
-	prepareHeaders: (headers) => {
+	prepareHeaders: async (headers) => {
 		headers.set("Content-Type", "application/json");
 		// Automatically include token from localStorage in Authorization header
-		const token = getTokenFromStorage();
+		const token = await getTokenFromStorage();
 		if (token) {
 			headers.set("Authorization", `Bearer ${token}`);
 		}

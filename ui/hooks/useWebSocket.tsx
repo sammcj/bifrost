@@ -60,13 +60,13 @@ export function WebSocketProvider({ children, path = "/ws" }: WebSocketProviderP
 	};
 
 	useEffect(() => {
-		const connect = () => {
+		const connect = async () => {
 			if (wsRef.current?.readyState === WebSocket.OPEN) {
 				return;
 			}
 
 			const wsUrl = getWebSocketUrl(path);
-			const token = getTokenFromStorage();
+			const token = await getTokenFromStorage();
 			const wsUrlWithAuth = token ? `${wsUrl}?token=${encodeURIComponent(token)}` : wsUrl;
 			const ws = new WebSocket(wsUrlWithAuth);
 			wsRef.current = ws;
