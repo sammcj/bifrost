@@ -6,13 +6,14 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { getErrorMessage, useCreateProviderMutation } from "@/lib/store";
 import { BaseProvider, ModelProviderName } from "@/lib/types/config";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AllowedRequestsFields } from "../fragments/allowedRequestsFields";
 import { allowedRequestsSchema } from "@/lib/types/schemas";
 import { cleanPathOverrides } from "@/lib/utils/validation";
+import { Switch } from "@/components/ui/switch";
 
 const formSchema = z.object({
 	name: z.string().min(1),
@@ -20,6 +21,7 @@ const formSchema = z.object({
 	base_url: z.string().min(1, "Base URL is required").url("Must be a valid URL"),
 	allowed_requests: allowedRequestsSchema,
 	request_path_overrides: z.record(z.string(), z.string().optional()).optional(),
+	is_key_less: z.boolean().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -53,6 +55,7 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 				list_models: true,
 			},
 			request_path_overrides: undefined,
+			is_key_less: false,
 		},
 	});
 
@@ -69,6 +72,7 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 				base_provider_type: data.baseFormat as BaseProvider,
 				allowed_requests: data.allowed_requests,
 				request_path_overrides: cleanPathOverrides(data.request_path_overrides),
+				is_key_less: data.is_key_less ?? false,
 			},
 			network_config: {
 				base_url: data.base_url,
@@ -93,16 +97,18 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 			});
 	};
 
+	const isKeyLessDisabled = useMemo(() => (form.watch("baseFormat") as BaseProvider) === "bedrock", [form.watch("baseFormat")]);
+
 	return (
 		<Sheet open={show} onOpenChange={(open) => !open && onClose()}>
-			<SheetContent className="custom-scrollbar dark:bg-card bg-white py-4 min-w-[600px] flex flex-col">
+			<SheetContent className="custom-scrollbar dark:bg-card flex min-w-[600px] flex-col bg-white py-4">
 				<SheetHeader>
 					<SheetTitle>Add Custom Provider</SheetTitle>
 					<SheetDescription>Enter the details of your custom provider.</SheetDescription>
 				</SheetHeader>
 				<Form {...form}>
-					<form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
-						<div className="space-y-4 px-4 flex-1 overflow-y-auto custom-scrollbar">
+					<form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
+						<div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto px-4">
 							<FormField
 								control={form.control}
 								name="name"
@@ -159,18 +165,38 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 									</FormItem>
 								)}
 							/>
+							{!isKeyLessDisabled && (
+								<FormField
+									control={form.control}
+									name="is_key_less"
+									render={({ field }) => (
+										<FormItem>
+											<div className="flex items-center justify-between space-x-2 rounded-lg border p-3">
+												<div className="space-y-0.5">
+													<label htmlFor="drop-excess-requests" className="text-sm font-medium">
+														Is Keyless?
+													</label>
+													<p className="text-muted-foreground text-sm">
+														Whether the custom provider requires a key (not allowed for Bedrock)
+													</p>
+												</div>
+												<Switch id="drop-excess-requests" size="md" checked={field.value} onCheckedChange={field.onChange} />
+											</div>
+										</FormItem>
+									)}
+								/>
+							)}
 							{/* Allowed Requests Configuration */}
-							<AllowedRequestsFields 
-								control={form.control} 
-								providerType={form.watch("baseFormat") as BaseProvider}
-							/>
+							<AllowedRequestsFields control={form.control} providerType={form.watch("baseFormat") as BaseProvider} />
 						</div>
-						<SheetFooter className="flex flex-row gap-2 mt-4 px-4 pt-4">
+						<SheetFooter className="mt-4 flex flex-row gap-2 px-4 pt-4">
 							<div className="ml-auto flex flex-row gap-2">
 								<Button type="button" variant="outline" onClick={onClose}>
 									Cancel
 								</Button>
-								<Button type="submit" isLoading={isAddingProvider}>Add</Button>
+								<Button type="submit" isLoading={isAddingProvider}>
+									Add
+								</Button>
 							</div>
 						</SheetFooter>
 					</form>

@@ -239,6 +239,12 @@ func (h *ProviderHandler) addProvider(ctx *fasthttp.RequestCtx) {
 		CustomProviderConfig:     payload.CustomProviderConfig,
 	}
 
+	// Validate custom provider configuration before persisting
+	if err := lib.ValidateCustomProvider(config, payload.Provider); err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid custom provider config: %v", err))
+		return
+	}
+
 	// Add provider to store (env vars will be processed by store)
 	if err := h.store.AddProvider(ctx, payload.Provider, config); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to add provider %s: %v", payload.Provider, err))
@@ -264,8 +270,12 @@ func (h *ProviderHandler) addProvider(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if err := h.modelsManager.RefetchModelsForProvider(ctx, payload.Provider); err != nil {
-		logger.Warn(fmt.Sprintf("Failed to refetch models for provider %s: %v", payload.Provider, err))
+	if payload.CustomProviderConfig == nil ||
+		!payload.CustomProviderConfig.IsKeyLess ||
+		(payload.CustomProviderConfig.AllowedRequests != nil && payload.CustomProviderConfig.AllowedRequests.ListModels) {
+		if err := h.modelsManager.RefetchModelsForProvider(ctx, payload.Provider); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to refetch models for provider %s: %v", payload.Provider, err))
+		}
 	}
 
 	response := h.getProviderResponseFromConfig(payload.Provider, *redactedConfig, ProviderStatusActive)
@@ -435,7 +445,10 @@ func (h *ProviderHandler) updateProvider(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if len(redactedConfig.Keys) > 0 {
+	if len(redactedConfig.Keys) > 0 &&
+		(payload.CustomProviderConfig == nil ||
+			!payload.CustomProviderConfig.IsKeyLess ||
+			(payload.CustomProviderConfig.AllowedRequests != nil && payload.CustomProviderConfig.AllowedRequests.ListModels)) {
 		if err := h.modelsManager.RefetchModelsForProvider(ctx, provider); err != nil {
 			logger.Warn(fmt.Sprintf("Failed to refetch models for provider %s: %v", provider, err))
 		}

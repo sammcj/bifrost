@@ -214,8 +214,8 @@ func (provider *BedrockProvider) makeStreamingRequest(ctx context.Context, jsonD
 	providerUtils.SetExtraHeadersHTTP(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	// If Value is set, use API Key authentication - else use IAM role authentication
+	req.Header.Set("Accept", "application/vnd.amazon.eventstream")
 	if key.Value != "" {
-		req.Header.Set("Accept", "application/vnd.amazon.eventstream")
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key.Value))
 	} else {
 		req.Header.Set("Accept", "application/vnd.amazon.eventstream")
