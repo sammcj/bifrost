@@ -14,7 +14,7 @@ export const getTokenFromStorage = (): Promise<string | null> => {
 	try {
 		if (IS_ENTERPRISE) {
 			// Enterprise OAuth login - use tokenManager
-			return getAccessToken();
+			return  getAccessToken();
 		} else {
 			// Traditional login - use bifrost-auth-token
 			return Promise.resolve(localStorage.getItem("bifrost-auth-token"));
