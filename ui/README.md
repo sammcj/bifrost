@@ -81,7 +81,7 @@ The main dashboard provides comprehensive request monitoring:
 
 Manage all your AI providers from a unified interface:
 
-- **Supported Providers**: OpenAI, Azure OpenAI, Anthropic, AWS Bedrock, Cohere, Google Vertex AI, Mistral, Ollama, Groq, Parasail, SGLang, Cerebras, Gemini, OpenRouter
+- **Supported Providers**: OpenAI, Azure OpenAI, Anthropic, AWS Bedrock, Cohere, Google Vertex AI, Mistral, Ollama, Parasail, SGLang, Cerebras, Groq, Gemini, OpenRouter
 - **Key Management**: Multiple API keys with weights and model assignments
 - **Network Configuration**: Custom base URLs, timeouts, retry policies, proxy settings
 - **Provider-specific Settings**: Azure deployments, Bedrock regions, Vertex projects
@@ -134,30 +134,26 @@ The UI uses Redux Toolkit + RTK Query for state management and API communication
 
 ```typescript
 // Example API usage with RTK Query
-import { 
-  useGetLogsQuery, 
-  useCreateProviderMutation,
-  getErrorMessage 
-} from '@/lib/store'
+import { useGetLogsQuery, useCreateProviderMutation, getErrorMessage } from "@/lib/store";
 
 // Get real-time logs with automatic caching
-const { data: logs, error, isLoading } = useGetLogsQuery({ filters, pagination })
+const { data: logs, error, isLoading } = useGetLogsQuery({ filters, pagination });
 
 // Configure provider with optimistic updates
-const [createProvider] = useCreateProviderMutation()
+const [createProvider] = useCreateProviderMutation();
 
 const handleCreate = async () => {
-  try {
-    await createProvider({
-      provider: 'openai',
-      keys: [{ value: 'sk-...', models: ['gpt-4'], weight: 1 }],
-      // ... other config
-    }).unwrap()
-    // Success handling
-  } catch (error) {
-    console.error(getErrorMessage(error))
-  }
-}
+	try {
+		await createProvider({
+			provider: "openai",
+			keys: [{ value: "sk-...", models: ["gpt-4"], weight: 1 }],
+			// ... other config
+		}).unwrap();
+		// Success handling
+	} catch (error) {
+		console.error(getErrorMessage(error));
+	}
+};
 ```
 
 ### Component Guidelines
@@ -183,15 +179,15 @@ The UI supports comprehensive provider configuration:
 
 ```typescript
 interface ProviderConfig {
-  keys: Key[] // API keys with model assignments
-  network_config: NetworkConfig // URLs, timeouts, retries
-  meta_config?: MetaConfig // Provider-specific settings
-  concurrency_and_buffer_size: {
-    // Performance tuning
-    concurrency: number
-    buffer_size: number
-  }
-  proxy_config?: ProxyConfig // Proxy settings
+	keys: Key[]; // API keys with model assignments
+	network_config: NetworkConfig; // URLs, timeouts, retries
+	meta_config?: MetaConfig; // Provider-specific settings
+	concurrency_and_buffer_size: {
+		// Performance tuning
+		concurrency: number;
+		buffer_size: number;
+	};
+	proxy_config?: ProxyConfig; // Proxy settings
 }
 ```
 
