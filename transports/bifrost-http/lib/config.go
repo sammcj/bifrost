@@ -814,6 +814,17 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 		} else if governanceConfig != nil && governanceConfig.AuthConfig == nil {
 			// Adding this config
 			governanceConfig.AuthConfig = configData.AuthConfig
+			// Resolving username and password if the value contains env.VAR_NAME
+			if configData.AuthConfig.AdminUserName != "" {
+				if configData.AuthConfig.AdminUserName, _, err = config.processEnvValue(configData.AuthConfig.AdminUserName); err != nil {
+					logger.Warn("failed to resolve username: %v", err)
+				}
+			}
+			if configData.AuthConfig.AdminPassword != "" {
+				if configData.AuthConfig.AdminPassword, _, err = config.processEnvValue(configData.AuthConfig.AdminPassword); err != nil {
+					logger.Warn("failed to resolve password: %v", err)
+				}
+			}
 		}
 	}
 
