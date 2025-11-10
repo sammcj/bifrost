@@ -1,3 +1,6 @@
+import { PROVIDER_SUPPORTED_REQUESTS } from "../constants/config";
+import { BaseProvider, KnownProvider } from "../types/config";
+
 export interface ValidationRule {
 	isValid: boolean;
 	message: string;
@@ -553,3 +556,19 @@ export const cleanJson = (text: unknown) => {
 		return text;
 	}
 };
+
+/**
+ * Checks if a request type is disabled for a provider
+ * @param providerType - The provider type
+ * @param requestType - The request type
+ * @returns true if the request type is disabled
+ */
+export function isRequestTypeDisabled(providerType: BaseProvider | undefined, requestType: string): boolean {
+	if (!providerType) return false;
+	
+	const supportedRequests = PROVIDER_SUPPORTED_REQUESTS[providerType];
+	if (!supportedRequests) return false; // If provider not in base list, allow all
+	
+	return !supportedRequests.includes(requestType);
+}
+

@@ -37,8 +37,8 @@ type ConfigStore interface {
 	GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, error)
 	GetMCPClientByName(ctx context.Context, name string) (*tables.TableMCPClient, error)
 	CreateMCPClientConfig(ctx context.Context, clientConfig schemas.MCPClientConfig, envKeys map[string][]EnvKeyInfo) error
-	UpdateMCPClientConfig(ctx context.Context, name string, clientConfig schemas.MCPClientConfig, envKeys map[string][]EnvKeyInfo) error
-	DeleteMCPClientConfig(ctx context.Context, name string) error
+	UpdateMCPClientConfig(ctx context.Context, id string, clientConfig schemas.MCPClientConfig, envKeys map[string][]EnvKeyInfo) error
+	DeleteMCPClientConfig(ctx context.Context, id string) error
 
 	// Vector store config CRUD
 	UpdateVectorStoreConfig(ctx context.Context, config *vectorstore.Config) error

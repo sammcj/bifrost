@@ -94,6 +94,8 @@ type AllowedRequests struct {
 	TextCompletionStream bool `json:"text_completion_stream"`
 	ChatCompletion       bool `json:"chat_completion"`
 	ChatCompletionStream bool `json:"chat_completion_stream"`
+	Responses            bool `json:"responses"`
+	ResponsesStream      bool `json:"responses_stream"`
 	Embedding            bool `json:"embedding"`
 	Speech               bool `json:"speech"`
 	SpeechStream         bool `json:"speech_stream"`
@@ -118,6 +120,10 @@ func (ar *AllowedRequests) IsOperationAllowed(operation RequestType) bool {
 		return ar.ChatCompletion
 	case ChatCompletionStreamRequest:
 		return ar.ChatCompletionStream
+	case ResponsesRequest:
+		return ar.Responses
+	case ResponsesStreamRequest:
+		return ar.ResponsesStream
 	case EmbeddingRequest:
 		return ar.Embedding
 	case SpeechRequest:

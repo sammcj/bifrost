@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AllowedRequestsFields } from "./allowedRequestsFields";
 import { getErrorMessage, setProviderFormDirtyState, useAppDispatch } from "@/lib/store";
 import { useUpdateProviderMutation } from "@/lib/store/apis/providersApi";
-import { KnownProvider, ModelProvider } from "@/lib/types/config";
+import { BaseProvider, ModelProvider } from "@/lib/types/config";
 import { formCustomProviderConfigSchema } from "@/lib/types/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
@@ -36,6 +36,8 @@ export function ApiStructureFormFragment({ provider }: Props) {
 				text_completion: provider.custom_provider_config?.allowed_requests?.text_completion ?? true,
 				chat_completion: provider.custom_provider_config?.allowed_requests?.chat_completion ?? true,
 				chat_completion_stream: provider.custom_provider_config?.allowed_requests?.chat_completion_stream ?? true,
+				responses: provider.custom_provider_config?.allowed_requests?.responses ?? true,
+				responses_stream: provider.custom_provider_config?.allowed_requests?.responses_stream ?? true,
 				embedding: provider.custom_provider_config?.allowed_requests?.embedding ?? true,
 				speech: provider.custom_provider_config?.allowed_requests?.speech ?? true,
 				speech_stream: provider.custom_provider_config?.allowed_requests?.speech_stream ?? true,
@@ -59,7 +61,7 @@ export function ApiStructureFormFragment({ provider }: Props) {
 		updateProvider({
 			...provider,
 			custom_provider_config: {
-				base_provider_type: data.base_provider_type as unknown as KnownProvider,
+				base_provider_type: data.base_provider_type as unknown as BaseProvider,
 				allowed_requests: data.allowed_requests,
 			},
 		})
@@ -106,7 +108,7 @@ export function ApiStructureFormFragment({ provider }: Props) {
 				</div>
 
 				{/* Allowed Requests Configuration */}
-				<AllowedRequestsFields control={form.control} />
+				<AllowedRequestsFields control={form.control} providerType={form.watch("base_provider_type") as BaseProvider} />
 
 				{/* Form Actions */}
 				<div className="flex justify-end space-x-2 py-2">
