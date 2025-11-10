@@ -87,21 +87,33 @@ The following table summarizes which operations are supported by each provider v
 
 | Provider | Models | Text | Text (stream) | Chat | Chat (stream) | Responses | Responses (stream) | Embeddings | TTS | TTS (stream) | STT | STT (stream) |
 |----------|--------|------|----------------|------|---------------|-----------|--------------------|------------|-----|-------------|-----|--------------|
-| Anthropic (`anthropic/<model>`) | Yes | Yes | No | Yes | Yes | Yes | Yes | No | No | No | No | No |
-| Azure OpenAI (`azure/<model>`) | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
-| Bedrock (`bedrock/<model>`) | Yes | Yes | No | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
-| Cerebras (`cerebras/<model>`) | Yes | Yes | Yes | Yes | Yes | Yes | Yes | No | No | No | No | No |
-| Cohere (`cohere/<model>`) | Yes | No | No | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
-| Gemini (`gemini/<model>`) | Yes | No | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| Groq (`groq/<model>`) | Yes | No | No | Yes | Yes | Yes | Yes | No | No | No | No | No |
-| Mistral (`mistral/<model>`) | Yes | No | No | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
-| Ollama (`ollama/<model>`) | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
-| OpenAI (`openai/<model>`) | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| OpenRouter (`openrouter/<model>`) | Yes | Yes | Yes | Yes | Yes | Yes | Yes | No | No | No | No | No |
-| Parasail (`parasail/<model>`) | Yes | No | No | Yes | Yes | Yes | Yes | No | No | No | No | No |
-| Perplexity (`perplexity/<model>`) | Yes | No | No | Yes | Yes | Yes | Yes | No | No | No | No | No |
-| SGL (`sgl/<model>`) | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
-| Vertex AI (`vertex/<model>`) | Yes | No | No | Yes | Yes | Yes | Yes | Yes | No | No | No | No |
+| Anthropic (`anthropic/<model>`) | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Azure OpenAI (`azure/<model>`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Bedrock (`bedrock/<model>`) | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Cerebras (`cerebras/<model>`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Cohere (`cohere/<model>`) | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Gemini (`gemini/<model>`) | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Groq (`groq/<model>`) | ✅ | 🟡 | 🟡 | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Mistral (`mistral/<model>`) | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Ollama (`ollama/<model>`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| OpenAI (`openai/<model>`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| OpenRouter (`openrouter/<model>`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Parasail (`parasail/<model>`) | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Perplexity (`perplexity/<model>`) | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| SGL (`sgl/<model>`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Vertex AI (`vertex/<model>`) | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+- 🟡 Not supported by the downstream provider, but internally implemented by Bifrost as a fallback.
+- ❌ Not supported by the downstream provider, hence not supported by Bifrost.
+- ✅ Fully supported by the downstream provider, or internally implemented by Bifrost.
+
+
+<Note>
+Some operations are not supported by the downstream provider, and their internal implementation in Bifrost is optional. 🟡
+Like Text completions are not supported by Groq, but Bifrost can emulate them internally using the Chat Completions API. This feature is disabled by default, but it can be enabled by setting the `enable_litellm_fallbacks` flag to `true` in the client configuration.
+We do not promote using such fallbacks, since text completions and chat completions are fundamentally different. However, this option is available to help users migrating from LiteLLM (which does support these fallbacks).
+</Note>
+
 
 Notes:
 - “Models” refers to the list models operation (`/v1/models`).
