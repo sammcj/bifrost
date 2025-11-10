@@ -2,8 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { HeadersTable } from "@/components/ui/headersTable";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DefaultNetworkConfig } from "@/lib/constants/config";
 import { getErrorMessage, setProviderFormDirtyState, useAppDispatch } from "@/lib/store";
@@ -177,34 +177,13 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 							name="network_config.extra_headers"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Extra Headers (Optional)</FormLabel>
 									<FormControl>
-										<Textarea
-											placeholder='{"Authorization": "Bearer token", "X-Custom-Header": "value"}'
-											value={typeof field.value === "string" ? field.value : JSON.stringify(field.value || {}, null, 2)}
-											onChange={(e) => {
-												// Store as string during editing to allow intermediate invalid states
-												field.onChange(e.target.value);
-											}}
-											onBlur={(e) => {
-												// Try to parse as JSON on blur, but keep as string if invalid
-												const value = e.target.value.trim();
-												if (value) {
-													try {
-														const parsed = JSON.parse(value);
-														if (typeof parsed === "object" && parsed !== null) {
-															field.onChange(parsed);
-														}
-													} catch {
-														// Keep as string for validation on submit
-													}
-												} else {
-													field.onChange(undefined);
-												}
-												field.onBlur();
-											}}
-											rows={3}
-											className="max-w-full font-mono text-sm wrap-anywhere"
+										<HeadersTable
+											value={field.value || {}}
+											onChange={field.onChange}
+											keyPlaceholder="Header name"
+											valuePlaceholder="Header value"
+											label="Extra Headers"
 										/>
 									</FormControl>
 									<FormMessage />

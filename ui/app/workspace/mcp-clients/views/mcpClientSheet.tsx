@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { HeadersTable } from "@/components/ui/headersTable";
 import { MCPClient } from "@/lib/types/mcp";
 import { CodeEditor } from "@/app/workspace/logs/views/codeEditor";
 import { MCP_STATUS_COLORS } from "@/lib/constants/config";
@@ -15,7 +16,6 @@ import { mcpClientUpdateSchema, type MCPClientUpdateSchema } from "@/lib/types/s
 import { useUpdateMCPClientMutation, getErrorMessage } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 
 interface MCPClientSheetProps {
 	mcpClient: MCPClient;
@@ -129,7 +129,7 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 						<div className="space-y-6">
 							{/* Name and Header Section */}
 							<div className="space-y-4">
-							<h3 className="font-semibold">Basic Information</h3>
+								<h3 className="font-semibold">Basic Information</h3>
 								<FormField
 									control={form.control}
 									name="name"
@@ -150,39 +150,16 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 									name="headers"
 									render={({ field }) => (
 										<FormItem className="flex flex-col gap-3">
-											<FormLabel>Headers (JSON)</FormLabel>
-											<div>
-												<FormControl>
-													<Textarea
-														placeholder='{"Authorization": "Bearer token", "Content-Type": "application/json"}'
-														value={typeof field.value === "string" ? field.value : JSON.stringify(field.value || {}, null, 2)}
-														onChange={(e) => {
-															// Store as string during editing to allow intermediate invalid states
-															field.onChange(e.target.value);
-														}}
-														onBlur={(e) => {
-															// Try to parse as JSON on blur, but keep as string if invalid
-															const value = e.target.value.trim();
-															if (value) {
-																try {
-																	const parsed = JSON.parse(value);
-																	if (typeof parsed === "object" && parsed !== null) {
-																		field.onChange(parsed);
-																	}
-																} catch {
-																	// Keep as string for validation on submit
-																}
-															} else {
-																field.onChange(undefined);
-															}
-															field.onBlur();
-														}}
-														rows={3}
-														className="max-w-full font-mono text-sm wrap-anywhere"
-													/>
-												</FormControl>
-												<FormMessage />
-											</div>
+											<FormControl>
+												<HeadersTable
+													value={field.value || {}}
+													onChange={field.onChange}
+													keyPlaceholder="Header name"
+													valuePlaceholder="Header value"
+													label="Headers"
+												/>
+											</FormControl>
+											<FormMessage />
 										</FormItem>
 									)}
 								/>
@@ -192,28 +169,28 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 								<h3 className="font-semibold">Configuration</h3>
 								<div className="rounded-sm border">
 									<div className="bg-muted/50 text-muted-foreground border-b px-6 py-2 text-xs font-medium">Client ConnectionConfig</div>
-								<CodeEditor
-									className="z-0 w-full"
-									shouldAdjustInitialHeight={true}
-									maxHeight={300}
-									wrap={true}
-									code={JSON.stringify(
-										(() => {
-											const { id, name, tools_to_execute, headers, ...rest } = mcpClient.config;
-											return rest;
-										})(),
-										null,
-										2
-									)}
-									lang="json"
-									readonly={true}
-									options={{
-										scrollBeyondLastLine: false,
-										collapsibleBlocks: true,
-										lineNumbers: "off",
-										alwaysConsumeMouseWheel: false,
-									}}
-								/>
+									<CodeEditor
+										className="z-0 w-full"
+										shouldAdjustInitialHeight={true}
+										maxHeight={300}
+										wrap={true}
+										code={JSON.stringify(
+											(() => {
+												const { id, name, tools_to_execute, headers, ...rest } = mcpClient.config;
+												return rest;
+											})(),
+											null,
+											2,
+										)}
+										lang="json"
+										readonly={true}
+										options={{
+											scrollBeyondLastLine: false,
+											collapsibleBlocks: true,
+											lineNumbers: "off",
+											alwaysConsumeMouseWheel: false,
+										}}
+									/>
 								</div>
 							</div>
 							{/* Tools Section */}
