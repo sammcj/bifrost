@@ -115,6 +115,11 @@ func (provider *CohereProvider) GetProviderKey() schemas.ModelProvider {
 	return providerUtils.GetProviderName(schemas.Cohere, provider.customProviderConfig)
 }
 
+// buildRequestURL constructs the full request URL using the provider's configuration.
+func (provider *CohereProvider) buildRequestURL(ctx context.Context, defaultPath string, requestType schemas.RequestType) string {
+	return provider.networkConfig.BaseURL + providerUtils.GetRequestPath(ctx, defaultPath, provider.customProviderConfig, requestType)
+}
+
 // completeRequest sends a request to Cohere's API and handles the response.
 // It constructs the API URL, sets up authentication, and processes the response.
 // Returns the response body or an error if the request fails.
@@ -201,7 +206,7 @@ func (provider *CohereProvider) listModelsByKey(ctx context.Context, key schemas
 	}
 
 	// Build URL
-	req.SetRequestURI(provider.networkConfig.BaseURL + providerUtils.GetPathFromContext(ctx, fmt.Sprintf("/v1/models?%s", params.Encode())))
+	req.SetRequestURI(provider.buildRequestURL(ctx, fmt.Sprintf("/v1/models?%s", params.Encode()), schemas.ListModelsRequest))
 	req.Header.SetMethod(http.MethodGet)
 	req.Header.SetContentType("application/json")
 	if key.Value != "" {
@@ -293,7 +298,7 @@ func (provider *CohereProvider) ChatCompletion(ctx context.Context, key schemas.
 		return nil, err
 	}
 
-	responseBody, latency, err := provider.completeRequest(ctx, jsonBody, provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/v2/chat"), key.Value)
+	responseBody, latency, err := provider.completeRequest(ctx, jsonBody, provider.buildRequestURL(ctx, "/v2/chat", schemas.ChatCompletionRequest), key.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +359,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx context.Context, postHo
 	defer fasthttp.ReleaseRequest(req)
 
 	req.Header.SetMethod(http.MethodPost)
-	req.SetRequestURI(provider.networkConfig.BaseURL + providerUtils.GetPathFromContext(ctx, "/v2/chat"))
+	req.SetRequestURI(provider.buildRequestURL(ctx, "/v2/chat", schemas.ChatCompletionStreamRequest))
 	req.Header.SetContentType("application/json")
 
 	// Set any extra headers from network config
@@ -508,7 +513,7 @@ func (provider *CohereProvider) Responses(ctx context.Context, key schemas.Key, 
 	}
 
 	// Convert to Cohere v2 request
-	responseBody, latency, err := provider.completeRequest(ctx, jsonBody, provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/v2/chat"), key.Value)
+	responseBody, latency, err := provider.completeRequest(ctx, jsonBody, provider.buildRequestURL(ctx, "/v2/chat", schemas.ResponsesRequest), key.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -568,7 +573,7 @@ func (provider *CohereProvider) ResponsesStream(ctx context.Context, postHookRun
 	defer fasthttp.ReleaseRequest(req)
 
 	req.Header.SetMethod(http.MethodPost)
-	req.SetRequestURI(provider.networkConfig.BaseURL + providerUtils.GetPathFromContext(ctx, "/v2/chat"))
+	req.SetRequestURI(provider.buildRequestURL(ctx, "/v2/chat", schemas.ResponsesStreamRequest))
 	req.Header.SetContentType("application/json")
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
@@ -732,7 +737,7 @@ func (provider *CohereProvider) Embedding(ctx context.Context, key schemas.Key, 
 	}
 
 	// Create Bifrost request for conversion
-	responseBody, latency, err := provider.completeRequest(ctx, jsonBody, provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/v2/embed"), key.Value)
+	responseBody, latency, err := provider.completeRequest(ctx, jsonBody, provider.buildRequestURL(ctx, "/v2/embed", schemas.EmbeddingRequest), key.Value)
 	if err != nil {
 		return nil, err
 	}

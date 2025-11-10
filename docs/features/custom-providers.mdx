@@ -63,13 +63,19 @@ curl --location 'http://localhost:8080/api/providers' \
         "allowed_requests": {
             "list_models": false,
             "text_completion": false,
+            "text_completion_stream": false,
             "chat_completion": true,
             "chat_completion_stream": true,
+            "responses": false,
+            "responses_stream": false,
             "embedding": false,
             "speech": false,
             "speech_stream": false,
             "transcription": false,
             "transcription_stream": false
+        },
+        "request_path_overrides": {
+            "chat_completion": "/v1/chat/completions"
         }
     }
 }'
@@ -95,13 +101,19 @@ curl --location 'http://localhost:8080/api/providers' \
                 "allowed_requests": {
                     "list_models": false,
                     "text_completion": false,
+                    "text_completion_stream": false,
                     "chat_completion": true,
                     "chat_completion_stream": true,
+                    "responses": false,
+                    "responses_stream": false,
                     "embedding": false,
                     "speech": false,
                     "speech_stream": false,
                     "transcription": false,
                     "transcription_stream": false
+                },
+                "request_path_overrides": {
+                    "chat_completion": "/v1/chat/completions"
                 }
             }
         }
@@ -181,13 +193,20 @@ func (a *MyAccount) GetConfigForProvider(provider schemas.ModelProvider) (*schem
                 BaseProviderType: schemas.OpenAI, // Use OpenAI protocol
                 AllowedRequests: &schemas.AllowedRequests{
                     TextCompletion:       false,
+                    TextCompletionStream: false,
                     ChatCompletion:       true,  // Enable chat completion
                     ChatCompletionStream: true,  // Enable streaming
+                    Responses:            false,
+                    ResponsesStream:      false,
                     Embedding:            false,
                     Speech:               false,
                     SpeechStream:         false,
                     Transcription:        false,
                     TranscriptionStream:  false,
+                },
+                RequestPathOverrides: map[schemas.RequestType]string{
+                    schemas.ChatCompletionRequest:       "/v1/chat/completions",
+                    schemas.ChatCompletionStreamRequest: "/v1/chat/completions",
                 },
             },
         }, nil
@@ -213,8 +232,11 @@ Control which operations your custom provider can perform. The behavior is:
 Available operations:
 
 - **`text_completion`**: Legacy text completion requests
+- **`text_completion_stream`**: Streaming text completion requests
 - **`chat_completion`**: Standard chat completion requests
 - **`chat_completion_stream`**: Streaming chat responses
+- **`responses`**: Standard responses requests
+- **`responses_stream`**: Streaming responses requests
 - **`embedding`**: Text embedding generation
 - **`speech`**: Text-to-speech conversion
 - **`speech_stream`**: Streaming text-to-speech
@@ -230,6 +252,57 @@ Custom providers can be built on these supported providers:
 - `bedrock` - AWS Bedrock
 - `cohere` - Cohere
 - `gemini` - Gemini
+
+### Request Path Overrides
+
+The `request_path_overrides` field allows you to override the default API endpoint paths for specific request types. This is useful when:
+
+- Connecting to custom or self-hosted model providers
+- Integrating with proxies that expect specific URL patterns
+- Using provider forks with modified API paths
+
+<Warning>
+**Not Supported:** `request_path_overrides` is not supported for `gemini` and `bedrock` base provider types due to their specialized API implementations.
+</Warning>
+
+The field accepts a mapping of request types to custom paths:
+
+```json
+{
+    "request_path_overrides": {
+        "chat_completion": "/v1/chat/completions",
+        "chat_completion_stream": "/v1/chat/completions",
+        "embedding": "/v1/embeddings",
+        "text_completion": "/v1/completions"
+    }
+}
+```
+
+**Example: OpenAI-Compatible Endpoint with Custom Paths**
+
+```json
+{
+    "custom-llm": {
+        "keys": [{ "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "network_config": {
+            "base_url": "https://your-openai-compatible-endpoint.com"
+        },
+        "custom_provider_config": {
+            "base_provider_type": "openai",
+            "allowed_requests": {
+                "chat_completion": true,
+                "chat_completion_stream": true
+            },
+            "request_path_overrides": {
+                "chat_completion": "/api/v2/chat",
+                "chat_completion_stream": "/api/v2/chat"
+            }
+        }
+    }
+}
+```
+
+In this example, instead of using OpenAI's default `/v1/chat/completions` path, requests will be sent to `https://custom-endpoint.example.com/api/v2/chat`.
 
 ## Use Cases
 

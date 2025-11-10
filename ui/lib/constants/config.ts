@@ -58,25 +58,12 @@ export const MCP_STATUS_COLORS = {
 	disconnected: "bg-gray-100 text-gray-800",
 } as const;
 
-export const DEFAULT_ALLOWED_REQUESTS = {
-	text_completion: true,
-	chat_completion: true,
-	chat_completion_stream: true,
-	responses: true,
-	responses_stream: true,
-	embedding: true,
-	speech: true,
-	speech_stream: true,
-	transcription: true,
-	transcription_stream: true,
-	list_models: true,
-} as const satisfies Required<AllowedRequests>;
-
 // Mapping of what IS supported by each base provider
 export const PROVIDER_SUPPORTED_REQUESTS: Record<BaseProvider, string[]> = {
 	openai: [
 		"list_models",
         "text_completion",
+        "text_completion_stream",
         "chat_completion",
         "chat_completion_stream",
         "responses",
@@ -89,7 +76,6 @@ export const PROVIDER_SUPPORTED_REQUESTS: Record<BaseProvider, string[]> = {
     ],
 	anthropic: [
 		"list_models",
-		"text_completion",
 		"chat_completion",
 		"chat_completion_stream",
 		"responses",
@@ -97,7 +83,6 @@ export const PROVIDER_SUPPORTED_REQUESTS: Record<BaseProvider, string[]> = {
 	],
 	gemini: [
 		"list_models",
-		"text_completion",
 		"chat_completion",
 		"chat_completion_stream",
 		"responses",
@@ -110,7 +95,6 @@ export const PROVIDER_SUPPORTED_REQUESTS: Record<BaseProvider, string[]> = {
 	],
 	cohere: [
 		"list_models",
-		"text_completion",
 		"chat_completion",
 		"chat_completion_stream",
 		"responses",
