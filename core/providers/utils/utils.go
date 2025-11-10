@@ -213,6 +213,29 @@ func GetPathFromContext(ctx context.Context, defaultPath string) string {
 	return defaultPath
 }
 
+// GetRequestPath gets the request path from the context, if it exists, checking for path overrides in the custom provider config.
+func GetRequestPath(ctx context.Context, defaultPath string, customProviderConfig *schemas.CustomProviderConfig, requestType schemas.RequestType) string {
+	// If path set in context, return it
+	if pathInContext, ok := ctx.Value(schemas.BifrostContextKeyURLPath).(string); ok {
+		return pathInContext
+	}
+	// If path override set in custom provider config, return it
+	if customProviderConfig != nil && customProviderConfig.RequestPathOverrides != nil {
+		if raw, ok := customProviderConfig.RequestPathOverrides[requestType]; ok {
+			pathOverride := strings.TrimSpace(raw)
+			if pathOverride == "" {
+				return defaultPath
+			}
+			if !strings.HasPrefix(pathOverride, "/") {
+				pathOverride = "/" + pathOverride
+			}
+			return pathOverride
+		}
+	}
+	// Return default path
+	return defaultPath
+}
+
 type RequestBodyGetter interface {
 	GetRawRequestBody() []byte
 }
