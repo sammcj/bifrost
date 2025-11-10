@@ -2,10 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { HeadersTable } from "@/components/ui/headersTable";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage, useCreateMCPClientMutation } from "@/lib/store";
@@ -41,7 +41,6 @@ const ClientForm: React.FC<ClientFormProps> = ({ open, onClose, onSaved }) => {
 	const [isLoading, setIsLoading] = useState(false);
 	const [argsText, setArgsText] = useState("");
 	const [envsText, setEnvsText] = useState("");
-	const [headersText, setHeadersText] = useState("");
 	const { toast } = useToast();
 
 	// RTK Query mutations
@@ -53,7 +52,6 @@ const ClientForm: React.FC<ClientFormProps> = ({ open, onClose, onSaved }) => {
 			setForm(emptyForm);
 			setArgsText("");
 			setEnvsText("");
-			setHeadersText(JSON.stringify(emptyForm.headers || {}, null, 2));
 			setIsLoading(false);
 		}
 	}, [open]);
@@ -75,65 +73,24 @@ const ClientForm: React.FC<ClientFormProps> = ({ open, onClose, onSaved }) => {
 		}));
 	};
 
-	const handleHeadersChange = (value: string) => {
-		setHeadersText(value);
-		// Try to parse JSON on change, but allow intermediate invalid states
-		const trimmed = value.trim();
-		if (trimmed) {
-			try {
-				const parsed = JSON.parse(trimmed);
-				if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-					setForm((prev) => ({ ...prev, headers: parsed as Record<string, string> }));
-				}
-			} catch {
-				// Keep as string during editing to allow intermediate invalid states
-			}
-		} else {
-			setForm((prev) => ({ ...prev, headers: {} }));
-		}
+	const handleHeadersChange = (value: Record<string, string>) => {
+		setForm((prev) => ({ ...prev, headers: value }));
 	};
 
-	const handleHeadersBlur = () => {
-		// Final parse on blur
-		const trimmed = headersText.trim();
-		if (trimmed) {
-			try {
-				const parsed = JSON.parse(trimmed);
-				if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-					setForm((prev) => ({ ...prev, headers: parsed as Record<string, string> }));
-					setHeadersText(JSON.stringify(parsed, null, 2));
+	// Validate headers format
+	const validateHeaders = (): string | null => {
+		if ((form.connection_type === "http" || form.connection_type === "sse") && form.headers) {
+			// Ensure all values are strings
+			for (const [key, value] of Object.entries(form.headers)) {
+				if (typeof value !== "string") {
+					return `Header "${key}" must have a string value`;
 				}
-			} catch {
-				// Keep current value if invalid JSON
-			}
-		} else {
-			setForm((prev) => ({ ...prev, headers: {} }));
-			setHeadersText("");
-		}
-	};
-
-	// Validate headers JSON format
-	const validateHeadersJSON = (): string | null => {
-		if ((form.connection_type === "http" || form.connection_type === "sse") && headersText.trim()) {
-			try {
-				const parsed = JSON.parse(headersText.trim());
-				if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-					return "Headers must be a valid JSON object";
-				}
-				// Ensure all values are strings
-				for (const [key, value] of Object.entries(parsed)) {
-					if (typeof value !== "string") {
-						return `Header "${key}" must have a string value`;
-					}
-				}
-			} catch {
-				return "Headers must be valid JSON format";
 			}
 		}
 		return null;
 	};
 
-	const headersValidationError = validateHeadersJSON();
+	const headersValidationError = validateHeaders();
 
 	const validator = new Validator([
 		// Name validation
@@ -178,21 +135,6 @@ const ClientForm: React.FC<ClientFormProps> = ({ open, onClose, onSaved }) => {
 		setIsLoading(true);
 
 		// Prepare the payload
-		// Parse headers from text if needed
-		let headers: Record<string, string> | undefined = form.headers;
-		if (headersText.trim()) {
-			try {
-				const parsed = JSON.parse(headersText.trim());
-				if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-					headers = parsed as Record<string, string>;
-				}
-			} catch {
-				setIsLoading(false);
-				toast({ title: "Error", description: "Invalid JSON format for headers", variant: "destructive" });
-				return;
-			}
-		}
-
 		const payload: CreateMCPClientRequest = {
 			...form,
 			stdio_config:
@@ -203,7 +145,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ open, onClose, onSaved }) => {
 							envs: parseArrayFromText(envsText),
 						}
 					: undefined,
-			headers: headers && Object.keys(headers).length > 0 ? headers : undefined,
+			headers: form.headers && Object.keys(form.headers).length > 0 ? form.headers : undefined,
 			tools_to_execute: ["*"],
 		};
 
@@ -283,20 +225,14 @@ const ClientForm: React.FC<ClientFormProps> = ({ open, onClose, onSaved }) => {
 								/>
 							</div>
 							<div className="space-y-2">
-								<Label>Headers (Optional)</Label>
-								<Textarea
-									value={headersText}
-									onChange={(e) => handleHeadersChange(e.target.value)}
-									onBlur={handleHeadersBlur}
-									placeholder='{"Authorization": "Bearer token", "X-Custom-Header": "value"}'
-									rows={3}
-									className={cn("font-mono text-sm", headersValidationError && "border-destructive focus-visible:ring-destructive")}
+								<HeadersTable
+									value={form.headers || {}}
+									onChange={handleHeadersChange}
+									keyPlaceholder="Header name"
+									valuePlaceholder="Header value"
+									label="Headers (Optional)"
 								/>
-								{headersValidationError ? (
-									<p className="text-destructive text-xs">{headersValidationError}</p>
-								) : (
-									<p className="text-muted-foreground text-xs">Enter headers as a JSON object with key-value pairs.</p>
-								)}
+								{headersValidationError && <p className="text-destructive text-xs">{headersValidationError}</p>}
 							</div>
 						</>
 					)}
