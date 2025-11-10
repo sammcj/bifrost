@@ -1,4 +1,0 @@
-- chore: version update core to 1.2.21
-- feat: add headers to MCP client config
-- refactor: mcp clients to use ids instead of names
-- feat: option to disable content logging
