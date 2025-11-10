@@ -24,6 +24,8 @@ const (
 	governanceRejectedContextKey    schemas.BifrostContextKey = "bf-governance-rejected"
 	governanceIsCacheReadContextKey schemas.BifrostContextKey = "bf-governance-is-cache-read"
 	governanceIsBatchContextKey     schemas.BifrostContextKey = "bf-governance-is-batch"
+
+	VirtualKeyPrefix = "sk-bf-"
 )
 
 // Config is the configuration for the governance plugin
