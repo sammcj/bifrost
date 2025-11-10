@@ -133,8 +133,33 @@ func (h *MCPHandler) reconnectMCPClient(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if err := h.client.ReconnectMCPClient(id); err != nil {
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to reconnect MCP client: %v", err))
+	// Check if client is registered in Bifrost (can be not registered if client initialization failed)
+	if clients, err := h.client.GetMCPClients(); err == nil && len(clients) > 0 {
+		for _, client := range clients {
+			if client.Config.ID == id {
+				if err := h.client.ReconnectMCPClient(id); err != nil {
+					SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to reconnect MCP client: %v", err))
+					return
+				} else {
+					SendJSON(ctx, map[string]any{
+						"status":  "success",
+						"message": "MCP client reconnected successfully",
+					})
+					return
+				}
+			}
+		}
+	}
+
+	// Config exists in store, but not in Bifrost (can happen if client initialization failed)
+	clientConfig, err := h.store.GetMCPClient(id)
+	if err != nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to get MCP client config: %v", err))
+		return
+	}
+
+	if err := h.client.AddMCPClient(*clientConfig); err != nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to add MCP client: %v", err))
 		return
 	}
 
