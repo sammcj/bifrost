@@ -22,6 +22,7 @@ const defaultConfig: CoreConfig = {
 	initial_pool_size: 1000,
 	prometheus_labels: [],
 	enable_logging: true,
+	disable_content_logging: false,
 	enable_governance: true,
 	enforce_governance_header: false,
 	allow_direct_keys: false,

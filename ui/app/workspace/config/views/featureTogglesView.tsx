@@ -13,6 +13,7 @@ const defaultConfig: CoreConfig = {
 	initial_pool_size: 1000,
 	prometheus_labels: [],
 	enable_logging: true,
+	disable_content_logging: false,
 	enable_governance: true,
 	enforce_governance_header: false,
 	allow_direct_keys: false,
@@ -36,7 +37,11 @@ export default function FeatureTogglesView() {
 
 	const hasChanges = useMemo(() => {
 		if (!config) return false;
-		return localConfig.enable_logging !== config.enable_logging || localConfig.enable_governance !== config.enable_governance;
+		return (
+			localConfig.enable_logging !== config.enable_logging ||
+			localConfig.disable_content_logging !== config.disable_content_logging ||
+			localConfig.enable_governance !== config.enable_governance
+		);
 	}, [config, localConfig]);
 
 	const handleConfigChange = useCallback((field: keyof CoreConfig, value: boolean | number | string[]) => {
@@ -95,12 +100,35 @@ export default function FeatureTogglesView() {
 								}
 							}}
 						/>
+				</div>
+				{needsRestart && <RestartWarning />}
+			</div>
+
+			{/* Disable Content Logging - Only show when logging is enabled */}
+			{localConfig.enable_logging && bifrostConfig?.is_logs_connected && (
+				<div>
+					<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+						<div className="space-y-0.5">
+							<label htmlFor="disable-content-logging" className="text-sm font-medium">
+								Disable Content Logging
+							</label>
+							<p className="text-muted-foreground text-sm">
+								When enabled, only usage metadata (latency, cost, token count, etc.) will be logged. Request/response content will not be stored.
+							</p>
+						</div>
+						<Switch
+							id="disable-content-logging"
+							size="md"
+							checked={localConfig.disable_content_logging}
+							onCheckedChange={(checked) => handleConfigChange("disable_content_logging", checked)}
+						/>
 					</div>
 					{needsRestart && <RestartWarning />}
 				</div>
+			)}
 
-				{/* Enable Governance */}
-				<div>
+			{/* Enable Governance */}
+			<div>
 					<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
 						<div className="space-y-0.5">
 							<label htmlFor="enable-governance" className="text-sm font-medium">

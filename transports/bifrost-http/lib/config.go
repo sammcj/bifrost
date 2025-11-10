@@ -173,6 +173,7 @@ var DefaultClientConfig = configstore.ClientConfig{
 	PrometheusLabels:        []string{},
 	InitialPoolSize:         schemas.DefaultInitialPoolSize,
 	EnableLogging:           true,
+	DisableContentLogging:   false,
 	EnableGovernance:        true,
 	EnforceGovernanceHeader: false,
 	AllowDirectKeys:         false,
