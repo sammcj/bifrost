@@ -1,9 +1,0 @@
-- chore: version update core to 1.2.21 and framework to 1.1.26
-- feat: add headers to MCP client config and provider config
-- feat: adds support for custom path overrides for custom providers
-- feat: adds support for key less authentication for custom providers
-- feat: handles `response_schema` and `response_json_schema` parameter in gemini integration
-- refactor: better mcp client management
-- feat: option to disable content logging
-- feat: key selection and retries info sent in genai traces
-- feat: option to edit and reconnect mcp clients
