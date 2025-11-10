@@ -1,15 +1,15 @@
 // Fallback OAuth Token Manager for non-enterprise builds
 // These functions return null/no-op when enterprise features are not available
 
-export const getAccessToken = (): string | null => null
+export const getAccessToken = async (): Promise<string | null> => Promise.resolve(null)
 
-export const getRefreshToken = (): string | null => null
+export const getRefreshToken = async (): Promise<string | null> => Promise.resolve(null)
 
 export const getTokenExpiry = (): number | null => null
 
 export const isTokenExpired = (): boolean => false
 
-export const setOAuthTokens = (accessToken: string, refreshToken?: string, expiresIn?: number) => {
+export const setOAuthTokens = async (accessToken: string, expiresIn?: number | null) => {
   // No-op in non-enterprise builds
 }
 
@@ -48,6 +48,31 @@ export const setUserInfo = (userInfo: UserInfo) => {
 
 // Fallback clearUserInfo - no-op
 export const clearUserInfo = () => {
+  // No-op in non-enterprise builds
+}
+
+// Fallback secure storage functions - no-op
+export const setSecureItem = async (key: string, value: string): Promise<void> => {
+  // No-op in non-enterprise builds
+}
+
+export const getSecureItem = async (key: string): Promise<string | null> => Promise.resolve(null)
+
+export const removeSecureItem = (key: string): void => {
+  // No-op in non-enterprise builds
+}
+
+export const setSecureLocalItem = async (key: string, value: string): Promise<void> => {
+  // No-op in non-enterprise builds
+}
+
+export const getSecureLocalItem = async (key: string): Promise<string | null> => Promise.resolve(null)
+
+export const removeSecureLocalItem = (key: string): void => {
+  // No-op in non-enterprise builds
+}
+
+export const clearEncryptionKey = (): void => {
   // No-op in non-enterprise builds
 }
 
