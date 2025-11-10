@@ -133,11 +133,6 @@ func (m *MCPManager) ReconnectClient(id string) error {
 		return fmt.Errorf("client %s not found", id)
 	}
 
-	if client.Conn != nil {
-		m.mu.Unlock()
-		return fmt.Errorf("client %s is already connected", id)
-	}
-
 	m.mu.Unlock()
 
 	// connectToMCPClient handles locking internally
@@ -244,10 +239,6 @@ func (m *MCPManager) EditClient(id string, updatedConfig schemas.MCPClientConfig
 		return fmt.Errorf("client %s not found", id)
 	}
 
-	if client.Conn == nil {
-		return fmt.Errorf("client %s has no active connection", id)
-	}
-
 	// Update the client's execution config with new tool filters
 	config := client.ExecutionConfig
 	config.Name = updatedConfig.Name
@@ -256,6 +247,10 @@ func (m *MCPManager) EditClient(id string, updatedConfig schemas.MCPClientConfig
 
 	// Store the updated config
 	client.ExecutionConfig = config
+
+	if client.Conn == nil {
+		return nil // Client is not connected, so no tools to update
+	}
 
 	// Clear current tool map
 	client.ToolMap = make(map[string]schemas.ChatTool)
@@ -596,22 +591,24 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 
 	// Initialize or validate client entry
 	if existingClient, exists := m.clientMap[config.ID]; exists {
-		// Client entry exists from config, check for existing connection
+		// Client entry exists from config, check for existing connection, if it does then close
+		if existingClient.cancelFunc != nil {
+			existingClient.cancelFunc()
+			existingClient.cancelFunc = nil
+		}
 		if existingClient.Conn != nil {
-			m.mu.Unlock()
-			return fmt.Errorf("client %s already has an active connection", config.Name)
+			existingClient.Conn.Close()
 		}
 		// Update connection type for this connection attempt
 		existingClient.ConnectionInfo.Type = config.ConnectionType
-	} else {
-		// Create new client entry with configuration
-		m.clientMap[config.ID] = &MCPClient{
-			ExecutionConfig: config,
-			ToolMap:         make(map[string]schemas.ChatTool),
-			ConnectionInfo: MCPClientConnectionInfo{
-				Type: config.ConnectionType,
-			},
-		}
+	}
+	// Create new client entry with configuration
+	m.clientMap[config.ID] = &MCPClient{
+		ExecutionConfig: config,
+		ToolMap:         make(map[string]schemas.ChatTool),
+		ConnectionInfo: MCPClientConnectionInfo{
+			Type: config.ConnectionType,
+		},
 	}
 	m.mu.Unlock()
 

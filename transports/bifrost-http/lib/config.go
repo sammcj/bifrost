@@ -1602,6 +1602,36 @@ func (c *Config) SetBifrostClient(client *bifrost.Bifrost) {
 	c.client = client
 }
 
+// GetMCPClient gets an MCP client configuration from the configuration.
+// This method is called when an MCP client is reconnected via the HTTP API.
+//
+// Parameters:
+//   - id: ID of the client to get
+//
+// Returns:
+//   - *schemas.MCPClientConfig: The MCP client configuration (not redacted)
+//   - error: Any retrieval error
+func (c *Config) GetMCPClient(id string) (*schemas.MCPClientConfig, error) {
+	c.muMCP.RLock()
+	defer c.muMCP.RUnlock()
+
+	if c.client == nil {
+		return nil, fmt.Errorf("bifrost client not set")
+	}
+
+	if c.MCPConfig == nil {
+		return nil, fmt.Errorf("no MCP config found")
+	}
+
+	for _, clientConfig := range c.MCPConfig.ClientConfigs {
+		if clientConfig.ID == id {
+			return &clientConfig, nil
+		}
+	}
+
+	return nil, fmt.Errorf("MCP client '%s' not found", id)
+}
+
 // AddMCPClient adds a new MCP client to the configuration.
 // This method is called when a new MCP client is added via the HTTP API.
 //
@@ -1668,7 +1698,7 @@ func (c *Config) AddMCPClient(ctx context.Context, clientConfig schemas.MCPClien
 					KeyID:      "", // Empty for MCP headers
 				})
 			}
-			clientConfig.Headers[header] = newValue
+			c.MCPConfig.ClientConfigs[len(c.MCPConfig.ClientConfigs)-1].Headers[header] = newValue
 		}
 	}
 
@@ -1710,8 +1740,16 @@ func (c *Config) RemoveMCPClient(ctx context.Context, id string) error {
 		return fmt.Errorf("no MCP config found")
 	}
 
-	if err := c.client.RemoveMCPClient(id); err != nil {
-		return fmt.Errorf("failed to remove MCP client: %w", err)
+	// Check if client is registered in Bifrost (can be not registered if client initialization failed)
+	if clients, err := c.client.GetMCPClients(); err == nil && len(clients) > 0 {
+		for _, client := range clients {
+			if client.Config.ID == id {
+				if err := c.client.RemoveMCPClient(id); err != nil {
+					return fmt.Errorf("failed to remove MCP client: %w", err)
+				}
+				break
+			}
+		}
 	}
 
 	for i, clientConfig := range c.MCPConfig.ClientConfigs {
@@ -1836,13 +1874,21 @@ func (c *Config) EditMCPClient(ctx context.Context, id string, updatedConfig sch
 	c.MCPConfig.ClientConfigs[configIndex].Headers = processedConfig.Headers
 	c.MCPConfig.ClientConfigs[configIndex].ToolsToExecute = processedConfig.ToolsToExecute
 
-	// Give the PROCESSED config (with actual env var values) to bifrost client
-	if err := c.client.EditMCPClient(id, processedConfig); err != nil {
-		// Rollback in-memory changes
-		c.MCPConfig.ClientConfigs[configIndex] = oldConfig
-		// Clean up any new env vars we added
-		c.cleanupEnvKeys("", id, newEnvKeys)
-		return fmt.Errorf("failed to edit MCP client: %w", err)
+	// Check if client is registered in Bifrost (can be not registered if client initialization failed)
+	if clients, err := c.client.GetMCPClients(); err == nil && len(clients) > 0 {
+		for _, client := range clients {
+			if client.Config.ID == id {
+				// Give the PROCESSED config (with actual env var values) to bifrost client
+				if err := c.client.EditMCPClient(id, processedConfig); err != nil {
+					// Rollback in-memory changes
+					c.MCPConfig.ClientConfigs[configIndex] = oldConfig
+					// Clean up any new env vars we added
+					c.cleanupEnvKeys("", id, newEnvKeys)
+					return fmt.Errorf("failed to edit MCP client: %w", err)
+				}
+				break
+			}
+		}
 	}
 
 	// Persist changes to config store

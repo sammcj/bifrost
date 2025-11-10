@@ -20,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { MCP_STATUS_COLORS } from "@/lib/constants/config";
 import { getErrorMessage, useDeleteMCPClientMutation, useGetMCPClientsQuery, useReconnectMCPClientMutation } from "@/lib/store";
 import { MCPClient } from "@/lib/types/mcp";
-import { Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import MCPClientSheet from "./mcpClientSheet";
 
@@ -33,6 +33,8 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 	const [selectedMCPClient, setSelectedMCPClient] = useState<MCPClient | null>(null);
 	const [showDetailSheet, setShowDetailSheet] = useState(false);
 	const { toast } = useToast();
+
+	const [reconnectingClients, setReconnectingClients] = useState<string[]>([]);
 
 	// RTK Query hooks
 	const { data: clientsData, refetch } = useGetMCPClientsQuery();
@@ -55,10 +57,13 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 
 	const handleReconnect = async (client: MCPClient) => {
 		try {
+			setReconnectingClients((prev) => [...prev, client.config.id]);
 			await reconnectMCPClient(client.config.id).unwrap();
+			setReconnectingClients((prev) => prev.filter((id) => id !== client.config.id));
 			toast({ title: "Reconnected", description: `Client ${client.config.name} reconnected successfully.` });
 			loadClients();
 		} catch (error) {
+			setReconnectingClients((prev) => prev.filter((id) => id !== client.config.id));
 			toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
 		}
 	};
@@ -157,15 +162,22 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 									<Badge className={MCP_STATUS_COLORS[c.state]}>{c.state}</Badge>
 								</TableCell>
 								<TableCell className="space-x-2 text-right" onClick={(e) => e.stopPropagation()}>
-									{c.state === "disconnected" && (
-										<Button variant="ghost" size="icon" onClick={() => handleReconnect(c)}>
+									<Button
+										variant="ghost"
+										size="icon"
+										onClick={() => handleReconnect(c)}
+										disabled={reconnectingClients.includes(c.config.id)}
+									>
+										{reconnectingClients.includes(c.config.id) ? (
+											<Loader2 className="h-4 w-4 animate-spin" />
+										) : (
 											<RefreshCcw className="h-4 w-4" />
-										</Button>
-									)}
+										)}
+									</Button>
 
 									<AlertDialog>
 										<AlertDialogTrigger asChild>
-											<Button variant="ghost" size="icon" disabled={c.state === "error"}>
+											<Button variant="ghost" size="icon">
 												<Trash2 className="h-4 w-4" />
 											</Button>
 										</AlertDialogTrigger>
