@@ -515,6 +515,8 @@ export const maximFormSchema = z.object({
 
 // MCP Client update schema
 export const mcpClientUpdateSchema = z.object({
+	name: z.string().min(1, "Name is required"),
+	headers: z.record(z.string(), z.string()).optional(),
 	tools_to_execute: z
 		.array(z.string())
 		.optional()

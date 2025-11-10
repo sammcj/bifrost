@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/migrator"
 	"gorm.io/gorm"
@@ -61,6 +62,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 		return err
 	}
 	if err := migrationAddDisableContentLoggingColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := migrationAddMCPClientIDColumn(ctx, db); err != nil {
 		return err
 	}
 	return nil
@@ -828,6 +832,74 @@ func migrationAddDisableContentLoggingColumn(ctx context.Context, db *gorm.DB) e
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while running db migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddMCPClientIDColumn adds the client_id column to the mcp_clients table and populates unique client IDs
+func migrationAddMCPClientIDColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_mcp_client_id_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			
+			if !migrator.HasColumn(&tables.TableMCPClient{}, "client_id") {
+				// Add the column as nullable first
+				if err := tx.Exec("ALTER TABLE config_mcp_clients ADD COLUMN client_id VARCHAR(255)").Error; err != nil {
+					return fmt.Errorf("failed to add client_id column: %w", err)
+				}
+
+				// Populate unique client_ids (UUIDs) for all existing MCP clients
+				var mcpClients []tables.TableMCPClient
+				if err := tx.Find(&mcpClients).Error; err != nil {
+					return fmt.Errorf("failed to fetch MCP clients: %w", err)
+				}
+
+				for _, client := range mcpClients {
+					// Generate a UUID for the client_id
+					clientID := uuid.New().String()
+
+					// Update the client with the generated client_id
+					if err := tx.Model(&client).Update("client_id", clientID).Error; err != nil {
+						return fmt.Errorf("failed to update MCP client %d with client_id %s: %w", client.ID, clientID, err)
+					}
+				}
+
+				// Create unique index on client_id
+				if err := tx.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_client_id ON config_mcp_clients (client_id)").Error; err != nil {
+					return fmt.Errorf("failed to create unique index on client_id: %w", err)
+				}
+				// Enforce NOT NULL in Postgres to guarantee ID presence on new rows
+				if tx.Dialector.Name() == "postgres" {
+					if err := tx.Exec("ALTER TABLE config_mcp_clients ALTER COLUMN client_id SET NOT NULL").Error; err != nil {
+						return fmt.Errorf("failed to set client_id NOT NULL: %w", err)
+					}
+				}
+			}
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			
+			// Drop the unique index first to avoid orphaned index artifacts
+			if err := tx.Exec("DROP INDEX IF EXISTS idx_mcp_client_id").Error; err != nil {
+				return fmt.Errorf("failed to drop client_id index: %w", err)
+			}
+			
+			if err := migrator.DropColumn(&tables.TableMCPClient{}, "client_id"); err != nil {
+				return fmt.Errorf("failed to drop client_id column: %w", err)
+			}
+			
+			return nil
+		},
+	}})
+	
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running MCP client_id migration: %s", err.Error())
 	}
 	return nil
 }

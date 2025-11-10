@@ -10,7 +10,8 @@ import (
 
 // TableMCPClient represents an MCP client configuration in the database
 type TableMCPClient struct {
-	ID                 uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID                 uint      `gorm:"primaryKey;autoIncrement" json:"id"` // ID is used as the internal primary key and is also accessed by public methods, so it must be present.
+	ClientID           string    `gorm:"type:varchar(255);uniqueIndex;not null" json:"client_id"`
 	Name               string    `gorm:"type:varchar(255);uniqueIndex;not null" json:"name"`
 	ConnectionType     string    `gorm:"type:varchar(20);not null" json:"connection_type"` // schemas.MCPConnectionType
 	ConnectionString   *string   `gorm:"type:text" json:"connection_string,omitempty"`
