@@ -51,7 +51,11 @@ func Ptr[T any](v T) *T {
 
 // providerRequiresKey returns true if the given provider requires an API key for authentication.
 // Some providers like Ollama and SGL are keyless and don't require API keys.
-func providerRequiresKey(providerKey schemas.ModelProvider) bool {
+func providerRequiresKey(providerKey schemas.ModelProvider, customConfig *schemas.CustomProviderConfig) bool {
+	// Keyless custom providers are not allowed for Bedrock.
+	if customConfig != nil && customConfig.IsKeyLess && customConfig.BaseProviderType != schemas.Bedrock {
+		return false
+	}
 	return providerKey != schemas.Ollama && providerKey != schemas.SGL
 }
 

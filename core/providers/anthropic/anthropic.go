@@ -134,7 +134,7 @@ func (provider *AnthropicProvider) completeRequest(ctx context.Context, jsonData
 	req.SetRequestURI(url)
 	req.Header.SetMethod(http.MethodPost)
 	req.Header.SetContentType("application/json")
-	// Can be empty in case of passthrough
+	// Can be empty in case of passthrough or keyless custom provider
 	if key != "" {
 		req.Header.Set("x-api-key", key)
 	}

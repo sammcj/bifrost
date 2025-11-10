@@ -25,6 +25,7 @@ node_modules
 temp*/
 tmp/
 tmp-*
+private
 
 # Go workspaces (local only)
 go.work

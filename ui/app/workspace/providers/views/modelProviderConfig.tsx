@@ -49,7 +49,12 @@ export default function ModelProviderConfig({ provider }: Props) {
 		return availableTabs(provider);
 	}, [provider.name, provider.custom_provider_config]);
 
-	const showApiKeys = keysRequired(provider.name);
+	const showApiKeys = useMemo(() => {
+		if (provider.custom_provider_config) {
+			return !(provider.custom_provider_config?.is_key_less ?? false);
+		}
+		return keysRequired(provider.name);
+	}, [provider.name, provider.custom_provider_config?.is_key_less]);
 
 	useEffect(() => {
 		setSelectedTab(tabs[0]?.id);

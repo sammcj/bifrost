@@ -22,30 +22,30 @@ export const azureKeyConfigSchema = z
 	.refine(
 		(data) => {
 			// If deployments is not provided, it's valid
-			if (!data.deployments) return true
+			if (!data.deployments) return true;
 			// If it's already an object, it's valid
-			if (typeof data.deployments === 'object') return true
+			if (typeof data.deployments === "object") return true;
 			// If it's a string, check if it's valid JSON or an env variable
-			if (typeof data.deployments === 'string') {
-				const trimmed = data.deployments.trim()
+			if (typeof data.deployments === "string") {
+				const trimmed = data.deployments.trim();
 				// Allow empty string
-				if (trimmed === '') return true
+				if (trimmed === "") return true;
 				// Allow env variables
-				if (trimmed.startsWith('env.')) return true
+				if (trimmed.startsWith("env.")) return true;
 				// Validate JSON format
 				try {
-					const parsed = JSON.parse(trimmed)
-					return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+					const parsed = JSON.parse(trimmed);
+					return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
 				} catch {
-					return false
+					return false;
 				}
 			}
-			return false
+			return false;
 		},
 		{
-			message: 'Deployments must be a valid JSON object or an environment variable reference',
-			path: ['deployments'],
-		}
+			message: "Deployments must be a valid JSON object or an environment variable reference",
+			path: ["deployments"],
+		},
 	);
 
 // Vertex key config schema
@@ -68,30 +68,30 @@ export const bedrockKeyConfigSchema = z
 	.refine(
 		(data) => {
 			// If deployments is not provided, it's valid
-			if (!data.deployments) return true
+			if (!data.deployments) return true;
 			// If it's already an object, it's valid
-			if (typeof data.deployments === 'object') return true
+			if (typeof data.deployments === "object") return true;
 			// If it's a string, check if it's valid JSON or an env variable
-			if (typeof data.deployments === 'string') {
-				const trimmed = data.deployments.trim()
+			if (typeof data.deployments === "string") {
+				const trimmed = data.deployments.trim();
 				// Allow empty string
-				if (trimmed === '') return true
+				if (trimmed === "") return true;
 				// Allow env variables
-				if (trimmed.startsWith('env.')) return true
+				if (trimmed.startsWith("env.")) return true;
 				// Validate JSON format
 				try {
-					const parsed = JSON.parse(trimmed)
-					return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+					const parsed = JSON.parse(trimmed);
+					return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
 				} catch {
-					return false
+					return false;
 				}
 			}
-			return false
+			return false;
 		},
 		{
-			message: 'Deployments must be a valid JSON object or an environment variable reference',
-			path: ['deployments'],
-		}
+			message: "Deployments must be a valid JSON object or an environment variable reference",
+			path: ["deployments"],
+		},
 	);
 
 // Model provider key schema
@@ -288,19 +288,46 @@ export const allowedRequestsSchema = z.object({
 });
 
 // Custom provider config schema
-export const customProviderConfigSchema = z.object({
-	base_provider_type: knownProviderSchema,
-	allowed_requests: allowedRequestsSchema.optional(),
-	request_path_overrides: z.record(z.string(), z.string().optional()).optional(),
-});
+export const customProviderConfigSchema = z
+	.object({
+		base_provider_type: knownProviderSchema,
+		is_key_less: z.boolean().optional(),
+		allowed_requests: allowedRequestsSchema.optional(),
+		request_path_overrides: z.record(z.string(), z.string().optional()).optional(),
+	})
+	.refine(
+		(data) => {
+			if (data.base_provider_type === "bedrock") {
+				return !data.is_key_less;
+			}
+			return true;
+		},
+		{
+			message: "Is keyless is not allowed for Bedrock",
+			path: ["is_key_less"],
+		},
+	);
 
 // Form-specific custom provider config schema
-export const formCustomProviderConfigSchema = z.object({
-	base_provider_type: z.string().min(1, "Base provider type is required"),
-	allowed_requests: allowedRequestsSchema.optional(),
-	request_path_overrides: z.record(z.string(), z.string().optional()).optional(),
-});
-
+export const formCustomProviderConfigSchema = z
+	.object({
+		base_provider_type: z.string().min(1, "Base provider type is required"),
+		is_key_less: z.boolean().optional(),
+		allowed_requests: allowedRequestsSchema.optional(),
+		request_path_overrides: z.record(z.string(), z.string().optional()).optional(),
+	})
+	.refine(
+		(data) => {
+			if (data.base_provider_type === "bedrock") {
+				return !data.is_key_less;
+			}
+			return true;
+		},
+		{
+			message: "Is keyless is not allowed for Bedrock",
+			path: ["is_key_less"],
+		},
+	);
 // Full model provider config schema
 export const modelProviderConfigSchema = z.object({
 	keys: z.array(modelProviderKeySchema).min(1, "At least one key is required"),
