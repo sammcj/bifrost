@@ -135,43 +135,6 @@
       },
       "additionalProperties": true
     },
-    "auth_config": {
-      "type": "object",
-      "description": "Authentication configuration for governance",
-      "properties": {
-        "api_key": {
-          "type": "string",
-          "description": "API key for authentication"
-        },
-        "jwks_url": {
-          "type": "string",
-          "format": "uri",
-          "description": "JWKS URL for JWT validation"
-        },
-        "jwt_secret": {
-          "type": "string",
-          "description": "JWT secret for token validation"
-        }
-      },
-      "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "api_key"
-          ]
-        },
-        {
-          "required": [
-            "jwks_url"
-          ]
-        },
-        {
-          "required": [
-            "jwt_secret"
-          ]
-        }
-      ]
-    },
     "governance": {
       "type": "object",
       "description": "Governance configuration for budgets, rate limits, customers, teams, and virtual keys",
@@ -360,6 +323,9 @@
             ],
             "additionalProperties": false
           }
+        },
+        "auth_config": {
+          "$ref": "#/$defs/auth_config"
         }
       },
       "additionalProperties": false
@@ -901,6 +867,28 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "auth_config": {
+      "type": "object",
+      "properties": {
+        "admin_username": {
+          "type": "string",
+          "description": "Admin username"
+        },
+        "admin_password": {
+          "type": "string",
+          "description": "Admin password"
+        },
+        "is_enabled": {
+          "type": "boolean",
+          "description": "Whether authentication is enabled"
+        },
+        "disable_auth_on_inference": {
+          "type": "boolean",
+          "description": "Whether authentication is disabled on inference"
+        }
+      },
+      "additionalProperties": false
+    },
     "pricing_config": {
       "type": "object",
       "properties": {
