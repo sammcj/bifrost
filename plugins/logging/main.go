@@ -80,25 +80,33 @@ type InitialLogData struct {
 // LogCallback is a function that gets called when a new log entry is created
 type LogCallback func(*logstore.Log)
 
+type Config struct {
+	DisableContentLogging *bool `json:"disable_content_logging"`
+}
+
 // LoggerPlugin implements the schemas.Plugin interface
 type LoggerPlugin struct {
-	ctx             context.Context
-	store           logstore.LogStore
-	pricingManager  *modelcatalog.ModelCatalog
-	mu              sync.Mutex
-	done            chan struct{}
-	wg              sync.WaitGroup
-	logger          schemas.Logger
-	logCallback     LogCallback
-	droppedRequests atomic.Int64
-	cleanupTicker   *time.Ticker           // Ticker for cleaning up old processing logs
-	logMsgPool      sync.Pool              // Pool for reusing LogMessage structs
-	updateDataPool  sync.Pool              // Pool for reusing UpdateLogData structs
-	accumulator     *streaming.Accumulator // Accumulator for streaming chunks
+	ctx                   context.Context
+	store                 logstore.LogStore
+	disableContentLogging *bool
+	pricingManager        *modelcatalog.ModelCatalog
+	mu                    sync.Mutex
+	done                  chan struct{}
+	wg                    sync.WaitGroup
+	logger                schemas.Logger
+	logCallback           LogCallback
+	droppedRequests       atomic.Int64
+	cleanupTicker         *time.Ticker           // Ticker for cleaning up old processing logs
+	logMsgPool            sync.Pool              // Pool for reusing LogMessage structs
+	updateDataPool        sync.Pool              // Pool for reusing UpdateLogData structs
+	accumulator           *streaming.Accumulator // Accumulator for streaming chunks
 }
 
 // Init creates new logger plugin with given log store
-func Init(ctx context.Context, logger schemas.Logger, logsStore logstore.LogStore, pricingManager *modelcatalog.ModelCatalog) (*LoggerPlugin, error) {
+func Init(ctx context.Context, config *Config, logger schemas.Logger, logsStore logstore.LogStore, pricingManager *modelcatalog.ModelCatalog) (*LoggerPlugin, error) {
+	if config == nil {
+		return nil, fmt.Errorf("config is required")
+	}
 	if logsStore == nil {
 		return nil, fmt.Errorf("logs store cannot be nil")
 	}
@@ -110,6 +118,7 @@ func Init(ctx context.Context, logger schemas.Logger, logsStore logstore.LogStor
 		ctx:            ctx,
 		store:          logsStore,
 		pricingManager: pricingManager,
+		disableContentLogging: config.DisableContentLogging,
 		done:           make(chan struct{}),
 		logger:         logger,
 		logMsgPool: sync.Pool{
@@ -200,7 +209,6 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 	if bifrost.IsStreamRequestType(req.RequestType) {
 		p.accumulator.CreateStreamAccumulator(requestID, createdTimestamp)
 	}
-	inputHistory, responsesInputHistory := p.extractInputHistory(req)
 
 	provider, model, _ := req.GetRequestFields()
 
@@ -208,36 +216,36 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 		Provider:              string(provider),
 		Model:                 model,
 		Object:                string(req.RequestType),
-		InputHistory:          inputHistory,
-		ResponsesInputHistory: responsesInputHistory,
 	}
 
-	switch req.RequestType {
-	case schemas.TextCompletionRequest, schemas.TextCompletionStreamRequest:
-		initialData.Params = req.TextCompletionRequest.Params
-	case schemas.ChatCompletionRequest, schemas.ChatCompletionStreamRequest:
-		initialData.Params = req.ChatRequest.Params
-		if req.ChatRequest.Params != nil && req.ChatRequest.Params.Tools != nil {
-			initialData.Tools = req.ChatRequest.Params.Tools
-		}
-	case schemas.ResponsesRequest, schemas.ResponsesStreamRequest:
-		initialData.Params = req.ResponsesRequest.Params
+	if p.disableContentLogging == nil || !*p.disableContentLogging {
+		inputHistory, responsesInputHistory := p.extractInputHistory(req)
+		initialData.InputHistory = inputHistory
+		initialData.ResponsesInputHistory = responsesInputHistory
 
-		if req.ResponsesRequest.Params != nil && req.ResponsesRequest.Params.Tools != nil {
+		switch req.RequestType {
+		case schemas.TextCompletionRequest, schemas.TextCompletionStreamRequest:
+			initialData.Params = req.TextCompletionRequest.Params
+		case schemas.ChatCompletionRequest, schemas.ChatCompletionStreamRequest:
+			initialData.Params = req.ChatRequest.Params
+			initialData.Tools = req.ChatRequest.Params.Tools
+		case schemas.ResponsesRequest, schemas.ResponsesStreamRequest:
+			initialData.Params = req.ResponsesRequest.Params
+	
 			var tools []schemas.ChatTool
 			for _, tool := range req.ResponsesRequest.Params.Tools {
 				tools = append(tools, *tool.ToChatTool())
 			}
 			initialData.Tools = tools
+		case schemas.EmbeddingRequest:
+			initialData.Params = req.EmbeddingRequest.Params
+		case schemas.SpeechRequest, schemas.SpeechStreamRequest:
+			initialData.Params = req.SpeechRequest.Params
+			initialData.SpeechInput = req.SpeechRequest.Input
+		case schemas.TranscriptionRequest, schemas.TranscriptionStreamRequest:
+			initialData.Params = req.TranscriptionRequest.Params
+			initialData.TranscriptionInput = req.TranscriptionRequest.Input
 		}
-	case schemas.EmbeddingRequest:
-		initialData.Params = req.EmbeddingRequest.Params
-	case schemas.SpeechRequest, schemas.SpeechStreamRequest:
-		initialData.Params = req.SpeechRequest.Params
-		initialData.SpeechInput = req.SpeechRequest.Input
-	case schemas.TranscriptionRequest, schemas.TranscriptionStreamRequest:
-		initialData.Params = req.TranscriptionRequest.Params
-		initialData.TranscriptionInput = req.TranscriptionRequest.Input
 	}
 
 	// Queue the log creation message (non-blocking) - Using sync.Pool
@@ -459,44 +467,46 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 				updateData.TokenUsage = usage
 				// Extract raw response
 				extraFields := result.GetExtraFields()
-				if extraFields.RawResponse != nil {
-					updateData.RawResponse = extraFields.RawResponse
-				}
-				if result.TextCompletionResponse != nil {
-					if len(result.TextCompletionResponse.Choices) > 0 {
-						choice := result.TextCompletionResponse.Choices[0]
-						if choice.TextCompletionResponseChoice != nil {
-							updateData.ChatOutput = &schemas.ChatMessage{
-								Role: schemas.ChatMessageRoleAssistant,
-								Content: &schemas.ChatMessageContent{
-									ContentStr: choice.TextCompletionResponseChoice.Text,
-								},
+				if p.disableContentLogging == nil || !*p.disableContentLogging {
+					if extraFields.RawResponse != nil {
+						updateData.RawResponse = extraFields.RawResponse
+					}
+					if result.TextCompletionResponse != nil {
+						if len(result.TextCompletionResponse.Choices) > 0 {
+							choice := result.TextCompletionResponse.Choices[0]
+							if choice.TextCompletionResponseChoice != nil {
+								updateData.ChatOutput = &schemas.ChatMessage{
+									Role: schemas.ChatMessageRoleAssistant,
+									Content: &schemas.ChatMessageContent{
+										ContentStr: choice.TextCompletionResponseChoice.Text,
+									},
+								}
 							}
 						}
 					}
-				}
-				if result.ChatResponse != nil {
-					// Output message and tool calls
-					if len(result.ChatResponse.Choices) > 0 {
-						choice := result.ChatResponse.Choices[0]
-						// Check if this is a non-stream response choice
-						if choice.ChatNonStreamResponseChoice != nil {
-							updateData.ChatOutput = choice.ChatNonStreamResponseChoice.Message
+					if result.ChatResponse != nil {
+						// Output message and tool calls
+						if len(result.ChatResponse.Choices) > 0 {
+							choice := result.ChatResponse.Choices[0]
+							// Check if this is a non-stream response choice
+							if choice.ChatNonStreamResponseChoice != nil {
+								updateData.ChatOutput = choice.ChatNonStreamResponseChoice.Message
+							}
 						}
 					}
-				}
-				if result.ResponsesResponse != nil {
-					updateData.ResponsesOutput = result.ResponsesResponse.Output
-				}
-				if result.EmbeddingResponse != nil && len(result.EmbeddingResponse.Data) > 0 {
-					updateData.EmbeddingOutput = result.EmbeddingResponse.Data
-				}
-				// Handle speech and transcription outputs for NON-streaming responses
-				if result.SpeechResponse != nil {
-					updateData.SpeechOutput = result.SpeechResponse
-				}
-				if result.TranscriptionResponse != nil {
-					updateData.TranscriptionOutput = result.TranscriptionResponse
+					if result.ResponsesResponse != nil {
+						updateData.ResponsesOutput = result.ResponsesResponse.Output
+					}
+					if result.EmbeddingResponse != nil && len(result.EmbeddingResponse.Data) > 0 {
+						updateData.EmbeddingOutput = result.EmbeddingResponse.Data
+					}
+					// Handle speech and transcription outputs for NON-streaming responses
+					if result.SpeechResponse != nil {
+						updateData.SpeechOutput = result.SpeechResponse
+					}
+					if result.TranscriptionResponse != nil {
+						updateData.TranscriptionOutput = result.TranscriptionResponse
+					}
 				}
 			}
 			logMsg.UpdateData = updateData
