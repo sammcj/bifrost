@@ -21,6 +21,7 @@ const defaultConfig: CoreConfig = {
 	allowed_origins: [],
 	max_request_body_size_mb: 100,
 	enable_litellm_fallbacks: false,
+	disable_content_logging: false,
 };
 
 export default function ObservabilityView() {
