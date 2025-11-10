@@ -4,25 +4,14 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getErrorMessage, useCreateProviderMutation } from "@/lib/store";
-import { KnownProvider, ModelProviderName } from "@/lib/types/config";
+import { BaseProvider, KnownProvider, ModelProviderName } from "@/lib/types/config";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AllowedRequestsFields } from "../fragments/allowedRequestsFields";
-
-const allowedRequestsSchema = z.object({
-	text_completion: z.boolean(),
-	chat_completion: z.boolean(),
-	chat_completion_stream: z.boolean(),
-	embedding: z.boolean(),
-	speech: z.boolean(),
-	speech_stream: z.boolean(),
-	transcription: z.boolean(),
-	transcription_stream: z.boolean(),
-	list_models: z.boolean(),
-});
+import { allowedRequestsSchema } from "@/lib/types/schemas";
 
 const formSchema = z.object({
 	name: z.string().min(1),
@@ -51,6 +40,8 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 				text_completion: true,
 				chat_completion: true,
 				chat_completion_stream: true,
+				responses: true,
+				responses_stream: true,
 				embedding: true,
 				speech: true,
 				speech_stream: true,
@@ -97,77 +88,82 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 
 	return (
 		<Sheet open={show} onOpenChange={(open) => !open && onClose()}>
-			<SheetContent className="custom-scrollbar dark:bg-card bg-white py-4 min-w-[600px]">
+			<SheetContent className="custom-scrollbar dark:bg-card bg-white py-4 min-w-[600px] flex flex-col">
 				<SheetHeader>
 					<SheetTitle>Add Custom Provider</SheetTitle>
 					<SheetDescription>Enter the details of your custom provider.</SheetDescription>
 				</SheetHeader>
 				<Form {...form}>
-					<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 px-4">
-						<FormField
-							control={form.control}
-							name="name"
-							render={({ field }) => (
-								<FormItem className="flex flex-col gap-3">
-									<FormLabel className="text-right">Name</FormLabel>
-									<div className="col-span-3">
-										<FormControl>
-											<Input placeholder="Name" {...field} />
-										</FormControl>
-										<FormMessage />
-									</div>
-								</FormItem>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="baseFormat"
-							render={({ field }) => (
-								<FormItem className="flex flex-col gap-3">
-									<FormLabel>Base Format</FormLabel>
-									<div>
-										<FormControl>
-											<Select onValueChange={field.onChange} defaultValue={field.value}>
-												<SelectTrigger className="w-full">
-													<SelectValue placeholder="Select base format" />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="openai">OpenAI</SelectItem>
-													<SelectItem value="anthropic">Anthropic</SelectItem>
-													<SelectItem value="gemini">Gemini</SelectItem>
-													<SelectItem value="cohere">Cohere</SelectItem>
-													<SelectItem value="bedrock">AWS Bedrock</SelectItem>
-												</SelectContent>
-											</Select>
-										</FormControl>
-										<FormMessage />
-									</div>
-								</FormItem>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="base_url"
-							render={({ field }) => (
-								<FormItem className="flex flex-col gap-3">
-									<FormLabel>Base URL</FormLabel>
-									<div>
-										<FormControl>
-											<Input placeholder={"https://api.your-provider.com"} {...field} value={field.value || ""} />
-										</FormControl>
-										<FormMessage />
-									</div>
-								</FormItem>
-							)}
-						/>
-						{/* Allowed Requests Configuration */}
-						<AllowedRequestsFields control={form.control} />
-						<SheetFooter className="flex flex-row gap-2">
+					<form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+						<div className="space-y-4 px-4 flex-1 overflow-y-auto custom-scrollbar">
+							<FormField
+								control={form.control}
+								name="name"
+								render={({ field }) => (
+									<FormItem className="flex flex-col gap-3">
+										<FormLabel className="text-right">Name</FormLabel>
+										<div className="col-span-3">
+											<FormControl>
+												<Input placeholder="Name" {...field} />
+											</FormControl>
+											<FormMessage />
+										</div>
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={form.control}
+								name="baseFormat"
+								render={({ field }) => (
+									<FormItem className="flex flex-col gap-3">
+										<FormLabel>Base Format</FormLabel>
+										<div>
+											<FormControl>
+												<Select onValueChange={field.onChange} defaultValue={field.value}>
+													<SelectTrigger className="w-full">
+														<SelectValue placeholder="Select base format" />
+													</SelectTrigger>
+													<SelectContent>
+														<SelectItem value="openai">OpenAI</SelectItem>
+														<SelectItem value="anthropic">Anthropic</SelectItem>
+														<SelectItem value="gemini">Gemini</SelectItem>
+														<SelectItem value="cohere">Cohere</SelectItem>
+														<SelectItem value="bedrock">AWS Bedrock</SelectItem>
+													</SelectContent>
+												</Select>
+											</FormControl>
+											<FormMessage />
+										</div>
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={form.control}
+								name="base_url"
+								render={({ field }) => (
+									<FormItem className="flex flex-col gap-3">
+										<FormLabel>Base URL</FormLabel>
+										<div>
+											<FormControl>
+												<Input placeholder={"https://api.your-provider.com"} {...field} value={field.value || ""} />
+											</FormControl>
+											<FormMessage />
+										</div>
+									</FormItem>
+								)}
+							/>
+							{/* Allowed Requests Configuration */}
+							<AllowedRequestsFields 
+								control={form.control} 
+								providerType={form.watch("baseFormat") as BaseProvider}
+							/>
+						</div>
+						<SheetFooter className="flex flex-row gap-2 mt-4 px-4 pt-4">
 							<div className="ml-auto flex flex-row gap-2">
 								<Button type="button" variant="outline" onClick={onClose}>
 									Cancel
 								</Button>
-								<Button type="submit">Add</Button>
+								<Button type="submit" isLoading={isAddingProvider}>Add</Button>
 							</div>
 						</SheetFooter>
 					</form>
