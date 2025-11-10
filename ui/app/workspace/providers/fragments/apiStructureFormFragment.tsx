@@ -10,11 +10,12 @@ import { useUpdateProviderMutation } from "@/lib/store/apis/providersApi";
 import { BaseProvider, ModelProvider } from "@/lib/types/config";
 import { formCustomProviderConfigSchema } from "@/lib/types/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { cleanPathOverrides } from "@/lib/utils/validation";
+import { Switch } from "@/components/ui/switch";
 
 // Type for form data
 type FormCustomProviderConfig = z.infer<typeof formCustomProviderConfigSchema>;
@@ -33,6 +34,7 @@ export function ApiStructureFormFragment({ provider }: Props) {
 		mode: "onChange",
 		defaultValues: {
 			base_provider_type: provider.custom_provider_config?.base_provider_type ?? "openai",
+			is_key_less: provider.custom_provider_config?.is_key_less ?? false,
 			allowed_requests: {
 				text_completion: provider.custom_provider_config?.allowed_requests?.text_completion ?? true,
 				text_completion_stream: provider.custom_provider_config?.allowed_requests?.text_completion_stream ?? true,
@@ -65,6 +67,7 @@ export function ApiStructureFormFragment({ provider }: Props) {
 			...provider,
 			custom_provider_config: {
 				base_provider_type: data.base_provider_type as unknown as BaseProvider,
+				is_key_less: data.is_key_less ?? false,
 				allowed_requests: data.allowed_requests,
 				request_path_overrides: cleanPathOverrides(data.request_path_overrides),
 			},
@@ -80,10 +83,15 @@ export function ApiStructureFormFragment({ provider }: Props) {
 			});
 	};
 
+	const isKeyLessDisabled = useMemo(
+		() => provider.custom_provider_config?.base_provider_type === "bedrock",
+		[provider.custom_provider_config?.base_provider_type],
+	);
+
 	return (
 		<Form {...form}>
 			<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 px-6">
-				<div className="space-y-4">
+				<div className="flex flex-col gap-4">
 					<FormField
 						control={form.control}
 						name="base_provider_type"
@@ -109,6 +117,25 @@ export function ApiStructureFormFragment({ provider }: Props) {
 							</FormItem>
 						)}
 					/>
+					{!isKeyLessDisabled && (
+						<FormField
+							control={form.control}
+							name="is_key_less"
+							render={({ field }) => (
+								<FormItem>
+									<div className="flex items-center justify-between space-x-2 rounded-lg border p-3">
+										<div className="space-y-0.5">
+											<label htmlFor="drop-excess-requests" className="text-sm font-medium">
+												Is Keyless?
+											</label>
+											<p className="text-muted-foreground text-sm">Whether the custom provider requires a key (not allowed for Bedrock)</p>
+										</div>
+										<Switch id="drop-excess-requests" size="md" checked={field.value} onCheckedChange={field.onChange} />
+									</div>
+								</FormItem>
+							)}
+						/>
+					)}
 				</div>
 
 				{/* Allowed Requests Configuration */}

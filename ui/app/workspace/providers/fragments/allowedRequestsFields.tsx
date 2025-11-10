@@ -9,7 +9,7 @@ import { BaseProvider, RequestType } from "@/lib/types/config";
 import { isRequestTypeDisabled } from "@/lib/utils/validation";
 import { Control, useFormContext } from "react-hook-form";
 import { Settings2 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 interface AllowedRequestsFieldsProps {
 	control: Control<any>;
@@ -84,9 +84,10 @@ export function AllowedRequestsFields({ control, namePrefix = "allowed_requests"
 		});
 	}, [providerType, namePrefix, setValue, getValues]);
 
+	const isPathOverrideDisabled = useMemo(() => providerType === "gemini" || providerType === "bedrock", [providerType]);
+
 	const renderRequestField = (requestType: { key: RequestType; label: string }) => {
 		const isDisabled = isRequestTypeDisabled(providerType, requestType.key);
-		const isPathOverrideDisabled = providerType === "gemini" || providerType === "bedrock";
 		const placeholder = getPlaceholder(providerType, requestType.key);
 
 		return (
@@ -160,7 +161,8 @@ export function AllowedRequestsFields({ control, namePrefix = "allowed_requests"
 			<div>
 				<div className="text-sm font-medium">Allowed Request Types</div>
 				<p className="text-muted-foreground text-xs">
-					Select which request types this custom provider can handle. Click the settings icon to customize endpoint paths.
+					Select which request types this custom provider can handle.{" "}
+					{!isPathOverrideDisabled ? "Click the settings icon to customize endpoint paths." : ""}
 				</p>
 			</div>
 

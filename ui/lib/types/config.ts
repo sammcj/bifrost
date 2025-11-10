@@ -89,6 +89,7 @@ export const DefaultModelProviderKey: ModelProviderKey = {
 // NetworkConfig matching Go's schemas.NetworkConfig
 export interface NetworkConfig {
 	base_url?: string;
+	is_key_less?: boolean;
 	extra_headers?: Record<string, string>;
 	default_request_timeout_in_seconds: number;
 	max_retries: number;
@@ -114,7 +115,7 @@ export interface ProxyConfig {
 }
 
 // Request types matching Go's schemas.RequestType
-export type RequestType = 
+export type RequestType =
 	| "list_models"
 	| "text_completion"
 	| "text_completion_stream"
@@ -147,6 +148,7 @@ export interface AllowedRequests {
 // CustomProviderConfig matching Go's schemas.CustomProviderConfig
 export interface CustomProviderConfig {
 	base_provider_type: KnownProvider;
+	is_key_less?: boolean;
 	allowed_requests?: AllowedRequests;
 	request_path_overrides?: Record<string, string>;
 }

@@ -2591,6 +2591,12 @@ func ValidateCustomProvider(config configstore.ProviderConfig, provider schemas.
 	if !bifrost.IsSupportedBaseProvider(cpc.BaseProviderType) {
 		return fmt.Errorf("custom provider validation failed: unsupported base_provider_type: %s", cpc.BaseProviderType)
 	}
+
+	// Reject Bedrock providers with IsKeyLess=true
+	if cpc.BaseProviderType == schemas.Bedrock && cpc.IsKeyLess {
+		return fmt.Errorf("custom provider validation failed: Bedrock providers cannot be keyless (is_key_less=true)")
+	}
+
 	return nil
 }
 
@@ -2621,6 +2627,11 @@ func ValidateCustomProviderUpdate(newConfig, existingConfig configstore.Provider
 	if newCPC.BaseProviderType != existingCPC.BaseProviderType {
 		return fmt.Errorf("provider %s: base_provider_type cannot be changed from %s to %s after creation",
 			provider, existingCPC.BaseProviderType, newCPC.BaseProviderType)
+	}
+
+	// Validate the new config (this will catch Bedrock+IsKeyLess configurations)
+	if err := ValidateCustomProvider(newConfig, provider); err != nil {
+		return err
 	}
 
 	return nil
