@@ -481,6 +481,7 @@ type ChatAssistantMessageAnnotationCitation struct {
 
 // ChatAssistantMessageToolCall represents a tool call in a message
 type ChatAssistantMessageToolCall struct {
+	Index    uint16                               `json:"index"`
 	Type     *string                              `json:"type,omitempty"`
 	ID       *string                              `json:"id,omitempty"`
 	Function ChatAssistantMessageToolCallFunction `json:"function"`
