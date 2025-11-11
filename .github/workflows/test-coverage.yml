@@ -23,10 +23,27 @@ jobs:
           go-version: '1.24'
 
       - name: Install dependencies
-        run: go mod download
+        run: |
+          for dir in core framework transports; do
+            if [ -f "$dir/go.mod" ]; then
+              echo "Installing dependencies for $dir..."
+              (cd "$dir" && go mod download)
+            fi
+          done
 
       - name: Run tests
-        run: go test -coverprofile=coverage.txt ./...
+        run: |
+          # Run tests for each module and combine coverage
+          for dir in core framework transports; do
+            if [ -f "$dir/go.mod" ]; then
+              echo "Running tests for $dir..."
+              (cd "$dir" && go test -coverprofile=../coverage-$(basename $dir).txt ./... || true)
+            fi
+          done
+          
+          # Combine coverage files
+          echo "mode: atomic" > coverage.txt
+          grep -h -v "^mode:" coverage-*.txt >> coverage.txt 2>/dev/null || true
 
       - name: Upload results to Codecov
         uses: codecov/codecov-action@v5
