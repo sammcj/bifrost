@@ -1,2 +1,0 @@
-- chore: Adds index to ChatAssistantMessageToolCall
-- fix: responses text output standardization to content blocks
