@@ -137,7 +137,8 @@ export const createColumns = (): ColumnDef<LogEntry>[] => [
 			return (
 				<div className="pl-4 text-sm">
 					<div className="font-mono">
-						{tokenUsage.total_tokens.toLocaleString()} ({tokenUsage.prompt_tokens}+{tokenUsage.completion_tokens})
+						{tokenUsage.total_tokens.toLocaleString()}{" "}
+						{tokenUsage.completion_tokens ? `(${tokenUsage.prompt_tokens}+${tokenUsage.completion_tokens})` : ""}
 					</div>
 				</div>
 			);

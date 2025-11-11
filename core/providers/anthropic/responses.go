@@ -1752,7 +1752,12 @@ func convertAnthropicContentBlocksToResponsesMessages(content []AnthropicContent
 					Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
 					Role: schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 					Content: &schemas.ResponsesMessageContent{
-						ContentStr: block.Text,
+						ContentBlocks: []schemas.ResponsesMessageContentBlock{
+							{
+								Type: schemas.ResponsesOutputMessageContentTypeText,
+								Text: block.Text,
+							},
+						},
 					},
 				})
 			}
