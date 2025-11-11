@@ -45,7 +45,7 @@ type ResponseExpectations struct {
 }
 
 // ToolCallExpectation defines expectations for a specific tool call
-type ToolCallExpectation struct {
+type ToolCallExpectation struct {	
 	FunctionName     string                 // Expected function name
 	RequiredArgs     []string               // Arguments that must be present
 	ForbiddenArgs    []string               // Arguments that should NOT be present

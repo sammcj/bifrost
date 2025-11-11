@@ -9,7 +9,7 @@ export default function NotFound() {
 				<p className="text-muted-foreground mt-2 text-sm">The page you are looking for doesn’t exist or has been moved</p>
 				<div className="mt-6 flex items-center justify-center gap-3">
 					<Link
-						href="/logs"
+						href="/workspace/logs"
 						className="bg-primary text-primary-foreground focus-visible:ring-primary inline-flex items-center rounded-md px-4 py-2 text-sm font-medium shadow transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
 					>
 						Go home

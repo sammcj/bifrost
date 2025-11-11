@@ -4,12 +4,53 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
 import { ProviderName, RequestTypeColors, RequestTypeLabels, Status, StatusColors } from "@/lib/constants/logs";
-import { LogEntry } from "@/lib/types/logs";
+import { LogEntry, ResponsesMessageContentBlock } from "@/lib/types/logs";
 import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown } from "lucide-react";
 import moment from "moment";
 
+function getMessage(log?: LogEntry) {
+	if (log?.input_history && log.input_history.length > 0) {
+		let userMessageContent = log.input_history[log.input_history.length - 1].content;
+		if (typeof userMessageContent === "string") {
+			return userMessageContent;
+		}
+		let lastTextContentBlock = "";
+		for (const block of userMessageContent) {
+			if (block.type === "text" && block.text) {
+				lastTextContentBlock = block.text;
+			}
+		}
+		return lastTextContentBlock;
+	} else if (log?.responses_input_history && log.responses_input_history.length > 0) {
+		let lastMessageContent = log.responses_input_history[log.responses_input_history.length - 1].content;
+		if (typeof lastMessageContent === "string") {
+			return lastMessageContent;
+		}
+		let lastTextContentBlock = "";
+		for (const block of (lastMessageContent ?? []) as ResponsesMessageContentBlock[]) {
+			if (block.text && block.text !== "") {
+				lastTextContentBlock = block.text;
+			}
+		}
+		return lastTextContentBlock;
+	}
+	return "";
+}
+
 export const createColumns = (): ColumnDef<LogEntry>[] => [
+	{
+		accessorKey: "status",
+		header: "Status",
+		cell: ({ row }) => {
+			const status = row.original.status as Status;
+			return (
+				<Badge variant="secondary" className={`${StatusColors[status] ?? ""} font-mono text-xs uppercase`}>
+					{status}
+				</Badge>
+			);
+		},
+	},
 	{
 		accessorKey: "timestamp",
 		header: ({ column }) => (
@@ -31,6 +72,18 @@ export const createColumns = (): ColumnDef<LogEntry>[] => [
 				<Badge variant="outline" className={`${RequestTypeColors[row.original.object as keyof typeof RequestTypeColors]} text-xs`}>
 					{RequestTypeLabels[row.original.object as keyof typeof RequestTypeLabels]}
 				</Badge>
+			);
+		},
+	},
+	{
+		accessorKey: "input",
+		header: "Message",
+		cell: ({ row }) => {
+			const input = getMessage(row.original);
+			return (
+				<div className="max-w-[400px] truncate font-mono text-xs font-normal" title={input || "No message"}>
+					{input}
+				</div>
 			);
 		},
 	},
@@ -107,18 +160,6 @@ export const createColumns = (): ColumnDef<LogEntry>[] => [
 				<div className="pl-4 text-xs">
 					<div className="font-mono">{row.original.cost?.toFixed(4)}</div>
 				</div>
-			);
-		},
-	},
-	{
-		accessorKey: "status",
-		header: "Status",
-		cell: ({ row }) => {
-			const status = row.original.status as Status;
-			return (
-				<Badge variant="secondary" className={`${StatusColors[status] ?? ""} font-mono text-xs uppercase`}>
-					{status}
-				</Badge>
 			);
 		},
 	},
