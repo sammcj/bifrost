@@ -4,7 +4,7 @@ go 1.24.0
 
 toolchain go1.24.3
 
-require github.com/maximhq/bifrost/core v1.2.21
+require github.com/maximhq/bifrost/core v1.2.22
 
 require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
