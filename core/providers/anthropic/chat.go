@@ -134,8 +134,9 @@ func (request *AnthropicMessageRequest) ToBifrostChatRequest() *schemas.BifrostC
 					case AnthropicContentBlockTypeToolUse:
 						if content.ID != nil && content.Name != nil {
 							tc := schemas.ChatAssistantMessageToolCall{
-								Type: schemas.Ptr(string(schemas.ChatToolChoiceTypeFunction)),
-								ID:   content.ID,
+								Index: uint16(len(toolCalls)),
+								Type:  schemas.Ptr(string(schemas.ChatToolChoiceTypeFunction)),
+								ID:    content.ID,
 								Function: schemas.ChatAssistantMessageToolCallFunction{
 									Name:      content.Name,
 									Arguments: schemas.JsonifyInput(content.Input),
@@ -302,6 +303,7 @@ func (response *AnthropicMessageResponse) ToBifrostChatResponse() *schemas.Bifro
 						}
 
 						toolCalls = append(toolCalls, schemas.ChatAssistantMessageToolCall{
+							Index:    uint16(len(toolCalls)),
 							Type:     schemas.Ptr(string(schemas.ChatToolTypeFunction)),
 							ID:       c.ID,
 							Function: function,
@@ -700,7 +702,7 @@ func (chunk *AnthropicStreamEvent) ToBifrostChatCompletionStream() (*schemas.Bif
 		return nil, nil, true
 
 	case AnthropicStreamEventTypeContentBlockStart:
-		// Emit tool-call metadata when starting a tool_use content block
+		// Emit tool-call metadata when starting a tool_use content block		
 		if chunk.Index != nil && chunk.ContentBlock != nil && chunk.ContentBlock.Type == AnthropicContentBlockTypeToolUse {
 			// Create streaming response with tool call metadata
 			streamResponse := &schemas.BifrostChatResponse{

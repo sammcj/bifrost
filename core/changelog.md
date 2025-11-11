@@ -1,0 +1,1 @@
+- chore: Adds index to ChatAssistantMessageToolCall

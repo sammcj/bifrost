@@ -37,7 +37,7 @@ func ToolCallExpectations(toolName string, requiredArgs []string) ResponseExpect
 		{
 			FunctionName:     toolName,
 			RequiredArgs:     requiredArgs,
-			ValidateArgsJSON: true,
+			ValidateArgsJSON: true,			
 		},
 	}
 	// Tool calls might not have text content
