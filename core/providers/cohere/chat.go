@@ -269,6 +269,7 @@ func (response *CohereChatResponse) ToBifrostChatResponse(model string) *schemas
 				functionArguments = toolCall.Function.Arguments
 
 				bifrostToolCall := schemas.ChatAssistantMessageToolCall{
+					Index: uint16(len(toolCalls)),
 					ID: toolCall.ID,
 					Function: schemas.ChatAssistantMessageToolCallFunction{
 						Name:      functionName,

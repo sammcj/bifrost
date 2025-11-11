@@ -242,6 +242,7 @@ func (a *Accumulator) accumulateToolCallsInMessage(message *schemas.ChatMessage,
 				args = "" // Reset empty braces to empty string to avoid duplication
 			}
 			toolCallToModify = &schemas.ChatAssistantMessageToolCall{
+				Index: uint16(len(existingToolCalls)),
 				ID: deltaToolCall.ID,
 				Function: schemas.ChatAssistantMessageToolCallFunction{
 					Name:      deltaToolCall.Function.Name,

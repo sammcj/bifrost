@@ -1,5 +1,5 @@
 ---
-title: "Tools & CLI Agents"
+title: "Tools, Editors & CLI Agents"
 description: "Use Bifrost with tools like LibreChat, Claude Code, Codex CLI and Qwen Code by just changing the base URL and unlock advanced features."
 icon: "robot"
 ---
@@ -121,6 +121,112 @@ It is Alibaba's powerful coding assistant with advanced reasoning capabilities.
    ```bash
    qwen
    ```
+
+### [Opencode](https://github.com/sst/opencode)
+
+![opencode with Bifrost](../../media/opencode-with-bifrost.png)
+
+
+**Setup**
+
+1. **Configure Bifrost**
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Theme configuration
+  "theme": "opencode",
+  "autoupdate": true,
+  "provider": {
+    "openai": {
+      "name": "Bifrost",
+      "options": {        
+        "baseURL": "http://localhost:8080/openai",
+        "apiKey": "{{virtual-key-if-enabled}}"
+      },
+      "models": {
+        "openai/gpt-5": {
+          "options": {
+            "reasoningEffort": "high",
+            "textVerbosity": "low",
+            "reasoningSummary": "auto",
+            "include": [
+              "reasoning.encrypted_content"
+            ],
+          },
+        },
+        "anthropic/claude-sonnet-4-5-20250929": {
+          "options": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 16000,
+            },
+          },
+        },
+      },
+    }
+  }
+}
+```
+
+2. Select Bifrost models using <key>ctrl</key>+<key>p</key>
+
+![Opencode model selection](../../media/opencode-model-selection.png)
+
+## Editors
+
+### [Zed editor](https://zed.dev/)
+
+![Zed editor](../../media/zed-editor-integration.png)
+
+1. **Configure Bifrost provider.**
+
+```json {4}
+   "language_models": {
+        "openai_compatible": {
+            "Bifrost": {
+                "api_url": "{{bifrost-base-url}}/openai",
+                "available_models": [
+                    {
+                        "name": "anthropic/claude-sonnet-4.5",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 4096,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": true,
+                            "prompt_cache_key": false
+                        }
+                    },
+                    {
+                        "name": "openai/gpt-4o",
+                        "max_tokens": 128000,
+                        "max_output_tokens": 4096,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": true,
+                            "prompt_cache_key": false
+                        }
+                    },
+                    {
+                        "name": "openai/gpt-5",
+                        "max_tokens": 256000,
+                        "max_output_tokens": 4096,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": true,
+                            "prompt_cache_key": false
+                        }
+                    }
+                ]
+            }
+        }
+    }
+```
+
+2. **Reload workspace** to make sure Zed editor recognizes and reloads the provider list.
 
 ## Configuration
 

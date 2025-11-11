@@ -10,6 +10,7 @@
     "primary": "#0C3B43",
     "light": "#07C983"
   },
+  "favicon":"favicon.ico",
   "topbarLinks": [
     {
       "name": "Support",
@@ -47,6 +48,7 @@
                 "icon": "server",
                 "pages": [
                   "quickstart/gateway/setting-up",
+                  "quickstart/gateway/setting-up-auth",
                   "quickstart/gateway/provider-configuration",
                   "quickstart/gateway/streaming",
                   "quickstart/gateway/tool-calling",

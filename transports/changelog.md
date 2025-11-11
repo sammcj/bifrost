@@ -1,0 +1,1 @@
+- feat: Adds input message in logs table for easier navigation
