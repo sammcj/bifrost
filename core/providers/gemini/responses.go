@@ -106,7 +106,12 @@ func convertGeminiCandidatesToResponsesOutput(candidates []*Candidate) []schemas
 				msg := schemas.ResponsesMessage{
 					Role: schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 					Content: &schemas.ResponsesMessageContent{
-						ContentStr: &part.Text,
+						ContentBlocks: []schemas.ResponsesMessageContentBlock{
+							{
+								Type: schemas.ResponsesOutputMessageContentTypeText,
+								Text: &part.Text,
+							},
+						},
 					},
 					Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
 				}
@@ -118,7 +123,12 @@ func convertGeminiCandidatesToResponsesOutput(candidates []*Candidate) []schemas
 					msg := schemas.ResponsesMessage{
 						Role: schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 						Content: &schemas.ResponsesMessageContent{
-							ContentStr: &part.Text,
+							ContentBlocks: []schemas.ResponsesMessageContentBlock{
+								{
+									Type: schemas.ResponsesOutputMessageContentTypeReasoning,
+									Text: &part.Text,
+								},
+							},
 						},
 						Type: schemas.Ptr(schemas.ResponsesMessageTypeReasoning),
 					}
@@ -165,7 +175,12 @@ func convertGeminiCandidatesToResponsesOutput(candidates []*Candidate) []schemas
 				msg := schemas.ResponsesMessage{
 					Role: schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 					Content: &schemas.ResponsesMessageContent{
-						ContentStr: &output,
+						ContentBlocks: []schemas.ResponsesMessageContentBlock{
+							{
+								Type: schemas.ResponsesOutputMessageContentTypeText,
+								Text: &output,
+							},
+						},
 					},
 					Type: schemas.Ptr(schemas.ResponsesMessageTypeFunctionCallOutput),
 					ResponsesToolMessage: &schemas.ResponsesToolMessage{
@@ -258,7 +273,12 @@ func convertGeminiCandidatesToResponsesOutput(candidates []*Candidate) []schemas
 				msg := schemas.ResponsesMessage{
 					Role: schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 					Content: &schemas.ResponsesMessageContent{
-						ContentStr: &output,
+						ContentBlocks: []schemas.ResponsesMessageContentBlock{
+							{
+								Type: schemas.ResponsesOutputMessageContentTypeText,
+								Text: &output,
+							},
+						},
 					},
 					Type: schemas.Ptr(schemas.ResponsesMessageTypeCodeInterpreterCall),
 				}
@@ -271,7 +291,12 @@ func convertGeminiCandidatesToResponsesOutput(candidates []*Candidate) []schemas
 				msg := schemas.ResponsesMessage{
 					Role: schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 					Content: &schemas.ResponsesMessageContent{
-						ContentStr: &codeContent,
+						ContentBlocks: []schemas.ResponsesMessageContentBlock{
+							{
+								Type: schemas.ResponsesOutputMessageContentTypeText,
+								Text: &codeContent,
+							},
+						},
 					},
 					Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
 				}

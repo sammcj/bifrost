@@ -338,7 +338,7 @@ func convertCohereMessageToResponsesOutput(cohereMsg CohereMessage) []schemas.Re
 
 		if cohereMsg.Content.StringContent != nil {
 			contentBlocks = append(contentBlocks, schemas.ResponsesMessageContentBlock{
-				Type: schemas.ResponsesInputMessageContentBlockTypeText,
+				Type: schemas.ResponsesOutputMessageContentTypeText,
 				Text: cohereMsg.Content.StringContent,
 			})
 		} else if cohereMsg.Content.BlocksContent != nil {
