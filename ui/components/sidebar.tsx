@@ -20,6 +20,7 @@ import {
 	Shuffle,
 	Telescope,
 	User,
+	UserRoundCheck,
 	Users,
 } from "lucide-react";
 
@@ -109,6 +110,19 @@ const items = [
 		description: "Configure models",
 	},
 	{
+		title: "MCP Tools",
+		url: "/workspace/mcp-clients",
+		icon: MCPIcon,
+		description: "MCP configuration",
+	},
+	{
+		title: "Plugins",
+		url: "/workspace/plugins",
+		icon: Puzzle,
+		tag: "BETA",
+		description: "Manage custom plugins",
+	},
+	{
 		title: "Governance",
 		url: "/workspace/governance",
 		icon: Landmark,
@@ -133,27 +147,18 @@ const items = [
 				description: "User management and provisioning",
 			},
 			{
+				title: "Roles & Permissions",
+				url: "/workspace/rbac",
+				icon: UserRoundCheck,
+				description: "User roles and permissions",
+			},
+			{
 				title: "Audit Logs",
 				url: "/workspace/audit-logs",
 				icon: ScrollText,
 				description: "Audit logs and compliance",
 			},
 		],
-	},
-
-	{
-		title: "Plugins",
-		url: "/workspace/plugins",
-		icon: Puzzle,
-		tag: "BETA",
-		description: "Manage custom plugins",
-	},
-
-	{
-		title: "MCP Gateway",
-		url: "/workspace/mcp-clients",
-		icon: MCPIcon,
-		description: "MCP configuration",
 	},
 	{
 		title: "Guardrails",
@@ -400,10 +405,10 @@ export default function AppSidebar() {
 	const { data: version } = useGetVersionQuery();
 	const { resolvedTheme } = useTheme();
 	const [logout] = useLogoutMutation();
-	
+
 	// Get user info from localStorage (for enterprise SCIM OAuth)
 	const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-	
+
 	useEffect(() => {
 		if (IS_ENTERPRISE) {
 			const info = getUserInfo();
@@ -418,7 +423,7 @@ export default function AppSidebar() {
 		return false;
 	}, [latestRelease, version]);
 	// Get governance config from RTK Query
-	const { data: coreConfig } = useGetCoreConfigQuery({});	
+	const { data: coreConfig } = useGetCoreConfigQuery({});
 	const isGovernanceEnabled = coreConfig?.client_config.enable_governance || false;
 	const isAuthEnabled = coreConfig?.auth_config?.is_enabled || false;
 
@@ -477,7 +482,7 @@ export default function AppSidebar() {
 				title: `${latestRelease.name} is now available.`,
 				description: (
 					<div className="flex h-full flex-col gap-2">
-						<img src={newReleaseImage} alt="Bifrost" className="h-[95px] object-cover rounded-md" />
+						<img src={newReleaseImage} alt="Bifrost" className="h-[95px] rounded-md object-cover" />
 						<Link
 							href={`https://docs.getbifrost.ai/changelogs/${latestRelease.name}`}
 							target="_blank"
@@ -592,7 +597,7 @@ export default function AppSidebar() {
 									<PopoverContent side="top" align="start" className="w-56 p-0">
 										<div className="flex flex-col">
 											<div className="px-4 py-3">
-												<p className="text-sm font-medium">{userInfo.name || userInfo.email || 'User'}</p>
+												<p className="text-sm font-medium">{userInfo.name || userInfo.email || "User"}</p>
 											</div>
 											<Separator />
 											<button
