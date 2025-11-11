@@ -462,7 +462,12 @@ func convertBedrockMessageToResponsesMessages(bedrockMsg BedrockMessage) []schem
 				Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
 				Role: schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 				Content: &schemas.ResponsesMessageContent{
-					ContentStr: block.Text,
+					ContentBlocks: []schemas.ResponsesMessageContentBlock{
+						{
+							Type: schemas.ResponsesOutputMessageContentTypeText,
+							Text: block.Text,
+						},
+					},
 				},
 			})
 		} else if block.ToolUse != nil {
@@ -511,7 +516,12 @@ func convertBedrockMessageToResponsesMessages(bedrockMsg BedrockMessage) []schem
 			resultMsg := schemas.ResponsesMessage{
 				Role: schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 				Content: &schemas.ResponsesMessageContent{
-					ContentStr: &resultContent,
+					ContentBlocks: []schemas.ResponsesMessageContentBlock{
+						{
+							Type: schemas.ResponsesOutputMessageContentTypeText,
+							Text: &resultContent,
+						},
+					},
 				},
 				Type: schemas.Ptr(schemas.ResponsesMessageTypeFunctionCallOutput),
 				ResponsesToolMessage: &schemas.ResponsesToolMessage{

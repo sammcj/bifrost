@@ -340,9 +340,17 @@ func (cm *ChatMessage) ToResponsesMessages() []ResponsesMessage {
 			ContentBlocks: []ResponsesMessageContentBlock{refusalBlock},
 		}
 	} else if cm.Content != nil && cm.Content.ContentStr != nil {
-		// Convert regular string content
-		rm.Content = &ResponsesMessageContent{
-			ContentStr: cm.Content.ContentStr,
+		// Convert regular string content (if input message then ContentStr, else ContentBlocks)
+		if cm.Role == ChatMessageRoleAssistant {
+			rm.Content = &ResponsesMessageContent{
+				ContentBlocks: []ResponsesMessageContentBlock{
+					{Type: ResponsesOutputMessageContentTypeText, Text: cm.Content.ContentStr},
+				},
+			}
+		} else {
+			rm.Content = &ResponsesMessageContent{
+				ContentStr: cm.Content.ContentStr,
+			}
 		}
 	} else if cm.Content != nil && cm.Content.ContentBlocks != nil {
 		// Convert content blocks

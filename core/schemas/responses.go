@@ -326,7 +326,9 @@ const (
 
 // ResponsesMessageContent is a union type that can be either a string or array of content blocks
 type ResponsesMessageContent struct {
-	ContentStr    *string                        // Simple text content
+	ContentStr *string // Simple text content
+
+	// Output will ALWAYS be an array of content blocks
 	ContentBlocks []ResponsesMessageContentBlock // Rich content with multiple media types
 }
 
