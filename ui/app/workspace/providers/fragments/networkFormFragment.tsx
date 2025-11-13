@@ -10,6 +10,7 @@ import { getErrorMessage, setProviderFormDirtyState, useAppDispatch } from "@/li
 import { useUpdateProviderMutation } from "@/lib/store/apis/providersApi";
 import { ModelProvider, isKnownProvider } from "@/lib/types/config";
 import { networkOnlyFormSchema, type NetworkOnlyFormSchema } from "@/lib/types/schemas";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm, type Resolver } from "react-hook-form";
@@ -21,6 +22,7 @@ interface NetworkFormFragmentProps {
 
 export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 	const dispatch = useAppDispatch();
+	const hasUpdateProviderAccess = useRbac(RbacResource.ModelProvider, RbacOperation.Update);
 	const [updateProvider, { isLoading: isUpdatingProvider }] = useUpdateProviderMutation();
 	const isCustomProvider = !isKnownProvider(provider.name as string);
 
@@ -47,8 +49,12 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 
 	const onSubmit = (data: NetworkOnlyFormSchema) => {
 		const requiresBaseUrl = isCustomProvider || provider.name === "ollama" || provider.name === "sgl";
-		if (requiresBaseUrl && !(data.network_config?.base_url || "").trim()) {
-			toast.error("Base URL is required for this provider.");
+		if (requiresBaseUrl && (data.network_config?.base_url ?? "").trim() === "") {
+			if ((provider.network_config?.base_url ?? "").trim() !== "") {
+				toast.error("You can't remove network configuration for this provider.");
+			} else {
+				toast.error("Base URL is required for this provider.");
+			}
 			return;
 		}
 		// Create updated provider configuration
@@ -205,6 +211,7 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 							onSubmit(form.getValues());
 						}}
 						disabled={
+							!hasUpdateProviderAccess ||
 							isUpdatingProvider ||
 							!provider.network_config ||
 							!provider.network_config.base_url ||
@@ -216,7 +223,11 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 					<TooltipProvider>
 						<Tooltip>
 							<TooltipTrigger asChild>
-								<Button type="submit" disabled={!form.formState.isDirty || !form.formState.isValid} isLoading={isUpdatingProvider}>
+								<Button
+									type="submit"
+									disabled={!form.formState.isDirty || !form.formState.isValid || !hasUpdateProviderAccess}
+									isLoading={isUpdatingProvider}
+								>
 									Save Network Configuration
 								</Button>
 							</TooltipTrigger>

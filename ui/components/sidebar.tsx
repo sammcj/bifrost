@@ -43,6 +43,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { IS_ENTERPRISE } from "@/lib/constants/config";
 import { useGetCoreConfigQuery, useGetLatestReleaseQuery, useGetVersionQuery, useLogoutMutation } from "@/lib/store";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import type { UserInfo } from "@enterprise/lib/store/utils/tokenManager";
 import { getUserInfo } from "@enterprise/lib/store/utils/tokenManager";
 import { BooksIcon, DiscordLogoIcon, GithubLogoIcon } from "@phosphor-icons/react";
@@ -76,129 +77,6 @@ const MCPIcon = ({ className }: { className?: string }) => (
 );
 
 // Main navigation items
-const items = [
-	{
-		title: "Observability",
-		url: "/workspace/logs",
-		icon: Telescope,
-		description: "Request logs & monitoring",
-		subItems: [
-			{
-				title: "Logs",
-				url: "/workspace/logs",
-				icon: Logs,
-				description: "Request logs & monitoring",
-			},
-			{
-				title: "Connectors",
-				url: "/workspace/observability",
-				icon: ChevronsLeftRightEllipsis,
-				description: "Log connectors",
-			},
-		],
-	},
-	{
-		title: "Prompt Repository",
-		url: "/workspace/prompt-repo",
-		icon: FolderGit,
-		description: "Prompt repository",
-	},
-	{
-		title: "Model Providers",
-		url: "/workspace/providers",
-		icon: BoxIcon,
-		description: "Configure models",
-	},
-	{
-		title: "MCP Tools",
-		url: "/workspace/mcp-clients",
-		icon: MCPIcon,
-		description: "MCP configuration",
-	},
-	{
-		title: "Plugins",
-		url: "/workspace/plugins",
-		icon: Puzzle,
-		tag: "BETA",
-		description: "Manage custom plugins",
-	},
-	{
-		title: "Governance",
-		url: "/workspace/governance",
-		icon: Landmark,
-		description: "Govern access",
-		subItems: [
-			{
-				title: "Virtual Keys",
-				url: "/workspace/virtual-keys",
-				icon: KeyRound,
-				description: "Manage virtual keys & access",
-			},
-			{
-				title: "Users & Groups",
-				url: "/workspace/user-groups",
-				icon: Users,
-				description: "Manage users & groups",
-			},
-			{
-				title: "User Provisioning",
-				url: "/workspace/scim",
-				icon: BookUser,
-				description: "User management and provisioning",
-			},
-			{
-				title: "Roles & Permissions",
-				url: "/workspace/rbac",
-				icon: UserRoundCheck,
-				description: "User roles and permissions",
-			},
-			{
-				title: "Audit Logs",
-				url: "/workspace/audit-logs",
-				icon: ScrollText,
-				description: "Audit logs and compliance",
-			},
-		],
-	},
-	{
-		title: "Guardrails",
-		url: "/workspace/guardrails",
-		icon: Construction,
-		description: "Guardrails configuration",
-		subItems: [
-			{
-				title: "Configuration",
-				url: "/workspace/guardrails/configuration",
-				icon: Cog,
-				description: "Guardrail configuration",
-			},
-			{
-				title: "Providers",
-				url: "/workspace/guardrails/providers",
-				icon: Boxes,
-				description: "Guardrail providers configuration",
-			},
-		],
-	},
-	{
-		title: "Cluster Config",
-		url: "/workspace/cluster",
-		icon: Layers,
-		description: "Manage Bifrost cluster",
-	},
-	{
-		title: "Adaptive Routing",
-		url: "/workspace/adaptive-routing",
-		icon: Shuffle,
-		description: "Manage adaptive load balancer",
-	},
-	{
-		title: "Config",
-		url: "/workspace/config",
-		icon: Settings2Icon,
-		description: "Bifrost settings",
-	},
-];
 
 // External links
 const externalLinks = [
@@ -250,7 +128,20 @@ const productionSetupHelpCard = {
 	dismissible: false,
 };
 
-const SidebarItem = ({
+// Sidebar item interface
+interface SidebarItem {
+	title: string;
+	url: string;
+	icon: React.ComponentType<{ className?: string }>;
+	description: string;
+	isAllowed?: boolean;
+	hasAccess: boolean;
+	subItems?: SidebarItem[];
+	tooltipText?: string;
+	tag?: string;
+}
+
+const SidebarItemView = ({
 	item,
 	isActive,
 	isAllowed,
@@ -259,8 +150,9 @@ const SidebarItem = ({
 	onToggle,
 	pathname,
 	router,
+	tooltipText,
 }: {
-	item: (typeof items)[0];
+	item: SidebarItem;
 	isActive: boolean;
 	isAllowed: boolean;
 	isWebSocketConnected: boolean;
@@ -268,6 +160,7 @@ const SidebarItem = ({
 	onToggle?: () => void;
 	pathname: string;
 	router: ReturnType<typeof useRouter>;
+	tooltipText?: string;
 }) => {
 	const hasSubItems = "subItems" in item && item.subItems && item.subItems.length > 0;
 	const isAnySubItemActive = hasSubItems && item.subItems?.some((subItem) => pathname.startsWith(subItem.url));
@@ -289,17 +182,17 @@ const SidebarItem = ({
 	};
 
 	return (
-		<SidebarMenuItem key={item.title}>
-			<TooltipProvider>
+		<TooltipProvider>
+			<SidebarMenuItem key={item.title}>
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<SidebarMenuButton
 							className={`relative h-7.5 cursor-pointer rounded-md border px-3 transition-all duration-200 ${
 								isActive || isAnySubItemActive
 									? "bg-sidebar-accent text-primary border-primary/20"
-									: isAllowed
+									: isAllowed && item.hasAccess
 										? "hover:bg-sidebar-accent hover:text-accent-foreground border-transparent text-slate-500 dark:text-zinc-400"
-										: "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-default border-transparent"
+										: "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
 							} `}
 							onClick={hasSubItems ? handleClick : () => handleNavigation(item.url)}
 						>
@@ -320,35 +213,40 @@ const SidebarItem = ({
 							</div>
 						</SidebarMenuButton>
 					</TooltipTrigger>
-					{!isAllowed && <TooltipContent side="right">Please enable governance in the config page</TooltipContent>}
+					{!isAllowed && <TooltipContent side="right">{tooltipText}</TooltipContent>}
 				</Tooltip>
-			</TooltipProvider>
-			{hasSubItems && isExpanded && (
-				<SidebarMenuSub className="border-sidebar-border mt-1 ml-4 space-y-0.5 border-l pl-2">
-					{item.subItems?.map((subItem: any) => {
-						const isSubItemActive = pathname.startsWith(subItem.url);
-						const SubItemIcon = subItem.icon;
-						return (
-							<SidebarMenuSubItem key={subItem.title}>
-								<SidebarMenuSubButton
-									className={`h-7 cursor-pointer rounded-md px-2 transition-all duration-200 ${
-										isSubItemActive
-											? "bg-sidebar-accent text-primary font-medium"
-											: "hover:bg-sidebar-accent hover:text-accent-foreground text-slate-500 dark:text-zinc-400"
-									}`}
-									onClick={() => handleSubItemClick(subItem.url)}
-								>
-									<div className="flex items-center gap-2">
-										{SubItemIcon && <SubItemIcon className={`h-3.5 w-3.5 ${isSubItemActive ? "text-primary" : "text-muted-foreground"}`} />}
-										<span className={`text-sm ${isSubItemActive ? "font-medium" : "font-normal"}`}>{subItem.title}</span>
-									</div>
-								</SidebarMenuSubButton>
-							</SidebarMenuSubItem>
-						);
-					})}
-				</SidebarMenuSub>
-			)}
-		</SidebarMenuItem>
+
+				{hasSubItems && isExpanded && (
+					<SidebarMenuSub className="border-sidebar-border mt-1 ml-4 space-y-0.5 border-l pl-2">
+						{item.subItems?.map((subItem: SidebarItem) => {
+							const isSubItemActive = pathname.startsWith(subItem.url);
+							const SubItemIcon = subItem.icon;
+							return (
+								<SidebarMenuSubItem key={subItem.title}>
+									<SidebarMenuSubButton
+										className={`h-7 cursor-pointer rounded-md px-2 transition-all duration-200 ${
+											isSubItemActive
+												? "bg-sidebar-accent text-primary font-medium"
+												: subItem.hasAccess == false
+													? "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground border-transparent cursor-not-allowed"
+													: "hover:bg-sidebar-accent hover:text-accent-foreground text-slate-500 dark:text-zinc-400"
+										}`}										
+										onClick={() => (subItem.hasAccess === false ? undefined : handleSubItemClick(subItem.url))}
+									>
+										<div className="flex items-center gap-2">
+											{SubItemIcon && (
+												<SubItemIcon className={`h-3.5 w-3.5 ${isSubItemActive ? "text-primary" : "text-muted-foreground"}`} />
+											)}
+											<span className={`text-sm ${isSubItemActive ? "font-medium" : "font-normal"}`}>{subItem.title}</span>
+										</div>
+									</SidebarMenuSubButton>
+								</SidebarMenuSubItem>
+							);
+						})}
+					</SidebarMenuSub>
+				)}
+			</SidebarMenuItem>
+		</TooltipProvider>
 	);
 };
 
@@ -402,6 +300,162 @@ export default function AppSidebar() {
 	const { data: latestRelease } = useGetLatestReleaseQuery(undefined, {
 		skip: !mounted, // Only fetch after component is mounted
 	});
+	const hasLogsAccess = useRbac(RbacResource.Logs, RbacOperation.View);
+	const hasObservabilityAccess = useRbac(RbacResource.Observability, RbacOperation.View);
+	const hasModelProvidersAccess = useRbac(RbacResource.ModelProvider, RbacOperation.View);
+	const hasMCPToolsAccess = useRbac(RbacResource.MCPGateway, RbacOperation.View);
+	const hasPluginsAccess = useRbac(RbacResource.Plugins, RbacOperation.View);
+	const hasUserProvisioningAccess = useRbac(RbacResource.UserProvisioning, RbacOperation.View);
+	const hasAuditLogsAccess = useRbac(RbacResource.AuditLogs, RbacOperation.View);
+	const hasVirtualKeysAccess = useRbac(RbacResource.VirtualKeys, RbacOperation.View);
+	const hasGuardrailsConfigAccess = useRbac(RbacResource.GuardrailsConfig, RbacOperation.View);
+	const hasClusterConfigAccess = useRbac(RbacResource.Cluster, RbacOperation.View);
+	const isAdaptiveRoutingAllowed = useRbac(RbacResource.AdaptiveRouter, RbacOperation.View);
+	const hasSettingsAccess = useRbac(RbacResource.Settings, RbacOperation.View);
+	
+	const items = [
+		{
+			title: "Observability",
+			url: "/workspace/logs",
+			icon: Telescope,
+			description: "Request logs & monitoring",
+			hasAccess: hasLogsAccess,
+			subItems: [
+				{
+					title: "Logs",
+					url: "/workspace/logs",
+					icon: Logs,
+					description: "Request logs & monitoring",
+					hasAccess: hasLogsAccess,
+				},
+				{
+					title: "Connectors",
+					url: "/workspace/observability",
+					icon: ChevronsLeftRightEllipsis,
+					description: "Log connectors",
+					hasAccess: hasObservabilityAccess,
+					tooltipText: hasObservabilityAccess ? undefined : "You don't have permission to configure log connectors",
+				},
+			],
+		},
+		{
+			title: "Prompt Repository",
+			url: "/workspace/prompt-repo",
+			icon: FolderGit,
+			description: "Prompt repository",
+			hasAccess: true,
+		},
+		{
+			title: "Model Providers",
+			url: "/workspace/providers",
+			icon: BoxIcon,
+			description: "Configure models",
+			hasAccess: hasModelProvidersAccess,
+		},
+		{
+			title: "MCP Tools",
+			url: "/workspace/mcp-clients",
+			icon: MCPIcon,
+			description: "MCP configuration",
+			hasAccess: hasMCPToolsAccess,
+		},
+		{
+			title: "Plugins",
+			url: "/workspace/plugins",
+			icon: Puzzle,
+			tag: "BETA",
+			description: "Manage custom plugins",
+			hasAccess: hasPluginsAccess,
+		},
+		{
+			title: "Governance",
+			url: "/workspace/governance",
+			icon: Landmark,
+			description: "Govern access",		
+			hasAccess: true,
+			subItems: [
+				{
+					title: "Virtual Keys",
+					url: "/workspace/virtual-keys",
+					icon: KeyRound,
+					description: "Manage virtual keys & access",
+					hasAccess: hasVirtualKeysAccess,
+				},
+				{
+					title: "Users & Groups",
+					url: "/workspace/user-groups",
+					icon: Users,
+					description: "Manage users & groups",
+					hasAccess: hasUserProvisioningAccess,
+				},
+				{
+					title: "User Provisioning",
+					url: "/workspace/scim",
+					icon: BookUser,
+					description: "User management and provisioning",
+					hasAccess: hasUserProvisioningAccess,
+				},
+				{
+					title: "Roles & Permissions",
+					url: "/workspace/rbac",
+					icon: UserRoundCheck,
+					description: "User roles and permissions",
+					hasAccess: hasUserProvisioningAccess,
+				},
+				{
+					title: "Audit Logs",
+					url: "/workspace/audit-logs",
+					icon: ScrollText,
+					description: "Audit logs and compliance",
+					hasAccess: hasAuditLogsAccess,
+				},
+			],
+		},
+		{
+			title: "Guardrails",
+			url: "/workspace/guardrails",
+			icon: Construction,
+			description: "Guardrails configuration",
+			hasAccess: true,
+			subItems: [
+				{
+					title: "Configuration",
+					url: "/workspace/guardrails/configuration",
+					icon: Cog,
+					description: "Guardrail configuration",
+					hasAccess: hasGuardrailsConfigAccess,
+				},
+				{
+					title: "Providers",
+					url: "/workspace/guardrails/providers",
+					icon: Boxes,
+					description: "Guardrail providers configuration",
+					hasAccess: hasGuardrailsConfigAccess,
+				},
+			],
+		},
+		{
+			title: "Cluster Config",
+			url: "/workspace/cluster",
+			icon: Layers,
+			description: "Manage Bifrost cluster",
+			hasAccess: hasClusterConfigAccess,
+		},
+		{
+			title: "Adaptive Routing",
+			url: "/workspace/adaptive-routing",
+			icon: Shuffle,
+			description: "Manage adaptive load balancer",
+			hasAccess: isAdaptiveRoutingAllowed,
+		},
+		{
+			title: "Config",
+			url: "/workspace/config",
+			icon: Settings2Icon,
+			description: "Bifrost settings",
+			hasAccess: hasSettingsAccess,
+		},
+	];
 	const { data: version } = useGetVersionQuery();
 	const { resolvedTheme } = useTheme();
 	const [logout] = useLogoutMutation();
@@ -542,7 +596,7 @@ export default function AppSidebar() {
 								const isActive = isActiveRoute(item.url);
 								const isAllowed = item.title === "Governance" ? isGovernanceEnabled : true;
 								return (
-									<SidebarItem
+									<SidebarItemView
 										key={item.title}
 										item={item}
 										isActive={isActive}

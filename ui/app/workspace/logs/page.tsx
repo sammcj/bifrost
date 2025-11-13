@@ -13,7 +13,7 @@ import type { ChatMessage, ChatMessageContent, ContentBlock, LogEntry, LogFilter
 import { AlertCircle, BarChart, CheckCircle, Clock, DollarSign, Hash } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-export default function LogsPage() {
+export default function LogsPage() {	
 	const [logs, setLogs] = useState<LogEntry[]>([]);
 	const [totalItems, setTotalItems] = useState(0); // changes with filters
 	const [stats, setStats] = useState<LogStats | null>(null);

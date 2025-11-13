@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { getErrorMessage, useUpdateProviderMutation } from "@/lib/store";
 import { ModelProvider } from "@/lib/types/config";
 import { cn } from "@/lib/utils";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { EllipsisIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -28,6 +29,7 @@ interface Props {
 }
 
 export default function ModelProviderKeysTableView({ provider, className }: Props) {
+	const hasUpdateProviderAccess = useRbac(RbacResource.ModelProvider, RbacOperation.Update);
 	const [updateProvider, { isLoading: isUpdatingProvider }] = useUpdateProviderMutation();
 	const [showAddNewKeyDialog, setShowAddNewKeyDialog] = useState<{ show: boolean; keyIndex: number } | undefined>(undefined);
 	const [showDeleteKeyDialog, setShowDeleteKeyDialog] = useState<{ show: boolean; keyIndex: number } | undefined>(undefined);
@@ -86,6 +88,7 @@ export default function ModelProviderKeysTableView({ provider, className }: Prop
 				<CardTitle className="flex items-center justify-between">
 					<div className="flex items-center gap-2">Configured keys</div>
 					<Button
+						disabled={!hasUpdateProviderAccess}
 						onClick={() => {
 							handleAddKey(provider.keys.length);
 						}}

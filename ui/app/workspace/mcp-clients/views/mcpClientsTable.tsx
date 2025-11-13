@@ -20,7 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { MCP_STATUS_COLORS } from "@/lib/constants/config";
 import { getErrorMessage, useDeleteMCPClientMutation, useGetMCPClientsQuery, useReconnectMCPClientMutation } from "@/lib/store";
 import { MCPClient } from "@/lib/types/mcp";
-import { Loader2, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
+import { Loader2, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import MCPClientSheet from "./mcpClientSheet";
 
@@ -30,6 +31,9 @@ interface MCPClientsTableProps {
 
 export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 	const [formOpen, setFormOpen] = useState(false);
+	const hasCreateMCPClientAccess = useRbac(RbacResource.MCPGateway, RbacOperation.Create);
+	const hasUpdateMCPClientAccess = useRbac(RbacResource.MCPGateway, RbacOperation.Update);
+	const hasDeleteMCPClientAccess = useRbac(RbacResource.MCPGateway, RbacOperation.Delete);
 	const [selectedMCPClient, setSelectedMCPClient] = useState<MCPClient | null>(null);
 	const [showDetailSheet, setShowDetailSheet] = useState(false);
 	const { toast } = useToast();
@@ -128,7 +132,7 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 			<CardHeader className="mb-4 px-0">
 				<CardTitle className="flex items-center justify-between">
 					<div className="flex items-center gap-2">Registered MCP Clients</div>
-					<Button onClick={handleCreate}>
+					<Button onClick={handleCreate} disabled={!hasCreateMCPClientAccess}>
 						<Plus className="h-4 w-4" /> New MCP Client
 					</Button>
 				</CardTitle>
@@ -166,7 +170,7 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 										variant="ghost"
 										size="icon"
 										onClick={() => handleReconnect(c)}
-										disabled={reconnectingClients.includes(c.config.id)}
+										disabled={reconnectingClients.includes(c.config.id) || !hasUpdateMCPClientAccess}
 									>
 										{reconnectingClients.includes(c.config.id) ? (
 											<Loader2 className="h-4 w-4 animate-spin" />
@@ -177,7 +181,7 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 
 									<AlertDialog>
 										<AlertDialogTrigger asChild>
-											<Button variant="ghost" size="icon">
+											<Button variant="ghost" size="icon" disabled={!hasDeleteMCPClientAccess}>
 												<Trash2 className="h-4 w-4" />
 											</Button>
 										</AlertDialogTrigger>

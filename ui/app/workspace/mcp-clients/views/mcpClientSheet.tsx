@@ -1,21 +1,22 @@
 "use client";
 
+import { CodeEditor } from "@/app/workspace/logs/views/codeEditor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { HeadersTable } from "@/components/ui/headersTable";
-import { MCPClient } from "@/lib/types/mcp";
-import { CodeEditor } from "@/app/workspace/logs/views/codeEditor";
-import { MCP_STATUS_COLORS } from "@/lib/constants/config";
-import { Sheet, SheetContent, SheetTitle, SheetHeader, SheetDescription } from "@/components/ui/sheet";
-import { useEffect } from "react";
-import { Switch } from "@/components/ui/switch";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { mcpClientUpdateSchema, type MCPClientUpdateSchema } from "@/lib/types/schemas";
-import { useUpdateMCPClientMutation, getErrorMessage } from "@/lib/store";
-import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import { MCP_STATUS_COLORS } from "@/lib/constants/config";
+import { getErrorMessage, useUpdateMCPClientMutation } from "@/lib/store";
+import { MCPClient } from "@/lib/types/mcp";
+import { mcpClientUpdateSchema, type MCPClientUpdateSchema } from "@/lib/types/schemas";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
 
 interface MCPClientSheetProps {
 	mcpClient: MCPClient;
@@ -24,6 +25,7 @@ interface MCPClientSheetProps {
 }
 
 export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: MCPClientSheetProps) {
+	const hasUpdateMCPClientAccess = useRbac(RbacResource.MCPGateway, RbacOperation.Update);
 	const [updateMCPClient, { isLoading: isUpdating }] = useUpdateMCPClientMutation();
 	const { toast } = useToast();
 
@@ -120,7 +122,7 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 									</SheetTitle>
 									<SheetDescription>MCP client configuration and available tools</SheetDescription>
 								</div>
-								<Button type="submit" disabled={isUpdating || !form.formState.isDirty} isLoading={isUpdating}>
+								<Button type="submit" disabled={isUpdating || !form.formState.isDirty || !hasUpdateMCPClientAccess} isLoading={isUpdating}>
 									Save Changes
 								</Button>
 							</div>
@@ -194,7 +196,7 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 								</div>
 							</div>
 							{/* Tools Section */}
-							<div className="space-y-4">
+							<div className="space-y-4 pb-10">
 								<div className="flex items-center justify-between">
 									<h3 className="font-semibold">Available Tools ({mcpClient.tools?.length || 0})</h3>
 									{mcpClient.tools && mcpClient.tools.length > 0 && (

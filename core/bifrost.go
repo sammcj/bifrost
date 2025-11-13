@@ -43,6 +43,7 @@ type ChannelMessage struct {
 // It handles request routing, provider management, and response processing.
 type Bifrost struct {
 	ctx                 context.Context
+	cancel              context.CancelFunc
 	account             schemas.Account                    // account interface
 	plugins             atomic.Pointer[[]schemas.Plugin]   // list of plugins
 	providers           atomic.Pointer[[]schemas.Provider] // list of providers
@@ -92,9 +93,10 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 	}
 
 	providerUtils.SetLogger(config.Logger)
-
+	bifrostCtx, cancel := context.WithCancel(ctx)
 	bifrost := &Bifrost{
-		ctx:           ctx,
+		ctx:           bifrostCtx,
+		cancel:        cancel,
 		account:       config.Account,
 		plugins:       atomic.Pointer[[]schemas.Plugin]{},
 		requestQueues: sync.Map{},
@@ -168,7 +170,7 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 
 	// Initialize MCP manager if configured
 	if config.MCPConfig != nil {
-		mcpManager, err := newMCPManager(ctx, *config.MCPConfig, bifrost.logger)
+		mcpManager, err := newMCPManager(bifrostCtx, *config.MCPConfig, bifrost.logger)
 		if err != nil {
 			bifrost.logger.Warn(fmt.Sprintf("failed to initialize MCP manager: %v", err))
 		} else {
@@ -1203,7 +1205,7 @@ func (bifrost *Bifrost) RemoveMCPClient(id string) error {
 	return bifrost.mcpManager.RemoveClient(id)
 }
 
-// EditMCPClientTools edits the tools of an MCP client.
+// EditMCPClient edits the tools of an MCP client.
 // This allows for dynamic MCP client tool management at runtime.
 //
 // Parameters:
@@ -2131,7 +2133,7 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 		}
 	}
 
-	bifrost.logger.Debug("worker for provider %s exiting...", provider.GetProviderKey())
+	// bifrost.logger.Debug("worker for provider %s exiting...", provider.GetProviderKey())
 }
 
 // handleProviderRequest handles the request to the provider based on the request type
@@ -2513,7 +2515,13 @@ func WeightedRandomKeySelector(ctx *context.Context, keys []schemas.Key, provide
 // It closes all request channels and waits for workers to exit.
 func (bifrost *Bifrost) Shutdown() {
 	bifrost.logger.Info("closing all request channels...")
-
+	// Check if the context is done
+	if bifrost.ctx.Err() != nil {
+		bifrost.logger.Warn("context already done, skipping cancel")
+		return
+	} else if bifrost.cancel != nil {
+		bifrost.cancel()
+	}
 	// Close all provider queues to signal workers to stop
 	bifrost.requestQueues.Range(func(key, value interface{}) bool {
 		close(value.(chan *ChannelMessage))
