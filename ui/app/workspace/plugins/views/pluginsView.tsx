@@ -7,6 +7,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { setPluginFormDirtyState, useAppDispatch, useAppSelector, useUpdatePluginMutation } from "@/lib/store";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -31,6 +32,8 @@ type PluginFormValues = z.infer<typeof pluginFormSchema>;
 
 export default function PluginsView(props: Props) {
 	const dispatch = useAppDispatch();
+	const hasUpdatePluginAccess = useRbac(RbacResource.Plugins, RbacOperation.Update);
+	const hasDeletePluginAccess = useRbac(RbacResource.Plugins, RbacOperation.Delete);
 	const [updatePlugin, { isLoading }] = useUpdatePluginMutation();
 	const selectedPlugin = useAppSelector((state) => state.plugin.selectedPlugin);
 	const [showConfig, setShowConfig] = useState(false);
@@ -285,15 +288,16 @@ export default function PluginsView(props: Props) {
 							type="button"
 							variant="outline"
 							onClick={handleDeleteClick}
+							disabled={!hasDeletePluginAccess}
 						>
 							<Trash2Icon className="h-4 w-4" />
 							Delete Plugin
 						</Button>
 						<div className="flex gap-2">
-							<Button type="button" variant="outline" onClick={() => form.reset()} disabled={!form.formState.isDirty}>
+							<Button type="button" variant="outline" onClick={() => form.reset()} disabled={!form.formState.isDirty || !hasUpdatePluginAccess}>
 								Reset
 							</Button>
-							<Button type="submit" disabled={isLoading || !form.formState.isDirty}>
+							<Button type="submit" disabled={isLoading || !form.formState.isDirty || !hasUpdatePluginAccess}>
 								<SaveIcon className="h-4 w-4" />
 								{isLoading ? "Saving..." : "Save Changes"}
 							</Button>

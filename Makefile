@@ -9,6 +9,7 @@ LOG_STYLE ?= json
 LOG_LEVEL ?= info
 TEST_REPORTS_DIR ?= test-reports
 GOTESTSUM_FORMAT ?= testname
+LOCAL ?=
 
 # Colors for output
 RED=\033[0;31m
@@ -39,6 +40,7 @@ help: ## Show this help message
 	@echo "  LOG_STYLE         Logger output format: json|pretty (default: json)"
 	@echo "  LOG_LEVEL         Logger level: debug|info|warn|error (default: info)"
 	@echo "  APP_DIR           App data directory inside container (default: /app/data)"
+	@echo "  LOCAL             Use local go.work for builds (e.g., make build LOCAL=1)"
 	@echo ""
 	@echo "$(YELLOW)Test Configuration:$(NC)"
 	@echo "  TEST_REPORTS_DIR  Directory for HTML test reports (default: test-reports)"
@@ -108,9 +110,18 @@ build-ui: install-ui ## Build ui
 	@rm -rf ui/.next
 	@cd ui && npm run build && npm run copy-build
 
-build: build-ui ## Build bifrost-http binary
-	@echo "$(GREEN)Building bifrost-http...$(NC)"
-	@cd transports/bifrost-http && GOWORK=off go build -o ../../tmp/bifrost-http .
+build: ## Build bifrost-http binary
+	@if [ -n "$(LOCAL)" ]; then \
+		echo "$(GREEN)╔═══════════════════════════════════════════════╗$(NC)"; \
+		echo "$(GREEN)║  Building bifrost-http with local go.work...  ║$(NC)"; \
+		echo "$(GREEN)╚═══════════════════════════════════════════════╝$(NC)"; \
+	else \
+		echo "$(GREEN)╔═══════════════════════════════════════╗$(NC)"; \
+		echo "$(GREEN)║  Building bifrost-http...             ║$(NC)"; \
+		echo "$(GREEN)╚═══════════════════════════════════════╝$(NC)"; \
+	fi
+	@$(MAKE) build-ui
+	@cd transports/bifrost-http && $(if $(LOCAL),,GOWORK=off) go build -o ../../tmp/bifrost-http .
 	@echo "$(GREEN)Built: tmp/bifrost-http$(NC)"
 
 build-docker-image: build-ui ## Build Docker image

@@ -12,6 +12,7 @@ import { getErrorMessage, useGetCoreConfigQuery, useUpdateCoreConfigMutation } f
 import { AuthConfig, CoreConfig } from "@/lib/types/config";
 import { parseArrayFromText } from "@/lib/utils/array";
 import { validateOrigins } from "@/lib/utils/validation";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { AlertTriangle, Info } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -32,6 +33,7 @@ const defaultConfig: CoreConfig = {
 };
 
 export default function SecurityView() {
+	const hasSettingsUpdateAccess = useRbac(RbacResource.Settings, RbacOperation.Update);
 	const { data: bifrostConfig } = useGetCoreConfigQuery({ fromDB: true });
 	const config = bifrostConfig?.client_config;
 	const [updateCoreConfig, { isLoading }] = useUpdateCoreConfigMutation();
@@ -164,7 +166,7 @@ export default function SecurityView() {
 					<h2 className="text-2xl font-semibold tracking-tight">Security Settings</h2>
 					<p className="text-muted-foreground text-sm">Configure security and access control settings.</p>
 				</div>
-				<Button onClick={handleSave} disabled={!hasChanges || isLoading}>
+				<Button onClick={handleSave} disabled={!hasChanges || isLoading || !hasSettingsUpdateAccess	}>
 					{isLoading ? "Saving..." : "Save Changes"}
 				</Button>
 			</div>
