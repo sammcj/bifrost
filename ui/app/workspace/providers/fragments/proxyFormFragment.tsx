@@ -9,6 +9,7 @@ import { useUpdateProviderMutation } from "@/lib/store/apis/providersApi";
 import { ModelProvider } from "@/lib/types/config";
 import { proxyOnlyFormSchema, type ProxyOnlyFormSchema } from "@/lib/types/schemas";
 import { cn } from "@/lib/utils";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -20,6 +21,7 @@ interface ProxyFormFragmentProps {
 
 export function ProxyFormFragment({ provider }: ProxyFormFragmentProps) {
 	const dispatch = useAppDispatch();
+	const hasUpdateProviderAccess = useRbac(RbacResource.ModelProvider, RbacOperation.Update);
 	const [updateProvider, { isLoading: isUpdatingProvider }] = useUpdateProviderMutation();
 	const form = useForm<ProxyOnlyFormSchema>({
 		resolver: zodResolver(proxyOnlyFormSchema),
@@ -163,13 +165,13 @@ export function ProxyFormFragment({ provider }: ProxyFormFragmentProps) {
 						onClick={() => {
 							onSubmit({ proxy_config: { type: "none", url: "" } });
 						}}
-						disabled={isUpdatingProvider || !provider.proxy_config || provider.proxy_config.type === "none"}
+						disabled={!hasUpdateProviderAccess || isUpdatingProvider || !provider.proxy_config || provider.proxy_config.type === "none"}
 					>
 						Remove configuration
 					</Button>
 					<Button
 						type="submit"
-						disabled={!form.formState.isDirty || !form.formState.isValid || isUpdatingProvider}
+						disabled={!form.formState.isDirty || !form.formState.isValid || !hasUpdateProviderAccess || isUpdatingProvider}
 						isLoading={isUpdatingProvider}
 					>
 						Save Proxy Configuration

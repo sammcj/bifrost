@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { getErrorMessage, useGetCoreConfigQuery, useUpdateCoreConfigMutation } from "@/lib/store";
 import { CoreConfig } from "@/lib/types/config";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import PluginsForm from "./pluginsForm";
@@ -23,6 +24,7 @@ const defaultConfig: CoreConfig = {
 };
 
 export default function FeatureTogglesView() {
+	const hasSettingsUpdateAccess = useRbac(RbacResource.Settings, RbacOperation.Update);
 	const { data: bifrostConfig } = useGetCoreConfigQuery({ fromDB: true });
 	const config = bifrostConfig?.client_config;
 	const [updateCoreConfig, { isLoading }] = useUpdateCoreConfigMutation();
@@ -69,7 +71,7 @@ export default function FeatureTogglesView() {
 					<h2 className="text-2xl font-semibold tracking-tight">Feature Toggles</h2>
 					<p className="text-muted-foreground text-sm">Enable or disable major features.</p>
 				</div>
-				<Button onClick={handleSave} disabled={!hasChanges || isLoading}>
+				<Button onClick={handleSave} disabled={!hasChanges || isLoading || !hasSettingsUpdateAccess}>
 					{isLoading ? "Saving..." : "Save Changes"}
 				</Button>
 			</div>			

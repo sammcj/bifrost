@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { DefaultPerformanceConfig } from "@/lib/constants/config";
 import { getErrorMessage, setProviderFormDirtyState, useAppDispatch } from "@/lib/store";
 import { useUpdateProviderMutation } from "@/lib/store/apis/providersApi";
 import { ModelProvider } from "@/lib/types/config";
-import { DefaultPerformanceConfig } from "@/lib/constants/config";
 import { performanceFormSchema, type PerformanceFormSchema } from "@/lib/types/schemas";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm, type Resolver } from "react-hook-form";
@@ -20,6 +21,7 @@ interface PerformanceFormFragmentProps {
 
 export function PerformanceFormFragment({ provider }: PerformanceFormFragmentProps) {
 	const dispatch = useAppDispatch();
+	const hasUpdateProviderAccess = useRbac(RbacResource.ModelProvider, RbacOperation.Update);
 	const [updateProvider, { isLoading: isUpdatingProvider }] = useUpdateProviderMutation();
 	const form = useForm<PerformanceFormSchema, any, PerformanceFormSchema>({
 		resolver: zodResolver(performanceFormSchema) as Resolver<PerformanceFormSchema, any, PerformanceFormSchema>,
@@ -155,7 +157,7 @@ export function PerformanceFormFragment({ provider }: PerformanceFormFragmentPro
 				<div className="flex justify-end space-x-2 pb-6">
 					<Button
 						type="submit"
-						disabled={!form.formState.isDirty || !form.formState.isValid || isUpdatingProvider}
+						disabled={!form.formState.isDirty || !form.formState.isValid || !hasUpdateProviderAccess || isUpdatingProvider}
 						isLoading={isUpdatingProvider}
 					>
 						Save Performance Configuration

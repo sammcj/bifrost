@@ -12,9 +12,9 @@ import { getErrorMessage, useCreateMCPClientMutation } from "@/lib/store";
 import { CreateMCPClientRequest, MCPConnectionType, MCPStdioConfig } from "@/lib/types/mcp";
 import { parseArrayFromText } from "@/lib/utils/array";
 import { Validator } from "@/lib/utils/validation";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { Info } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
 
 interface ClientFormProps {
 	open: boolean;
@@ -37,6 +37,7 @@ const emptyForm: CreateMCPClientRequest = {
 };
 
 const ClientForm: React.FC<ClientFormProps> = ({ open, onClose, onSaved }) => {
+	const hasCreateMCPClientAccess = useRbac(RbacResource.MCPGateway, RbacOperation.Create);
 	const [form, setForm] = useState<CreateMCPClientRequest>(emptyForm);
 	const [isLoading, setIsLoading] = useState(false);
 	const [argsText, setArgsText] = useState("");
@@ -274,7 +275,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ open, onClose, onSaved }) => {
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<span>
-									<Button onClick={handleSubmit} disabled={!validator.isValid() || isLoading} isLoading={isLoading}>
+									<Button onClick={handleSubmit} disabled={!validator.isValid() || isLoading || !hasCreateMCPClientAccess} isLoading={isLoading}>
 										Create
 									</Button>
 								</span>

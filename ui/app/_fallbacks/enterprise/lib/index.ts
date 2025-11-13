@@ -19,3 +19,6 @@ export {
 // Re-export base query (fallback passthrough)
 export { createBaseQueryWithRefresh } from "./store/utils/baseQueryWithRefresh";
 
+// Re-export RBAC context (dummy implementation for OSS)
+export * from "./contexts/rbacContext";
+
