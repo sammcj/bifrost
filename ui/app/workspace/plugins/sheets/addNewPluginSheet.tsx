@@ -5,6 +5,7 @@ import { Form } from "@/components/ui/form";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getErrorMessage, useCreatePluginMutation, useUpdatePluginMutation } from "@/lib/store";
 import { Plugin } from "@/lib/types/plugins";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -58,6 +59,8 @@ interface AddNewPluginSheetProps {
 }
 
 export default function AddNewPluginSheet({ open, onClose, plugin }: AddNewPluginSheetProps) {
+	const hasCreatePluginAccess = useRbac(RbacResource.Plugins, RbacOperation.Create);
+	const hasUpdatePluginAccess = useRbac(RbacResource.Plugins, RbacOperation.Update);
 	const [createPlugin, { isLoading: isCreating }] = useCreatePluginMutation();
 	const [updatePlugin, { isLoading: isUpdating }] = useUpdatePluginMutation();
 
@@ -66,7 +69,7 @@ export default function AddNewPluginSheet({ open, onClose, plugin }: AddNewPlugi
 
 	const form = useForm<PluginFormData>({
 		resolver: zodResolver(pluginFormSchema),
-		mode: 'onChange',
+		mode: "onChange",
 		defaultValues: {
 			name: "",
 			path: "",
@@ -131,7 +134,7 @@ export default function AddNewPluginSheet({ open, onClose, plugin }: AddNewPlugi
 
 			form.reset();
 			onClose();
-		} catch (error) {			
+		} catch (error) {
 			toast.error(getErrorMessage(error));
 		}
 	};
@@ -140,6 +143,8 @@ export default function AddNewPluginSheet({ open, onClose, plugin }: AddNewPlugi
 		form.reset();
 		onClose();
 	};
+
+	const disableAction = isEditMode ? !hasUpdatePluginAccess : !hasCreatePluginAccess;
 
 	return (
 		<Sheet open={open} onOpenChange={handleClose}>
@@ -163,7 +168,7 @@ export default function AddNewPluginSheet({ open, onClose, plugin }: AddNewPlugi
 							<Button type="button" variant="outline" onClick={handleClose} disabled={isLoading}>
 								Cancel
 							</Button>
-							<Button type="submit" disabled={isLoading || !form.formState.isValid} isLoading={isLoading}>
+							<Button type="submit" disabled={isLoading || !form.formState.isValid || disableAction} isLoading={isLoading}>
 								{isEditMode ? "Update Plugin" : "Install Plugin"}
 							</Button>
 						</div>

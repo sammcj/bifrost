@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/themeProvider";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { WebSocketProvider } from "@/hooks/useWebSocket";
 import { getErrorMessage, ReduxProvider, useGetCoreConfigQuery } from "@/lib/store";
+import { RbacProvider } from "@enterprise/lib/contexts/rbacContext";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { useEffect } from "react";
 import { toast, Toaster } from "sonner";
@@ -42,7 +43,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 				<Toaster />
 				<ReduxProvider>
 					<NuqsAdapter>
-						<AppContent>{children}</AppContent>
+						<RbacProvider>
+							<AppContent>{children}</AppContent>
+						</RbacProvider>
 					</NuqsAdapter>
 				</ReduxProvider>
 			</ThemeProvider>

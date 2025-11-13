@@ -17,6 +17,7 @@ import {
 } from "@/lib/store";
 import { KnownProvider, ModelProviderName, ProviderStatus } from "@/lib/types/config";
 import { cn } from "@/lib/utils";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { AlertCircle, PlusIcon, Trash } from "lucide-react";
 import { useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
@@ -29,6 +30,7 @@ export default function Providers() {
 	const dispatch = useAppDispatch();
 	const selectedProvider = useAppSelector((state) => state.provider.selectedProvider);
 	const providerFormIsDirty = useAppSelector((state) => state.provider.isDirty);
+	const hasProviderCreateAccess = useRbac(RbacResource.ModelProvider, RbacOperation.Create);
 
 	const [showRedirectionDialog, setShowRedirectionDialog] = useState(false);
 	const [showDeleteProviderDialog, setShowDeleteProviderDialog] = useState(false);
@@ -92,7 +94,7 @@ export default function Providers() {
 	}
 
 	return (
-		<div className="flex h-full flex-row gap-4 max-w-7xl mx-auto w-full">
+		<div className="mx-auto flex h-full w-full max-w-7xl flex-row gap-4">
 			<ConfirmDeleteProviderDialog
 				provider={selectedProvider!}
 				show={showDeleteProviderDialog}
@@ -213,11 +215,12 @@ export default function Providers() {
 									variant="outline"
 									size="sm"
 									className="w-full justify-start"
+									disabled={!hasProviderCreateAccess}
 									onClick={(e) => {
 										e.preventDefault();
 										e.stopPropagation();
 										setShowCustomProviderDialog(true);
-									}}
+									}}									
 								>
 									<PlusIcon className="h-4 w-4" />
 									<div className="text-xs">Add New Provider</div>

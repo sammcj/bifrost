@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { setSelectedPlugin, useAppDispatch, useAppSelector, useGetPluginsQuery } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { PlusIcon, Puzzle } from "lucide-react";
 import Link from "next/link";
 import { useQueryState } from "nuqs";
@@ -12,6 +13,7 @@ import PluginsView from "./views/pluginsView";
 
 export default function PluginsPage() {
 	const dispatch = useAppDispatch();
+	const hasCreatePluginAccess = useRbac(RbacResource.Plugins, RbacOperation.Create);
 	const { data: plugins, isLoading } = useGetPluginsQuery();
 	const selectedPlugin = useAppSelector((state) => state.plugin.selectedPlugin);
 	const [selectedPluginId, setSelectedPluginId] = useQueryState("plugin");
@@ -85,6 +87,7 @@ export default function PluginsPage() {
 									variant="outline"
 									size="sm"
 									className="w-full justify-start"
+									disabled={!hasCreatePluginAccess}
 									onClick={(e) => {
 										e.preventDefault();
 										e.stopPropagation();
@@ -109,11 +112,14 @@ export default function PluginsPage() {
 						</div>
 					</div>
 				</div>
-				<PluginsView onDelete={() => {
-					setSelectedPluginId(customPlugins?.[0]?.name ?? "");
-				}} onCreate={(pluginName) => {
-					setSelectedPluginId(pluginName ?? "");
-				}} />
+				<PluginsView
+					onDelete={() => {
+						setSelectedPluginId(customPlugins?.[0]?.name ?? "");
+					}}
+					onCreate={(pluginName) => {
+						setSelectedPluginId(pluginName ?? "");
+					}}
+				/>
 			</div>
 			<AddNewPluginSheet open={isSheetOpen} onClose={handleCloseSheet} />
 		</div>
