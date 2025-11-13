@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          for dir in core framework transports; do
+          for dir in core framework transports tests/core-providers tests/core-chatbot; do
             if [ -f "$dir/go.mod" ]; then
               echo "Installing dependencies for $dir..."
               (cd "$dir" && go mod download)
@@ -34,10 +34,11 @@ jobs:
       - name: Run tests
         run: |
           # Run tests for each module and combine coverage
-          for dir in core framework transports; do
+          for dir in core framework transports tests/core-providers tests/core-chatbot; do
             if [ -f "$dir/go.mod" ]; then
               echo "Running tests for $dir..."
-              (cd "$dir" && go test -coverprofile=../coverage-$(basename $dir).txt ./... || true)
+              dirname=$(echo $dir | sed 's/\//-/g')
+              (cd "$dir" && go test -coverprofile=../coverage-$dirname.txt -coverpkg=github.com/maximhq/bifrost/core/...,github.com/maximhq/bifrost/framework/...,github.com/maximhq/bifrost/transports/... ./... || true)
             fi
           done
           
