@@ -101,7 +101,6 @@ func Init(ctx context.Context, config *Config, configStore configstore.ConfigSto
 	}
 
 	logger.Info("initializing pricing manager...")
-
 	if configStore != nil {
 		// Load initial pricing data
 		if err := mc.loadPricingFromDatabase(ctx); err != nil {
@@ -279,6 +278,7 @@ func (mc *ModelCatalog) GetProvidersForModel(model string) []schemas.ModelProvid
 	return providers
 }
 
+// AddModelDataToPool adds model data to the model pool.
 func (mc *ModelCatalog) AddModelDataToPool(modelData *schemas.BifrostListModelsResponse) {
 	if modelData == nil {
 		return
