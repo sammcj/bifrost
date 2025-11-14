@@ -6,7 +6,7 @@ toolchain go1.24.3
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/maximhq/bifrost/core v1.2.22
+	github.com/maximhq/bifrost/core v1.2.23
 	github.com/redis/go-redis/v9 v9.14.0
 	github.com/stretchr/testify v1.11.1
 	github.com/weaviate/weaviate v1.33.1
