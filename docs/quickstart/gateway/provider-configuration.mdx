@@ -52,6 +52,31 @@ curl --location 'http://localhost:8080/api/providers' \
         }
     ]
 }'
+
+# Add vLLM (self-hosted OpenAI-compatible server)
+curl --location 'http://localhost:8080/api/providers' \
+--header 'Content-Type: application/json' \
+--data '{
+    "provider": "vllm-local",
+    "keys": [
+        {
+            "value": "dummy",
+            "models": [],
+            "weight": 1.0
+        }
+    ],
+    "network_config": {
+        "base_url": "http://vllm-endpoint:8000",
+        "default_request_timeout_in_seconds": 60
+    },
+    "custom_provider_config": {
+        "base_provider_type": "openai",
+        "allowed_requests": {
+            "chat_completion": true,
+            "chat_completion_stream": true
+        }
+    }
+}'
 ```
 
 </Tab>
@@ -78,14 +103,39 @@ curl --location 'http://localhost:8080/api/providers' \
                     "weight": 1.0
                 }
             ]
+        },
+        "vllm-local": {
+            "keys": [
+                {
+                    "value": "dummy",
+                    "models": [],
+                    "weight": 1.0
+                }
+            ],
+            "network_config": {
+                "base_url": "http://vllm-endpoint:8000",
+                "default_request_timeout_in_seconds": 60
+            },
+            "custom_provider_config": {
+                "base_provider_type": "openai",
+                "allowed_requests": {
+                    "chat_completion": true,
+                    "chat_completion_stream": true
+                }
+            }
         }
     }
 }
 ```
 
+
 </Tab>
 
 </Tabs>
+
+<Tip>
+**Kubernetes DNS (only for custom endpoint):** When running in Kubernetes, use fully qualified domain names (FQDN) like `http://<service>.<namespace>.svc.cluster.local:8000` for cross-namespace custom endpoints. Short names like `http://<service>:8000` only work within the same namespace.
+</Tip>
 
 ## Making Requests
 
