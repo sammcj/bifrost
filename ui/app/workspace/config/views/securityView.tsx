@@ -142,7 +142,6 @@ export default function SecurityView() {
 				);
 				return;
 			}
-
 			await updateCoreConfig({
 				...bifrostConfig!,
 				client_config: localConfig,
