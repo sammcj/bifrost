@@ -28,7 +28,7 @@ type ElevenlabsProvider struct {
 	customProviderConfig *schemas.CustomProviderConfig // Custom provider config
 }
 
-// NewElevenlabsProvider creates a new Gemini provider instance.
+// NewElevenlabsProvider creates a new Elevenlabs provider instance.
 // It initializes the HTTP client with the provided configuration.
 // The client is configured with timeouts, concurrency limits, and optional proxy settings.
 func NewElevenlabsProvider(config *schemas.ProviderConfig, logger schemas.Logger) *ElevenlabsProvider {
@@ -60,7 +60,7 @@ func NewElevenlabsProvider(config *schemas.ProviderConfig, logger schemas.Logger
 	}
 }
 
-// GetProviderKey returns the provider identifier for Gemini.
+// GetProviderKey returns the provider identifier for Elevenlabs.
 func (provider *ElevenlabsProvider) GetProviderKey() schemas.ModelProvider {
 	return providerUtils.GetProviderName(schemas.Elevenlabs, provider.customProviderConfig)
 }
@@ -90,6 +90,10 @@ func (provider *ElevenlabsProvider) listModelsByKey(ctx context.Context, key sch
 
 	// Make request
 	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
 	if resp.StatusCode() != fasthttp.StatusOK {
 		bifrostErr := parseElevenlabsError(providerName, resp)
 		return nil, bifrostErr
@@ -115,7 +119,7 @@ func (provider *ElevenlabsProvider) listModelsByKey(ctx context.Context, key sch
 // ListModels performs a list models request to Elevenlabs' API.
 // Requests are made concurrently for improved performance.
 func (provider *ElevenlabsProvider) ListModels(ctx context.Context, keys []schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
-	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.ListModelsRequest); err != nil {
+	if err := providerUtils.CheckOperationAllowed(schemas.Elevenlabs, provider.customProviderConfig, schemas.ListModelsRequest); err != nil {
 		return nil, err
 	}
 	return providerUtils.HandleMultipleListModelsRequests(
@@ -530,8 +534,7 @@ func (provider *ElevenlabsProvider) Transcription(ctx context.Context, key schem
 		return nil, bifrostErr
 	}
 
-	statusCode := resp.StatusCode()
-	if statusCode != fasthttp.StatusOK {
+	if resp.StatusCode() != fasthttp.StatusOK {
 		provider.logger.Debug(fmt.Sprintf("error from %s provider: %s", providerName, string(resp.Body())))
 		return nil, parseElevenlabsError(providerName, resp)
 	}
