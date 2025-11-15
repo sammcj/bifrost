@@ -12,13 +12,12 @@ import (
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
-	"gorm.io/gorm"
 )
 
 type PluginsLoader interface {
 	ReloadPlugin(ctx context.Context, name string, path *string, pluginConfig any) error
 	RemovePlugin(ctx context.Context, name string) error
-	GetPluginStatus() []schemas.PluginStatus
+	GetPluginStatus(ctx context.Context) []schemas.PluginStatus
 }
 
 // PluginsHandler is the handler for the plugins API
@@ -62,7 +61,7 @@ func (h *PluginsHandler) RegisterRoutes(r *router.Router, middlewares ...lib.Bif
 // getPlugins gets all plugins
 func (h *PluginsHandler) getPlugins(ctx *fasthttp.RequestCtx) {
 	if h.configStore == nil {
-		pluginStatus := h.pluginsLoader.GetPluginStatus()
+		pluginStatus := h.pluginsLoader.GetPluginStatus(ctx)
 		finalPlugins := []struct {
 			Name     string               `json:"name"`
 			Enabled  bool                 `json:"enabled"`
@@ -101,7 +100,7 @@ func (h *PluginsHandler) getPlugins(ctx *fasthttp.RequestCtx) {
 		return
 	}
 	// Fetching status
-	pluginStatus := h.pluginsLoader.GetPluginStatus()
+	pluginStatus := h.pluginsLoader.GetPluginStatus(ctx)
 	// Creating ephemeral struct for the plugins
 	finalPlugins := []struct {
 		Name     string               `json:"name"`
@@ -149,7 +148,7 @@ func (h *PluginsHandler) getPlugins(ctx *fasthttp.RequestCtx) {
 // getPlugin gets a plugin by name
 func (h *PluginsHandler) getPlugin(ctx *fasthttp.RequestCtx) {
 	if h.configStore == nil {
-		pluginStatus := h.pluginsLoader.GetPluginStatus()
+		pluginStatus := h.pluginsLoader.GetPluginStatus(ctx)
 		pluginInfo := struct {
 			Name     string               `json:"name"`
 			Enabled  bool                 `json:"enabled"`
@@ -204,7 +203,7 @@ func (h *PluginsHandler) getPlugin(ctx *fasthttp.RequestCtx) {
 
 	plugin, err := h.configStore.GetPlugin(ctx, name)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, configstore.ErrNotFound) {
 			SendError(ctx, fasthttp.StatusNotFound, "Plugin not found")
 			return
 		}
@@ -351,7 +350,7 @@ func (h *PluginsHandler) updatePlugin(ctx *fasthttp.RequestCtx) {
 
 	plugin, err = h.configStore.GetPlugin(ctx, name)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, configstore.ErrNotFound) {
 			SendError(ctx, fasthttp.StatusNotFound, "Plugin not found")
 			return
 		}
@@ -415,7 +414,7 @@ func (h *PluginsHandler) deletePlugin(ctx *fasthttp.RequestCtx) {
 	}
 
 	if err := h.configStore.DeletePlugin(ctx, name); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, configstore.ErrNotFound) {
 			SendError(ctx, fasthttp.StatusNotFound, "Plugin not found")
 			return
 		}
