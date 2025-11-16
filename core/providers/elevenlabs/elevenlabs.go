@@ -93,10 +93,8 @@ func (provider *ElevenlabsProvider) listModelsByKey(ctx context.Context, key sch
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
-
 	if resp.StatusCode() != fasthttp.StatusOK {
-		bifrostErr := parseElevenlabsError(providerName, resp)
-		return nil, bifrostErr
+		return nil, parseElevenlabsError(providerName, resp)
 	}
 
 	var elevenlabsResponse ElevenlabsListModelsResponse
@@ -129,50 +127,6 @@ func (provider *ElevenlabsProvider) ListModels(ctx context.Context, keys []schem
 		provider.listModelsByKey,
 		provider.logger,
 	)
-}
-
-// buildSpeechRequestURL constructs the full request URL using the provider's configuration for speech.
-func (provider *ElevenlabsProvider) buildSpeechRequestURL(ctx context.Context, defaultPath string, requestType schemas.RequestType, request *schemas.BifrostSpeechRequest) string {
-	baseURL := provider.networkConfig.BaseURL
-	requestPath := providerUtils.GetRequestPath(ctx, defaultPath, provider.customProviderConfig, requestType)
-
-	u, parseErr := url.Parse(baseURL)
-	if parseErr != nil {
-		return baseURL + requestPath
-	}
-
-	u.Path = path.Join(u.Path, requestPath)
-	q := u.Query()
-
-	if request.Params != nil {
-		if request.Params.EnableLogging != nil {
-			q.Set("enable_logging", strconv.FormatBool(*request.Params.EnableLogging))
-		}
-
-		request.Params.ResponseFormat = providerUtils.ConvertOpenAISpeechFormatToElevenlabsFormat(request.Params.ResponseFormat)
-
-		if request.Params.OptimizeStreamingLatency != nil {
-			q.Set("optimize_streaming_latency", strconv.FormatBool(*request.Params.OptimizeStreamingLatency))
-		}
-	}
-
-	u.RawQuery = q.Encode()
-	return u.String()
-}
-
-// buildTranscriptionRequestURL constructs the full request URL using the provider's configuration for transcription.
-func (provider *ElevenlabsProvider) buildTranscriptionRequestURL(ctx context.Context) string {
-	baseURL := provider.networkConfig.BaseURL
-	requestPath := providerUtils.GetRequestPath(ctx, "/v1/speech-to-text", provider.customProviderConfig, schemas.TranscriptionRequest)
-
-	parsedURL, err := url.Parse(baseURL)
-	if err != nil {
-		return baseURL + requestPath
-	}
-
-	parsedURL.Path = path.Join(parsedURL.Path, requestPath)
-
-	return parsedURL.String()
 }
 
 // TextCompletion is not supported by the Elevenlabs provider
@@ -227,27 +181,22 @@ func (provider *ElevenlabsProvider) Speech(ctx context.Context, key schemas.Key,
 	// Set any extra headers from network config
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
-	// Determine if timestamps are requested
-	withTimestamps := request.Params != nil && request.Params.WithTimestamps != nil && *request.Params.WithTimestamps
+	withTimestampsRequest := request.Params != nil && request.Params.WithTimestamps != nil && *request.Params.WithTimestamps
 
-	voice := ""
+	var endpoint string
 	if request.Params != nil && request.Params.VoiceConfig != nil && request.Params.VoiceConfig.Voice != nil {
-		voice = *request.Params.VoiceConfig.Voice
-	}
-
-	if voice == "" {
+		voice := *request.Params.VoiceConfig.Voice
+		// Determine if timestamps are requested
+		if withTimestampsRequest {
+			endpoint = "/v1/text-to-speech/" + voice + "/with-timestamps"
+		} else {
+			endpoint = "/v1/text-to-speech/" + voice
+		}
+	} else {
 		return nil, providerUtils.NewBifrostOperationError("voice parameter is required", nil, providerName)
 	}
 
-	var endpoint string
-	if withTimestamps {
-		endpoint = "/v1/text-to-speech/" + voice + "/with-timestamps"
-	} else {
-		endpoint = "/v1/text-to-speech/" + voice
-	}
-
-	requestURL := provider.buildSpeechRequestURL(ctx, endpoint, schemas.SpeechRequest, request)
-	provider.logger.Debug(fmt.Sprintf("Speech request URL: %s, withTimestamps: %v", requestURL, withTimestamps))
+	requestURL := provider.buildBaseSpeechRequestURL(ctx, endpoint, schemas.SpeechRequest, request)
 	req.SetRequestURI(requestURL)
 
 	req.Header.SetMethod(http.MethodPost)
@@ -296,7 +245,7 @@ func (provider *ElevenlabsProvider) Speech(ctx context.Context, key schemas.Key,
 		},
 	}
 
-	if withTimestamps {
+	if withTimestampsRequest {
 		var timestampResponse ElevenlabsSpeechWithTimestampsResponse
 		if err := sonic.Unmarshal(body, &timestampResponse); err != nil {
 			return nil, providerUtils.NewBifrostOperationError("failed to parse with-timestamps response", err, providerName)
@@ -359,7 +308,11 @@ func (provider *ElevenlabsProvider) SpeechStream(ctx context.Context, postHookRu
 	// Set any extra headers from network config
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
-	req.SetRequestURI(provider.buildSpeechRequestURL(ctx, "/v1/text-to-speech/"+*request.Params.VoiceConfig.Voice+"/stream", schemas.SpeechStreamRequest, request))
+	if request.Params == nil || request.Params.VoiceConfig == nil || request.Params.VoiceConfig.Voice == nil {
+		return nil, providerUtils.NewBifrostOperationError("voice parameter is required", nil, providerName)
+	}
+
+	req.SetRequestURI(provider.buildBaseSpeechRequestURL(ctx, "/v1/text-to-speech/"+*request.Params.VoiceConfig.Voice+"/stream", schemas.SpeechStreamRequest, request))
 
 	req.Header.SetMethod(http.MethodPost)
 	req.Header.SetContentType("application/json")
@@ -400,18 +353,18 @@ func (provider *ElevenlabsProvider) SpeechStream(ctx context.Context, postHookRu
 	responseChan := make(chan *schemas.BifrostStream, schemas.DefaultStreamBufferSize)
 
 	go func() {
-		defer close(responseChan)
 		defer providerUtils.ReleaseStreamingResponse(resp)
-
-		chunkIndex := -1
-		lastChunkTime := time.Now()
+		defer close(responseChan)
 
 		// read binary audio chunks from the stream
 		// 4KB buffer for reading chunks
 		buffer := make([]byte, 4096)
 		bodyStream := resp.BodyStream()
+		chunkIndex := -1
+		lastChunkTime := time.Now()
 
 		for {
+			// Check if context is done before processing
 			select {
 			case <-ctx.Done():
 				return
@@ -455,6 +408,7 @@ func (provider *ElevenlabsProvider) SpeechStream(ctx context.Context, postHookRu
 			}
 		}
 
+		// Send final response after natural loop termination (similar to Gemini pattern)
 		finalResponse := &schemas.BifrostSpeechStreamResponse{
 			Type:  schemas.SpeechStreamResponseTypeDone,
 			Audio: []byte{},
@@ -487,17 +441,11 @@ func (provider *ElevenlabsProvider) Transcription(ctx context.Context, key schem
 		return nil, providerUtils.NewBifrostOperationError("transcription request is not provided", nil, providerName)
 	}
 
-	if strings.TrimSpace(reqBody.ModelID) == "" {
-		return nil, providerUtils.NewBifrostOperationError("model_id is required for Elevenlabs transcription", nil, providerName)
-	}
-
 	hasFile := len(reqBody.File) > 0
 	hasURL := reqBody.CloudStorageURL != nil && strings.TrimSpace(*reqBody.CloudStorageURL) != ""
-
 	if hasFile && hasURL {
 		return nil, providerUtils.NewBifrostOperationError("provide either a file or cloud_storage_url, not both", nil, providerName)
 	}
-
 	if !hasFile && !hasURL {
 		return nil, providerUtils.NewBifrostOperationError("either a transcription file or cloud_storage_url must be provided", nil, providerName)
 	}
@@ -521,7 +469,7 @@ func (provider *ElevenlabsProvider) Transcription(ctx context.Context, key schem
 
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
-	req.SetRequestURI(provider.buildTranscriptionRequestURL(ctx))
+	req.SetRequestURI(provider.networkConfig.BaseURL + providerUtils.GetRequestPath(ctx, "/v1/speech-to-text", provider.customProviderConfig, schemas.TranscriptionRequest))
 	req.Header.SetMethod(http.MethodPost)
 	req.Header.SetContentType(contentType)
 	if key.Value != "" {
@@ -533,7 +481,6 @@ func (provider *ElevenlabsProvider) Transcription(ctx context.Context, key schem
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
-
 	if resp.StatusCode() != fasthttp.StatusOK {
 		provider.logger.Debug(fmt.Sprintf("error from %s provider: %s", providerName, string(resp.Body())))
 		return nil, parseElevenlabsError(providerName, resp)
@@ -544,9 +491,8 @@ func (provider *ElevenlabsProvider) Transcription(ctx context.Context, key schem
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
 	}
 
-	sendRaw := providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse)
 	var rawResponse interface{}
-	if sendRaw {
+	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
 		if err := sonic.Unmarshal(responseBody, &rawResponse); err != nil {
 			return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRawResponseUnmarshal, err, providerName)
 		}
@@ -557,33 +503,21 @@ func (provider *ElevenlabsProvider) Transcription(ctx context.Context, key schem
 		return nil, providerUtils.NewBifrostOperationError(err.Error(), nil, providerName)
 	}
 
-	text, words, logProbs, language, duration := convertChunksToBifrost(chunks)
-
-	response := &schemas.BifrostTranscriptionResponse{
-		Text:     text,
-		Words:    words,
-		LogProbs: logProbs,
-		ExtraFields: schemas.BifrostResponseExtraFields{
-			RequestType:    schemas.TranscriptionRequest,
-			Provider:       providerName,
-			ModelRequested: request.Model,
-			Latency:        latency.Milliseconds(),
-		},
+	if len(chunks) == 0 {
+		return nil, providerUtils.NewBifrostOperationError("no chunks found in transcription response", nil, providerName)
 	}
 
-	if language != nil {
-		response.Language = language
+	response := ToBifrostTranscriptionResponse(chunks)
+	response.ExtraFields = schemas.BifrostResponseExtraFields{
+		RequestType:    schemas.TranscriptionRequest,
+		Provider:       providerName,
+		ModelRequested: request.Model,
+		Latency:        latency.Milliseconds(),
 	}
 
-	if duration != nil {
-		response.Duration = duration
-	}
-
-	if sendRaw {
+	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
 		response.ExtraFields.RawResponse = rawResponse
 	}
-
-	response.Task = schemas.Ptr("transcribe")
 
 	return response, nil
 }
@@ -716,4 +650,36 @@ func writeTranscriptionMultipart(writer *multipart.Writer, reqBody *ElevenlabsTr
 // TranscriptionStream is not supported by the Elevenlabs provider
 func (provider *ElevenlabsProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.TranscriptionStreamRequest, provider.GetProviderKey())
+}
+
+// buildSpeechRequestURL constructs the full request URL using the provider's configuration for speech.
+func (provider *ElevenlabsProvider) buildBaseSpeechRequestURL(ctx context.Context, defaultPath string, requestType schemas.RequestType, request *schemas.BifrostSpeechRequest) string {
+	baseURL := provider.networkConfig.BaseURL
+	requestPath := providerUtils.GetRequestPath(ctx, defaultPath, provider.customProviderConfig, requestType)
+
+	u, parseErr := url.Parse(baseURL)
+	if parseErr != nil {
+		return baseURL + requestPath
+	}
+
+	u.Path = path.Join(u.Path, requestPath)
+	q := u.Query()
+
+	if request.Params != nil {
+		if request.Params.EnableLogging != nil {
+			q.Set("enable_logging", strconv.FormatBool(*request.Params.EnableLogging))
+		}
+
+		convertedFormat := ConvertBifrostSpeechFormatToElevenlabs(request.Params.ResponseFormat)
+		if convertedFormat != "" {
+			q.Set("output_format", convertedFormat)
+		}
+
+		if request.Params.OptimizeStreamingLatency != nil {
+			q.Set("optimize_streaming_latency", strconv.FormatBool(*request.Params.OptimizeStreamingLatency))
+		}
+	}
+
+	u.RawQuery = q.Encode()
+	return u.String()
 }

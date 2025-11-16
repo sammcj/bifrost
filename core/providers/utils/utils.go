@@ -955,18 +955,3 @@ func HandleMultipleListModelsRequests(
 
 	return response, nil
 }
-
-func ConvertOpenAISpeechFormatToElevenlabsFormat(format string) string {
-	switch format {
-	case "", "mp3":
-		return "mp3_44100_128"
-	case "opus":
-		return "opus_48000_128"
-	case "wav":
-		return "pcm_44100"
-	case "pcm":
-		return "pcm_44100"
-	default:
-		return format
-	}
-}

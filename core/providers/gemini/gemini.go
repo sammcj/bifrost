@@ -489,8 +489,8 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 
 	// Start streaming in a goroutine
 	go func() {
-		defer close(responseChan)
 		defer providerUtils.ReleaseStreamingResponse(resp)
+		defer close(responseChan)
 
 		scanner := bufio.NewScanner(resp.BodyStream())
 		// Increase buffer size to handle large chunks (especially for audio data)
@@ -926,7 +926,7 @@ func extractGeminiUsageMetadata(geminiResponse *GenerateContentResponse) (int, i
 
 // parseStreamGeminiError parses Gemini streaming error responses
 func parseStreamGeminiError(providerName schemas.ModelProvider, resp *fasthttp.Response) *schemas.BifrostError {
-	body := resp.Body()
+	body := append([]byte(nil), resp.Body()...)
 
 	// Try to parse as JSON first
 	var errorResp GeminiGenerationError
@@ -953,7 +953,7 @@ func parseStreamGeminiError(providerName schemas.ModelProvider, resp *fasthttp.R
 
 // parseGeminiError parses Gemini error responses
 func parseGeminiError(providerName schemas.ModelProvider, resp *fasthttp.Response) *schemas.BifrostError {
-	body := resp.Body()
+	body := append([]byte(nil), resp.Body()...)
 
 	// Try to parse as JSON first
 	var errorResp GeminiGenerationError

@@ -609,7 +609,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 												);
 
 												if (unconfiguredProviders.length === 0) {
-													return <div className="text-muted-foreground px-2 py-1.5 text-sm">All providers configured</div>;
+													return <div className="text-muted-foreground px-2 py-1.5 text-sm">No providers left to configure</div>;
 												}
 
 												// Separate base providers and custom providers
@@ -812,143 +812,145 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 							</div>
 
 							{/* MCP Client Configurations */}
-							<div className="mt-6 space-y-2">
-								<div className="flex items-center gap-2">
-									<Label className="text-sm font-medium">MCP Client Configurations</Label>
-									<TooltipProvider>
-										<Tooltip>
-											<TooltipTrigger asChild>
-												<span>
-													<Info className="text-muted-foreground h-3 w-3" />
-												</span>
-											</TooltipTrigger>
-											<TooltipContent>
-												<p>
-													Configure which MCP clients this virtual key can use and their allowed tools. Leave empty to allow all MCP clients
-													and tools.
-												</p>
-											</TooltipContent>
-										</Tooltip>
-									</TooltipProvider>
+							{((mcpClientsData && mcpClientsData.length > 0) || (mcpConfigs && mcpConfigs.length > 0)) && (
+								<div className="mt-6 space-y-2">
+									<div className="flex items-center gap-2">
+										<Label className="text-sm font-medium">MCP Client Configurations</Label>
+										<TooltipProvider>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<span>
+														<Info className="text-muted-foreground h-3 w-3" />
+													</span>
+												</TooltipTrigger>
+												<TooltipContent>
+													<p>
+														Configure which MCP clients this virtual key can use and their allowed tools. Leave empty to allow all MCP
+														clients and tools.
+													</p>
+												</TooltipContent>
+											</Tooltip>
+										</TooltipProvider>
+									</div>
+
+									{/* Add MCP Client Dropdown */}
+									{mcpClientsData && mcpClientsData.length > 0 && (
+										<div className="flex gap-2">
+											<Select
+												value={selectedMCPClient}
+												onValueChange={(mcpClientId) => {
+													handleAddMCPClient(mcpClientId);
+													setSelectedMCPClient(""); // Reset to placeholder state
+												}}
+											>
+												<SelectTrigger className="flex-1">
+													<SelectValue placeholder="Select an MCP client to add" />
+												</SelectTrigger>
+												<SelectContent>
+													{mcpClientsData.filter((client) => !mcpConfigs.some((config) => config.mcp_client_name === client.config.name))
+														.length > 0 ? (
+														mcpClientsData
+															.filter((client) => !mcpConfigs.some((config) => config.mcp_client_name === client.config.name))
+															.map((client, index) => {
+																const client_tools = client.tools || [];
+																const totalTools = client.config.tools_to_execute?.includes("*")
+																	? client_tools.length
+																	: client_tools.filter((tool) => client.config.tools_to_execute?.includes(tool.name)).length;
+																return (
+																	<SelectItem key={index} value={client.config.name}>
+																		<div className="flex items-center gap-2">
+																			{client.config.name}
+																			<span className="text-muted-foreground text-xs">
+																				({totalTools} {totalTools === 1 ? "enabled tool" : "enabled tools"})
+																			</span>
+																		</div>
+																	</SelectItem>
+																);
+															})
+													) : (
+														<div className="text-muted-foreground px-2 py-1.5 text-sm">All MCP clients configured</div>
+													)}
+												</SelectContent>
+											</Select>
+										</div>
+									)}
+
+									{/* MCP Configurations Table */}
+									{mcpConfigs.length > 0 && (
+										<div className="rounded-md border">
+											<Table>
+												<TableHeader>
+													<TableRow>
+														<TableHead>MCP Client</TableHead>
+														<TableHead>Allowed Tools</TableHead>
+														<TableHead className="w-[50px]"></TableHead>
+													</TableRow>
+												</TableHeader>
+												<TableBody>
+													{mcpConfigs.map((config, index) => {
+														const mcpClient = mcpClientsData?.find((client) => client.config.name === config.mcp_client_name);
+
+														// Handle new wildcard semantics for client-level filtering
+														const clientToolsToExecute = mcpClient?.config?.tools_to_execute;
+														let availableTools: any[] = [];
+
+														if (!clientToolsToExecute || clientToolsToExecute.length === 0) {
+															// nil/undefined or empty array - no tools available from client config
+															availableTools = [];
+														} else if (clientToolsToExecute.includes("*")) {
+															// Wildcard - all tools available
+															availableTools = mcpClient?.tools || [];
+														} else {
+															// Specific tools listed
+															availableTools = (mcpClient?.tools || []).filter((tool) => clientToolsToExecute.includes(tool.name)) || [];
+														}
+
+														const enabledToolsByConfig =
+															(mcpClient?.tools || []).filter((tool) => config.tools_to_execute?.includes(tool.name)) || [];
+														const selectedTools = config.tools_to_execute || [];
+
+														return (
+															<TableRow key={`${config.mcp_client_name}-${index}`}>
+																<TableCell className="w-[150px]">{config.mcp_client_name}</TableCell>
+																<TableCell>
+																	<MultiSelect
+																		options={[...availableTools, ...enabledToolsByConfig]
+																			.filter((tool, index, arr) => arr.findIndex((t) => t.name === tool.name) === index)
+																			.map((tool) => ({
+																				label: tool.name,
+																				value: tool.name,
+																				description: tool.description,
+																			}))}
+																		defaultValue={selectedTools}
+																		onValueChange={(tools: string[]) => handleUpdateMCPConfig(index, "tools_to_execute", tools)}
+																		placeholder={
+																			selectedTools.length === 0
+																				? "No tools selected"
+																				: selectedTools.includes("*")
+																					? "All tools selected"
+																					: "Select tools..."
+																		}
+																		variant="inverted"
+																		className="hover:bg-accent w-full bg-white dark:bg-zinc-800"
+																		commandClassName="w-full max-w-96"
+																		modalPopover={true}
+																		animation={0}
+																	/>
+																</TableCell>
+																<TableCell>
+																	<Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveMCPClient(index)}>
+																		<Trash2 className="h-4 w-4" />
+																	</Button>
+																</TableCell>
+															</TableRow>
+														);
+													})}
+												</TableBody>
+											</Table>
+										</div>
+									)}
 								</div>
-
-								{/* Add MCP Client Dropdown */}
-								{mcpClientsData && mcpClientsData.length > 0 && (
-									<div className="flex gap-2">
-										<Select
-											value={selectedMCPClient}
-											onValueChange={(mcpClientId) => {
-												handleAddMCPClient(mcpClientId);
-												setSelectedMCPClient(""); // Reset to placeholder state
-											}}
-										>
-											<SelectTrigger className="flex-1">
-												<SelectValue placeholder="Select an MCP client to add" />
-											</SelectTrigger>
-											<SelectContent>
-												{mcpClientsData.filter((client) => !mcpConfigs.some((config) => config.mcp_client_name === client.config.name))
-													.length > 0 ? (
-													mcpClientsData
-														.filter((client) => !mcpConfigs.some((config) => config.mcp_client_name === client.config.name))
-														.map((client, index) => {
-															const client_tools = client.tools || [];
-															const totalTools = client.config.tools_to_execute?.includes("*")
-																? client_tools.length
-																: client_tools.filter((tool) => client.config.tools_to_execute?.includes(tool.name)).length;
-															return (
-																<SelectItem key={index} value={client.config.name}>
-																	<div className="flex items-center gap-2">
-																		{client.config.name}
-																		<span className="text-muted-foreground text-xs">
-																			({totalTools} {totalTools === 1 ? "enabled tool" : "enabled tools"})
-																		</span>
-																	</div>
-																</SelectItem>
-															);
-														})
-												) : (
-													<div className="text-muted-foreground px-2 py-1.5 text-sm">All MCP clients configured</div>
-												)}
-											</SelectContent>
-										</Select>
-									</div>
-								)}
-
-								{/* MCP Configurations Table */}
-								{mcpConfigs.length > 0 && (
-									<div className="rounded-md border">
-										<Table>
-											<TableHeader>
-												<TableRow>
-													<TableHead>MCP Client</TableHead>
-													<TableHead>Allowed Tools</TableHead>
-													<TableHead className="w-[50px]"></TableHead>
-												</TableRow>
-											</TableHeader>
-											<TableBody>
-												{mcpConfigs.map((config, index) => {
-													const mcpClient = mcpClientsData?.find((client) => client.config.name === config.mcp_client_name);
-
-													// Handle new wildcard semantics for client-level filtering
-													const clientToolsToExecute = mcpClient?.config?.tools_to_execute;
-													let availableTools: any[] = [];
-
-													if (!clientToolsToExecute || clientToolsToExecute.length === 0) {
-														// nil/undefined or empty array - no tools available from client config
-														availableTools = [];
-													} else if (clientToolsToExecute.includes("*")) {
-														// Wildcard - all tools available
-														availableTools = mcpClient?.tools || [];
-													} else {
-														// Specific tools listed
-														availableTools = (mcpClient?.tools || []).filter((tool) => clientToolsToExecute.includes(tool.name)) || [];
-													}
-
-													const enabledToolsByConfig =
-														(mcpClient?.tools || []).filter((tool) => config.tools_to_execute?.includes(tool.name)) || [];
-													const selectedTools = config.tools_to_execute || [];
-
-													return (
-														<TableRow key={`${config.mcp_client_name}-${index}`}>
-															<TableCell className="w-[150px]">{config.mcp_client_name}</TableCell>
-															<TableCell>
-																<MultiSelect
-																	options={[...availableTools, ...enabledToolsByConfig]
-																		.filter((tool, index, arr) => arr.findIndex((t) => t.name === tool.name) === index)
-																		.map((tool) => ({
-																			label: tool.name,
-																			value: tool.name,
-																			description: tool.description,
-																		}))}
-																	defaultValue={selectedTools}
-																	onValueChange={(tools: string[]) => handleUpdateMCPConfig(index, "tools_to_execute", tools)}
-																	placeholder={
-																		selectedTools.length === 0
-																			? "No tools selected"
-																			: selectedTools.includes("*")
-																				? "All tools selected"
-																				: "Select tools..."
-																	}
-																	variant="inverted"
-																	className="hover:bg-accent w-full bg-white dark:bg-zinc-800"
-																	commandClassName="w-full max-w-96"
-																	modalPopover={true}
-																	animation={0}
-																/>
-															</TableCell>
-															<TableCell>
-																<Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveMCPClient(index)}>
-																	<Trash2 className="h-4 w-4" />
-																</Button>
-															</TableCell>
-														</TableRow>
-													);
-												})}
-											</TableBody>
-										</Table>
-									</div>
-								)}
-							</div>
+							)}
 
 							<DottedSeparator className="mt-6 mb-5" />
 
