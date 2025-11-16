@@ -34,6 +34,10 @@ function getMessage(log?: LogEntry) {
 			}
 		}
 		return lastTextContentBlock;
+	} else if (log?.speech_input) {
+		return log.speech_input.input;
+	} else if (log?.transcription_input) {
+		return log.transcription_input.prompt || "Audio file";
 	}
 	return "";
 }
@@ -81,7 +85,7 @@ export const createColumns = (): ColumnDef<LogEntry>[] => [
 		cell: ({ row }) => {
 			const input = getMessage(row.original);
 			return (
-				<div className="max-w-[400px] truncate font-mono text-xs font-normal" title={input || "No message"}>
+				<div className="max-w-[400px] truncate font-mono text-xs font-normal" title={input || "-"}>
 					{input}
 				</div>
 			);

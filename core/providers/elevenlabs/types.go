@@ -47,9 +47,8 @@ type ElevenlabsPronunciationDictionaryLocator struct {
 
 // TRANSCRIPTION TYPES
 type ElevenlabsTranscriptionRequest struct {
-	ModelID string `json:"model_id"`
-	File    []byte `json:"-"`
-
+	ModelID               string                           `json:"model_id"`
+	File                  []byte                           `json:"-"`
 	LanguageCode          *string                          `json:"language_code,omitempty"`
 	TagAudioEvents        *bool                            `json:"tag_audio_events,omitempty"`
 	NumSpeakers           *int                             `json:"num_speakers,omitempty"`

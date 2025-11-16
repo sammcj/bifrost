@@ -1,4 +1,4 @@
-import { AllowedRequests, BaseProvider, ConcurrencyAndBufferSize, NetworkConfig } from "@/lib/types/config";
+import { BaseProvider, ConcurrencyAndBufferSize, NetworkConfig } from "@/lib/types/config";
 import { ProviderName } from "./logs";
 
 // Model placeholders based on provider type
