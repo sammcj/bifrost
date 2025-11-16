@@ -125,7 +125,7 @@ const productionSetupHelpCard = {
 			.
 		</>
 	),
-	dismissible: false,
+	dismissible: true,
 };
 
 // Sidebar item interface
@@ -228,9 +228,9 @@ const SidebarItemView = ({
 											isSubItemActive
 												? "bg-sidebar-accent text-primary font-medium"
 												: subItem.hasAccess == false
-													? "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground border-transparent cursor-not-allowed"
+													? "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
 													: "hover:bg-sidebar-accent hover:text-accent-foreground text-slate-500 dark:text-zinc-400"
-										}`}										
+										}`}
 										onClick={() => (subItem.hasAccess === false ? undefined : handleSubItemClick(subItem.url))}
 									>
 										<div className="flex items-center gap-2">
@@ -312,7 +312,7 @@ export default function AppSidebar() {
 	const hasClusterConfigAccess = useRbac(RbacResource.Cluster, RbacOperation.View);
 	const isAdaptiveRoutingAllowed = useRbac(RbacResource.AdaptiveRouter, RbacOperation.View);
 	const hasSettingsAccess = useRbac(RbacResource.Settings, RbacOperation.View);
-	
+
 	const items = [
 		{
 			title: "Observability",
@@ -371,7 +371,7 @@ export default function AppSidebar() {
 			title: "Governance",
 			url: "/workspace/governance",
 			icon: Landmark,
-			description: "Govern access",		
+			description: "Govern access",
 			hasAccess: true,
 			subItems: [
 				{
@@ -527,9 +527,6 @@ export default function AppSidebar() {
 	// Memoize promo cards array to prevent duplicates and unnecessary re-renders
 	const promoCards = useMemo(() => {
 		const cards = [];
-		if (!IS_ENTERPRISE) {
-			cards.push(productionSetupHelpCard);
-		}
 		if (showNewReleaseBanner && latestRelease) {
 			cards.push({
 				id: "new-release",
@@ -548,6 +545,9 @@ export default function AppSidebar() {
 				),
 				dismissible: true,
 			});
+		}
+		if (!IS_ENTERPRISE) {
+			cards.push(productionSetupHelpCard);
 		}
 		return cards;
 	}, [showNewReleaseBanner, latestRelease, newReleaseImage]);

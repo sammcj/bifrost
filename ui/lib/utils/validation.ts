@@ -371,7 +371,7 @@ function isValidWildcardOrigin(origin: string): boolean {
  * @returns Object with validation result and invalid origins
  */
 export function validateOrigins(origins: string[]): { isValid: boolean; invalidOrigins: string[] } {
-	const invalidOrigins = origins.filter((origin) => !isValidOrigin(origin));
+	const invalidOrigins = origins?.filter((origin) => !isValidOrigin(origin)) || [];
 
 	return {
 		isValid: invalidOrigins.length === 0,
@@ -565,13 +565,12 @@ export const cleanJson = (text: unknown) => {
  */
 export function isRequestTypeDisabled(providerType: BaseProvider | undefined, requestType: string): boolean {
 	if (!providerType) return false;
-	
+
 	const supportedRequests = PROVIDER_SUPPORTED_REQUESTS[providerType];
 	if (!supportedRequests) return false; // If provider not in base list, allow all
-	
+
 	return !supportedRequests.includes(requestType);
 }
-
 
 /**
  * Cleans the path overrides by removing empty values
@@ -585,5 +584,5 @@ export function cleanPathOverrides(overrides?: Record<string, string | undefined
 		.map(([k, v]) => [k, v?.trim()])
 		.filter(([, v]) => v && v !== "");
 
-	return entries.length ? Object.fromEntries(entries) as Record<string, string> : undefined;
+	return entries.length ? (Object.fromEntries(entries) as Record<string, string>) : undefined;
 }
