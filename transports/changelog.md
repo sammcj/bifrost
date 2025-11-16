@@ -1,2 +1,3 @@
 - feat: adds support for elevenlabs provider
 - fix: fixes security settings form submission with empty cors domains.
+- chore: minor ui enhancements

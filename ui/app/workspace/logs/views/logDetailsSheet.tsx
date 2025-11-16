@@ -32,20 +32,13 @@ export function LogDetailSheet({ log, open, onOpenChange }: LogDetailSheetProps)
 		} catch (ignored) {}
 	}
 
-	let toolChoice = null;
-	if (log.params?.tool_choice) {
-		try {
-			toolChoice = JSON.stringify(log.params.tool_choice, null, 2);
-		} catch (ignored) {}
-	}
-
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
 			<SheetContent className="dark:bg-card flex w-full flex-col overflow-x-hidden bg-white p-8 sm:max-w-2xl">
 				<SheetHeader className="px-0">
 					<SheetTitle className="flex w-fit items-center gap-2 font-medium">
-						{log.status === "success" && <p className="text-md max-w-full truncate">Request ID: {log.id}</p>}
-						<Badge variant="outline" className={StatusColors[log.status as Status]}>
+						{log.id && <p className="text-md max-w-full truncate">Request ID: {log.id}</p>}
+						<Badge variant="outline" className={`${StatusColors[log.status as Status]} uppercase`}>
 							{log.status}
 						</Badge>
 					</SheetTitle>
