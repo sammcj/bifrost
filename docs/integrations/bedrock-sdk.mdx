@@ -1,0 +1,106 @@
+---
+title: "AWS Bedrock Integration"
+description: "Use Bifrost as a Bedrock-compatible gateway for the Converse API, with Bifrost features on top."
+icon: "b"
+---
+
+## Overview
+
+Bifrost provides a Bedrock-compatible endpoint for the **Converse** API via protocol adaptation. The integration handles request transformation, response normalization, and error mapping between AWS Bedrock's Converse API and Bifrost's internal processing pipeline.
+
+This integration lets you layer Bifrost features like governance, load balancing, semantic caching, multi-provider support, and more on top of your existing Bedrock usage.
+
+**Endpoint:** `/bedrock`
+
+> **Current Status:** This integration currently supports the **Converse** API (non-streaming), including tools and image/multimodal usage via standard Converse fields. Converse streaming and list models via this integration are in progress.
+
+---
+
+## Setup
+
+<Tabs group="bedrock-sdk">
+<Tab title="Python">
+
+```python {6}
+import boto3
+
+# Configure boto3 Bedrock client to use Bifrost
+client = boto3.client(
+    service_name="bedrock-runtime",
+    endpoint_url="http://localhost:8080/bedrock",
+    region_name="us-west-2"  # AWS credentials handled by Bifrost
+)
+
+# Make requests as usual
+response = client.converse(
+    modelId="anthropic.claude-3-5-sonnet-20240620-v1:0",
+    messages=[
+        {
+            "role": "user",
+            "content": [{"text": "Hello!"}]
+        }
+    ]
+)
+
+print(response)
+```
+
+</Tab>
+</Tabs>
+
+---
+
+## Provider/Model Usage Examples
+
+Because Bedrock itself is a multi-provider platform, you can use any Bedrock-supported model ID and still route through Bifrost. Bifrost will handle governance, observability, and other cross-cutting concerns.
+
+```python
+import boto3
+
+client = boto3.client(
+    service_name="bedrock-runtime",
+    endpoint_url="http://localhost:8080/bedrock",
+    region_name="us-west-2"
+)
+
+# Anthropic via Bedrock
+anthropic_response = client.converse(
+    modelId="anthropic.claude-3-sonnet-20240229",
+    messages=[{"role": "user", "content": [{"text": "Hello from Claude!"}]}]
+)
+
+# Mistral via Bedrock
+mistral_response = client.converse(
+    modelId="mistral.mistral-large-2407",
+    messages=[{"role": "user", "content": [{"text": "Hello from Mistral!"}]}]
+)
+
+# Amazon Titan text models
+titan_response = client.converse(
+    modelId="amazon.titan-text-lite-v1",
+    messages=[{"role": "user", "content": [{"text": "Hello from Titan!"}]}]
+)
+```
+
+---
+
+## Supported Features
+
+The Bedrock integration currently supports:
+
+- **Converse** API (`/bedrock/model/{modelId}/converse`) for text/chat-style workloads  
+- **Tools** via `toolConfig`, `toolUse`, and `toolResult` inside Converse requests  
+- **Image and multimodal** responses where supported by the underlying Bedrock model  
+- All Bifrost core features that apply to these flows (governance, load balancing, semantic cache, observability, etc.)
+
+> **Roadmap:** Support for **Converse streaming** and **List Models** via the Bedrock integration is under active development.
+
+---
+
+## Next Steps
+
+- **[What is an integration?](./what-is-an-integration)** – Core integration concepts  
+- **[Configuration](../quickstart/README)** – Bedrock provider setup and API key management  
+- **[Core Features](../features/)** – Governance, semantic caching, and more
+
+
