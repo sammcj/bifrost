@@ -28,6 +28,8 @@ func SetLogger(l schemas.Logger) {
 	logger = l
 }
 
+var UnsupportedSpeechStreamModels = []string{"tts-1", "tts-1-hd"}
+
 // MakeRequestWithContext makes a request with a context and returns the latency and error.
 // IMPORTANT: This function does NOT truly cancel the underlying fasthttp network request if the
 // context is done. The fasthttp client call will continue in its goroutine until it completes
@@ -952,4 +954,19 @@ func HandleMultipleListModelsRequests(
 	response.ExtraFields.Latency = latency.Milliseconds()
 
 	return response, nil
+}
+
+func ConvertOpenAISpeechFormatToElevenlabsFormat(format string) string {
+	switch format {
+	case "", "mp3":
+		return "mp3_44100_128"
+	case "opus":
+		return "opus_48000_128"
+	case "wav":
+		return "pcm_44100"
+	case "pcm":
+		return "pcm_44100"
+	default:
+		return format
+	}
 }
