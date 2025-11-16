@@ -1,0 +1,2 @@
+- feat: Support for Elevenlabs text-to-speech (with timestamps and streaming)
+- feat: Support for Elevenlabs speech-to-text (transcription)

@@ -187,7 +187,7 @@ func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx c
 
 			requestCtx := context.Background()
 
-			response, bifrostErr := WithTestRetry(t, retryConfig, retryContext, expectations, "SpeechSynthesis_HD", func() (*schemas.BifrostResponse, *schemas.BifrostError) {
+			responseFormat, bifrostErr := WithTestRetry(t, retryConfig, retryContext, expectations, "SpeechSynthesis_HD", func() (*schemas.BifrostResponse, *schemas.BifrostError) {
 				c, err := client.SpeechRequest(requestCtx, request)
 				if err != nil {
 					return nil, err
@@ -198,20 +198,20 @@ func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx c
 				t.Fatalf("❌ SpeechSynthesis_HD request failed after retries: %v", GetErrorMessage(bifrostErr))
 			}
 
-			if response.SpeechResponse == nil || response.SpeechResponse.Audio == nil {
+			if responseFormat.SpeechResponse == nil || responseFormat.SpeechResponse.Audio == nil {
 				t.Fatal("HD speech synthesis response missing audio data")
 			}
 
-			audioSize := len(response.SpeechResponse.Audio)
+			audioSize := len(responseFormat.SpeechResponse.Audio)
 			if audioSize < 5000 {
 				t.Fatalf("HD audio data too small: got %d bytes, expected at least 5000", audioSize)
 			}
 
-			if response.SpeechResponse.ExtraFields.ModelRequested != testConfig.SpeechSynthesisModel {
-				t.Logf("⚠️ Expected HD model, got: %s", response.SpeechResponse.ExtraFields.ModelRequested)
+			if responseFormat.SpeechResponse.ExtraFields.ModelRequested != testConfig.SpeechSynthesisModel {
+				t.Logf("⚠️ Expected HD model, got: %s", responseFormat.SpeechResponse.ExtraFields.ModelRequested)
 			}
 
-			t.Logf("✅ HD speech synthesis successful: %d bytes generated", len(response.SpeechResponse.Audio))
+			t.Logf("✅ HD speech synthesis successful: %d bytes generated", len(responseFormat.SpeechResponse.Audio))
 		})
 
 		t.Run("AllVoiceOptions", func(t *testing.T) {
