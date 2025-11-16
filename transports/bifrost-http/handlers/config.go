@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -306,14 +307,20 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		// Getting current governance config
 		authConfig, err := h.store.ConfigStore.GetAuthConfig(ctx)
 		if err != nil {
-			logger.Warn(fmt.Sprintf("failed to get auth config from store: %v", err))
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to get auth config from store: %v", err))
+			if !errors.Is(err, configstore.ErrNotFound) {
+				logger.Warn(fmt.Sprintf("failed to get auth config from store: %v", err))
+				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to get auth config from store: %v", err))
+				return
+			}
+		}
+		if authConfig == nil && (payload.AuthConfig.AdminUserName == "" || payload.AuthConfig.AdminPassword == "") {
+			SendError(ctx, fasthttp.StatusBadRequest, "auth username and password must be provided")
 			return
 		}
 		// Fetching current Auth config
 		if payload.AuthConfig.AdminUserName != "" {
 			if payload.AuthConfig.AdminPassword == "<redacted>" {
-				if authConfig.AdminPassword == "" {
+				if authConfig == nil || authConfig.AdminPassword == "" {
 					SendError(ctx, fasthttp.StatusBadRequest, "auth password must be provided")
 					return
 				}
@@ -331,15 +338,11 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 				payload.AuthConfig.AdminPassword = string(hashedPassword)
 			}
 		}
-		// Checking if auth is enabled or not
-
-		if payload.AuthConfig != nil && authConfig != nil {
-			err = h.configManager.UpdateAuthConfig(ctx, payload.AuthConfig)
-			if err != nil {
-				logger.Warn(fmt.Sprintf("failed to update auth config: %v", err))
-				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update auth config: %v", err))
-				return
-			}
+		err = h.configManager.UpdateAuthConfig(ctx, payload.AuthConfig)
+		if err != nil {
+			logger.Warn(fmt.Sprintf("failed to update auth config: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update auth config: %v", err))
+			return
 		}
 	}
 	ctx.SetStatusCode(fasthttp.StatusOK)
