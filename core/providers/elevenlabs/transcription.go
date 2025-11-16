@@ -97,6 +97,58 @@ func ToElevenlabsTranscriptionRequest(bifrostReq *schemas.BifrostTranscriptionRe
 	return req
 }
 
+func ToBifrostTranscriptionResponse(chunks []ElevenlabsSpeechToTextChunkResponse) *schemas.BifrostTranscriptionResponse {
+	if len(chunks) == 0 {
+		return nil
+	}
+
+	textParts := make([]string, 0, len(chunks))
+	allWords := make([]schemas.TranscriptionWord, 0)
+	allLogProbs := make([]schemas.TranscriptionLogProb, 0)
+
+	var language *string
+	var overallDuration *float64
+
+	for _, chunk := range chunks {
+		textParts = append(textParts, chunk.Text)
+
+		words, logProbs, chunkDuration := convertWords(chunk.Words)
+		allWords = append(allWords, words...)
+		allLogProbs = append(allLogProbs, logProbs...)
+
+		if language == nil && chunk.LanguageCode != "" {
+			lc := chunk.LanguageCode
+			language = &lc
+		}
+
+		if chunkDuration != nil {
+			if overallDuration == nil || *chunkDuration > *overallDuration {
+				val := *chunkDuration
+				overallDuration = &val
+			}
+		}
+	}
+
+	text := strings.Join(textParts, "\n")
+
+	response := &schemas.BifrostTranscriptionResponse{
+		Text:     text,
+		Words:    allWords,
+		LogProbs: allLogProbs,
+	}
+
+	if language != nil {
+		response.Language = language
+	}
+
+	if overallDuration != nil {
+		response.Duration = overallDuration
+	}
+
+	return response
+
+}
+
 func convertAdditionalFormat(format schemas.TranscriptionAdditionalFormat) (ElevenlabsAdditionalFormat, bool) {
 	if format.Format == "" {
 		return ElevenlabsAdditionalFormat{}, false
@@ -131,41 +183,6 @@ func convertAdditionalFormat(format schemas.TranscriptionAdditionalFormat) (Elev
 	}
 
 	return converted, true
-}
-
-func convertChunksToBifrost(chunks []ElevenlabsSpeechToTextChunkResponse) (string, []schemas.TranscriptionWord, []schemas.TranscriptionLogProb, *string, *float64) {
-	if len(chunks) == 0 {
-		return "", nil, nil, nil, nil
-	}
-
-	textParts := make([]string, 0, len(chunks))
-	allWords := make([]schemas.TranscriptionWord, 0)
-	allLogProbs := make([]schemas.TranscriptionLogProb, 0)
-
-	var language *string
-	var overallDuration *float64
-
-	for _, chunk := range chunks {
-		textParts = append(textParts, chunk.Text)
-
-		words, logProbs, chunkDuration := convertWords(chunk.Words)
-		allWords = append(allWords, words...)
-		allLogProbs = append(allLogProbs, logProbs...)
-
-		if language == nil && chunk.LanguageCode != "" {
-			lc := chunk.LanguageCode
-			language = &lc
-		}
-
-		if chunkDuration != nil {
-			if overallDuration == nil || *chunkDuration > *overallDuration {
-				val := *chunkDuration
-				overallDuration = &val
-			}
-		}
-	}
-
-	return strings.Join(textParts, "\n"), allWords, allLogProbs, language, overallDuration
 }
 
 func convertWords(words []ElevenlabsSpeechToTextWord) ([]schemas.TranscriptionWord, []schemas.TranscriptionLogProb, *float64) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/valyala/fasthttp"
 
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
@@ -11,19 +12,11 @@ import (
 )
 
 func parseElevenlabsError(providerName schemas.ModelProvider, resp *fasthttp.Response) *schemas.BifrostError {
-	body := resp.Body()
+	body := append([]byte(nil), resp.Body()...)
 
+	// Try to parse as JSON first
 	var errorResp ElevenlabsError
-	rawResponse, bifrostErr := providerUtils.HandleProviderResponse(body, &errorResp, true)
-	if bifrostErr != nil {
-		return providerUtils.NewBifrostOperationError(
-			fmt.Sprintf("failed to parse error response: %v", bifrostErr.Error.Error),
-			fmt.Errorf("HTTP %d", resp.StatusCode()),
-			providerName,
-		)
-	}
-
-	if len(errorResp.Detail) > 0 {
+	if err := sonic.Unmarshal(body, &errorResp); err == nil {
 		var messages []string
 		for _, detail := range errorResp.Detail {
 			location := "unknown"
@@ -43,9 +36,10 @@ func parseElevenlabsError(providerName schemas.ModelProvider, resp *fasthttp.Res
 		}
 	}
 
-	if rawResponse != nil {
-		return providerUtils.NewBifrostOperationError(fmt.Sprintf("Elevenlabs error: %v", rawResponse), fmt.Errorf("HTTP %d", resp.StatusCode()), providerName)
+	var rawResponse map[string]interface{}
+	if err := sonic.Unmarshal(body, &rawResponse); err != nil {
+		return providerUtils.NewBifrostOperationError("failed to parse Elevenlabs error response", err, providerName)
 	}
 
-	return providerUtils.NewBifrostOperationError("Elevenlabs error: no response", fmt.Errorf("HTTP %d", resp.StatusCode()), providerName)
+	return providerUtils.NewBifrostOperationError(fmt.Sprintf("Elevenlabs error: %v", rawResponse), fmt.Errorf("HTTP %d", resp.StatusCode()), providerName)
 }

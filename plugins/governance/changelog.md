@@ -1,1 +1,1 @@
-- chore: update core version to 1.2.23 and framework version to 1.1.28
+- chore: update core version to 1.2.24 and framework version to 1.1.29

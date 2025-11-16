@@ -78,7 +78,7 @@ export function LogsDataTable({
 	return (
 		<div className="space-y-2">
 			<LogFiltersComponent filters={filters} onFiltersChange={onFiltersChange} />
-			<div className="rounded-sm border max-h-[calc(100vh-16.5rem)]">
+			<div className="max-h-[calc(100vh-16.5rem)] rounded-sm border">
 				<Table containerClassName="max-h-[calc(100vh-16.5rem)]">
 					<TableHeader className="px-2">
 						{table.getHeaderGroups().map((headerGroup) => (
@@ -91,7 +91,7 @@ export function LogsDataTable({
 							</TableRow>
 						))}
 					</TableHeader>
-					<TableBody>	
+					<TableBody>
 						{loading ? (
 							<TableRow>
 								<TableCell colSpan={columns.length} className="h-24 text-center">

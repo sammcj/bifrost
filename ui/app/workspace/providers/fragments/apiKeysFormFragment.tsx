@@ -22,14 +22,7 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 	const isBedrock = providerName === "bedrock";
 	const isVertex = providerName === "vertex";
 	const isAzure = providerName === "azure";
-	const modelsPlaceholder = isAzure
-		? ModelPlaceholders.azure
-		: isBedrock
-			? ModelPlaceholders.bedrock
-			: isVertex
-				? ModelPlaceholders.vertex
-				: ModelPlaceholders.openai;
-
+	const modelsPlaceholder = ModelPlaceholders[providerName as keyof typeof ModelPlaceholders] ?? ModelPlaceholders.default;
 	return (
 		<div data-tab="api-keys" className="space-y-4 overflow-hidden">
 			{isBedrock && (
