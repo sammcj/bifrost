@@ -25,7 +25,7 @@ func CorsMiddleware(config *lib.Config) lib.BifrostHTTPMiddleware {
 			// Check if origin is allowed (localhost always allowed + configured origins)
 			if allowed {
 				ctx.Response.Header.Set("Access-Control-Allow-Origin", origin)
-				ctx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				ctx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
 				ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 				ctx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
 				ctx.Response.Header.Set("Access-Control-Max-Age", "86400")
@@ -54,7 +54,6 @@ func TransportInterceptorMiddleware(config *lib.Config) lib.BifrostHTTPMiddlewar
 				next(ctx)
 				return
 			}
-
 			// If governance plugin is not loaded, skip interception
 			hasGovernance := false
 			for _, p := range plugins {
@@ -128,7 +127,6 @@ func TransportInterceptorMiddleware(config *lib.Config) lib.BifrostHTTPMiddlewar
 			for key, value := range headers {
 				ctx.Request.Header.Set(key, value)
 			}
-
 			next(ctx)
 		}
 	}
@@ -168,7 +166,7 @@ func AuthMiddleware(store configstore.ConfigStore) lib.BifrostHTTPMiddleware {
 		"/api/session/login",
 		"/api/session/logout",
 		"/health",
-	}	
+	}
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			// We skip authorization for the login route
