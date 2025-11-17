@@ -1475,9 +1475,15 @@ func (c *Config) UpdateProviderConfig(ctx context.Context, provider schemas.Mode
 
 	if c.ConfigStore != nil {
 		if err := c.ConfigStore.UpdateProvider(ctx, provider, config, c.EnvKeys); err != nil {
+			if errors.Is(err, configstore.ErrNotFound) {
+				return ErrNotFound
+			}
 			return fmt.Errorf("failed to update provider config in store: %w", err)
 		}
 		if err := c.ConfigStore.UpdateEnvKeys(ctx, c.EnvKeys); err != nil {
+			if errors.Is(err, configstore.ErrNotFound) {
+				return ErrNotFound
+			}
 			logger.Warn("failed to update env keys: %v", err)
 		}
 	}

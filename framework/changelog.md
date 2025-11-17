@@ -1,0 +1,1 @@
+feat: splits logs APIs into `getStats` and `getLogs` to improve speed for sqlite

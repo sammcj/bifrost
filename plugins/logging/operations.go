@@ -322,6 +322,11 @@ func (p *LoggerPlugin) SearchLogs(ctx context.Context, filters logstore.SearchFi
 	return p.store.SearchLogs(ctx, filters, pagination)
 }
 
+// GetStats calculates statistics for logs matching the given filters
+func (p *LoggerPlugin) GetStats(ctx context.Context, filters logstore.SearchFilters) (*logstore.SearchStats, error) {
+	return p.store.GetStats(ctx, filters)
+}
+
 // GetAvailableModels returns all unique models from logs
 func (p *LoggerPlugin) GetAvailableModels(ctx context.Context) []string {
 	result, err := p.store.FindAll(ctx, "model IS NOT NULL AND model != ''", "model")

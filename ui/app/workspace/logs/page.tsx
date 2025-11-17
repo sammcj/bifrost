@@ -8,9 +8,9 @@ import FullPageLoader from "@/components/fullPageLoader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { getErrorMessage, useLazyGetLogsQuery } from "@/lib/store";
+import { getErrorMessage, useLazyGetLogsQuery, useLazyGetLogsStatsQuery } from "@/lib/store";
 import type { ChatMessage, ChatMessageContent, ContentBlock, LogEntry, LogFilters, LogStats, Pagination } from "@/lib/types/logs";
-import { AlertCircle, BarChart, CheckCircle, Clock, DollarSign, Hash } from "lucide-react";
+import { AlertCircle, BarChart, CheckCircle, Clock, DollarSign, Hash, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export default function LogsPage() {	
@@ -19,11 +19,13 @@ export default function LogsPage() {
 	const [stats, setStats] = useState<LogStats | null>(null);
 	const [initialLoading, setInitialLoading] = useState(true); // on initial load
 	const [fetchingLogs, setFetchingLogs] = useState(false); // on pagination/filters change
+	const [fetchingStats, setFetchingStats] = useState(false); // on stats fetch
 	const [error, setError] = useState<string | null>(null);
 	const [showEmptyState, setShowEmptyState] = useState(false);
 
-	// RTK Query lazy hook for manual triggering
+	// RTK Query lazy hooks for manual triggering
 	const [triggerGetLogs] = useLazyGetLogsQuery();
+	const [triggerGetStats] = useLazyGetLogsStatsQuery();
 
 	const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
 
@@ -221,7 +223,6 @@ export default function LogsPage() {
 			} else if (result.data) {
 				setLogs(result.data.logs || []);
 				setTotalItems(result.data.stats.total_requests);
-				setStats(result.data.stats);
 			}
 
 			// Only set showEmptyState on initial load and only based on total logs
@@ -241,14 +242,50 @@ export default function LogsPage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [filters, pagination]);
 
+	const fetchStats = useCallback(async () => {
+		setFetchingStats(true);
+
+		try {
+			const result = await triggerGetStats({ filters });
+
+			if (result.error) {
+				// Don't show error for stats failure, just log it
+				console.error("Failed to fetch stats:", result.error);
+			} else if (result.data) {
+				setStats(result.data);
+			}
+		} catch (error) {
+			console.error("Failed to fetch stats:", error);
+		} finally {
+			setFetchingStats(false);
+		}
+	}, [filters, triggerGetStats]);
+
 	// Fetch logs when filters or pagination change
 	useEffect(() => {
-		if (!initialLoading) fetchLogs();
-	}, [fetchLogs, initialLoading]);
+		if (!initialLoading) {
+			fetchLogs();
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [filters, pagination, initialLoading]);
 
+	// Fetch stats when filters change (but not pagination)
 	useEffect(() => {
-		fetchLogs();
-		setInitialLoading(false);
+		if (!initialLoading) {
+			fetchStats();
+		}
+	}, [fetchStats, initialLoading]);
+
+	// Initial load
+	useEffect(() => {
+		const initialLoad = async () => {
+			// Load logs and stats in parallel, don't wait for stats to show the page
+			await fetchLogs();
+			fetchStats(); // Don't await - let it load in background
+			setInitialLoading(false);
+		};
+		initialLoad();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	const getMessageText = (content: ChatMessageContent): string => {
@@ -315,31 +352,31 @@ export default function LogsPage() {
 		() => [
 			{
 				title: "Total Requests",
-				value: stats?.total_requests.toLocaleString() || "-",
+				value: fetchingStats ? <Loader2 className="size-4 animate-spin mt-2" /> : stats?.total_requests.toLocaleString() || "-",
 				icon: <BarChart className="size-4" />,
 			},
 			{
 				title: "Success Rate",
-				value: stats ? `${stats.success_rate.toFixed(2)}%` : "-",
+				value: fetchingStats ? <Loader2 className="size-4 animate-spin mt-2" /> : stats ? `${stats.success_rate.toFixed(2)}%` : "-",
 				icon: <CheckCircle className="size-4" />,
 			},
 			{
 				title: "Avg Latency",
-				value: stats ? `${stats.average_latency.toFixed(2)}ms` : "-",
+				value: fetchingStats ? <Loader2 className="size-4 animate-spin mt-2" /> : stats ? `${stats.average_latency.toFixed(2)}ms` : "-",
 				icon: <Clock className="size-4" />,
 			},
 			{
 				title: "Total Tokens",
-				value: stats?.total_tokens.toLocaleString() || "-",
+				value: fetchingStats ? <Loader2 className="size-4 animate-spin mt-2" /> : stats?.total_tokens.toLocaleString() || "-",
 				icon: <Hash className="size-4" />,
 			},
 			{
 				title: "Total Cost",
-				value: stats ? `$${(stats.total_cost ?? 0).toFixed(4)}` : "-",
+				value: fetchingStats ? <Loader2 className="size-4 animate-spin mt-2" /> : stats ? `$${(stats.total_cost ?? 0).toFixed(4)}` : "-",
 				icon: <DollarSign className="size-4" />,
 			},
 		],
-		[stats],
+		[stats, fetchingStats],
 	);
 
 	const columns = useMemo(() => createColumns(), []);
