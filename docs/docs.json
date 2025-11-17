@@ -153,7 +153,21 @@
             "pages": [
               "enterprise/guardrails",
               "enterprise/clustering",
-              "enterprise/advanced-governance",
+              {
+                "group": "Advanced Governance",
+                "icon": "shield-check",
+                "pages": [
+                  "enterprise/advanced-governance",
+                  {
+                    "group": "Identity Providers",
+                    "icon": "id-card",
+                    "pages": [
+                      "enterprise/setting-up-okta",
+                      "enterprise/setting-up-entra"
+                    ]
+                  }
+                ]
+              },
               "enterprise/mcp-with-fa",
               "enterprise/vault-support",
               "enterprise/invpc-deployments",
