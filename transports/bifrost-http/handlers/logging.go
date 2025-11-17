@@ -41,6 +41,7 @@ func NewLoggingHandler(logManager logging.LogManager, redactedKeysManager Redact
 func (h *LoggingHandler) RegisterRoutes(r *router.Router, middlewares ...lib.BifrostHTTPMiddleware) {
 	// Log retrieval with filtering, search, and pagination
 	r.GET("/api/logs", lib.ChainMiddlewares(h.getLogs, middlewares...))
+	r.GET("/api/logs/stats", lib.ChainMiddlewares(h.getLogsStats, middlewares...))
 	r.GET("/api/logs/dropped", lib.ChainMiddlewares(h.getDroppedRequests, middlewares...))
 	r.GET("/api/logs/filterdata", lib.ChainMiddlewares(h.getAvailableFilterData, middlewares...))
 }
@@ -199,6 +200,84 @@ func (h *LoggingHandler) getLogs(ctx *fasthttp.RequestCtx) {
 	}
 
 	SendJSON(ctx, result)
+}
+
+// getLogsStats handles GET /api/logs/stats - Get statistics for logs with filtering
+func (h *LoggingHandler) getLogsStats(ctx *fasthttp.RequestCtx) {
+	// Parse query parameters into filters (same as getLogs)
+	filters := &logstore.SearchFilters{}
+
+	// Extract filters from query parameters
+	if providers := string(ctx.QueryArgs().Peek("providers")); providers != "" {
+		filters.Providers = parseCommaSeparated(providers)
+	}
+	if models := string(ctx.QueryArgs().Peek("models")); models != "" {
+		filters.Models = parseCommaSeparated(models)
+	}
+	if statuses := string(ctx.QueryArgs().Peek("status")); statuses != "" {
+		filters.Status = parseCommaSeparated(statuses)
+	}
+	if objects := string(ctx.QueryArgs().Peek("objects")); objects != "" {
+		filters.Objects = parseCommaSeparated(objects)
+	}
+	if selectedKeyIDs := string(ctx.QueryArgs().Peek("selected_key_ids")); selectedKeyIDs != "" {
+		filters.SelectedKeyIDs = parseCommaSeparated(selectedKeyIDs)
+	}
+	if virtualKeyIDs := string(ctx.QueryArgs().Peek("virtual_key_ids")); virtualKeyIDs != "" {
+		filters.VirtualKeyIDs = parseCommaSeparated(virtualKeyIDs)
+	}
+	if startTime := string(ctx.QueryArgs().Peek("start_time")); startTime != "" {
+		if t, err := time.Parse(time.RFC3339, startTime); err == nil {
+			filters.StartTime = &t
+		}
+	}
+	if endTime := string(ctx.QueryArgs().Peek("end_time")); endTime != "" {
+		if t, err := time.Parse(time.RFC3339, endTime); err == nil {
+			filters.EndTime = &t
+		}
+	}
+	if minLatency := string(ctx.QueryArgs().Peek("min_latency")); minLatency != "" {
+		if f, err := strconv.ParseFloat(minLatency, 64); err == nil {
+			filters.MinLatency = &f
+		}
+	}
+	if maxLatency := string(ctx.QueryArgs().Peek("max_latency")); maxLatency != "" {
+		if val, err := strconv.ParseFloat(maxLatency, 64); err == nil {
+			filters.MaxLatency = &val
+		}
+	}
+	if minTokens := string(ctx.QueryArgs().Peek("min_tokens")); minTokens != "" {
+		if val, err := strconv.Atoi(minTokens); err == nil {
+			filters.MinTokens = &val
+		}
+	}
+	if maxTokens := string(ctx.QueryArgs().Peek("max_tokens")); maxTokens != "" {
+		if val, err := strconv.Atoi(maxTokens); err == nil {
+			filters.MaxTokens = &val
+		}
+	}
+	if cost := string(ctx.QueryArgs().Peek("min_cost")); cost != "" {
+		if val, err := strconv.ParseFloat(cost, 64); err == nil {
+			filters.MinCost = &val
+		}
+	}
+	if maxCost := string(ctx.QueryArgs().Peek("max_cost")); maxCost != "" {
+		if val, err := strconv.ParseFloat(maxCost, 64); err == nil {
+			filters.MaxCost = &val
+		}
+	}
+	if contentSearch := string(ctx.QueryArgs().Peek("content_search")); contentSearch != "" {
+		filters.ContentSearch = contentSearch
+	}
+
+	stats, err := h.logManager.GetStats(ctx, filters)
+	if err != nil {
+		logger.Error("failed to get log stats: %v", err)
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Stats calculation failed: %v", err))
+		return
+	}
+
+	SendJSON(ctx, stats)
 }
 
 // getDroppedRequests handles GET /api/logs/dropped - Get the number of dropped requests

@@ -422,13 +422,6 @@ func (h *ProviderHandler) updateProvider(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	// First update the provider config in store because account interface fetched config from there in client update
-	if err := h.client.UpdateProvider(provider); err != nil {
-		logger.Warn(fmt.Sprintf("Failed to update provider %s: %v", provider, err))
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to update provider: %v", err))
-		return
-	}
-
 	// Get redacted config for response
 	redactedConfig, err := h.store.GetProviderConfigRedacted(provider)
 	if err != nil {

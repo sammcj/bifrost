@@ -180,10 +180,6 @@ func (h *GovernanceHandler) getVirtualKeys(ctx *fasthttp.RequestCtx) {
 	// Preload all relationships for complete information
 	virtualKeys, err := h.configStore.GetVirtualKeys(ctx)
 	if err != nil {
-		if errors.Is(err, configstore.ErrNotFound) {
-			SendError(ctx, 404, "Virtual keys not found")
-			return
-		}
 		logger.Error("failed to retrieve virtual keys: %v", err)
 		SendError(ctx, 500, "Failed to retrieve virtual keys")
 		return

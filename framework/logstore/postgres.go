@@ -30,12 +30,9 @@ func newPostgresLogStore(ctx context.Context, config *PostgresConfig, logger sch
 	}
 	d := &RDBLogStore{db: db, logger: logger}
 	// Run migrations
-	if err := db.WithContext(ctx).AutoMigrate(&Log{}); err != nil {
-		// Closing the DB connection
-		if sqlDB, dbErr := db.DB(); dbErr == nil {
-			if closeErr := sqlDB.Close(); closeErr != nil {
-				logger.Error("failed to close DB connection: %v", closeErr)
-			}
+	if err := triggerMigrations(ctx, db); err != nil {
+		if sqlDB, sqlErr := db.DB(); sqlErr == nil {
+			sqlDB.Close()
 		}
 		return nil, err
 	}

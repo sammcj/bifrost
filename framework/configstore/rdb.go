@@ -235,6 +235,9 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 		// Get existing keys for this provider
 		var existingKeys []tables.TableKey
 		if err := tx.WithContext(ctx).Where("provider_id = ?", dbProvider.ID).Find(&existingKeys).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNotFound
+			}
 			return err
 		}
 
@@ -302,6 +305,9 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 		// Delete keys that are no longer in the new config
 		for _, keyToDelete := range existingKeysMap {
 			if err := tx.WithContext(ctx).Delete(&keyToDelete).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return ErrNotFound
+				}
 				return err
 			}
 		}
@@ -406,6 +412,9 @@ func (s *RDBConfigStore) DeleteProvider(ctx context.Context, provider schemas.Mo
 
 		// Delete the provider (keys will be deleted due to CASCADE constraint)
 		if err := tx.WithContext(ctx).Delete(&dbProvider).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNotFound
+			}
 			return err
 		}
 
@@ -1143,6 +1152,9 @@ func (s *RDBConfigStore) DeleteVirtualKey(ctx context.Context, id string) error 
 func (s *RDBConfigStore) GetVirtualKeyProviderConfigs(ctx context.Context, virtualKeyID string) ([]tables.TableVirtualKeyProviderConfig, error) {
 	var virtualKey tables.TableVirtualKey
 	if err := s.db.WithContext(ctx).First(&virtualKey, "id = ?", virtualKeyID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return []tables.TableVirtualKeyProviderConfig{}, nil
+		}
 		return nil, err
 	}
 	if virtualKey.ID == "" {
@@ -1192,6 +1204,9 @@ func (s *RDBConfigStore) DeleteVirtualKeyProviderConfig(ctx context.Context, id 
 func (s *RDBConfigStore) GetVirtualKeyMCPConfigs(ctx context.Context, virtualKeyID string) ([]tables.TableVirtualKeyMCPConfig, error) {
 	var virtualKey tables.TableVirtualKey
 	if err := s.db.WithContext(ctx).First(&virtualKey, "id = ?", virtualKeyID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return []tables.TableVirtualKeyMCPConfig{}, nil
+		}
 		return nil, err
 	}
 	if virtualKey.ID == "" {
@@ -1349,6 +1364,9 @@ func (s *RDBConfigStore) DeleteCustomer(ctx context.Context, id string) error {
 func (s *RDBConfigStore) GetRateLimit(ctx context.Context, id string) (*tables.TableRateLimit, error) {
 	var rateLimit tables.TableRateLimit
 	if err := s.db.WithContext(ctx).First(&rateLimit, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return &rateLimit, nil
@@ -1600,6 +1618,9 @@ func (s *RDBConfigStore) UpdateAuthConfig(ctx context.Context, config *AuthConfi
 func (s *RDBConfigStore) GetSession(ctx context.Context, token string) (*tables.SessionsTable, error) {
 	var session tables.SessionsTable
 	if err := s.db.WithContext(ctx).First(&session, "token = ?", token).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &session, nil

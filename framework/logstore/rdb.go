@@ -17,33 +17,8 @@ type RDBLogStore struct {
 	logger schemas.Logger
 }
 
-// Create inserts a new log entry into the database.
-func (s *RDBLogStore) Create(ctx context.Context, entry *Log) error {
-	return s.db.WithContext(ctx).Create(entry).Error
-}
-
-// Ping checks if the database is reachable.
-func (s *RDBLogStore) Ping(ctx context.Context) error {
-	return s.db.WithContext(ctx).Exec("SELECT 1").Error
-}
-
-// Update updates a log entry in the database.
-func (s *RDBLogStore) Update(ctx context.Context, id string, entry any) error {
-	tx := s.db.WithContext(ctx).Model(&Log{}).Where("id = ?", id).Updates(entry)
-	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
-		return ErrNotFound
-	}
-	if tx.RowsAffected == 0 {
-		return ErrNotFound
-	}
-	return tx.Error
-}
-
-// SearchLogs searches for logs in the database.
-func (s *RDBLogStore) SearchLogs(ctx context.Context, filters SearchFilters, pagination PaginationOptions) (*SearchResult, error) {
-	baseQuery := s.db.WithContext(ctx).Model(&Log{})
-
-	// Apply filters efficiently
+// applyFilters applies search filters to a GORM query
+func (s *RDBLogStore) applyFilters(baseQuery *gorm.DB, filters SearchFilters) *gorm.DB {
 	if len(filters.Providers) > 0 {
 		baseQuery = baseQuery.Where("provider IN ?", filters.Providers)
 	}
@@ -89,59 +64,39 @@ func (s *RDBLogStore) SearchLogs(ctx context.Context, filters SearchFilters, pag
 	if filters.ContentSearch != "" {
 		baseQuery = baseQuery.Where("content_summary LIKE ?", "%"+filters.ContentSearch+"%")
 	}
+	return baseQuery
+}
 
-	// Get total count
+// Create inserts a new log entry into the database.
+func (s *RDBLogStore) Create(ctx context.Context, entry *Log) error {
+	return s.db.WithContext(ctx).Create(entry).Error
+}
+
+// Ping checks if the database is reachable.
+func (s *RDBLogStore) Ping(ctx context.Context) error {
+	return s.db.WithContext(ctx).Exec("SELECT 1").Error
+}
+
+// Update updates a log entry in the database.
+func (s *RDBLogStore) Update(ctx context.Context, id string, entry any) error {
+	tx := s.db.WithContext(ctx).Model(&Log{}).Where("id = ?", id).Updates(entry)
+	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
+		return ErrNotFound
+	}
+	return tx.Error
+}
+
+// SearchLogs searches for logs in the database without calculating statistics.
+func (s *RDBLogStore) SearchLogs(ctx context.Context, filters SearchFilters, pagination PaginationOptions) (*SearchResult, error) {
+	baseQuery := s.db.WithContext(ctx).Model(&Log{})
+
+	// Apply filters efficiently
+	baseQuery = s.applyFilters(baseQuery, filters)
+
+	// Get total count for pagination
 	var totalCount int64
 	if err := baseQuery.Count(&totalCount).Error; err != nil {
 		return nil, err
-	}
-
-	// Initialize stats
-	stats := SearchStats{}
-
-	// Calculate statistics efficiently if we have data
-	if totalCount > 0 {
-		// Total requests should include all requests (processing, success, error)
-		stats.TotalRequests = totalCount
-
-		// Get completed requests count (success + error, excluding processing) for success rate calculation
-		var completedCount int64
-		completedQuery := baseQuery.Session(&gorm.Session{})
-		if err := completedQuery.Where("status IN ?", []string{"success", "error"}).Count(&completedCount).Error; err != nil {
-			return nil, err
-		}
-
-		if completedCount > 0 {
-			// Calculate success rate based on completed requests only
-			var successCount int64
-			successQuery := baseQuery.Session(&gorm.Session{})
-			if err := successQuery.Where("status = ?", "success").Count(&successCount).Error; err != nil {
-				return nil, err
-			}
-			stats.SuccessRate = float64(successCount) / float64(completedCount) * 100
-
-			// Calculate average latency and total tokens in a single query for better performance
-			var result struct {
-				AvgLatency  sql.NullFloat64 `json:"avg_latency"`
-				TotalTokens sql.NullInt64   `json:"total_tokens"`
-				TotalCost   sql.NullFloat64 `json:"total_cost"`
-			}
-
-			statsQuery := baseQuery.Session(&gorm.Session{})
-			if err := statsQuery.Select("AVG(latency) as avg_latency, SUM(total_tokens) as total_tokens, SUM(cost) as total_cost").Scan(&result).Error; err != nil {
-				return nil, err
-			}
-
-			if result.AvgLatency.Valid {
-				stats.AverageLatency = result.AvgLatency.Float64
-			}
-			if result.TotalTokens.Valid {
-				stats.TotalTokens = result.TotalTokens.Int64
-			}
-			if result.TotalCost.Valid {
-				stats.TotalCost = result.TotalCost.Float64
-			}
-		}
 	}
 
 	// Build order clause
@@ -180,7 +135,9 @@ func (s *RDBLogStore) SearchLogs(ctx context.Context, filters SearchFilters, pag
 			return &SearchResult{
 				Logs:       logs,
 				Pagination: pagination,
-				Stats:      stats,
+				Stats: SearchStats{
+					TotalRequests: totalCount,
+				},
 			}, nil
 		}
 		return nil, err
@@ -189,8 +146,83 @@ func (s *RDBLogStore) SearchLogs(ctx context.Context, filters SearchFilters, pag
 	return &SearchResult{
 		Logs:       logs,
 		Pagination: pagination,
-		Stats:      stats,
+		Stats: SearchStats{
+			TotalRequests: totalCount,
+		},
 	}, nil
+}
+
+// GetStats calculates statistics for logs matching the given filters.
+func (s *RDBLogStore) GetStats(ctx context.Context, filters SearchFilters) (*SearchStats, error) {
+	baseQuery := s.db.WithContext(ctx).Model(&Log{})
+
+	// Apply filters
+	baseQuery = s.applyFilters(baseQuery, filters)
+
+	// Get total count
+	var totalCount int64
+	if err := baseQuery.Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
+
+	// Initialize stats
+	stats := &SearchStats{
+		TotalRequests: totalCount,
+	}
+
+	// Calculate statistics only if we have data
+	if totalCount > 0 {
+		// Build a completed query (success + error, excluding processing)
+		completedQuery := s.db.WithContext(ctx).Model(&Log{})
+		completedQuery = s.applyFilters(completedQuery, filters)
+		completedQuery = completedQuery.Where("status IN ?", []string{"success", "error"})
+
+		// Get completed requests count
+		var completedCount int64
+		if err := completedQuery.Count(&completedCount).Error; err != nil {
+			return nil, err
+		}
+
+		if completedCount > 0 {
+			// Calculate success rate based on completed requests only
+			successQuery := s.db.WithContext(ctx).Model(&Log{})
+			successQuery = s.applyFilters(successQuery, filters)
+			successQuery = successQuery.Where("status = ?", "success")
+			
+			var successCount int64
+			if err := successQuery.Count(&successCount).Error; err != nil {
+				return nil, err
+			}
+			stats.SuccessRate = float64(successCount) / float64(completedCount) * 100
+
+			// Calculate average latency and total tokens in a single query for better performance
+			var result struct {
+				AvgLatency  sql.NullFloat64 `json:"avg_latency"`
+				TotalTokens sql.NullInt64   `json:"total_tokens"`
+				TotalCost   sql.NullFloat64 `json:"total_cost"`
+			}
+
+			statsQuery := s.db.WithContext(ctx).Model(&Log{})
+			statsQuery = s.applyFilters(statsQuery, filters)
+			statsQuery = statsQuery.Where("status IN ?", []string{"success", "error"})
+			
+			if err := statsQuery.Select("AVG(latency) as avg_latency, SUM(total_tokens) as total_tokens, SUM(cost) as total_cost").Scan(&result).Error; err != nil {
+				return nil, err
+			}
+
+			if result.AvgLatency.Valid {
+				stats.AverageLatency = result.AvgLatency.Float64
+			}
+			if result.TotalTokens.Valid {
+				stats.TotalTokens = result.TotalTokens.Int64
+			}
+			if result.TotalCost.Valid {
+				stats.TotalCost = result.TotalCost.Float64
+			}
+		}
+	}
+
+	return stats, nil
 }
 
 // FindFirst gets a log entry from the database.

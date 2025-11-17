@@ -24,6 +24,7 @@ type LogStore interface {
 	FindFirst(ctx context.Context, query any, fields ...string) (*Log, error)
 	FindAll(ctx context.Context, query any, fields ...string) ([]*Log, error)
 	SearchLogs(ctx context.Context, filters SearchFilters, pagination PaginationOptions) (*SearchResult, error)
+	GetStats(ctx context.Context, filters SearchFilters) (*SearchStats, error)
 	Update(ctx context.Context, id string, entry any) error
 	Flush(ctx context.Context, since time.Time) error	
 	Close(ctx context.Context) error
