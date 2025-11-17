@@ -238,6 +238,12 @@ postgresql:
     # existingSecret: ""  # Use existing secret for password
     # passwordKey: "password"  # Key in the secret
   
+  # PostgreSQL image configuration
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  
   # PostgreSQL subchart configuration (when postgresql.enabled is true)
   auth:
     username: bifrost
@@ -321,6 +327,12 @@ vectorStore:
       database: 0
       # existingSecret: ""
       # passwordKey: "password"
+    
+    # Redis image configuration
+    image:
+      repository: redis
+      tag: "7-alpine"
+      pullPolicy: IfNotPresent
     
     # Redis subchart configuration (when redis.enabled is true)
     auth:

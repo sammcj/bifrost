@@ -25,8 +25,8 @@ spec:
         fsGroup: 999
       containers:
         - name: postgresql
-          image: postgres:16-alpine
-          imagePullPolicy: IfNotPresent
+          image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
           ports:
             - name: postgresql
               containerPort: 5432
