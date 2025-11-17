@@ -34,18 +34,10 @@ jobs:
           cache-dependency-path: |
             npx/package-lock.json
 
-      # Extract and validate version from tag
-      - name: Extract version from tag
+      # Extract and validate version from package.json
+      - name: Extract version from package.json
         id: extract-version
         run: ./.github/workflows/scripts/extract-npx-version.sh
-
-      # Update package.json with the tagged version
-      - name: Update package version
-        working-directory: npx
-        run: |
-          VERSION="${{ steps.extract-version.outputs.version }}"
-          echo "📝 Updating package.json version to $VERSION"
-          npm version "$VERSION" --no-git-tag-version
 
       # Install dependencies (if any)
       - name: Install dependencies
