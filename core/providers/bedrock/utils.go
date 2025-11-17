@@ -531,7 +531,7 @@ func checkMessageForToolContent(msg schemas.ChatMessage, toolsMap map[string]Bed
 	}
 
 	// Check content blocks
-	if msg.Content.ContentBlocks != nil {
+	if msg.Content != nil && msg.Content.ContentBlocks != nil {
 		for _, block := range msg.Content.ContentBlocks {
 			if block.Type == "tool_use" || block.Type == "tool_result" {
 				hasContent = true

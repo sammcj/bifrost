@@ -1,1 +1,1 @@
-- feat: adds elevenlabs support
+- fix: bedrock memory and streaming response parsing fixes
