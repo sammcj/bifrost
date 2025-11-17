@@ -1,10 +1,12 @@
 name: NPX Package Publish
 
-# Triggers when npx package is tagged
+# Triggers when main is pushed and package.json has changed
 on:
   push:
-    tags:
-      - "npx/v*"
+    branches:
+      - main
+    paths:
+      - 'npx/package.json'
 
 # Prevent concurrent runs for the same trigger
 concurrency:
