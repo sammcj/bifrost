@@ -1,0 +1,2 @@
+- feat: adds support for elevenlabs provider
+- fix: fixes a few UI -> API server communication bugs

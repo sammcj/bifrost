@@ -1,0 +1,1 @@
+- feat: adds changes for supporting elevenlabs provider
