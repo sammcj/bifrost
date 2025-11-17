@@ -1,2 +1,1 @@
-- feat: adds support for elevenlabs provider
-- fix: fixes a few UI -> API server communication bugs
+- fix: bedrock memory and streaming response parsing fixes

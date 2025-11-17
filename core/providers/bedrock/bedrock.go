@@ -64,11 +64,8 @@ func NewBedrockProvider(config *schemas.ProviderConfig, logger schemas.Logger) (
 	client := &http.Client{Timeout: time.Second * time.Duration(config.NetworkConfig.DefaultRequestTimeoutInSeconds)}
 
 	// Pre-warm response pools
-	for range config.ConcurrencyAndBufferSize.Concurrency {
-		for i := 0; i < config.ConcurrencyAndBufferSize.Concurrency; i++ {
-			bedrockChatResponsePool.Put(&BedrockConverseResponse{})
-		}
-
+	for i := 0; i < config.ConcurrencyAndBufferSize.Concurrency; i++ {
+		bedrockChatResponsePool.Put(&BedrockConverseResponse{})
 	}
 
 	return &BedrockProvider{

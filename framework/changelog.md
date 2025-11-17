@@ -1,1 +1,1 @@
-- feat: adds changes for supporting elevenlabs provider
+- chore: update core version to 1.2.25
