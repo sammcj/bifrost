@@ -56,15 +56,16 @@ func RunSpeechSynthesisStreamTest(t *testing.T, client *bifrost.Bifrost, ctx con
 				expectMinBytes:  3000,
 				skip:            testConfig.Provider == schemas.Gemini,
 			},
-			{
-				name:            "MediumText_Echo_WAV",
-				text:            "Testing streaming with WAV format. This should produce multiple audio chunks in WAV format for streaming playback.",
-				voice:           GetProviderVoice(testConfig.Provider, "tertiary"),
-				format:          "wav",
-				expectMinChunks: 1,
-				expectMinBytes:  2000,
-				skip:            false,
-			},
+			// This flow is allowed to only pro accounts
+			// {
+			// 	name:            "MediumText_Echo_WAV",
+			// 	text:            "Testing streaming with WAV format. This should produce multiple audio chunks in WAV format for streaming playback.",
+			// 	voice:           GetProviderVoice(testConfig.Provider, "tertiary"),
+			// 	format:          "wav",
+			// 	expectMinChunks: 1,
+			// 	expectMinBytes:  2000,
+			// 	skip:            false,
+			// },
 		}
 
 		for _, tc := range testCases {
