@@ -725,6 +725,7 @@ func (s *BifrostHTTPServer) ReloadPlugin(ctx context.Context, name string, path 
 		s.UpdatePluginStatus(name, schemas.PluginStatusError, []string{fmt.Sprintf("error reloading plugin %s: %v", name, err)})
 		return err
 	}
+	s.UpdatePluginStatus(name, schemas.PluginStatusActive, []string{fmt.Sprintf("plugin %s reloaded successfully", name)})
 	// CAS retry loop (matching bifrost.go pattern)
 	for {
 		oldPlugins := s.Config.Plugins.Load()
@@ -1076,6 +1077,7 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	s.Server = &fasthttp.Server{
 		Handler:            handlers.CorsMiddleware(s.Config)(handlers.TransportInterceptorMiddleware(s.Config)(s.Router.Handler)),
 		MaxRequestBodySize: s.Config.ClientConfig.MaxRequestBodySizeMB * 1024 * 1024,
+		ReadBufferSize:     1024 * 16, // 16kb		
 	}
 	return nil
 }
