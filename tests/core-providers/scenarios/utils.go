@@ -180,10 +180,10 @@ func GetSampleResponsesTool(toolName SampleToolType) *schemas.ResponsesTool {
 }
 
 // Test image of an ant
-const TestImageURL = "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fb/Carpenter_ant_Tanzania_crop.jpg/1200px-Carpenter_ant_Tanzania_crop.png"
+const TestImageURL = "https://pestworldcdn-dcf2a8gbggazaghf.z01.azurefd.net/media/561791/carpenter-ant4.jpg"
 
 // Test image of the Eiffel Tower
-const TestImageURL2 = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/La_Tour_Eiffel_vue_de_la_Tour_Saint-Jacques%2C_Paris_ao%C3%BBt_2014_%282%29.jpg/960px-La_Tour_Eiffel_vue_de_la_Tour_Saint-Jacques%2C_Paris_ao%C3%BBt_2014_%282%29.png"
+const TestImageURL2 = "https://images.pexels.com/photos/30662605/pexels-photo-30662605/free-photo-of-eiffel-tower-view-from-the-seine-river-in-paris.jpeg"
 
 // Test image base64 of a grey solid
 const TestImageBase64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAIAAoDASIAAhEBAxEB/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="

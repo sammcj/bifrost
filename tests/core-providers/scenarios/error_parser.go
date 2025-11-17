@@ -407,7 +407,7 @@ func AssertNoError(t *testing.T, err *schemas.BifrostError, msgAndArgs ...interf
 				}
 			}
 		}
-		t.Errorf("%s, but got:\n%s", message, FormatError(parsed))
+		t.Fatalf("%s, but got:\n%s", message, FormatError(parsed))
 		return false
 	}
 	return true

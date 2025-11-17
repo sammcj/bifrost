@@ -181,14 +181,14 @@ func RunTextCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 		// Validate latency is present in the last chunk (total latency)
 		if lastResponse != nil && lastResponse.BifrostTextCompletionResponse != nil {
 			if lastResponse.BifrostTextCompletionResponse.ExtraFields.Latency <= 0 {
-				t.Errorf("❌ Last streaming chunk missing latency information (got %d ms)", lastResponse.BifrostTextCompletionResponse.ExtraFields.Latency)
+				t.Fatalf("❌ Last streaming chunk missing latency information (got %d ms)", lastResponse.BifrostTextCompletionResponse.ExtraFields.Latency)
 			} else {
 				t.Logf("✅ Total streaming latency: %d ms", lastResponse.BifrostTextCompletionResponse.ExtraFields.Latency)
 			}
 		}
 
 		if !validationResult.Passed {
-			t.Errorf("❌ Text completion streaming validation failed: %v", validationResult.Errors)
+			t.Fatalf("❌ Text completion streaming validation failed: %v", validationResult.Errors)
 		}
 
 		t.Logf("📊 Text completion streaming metrics: %d chunks, %d chars", responseCount, len(finalContent))

@@ -216,7 +216,7 @@ func RunSpeechSynthesisStreamTest(t *testing.T, client *bifrost.Bifrost, ctx con
 				}
 
 				if lastTokenLatency == 0 {
-					t.Errorf("❌ Last token latency is 0")
+					t.Fatalf("❌ Last token latency is 0")
 				}
 
 				t.Logf("✅ Streaming speech synthesis successful: %d chunks, %d total bytes for voice '%s' in %s format",
@@ -341,7 +341,7 @@ func RunSpeechSynthesisStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost,
 			}
 
 			if lastTokenLatency == 0 {
-				t.Errorf("❌ Last token latency is 0")
+				t.Fatalf("❌ Last token latency is 0")
 			}
 
 			t.Logf("✅ HD streaming successful: %d chunks, %d total bytes", chunkCount, totalBytes)
@@ -441,14 +441,14 @@ func RunSpeechSynthesisStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost,
 					}
 
 					if len(streamErrors) > 0 {
-						t.Errorf("❌ Stream errors for voice %s: %v", voice, streamErrors)
+						t.Fatalf("❌ Stream errors for voice %s: %v", voice, streamErrors)
 					}
 
 					if !receivedData {
-						t.Errorf("❌ Should receive audio data for voice %s", voice)
+						t.Fatalf("❌ Should receive audio data for voice %s", voice)
 					}
 					if lastTokenLatency == 0 {
-						t.Errorf("❌ Last token latency is 0")
+						t.Fatalf("❌ Last token latency is 0")
 					}
 					t.Logf("✅ Streaming successful for voice: %s", voice)
 				})

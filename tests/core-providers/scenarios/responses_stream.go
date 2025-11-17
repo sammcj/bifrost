@@ -483,7 +483,7 @@ func validateResponsesStreamingStructure(t *testing.T, eventTypes map[schemas.Re
 	// Validate sequence numbers are increasing
 	for i := 1; i < len(sequenceNumbers); i++ {
 		if sequenceNumbers[i] < sequenceNumbers[i-1] {
-			t.Errorf("⚠️ Warning: Sequence numbers not in ascending order: %d -> %d", sequenceNumbers[i-1], sequenceNumbers[i])
+			t.Fatalf("⚠️ Warning: Sequence numbers not in ascending order: %d -> %d", sequenceNumbers[i-1], sequenceNumbers[i])
 		}
 	}
 

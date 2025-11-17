@@ -747,21 +747,21 @@ func validateStreamingToolCalls(t *testing.T, toolCalls []ToolCallInfo, apiName 
 	for i, toolCall := range toolCalls {
 		// Validate ID
 		if toolCall.ID == "" {
-			t.Errorf("❌ %s: Tool call %d missing ID", apiName, i)
+			t.Fatalf("❌ %s: Tool call %d missing ID", apiName, i)
 		} else {
 			t.Logf("✅ %s: Tool call %d has ID: %s", apiName, i, toolCall.ID)
 		}
 
 		// Validate name
 		if toolCall.Name == "" {
-			t.Errorf("❌ %s: Tool call %d missing name", apiName, i)
+			t.Fatalf("❌ %s: Tool call %d missing name", apiName, i)
 		} else {
 			t.Logf("✅ %s: Tool call %d has name: %s", apiName, i, toolCall.Name)
 		}
 
 		// Validate arguments
 		if toolCall.Arguments == "" {
-			t.Errorf("❌ %s: Tool call %d missing arguments", apiName, i)
+			t.Fatalf("❌ %s: Tool call %d missing arguments", apiName, i)
 		} else {
 			// Try to parse arguments as JSON to ensure they're valid
 			var args map[string]interface{}
@@ -770,7 +770,7 @@ func validateStreamingToolCalls(t *testing.T, toolCalls []ToolCallInfo, apiName 
 				// Don't fail on this - some providers might send partial JSON during streaming
 				// But we should at least have some content
 				if strings.TrimSpace(toolCall.Arguments) == "" {
-					t.Errorf("❌ %s: Tool call %d has empty arguments", apiName, i)
+					t.Fatalf("❌ %s: Tool call %d has empty arguments", apiName, i)
 				}
 			} else {
 				t.Logf("✅ %s: Tool call %d has valid JSON arguments: %s", apiName, i, toolCall.Arguments)

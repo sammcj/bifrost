@@ -401,9 +401,9 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     5, // Mistral can be variable
+				MaxRetries:                     10, // Mistral can be variable
 				RetryBackoffInitial:            5 * time.Second,
-				RetryBackoffMax:                3 * time.Minute,
+				RetryBackoffMax:                5 * time.Minute,
 			},
 			ConcurrencyAndBufferSize: schemas.ConcurrencyAndBufferSize{
 				Concurrency: Concurrency,
