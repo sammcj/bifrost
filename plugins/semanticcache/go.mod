@@ -7,8 +7,8 @@ toolchain go1.24.3
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/google/uuid v1.6.0
-	github.com/maximhq/bifrost/core v1.2.24
-	github.com/maximhq/bifrost/framework v1.1.29
+	github.com/maximhq/bifrost/core v1.2.25
+	github.com/maximhq/bifrost/framework v1.1.30
 	github.com/maximhq/bifrost/plugins/mocker v1.3.20
 )
 
