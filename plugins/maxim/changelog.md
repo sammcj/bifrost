@@ -1,0 +1,1 @@
+- chore: updates core to 1.2.24 and framework version to 1.1.29
