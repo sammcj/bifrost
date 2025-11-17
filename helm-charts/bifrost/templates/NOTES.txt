@@ -19,7 +19,7 @@ Bifrost has been installed!
 
 1. Get the NodePort:
    export NODE_PORT=$(kubectl get svc {{ include "bifrost.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath='{.spec.ports[0].nodePort}')
-   export NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
+   export NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}' || kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 
 2. Access Bifrost at:
    http://$NODE_IP:$NODE_PORT

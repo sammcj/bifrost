@@ -23,8 +23,8 @@ spec:
     spec:
       containers:
         - name: redis
-          image: redis:7-alpine
-          imagePullPolicy: IfNotPresent
+          image: "{{ .Values.vectorStore.redis.image.repository }}:{{ .Values.vectorStore.redis.image.tag }}"
+          imagePullPolicy: {{ .Values.vectorStore.redis.image.pullPolicy }}
           ports:
             - name: redis
               containerPort: 6379
@@ -46,8 +46,14 @@ spec:
           livenessProbe:
             exec:
               command:
-                - redis-cli
-                - ping
+                - sh
+                - -c
+                - |
+                  {{- if .Values.vectorStore.redis.auth.enabled }}
+                  redis-cli -a "$REDIS_PASSWORD" ping
+                  {{- else }}
+                  redis-cli ping
+                  {{- end }}
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -55,8 +61,14 @@ spec:
           readinessProbe:
             exec:
               command:
-                - redis-cli
-                - ping
+                - sh
+                - -c
+                - |
+                  {{- if .Values.vectorStore.redis.auth.enabled }}
+                  redis-cli -a "$REDIS_PASSWORD" ping
+                  {{- else }}
+                  redis-cli ping
+                  {{- end }}
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
