@@ -207,7 +207,7 @@ func RunChatCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 		}
 
 		if !validationResult.Passed {
-			t.Errorf("❌ Streaming validation failed: %v", validationResult.Errors)
+			t.Fatalf("❌ Streaming validation failed: %v", validationResult.Errors)
 		}
 
 		t.Logf("📊 Streaming metrics: %d chunks, %d chars", responseCount, len(finalContent))
