@@ -13,7 +13,7 @@ Official Helm charts for deploying [Bifrost](https://www.getbifrost.ai) on Kuber
 ### Add Helm Repository
 
 ```bash
-helm repo add bifrost https://maximhq.github.io/bifrost
+helm repo add bifrost https://maximhq.github.io/bifrost/helm-charts
 helm repo update
 ```
 

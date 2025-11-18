@@ -45,7 +45,7 @@ kubectl get storageclass
 **Step 1:** Add the Bifrost Helm repository
 
 ```bash
-helm repo add bifrost https://maximhq.github.io/bifrost
+helm repo add bifrost https://maximhq.github.io/bifrost/helm-charts
 helm repo update
 ```
 
