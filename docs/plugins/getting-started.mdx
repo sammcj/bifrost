@@ -4,6 +4,11 @@ description: "Learn how to extend Bifrost's functionality by creating custom plu
 icon: "book"
 ---
 
+<Note>
+Dynamic plugins are only enabled on Docker builds of the OSS version. If you are using npx, you won't be able to dynamically load the .so files. 
+</Note>
+
+
 ## What are Bifrost Plugins?
 
 Bifrost plugins allow you to extend the gateway's functionality by intercepting requests and responses. Plugins can modify, log, validate, or enrich data as it flows through the system, giving you powerful hooks into Bifrost's request lifecycle.
