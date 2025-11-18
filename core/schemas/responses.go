@@ -448,12 +448,13 @@ type ResponsesOutputMessageContentRefusal struct {
 }
 
 type ResponsesToolMessage struct {
-	CallID    *string                           `json:"call_id,omitempty"` // Common call ID for tool calls and outputs
-	Name      *string                           `json:"name,omitempty"`    // Common name field for tool calls
-	Arguments *string                           `json:"arguments,omitempty"`
-	Output    *ResponsesToolMessageOutputStruct `json:"output,omitempty"`
-	Action    *ResponsesToolMessageActionStruct `json:"action,omitempty"`
-	Error     *string                           `json:"error,omitempty"`
+	CallID       *string                           `json:"call_id,omitempty"`       // Common call ID for tool calls and outputs
+	Name         *string                           `json:"name,omitempty"`          // Common name field for tool calls
+	Arguments    *string                           `json:"arguments,omitempty"`
+	Output       *ResponsesToolMessageOutputStruct `json:"output,omitempty"`
+	Action       *ResponsesToolMessageActionStruct `json:"action,omitempty"`
+	Error        *string                           `json:"error,omitempty"`
+	ExtraContent map[string]interface{}            `json:"extra_content,omitempty"` // Provider-specific fields (e.g., thought_signature for Gemini)
 
 	// Tool calls and outputs
 	*ResponsesFileSearchToolCall

@@ -135,31 +135,42 @@ func convertGeminiCandidatesToResponsesOutput(candidates []*Candidate) []schemas
 					messages = append(messages, msg)
 				}
 
-			case part.FunctionCall != nil:
-				// Function call message
-				// Convert Args to JSON string if it's not already a string
-				argumentsStr := ""
-				if part.FunctionCall.Args != nil {
-					if argsBytes, err := json.Marshal(part.FunctionCall.Args); err == nil {
-						argumentsStr = string(argsBytes)
-					}
+		case part.FunctionCall != nil:
+			// Function call message
+			// Convert Args to JSON string if it's not already a string
+			argumentsStr := ""
+			if part.FunctionCall.Args != nil {
+				if argsBytes, err := json.Marshal(part.FunctionCall.Args); err == nil {
+					argumentsStr = string(argsBytes)
 				}
+			}
 
-				// Create copies of the values to avoid range loop variable capture
-				functionCallID := part.FunctionCall.ID
-				functionCallName := part.FunctionCall.Name
+			// Create copies of the values to avoid range loop variable capture
+			functionCallID := part.FunctionCall.ID
+			functionCallName := part.FunctionCall.Name
 
-				msg := schemas.ResponsesMessage{
-					Role:    schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
-					Content: &schemas.ResponsesMessageContent{},
-					Type:    schemas.Ptr(schemas.ResponsesMessageTypeFunctionCall),
-					ResponsesToolMessage: &schemas.ResponsesToolMessage{
-						CallID:    &functionCallID,
-						Name:      &functionCallName,
-						Arguments: &argumentsStr,
+			toolMsg := &schemas.ResponsesToolMessage{
+				CallID:    &functionCallID,
+				Name:      &functionCallName,
+				Arguments: &argumentsStr,
+			}
+
+			// Preserve thought signature if present (required for Gemini 3 Pro)
+			if len(part.ThoughtSignature) > 0 {
+				toolMsg.ExtraContent = map[string]interface{}{
+					"google": map[string]interface{}{
+						"thought_signature": string(part.ThoughtSignature),
 					},
 				}
-				messages = append(messages, msg)
+			}
+
+			msg := schemas.ResponsesMessage{
+				Role:                 schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
+				Content:              &schemas.ResponsesMessageContent{},
+				Type:                 schemas.Ptr(schemas.ResponsesMessageTypeFunctionCall),
+				ResponsesToolMessage: toolMsg,
+			}
+			messages = append(messages, msg)
 
 			case part.FunctionResponse != nil:
 				// Function response message
@@ -593,6 +604,16 @@ func convertResponsesMessagesToGeminiContents(messages []schemas.ResponsesMessag
 					if msg.ResponsesToolMessage.CallID != nil {
 						part.FunctionCall.ID = *msg.ResponsesToolMessage.CallID
 					}
+
+					// Preserve thought signature from extra_content (required for Gemini 3 Pro)
+					if msg.ResponsesToolMessage.ExtraContent != nil {
+						if googleData, ok := msg.ResponsesToolMessage.ExtraContent["google"].(map[string]interface{}); ok {
+							if thoughtSig, ok := googleData["thought_signature"].(string); ok {
+								part.ThoughtSignature = []byte(thoughtSig)
+							}
+						}
+					}
+
 					content.Parts = append(content.Parts, part)
 				}
 			case schemas.ResponsesMessageTypeFunctionCallOutput:
