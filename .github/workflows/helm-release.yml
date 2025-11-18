@@ -11,8 +11,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   release:
@@ -23,11 +21,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-
       - name: Install Helm
         uses: azure/setup-helm@v4
         with:
@@ -37,29 +30,38 @@ jobs:
         run: |
           helm lint helm-charts/bifrost
 
+      - name: Get chart version
+        id: chart-version
+        run: |
+          VERSION=$(grep '^version:' helm-charts/bifrost/Chart.yaml | awk '{print $2}')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Chart version: $VERSION"
+
+      - name: Check if release exists
+        id: check-release
+        run: |
+          if gh release view "helm-chart-v${{ steps.chart-version.outputs.version }}" &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Package Helm chart
+        if: steps.check-release.outputs.exists == 'false'
         run: |
           cd helm-charts
           helm package bifrost
-          helm repo index . --url https://maximhq.github.io/bifrost/helm-charts
+          helm repo index . --url https://github.com/maximhq/bifrost/releases/download/helm-chart-v${{ steps.chart-version.outputs.version }}
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: helm-charts
-          path: |
-            helm-charts/*.tgz
-            helm-charts/index.yaml
-          retention-days: 30
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        if: github.ref == 'refs/heads/main'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./helm-charts
-          destination_dir: helm-charts
-          keep_files: true
-          enable_jekyll: false
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
+      - name: Create GitHub Release
+        if: steps.check-release.outputs.exists == 'false'
+        run: |
+          gh release create "helm-chart-v${{ steps.chart-version.outputs.version }}" \
+            helm-charts/bifrost-${{ steps.chart-version.outputs.version }}.tgz \
+            helm-charts/index.yaml \
+            --title "Helm Chart v${{ steps.chart-version.outputs.version }}" \
+            --notes "Helm chart release for Bifrost v${{ steps.chart-version.outputs.version }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

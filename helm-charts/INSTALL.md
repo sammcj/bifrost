@@ -40,26 +40,27 @@ kubectl get storageclass
 
 ## Installation Methods
 
-### Method 1: Helm Repository (Recommended)
+### Method 1: Direct Install from GitHub Releases (Recommended)
 
-**Step 1:** Add the Bifrost Helm repository
-
-```bash
-helm repo add bifrost https://maximhq.github.io/bifrost/helm-charts
-helm repo update
-```
-
-**Step 2:** Install Bifrost
+Install the latest version:
 
 ```bash
-helm install bifrost bifrost/bifrost
+# Get the latest chart version
+CHART_VERSION=$(curl -s https://api.github.com/repos/maximhq/bifrost/releases/latest | grep 'helm-chart-v' | head -1 | cut -d'"' -f4 | sed 's/helm-chart-v//')
+
+# Install the chart
+helm install bifrost \
+  https://github.com/maximhq/bifrost/releases/download/helm-chart-v${CHART_VERSION}/bifrost-${CHART_VERSION}.tgz
 ```
 
-**Step 3:** Verify installation
+Or install a specific version:
 
 ```bash
-kubectl get pods -l app.kubernetes.io/name=bifrost
+helm install bifrost \
+  https://github.com/maximhq/bifrost/releases/download/helm-chart-v1.3.5/bifrost-1.3.5.tgz
 ```
+
+### Method 2: Install from Local Chart
 
 ### Method 2: From Source
 
@@ -495,8 +496,12 @@ kubectl exec -it deployment/bifrost -- nc -zv bifrost-postgresql 5432
 # Check resource usage
 kubectl top pods -l app.kubernetes.io/name=bifrost
 
+# Get latest chart version
+CHART_VERSION=$(curl -s https://api.github.com/repos/maximhq/bifrost/releases/latest | grep 'helm-chart-v' | head -1 | cut -d'"' -f4 | sed 's/helm-chart-v//')
+
 # Increase resources
-helm upgrade bifrost bifrost/bifrost \
+helm upgrade bifrost \
+  https://github.com/maximhq/bifrost/releases/download/helm-chart-v${CHART_VERSION}/bifrost-${CHART_VERSION}.tgz \
   --set resources.limits.memory=4Gi \
   --reuse-values
 ```
@@ -525,14 +530,18 @@ kubectl exec -it deployment/bifrost-redis-master -- redis-cli ping
 ## Upgrade
 
 ```bash
-# Update repo
-helm repo update
+# Get the latest version
+CHART_VERSION=$(curl -s https://api.github.com/repos/maximhq/bifrost/releases/latest | grep 'helm-chart-v' | head -1 | cut -d'"' -f4 | sed 's/helm-chart-v//')
 
 # Upgrade with same values
-helm upgrade bifrost bifrost/bifrost --reuse-values
+helm upgrade bifrost \
+  https://github.com/maximhq/bifrost/releases/download/helm-chart-v${CHART_VERSION}/bifrost-${CHART_VERSION}.tgz \
+  --reuse-values
 
 # Upgrade with new values
-helm upgrade bifrost bifrost/bifrost -f your-values.yaml
+helm upgrade bifrost \
+  https://github.com/maximhq/bifrost/releases/download/helm-chart-v${CHART_VERSION}/bifrost-${CHART_VERSION}.tgz \
+  -f your-values.yaml
 
 # Rollback if needed
 helm rollback bifrost
