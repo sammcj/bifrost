@@ -161,12 +161,16 @@ func parseJSONInput(jsonStr string) interface{} {
 //	  "type": "json_schema",
 //	  "schema": {...}
 //	}
-func convertResponsesTextConfigToAnthropicOutputFormat(textConfig *schemas.ResponsesTextConfig) *interface{} {
+func convertResponsesTextConfigToAnthropicOutputFormat(textConfig *schemas.ResponsesTextConfig) interface{} {
 	if textConfig == nil || textConfig.Format == nil {
 		return nil
 	}
 
 	format := textConfig.Format
+	// Anthropic currently only supports json_schema type
+	if format.Type != "json_schema" {
+		return nil
+	}
 
 	// Build the Anthropic-compatible output_format structure
 	outputFormat := map[string]interface{}{
@@ -205,6 +209,5 @@ func convertResponsesTextConfigToAnthropicOutputFormat(textConfig *schemas.Respo
 		outputFormat["strict"] = *format.Strict
 	}
 
-	var result interface{} = outputFormat
-	return &result
+	return outputFormat
 }
