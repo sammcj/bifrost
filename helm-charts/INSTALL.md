@@ -553,15 +553,15 @@ kubectl delete secret bifrost-secrets
 
 ## Getting Help
 
-- **Documentation**: https://www.getbifrost.ai/docs
-- **GitHub Issues**: https://github.com/maximhq/bifrost/issues
-- **Community**: Join our Discord/Slack
-- **Email**: support@getbifrost.ai
+- **Documentation**: <https://www.getbifrost.ai/docs>
+- **GitHub Issues**: <https://github.com/maximhq/bifrost/issues>
+- **Community**: Join our Discord/Slack (contact us for invite)
+- **Email**: <mailto:support@getbifrost.ai>
 
 ## Next Steps
 
 1. Review the [Configuration Reference](./bifrost/README.md)
 2. Explore [Example Configurations](./bifrost/values-examples/)
-3. Set up [Monitoring and Observability](https://www.getbifrost.ai/docs/monitoring)
-4. Configure [Provider Keys](https://www.getbifrost.ai/docs/providers)
-5. Enable [Plugins](https://www.getbifrost.ai/docs/plugins)
+3. Set up [Monitoring and Observability](<https://www.getbifrost.ai/docs/monitoring>)
+4. Configure [Provider Keys](<https://www.getbifrost.ai/docs/providers>)
+5. Enable [Plugins](<https://www.getbifrost.ai/docs/plugins>)
