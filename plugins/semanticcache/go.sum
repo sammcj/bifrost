@@ -156,8 +156,8 @@ github.com/mattn/go-sqlite3 v1.14.32 h1:JD12Ag3oLy1zQA+BNn74xRgaBbdhbNIDYvQUEuuE
 github.com/mattn/go-sqlite3 v1.14.32/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/maximhq/bifrost/core v1.2.26 h1:CMYx7sCiiKAXFt1vj/hbO8X2dzBzLi36x6cIvpyz594=
 github.com/maximhq/bifrost/core v1.2.26/go.mod h1:zyAYoA5lN5mlwUODeZdBw5s45kBftvbq14qtQne8ZVw=
-github.com/maximhq/bifrost/framework v1.1.32 h1:bTsL50Qibyu7sCob5bfY8IBgAQDTFkbMn9jITEGc2fw=
-github.com/maximhq/bifrost/framework v1.1.32/go.mod h1:XlBgLcKyikKGcRe1sXnxl95Czjr8+E+RQEc/O05QCzg=
+github.com/maximhq/bifrost/framework v1.1.33 h1:mE+rR2ADlN05UCxNM2zS8KIt7zqcIM3WxuiRa9EV3zw=
+github.com/maximhq/bifrost/framework v1.1.33/go.mod h1:XlBgLcKyikKGcRe1sXnxl95Czjr8+E+RQEc/O05QCzg=
 github.com/maximhq/bifrost/plugins/mocker v1.3.20 h1:Wgn43k1V6ZX6nRXZ4NfcMbGJqDQtEcSpHGJIh0ArFwM=
 github.com/maximhq/bifrost/plugins/mocker v1.3.20/go.mod h1:AzmO1n+oDm4Hq2vhWkqloGDhwswwF4EmOb+BWseY4SE=
 github.com/oklog/ulid v1.3.1 h1:EGfNDEx6MqHz8B3uNV6QAib1UR2Lm97sHi3ocA6ESJ4=
