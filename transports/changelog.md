@@ -1,1 +1,0 @@
-feat: Improves log page loading performance for millions of logs stored on sqlite
