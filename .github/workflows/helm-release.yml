@@ -35,20 +35,51 @@ jobs:
         run: |
           helm lint helm-charts/bifrost
 
+      - name: Get chart version
+        id: chart-version
+        run: |
+          VERSION=$(grep '^version:' helm-charts/bifrost/Chart.yaml | awk '{print $2}')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Chart version: $VERSION"
+
+      - name: Check if release exists
+        id: check-release
+        run: |
+          if gh release view "helm-chart-v${{ steps.chart-version.outputs.version }}" &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Package Helm chart
         run: |
           cd helm-charts
           helm package bifrost
-          helm repo index . --url https://maximhq.github.io/bifrost/helm-charts
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: helm-charts
-          path: |
-            helm-charts/*.tgz
-            helm-charts/index.yaml
-          retention-days: 30
+      - name: Create GitHub Release
+        if: steps.check-release.outputs.exists == 'false'
+        run: |
+          cd helm-charts
+          gh release create "helm-chart-v${{ steps.chart-version.outputs.version }}" \
+            bifrost-${{ steps.chart-version.outputs.version }}.tgz \
+            --title "Helm Chart v${{ steps.chart-version.outputs.version }}" \
+            --notes "Helm chart release for Bifrost v${{ steps.chart-version.outputs.version }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Helm repository index
+        run: |
+          cd helm-charts
+          # Download existing index if it exists
+          curl -sLO https://maximhq.github.io/bifrost/helm-charts/index.yaml || true
+          # Merge with new chart only if index.yaml exists
+          if [ -f index.yaml ]; then
+            helm repo index . --url https://github.com/maximhq/bifrost/releases/download/helm-chart-v${{ steps.chart-version.outputs.version }} --merge index.yaml
+          else
+            helm repo index . --url https://github.com/maximhq/bifrost/releases/download/helm-chart-v${{ steps.chart-version.outputs.version }}
+          fi
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
@@ -57,7 +88,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./helm-charts
           destination_dir: helm-charts
-          keep_files: true
+          keep_files: false
           enable_jekyll: false
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
