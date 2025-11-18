@@ -182,8 +182,8 @@ helm uninstall bifrost
 ## Support
 
 - Documentation: [https://www.getbifrost.ai/docs](https://www.getbifrost.ai/docs)
-- GitHub: [https://github.com/maxim-ai/bifrost](https://github.com/maxim-ai/bifrost)
-- Issues: [https://github.com/maxim-ai/bifrost/issues](https://github.com/maxim-ai/bifrost/issues)
+- GitHub: [https://github.com/maximhq/bifrost](https://github.com/maximhq/bifrost)
+- Issues: [https://github.com/maximhq/bifrost/issues](https://github.com/maximhq/bifrost/issues)
 
 ## License
 
