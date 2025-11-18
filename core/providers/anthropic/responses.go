@@ -282,6 +282,9 @@ func ToAnthropicResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *A
 				UserID: bifrostReq.Params.User,
 			}
 		}
+		if bifrostReq.Params.Text != nil {
+			anthropicReq.OutputFormat = convertResponsesTextConfigToAnthropicOutputFormat(bifrostReq.Params.Text)
+		}
 		if bifrostReq.Params.ExtraParams != nil {
 			topK, ok := schemas.SafeExtractIntPointer(bifrostReq.Params.ExtraParams["top_k"])
 			if ok {

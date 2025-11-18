@@ -397,6 +397,9 @@ func ToAnthropicChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) *A
 		if ok {
 			anthropicReq.TopK = topK
 		}
+		if bifrostReq.Params.ResponseFormat != nil {
+			anthropicReq.OutputFormat = bifrostReq.Params.ResponseFormat
+		}
 
 		// Convert tools
 		if bifrostReq.Params.Tools != nil {
