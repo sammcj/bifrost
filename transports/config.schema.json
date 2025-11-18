@@ -989,6 +989,10 @@
     "base_key": {
       "type": "object",
       "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the key"
+        },
         "value": {
           "type": "string",
           "description": "API key value (can use env. prefix)"
@@ -998,6 +1002,7 @@
           "items": {
             "type": "string"
           },
+          "default": [],
           "description": "Supported models for this key"
         },
         "weight": {
@@ -1007,6 +1012,8 @@
         }
       },
       "required": [
+        "name",
+        "value",
         "weight"
       ],
       "additionalProperties": false
