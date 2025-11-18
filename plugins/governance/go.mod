@@ -1,8 +1,6 @@
 module github.com/maximhq/bifrost/plugins/governance
 
-go 1.24.1
-
-toolchain go1.24.3
+go 1.24.3
 
 require gorm.io/gorm v1.31.1
 
