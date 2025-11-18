@@ -4,7 +4,7 @@ go 1.24.3
 
 require (
 	github.com/maximhq/bifrost/core v1.2.26
-	github.com/maximhq/bifrost/framework v1.1.32
+	github.com/maximhq/bifrost/framework v1.1.33
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.10
 )
