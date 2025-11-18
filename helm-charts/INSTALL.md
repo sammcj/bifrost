@@ -15,7 +15,7 @@ Complete guide for installing Bifrost using Helm.
 
 ### Required
 
-- Kubernetes cluster (v1.19+)
+- Kubernetes cluster (v1.27+)
 - `kubectl` configured to communicate with your cluster
 - Helm 3.2.0+ installed
 
@@ -370,6 +370,7 @@ resources:
     memory: 2Gi
 
 bifrost:
+  # Use 32-byte random value (generate with: openssl rand -base64 32)
   encryptionKey: "CHANGE_ME_32_BYTE_KEY"
   logLevel: info
   logStyle: json
