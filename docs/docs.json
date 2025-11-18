@@ -185,6 +185,7 @@
             "pages": [
                "deployment-guides/k8s",
               "deployment-guides/ecs",
+              "deployment-guides/helm",
               "deployment-guides/fly"
             ]
           },
