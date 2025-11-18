@@ -13,19 +13,14 @@ Official Helm charts for deploying [Bifrost](https://www.getbifrost.ai) on Kuber
 ### Add Helm Repository
 
 ```bash
-# Get the latest chart version
-CHART_VERSION=$(curl -s https://api.github.com/repos/maximhq/bifrost/releases/latest | grep 'helm-chart-v' | head -1 | cut -d'"' -f4 | sed 's/helm-chart-v//')
-
-# Download and install the chart
-helm install bifrost \
-  https://github.com/maximhq/bifrost/releases/download/helm-chart-v${CHART_VERSION}/bifrost-${CHART_VERSION}.tgz
+helm repo add bifrost https://maximhq.github.io/bifrost/helm-charts
+helm repo update
 ```
 
-Or specify a specific version:
+### Install with Default Configuration (SQLite)
 
 ```bash
-helm install bifrost \
-  https://github.com/maximhq/bifrost/releases/download/helm-chart-v1.3.5/bifrost-1.3.5.tgz
+helm install bifrost bifrost/bifrost
 ```
 
 ### Install with PostgreSQL

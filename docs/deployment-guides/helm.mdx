@@ -16,24 +16,17 @@ Deploy Bifrost on Kubernetes using the official Helm chart. This is the recommen
 
 ## Quick Start
 
-### Install from GitHub Releases
-
-Install the latest version:
+### Add Helm Repository
 
 ```bash
-# Get the latest chart version
-CHART_VERSION=$(curl -s https://api.github.com/repos/maximhq/bifrost/releases/latest | grep 'helm-chart-v' | head -1 | cut -d'"' -f4 | sed 's/helm-chart-v//')
-
-# Install the chart
-helm install bifrost \
-  https://github.com/maximhq/bifrost/releases/download/helm-chart-v${CHART_VERSION}/bifrost-${CHART_VERSION}.tgz
+helm repo add bifrost https://maximhq.github.io/bifrost/helm-charts
+helm repo update
 ```
 
-Or install a specific version:
+### Install Bifrost
 
 ```bash
-helm install bifrost \
-  https://github.com/maximhq/bifrost/releases/download/helm-chart-v1.3.5/bifrost-1.3.5.tgz
+helm install bifrost bifrost/bifrost
 ```
 
 This deploys Bifrost with:
