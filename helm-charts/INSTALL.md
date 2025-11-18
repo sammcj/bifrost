@@ -81,7 +81,7 @@ helm install bifrost ./bifrost
 **Step 1:** Download the chart package
 
 ```bash
-wget https://github.com/maximhq/bifrost/releases/download/helm-chart-1.3.5/bifrost-1.3.5.tgz
+wget https://maximhq.github.io/bifrost/helm-charts/bifrost-1.3.5.tgz
 ```
 
 **Step 2:** Install from the package
