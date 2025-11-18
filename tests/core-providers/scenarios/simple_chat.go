@@ -125,10 +125,10 @@ func RunSimpleChatTest(t *testing.T, client *bifrost.Bifrost, ctx context.Contex
 
 		// Check that both APIs succeeded
 		if chatError != nil {
-			t.Errorf("❌ Chat Completions API failed: %s", GetErrorMessage(chatError))
+			t.Fatalf("❌ Chat Completions API failed: %s", GetErrorMessage(chatError))
 		}
 		if responsesError != nil {
-			t.Errorf("❌ Responses API failed: %s", GetErrorMessage(responsesError))
+			t.Fatalf("❌ Responses API failed: %s", GetErrorMessage(responsesError))
 		}
 
 		// Log results from both APIs

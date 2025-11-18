@@ -50,7 +50,7 @@ func RunListModelsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Contex
 		validModels := 0
 		for i, model := range response.Data {
 			if model.ID == "" {
-				t.Errorf("❌ Model at index %d has empty ID", i)
+				t.Fatalf("❌ Model at index %d has empty ID", i)
 				continue
 			}
 
@@ -70,16 +70,16 @@ func RunListModelsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Contex
 
 		// Validate extra fields
 		if response.ExtraFields.Provider != testConfig.Provider {
-			t.Errorf("❌ Provider mismatch: expected %s, got %s", testConfig.Provider, response.ExtraFields.Provider)
+			t.Fatalf("❌ Provider mismatch: expected %s, got %s", testConfig.Provider, response.ExtraFields.Provider)
 		}
 
 		if response.ExtraFields.RequestType != schemas.ListModelsRequest {
-			t.Errorf("❌ Request type mismatch: expected %s, got %s", schemas.ListModelsRequest, response.ExtraFields.RequestType)
+			t.Fatalf("❌ Request type mismatch: expected %s, got %s", schemas.ListModelsRequest, response.ExtraFields.RequestType)
 		}
 
 		// Validate latency is reasonable (non-negative and not absurdly high)
 		if response.ExtraFields.Latency < 0 {
-			t.Errorf("❌ Invalid latency: %d ms (should be non-negative)", response.ExtraFields.Latency)
+			t.Fatalf("❌ Invalid latency: %d ms (should be non-negative)", response.ExtraFields.Latency)
 		} else if response.ExtraFields.Latency > 30000 {
 			t.Logf("⚠️  Warning: High latency detected: %d ms", response.ExtraFields.Latency)
 		} else {
@@ -120,7 +120,7 @@ func RunListModelsPaginationTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 
 		// Check that pagination was applied
 		if len(response.Data) > pageSize {
-			t.Errorf("❌ Expected at most %d models, got %d", pageSize, len(response.Data))
+			t.Fatalf("❌ Expected at most %d models, got %d", pageSize, len(response.Data))
 		} else {
 			t.Logf("✅ Pagination working: returned %d models (page size: %d)", len(response.Data), pageSize)
 		}
@@ -138,7 +138,7 @@ func RunListModelsPaginationTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 
 			nextPageResponse, nextPageErr := client.ListModelsRequest(ctx, nextPageRequest)
 			if nextPageErr != nil {
-				t.Errorf("❌ Failed to fetch next page: %v", GetErrorMessage(nextPageErr))
+				t.Fatalf("❌ Failed to fetch next page: %v", GetErrorMessage(nextPageErr))
 			} else if nextPageResponse != nil {
 				t.Logf("✅ Successfully fetched next page with %d models", len(nextPageResponse.Data))
 

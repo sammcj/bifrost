@@ -46,14 +46,14 @@ export default function PluginsView(props: Props) {
 			enabled: selectedPlugin?.enabled || false,
 			path: selectedPlugin?.path || undefined,
 			config: selectedPlugin?.config ? JSON.stringify(selectedPlugin.config, null, 2) : undefined,
-			hasConfig: selectedPlugin?.config && Object.keys(selectedPlugin.config).length > 0,
+			hasConfig: Boolean(selectedPlugin?.config && Object.keys(selectedPlugin.config).length > 0),
 		},
 	});
 
 	// Update form when selectedPlugin changes
 	useEffect(() => {
 		if (selectedPlugin) {
-			const hasConfig = selectedPlugin.config && Object.keys(selectedPlugin.config).length > 0;
+			const hasConfig = Boolean(selectedPlugin.config && Object.keys(selectedPlugin.config).length > 0);
 			setShowConfig(hasConfig);
 			form.reset({
 				name: selectedPlugin.name,
@@ -96,9 +96,12 @@ export default function PluginsView(props: Props) {
 			toast.success("Plugin updated successfully");
 			form.reset(values);
 		} catch (error) {
-			toast.error("Failed to update plugin");
-			console.error("Failed to update plugin:", error);
+			toast.error("Failed to update plugin");			
 		}
+	};
+
+	const onError = (errors: any) => {
+		toast.error("Please fix the form errors before submitting");
 	};
 
 	const handleDeleteClick = () => {
@@ -140,10 +143,12 @@ export default function PluginsView(props: Props) {
 		return errorKeywords.some((keyword) => log.toLowerCase().includes(keyword.toLowerCase()));
 	};
 
+
+
 	return (
 		<div className="ml-4 w-full">
 			<Form {...form}>
-				<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+				<form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-6">
 					{/* Editable Fields */}
 					<div className="">
 						<h3 className="mb-4 text-lg font-semibold">Plugin Configuration</h3>

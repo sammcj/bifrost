@@ -31,6 +31,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddNumberOfRetriesAndFallbackIndexAndSelectedKeyAndVirtualKeyColumns(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddPerformanceIndexes(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -377,6 +380,81 @@ func migrationAddNumberOfRetriesAndFallbackIndexAndSelectedKeyAndVirtualKeyColum
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while adding number_of_retries and fallback_index columns: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddPerformanceIndexes adds indexes for performance optimization
+func migrationAddPerformanceIndexes(ctx context.Context, db *gorm.DB) error {
+	opts := *migrator.DefaultOptions
+	opts.UseTransaction = true
+	m := migrator.New(db, &opts, []*migrator.Migration{{
+		ID: "logs_add_performance_indexes",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			// Add index on latency for AVG aggregation queries
+			if !migrator.HasIndex(&Log{}, "idx_logs_latency") {
+				if err := migrator.CreateIndex(&Log{}, "idx_logs_latency"); err != nil {
+					return fmt.Errorf("failed to create index on latency: %w", err)
+				}
+			}
+
+			// Add index on total_tokens for SUM aggregation queries
+			if !migrator.HasIndex(&Log{}, "idx_logs_total_tokens") {
+				if err := migrator.CreateIndex(&Log{}, "idx_logs_total_tokens"); err != nil {
+					return fmt.Errorf("failed to create index on total_tokens: %w", err)
+				}
+			}
+
+			// Add index on selected_key_id for filtering
+			if !migrator.HasIndex(&Log{}, "idx_logs_selected_key_id") {
+				if err := migrator.CreateIndex(&Log{}, "idx_logs_selected_key_id"); err != nil {
+					return fmt.Errorf("failed to create index on selected_key_id: %w", err)
+				}
+			}
+
+			// Add index on virtual_key_id for filtering
+			if !migrator.HasIndex(&Log{}, "idx_logs_virtual_key_id") {
+				if err := migrator.CreateIndex(&Log{}, "idx_logs_virtual_key_id"); err != nil {
+					return fmt.Errorf("failed to create index on virtual_key_id: %w", err)
+				}
+			}
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			if migrator.HasIndex(&Log{}, "idx_logs_latency") {
+				if err := migrator.DropIndex(&Log{}, "idx_logs_latency"); err != nil {
+					return err
+				}
+			}
+			if migrator.HasIndex(&Log{}, "idx_logs_total_tokens") {
+				if err := migrator.DropIndex(&Log{}, "idx_logs_total_tokens"); err != nil {
+					return err
+				}
+			}
+			if migrator.HasIndex(&Log{}, "idx_logs_selected_key_id") {
+				if err := migrator.DropIndex(&Log{}, "idx_logs_selected_key_id"); err != nil {
+					return err
+				}
+			}
+			if migrator.HasIndex(&Log{}, "idx_logs_virtual_key_id") {
+				if err := migrator.DropIndex(&Log{}, "idx_logs_virtual_key_id"); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while adding performance indexes: %s", err.Error())
 	}
 	return nil
 }

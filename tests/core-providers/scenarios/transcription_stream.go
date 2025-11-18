@@ -235,7 +235,7 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 				}
 
 				if lastTokenLatency == 0 {
-					t.Errorf("❌ Last token latency is 0")
+					t.Fatalf("❌ Last token latency is 0")
 				}
 
 				// Normalize for comparison (lowercase, remove punctuation)
@@ -470,7 +470,7 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 					}
 
 					if lastTokenLatency == 0 {
-						t.Errorf("❌ Last token latency is 0")
+						t.Fatalf("❌ Last token latency is 0")
 					}
 
 					t.Logf("✅ Streaming successful for language: %s", lang)
@@ -565,7 +565,7 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 			}
 
 			if lastTokenLatency == 0 {
-				t.Errorf("❌ Last token latency is 0")
+				t.Fatalf("❌ Last token latency is 0")
 			}
 
 			t.Logf("✅ Custom prompt streaming successful: %d chunks received", chunkCount)

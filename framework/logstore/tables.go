@@ -79,9 +79,9 @@ type Log struct {
 	Model                 string    `gorm:"type:varchar(255);index;not null" json:"model"`
 	NumberOfRetries       int       `gorm:"default:0" json:"number_of_retries"`
 	FallbackIndex         int       `gorm:"default:0" json:"fallback_index"`
-	SelectedKeyID         string    `gorm:"type:varchar(255)" json:"selected_key_id"`
+	SelectedKeyID         string    `gorm:"type:varchar(255);index:idx_logs_selected_key_id" json:"selected_key_id"`
 	SelectedKeyName       string    `gorm:"type:varchar(255)" json:"selected_key_name"`
-	VirtualKeyID          *string   `gorm:"type:varchar(255)" json:"virtual_key_id"`
+	VirtualKeyID          *string   `gorm:"type:varchar(255);index:idx_logs_virtual_key_id" json:"virtual_key_id"`
 	VirtualKeyName        *string   `gorm:"type:varchar(255)" json:"virtual_key_name"`
 	InputHistory          string    `gorm:"type:text" json:"-"` // JSON serialized []schemas.ChatMessage
 	ResponsesInputHistory string    `gorm:"type:text" json:"-"` // JSON serialized []schemas.ResponsesMessage
@@ -96,7 +96,7 @@ type Log struct {
 	SpeechOutput          string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostSpeech
 	TranscriptionOutput   string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostTranscribe
 	CacheDebug            string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostCacheDebug
-	Latency               *float64  `json:"latency,omitempty"`
+	Latency               *float64  `gorm:"index:idx_logs_latency" json:"latency,omitempty"`
 	TokenUsage            string    `gorm:"type:text" json:"-"`                            // JSON serialized *schemas.LLMUsage
 	Cost                  *float64  `gorm:"index" json:"cost,omitempty"`                   // Cost in dollars (total cost of the request - includes cache lookup cost)
 	Status                string    `gorm:"type:varchar(50);index;not null" json:"status"` // "processing", "success", or "error"
@@ -108,7 +108,7 @@ type Log struct {
 	// Denormalized token fields for easier querying
 	PromptTokens     int `gorm:"default:0" json:"-"`
 	CompletionTokens int `gorm:"default:0" json:"-"`
-	TotalTokens      int `gorm:"default:0" json:"-"`
+	TotalTokens      int `gorm:"index:idx_logs_total_tokens;default:0" json:"-"`
 
 	CreatedAt time.Time `gorm:"index;not null" json:"created_at"`
 
