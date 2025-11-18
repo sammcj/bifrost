@@ -1,0 +1,1 @@
+feat: add migration for missing provider column in key table
