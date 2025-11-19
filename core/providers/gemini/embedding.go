@@ -116,8 +116,9 @@ func (request *GeminiGenerationRequest) ToBifrostEmbeddingRequest() *schemas.Bif
 
 	// Create the embedding request
 	bifrostReq := &schemas.BifrostEmbeddingRequest{
-		Provider: provider,
-		Model:    model,
+		Provider:  provider,
+		Model:     model,
+		Fallbacks: schemas.ParseFallbacks(request.Fallbacks),
 	}
 
 	if len(request.Requests) > 0 {
