@@ -121,8 +121,13 @@ build: build-ui ## Build bifrost-http binary
 		echo "$(GREEN)║  Building bifrost-http...             ║$(NC)"; \
 		echo "$(GREEN)╚═══════════════════════════════════════╝$(NC)"; \
 	fi
-	@echo "$(YELLOW)Note: This will create a statically linked build.$(NC)"
-	@echo "$(YELLOW)To build with dynamic plugin support.$(NC)"
+	@if [ -n "$(DYNAMIC)" ]; then \
+		echo "$(YELLOW)Note: This will create a dynamically linked build.$(NC)"; \
+		echo "$(YELLOW)To build with dynamic plugin support.$(NC)"; \
+	else \
+		echo "$(YELLOW)Note: This will create a statically linked build.$(NC)"; \
+		echo "$(YELLOW)To build with dynamic plugin support.$(NC)"; \
+	fi
 	@mkdir -p ./tmp
 	@TARGET_OS="$(GOOS)"; \
 	TARGET_ARCH="$(GOARCH)"; \
@@ -138,13 +143,22 @@ build: build-ui ## Build bifrost-http binary
 	HOST_ARCH=$$ACTUAL_ARCH; \
 	echo "$(CYAN)Host: $$HOST_OS/$$HOST_ARCH | Target: $$TARGET_OS/$$TARGET_ARCH$(NC)"; \
 	if [ "$$TARGET_OS" = "linux" ] && [ "$$HOST_OS" = "linux" ]; then \
-		echo "$(CYAN)Building for $$TARGET_OS/$$TARGET_ARCH with static linking...$(NC)"; \
-		cd transports/bifrost-http && CGO_ENABLED=1 GOOS=$$TARGET_OS GOARCH=$$TARGET_ARCH $(if $(LOCAL),,GOWORK=off) go build \
-			-ldflags="-w -s -extldflags "-static" -X main.Version=v$(VERSION)" \
-			-a -trimpath \
-			-tags "sqlite_static" \
-			-o ../../tmp/bifrost-http \
-			.; \
+		if [ -n "$(DYNAMIC)" ]; then \
+			echo "$(CYAN)Building for $$TARGET_OS/$$TARGET_ARCH with dynamic linking...$(NC)"; \
+			cd transports/bifrost-http && CGO_ENABLED=1 GOOS=$$TARGET_OS GOARCH=$$TARGET_ARCH $(if $(LOCAL),,GOWORK=off) go build \
+				-ldflags="-w -s -X main.Version=v$(VERSION)" \
+				-a -trimpath \
+				-o ../../tmp/bifrost-http \
+				.; \
+		else \
+			echo "$(CYAN)Building for $$TARGET_OS/$$TARGET_ARCH with static linking...$(NC)"; \
+			cd transports/bifrost-http && CGO_ENABLED=1 GOOS=$$TARGET_OS GOARCH=$$TARGET_ARCH $(if $(LOCAL),,GOWORK=off) go build \
+				-ldflags="-w -s -extldflags "-static" -X main.Version=v$(VERSION)" \
+				-a -trimpath \
+				-tags "sqlite_static" \
+				-o ../../tmp/bifrost-http \
+				.; \
+		fi; \
 		echo "$(GREEN)Built: tmp/bifrost-http (version: v$(VERSION))$(NC)"; \
 	elif [ "$$TARGET_OS" = "$$HOST_OS" ] && [ "$$TARGET_ARCH" = "$$HOST_ARCH" ]; then \
 		echo "$(CYAN)Building for $$TARGET_OS/$$TARGET_ARCH (native build with CGO)...$(NC)"; \
@@ -158,29 +172,48 @@ build: build-ui ## Build bifrost-http binary
 	else \
 		echo "$(YELLOW)Cross-compilation detected: $$HOST_OS/$$HOST_ARCH -> $$TARGET_OS/$$TARGET_ARCH$(NC)"; \
 		echo "$(CYAN)Using Docker for cross-compilation...$(NC)"; \
-		$(MAKE) _build-with-docker TARGET_OS=$$TARGET_OS TARGET_ARCH=$$TARGET_ARCH; \
+		$(MAKE) _build-with-docker TARGET_OS=$$TARGET_OS TARGET_ARCH=$$TARGET_ARCH $(if $(DYNAMIC),DYNAMIC=$(DYNAMIC)); \
 	fi
 
 _build-with-docker: # Internal target for Docker-based cross-compilation
 	@echo "$(CYAN)Using Docker for cross-compilation...$(NC)"; \
 	if [ "$(TARGET_OS)" = "linux" ]; then \
-		echo "$(CYAN)Building for $(TARGET_OS)/$(TARGET_ARCH) in Docker container...$(NC)"; \
-		docker run --rm \
-			--platform linux/$(TARGET_ARCH) \
-			-v "$(shell pwd):/workspace" \
-			-w /workspace/transports/bifrost-http \
-			-e CGO_ENABLED=1 \
-			-e GOOS=$(TARGET_OS) \
-			-e GOARCH=$(TARGET_ARCH) \
-			 $(if $(LOCAL),,-e GOWORK=off) \
-			golang:1.24.3-alpine3.22 \
-			sh -c "apk add --no-cache gcc musl-dev && \
-			go build \
-				-ldflags='-w -s -extldflags "-static" -X main.Version=v$(VERSION)' \
-				-a -trimpath \
-				-tags sqlite_static \
-				-o ../../tmp/bifrost-http \
-				."; \
+		if [ -n "$(DYNAMIC)" ]; then \
+			echo "$(CYAN)Building for $(TARGET_OS)/$(TARGET_ARCH) in Docker container with dynamic linking...$(NC)"; \
+			docker run --rm \
+				--platform linux/$(TARGET_ARCH) \
+				-v "$(shell pwd):/workspace" \
+				-w /workspace/transports/bifrost-http \
+				-e CGO_ENABLED=1 \
+				-e GOOS=$(TARGET_OS) \
+				-e GOARCH=$(TARGET_ARCH) \
+				 $(if $(LOCAL),,-e GOWORK=off) \
+				golang:1.24.3-alpine3.22 \
+				sh -c "apk add --no-cache gcc musl-dev && \
+				go build \
+					-ldflags='-w -s -X main.Version=v$(VERSION)' \
+					-a -trimpath \
+					-o ../../tmp/bifrost-http \
+					."; \
+		else \
+			echo "$(CYAN)Building for $(TARGET_OS)/$(TARGET_ARCH) in Docker container...$(NC)"; \
+			docker run --rm \
+				--platform linux/$(TARGET_ARCH) \
+				-v "$(shell pwd):/workspace" \
+				-w /workspace/transports/bifrost-http \
+				-e CGO_ENABLED=1 \
+				-e GOOS=$(TARGET_OS) \
+				-e GOARCH=$(TARGET_ARCH) \
+				 $(if $(LOCAL),,-e GOWORK=off) \
+				golang:1.24.3-alpine3.22 \
+				sh -c "apk add --no-cache gcc musl-dev && \
+				go build \
+					-ldflags='-w -s -extldflags "-static" -X main.Version=v$(VERSION)' \
+					-a -trimpath \
+					-tags sqlite_static \
+					-o ../../tmp/bifrost-http \
+					."; \
+		fi; \
 		echo "$(GREEN)Built: tmp/bifrost-http ($(TARGET_OS)/$(TARGET_ARCH), version: v$(VERSION))$(NC)"; \
 	else \
 		echo "$(RED)Error: Docker cross-compilation only supports Linux targets$(NC)"; \

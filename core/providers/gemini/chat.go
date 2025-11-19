@@ -22,9 +22,10 @@ func (request *GeminiGenerationRequest) ToBifrostChatRequest() *schemas.BifrostC
 
 	// Handle chat completion requests
 	bifrostReq := &schemas.BifrostChatRequest{
-		Provider: provider,
-		Model:    model,
-		Input:    []schemas.ChatMessage{},
+		Provider:  provider,
+		Model:     model,
+		Input:     []schemas.ChatMessage{},
+		Fallbacks: schemas.ParseFallbacks(request.Fallbacks),
 	}
 
 	messages := []schemas.ChatMessage{}
