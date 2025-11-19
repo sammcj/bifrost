@@ -1,0 +1,1 @@
+chore: update core version to 1.2.27 to framework version 1.1.34
