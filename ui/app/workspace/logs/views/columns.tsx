@@ -7,7 +7,14 @@ import { ProviderName, RequestTypeColors, RequestTypeLabels, Status, StatusColor
 import { LogEntry, ResponsesMessageContentBlock } from "@/lib/types/logs";
 import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown } from "lucide-react";
-import moment from "moment";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdownMenu";
+import { MoreHorizontal } from "lucide-react";
+import moment from "moment"
 
 function getMessage(log?: LogEntry) {
 	if (log?.input_history && log.input_history.length > 0) {
@@ -42,7 +49,9 @@ function getMessage(log?: LogEntry) {
 	return "";
 }
 
-export const createColumns = (): ColumnDef<LogEntry>[] => [
+export const createColumns = (
+	onDelete: (log: LogEntry) => void,
+): ColumnDef<LogEntry>[] => [
 	{
 		accessorKey: "status",
 		header: "Status",
@@ -165,6 +174,28 @@ export const createColumns = (): ColumnDef<LogEntry>[] => [
 				<div className="pl-4 text-xs">
 					<div className="font-mono">{row.original.cost?.toFixed(4)}</div>
 				</div>
+			);
+		},
+	},
+	{
+		id: "actions",
+		cell: ({ row }) => {
+			const log = row.original;
+
+			return (
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button variant="ghost" className="h-8 w-8 p-0">
+							<span className="sr-only">Open menu</span>
+							<MoreHorizontal className="h-4 w-4" />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem onClick={() => onDelete(log)}>
+							Delete log
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			);
 		},
 	},

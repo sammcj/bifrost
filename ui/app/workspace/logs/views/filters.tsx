@@ -1,13 +1,50 @@
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { DateTimePickerWithRange } from "@/components/ui/datePickerWithRange";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RequestTypeLabels, RequestTypes, Statuses } from "@/lib/constants/logs";
 import { useGetAvailableFilterDataQuery, useGetProvidersQuery } from "@/lib/store";
 import type { LogFilters } from "@/lib/types/logs";
 import { cn } from "@/lib/utils";
+import { add, addDays } from "date-fns";
+import { filter } from "lodash-es";
 import { Check, FilterIcon, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+/**
+ * Converts a Date object to an RFC 3339 string with the local time zone offset.
+ *
+ * Example: 2025-11-19T12:23:19.421+05:30
+ *
+ * @param dateObj The Date object to convert (defaults to new Date() if null/undefined).
+ * @returns The RFC 3339 formatted string with local offset.
+ */
+export function dateToRfc3339Local(dateObj?: Date): string {
+    const now = dateObj instanceof Date ? dateObj : new Date();
+
+    // Helper function to pad single digits with a leading zero
+    const pad = (num: number): string => (num < 10 ? '0' + num : String(num));
+
+    const Y = now.getFullYear();
+    const M = pad(now.getMonth() + 1); // Month is 0-indexed (Jan=0)
+    const D = pad(now.getDate());
+    const H = pad(now.getHours());
+    const m = pad(now.getMinutes());
+    const S = pad(now.getSeconds());
+    const ms = String(now.getMilliseconds()).padStart(3, '0');
+
+    // getTimezoneOffset() returns the difference in minutes from UTC for the local time.
+    // The result is positive for time zones west of Greenwich and negative for those east.
+    // We negate it to get the standard ISO/RFC sign convention (+ for East, - for West).
+    const timezoneOffsetMinutes = -now.getTimezoneOffset(); 
+    const sign = timezoneOffsetMinutes >= 0 ? '+' : '-';
+    const absoluteOffset = Math.abs(timezoneOffsetMinutes);
+    const offsetHours = pad(Math.floor(absoluteOffset / 60));
+    const offsetMinutes = pad(absoluteOffset % 60);
+    const rfc3339Local = `${Y}-${M}-${D}T${H}:${m}:${S}.${ms}${sign}${offsetHours}:${offsetMinutes}`;
+    return rfc3339Local;
+}
 
 interface LogFiltersProps {
 	filters: LogFilters;
@@ -18,6 +55,9 @@ export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
 	const [open, setOpen] = useState(false);
 	const [localSearch, setLocalSearch] = useState(filters.content_search || "");
 	const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
+	const [startTime, setStartTime] = useState<Date | undefined>();
+	const [endTime, setEndTime] = useState<Date | undefined>();
 
 	// Use RTK Query to fetch available models
 	const { data: providersData, isLoading: providersLoading } = useGetProvidersQuery();
@@ -143,6 +183,21 @@ export function LogFilters({ filters, onFiltersChange }: LogFiltersProps) {
 					onChange={(e) => handleSearchChange(e.target.value)}
 				/>
 			</div>
+
+			<DateTimePickerWithRange dateTime={{
+				from: startTime,
+				to: endTime,
+			}}
+				onDateTimeUpdate={(p) => {
+					setStartTime(p.from);
+					setEndTime(p.to);
+					onFiltersChange({
+						...filters,
+						start_time: p.from?.toISOString(),
+						end_time: p.to ? new Date(p.to.setHours(23, 59, 59, 999)).toISOString() : undefined,
+					});
+				}}
+			/>
 
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>

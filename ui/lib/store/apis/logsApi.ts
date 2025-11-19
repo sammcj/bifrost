@@ -115,6 +115,16 @@ export const logsApi = baseApi.injectEndpoints({
 			query: () => "/logs/filterdata",
 			providesTags: ["Logs"],
 		}),
+
+		// Delete logs by their IDs
+		deleteLogs: builder.mutation<void, { ids: string[] }>({
+			query: ({ ids }) => ({
+				url: "/logs",
+				method: "DELETE",
+				body: { ids },
+			}),
+			invalidatesTags: ["Logs"],
+		}),
 	}),
 });
 
@@ -127,4 +137,5 @@ export const {
 	useLazyGetLogsStatsQuery,
 	useLazyGetDroppedRequestsQuery,
 	useLazyGetAvailableFilterDataQuery,
+	useDeleteLogsMutation,
 } = logsApi;

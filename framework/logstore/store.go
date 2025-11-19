@@ -28,6 +28,8 @@ type LogStore interface {
 	Update(ctx context.Context, id string, entry any) error
 	Flush(ctx context.Context, since time.Time) error	
 	Close(ctx context.Context) error
+	DeleteLog(ctx context.Context, id string) error
+	DeleteLogs(ctx context.Context, ids []string) error
 }
 
 // NewLogStore creates a new log store based on the configuration.

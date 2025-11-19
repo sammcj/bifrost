@@ -188,7 +188,7 @@ func (s *RDBLogStore) GetStats(ctx context.Context, filters SearchFilters) (*Sea
 			successQuery := s.db.WithContext(ctx).Model(&Log{})
 			successQuery = s.applyFilters(successQuery, filters)
 			successQuery = successQuery.Where("status = ?", "success")
-			
+
 			var successCount int64
 			if err := successQuery.Count(&successCount).Error; err != nil {
 				return nil, err
@@ -205,7 +205,7 @@ func (s *RDBLogStore) GetStats(ctx context.Context, filters SearchFilters) (*Sea
 			statsQuery := s.db.WithContext(ctx).Model(&Log{})
 			statsQuery = s.applyFilters(statsQuery, filters)
 			statsQuery = statsQuery.Where("status IN ?", []string{"success", "error"})
-			
+
 			if err := statsQuery.Select("AVG(latency) as avg_latency, SUM(total_tokens) as total_tokens, SUM(cost) as total_cost").Scan(&result).Error; err != nil {
 				return nil, err
 			}
@@ -265,4 +265,23 @@ func (s *RDBLogStore) Close(ctx context.Context) error {
 		return err
 	}
 	return sqlDB.Close()
+}
+
+// DeleteLog deletes a log entry from the database by its ID.
+func (s *RDBLogStore) DeleteLog(ctx context.Context, id string) error {
+	if err := s.db.WithContext(ctx).Where("id = ?", id).Delete(&Log{}).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteLogs deletes multiple log entries from the database by their IDs.
+func (s *RDBLogStore) DeleteLogs(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := s.db.WithContext(ctx).Where("id IN ?", ids).Delete(&Log{}).Error; err != nil {
+		return err
+	}
+	return nil
 }
