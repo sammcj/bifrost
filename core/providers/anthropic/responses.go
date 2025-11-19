@@ -167,6 +167,9 @@ func (request *AnthropicMessageRequest) ToBifrostResponsesRequest() *schemas.Bif
 	if request.Thinking != nil {
 		params.ExtraParams["thinking"] = request.Thinking
 	}
+	if request.OutputFormat != nil {
+		params.Text = convertAnthropicOutputFormatToResponsesTextConfig(request.OutputFormat)
+	}
 
 	// Add trucation parameter if computer tool is being used
 	if provider == schemas.OpenAI && request.Tools != nil {

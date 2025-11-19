@@ -211,3 +211,117 @@ func convertResponsesTextConfigToAnthropicOutputFormat(textConfig *schemas.Respo
 
 	return outputFormat
 }
+
+// convertAnthropicOutputFormatToResponsesTextConfig converts Anthropic's output_format structure
+// to OpenAI Responses API text config.
+//
+// Anthropic format:
+//
+//	{
+//	  "type": "json_schema",
+//	  "schema": {...},
+//	  "name": "...",
+//	  "strict": true
+//	}
+//
+// OpenAI Responses API format:
+//
+//	{
+//	  "text": {
+//	    "format": {
+//	      "type": "json_schema",
+//	      "json_schema": {...},
+//	      "name": "...",
+//	      "strict": true
+//	    }
+//	  }
+//	}
+func convertAnthropicOutputFormatToResponsesTextConfig(outputFormat interface{}) *schemas.ResponsesTextConfig {
+	if outputFormat == nil {
+		return nil
+	}
+
+	// Try to convert to map
+	formatMap, ok := outputFormat.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	// Extract type
+	formatType, ok := formatMap["type"].(string)
+	if !ok || formatType != "json_schema" {
+		return nil
+	}
+
+	format := &schemas.ResponsesTextConfigFormat{
+		Type: formatType,
+	}
+
+	// Extract name if present
+	if name, ok := formatMap["name"].(string); ok {
+		format.Name = &name
+	}
+
+	// Extract strict if present
+	if strict, ok := formatMap["strict"].(bool); ok {
+		format.Strict = &strict
+	}
+
+	// Extract schema if present
+	if schemaMap, ok := formatMap["schema"].(map[string]interface{}); ok {
+		jsonSchema := &schemas.ResponsesTextConfigFormatJSONSchema{}
+
+		if schemaType, ok := schemaMap["type"].(string); ok {
+			jsonSchema.Type = &schemaType
+		}
+
+		if properties, ok := schemaMap["properties"].(map[string]interface{}); ok {
+			jsonSchema.Properties = &properties
+		}
+
+		if required, ok := schemaMap["required"].([]interface{}); ok {
+			requiredStrs := make([]string, 0, len(required))
+			for _, r := range required {
+				if rStr, ok := r.(string); ok {
+					requiredStrs = append(requiredStrs, rStr)
+				}
+			}
+			if len(requiredStrs) > 0 {
+				jsonSchema.Required = requiredStrs
+			}
+		}
+
+		if additionalProps, ok := schemaMap["additionalProperties"].(bool); ok {
+			jsonSchema.AdditionalProperties = &additionalProps
+		}
+
+		format.JSONSchema = jsonSchema
+	}
+
+	return &schemas.ResponsesTextConfig{
+		Format: format,
+	}
+}
+
+// convertAnthropicOutputFormatToChatResponseFormat converts Anthropic's output_format structure
+// to Bifrost Chat API response format.
+//
+// For the Chat API, we simply pass through the output format as-is since
+// Bifrost's ResponseFormat field is a *interface{} that can hold any structure.
+//
+// Anthropic format:
+//
+//	{
+//	  "type": "json_schema",
+//	  "schema": {...},
+//	  "name": "...",
+//	  "strict": true
+//	}
+func convertAnthropicOutputFormatToChatResponseFormat(outputFormat interface{}) *interface{} {
+	if outputFormat == nil {
+		return nil
+	}
+	// For Chat API, just pass through the output format as-is
+	// since ResponseFormat is *interface{} in ChatParameters
+	return &outputFormat
+}
