@@ -47,6 +47,24 @@ func IsAllDigitsASCII(s string) bool {
 	return true
 }
 
+// ParseFallbacks parses a slice of strings into a slice of Fallback structs
+func ParseFallbacks(fallbacks []string) []Fallback {
+	if len(fallbacks) == 0 {
+		return nil
+	}
+	parsedFallbacks := make([]Fallback, 0, len(fallbacks))
+	for _, fallback := range fallbacks {
+		if fallback == "" {
+			continue
+		}
+		fallbackProvider, fallbackModel := ParseModelString(fallback, "")
+		if fallbackProvider != "" && fallbackModel != "" {
+			parsedFallbacks = append(parsedFallbacks, Fallback{Provider: fallbackProvider, Model: fallbackModel})
+		}
+	}
+	return parsedFallbacks
+}
+
 //* IMAGE UTILS *//
 
 // dataURIRegex is a precompiled regex for matching data URI format patterns.

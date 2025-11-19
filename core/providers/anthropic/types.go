@@ -25,6 +25,9 @@ type AnthropicTextRequest struct {
 	TopK              *int     `json:"top_k,omitempty"`
 	Stream            *bool    `json:"stream,omitempty"`
 	StopSequences     []string `json:"stop_sequences,omitempty"`
+
+	// Bifrost specific field (only parsed when converting from Provider -> Bifrost request)
+	Fallbacks []string `json:"fallbacks,omitempty"`
 }
 
 // IsStreamingRequested implements the StreamingRequest interface
@@ -49,6 +52,9 @@ type AnthropicMessageRequest struct {
 	MCPServers    []AnthropicMCPServer `json:"mcp_servers,omitempty"` // This feature requires the beta header: "anthropic-beta": "mcp-client-2025-04-04"
 	Thinking      *AnthropicThinking   `json:"thinking,omitempty"`
 	OutputFormat  interface{}         `json:"output_format,omitempty"` // This feature requires the beta header: "anthropic-beta": "structured-outputs-2025-11-13" and currently only supported for Claude Sonnet 4.5 and Claude Opus 4.1
+
+	// Bifrost specific field (only parsed when converting from Provider -> Bifrost request)
+	Fallbacks []string `json:"fallbacks,omitempty"`
 }
 
 type AnthropicMetaData struct {
