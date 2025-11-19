@@ -94,6 +94,7 @@
             "icon": "puzzle-piece",
             "pages": [
               "plugins/getting-started",
+              "plugins/building-dynamic-binary",
               "plugins/writing-plugin"              
             ]
           },
