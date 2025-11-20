@@ -53,7 +53,7 @@ curl --location 'http://localhost:8080/api/providers' \
     "provider": "openai-custom",
     "keys": [
         {
-            "name" "openai-custom-key-1",
+            "name": "openai-custom-key-1",
             "value": "env.OPENAI_API_KEY",
             "models": [],
             "weight": 1.0
@@ -92,7 +92,7 @@ curl --location 'http://localhost:8080/api/providers' \
         "openai-custom": {
             "keys": [
                 {
-                    "name" "openai-custom-key-1",
+                    "name": "openai-custom-key-1",
                     "value": "env.OPENAI_API_KEY",
                     "models": [],
                     "weight": 1.0
@@ -285,7 +285,7 @@ The field accepts a mapping of request types to custom paths:
 ```json
 {
     "custom-llm": {
-        "keys": [{ "name" "custom-llm-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "keys": [{ "name": "custom-llm-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
         "network_config": {
             "base_url": "https://your-openai-compatible-endpoint.com"
         },
@@ -315,7 +315,7 @@ Create different configurations for production, staging, and development environ
 ```json
 {
     "openai-production": {
-        "keys": [{ "name" "openai-prod-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "keys": [{ "name": "openai-prod-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
         "custom_provider_config": {
             "base_provider_type": "openai",
             "allowed_requests": {
@@ -328,7 +328,7 @@ Create different configurations for production, staging, and development environ
         }
     },
     "openai-staging": {
-        "keys": [{ "name" "openai-stage-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "keys": [{ "name": "openai-stage-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
         "custom_provider_config": {
             "base_provider_type": "openai",
             "allowed_requests": {
@@ -341,7 +341,7 @@ Create different configurations for production, staging, and development environ
         }
     },
     "openai-dev": {
-        "keys": [{ "name" "openai-dev-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "keys": [{ "name": "openai-dev-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
         "custom_provider_config": {
             "base_provider_type": "openai",
             "allowed_requests": {
@@ -363,7 +363,7 @@ Restrict capabilities based on user roles or team permissions. You can then crea
 ```json
 {
     "openai-developers": {
-        "keys": [{ "name" "openai-developers-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "keys": [{ "name": "openai-developers-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
         "custom_provider_config": {
             "base_provider_type": "openai",
             "allowed_requests": {
@@ -375,7 +375,7 @@ Restrict capabilities based on user roles or team permissions. You can then crea
         }
     },
     "openai-analysts": {
-        "keys": [{ "name" "openai-analysts-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "keys": [{ "name": "openai-analysts-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
         "custom_provider_config": {
             "base_provider_type": "openai",
             "allowed_requests": {
@@ -385,7 +385,7 @@ Restrict capabilities based on user roles or team permissions. You can then crea
         }
     },
     "openai-support": {
-        "keys": [{ "name" "openai-support-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "keys": [{ "name": "openai-support-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
         "custom_provider_config": {
             "base_provider_type": "openai",
             "allowed_requests": {
@@ -404,7 +404,7 @@ Test new features with limited user groups:
 ```json
 {
     "openai-beta-streaming": {
-        "keys": [{ "name" "openai-streaming-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "keys": [{ "name": "openai-streaming-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
         "custom_provider_config": {
             "base_provider_type": "openai",
             "allowed_requests": {
@@ -415,7 +415,7 @@ Test new features with limited user groups:
         }
     },
     "openai-stable": {
-        "keys": [{ "name" "openai-stable-key-1" "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
+        "keys": [{ "name": "openai-stable-key-1", "value": "env.PROVIDER_API_KEY", "models": [], "weight": 1.0 }],
         "custom_provider_config": {
             "base_provider_type": "openai",
             "allowed_requests": {
