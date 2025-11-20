@@ -128,10 +128,10 @@ export default function LogsPage() {
 		[setUrlState],
 	);
 
-	const latest = useRef({ logs, filters, pagination, showEmptyState });
+	const latest = useRef({ logs, filters, pagination, showEmptyState, liveEnabled });
 	useEffect(() => {
-		latest.current = { logs, filters, pagination, showEmptyState };
-	}, [logs, filters, pagination, showEmptyState]);
+		latest.current = { logs, filters, pagination, showEmptyState, liveEnabled };
+	}, [logs, filters, pagination, showEmptyState, liveEnabled]);
 
 	const handleDelete = useCallback(async (log: LogEntry) => {
 		try {
@@ -144,7 +144,7 @@ export default function LogsPage() {
 	}, [deleteLogs]);
 
 	const handleLogMessage = useCallback((log: LogEntry, operation: "create" | "update") => {
-		const { logs, filters, pagination, showEmptyState } = latest.current;
+		const { logs, filters, pagination, showEmptyState, liveEnabled } = latest.current;
 		// If we were in empty state, exit it since we now have logs
 		if (showEmptyState) {
 			setShowEmptyState(false);
@@ -155,7 +155,7 @@ export default function LogsPage() {
 			// Only prepend the new log if we're on the first page and sorted by timestamp desc
 			if (pagination.offset === 0 && pagination.sort_by === "timestamp" && pagination.order === "desc") {
 				// Check if the log matches current filters
-				if (!matchesFilters(log, filters)) {
+				if (!matchesFilters(log, filters, !liveEnabled)) {
 					return;
 				}
 
@@ -193,7 +193,7 @@ export default function LogsPage() {
 				// Fallback: if log doesn't exist, treat as create (e.g., user was on different page when created)
 				if (pagination.offset === 0 && pagination.sort_by === "timestamp" && pagination.order === "desc") {
 					// Check if the log matches current filters
-					if (matchesFilters(log, filters)) {
+					if (matchesFilters(log, filters, !liveEnabled)) {
 						setLogs((prevLogs: LogEntry[]) => {
 							// Double-check it doesn't exist (race condition protection)
 							if (prevLogs.some((existingLog) => existingLog.id === log.id)) {
@@ -412,7 +412,7 @@ export default function LogsPage() {
 	};
 
 	// Helper function to check if a log matches the current filters
-	const matchesFilters = (log: LogEntry, filters: LogFilters): boolean => {
+	const matchesFilters = (log: LogEntry, filters: LogFilters, applyTimeFilters = true): boolean => {
 		if (filters.providers?.length && !filters.providers.includes(log.provider)) {
 			return false;
 		}
@@ -425,7 +425,7 @@ export default function LogsPage() {
 		if (filters.start_time && new Date(log.timestamp) < new Date(filters.start_time)) {
 			return false;
 		}
-		if (filters.end_time && new Date(log.timestamp) > new Date(filters.end_time)) {
+		if (applyTimeFilters && filters.end_time && new Date(log.timestamp) > new Date(filters.end_time)) {
 			return false;
 		}
 		if (filters.min_latency && (!log.latency || log.latency < filters.min_latency)) {
