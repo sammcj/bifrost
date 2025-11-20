@@ -448,8 +448,8 @@ type ResponsesOutputMessageContentRefusal struct {
 }
 
 type ResponsesToolMessage struct {
-	CallID    *string                           `json:"call_id,omitempty"` // Common call ID for tool calls and outputs
-	Name      *string                           `json:"name,omitempty"`    // Common name field for tool calls
+	CallID    *string                           `json:"call_id,omitempty"`    // Common call ID for tool calls and outputs
+	Name      *string                           `json:"name,omitempty"`       // Common name field for tool calls
 	Arguments *string                           `json:"arguments,omitempty"`
 	Output    *ResponsesToolMessageOutputStruct `json:"output,omitempty"`
 	Action    *ResponsesToolMessageActionStruct `json:"action,omitempty"`
