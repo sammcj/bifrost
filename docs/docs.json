@@ -171,7 +171,9 @@
             "group": "Contributing",
             "icon": "code",
             "pages": [
-              "contributing/setting-up-repo"
+              "contributing/setting-up-repo",
+              "contributing/adding-a-provider",
+              "contributing/adding-a-configstore"
             ]
           }
         ]
