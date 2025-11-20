@@ -34,6 +34,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddPerformanceIndexes(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddPerformanceIndexesV2(ctx, db); err != nil {
+		return err
+	}
 	if err := migrationUpdateTimestampFormat(ctx, db); err != nil {
 		return err
 	}

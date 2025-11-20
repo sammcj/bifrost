@@ -9,11 +9,15 @@ This guide walks you through setting up the Bifrost repository for local develop
 ## Prerequisites
 
 Before setting up the repository, ensure you have the following tools installed:
-- [Go](https://go.dev/doc/install) (>= 1.21)
-- [Node.js](https://nodejs.org/en/download) (>= 18) and npm
+- [Go](https://go.dev/doc/install) (1.24.3)
+- [Node.js](https://nodejs.org/en/download) (>= 18.0.0) and npm
 - [Make](/deployment-guides/how-to/install-make)
 - [Docker](https://www.docker.com) (optional, for containerized development)
 - [Air](https://github.com/air-verse/air?tab=readme-ov-file#installation) (for hot reloading, auto-installed by Makefile when needed)
+- [golangci-lint](https://golangci-lint.run/usage/install/) (optional, for linting)
+- [goimports](https://pkg.go.dev/golang.org/x/tools/cmd/goimports) (optional, for code formatting)
+
+<Note>`gotestsum` and `junit-viewer` are auto-installed by make commands when needed for test reporting.</Note>
 
 ## Clone the Repository
 
@@ -118,6 +122,18 @@ This creates a `go.work` file that links all local modules for development.
 ```bash
 # Build UI and binary
 make build
+
+# Build with local go.work modules (for development)
+make build LOCAL=1
+
+# Build with specific version
+make build VERSION=1.0.0
+
+# Cross-compile for different platforms
+make build GOOS=linux GOARCH=amd64
+
+# Build with dynamic linking (Linux only)
+make build DYNAMIC=1
 ```
 
 #### 5. Run the Application
@@ -147,17 +163,31 @@ make clean        # Clean build artifacts
 
 ```bash
 make test         # Run bifrost-http tests
-make test-core    # Run core tests
+make test-core    # Run all core tests
+make test-core PROVIDER=openai  # Run specific provider tests
+make test-core PROVIDER=openai TESTCASE=SpeechSynthesisStreamAdvanced/MultipleVoices_Streaming/StreamingVoice_echo  # Run specific test case
 make test-plugins # Run plugin tests
 make test-all     # Run all tests
+make clean-test-reports  # Clean test reports
+make generate-html-reports  # Convert XML to HTML reports
 ```
+
+<Note>
+- **TESTCASE must use forward-slash separated nested path format** (e.g., `ParentTest/SubTest/SpecificTest`)
+- See the Makefile comment at line 311 for the expected format and additional examples
+- HTML test reports are automatically generated when `junit-viewer` is available
+- Reports are saved to `test-reports/` directory
+- View with: `open test-reports/index.html`
+</Note>
 
 ### Workspace Management
 
 ```bash
 make setup-workspace  # Set up Go workspace for local development
-make work-clean      # Remove local go.work files
+make work-clean       # Remove local go.work files
 ```
+
+<Note>`make work-init` is deprecated. Use `make setup-workspace` instead.</Note>
 
 ### UI Commands
 
@@ -186,6 +216,13 @@ make lint         # Run linter for Go code
 make fmt          # Format Go code
 ```
 
+### Tool Installation
+
+```bash
+make install-gotestsum     # Install gotestsum for test reporting
+make install-junit-viewer  # Install junit-viewer for HTML reports
+```
+
 ## Environment Variables
 
 You can customize the development environment with these variables:
@@ -202,8 +239,12 @@ LOG_LEVEL=info                   # Logger level: debug|info|warn|error (default:
 # Prometheus
 PROMETHEUS_LABELS="env=dev"      # Labels for Prometheus metrics
 
-# App directory (for containers)
-APP_DIR=/app/data               # App data directory 
+# App directory
+APP_DIR=                         # App data directory (empty by default, /app/data recommended for containers)
+
+# Build configuration
+VERSION=dev-build                # Build version (default: dev-build)
+LOCAL=                           # Use local go.work for builds (e.g., make build LOCAL=1)
 ```
 
 Example with custom settings:
@@ -252,11 +293,23 @@ make dev
 ### 3. Test Your Changes
 
 ```bash
-# Run relevant tests
-make test           # HTTP transport tests
-make test-core      # Core functionality tests
-make test-plugins   # Plugin tests
-make test-all       # All tests
+# Run all tests
+make test-all
+
+# Run specific provider tests
+make test-core PROVIDER=openai
+
+# Run specific test case (TESTCASE must be a slash-delimited nested path matching the test hierarchy)
+make test-core PROVIDER=elevenlabs TESTCASE=SpeechSynthesisStreamAdvanced/MultipleVoices_Streaming/StreamingVoice_echo
+
+# Run HTTP transport tests
+make test
+
+# Run plugin tests
+make test-plugins
+
+# View test reports (after running tests)
+open test-reports/index.html
 ```
 
 ### 4. Verify Code Quality

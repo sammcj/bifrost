@@ -10,6 +10,7 @@ export const logsApi = baseApi.injectEndpoints({
 				logs: LogEntry[];
 				pagination: Pagination;
 				stats: LogStats;
+				has_logs: boolean;
 			},
 			{
 				filters: LogFilters;

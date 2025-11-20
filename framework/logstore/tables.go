@@ -58,6 +58,7 @@ type SearchResult struct {
 	Logs       []Log             `json:"logs"`
 	Pagination PaginationOptions `json:"pagination"`
 	Stats      SearchStats       `json:"stats"`
+	HasLogs    bool              `json:"has_logs"`
 }
 
 type SearchStats struct {

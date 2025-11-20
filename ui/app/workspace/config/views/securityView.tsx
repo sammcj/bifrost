@@ -30,6 +30,7 @@ const defaultConfig: CoreConfig = {
 	allowed_origins: [],
 	max_request_body_size_mb: 100,
 	enable_litellm_fallbacks: false,
+	log_retention_days: 365,
 };
 
 export default function SecurityView() {
@@ -79,7 +80,10 @@ export default function SecurityView() {
 			authConfig.admin_password !== bifrostConfig?.auth_config?.admin_password ||
 			authConfig.disable_auth_on_inference !== bifrostConfig?.auth_config?.disable_auth_on_inference;
 
-		return originsChanged || authChanged;
+		const enforceVirtualKeyChanged = localConfig.enforce_governance_header !== config.enforce_governance_header;
+		const allowDirectKeysChanged = localConfig.allow_direct_keys !== config.allow_direct_keys;
+
+		return originsChanged || authChanged || enforceVirtualKeyChanged || allowDirectKeysChanged;
 	}, [config, localConfig, authConfig, bifrostConfig]);
 
 	const handleAllowedOriginsChange = useCallback((value: string) => {
@@ -90,6 +94,10 @@ export default function SecurityView() {
 		const requiresRestart =
 			nextOrigins.length !== currentOrigins.length || nextOrigins.some((origin, index) => origin !== currentOrigins[index]);
 		setNeedsRestart(requiresRestart);
+	}, []);
+
+	const handleConfigChange = useCallback((field: keyof CoreConfig, value: boolean) => {
+		setLocalConfig((prev) => ({ ...prev, [field]: value }));
 	}, []);
 
 	const checkAuthNeedsRestart = useCallback(
@@ -252,6 +260,41 @@ export default function SecurityView() {
 						</div>
 					</div>
 				)}
+				{/* Enforce Virtual Keys */}
+				{localConfig.enable_governance && (
+					<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+						<div className="space-y-0.5">
+							<label htmlFor="enforce-governance" className="text-sm font-medium">
+								Enforce Virtual Keys
+							</label>
+							<p className="text-muted-foreground text-sm">
+								Enforce the use of a virtual key for all requests. If enabled, requests without the <b>x-bf-vk</b> header will be rejected.
+							</p>
+						</div>
+						<Switch
+							id="enforce-governance"
+							checked={localConfig.enforce_governance_header}
+							onCheckedChange={(checked) => handleConfigChange("enforce_governance_header", checked)}
+						/>
+					</div>
+				)}
+				{/* Allow Direct API Keys */}
+				<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+					<div className="space-y-0.5">
+						<label htmlFor="allow-direct-keys" className="text-sm font-medium">
+							Allow Direct API Keys
+						</label>
+						<p className="text-muted-foreground text-sm">
+							Allow API keys to be passed directly in request headers (<b>Authorization</b> or <b>x-api-key</b>). Bifrost will directly use
+							the key.
+						</p>
+					</div>
+					<Switch
+						id="allow-direct-keys"
+						checked={localConfig.allow_direct_keys}
+						onCheckedChange={(checked) => handleConfigChange("allow_direct_keys", checked)}
+					/>
+				</div>
 				{/* Allowed Origins */}
 				<div>
 					<div className="space-y-2 rounded-lg border p-4">
