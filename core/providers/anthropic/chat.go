@@ -191,7 +191,7 @@ func (request *AnthropicMessageRequest) ToBifrostChatRequest() *schemas.BifrostC
 			params.Stop = request.StopSequences
 		}
 		if request.OutputFormat != nil {
-			params.ResponseFormat = convertAnthropicOutputFormatToChatResponseFormat(request.OutputFormat)
+			params.ResponseFormat = &request.OutputFormat
 		}
 
 		bifrostReq.Params = params

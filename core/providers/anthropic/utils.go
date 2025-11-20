@@ -302,26 +302,3 @@ func convertAnthropicOutputFormatToResponsesTextConfig(outputFormat interface{})
 		Format: format,
 	}
 }
-
-// convertAnthropicOutputFormatToChatResponseFormat converts Anthropic's output_format structure
-// to Bifrost Chat API response format.
-//
-// For the Chat API, we simply pass through the output format as-is since
-// Bifrost's ResponseFormat field is a *interface{} that can hold any structure.
-//
-// Anthropic format:
-//
-//	{
-//	  "type": "json_schema",
-//	  "schema": {...},
-//	  "name": "...",
-//	  "strict": true
-//	}
-func convertAnthropicOutputFormatToChatResponseFormat(outputFormat interface{}) *interface{} {
-	if outputFormat == nil {
-		return nil
-	}
-	// For Chat API, just pass through the output format as-is
-	// since ResponseFormat is *interface{} in ChatParameters
-	return &outputFormat
-}
