@@ -7,7 +7,6 @@ import { CoreConfig } from "@/lib/types/config";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import PluginsForm from "./pluginsForm";
 
 const defaultConfig: CoreConfig = {
 	drop_excess_requests: false,
@@ -15,6 +14,7 @@ const defaultConfig: CoreConfig = {
 	prometheus_labels: [],
 	enable_logging: true,
 	disable_content_logging: false,
+	log_retention_days: 365,
 	enable_governance: true,
 	enforce_governance_header: false,
 	allow_direct_keys: false,
@@ -23,7 +23,7 @@ const defaultConfig: CoreConfig = {
 	enable_litellm_fallbacks: false,
 };
 
-export default function FeatureTogglesView() {
+export default function GovernanceView() {
 	const hasSettingsUpdateAccess = useRbac(RbacResource.Settings, RbacOperation.Update);
 	const { data: bifrostConfig } = useGetCoreConfigQuery({ fromDB: true });
 	const config = bifrostConfig?.client_config;
@@ -39,11 +39,7 @@ export default function FeatureTogglesView() {
 
 	const hasChanges = useMemo(() => {
 		if (!config) return false;
-		return (
-			localConfig.enable_logging !== config.enable_logging ||
-			localConfig.disable_content_logging !== config.disable_content_logging ||
-			localConfig.enable_governance !== config.enable_governance
-		);
+		return localConfig.enable_governance !== config.enable_governance;
 	}, [config, localConfig]);
 
 	const handleConfigChange = useCallback((field: keyof CoreConfig, value: boolean | number | string[]) => {
@@ -58,7 +54,7 @@ export default function FeatureTogglesView() {
 		}
 		try {
 			await updateCoreConfig({ ...bifrostConfig, client_config: localConfig }).unwrap();
-			toast.success("Feature toggles updated successfully.");
+			toast.success("Governance configuration updated successfully.");
 		} catch (error) {
 			toast.error(getErrorMessage(error));
 		}
@@ -68,76 +64,24 @@ export default function FeatureTogglesView() {
 		<div className="space-y-4">
 			<div className="flex items-center justify-between">
 				<div>
-					<h2 className="text-2xl font-semibold tracking-tight">Feature Toggles</h2>
-					<p className="text-muted-foreground text-sm">Enable or disable major features.</p>
+					<h2 className="text-2xl font-semibold tracking-tight">Governance</h2>
+					<p className="text-muted-foreground text-sm">Configure governance settings for requests.</p>
 				</div>
 				<Button onClick={handleSave} disabled={!hasChanges || isLoading || !hasSettingsUpdateAccess}>
 					{isLoading ? "Saving..." : "Save Changes"}
 				</Button>
-			</div>			
-
-			<div className="space-y-4">
-				{/* Enable Logs */}
-				<div>
-					<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
-						<div className="space-y-0.5">
-							<label htmlFor="enable-logging" className="text-sm font-medium">
-								Enable Logs
-							</label>
-							<p className="text-muted-foreground text-sm">
-								Enable logging of requests and responses to a SQL database. This can add 40-60mb of overhead to the system memory.
-								{!bifrostConfig?.is_logs_connected && (
-									<span className="text-destructive font-medium"> Requires logs store to be configured and enabled in config.json.</span>
-								)}
-							</p>
-						</div>
-						<Switch
-							id="enable-logging"
-							size="md"
-							checked={localConfig.enable_logging && bifrostConfig?.is_logs_connected}
-							disabled={!bifrostConfig?.is_logs_connected}
-							onCheckedChange={(checked) => {
-								if (bifrostConfig?.is_logs_connected) {
-									handleConfigChange("enable_logging", checked);
-								}
-							}}
-						/>
-				</div>
-				{needsRestart && <RestartWarning />}
 			</div>
 
-			{/* Disable Content Logging - Only show when logging is enabled */}
-			{localConfig.enable_logging && bifrostConfig?.is_logs_connected && (
+			<div className="space-y-4">
+				{/* Enable Governance */}
 				<div>
-					<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
-						<div className="space-y-0.5">
-							<label htmlFor="disable-content-logging" className="text-sm font-medium">
-								Disable Content Logging
-							</label>
-							<p className="text-muted-foreground text-sm">
-								When enabled, only usage metadata (latency, cost, token count, etc.) will be logged. Request/response content will not be stored.
-							</p>
-						</div>
-						<Switch
-							id="disable-content-logging"
-							size="md"
-							checked={localConfig.disable_content_logging}
-							onCheckedChange={(checked) => handleConfigChange("disable_content_logging", checked)}
-						/>
-					</div>
-					{needsRestart && <RestartWarning />}
-				</div>
-			)}
-
-			{/* Enable Governance */}
-			<div>
 					<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
 						<div className="space-y-0.5">
 							<label htmlFor="enable-governance" className="text-sm font-medium">
 								Enable Governance
 							</label>
 							<p className="text-muted-foreground text-sm">
-								Enable governance on requests. You can configure budgets and rate limits in the <b>Governance</b> tab.
+								Enable governance on requests. You can configure budgets and rate limits in the <b>Governance</b> section.
 							</p>
 						</div>
 						<Switch
@@ -149,9 +93,6 @@ export default function FeatureTogglesView() {
 					</div>
 					{needsRestart && <RestartWarning />}
 				</div>
-
-				{/* Plugins Form */}
-				<PluginsForm isVectorStoreEnabled={bifrostConfig?.is_cache_connected ?? false} />
 			</div>
 		</div>
 	);
@@ -160,3 +101,5 @@ export default function FeatureTogglesView() {
 const RestartWarning = () => {
 	return <div className="text-muted-foreground mt-2 pl-4 text-xs font-semibold">Need to restart Bifrost to apply changes.</div>;
 };
+
+

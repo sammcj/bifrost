@@ -23,6 +23,7 @@ type LogStore interface {
 	Create(ctx context.Context, entry *Log) error
 	FindFirst(ctx context.Context, query any, fields ...string) (*Log, error)
 	FindAll(ctx context.Context, query any, fields ...string) ([]*Log, error)
+	HasLogs(ctx context.Context) (bool, error)
 	SearchLogs(ctx context.Context, filters SearchFilters, pagination PaginationOptions) (*SearchResult, error)
 	GetStats(ctx context.Context, filters SearchFilters) (*SearchStats, error)
 	Update(ctx context.Context, id string, entry any) error
@@ -30,6 +31,7 @@ type LogStore interface {
 	Close(ctx context.Context) error
 	DeleteLog(ctx context.Context, id string) error
 	DeleteLogs(ctx context.Context, ids []string) error
+	DeleteLogsBatch(ctx context.Context, cutoff time.Time, batchSize int) (deletedCount int64, err error)
 }
 
 // NewLogStore creates a new log store based on the configuration.

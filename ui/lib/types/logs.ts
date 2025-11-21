@@ -565,3 +565,46 @@ export interface WebSocketLogMessage {
 	operation: "create" | "update";
 	payload: LogEntry;
 }
+
+// Date utility functions for URL state management
+export const dateUtils = {
+	/**
+	 * Converts a Date object to Unix timestamp (seconds)
+	 */
+	toUnixTimestamp: (date: Date | undefined): number | undefined => {
+		if (!date) return undefined;
+		return Math.floor(date.getTime() / 1000);
+	},
+
+	/**
+	 * Converts Unix timestamp (seconds) to Date object
+	 */
+	fromUnixTimestamp: (timestamp: number | undefined): Date | undefined => {
+		if (timestamp === undefined) return undefined;
+		return new Date(timestamp * 1000);
+	},
+
+	/**
+	 * Gets the Unix timestamp for 24 hours ago
+	 */
+	get24HoursAgo: (): number => {
+		const date = new Date();
+		date.setHours(date.getHours() - 24);
+		return Math.floor(date.getTime() / 1000);
+	},
+
+	/**
+	 * Gets the current Unix timestamp
+	 */
+	getCurrentTimestamp: (): number => {
+		return Math.floor(Date.now() / 1000);
+	},
+
+	/**
+	 * Converts Unix timestamp to ISO string for API calls
+	 */
+	toISOString: (timestamp: number | undefined): string | undefined => {
+		if (timestamp === undefined) return undefined;
+		return new Date(timestamp * 1000).toISOString();
+	},
+};

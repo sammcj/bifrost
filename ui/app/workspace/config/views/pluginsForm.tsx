@@ -155,7 +155,7 @@ export default function PluginsForm({ isVectorStoreEnabled }: PluginsFormProps) 
 							Enable Semantic Caching
 						</label>
 						<p className="text-muted-foreground text-sm">
-							Enable semantic caching for requests. Send <b>x-bf-cache-key</b> header with requests to use semantic caching.
+							Enable semantic caching for requests. Send <b>x-bf-cache-key</b> header with requests to use semantic caching.{" "}
 							{!isVectorStoreEnabled && (
 								<span className="text-destructive font-medium">Requires vector store to be configured and enabled in config.json.</span>
 							)}

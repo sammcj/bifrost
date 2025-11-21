@@ -14,7 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DottedSeparator } from "@/components/ui/separator";
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
 import { RequestTypeColors, RequestTypeLabels, Status, StatusColors } from "@/lib/constants/logs";
 import { LogEntry } from "@/lib/types/logs";
@@ -48,7 +48,7 @@ export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDet
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
 			<SheetContent className="dark:bg-card flex w-full flex-col overflow-x-hidden bg-white p-8 sm:max-w-2xl">
-				<SheetHeader className="px-0">
+				<SheetHeader className="flex flex-row items-center px-0">
 					<div className="flex w-full items-center justify-between">
 						<SheetTitle className="flex w-fit items-center gap-2 font-medium">
 							{log.id && <p className="text-md max-w-full truncate">Request ID: {log.id}</p>}
@@ -57,6 +57,30 @@ export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDet
 							</Badge>
 						</SheetTitle>
 					</div>
+					<AlertDialog>
+						<AlertDialogTrigger asChild>
+							<Button variant="outline" className="ml-auto">
+								<Trash2 />
+							</Button>
+						</AlertDialogTrigger>
+						<AlertDialogContent>
+							<AlertDialogHeader>
+								<AlertDialogTitle>Are you sure you want to delete this log?</AlertDialogTitle>
+								<AlertDialogDescription>This action cannot be undone. This will permanently delete the log entry.</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel>Cancel</AlertDialogCancel>
+								<AlertDialogAction
+									onClick={() => {
+										handleDelete(log);
+										onOpenChange(false);
+									}}
+								>
+									Delete
+								</AlertDialogAction>
+							</AlertDialogFooter>
+						</AlertDialogContent>
+					</AlertDialog>
 				</SheetHeader>
 				<div className="space-y-4 rounded-sm border px-6 py-4">
 					<div className="space-y-4">
@@ -414,32 +438,6 @@ export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDet
 						)}
 					</>
 				)}
-				<SheetFooter className="flex items-end px-0">
-					<AlertDialog>
-						<AlertDialogTrigger asChild>
-							<Button variant="destructive" className="w-fit">
-								<Trash2 /> Delete log
-							</Button>
-						</AlertDialogTrigger>
-						<AlertDialogContent>
-							<AlertDialogHeader>
-								<AlertDialogTitle>Are you sure you want to delete this log?</AlertDialogTitle>
-								<AlertDialogDescription>This action cannot be undone. This will permanently delete the log entry.</AlertDialogDescription>
-							</AlertDialogHeader>
-							<AlertDialogFooter>
-								<AlertDialogCancel>Cancel</AlertDialogCancel>
-								<AlertDialogAction
-									onClick={() => {
-										handleDelete(log);
-										onOpenChange(false);
-									}}
-								>
-									Delete
-								</AlertDialogAction>
-							</AlertDialogFooter>
-						</AlertDialogContent>
-					</AlertDialog>
-				</SheetFooter>
 			</SheetContent>
 		</Sheet>
 	);

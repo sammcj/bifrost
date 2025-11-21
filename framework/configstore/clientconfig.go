@@ -31,8 +31,9 @@ type ClientConfig struct {
 	DropExcessRequests      bool     `json:"drop_excess_requests"`      // Drop excess requests if the provider queue is full
 	InitialPoolSize         int      `json:"initial_pool_size"`         // The initial pool size for the bifrost client
 	PrometheusLabels        []string `json:"prometheus_labels"`         // The labels to be used for prometheus metrics
-	EnableLogging           bool     `json:"enable_logging"`            // Enable logging of requests and responses
-	DisableContentLogging   bool     `json:"disable_content_logging"`   // Disable logging of content
+	EnableLogging           bool     `json:"enable_logging"`                      // Enable logging of requests and responses
+	DisableContentLogging   bool     `json:"disable_content_logging"`             // Disable logging of content
+	LogRetentionDays        int      `json:"log_retention_days" validate:"min=1"` // Number of days to retain logs (minimum 1 day)
 	EnableGovernance        bool     `json:"enable_governance"`         // Enable governance on all requests
 	EnforceGovernanceHeader bool     `json:"enforce_governance_header"` // Enforce governance on all requests
 	AllowDirectKeys         bool     `json:"allow_direct_keys"`         // Allow direct keys to be used for requests
