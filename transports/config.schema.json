@@ -568,7 +568,7 @@
                   "max_open_conns": {
                     "type": "integer",
                     "description": "Maximum number of open connections to the database (default: 50)",
-                    "minimum": 0,
+                    "minimum": 2,
                     "default": 50
                   }
                 },
