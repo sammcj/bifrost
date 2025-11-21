@@ -10,7 +10,7 @@
     "primary": "#0C3B43",
     "light": "#07C983"
   },
-  "favicon":"favicon.ico",
+  "favicon": "favicon.ico",
   "topbarLinks": [
     {
       "name": "Support",
@@ -69,7 +69,7 @@
                 ]
               }
             ]
-          },          
+          },
           {
             "group": "Models Catalog",
             "icon": "box",
@@ -95,7 +95,7 @@
             "pages": [
               "plugins/getting-started",
               "plugins/building-dynamic-binary",
-              "plugins/writing-plugin"              
+              "plugins/writing-plugin"
             ]
           },
           {
@@ -173,7 +173,9 @@
             "pages": [
               "contributing/setting-up-repo",
               "contributing/adding-a-provider",
-              "contributing/adding-a-configstore"
+              "contributing/adding-a-configstore",
+              "contributing/adding-a-logstore",
+              "contributing/adding-a-vectorstore"
             ]
           }
         ]
@@ -186,7 +188,7 @@
             "group": "Platform specific guides",
             "icon": "swatchbook",
             "pages": [
-               "deployment-guides/k8s",
+              "deployment-guides/k8s",
               "deployment-guides/ecs",
               "deployment-guides/helm",
               "deployment-guides/fly"

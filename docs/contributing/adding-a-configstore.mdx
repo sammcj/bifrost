@@ -45,6 +45,36 @@ GORM provides implementations for the functions listed in the `ConfigStore` inte
 When adding a new database, please follow these conventions:
 
 ### File Placement
-*   **Interface & Factory**: The main interface and factory method are in `framework/configstore/store.go`.
-*   **Common RDB Logic**: Shared RDB implementation details are in `framework/configstore/rdb.go`.
-*   **Database Specifics**: Create a new file for your database implementation, named after the database (e.g., `framework/configstore/mysql.go`).
+*   The main interface and factory method are in `framework/configstore/store.go`.
+*   Shared RDB implementation details are in `framework/configstore/rdb.go`.
+*   Create a new file for your database implementation, named after the database (e.g., `framework/configstore/postgres.go`).
+
+### Implementation Steps
+
+1.  Add a new constant to the `ConfigStoreType` in `store.go`.
+2.  Define a struct in your new database file that contains all connection parameters (host, port, credentials, etc.).
+3.  Implement the Factory Function: Create a function that:
+    *   Accepts the configuration struct and a logger
+    *   Opens a GORM database connection using your database's GORM driver
+    *   Returns an instance of `RDBConfigStore` with the database connection
+    *   Runs migrations to ensure the schema is up-to-date
+4.  Update the Factory: Add a new case in the `NewConfigStore` function in `store.go` to handle your new database type.
+5.  If needed, update the `Config` struct's `UnmarshalJSON` method in `config.go` to properly parse your configuration.
+
+### Error Handling
+
+Make sure to properly handle errors during:
+*   Database connection establishment
+*   Migration execution
+*   Connection cleanup (especially important if migrations fail)
+
+### Testing Considerations
+
+*   Ensure your implementation can handle concurrent access to the database
+*   Consider connection pooling and timeout settings appropriate for your database
+*   Test with both empty and populated databases
+*   Verify that all `ConfigStore` interface methods work correctly with your backend
+
+## Getting Help
+
+If you need help, please reach out to the Bifrost team on [Discord](https://getmax.im/bifrost-discord).
