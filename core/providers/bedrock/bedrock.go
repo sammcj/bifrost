@@ -723,6 +723,17 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 						CompletionTokens: streamEvent.Usage.OutputTokens,
 						TotalTokens:      streamEvent.Usage.TotalTokens,
 					}
+					// Handle cached tokens if present
+					if streamEvent.Usage.CacheReadInputTokens > 0 {
+						usage.PromptTokensDetails = &schemas.ChatPromptTokensDetails{
+							CachedTokens: streamEvent.Usage.CacheReadInputTokens,
+						}
+					}
+					if streamEvent.Usage.CacheWriteInputTokens > 0 {
+						usage.CompletionTokensDetails = &schemas.ChatCompletionTokensDetails{
+							CachedTokens: streamEvent.Usage.CacheWriteInputTokens,
+						}
+					}
 				}
 
 				if streamEvent.StopReason != nil {
@@ -949,6 +960,17 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 						InputTokens:  streamEvent.Usage.InputTokens,
 						OutputTokens: streamEvent.Usage.OutputTokens,
 						TotalTokens:  streamEvent.Usage.TotalTokens,
+					}
+					// Handle cached tokens if present
+					if streamEvent.Usage.CacheReadInputTokens > 0 {
+						usage.InputTokensDetails = &schemas.ResponsesResponseInputTokens{
+							CachedTokens: streamEvent.Usage.CacheReadInputTokens,
+						}
+					}
+					if streamEvent.Usage.CacheWriteInputTokens > 0 {
+						usage.OutputTokensDetails = &schemas.ResponsesResponseOutputTokens{
+							CachedTokens: streamEvent.Usage.CacheWriteInputTokens,
+						}
 					}
 				}
 

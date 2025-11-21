@@ -566,7 +566,10 @@ type BifrostLLMUsage struct {
 }
 
 type ChatPromptTokensDetails struct {
-	AudioTokens  int `json:"audio_tokens,omitempty"`
+	AudioTokens int `json:"audio_tokens,omitempty"`
+
+	// For Providers which follow OpenAI's spec, CachedTokens means the number of input tokens read from the cache+input tokens used to create the cache entry. (because they do not differentiate between cache creation and cache read tokens)
+	// For Providers which do not follow OpenAI's spec, CachedTokens means only the number of input tokens read from the cache.
 	CachedTokens int `json:"cached_tokens,omitempty"`
 }
 
@@ -578,7 +581,8 @@ type ChatCompletionTokensDetails struct {
 	ReasoningTokens          int  `json:"reasoning_tokens,omitempty"`
 	RejectedPredictionTokens int  `json:"rejected_prediction_tokens,omitempty"`
 
-	CachedTokens int `json:"cached_tokens,omitempty"` // Not in OpenAI's schemas, but sent by a few providers (Anthropic is one of them)
+	// This means the number of input tokens used to create the cache entry. (cache creation tokens)
+	CachedTokens int `json:"cached_tokens,omitempty"` // Not in OpenAI's schemas, but sent by a few providers (Anthropic, Bedrock are some of them)
 }
 
 type BifrostCost struct {
