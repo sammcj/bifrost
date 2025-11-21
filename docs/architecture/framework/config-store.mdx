@@ -65,12 +65,14 @@ pgConfig := &configstore.Config{
     Enabled: true,
     Type:    configstore.ConfigStoreTypePostgres,
     Config: &configstore.PostgresConfig{
-        Host:     "localhost",
-        Port:     "5432",
-        User:     "postgres",
-        Password: "secret",
-        DBName:   "bifrost",
-        SSLMode:  "disable",
+        Host:         "localhost",
+        Port:         "5432",
+        User:         "postgres",
+        Password:     "secret",
+        DBName:       "bifrost",
+        SSLMode:      "disable",
+        MaxIdleConns: 5,  // Optional: Maximum idle connections (default: 5)
+        MaxOpenConns: 50, // Optional: Maximum open connections (default: 50)
     },
 }
 
@@ -79,6 +81,15 @@ if err != nil {
     // Handle error
 }
 ```
+
+### Connection Pool Configuration
+
+For PostgreSQL backends, you can configure the database connection pool to optimize performance based on your workload:
+
+- **MaxIdleConns**: Maximum number of idle connections in the pool (default: 5)
+- **MaxOpenConns**: Maximum number of open connections to the database (default: 50)
+
+These parameters help manage database connection resources effectively. Increase them for high-traffic deployments or decrease them for resource-constrained environments.
 
 ## Data Models
 
