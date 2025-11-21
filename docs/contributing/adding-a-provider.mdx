@@ -6,10 +6,6 @@ icon: "file-pen"
 
 This guide will walk you through creating a provider for Bifrost, testing locally and adding automated tests.
 
-## Setup
-
-We assume you have some idea about how Bifrost works and you have already [set up bifrost for local development](setting-up-repo).
-
 ## Provider structure
 
 Bifrost is a gateway, meaning it receives request in a standard format (OpenAI compatible), converts it to provider specific formats and sends the request. It then receives the provider response and converts it back to the standard (OpenAI compatible) response.
