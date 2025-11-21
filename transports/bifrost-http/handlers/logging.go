@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/fasthttp/router"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
@@ -44,6 +45,7 @@ func (h *LoggingHandler) RegisterRoutes(r *router.Router, middlewares ...lib.Bif
 	r.GET("/api/logs/stats", lib.ChainMiddlewares(h.getLogsStats, middlewares...))
 	r.GET("/api/logs/dropped", lib.ChainMiddlewares(h.getDroppedRequests, middlewares...))
 	r.GET("/api/logs/filterdata", lib.ChainMiddlewares(h.getAvailableFilterData, middlewares...))
+	r.DELETE("/api/logs", lib.ChainMiddlewares(h.deleteLogs, middlewares...))
 }
 
 // getLogs handles GET /api/logs - Get logs with filtering, search, and pagination via query parameters
@@ -345,6 +347,32 @@ func (h *LoggingHandler) getAvailableFilterData(ctx *fasthttp.RequestCtx) {
 	}
 
 	SendJSON(ctx, map[string]interface{}{"models": models, "selected_keys": selectedKeysArray, "virtual_keys": virtualKeysArray})
+}
+
+// deleteLogs handles DELETE /api/logs - Delete logs by their IDs
+func (h *LoggingHandler) deleteLogs(ctx *fasthttp.RequestCtx) {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := sonic.Unmarshal(ctx.PostBody(), &req); err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		SendError(ctx, fasthttp.StatusBadRequest, "No log IDs provided")
+		return
+	}
+
+	if err := h.logManager.DeleteLogs(ctx, req.IDs); err != nil {
+		logger.Error("failed to delete logs: %v", err)
+		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to delete logs")
+		return
+	}
+
+	SendJSON(ctx, map[string]interface{}{
+		"message": "Logs deleted successfully",
+	})
 }
 
 // Helper functions

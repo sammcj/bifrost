@@ -8,12 +8,12 @@ import FullPageLoader from "@/components/fullPageLoader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { getErrorMessage, useLazyGetLogsQuery, useLazyGetLogsStatsQuery } from "@/lib/store";
+import { getErrorMessage, useDeleteLogsMutation, useLazyGetLogsQuery, useLazyGetLogsStatsQuery } from "@/lib/store";
 import type { ChatMessage, ChatMessageContent, ContentBlock, LogEntry, LogFilters, LogStats, Pagination } from "@/lib/types/logs";
 import { AlertCircle, BarChart, CheckCircle, Clock, DollarSign, Hash, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-export default function LogsPage() {	
+export default function LogsPage() {
 	const [logs, setLogs] = useState<LogEntry[]>([]);
 	const [totalItems, setTotalItems] = useState(0); // changes with filters
 	const [stats, setStats] = useState<LogStats | null>(null);
@@ -26,6 +26,7 @@ export default function LogsPage() {
 	// RTK Query lazy hooks for manual triggering
 	const [triggerGetLogs] = useLazyGetLogsQuery();
 	const [triggerGetStats] = useLazyGetLogsStatsQuery();
+	const [deleteLogs] = useDeleteLogsMutation();
 
 	const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
 
@@ -51,6 +52,16 @@ export default function LogsPage() {
 	useEffect(() => {
 		latest.current = { logs, filters, pagination, showEmptyState };
 	}, [logs, filters, pagination, showEmptyState]);
+
+	const handleDelete = useCallback(async (log: LogEntry) => {
+		try {
+			await deleteLogs({ ids: [log.id] }).unwrap();
+			setLogs((prevLogs) => prevLogs.filter((l) => l.id !== log.id));
+			setTotalItems((prev) => prev - 1);
+		} catch (error) {
+			setError(getErrorMessage(error));
+		}
+	}, [deleteLogs]);
 
 	const handleLogMessage = useCallback((log: LogEntry, operation: "create" | "update") => {
 		const { logs, filters, pagination, showEmptyState } = latest.current;
@@ -379,7 +390,7 @@ export default function LogsPage() {
 		[stats, fetchingStats],
 	);
 
-	const columns = useMemo(() => createColumns(), []);
+	const columns = useMemo(() => createColumns(handleDelete), [handleDelete]);
 
 	return (
 		<div className="dark:bg-card bg-white">
@@ -404,6 +415,8 @@ export default function LogsPage() {
 							))}
 						</div>
 
+
+
 						{/* Error Alert */}
 						{error && (
 							<Alert variant="destructive">
@@ -427,7 +440,12 @@ export default function LogsPage() {
 					</div>
 
 					{/* Log Detail Sheet */}
-					<LogDetailSheet log={selectedLog} open={selectedLog !== null} onOpenChange={(open) => !open && setSelectedLog(null)} />
+					<LogDetailSheet
+							log={selectedLog}
+							open={selectedLog !== null}
+							onOpenChange={(open) => !open && setSelectedLog(null)}
+							handleDelete={handleDelete}
+						/>
 				</div>
 			)}
 		</div>
