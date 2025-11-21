@@ -282,7 +282,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     3, // Higher retries for production-grade provider
+				MaxRetries:                     10, // Higher retries for production-grade provider
 				RetryBackoffInitial:            500 * time.Millisecond,
 				RetryBackoffMax:                8 * time.Second,
 			},
@@ -296,7 +296,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 			NetworkConfig: schemas.NetworkConfig{
 				BaseURL:                        "https://api.openai.com",
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     4, // Higher retries for Groq (can be flaky)
+				MaxRetries:                     10, // Higher retries for Groq (can be flaky)
 				RetryBackoffInitial:            1 * time.Second,
 				RetryBackoffMax:                10 * time.Second,
 			},
@@ -322,7 +322,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     3, // Claude is generally reliable
+				MaxRetries:                     10, // Claude is generally reliable
 				RetryBackoffInitial:            500 * time.Millisecond,
 				RetryBackoffMax:                8 * time.Second,
 			},
@@ -335,7 +335,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     5, // AWS services can have occasional issues
+				MaxRetries:                     10, // AWS services can have occasional issues
 				RetryBackoffInitial:            5 * time.Second,
 				RetryBackoffMax:                40 * time.Second,
 			},
@@ -348,7 +348,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     5, // Cohere can be variable
+				MaxRetries:                     10, // Cohere can be variable
 				RetryBackoffInitial:            5 * time.Second,
 				RetryBackoffMax:                40 * time.Second,
 			},
@@ -361,7 +361,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 600,
-				MaxRetries:                     5,
+				MaxRetries:                     10,
 				RetryBackoffInitial:            20 * time.Second,
 				RetryBackoffMax:                3 * time.Minute,
 			},
@@ -374,7 +374,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     3, // Google Cloud is generally reliable
+				MaxRetries:                     10, // Google Cloud is generally reliable
 				RetryBackoffInitial:            500 * time.Millisecond,
 				RetryBackoffMax:                8 * time.Second,
 			},
@@ -387,7 +387,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     2, // Local service, fewer retries needed
+				MaxRetries:                     8, // Local service, fewer retries needed
 				RetryBackoffInitial:            250 * time.Millisecond,
 				RetryBackoffMax:                4 * time.Second,
 				BaseURL:                        os.Getenv("OLLAMA_BASE_URL"),
@@ -414,7 +414,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     5, // Groq can be flaky at times
+				MaxRetries:                     10, // Groq can be flaky at times
 				RetryBackoffInitial:            1 * time.Second,
 				RetryBackoffMax:                15 * time.Second,
 			},
@@ -428,7 +428,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 			NetworkConfig: schemas.NetworkConfig{
 				BaseURL:                        os.Getenv("SGL_BASE_URL"),
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     5, // SGL (self-hosted) can be variable
+				MaxRetries:                     10, // SGL (self-hosted) can be variable
 				RetryBackoffInitial:            1 * time.Second,
 				RetryBackoffMax:                15 * time.Second,
 			},
@@ -441,7 +441,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     5, // Parasail can be variable
+				MaxRetries:                     10, // Parasail can be variable
 				RetryBackoffInitial:            1 * time.Second,
 				RetryBackoffMax:                12 * time.Second,
 			},
@@ -454,7 +454,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     5, // Elevenlabs can be variable
+				MaxRetries:                     10, // Elevenlabs can be variable
 				RetryBackoffInitial:            1 * time.Second,
 				RetryBackoffMax:                12 * time.Second,
 			},
@@ -467,7 +467,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     5, // Perplexity can be variable
+				MaxRetries:                     10, // Perplexity can be variable
 				RetryBackoffInitial:            1 * time.Second,
 				RetryBackoffMax:                12 * time.Second,
 			},
@@ -480,7 +480,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     5, // Cerebras is reasonably stable
+				MaxRetries:                     10, // Cerebras is reasonably stable
 				RetryBackoffInitial:            5 * time.Second,
 				RetryBackoffMax:                3 * time.Minute,
 			},
@@ -493,7 +493,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     4, // Gemini can be variable
+				MaxRetries:                     10, // Gemini can be variable
 				RetryBackoffInitial:            750 * time.Millisecond,
 				RetryBackoffMax:                12 * time.Second,
 			},
@@ -506,7 +506,7 @@ func (account *ComprehensiveTestAccount) GetConfigForProvider(providerKey schema
 		return &schemas.ProviderConfig{
 			NetworkConfig: schemas.NetworkConfig{
 				DefaultRequestTimeoutInSeconds: 120,
-				MaxRetries:                     4, // OpenRouter can be variable (proxy service)
+				MaxRetries:                     10, // OpenRouter can be variable (proxy service)
 				RetryBackoffInitial:            1 * time.Second,
 				RetryBackoffMax:                12 * time.Second,
 			},
