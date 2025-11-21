@@ -1,0 +1,2 @@
+- feat: Log view is enabled even if config_store is disabled
+- fix: Add missing cache and batch pricing columns to ensure we compute costs for those operations accurately.

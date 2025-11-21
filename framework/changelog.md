@@ -1,0 +1,1 @@
+hotfix: Adds missing batch and cache token pricing columns in config_store

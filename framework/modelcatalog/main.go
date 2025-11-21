@@ -181,7 +181,7 @@ func (mc *ModelCatalog) getPricingSyncInterval() time.Duration {
 	return mc.pricingSyncInterval
 }
 
-// GetPricingData returns the pricing data
+// GetPricingEntryForModel returns the pricing data
 func (mc *ModelCatalog) GetPricingEntryForModel(model string, provider schemas.ModelProvider) *PricingEntry {
 	mc.mu.RLock()
 	defer mc.mu.RUnlock()
