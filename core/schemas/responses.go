@@ -257,8 +257,11 @@ type ResponsesResponseUsage struct {
 }
 
 type ResponsesResponseInputTokens struct {
-	AudioTokens  int `json:"audio_tokens"`  // Tokens for audio input
-	CachedTokens int `json:"cached_tokens"` // Tokens retrieved from cache
+	AudioTokens int `json:"audio_tokens"` // Tokens for audio input
+
+	// For Providers which follow OpenAI's spec, CachedTokens means the number of input tokens read from the cache+input tokens used to create the cache entry. (because they do not differentiate between cache creation and cache read tokens)
+	// For Providers which do not follow OpenAI's spec, CachedTokens means only the number of input tokens read from the cache.
+	CachedTokens int `json:"cached_tokens"`
 }
 
 type ResponsesResponseOutputTokens struct {
@@ -269,7 +272,8 @@ type ResponsesResponseOutputTokens struct {
 	CitationTokens           *int `json:"citation_tokens,omitempty"`
 	NumSearchQueries         *int `json:"num_search_queries,omitempty"`
 
-	CachedTokens int `json:"cached_tokens,omitempty"` // Not in OpenAI's schemas, but sent by a few providers (Anthropic is one of them)
+	// This means the number of input tokens used to create the cache entry. (cache creation tokens)
+	CachedTokens int `json:"cached_tokens,omitempty"` // Not in OpenAI's schemas, but sent by a few providers (Anthropic, Bedrock are some of them)
 }
 
 // =============================================================================

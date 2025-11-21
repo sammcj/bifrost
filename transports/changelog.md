@@ -1,0 +1,2 @@
+- fix: added parsing for cached creation input tokens for Anthropic and Bedrock
+- fix: handled cost calculation for cached tokens

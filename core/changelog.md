@@ -1,1 +1,1 @@
-- fix: added parsing for cached creation input tokens for Anthropic
+- fix: added parsing for cached creation input tokens for Anthropic and Bedrock

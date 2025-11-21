@@ -112,7 +112,7 @@ export default function ClientSettingsView() {
 								Enforce Virtual Keys
 							</label>
 							<p className="text-muted-foreground text-sm">
-								Enforce the use of a virtual key for all requests. If enabled, requests without the <b>x-bf-vk</b> header will be rejected.
+								Enforce the use of a virtual key for all requests. If enabled, requests without the virtual keys will be rejected.
 							</p>
 						</div>
 						<Switch
