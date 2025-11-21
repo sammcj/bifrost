@@ -8,13 +8,9 @@ The Vector store in Bifrost is designed to be extensible, allowing support for d
 
 This guide will help you add a new custom backend for the vector store. Currently, Bifrost supports Weaviate, Redis and Qdrant.
 
-## Philosophy
+## Setup
 
-The core logic is decoupled from the underlying storage mechanism. This is achieved through:
-
-*   **Interfaces**: The `VectorStore` interface defines the contract for all vector operations.
-*   **Database-Specific Implementations**: Each vector database backend implements the interface independently, using native clients and optimizing for that database's strengths.
-*   **Extensibility**: Adding a new database requires implementing the interface with the database-specific client, rather than forcing a common abstraction layer.
+We assume you have some idea about how Bifrost works and you have already [set up bifrost for local development](setting-up-repo).
 
 ## Architecture
 

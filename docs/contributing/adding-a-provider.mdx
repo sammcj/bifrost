@@ -6,6 +6,10 @@ icon: "file-pen"
 
 This guide will walk you through creating a provider for Bifrost, testing locally and adding automated tests.
 
+## Setup
+
+We assume you have some idea about how Bifrost works and you have already [set up bifrost for local development](setting-up-repo).
+
 ## Provider structure
 
 Bifrost is a gateway, meaning it receives request in a standard format (OpenAI compatible), converts it to provider specific formats and sends the request. It then receives the provider response and converts it back to the standard (OpenAI compatible) response.
@@ -30,6 +34,26 @@ Add provider specific types in types.go (see `core/providers/openai/types.go` fo
 ### OpenAI Compatible Providers
 
 If you are implementing a provider for an OpenAI API compatible API, you can use the `openai` package from `core/providers/openai`. (See [cerebras](https://github.com/maximhq/bifrost/blob/main/core/providers/cerebras.go) provider as an example.)
+
+### File conventions
+
+If the provider is OpenAI compatible, a single `provider/[provider_name].go` file is enough.
+
+If the provider is not OpenAI compatible, you need to create a new folder and add the following files. Not all of them are required. Add the ones that are relevant to your provider.
+```text
+providers/
+└─ [provider_name]/                 # Provider that is not OpenAI compatible
+    ├── [provider_name].go          # Contains code for actually making the request to the provider (required)
+    ├── types.go                    # Contains provider specific types
+    ├── utils.go                    # Contains utility functions
+    ├── errors.go                   # Contains error handlers for responses
+    ├── chat.go                     # Contains convertors for chat completion and chat completion streaming requests
+    ├── responses.go                # Contains convertors for responses endpoints
+    ├── speech.go                   # Contains convertors for speech and speech streaming requests
+    ├── transcription.go            # Contains convertors for transcription and transcription streaming requests
+    ├── embedding.go                # Contains convertors for embeddings requests
+    └── models.go                   # Contains convertors for list models requests
+```
 
 ### Extra fields
 
