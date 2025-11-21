@@ -8,13 +8,9 @@ The Config store in Bifrost is designed to be extensible, allowing support for d
 
 This guide will help you add a new custom backend for the config store. Currently, bifrost supports PostgreSQL and SQLite.
 
-## Philosophy
+## Setup
 
-The core logic is decoupled from the underlying storage mechanism. This is achieved through:
-
-*   **Interfaces**: The `ConfigStore` interface defines the contract for all configuration operations.
-*   **Abstraction**: The `RDBConfigStore` provides a common implementation for relational databases, handling most of the heavy lifting using an ORM.
-*   **Extensibility**: Adding a new database is primarily about providing a connection and configuration, rather than rewriting the entire store logic.
+We assume you have some idea about how Bifrost works and you have already [set up bifrost for local development](setting-up-repo).
 
 ## Architecture
 
