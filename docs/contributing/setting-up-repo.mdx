@@ -1,5 +1,5 @@
 ---
-title: "Setting Up the Repository"
+title: "Setting up the repository"
 description: "Complete guide to setting up the Bifrost repository for local development."
 icon: "hammer"
 ---
@@ -9,75 +9,11 @@ This guide walks you through setting up the Bifrost repository for local develop
 ## Prerequisites
 
 Before setting up the repository, ensure you have the following tools installed:
-
-### Go (Required)
-
-Bifrost requires **Go 1.21+** for development.
-
-```bash
-# Check if Go is installed
-go version
-
-# If not installed, download from https://golang.org/dl/
-# Or use package managers:
-
-# macOS (Homebrew)
-brew install go
-
-# Ubuntu/Debian
-sudo apt update && sudo apt install golang-go
-
-# Windows (Chocolatey)
-choco install golang
-```
-
-### Node.js and npm (Required for UI development)
-
-The UI components require **Node.js 18+** and npm.
-
-```bash
-# Check versions
-node --version
-npm --version
-
-# Install via package managers:
-
-# macOS (Homebrew)
-brew install node
-
-# Ubuntu/Debian
-curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Windows (Chocolatey)
-choco install nodejs
-```
-
-### Make (Required)
-
-Required for running development commands via the Makefile.
-
-```bash
-# Check if make is installed
-make --version
-```
-
-If `make` is not installed, follow our [Install make command guide](/deployment-guides/how-to/install-make).
-
-### Docker (Optional)
-
-Only needed if you plan to build Docker images or test containerized deployments.
-
-```bash
-# Check if Docker is installed
-docker --version
-
-# Install from https://docs.docker.com/get-docker/
-```
-
-### Air (Auto-installed)
-
-Air provides hot reloading during development. The Makefile will install it automatically when needed.
+- [Go](https://go.dev/doc/install) (>= 1.21)
+- [Node.js](https://nodejs.org/en/download) (>= 18) and npm
+- [Make](/deployment-guides/how-to/install-make)
+- [Docker](https://www.docker.com) (optional, for containerized development)
+- [Air](https://github.com/air-verse/air?tab=readme-ov-file#installation) (for hot reloading, auto-installed by Makefile when needed)
 
 ## Clone the Repository
 
@@ -139,6 +75,12 @@ This command will:
 3. Set up the Go workspace with local modules
 4. Start the Next.js development server (port 3000)
 5. Start the API server with UI proxy (port 8080)
+
+
+If you're setting up the repo for the first time, you may need to build the project at least once:
+```bash
+make build
+```
 
 **Access the application at:** http://localhost:8080
 
@@ -261,13 +203,13 @@ LOG_LEVEL=info                   # Logger level: debug|info|warn|error (default:
 PROMETHEUS_LABELS="env=dev"      # Labels for Prometheus metrics
 
 # App directory (for containers)
-APP_DIR=/app/data               # App data directory
+APP_DIR=/app/data               # App data directory 
 ```
 
 Example with custom settings:
 
 ```bash
-PORT=3001 LOG_STYLE=pretty LOG_LEVEL=debug make dev
+PORT=3001 LOG_STYLE=pretty LOG_LEVEL=debug APP_DIR=/app/data make dev
 ```
 
 ## Understanding Bifrost Architecture
@@ -359,6 +301,12 @@ make install-ui
 ```bash
 # Use different ports
 PORT=9090 make dev
+```
+
+If an process is running on a port you need to use, you may need to terminate or kill it first:
+```bash
+# Kill the process on port 8080
+kill -9 $(lsof -t -i:8080)
 ```
 
 **Hot reload not working:**
