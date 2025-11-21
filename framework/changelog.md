@@ -1,2 +1,0 @@
-- fix: handled cost calculation for cached tokens
-- feat: adds support for log cleanup routine

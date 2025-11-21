@@ -1,3 +1,0 @@
-- feat: Adds log retention config and a routine to cleanup logs daily based on the retention config. Default retention days are 365.
-- fix: Added parsing for cached creation input tokens for Anthropic and Bedrock
-- fix: Handled cost calculation for cached tokens
