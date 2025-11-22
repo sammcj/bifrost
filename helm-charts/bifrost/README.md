@@ -5,7 +5,7 @@ This Helm chart deploys [Bifrost](https://www.getbifrost.ai) - an AI Gateway wit
 ## Features
 
 - 🚀 Support for multiple storage backends (SQLite, PostgreSQL)
-- 🔍 Optional vector store integration (Weaviate, Redis)
+- 🔍 Optional vector store integration (Weaviate, Redis, Qdrant)
 - 📊 Built-in observability and metrics
 - 🔐 Encryption support for sensitive data
 - 🎯 Semantic caching capabilities
@@ -47,6 +47,12 @@ helm install bifrost ./bifrost -f values-examples/postgres-weaviate.yaml
 helm install bifrost ./bifrost -f values-examples/postgres-redis.yaml
 ```
 
+### PostgreSQL + Qdrant
+
+```bash
+helm install bifrost ./bifrost -f values-examples/postgres-qdrant.yaml
+```
+
 ### SQLite + Weaviate
 
 ```bash
@@ -57,6 +63,12 @@ helm install bifrost ./bifrost -f values-examples/sqlite-weaviate.yaml
 
 ```bash
 helm install bifrost ./bifrost -f values-examples/sqlite-redis.yaml
+```
+
+### SQLite + Qdrant
+
+```bash
+helm install bifrost ./bifrost -f values-examples/sqlite-qdrant.yaml
 ```
 
 ### External PostgreSQL
@@ -89,6 +101,7 @@ Configure semantic caching with vector stores:
 - **none** (default): No vector store
 - **weaviate**: Use Weaviate for vector storage
 - **redis**: Use Redis for vector storage
+- **qdrant**: Use Qdrant for vector storage
 
 ### Key Configuration Parameters
 
