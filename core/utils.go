@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 
@@ -291,4 +293,92 @@ func GetIntFromContext(ctx context.Context, key any) int {
 		}
 	}
 	return 0
+}
+
+// RedactSensitiveString redacts sensitive information in a string
+func RedactSensitiveString(s string) string {
+	if s == "" {
+		return ""
+	}
+	// Show first 4 and last 4 characters for identification, rest is [REDACTED]
+	if len(s) <= 8 {
+		return "[REDACTED]"
+	}
+	return s[:4] + "[REDACTED]" + s[len(s)-4:]
+}
+
+// ValidateExternalURL validates a URL for security concerns (SSRF protection)
+func ValidateExternalURL(urlStr string) error {
+	if urlStr == "" {
+		return fmt.Errorf("URL cannot be empty")
+	}
+	// Parse the URL
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return fmt.Errorf("invalid URL format: %w", err)
+	}
+	// Only allow HTTPS scheme (or HTTP for localhost in development)
+	if parsedURL.Scheme != "https" && parsedURL.Scheme != "http" {
+		return fmt.Errorf("only https and http schemes are allowed, got: %s", parsedURL.Scheme)
+	}
+	// Extract hostname
+	hostname := parsedURL.Hostname()
+	if hostname == "" {
+		return fmt.Errorf("URL must have a hostname")
+	}
+	// Block localhost and loopback addresses
+	if isLocalhost(hostname) {
+		return fmt.Errorf("localhost and loopback addresses are not allowed")
+	}
+	// Resolve hostname to IP addresses
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		return fmt.Errorf("failed to resolve hostname: %w", err)
+	}
+	// Check if any resolved IP is private
+	for _, ip := range ips {
+		if isPrivateIP(ip) {
+			return fmt.Errorf("private IP addresses are not allowed")
+		}
+	}
+	return nil
+}
+
+// isLocalhost checks if a hostname is localhost or a loopback address
+func isLocalhost(hostname string) bool {
+	return hostname == "localhost" ||
+		hostname == "127.0.0.1" ||
+		hostname == "::1" ||
+		hostname == "0.0.0.0" ||
+		hostname == "::"
+}
+
+// isPrivateIP checks if an IP address is in a private range
+func isPrivateIP(ip net.IP) bool {
+	// Private IPv4 ranges
+	privateRanges := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"169.254.0.0/16", // Link-local
+		"127.0.0.0/8",    // Loopback
+	}
+	for _, cidr := range privateRanges {
+		_, subnet, _ := net.ParseCIDR(cidr)
+		if subnet.Contains(ip) {
+			return true
+		}
+	}
+	// Check for private IPv6
+	if ip.To4() == nil {
+		// Check for IPv6 loopback and link-local
+		if ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+			return true
+		}
+		// Check for IPv6 unique local addresses (fc00::/7)
+		if len(ip) == 16 && (ip[0]&0xfe) == 0xfc {
+			return true
+		}
+	}
+	return false
 }

@@ -155,7 +155,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Validating framework config
-	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != modelcatalog.DefaultPricingURL {
+	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != modelcatalog.DefaultPricingURL {		
 		// Checking the accessibility of the pricing URL
 		resp, err := http.Get(*payload.FrameworkConfig.PricingURL)
 		if err != nil {
@@ -253,7 +253,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	}
 	// Updating framework config
 	shouldReloadFrameworkConfig := false
-	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != *frameworkConfig.PricingURL {
+	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != *frameworkConfig.PricingURL {				
 		// Checking the accessibility of the pricing URL
 		resp, err := http.Get(*payload.FrameworkConfig.PricingURL)
 		if err != nil {

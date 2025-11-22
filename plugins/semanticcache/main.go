@@ -503,7 +503,7 @@ func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostRespons
 		// Get the hash from context
 		hash, ok = (*ctx).Value(requestHashKey).(string)
 		if !ok {
-			plugin.logger.Warn(PluginLoggerPrefix+" Hash is not a string, its %T. Continuing without caching", hash)
+			plugin.logger.Warn(PluginLoggerPrefix + " Hash is not a string. Continuing without caching")
 			return res, nil, nil
 		}
 	}
