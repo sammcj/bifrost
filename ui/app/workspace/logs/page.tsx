@@ -7,13 +7,24 @@ import { LogsDataTable } from "@/app/workspace/logs/views/logsTable";
 import FullPageLoader from "@/components/fullPageLoader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { getErrorMessage, useLazyGetLogsQuery, useLazyGetLogsStatsQuery } from "@/lib/store";
+import { getErrorMessage, useDeleteLogsMutation, useLazyGetLogsQuery, useLazyGetLogsStatsQuery } from "@/lib/store";
 import type { ChatMessage, ChatMessageContent, ContentBlock, LogEntry, LogFilters, LogStats, Pagination } from "@/lib/types/logs";
-import { AlertCircle, BarChart, CheckCircle, Clock, DollarSign, Hash, Loader2 } from "lucide-react";
+import { dateUtils } from "@/lib/types/logs";
+import { AlertCircle, BarChart, CheckCircle, Clock, DollarSign, Hash } from "lucide-react";
+import { parseAsArrayOf, parseAsBoolean, parseAsInteger, parseAsString, useQueryStates } from "nuqs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-export default function LogsPage() {	
+// Calculate default timestamps once at module level to prevent constant recalculation
+const DEFAULT_END_TIME = Math.floor(Date.now() / 1000);
+const DEFAULT_START_TIME = (() => {
+	const date = new Date();
+	date.setHours(date.getHours() - 24);
+	return Math.floor(date.getTime() / 1000);
+})();
+
+export default function LogsPage() {
 	const [logs, setLogs] = useState<LogEntry[]>([]);
 	const [totalItems, setTotalItems] = useState(0); // changes with filters
 	const [stats, setStats] = useState<LogStats | null>(null);
@@ -26,34 +37,114 @@ export default function LogsPage() {
 	// RTK Query lazy hooks for manual triggering
 	const [triggerGetLogs] = useLazyGetLogsQuery();
 	const [triggerGetStats] = useLazyGetLogsStatsQuery();
+	const [deleteLogs] = useDeleteLogsMutation();
 
 	const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
 
 	// Debouncing for streaming updates (client-side)
 	const streamingUpdateTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-	const [filters, setFilters] = useState<LogFilters>({
-		providers: [],
-		models: [],
-		status: [],
-		content_search: "",
-		selected_key_ids: [],
-		virtual_key_ids: [],
-	});
-	const [pagination, setPagination] = useState<Pagination>({
-		limit: 50,
-		offset: 0,
-		sort_by: "timestamp",
-		order: "desc",
-	});
+	// URL state management with nuqs - all filters and pagination in URL
+	const [urlState, setUrlState] = useQueryStates(
+		{
+			providers: parseAsArrayOf(parseAsString).withDefault([]),
+			models: parseAsArrayOf(parseAsString).withDefault([]),
+			status: parseAsArrayOf(parseAsString).withDefault([]),
+			objects: parseAsArrayOf(parseAsString).withDefault([]),
+			selected_key_ids: parseAsArrayOf(parseAsString).withDefault([]),
+			virtual_key_ids: parseAsArrayOf(parseAsString).withDefault([]),
+			content_search: parseAsString.withDefault(""),
+			start_time: parseAsInteger.withDefault(DEFAULT_START_TIME),
+			end_time: parseAsInteger.withDefault(DEFAULT_END_TIME),
+			limit: parseAsInteger.withDefault(50),
+			offset: parseAsInteger.withDefault(0),
+			sort_by: parseAsString.withDefault("timestamp"),
+			order: parseAsString.withDefault("desc"),
+			live_enabled: parseAsBoolean.withDefault(true),
+		},
+		{
+			history: "push",
+			shallow: false,
+		},
+	);
 
-	const latest = useRef({ logs, filters, pagination, showEmptyState });
+	// Convert URL state to filters and pagination for API calls
+	const filters: LogFilters = useMemo(
+		() => ({
+			providers: urlState.providers,
+			models: urlState.models,
+			status: urlState.status,
+			objects: urlState.objects,
+			selected_key_ids: urlState.selected_key_ids,
+			virtual_key_ids: urlState.virtual_key_ids,
+			content_search: urlState.content_search,
+			start_time: dateUtils.toISOString(urlState.start_time),
+			end_time: dateUtils.toISOString(urlState.end_time),
+		}),
+		[urlState],
+	);
+
+	const pagination: Pagination = useMemo(
+		() => ({
+			limit: urlState.limit,
+			offset: urlState.offset,
+			sort_by: urlState.sort_by as "timestamp" | "latency" | "tokens" | "cost",
+			order: urlState.order as "asc" | "desc",
+		}),
+		[urlState],
+	);
+
+	const liveEnabled = urlState.live_enabled;
+
+	// Helper to update filters in URL
+	const setFilters = useCallback(
+		(newFilters: LogFilters) => {
+			setUrlState({
+				providers: newFilters.providers || [],
+				models: newFilters.models || [],
+				status: newFilters.status || [],
+				objects: newFilters.objects || [],
+				selected_key_ids: newFilters.selected_key_ids || [],
+				virtual_key_ids: newFilters.virtual_key_ids || [],
+				content_search: newFilters.content_search || "",
+				start_time: newFilters.start_time ? dateUtils.toUnixTimestamp(new Date(newFilters.start_time)) : undefined,
+				end_time: newFilters.end_time ? dateUtils.toUnixTimestamp(new Date(newFilters.end_time)) : undefined,
+				offset: 0,
+			});
+		},
+		[setUrlState],
+	);
+
+	// Helper to update pagination in URL
+	const setPagination = useCallback(
+		(newPagination: Pagination) => {
+			setUrlState({
+				limit: newPagination.limit,
+				offset: newPagination.offset,
+				sort_by: newPagination.sort_by,
+				order: newPagination.order,
+			});
+		},
+		[setUrlState],
+	);
+
+	const latest = useRef({ logs, filters, pagination, showEmptyState, liveEnabled });
 	useEffect(() => {
-		latest.current = { logs, filters, pagination, showEmptyState };
-	}, [logs, filters, pagination, showEmptyState]);
+		latest.current = { logs, filters, pagination, showEmptyState, liveEnabled };
+	}, [logs, filters, pagination, showEmptyState, liveEnabled]);
+
+	const handleDelete = useCallback(async (log: LogEntry) => {
+		try {
+			await deleteLogs({ ids: [log.id] }).unwrap();
+			setLogs((prevLogs) => prevLogs.filter((l) => l.id !== log.id));
+			setTotalItems((prev) => prev - 1);
+		} catch (error) {
+			setError(getErrorMessage(error));
+		}
+	}, [deleteLogs]);
 
 	const handleLogMessage = useCallback((log: LogEntry, operation: "create" | "update") => {
-		const { logs, filters, pagination, showEmptyState } = latest.current;
+		const { logs, filters, pagination, showEmptyState, liveEnabled } = latest.current;
 		// If we were in empty state, exit it since we now have logs
 		if (showEmptyState) {
 			setShowEmptyState(false);
@@ -64,7 +155,7 @@ export default function LogsPage() {
 			// Only prepend the new log if we're on the first page and sorted by timestamp desc
 			if (pagination.offset === 0 && pagination.sort_by === "timestamp" && pagination.order === "desc") {
 				// Check if the log matches current filters
-				if (!matchesFilters(log, filters)) {
+				if (!matchesFilters(log, filters, !liveEnabled)) {
 					return;
 				}
 
@@ -102,7 +193,7 @@ export default function LogsPage() {
 				// Fallback: if log doesn't exist, treat as create (e.g., user was on different page when created)
 				if (pagination.offset === 0 && pagination.sort_by === "timestamp" && pagination.order === "desc") {
 					// Check if the log matches current filters
-					if (matchesFilters(log, filters)) {
+					if (matchesFilters(log, filters, !liveEnabled)) {
 						setLogs((prevLogs: LogEntry[]) => {
 							// Double-check it doesn't exist (race condition protection)
 							if (prevLogs.some((existingLog) => existingLog.id === log.id)) {
@@ -190,15 +281,19 @@ export default function LogsPage() {
 
 	const { isConnected: isSocketConnected, subscribe } = useWebSocket();
 
-	// Subscribe to log messages
+	// Subscribe to log messages - only when live updates are enabled
 	useEffect(() => {
+		if (!liveEnabled) {
+			return;
+		}
+
 		const unsubscribe = subscribe("log", (data) => {
 			const { payload, operation } = data;
 			handleLogMessage(payload, operation);
 		});
 
 		return unsubscribe;
-	}, [handleLogMessage, subscribe]);
+	}, [handleLogMessage, subscribe, liveEnabled]);
 
 	// Cleanup timeouts on unmount
 	useEffect(() => {
@@ -228,7 +323,7 @@ export default function LogsPage() {
 			// Only set showEmptyState on initial load and only based on total logs
 			if (initialLoading) {
 				// Check if there are any logs globally, not just in the current filter
-				setShowEmptyState(result.data ? result.data.stats.total_requests === 0 : true);
+				setShowEmptyState(result.data ? !result.data.has_logs : true);
 			}
 		} catch {
 			setError("Cannot fetch logs. Please check if logs are enabled in your Bifrost config.");
@@ -261,6 +356,18 @@ export default function LogsPage() {
 		}
 	}, [filters, triggerGetStats]);
 
+	// Helper to toggle live updates
+	const handleLiveToggle = useCallback(
+		(enabled: boolean) => {
+			setUrlState({ live_enabled: enabled });
+			// When re-enabling, refetch logs to get latest data
+			if (enabled) {
+				fetchLogs();
+			}
+		},
+		[setUrlState, fetchLogs],
+	);
+
 	// Fetch logs when filters or pagination change
 	useEffect(() => {
 		if (!initialLoading) {
@@ -274,7 +381,8 @@ export default function LogsPage() {
 		if (!initialLoading) {
 			fetchStats();
 		}
-	}, [fetchStats, initialLoading]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [filters, initialLoading]);
 
 	// Initial load
 	useEffect(() => {
@@ -304,7 +412,7 @@ export default function LogsPage() {
 	};
 
 	// Helper function to check if a log matches the current filters
-	const matchesFilters = (log: LogEntry, filters: LogFilters): boolean => {
+	const matchesFilters = (log: LogEntry, filters: LogFilters, applyTimeFilters = true): boolean => {
 		if (filters.providers?.length && !filters.providers.includes(log.provider)) {
 			return false;
 		}
@@ -317,7 +425,7 @@ export default function LogsPage() {
 		if (filters.start_time && new Date(log.timestamp) < new Date(filters.start_time)) {
 			return false;
 		}
-		if (filters.end_time && new Date(log.timestamp) > new Date(filters.end_time)) {
+		if (applyTimeFilters && filters.end_time && new Date(log.timestamp) > new Date(filters.end_time)) {
 			return false;
 		}
 		if (filters.min_latency && (!log.latency || log.latency < filters.min_latency)) {
@@ -352,34 +460,34 @@ export default function LogsPage() {
 		() => [
 			{
 				title: "Total Requests",
-				value: fetchingStats ? <Loader2 className="size-4 animate-spin mt-2" /> : stats?.total_requests.toLocaleString() || "-",
+				value: fetchingStats ? <Skeleton className="h-8 w-20" /> : stats?.total_requests.toLocaleString() || "-",
 				icon: <BarChart className="size-4" />,
 			},
 			{
 				title: "Success Rate",
-				value: fetchingStats ? <Loader2 className="size-4 animate-spin mt-2" /> : stats ? `${stats.success_rate.toFixed(2)}%` : "-",
+				value: fetchingStats ? <Skeleton className="h-8 w-16" /> : stats ? `${stats.success_rate.toFixed(2)}%` : "-",
 				icon: <CheckCircle className="size-4" />,
 			},
 			{
 				title: "Avg Latency",
-				value: fetchingStats ? <Loader2 className="size-4 animate-spin mt-2" /> : stats ? `${stats.average_latency.toFixed(2)}ms` : "-",
+				value: fetchingStats ? <Skeleton className="h-8 w-20" /> : stats ? `${stats.average_latency.toFixed(2)}ms` : "-",
 				icon: <Clock className="size-4" />,
 			},
 			{
 				title: "Total Tokens",
-				value: fetchingStats ? <Loader2 className="size-4 animate-spin mt-2" /> : stats?.total_tokens.toLocaleString() || "-",
+				value: fetchingStats ? <Skeleton className="h-8 w-24" /> : stats?.total_tokens.toLocaleString() || "-",
 				icon: <Hash className="size-4" />,
 			},
 			{
 				title: "Total Cost",
-				value: fetchingStats ? <Loader2 className="size-4 animate-spin mt-2" /> : stats ? `$${(stats.total_cost ?? 0).toFixed(4)}` : "-",
+				value: fetchingStats ? <Skeleton className="h-8 w-20" /> : stats ? `$${(stats.total_cost ?? 0).toFixed(4)}` : "-",
 				icon: <DollarSign className="size-4" />,
 			},
 		],
 		[stats, fetchingStats],
 	);
 
-	const columns = useMemo(() => createColumns(), []);
+	const columns = useMemo(() => createColumns(handleDelete), [handleDelete]);
 
 	return (
 		<div className="dark:bg-card bg-white">
@@ -404,6 +512,8 @@ export default function LogsPage() {
 							))}
 						</div>
 
+
+
 						{/* Error Alert */}
 						{error && (
 							<Alert variant="destructive">
@@ -423,11 +533,18 @@ export default function LogsPage() {
 							onPaginationChange={setPagination}
 							onRowClick={setSelectedLog}
 							isSocketConnected={isSocketConnected}
+							liveEnabled={liveEnabled}
+							onLiveToggle={handleLiveToggle}
 						/>
 					</div>
 
 					{/* Log Detail Sheet */}
-					<LogDetailSheet log={selectedLog} open={selectedLog !== null} onOpenChange={(open) => !open && setSelectedLog(null)} />
+					<LogDetailSheet
+							log={selectedLog}
+							open={selectedLog !== null}
+							onOpenChange={(open) => !open && setSelectedLog(null)}
+							handleDelete={handleDelete}
+						/>
 				</div>
 			)}
 		</div>

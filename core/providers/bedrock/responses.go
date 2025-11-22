@@ -331,6 +331,17 @@ func (response *BedrockConverseResponse) ToBifrostResponsesResponse() (*schemas.
 			OutputTokens: response.Usage.OutputTokens,
 			TotalTokens:  response.Usage.TotalTokens,
 		}
+		// Handle cached tokens if present
+		if response.Usage.CacheReadInputTokens > 0 {
+			bifrostResp.Usage.InputTokensDetails = &schemas.ResponsesResponseInputTokens{
+				CachedTokens: response.Usage.CacheReadInputTokens,
+			}
+		}
+		if response.Usage.CacheWriteInputTokens > 0 {
+			bifrostResp.Usage.OutputTokensDetails = &schemas.ResponsesResponseOutputTokens{
+				CachedTokens: response.Usage.CacheWriteInputTokens,
+			}
+		}
 	}
 
 	// Convert output message to Responses format
@@ -736,6 +747,21 @@ func (chunk *BedrockStreamEvent) ToBifrostResponsesStream(sequenceNumber int, st
 			Item:           item,
 		})
 
+		// Emit content_part.added with empty output_text part
+		emptyText := ""
+		part := &schemas.ResponsesMessageContentBlock{
+			Type: schemas.ResponsesOutputMessageContentTypeText,
+			Text: &emptyText,
+		}
+		responses = append(responses, &schemas.BifrostResponsesStreamResponse{
+			Type:           schemas.ResponsesStreamResponseTypeContentPartAdded,
+			SequenceNumber: sequenceNumber + len(responses),
+			OutputIndex:    schemas.Ptr(outputIndex),
+			ContentIndex:   schemas.Ptr(0),
+			ItemID:         &itemID,
+			Part:           part,
+		})
+
 		if len(responses) > 0 {
 			return responses, nil, false
 		}
@@ -753,8 +779,30 @@ func (chunk *BedrockStreamEvent) ToBifrostResponsesStream(sequenceNumber int, st
 			var responses []*schemas.BifrostResponsesStreamResponse
 			if !state.TextItemClosed {
 				outputIndex := 0
-				statusCompleted := "completed"
 				itemID := state.ItemIDs[outputIndex]
+
+				// Emit output_text.done (without accumulated text, just the event)
+				emptyText := ""
+				responses = append(responses, &schemas.BifrostResponsesStreamResponse{
+					Type:           schemas.ResponsesStreamResponseTypeOutputTextDone,
+					SequenceNumber: sequenceNumber + len(responses),
+					OutputIndex:    schemas.Ptr(outputIndex),
+					ContentIndex:   schemas.Ptr(0),
+					ItemID:         &itemID,
+					Text:           &emptyText,
+				})
+
+				// Emit content_part.done
+				responses = append(responses, &schemas.BifrostResponsesStreamResponse{
+					Type:           schemas.ResponsesStreamResponseTypeContentPartDone,
+					SequenceNumber: sequenceNumber + len(responses),
+					OutputIndex:    schemas.Ptr(outputIndex),
+					ContentIndex:   schemas.Ptr(0),
+					ItemID:         &itemID,
+				})
+
+				// Emit output_item.done
+				statusCompleted := "completed"
 				doneItem := &schemas.ResponsesMessage{
 					Status: &statusCompleted,
 				}
@@ -763,7 +811,7 @@ func (chunk *BedrockStreamEvent) ToBifrostResponsesStream(sequenceNumber int, st
 				}
 				responses = append(responses, &schemas.BifrostResponsesStreamResponse{
 					Type:           schemas.ResponsesStreamResponseTypeOutputItemDone,
-					SequenceNumber: sequenceNumber,
+					SequenceNumber: sequenceNumber + len(responses),
 					OutputIndex:    schemas.Ptr(outputIndex),
 					ContentIndex:   schemas.Ptr(0),
 					Item:           doneItem,
@@ -878,8 +926,30 @@ func FinalizeBedrockStream(state *BedrockResponsesStreamState, sequenceNumber in
 	// Close text item if still open
 	if !state.TextItemClosed {
 		outputIndex := 0
-		statusCompleted := "completed"
 		itemID := state.ItemIDs[outputIndex]
+
+		// Emit output_text.done (without accumulated text, just the event)
+		emptyText := ""
+		responses = append(responses, &schemas.BifrostResponsesStreamResponse{
+			Type:           schemas.ResponsesStreamResponseTypeOutputTextDone,
+			SequenceNumber: sequenceNumber + len(responses),
+			OutputIndex:    schemas.Ptr(outputIndex),
+			ContentIndex:   schemas.Ptr(0),
+			ItemID:         &itemID,
+			Text:           &emptyText,
+		})
+
+		// Emit content_part.done
+		responses = append(responses, &schemas.BifrostResponsesStreamResponse{
+			Type:           schemas.ResponsesStreamResponseTypeContentPartDone,
+			SequenceNumber: sequenceNumber + len(responses),
+			OutputIndex:    schemas.Ptr(outputIndex),
+			ContentIndex:   schemas.Ptr(0),
+			ItemID:         &itemID,
+		})
+
+		// Emit output_item.done
+		statusCompleted := "completed"
 		doneItem := &schemas.ResponsesMessage{
 			Status: &statusCompleted,
 		}

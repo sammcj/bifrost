@@ -244,9 +244,11 @@ type BedrockConverseOutput struct {
 
 // BedrockTokenUsage represents token usage information
 type BedrockTokenUsage struct {
-	InputTokens  int `json:"inputTokens"`  // Number of input tokens
-	OutputTokens int `json:"outputTokens"` // Number of output tokens
-	TotalTokens  int `json:"totalTokens"`  // Total number of tokens (input + output)
+	InputTokens           int `json:"inputTokens"`           // Number of input tokens
+	OutputTokens          int `json:"outputTokens"`          // Number of output tokens
+	TotalTokens           int `json:"totalTokens"`           // Total number of tokens (input + output)
+	CacheReadInputTokens  int `json:"cacheReadInputTokens"`  // Number of cached tokens read
+	CacheWriteInputTokens int `json:"cacheWriteInputTokens"` // Number of cached tokens written
 }
 
 // BedrockConverseMetrics represents response metrics

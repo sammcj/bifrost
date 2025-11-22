@@ -1,0 +1,83 @@
+---
+title: "Adding a new provider"
+description: "Learn how to contribute a new provider to Bifrost."
+icon: "box"
+---
+
+This guide will walk you through creating a provider for Bifrost, testing locally and adding automated tests.
+
+## Setup
+
+We assume you have some idea about how Bifrost works and you have already [set up bifrost for local development](setting-up-repo).
+
+## Provider structure
+
+Bifrost is a gateway, meaning it receives request in a standard format (OpenAI compatible), converts it to provider specific formats and sends the request. It then receives the provider response and converts it back to the standard (OpenAI compatible) response.
+
+To implement a new provider, you must roughly follow these steps:
+- Define provider specific types, like `ProviderSpeechRequest` or `ProviderChatCompletionRequest`, etc.
+- Implement conversion functions from Bifrost request / response to provider specific request / response and vice versa.
+- Implement the handler functions for the type of request you want to handle. For example, to handle chat completion requests, you need to implement `ChatCompletion` functions. You can check the [full list of handlers](https://github.com/maximhq/bifrost/blob/main/core/schemas/provider.go) here.
+
+We will go through each step in detail. But first, here is the directory structure:
+
+```text
+bifrost/
+└─ core/                 # Core functionality and shared components
+    ├── providers/       # Provider-specific implementations (OpenAI, Anthropic, etc.)
+    ├── schemas/         # Interfaces and structs used throughout Bifrost
+    └── bifrost.go       # Main Bifrost implementation
+```
+
+Add provider specific types in types.go (see `core/providers/openai/types.go` for an example).
+
+### OpenAI Compatible Providers
+
+If you are implementing a provider for an OpenAI API compatible API, you can use the `openai` package from `core/providers/openai`. (See [cerebras](https://github.com/maximhq/bifrost/blob/main/core/providers/cerebras.go) provider as an example.)
+
+### File conventions
+
+If the provider is OpenAI compatible, a single `provider/[provider_name].go` file is enough.
+
+If the provider is not OpenAI compatible, you need to create a new folder and add the following files. Not all of them are required. Add the ones that are relevant to your provider.
+```text
+providers/
+└─ [provider_name]/                 # Provider that is not OpenAI compatible
+    ├── [provider_name].go          # Contains code for actually making the request to the provider (required)
+    ├── types.go                    # Contains provider specific types
+    ├── utils.go                    # Contains utility functions
+    ├── errors.go                   # Contains error handlers for responses
+    ├── chat.go                     # Contains convertors for chat completion and chat completion streaming requests
+    ├── responses.go                # Contains convertors for responses endpoints
+    ├── speech.go                   # Contains convertors for speech and speech streaming requests
+    ├── transcription.go            # Contains convertors for transcription and transcription streaming requests
+    ├── embedding.go                # Contains convertors for embeddings requests
+    └── models.go                   # Contains convertors for list models requests
+```
+
+### Extra fields
+
+When parsing request, all non standard fields are stored in `Params.ExtraParams` map. This is useful for providers that require additional fields that are not part of OpenAI API. (See [perplexity provider](https://github.com/maximhq/bifrost/tree/main/core/providers/perplexity) as an example).
+
+## Local testing
+
+Once you're done writing the provider, you may want to test it locally before writing some automated tests. We will setup a new go project and import our provider.
+
+```bash
+go mod init bifrost-test
+go get github.com/maximhq/bifrost/core
+go mod tidy
+```
+
+Replace `github.com/maximhq/bifrost/core` with your local path to the core (relative path).
+
+```text
+// add this line at the end of go.mod
+replace github.com/maximhq/bifrost/core => ../path-to-bifrost/core
+```
+
+Now you can test your provide by importing it as a Go SDK. This guide explains [how to use Bifrost as a Go SDK](/quickstart/go-sdk/setting-up) in further detail.
+
+# Adding automated tests
+
+Create a new file in `tests/core-providers` directory and enable tests for all the provider function you have implemented (like `Speech`, `SpeechStream`, `Embeddings`, etc.).

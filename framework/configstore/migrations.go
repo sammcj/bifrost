@@ -76,6 +76,12 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationMissingProviderColumnInKeyTable(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddLogRetentionDaysColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := migrationAddBatchAndCachePricingColumns(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1032,4 +1038,84 @@ func migrationMissingProviderColumnInKeyTable(ctx context.Context, db *gorm.DB) 
 		return fmt.Errorf("error while running add and fill provider column migration: %s", err.Error())
 	}
 	return nil
+}
+
+// migrationAddLogRetentionDaysColumn adds the log_retention_days column to the client config table
+func migrationAddLogRetentionDaysColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_log_retention_days_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasColumn(&tables.TableClientConfig{}, "log_retention_days") {
+				if err := migrator.AddColumn(&tables.TableClientConfig{}, "log_retention_days"); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if err := migrator.DropColumn(&tables.TableClientConfig{}, "log_retention_days"); err != nil {
+				return err
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running db migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddBatchAndCachePricingColumns adds the cache_read_input_token_cost, cache_creation_input_token_cost, input_cost_per_token_batches, and output_cost_per_token_batches columns to the model_pricing table
+func migrationAddBatchAndCachePricingColumns(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "update_model_pricing_table_to_add_cache_and_batch_pricing",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasColumn(&tables.TableModelPricing{}, "cache_read_input_token_cost") {
+				if err := migrator.AddColumn(&tables.TableModelPricing{}, "cache_read_input_token_cost"); err != nil {
+					return err
+				}
+			}
+			if !migrator.HasColumn(&tables.TableModelPricing{}, "cache_creation_input_token_cost") {
+				if err := migrator.AddColumn(&tables.TableModelPricing{}, "cache_creation_input_token_cost"); err != nil {
+					return err
+				}
+			}
+			if !migrator.HasColumn(&tables.TableModelPricing{}, "input_cost_per_token_batches") {
+				if err := migrator.AddColumn(&tables.TableModelPricing{}, "input_cost_per_token_batches"); err != nil {
+					return err
+				}
+			}
+			if !migrator.HasColumn(&tables.TableModelPricing{}, "output_cost_per_token_batches") {
+				if err := migrator.AddColumn(&tables.TableModelPricing{}, "output_cost_per_token_batches"); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if err := migrator.DropColumn(&tables.TableModelPricing{}, "cache_read_input_token_cost"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TableModelPricing{}, "cache_creation_input_token_cost"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TableModelPricing{}, "input_cost_per_token_batches"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TableModelPricing{}, "output_cost_per_token_batches"); err != nil {
+				return err
+			}
+			return nil
+		},
+	}})
+	return m.Migrate()
 }

@@ -663,6 +663,7 @@ func (cu *BifrostLLMUsage) ToResponsesResponseUsage() *ResponsesResponseUsage {
 			RejectedPredictionTokens: cu.CompletionTokensDetails.RejectedPredictionTokens,
 			CitationTokens:           cu.CompletionTokensDetails.CitationTokens,
 			NumSearchQueries:         cu.CompletionTokensDetails.NumSearchQueries,
+			CachedTokens:             cu.CompletionTokensDetails.CachedTokens,
 		}
 	}
 
@@ -695,6 +696,7 @@ func (ru *ResponsesResponseUsage) ToBifrostLLMUsage() *BifrostLLMUsage {
 			RejectedPredictionTokens: ru.OutputTokensDetails.RejectedPredictionTokens,
 			CitationTokens:           ru.OutputTokensDetails.CitationTokens,
 			NumSearchQueries:         ru.OutputTokensDetails.NumSearchQueries,
+			CachedTokens:             ru.OutputTokensDetails.CachedTokens,
 		}
 	}
 
@@ -1175,6 +1177,23 @@ func (cr *BifrostChatResponse) ToBifrostResponsesStreamResponse(state *ChatToRes
 			})
 			state.SequenceNumber++
 			state.TextItemAdded = true
+
+			// Emit content_part.added with empty output_text part
+			emptyText := ""
+			part := &ResponsesMessageContentBlock{
+				Type: ResponsesOutputMessageContentTypeText,
+				Text: &emptyText,
+			}
+			responses = append(responses, &BifrostResponsesStreamResponse{
+				Type:           ResponsesStreamResponseTypeContentPartAdded,
+				SequenceNumber: state.SequenceNumber,
+				OutputIndex:    Ptr(outputIndex),
+				ContentIndex:   Ptr(0),
+				ItemID:         &itemID,
+				Part:           part,
+				ExtraFields:    cr.ExtraFields,
+			})
+			state.SequenceNumber++
 		}
 
 		// Emit text delta
@@ -1221,8 +1240,34 @@ func (cr *BifrostChatResponse) ToBifrostResponsesStreamResponse(state *ChatToRes
 				// Close text item if still open and has content
 				if state.TextItemAdded && !state.TextItemClosed && state.TextItemHasContent {
 					outputIndex := 0
-					statusCompleted := "completed"
 					itemID := state.ItemIDs["text"]
+
+					// Emit output_text.done (without accumulated text, just the event)
+					emptyText := ""
+					responses = append(responses, &BifrostResponsesStreamResponse{
+						Type:           ResponsesStreamResponseTypeOutputTextDone,
+						SequenceNumber: state.SequenceNumber,
+						OutputIndex:    Ptr(outputIndex),
+						ContentIndex:   Ptr(0),
+						ItemID:         &itemID,
+						Text:           &emptyText,
+						ExtraFields:    cr.ExtraFields,
+					})
+					state.SequenceNumber++
+
+					// Emit content_part.done
+					responses = append(responses, &BifrostResponsesStreamResponse{
+						Type:           ResponsesStreamResponseTypeContentPartDone,
+						SequenceNumber: state.SequenceNumber,
+						OutputIndex:    Ptr(outputIndex),
+						ContentIndex:   Ptr(0),
+						ItemID:         &itemID,
+						ExtraFields:    cr.ExtraFields,
+					})
+					state.SequenceNumber++
+
+					// Emit output_item.done
+					statusCompleted := "completed"
 					doneItem := &ResponsesMessage{
 						Status: &statusCompleted,
 					}
@@ -1338,8 +1383,34 @@ func (cr *BifrostChatResponse) ToBifrostResponsesStreamResponse(state *ChatToRes
 		// Close text item if still open and has content
 		if state.TextItemAdded && !state.TextItemClosed && state.TextItemHasContent {
 			outputIndex := 0
-			statusCompleted := "completed"
 			itemID := state.ItemIDs["text"]
+
+			// Emit output_text.done (without accumulated text, just the event)
+			emptyText := ""
+			responses = append(responses, &BifrostResponsesStreamResponse{
+				Type:           ResponsesStreamResponseTypeOutputTextDone,
+				SequenceNumber: state.SequenceNumber,
+				OutputIndex:    Ptr(outputIndex),
+				ContentIndex:   Ptr(0),
+				ItemID:         &itemID,
+				Text:           &emptyText,
+				ExtraFields:    cr.ExtraFields,
+			})
+			state.SequenceNumber++
+
+			// Emit content_part.done
+			responses = append(responses, &BifrostResponsesStreamResponse{
+				Type:           ResponsesStreamResponseTypeContentPartDone,
+				SequenceNumber: state.SequenceNumber,
+				OutputIndex:    Ptr(outputIndex),
+				ContentIndex:   Ptr(0),
+				ItemID:         &itemID,
+				ExtraFields:    cr.ExtraFields,
+			})
+			state.SequenceNumber++
+
+			// Emit output_item.done
+			statusCompleted := "completed"
 			doneItem := &ResponsesMessage{
 				Status: &statusCompleted,
 			}

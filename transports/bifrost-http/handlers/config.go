@@ -155,7 +155,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Validating framework config
-	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != modelcatalog.DefaultPricingURL {
+	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != modelcatalog.DefaultPricingURL {		
 		// Checking the accessibility of the pricing URL
 		resp, err := http.Get(*payload.FrameworkConfig.PricingURL)
 		if err != nil {
@@ -207,6 +207,14 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	updatedConfig.MaxRequestBodySizeMB = payload.ClientConfig.MaxRequestBodySizeMB
 	updatedConfig.EnableLiteLLMFallbacks = payload.ClientConfig.EnableLiteLLMFallbacks
 
+	// Validate LogRetentionDays
+	if payload.ClientConfig.LogRetentionDays < 1 {
+		logger.Warn("log_retention_days must be at least 1")
+		SendError(ctx, fasthttp.StatusBadRequest, "log_retention_days must be at least 1")
+		return
+	}
+	updatedConfig.LogRetentionDays = payload.ClientConfig.LogRetentionDays
+
 	// Update the store with the new config
 	h.store.ClientConfig = updatedConfig
 
@@ -245,7 +253,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	}
 	// Updating framework config
 	shouldReloadFrameworkConfig := false
-	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != *frameworkConfig.PricingURL {
+	if payload.FrameworkConfig.PricingURL != nil && *payload.FrameworkConfig.PricingURL != *frameworkConfig.PricingURL {				
 		// Checking the accessibility of the pricing URL
 		resp, err := http.Get(*payload.FrameworkConfig.PricingURL)
 		if err != nil {
@@ -303,7 +311,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		// }
 	}
 	// Checking auth config and trying to update if required
-	if payload.AuthConfig != nil {
+	if payload.AuthConfig != nil && payload.AuthConfig.IsEnabled {
 		// Getting current governance config
 		authConfig, err := h.store.ConfigStore.GetAuthConfig(ctx)
 		if err != nil {
@@ -313,7 +321,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 				return
 			}
 		}
-		if authConfig == nil && (payload.AuthConfig.AdminUserName == "" || payload.AuthConfig.AdminPassword == "") {
+		if authConfig == nil && payload.AuthConfig.IsEnabled && (payload.AuthConfig.AdminUserName == "" || payload.AuthConfig.AdminPassword == "") {
 			SendError(ctx, fasthttp.StatusBadRequest, "auth username and password must be provided")
 			return
 		}

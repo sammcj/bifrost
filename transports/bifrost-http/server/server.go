@@ -21,6 +21,7 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
+	"github.com/maximhq/bifrost/framework/logstore"
 	dynamicPlugins "github.com/maximhq/bifrost/framework/plugins"
 	"github.com/maximhq/bifrost/plugins/governance"
 	"github.com/maximhq/bifrost/plugins/logging"
@@ -96,6 +97,7 @@ type BifrostHTTPServer struct {
 	Server           *fasthttp.Server
 	Router           *router.Router
 	WebSocketHandler *handlers.WebSocketHandler
+	LogsCleaner      *logstore.LogsCleaner
 }
 
 var logger schemas.Logger
@@ -1001,6 +1003,38 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config %v", err)
 	}
+	// Initialize log retention cleaner if log store is configured
+	if s.Config.LogsStore != nil {
+		// If log retention days remains 0, then we wont be initializing the log retention cleaner
+		logRetentionDays := 0
+		if s.Config.ConfigStore != nil {
+			// Get logs store config from config store
+			clientConfig, err := s.Config.ConfigStore.GetClientConfig(ctx)
+			if err != nil {
+				logger.Warn("failed to get logs store config: %v", err)
+				// So we wont be initializing the log retention cleaner
+			}
+			if clientConfig != nil {
+				logRetentionDays = clientConfig.LogRetentionDays
+			}
+		} else {
+			// We will check if the config file has the log retention days set
+			logRetentionDays = s.Config.ClientConfig.LogRetentionDays
+		}
+		logger.Info("log retention days: %d", logRetentionDays)
+		if logRetentionDays > 0 {
+			// Type assert to get RDBLogStore (which implements LogRetentionManager)
+			if rdbStore, ok := s.Config.LogsStore.(logstore.LogRetentionManager); ok {
+				cleanerConfig := logstore.CleanerConfig{
+					RetentionDays: logRetentionDays,
+				}
+				s.LogsCleaner = logstore.NewLogsCleaner(rdbStore, cleanerConfig, logger)
+				s.LogsCleaner.StartCleanupRoutine()
+				logger.Info("log retention cleaner initialized with %d days retention",
+					logRetentionDays)
+			}
+		}
+	}
 	// Load plugins
 	s.pluginStatusMutex.Lock()
 	defer s.pluginStatusMutex.Unlock()
@@ -1077,7 +1111,7 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	s.Server = &fasthttp.Server{
 		Handler:            handlers.CorsMiddleware(s.Config)(handlers.TransportInterceptorMiddleware(s.Config)(s.Router.Handler)),
 		MaxRequestBodySize: s.Config.ClientConfig.MaxRequestBodySizeMB * 1024 * 1024,
-		ReadBufferSize:     1024 * 16, // 16kb		
+		ReadBufferSize:     1024 * 16, // 16kb
 	}
 	return nil
 }
@@ -1129,6 +1163,10 @@ func (s *BifrostHTTPServer) Start() error {
 			}
 			if s.Config != nil && s.Config.ConfigStore != nil {
 				s.Config.ConfigStore.Close(shutdownCtx)
+			}
+			if s.LogsCleaner != nil {
+				logger.Info("stopping log retention cleaner...")
+				s.LogsCleaner.StopCleanupRoutine()
 			}
 			if s.Config != nil && s.Config.LogsStore != nil {
 				s.Config.LogsStore.Close(shutdownCtx)

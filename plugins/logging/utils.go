@@ -37,6 +37,12 @@ type LogManager interface {
 
 	// GetAvailableVirtualKeys returns all unique virtual key ID-Name pairs from logs
 	GetAvailableVirtualKeys(ctx context.Context) []KeyPair
+
+	// DeleteLog deletes a log entry by its ID
+	DeleteLog(ctx context.Context, id string) error
+
+	// DeleteLogs deletes multiple log entries by their IDs
+	DeleteLogs(ctx context.Context, ids []string) error
 }
 
 // PluginLogManager implements LogManager interface wrapping the plugin
@@ -75,6 +81,22 @@ func (p *PluginLogManager) GetAvailableSelectedKeys(ctx context.Context) []KeyPa
 // GetAvailableVirtualKeys returns all unique virtual key ID-Name pairs from logs
 func (p *PluginLogManager) GetAvailableVirtualKeys(ctx context.Context) []KeyPair {
 	return p.plugin.GetAvailableVirtualKeys(ctx)
+}
+
+// DeleteLog deletes a log from the log store
+func (p *PluginLogManager) DeleteLog(ctx context.Context, id string) error {
+	if p.plugin == nil || p.plugin.store == nil {
+		return fmt.Errorf("log store not initialized")
+	}
+	return p.plugin.store.DeleteLog(ctx, id)
+}
+
+// DeleteLogs deletes multiple logs from the log store
+func (p *PluginLogManager) DeleteLogs(ctx context.Context, ids []string) error {
+	if p.plugin == nil || p.plugin.store == nil {
+		return fmt.Errorf("log store not initialized")
+	}
+	return p.plugin.store.DeleteLogs(ctx, ids)
 }
 
 // GetPluginLogManager returns a LogManager interface for this plugin

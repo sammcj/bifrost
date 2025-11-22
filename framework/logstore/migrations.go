@@ -34,6 +34,12 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddPerformanceIndexes(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddPerformanceIndexesV2(ctx, db); err != nil {
+		return err
+	}
+	if err := migrationUpdateTimestampFormat(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -455,6 +461,180 @@ func migrationAddPerformanceIndexes(ctx context.Context, db *gorm.DB) error {
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while adding performance indexes: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddPerformanceIndexesV2 adds additional indexes for improved query performance
+// This migration adds indices based on query patterns in rdb.go
+func migrationAddPerformanceIndexesV2(ctx context.Context, db *gorm.DB) error {
+	opts := *migrator.DefaultOptions
+	opts.UseTransaction = true
+	m := migrator.New(db, &opts, []*migrator.Migration{{
+		ID: "logs_add_performance_indexes_v2",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			// Single-column indices for filtering and sorting
+			// These indices optimize queries in applyFilters, SearchLogs, GetStats, and Flush
+
+			// Add index on timestamp for range queries and default ordering
+			// Used in: WHERE timestamp >= ? AND timestamp <= ? and ORDER BY timestamp
+			if !migrator.HasIndex(&Log{}, "idx_logs_timestamp") {
+				if err := tx.Exec("CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp)").Error; err != nil {
+					return fmt.Errorf("failed to create index on timestamp: %w", err)
+				}
+			}
+
+			// Add index on status for filtering (success, error, processing)
+			// Used in: WHERE status IN ('success', 'error'), WHERE status = 'processing'
+			if !migrator.HasIndex(&Log{}, "idx_logs_status") {
+				if err := tx.Exec("CREATE INDEX IF NOT EXISTS idx_logs_status ON logs(status)").Error; err != nil {
+					return fmt.Errorf("failed to create index on status: %w", err)
+				}
+			}
+
+			// Add index on created_at for Flush operations
+			// Used in: WHERE created_at < ?
+			if !migrator.HasIndex(&Log{}, "idx_logs_created_at") {
+				if err := tx.Exec("CREATE INDEX IF NOT EXISTS idx_logs_created_at ON logs(created_at)").Error; err != nil {
+					return fmt.Errorf("failed to create index on created_at: %w", err)
+				}
+			}
+
+			// Add index on provider for filtering
+			// Used in: WHERE provider IN (?)
+			if !migrator.HasIndex(&Log{}, "idx_logs_provider") {
+				if err := tx.Exec("CREATE INDEX IF NOT EXISTS idx_logs_provider ON logs(provider)").Error; err != nil {
+					return fmt.Errorf("failed to create index on provider: %w", err)
+				}
+			}
+
+			// Add index on model for filtering
+			// Used in: WHERE model IN (?)
+			if !migrator.HasIndex(&Log{}, "idx_logs_model") {
+				if err := tx.Exec("CREATE INDEX IF NOT EXISTS idx_logs_model ON logs(model)").Error; err != nil {
+					return fmt.Errorf("failed to create index on model: %w", err)
+				}
+			}
+
+			// Add index on object_type for filtering
+			// Used in: WHERE object_type IN (?)
+			if !migrator.HasIndex(&Log{}, "idx_logs_object_type") {
+				if err := tx.Exec("CREATE INDEX IF NOT EXISTS idx_logs_object_type ON logs(object_type)").Error; err != nil {
+					return fmt.Errorf("failed to create index on object_type: %w", err)
+				}
+			}
+
+			// Add index on cost for range queries and ordering
+			// Used in: WHERE cost >= ? AND cost <= ?, ORDER BY cost
+			if !migrator.HasIndex(&Log{}, "idx_logs_cost") {
+				if err := tx.Exec("CREATE INDEX IF NOT EXISTS idx_logs_cost ON logs(cost)").Error; err != nil {
+					return fmt.Errorf("failed to create index on cost: %w", err)
+				}
+			}
+
+			// Composite indices for common query patterns
+
+			// Add composite index on (status, timestamp) for GetStats queries
+			// Used when filtering completed requests (status IN ('success', 'error')) with timestamp ranges
+			// This composite index is more efficient than individual indices for these combined queries
+			if !migrator.HasIndex(&Log{}, "idx_logs_status_timestamp") {
+				if err := tx.Exec("CREATE INDEX IF NOT EXISTS idx_logs_status_timestamp ON logs(status, timestamp)").Error; err != nil {
+					return fmt.Errorf("failed to create composite index on (status, timestamp): %w", err)
+				}
+			}
+
+			// Add composite index on (status, created_at) for Flush operations
+			// Used in Flush: WHERE status = 'processing' AND created_at < ?
+			// This composite index significantly improves cleanup query performance
+			if !migrator.HasIndex(&Log{}, "idx_logs_status_created_at") {
+				if err := tx.Exec("CREATE INDEX IF NOT EXISTS idx_logs_status_created_at ON logs(status, created_at)").Error; err != nil {
+					return fmt.Errorf("failed to create composite index on (status, created_at): %w", err)
+				}
+			}
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			// Drop all indices added in this migration
+			indices := []string{
+				"idx_logs_timestamp",
+				"idx_logs_status",
+				"idx_logs_created_at",
+				"idx_logs_provider",
+				"idx_logs_model",
+				"idx_logs_object_type",
+				"idx_logs_cost",
+				"idx_logs_status_timestamp",
+				"idx_logs_status_created_at",
+			}
+
+			for _, indexName := range indices {
+				if migrator.HasIndex(&Log{}, indexName) {
+					if err := tx.Exec(fmt.Sprintf("DROP INDEX IF EXISTS %s", indexName)).Error; err != nil {
+						return fmt.Errorf("failed to drop index %s: %w", indexName, err)
+					}
+				}
+			}
+
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while adding performance indexes v2: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationUpdateLogsTimestampFormat converts local timestamps to UTC timestamps in logs table
+func migrationUpdateTimestampFormat(ctx context.Context, db *gorm.DB) error {
+	// only run the migration for sqlite databases
+	dialect := db.Dialector.Name()
+	if dialect != "sqlite" {
+		return nil
+	}
+
+	opts := *migrator.DefaultOptions
+	opts.UseTransaction = true
+	m := migrator.New(db, &opts, []*migrator.Migration{{
+		ID: "logs_update_timestamp_format",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+
+			updateSQL := `
+				UPDATE logs
+				SET "timestamp" = strftime('%Y-%m-%dT%H:%M:%S', "timestamp", 'utc') || '.' || 
+                    CAST(CAST(strftime('%f', "timestamp") * 1000 AS INTEGER) % 1000 AS TEXT) || 'Z'
+				WHERE 
+					"timestamp" NOT LIKE '%Z' 
+					AND "timestamp" NOT LIKE '%+00%';
+				UPDATE logs
+				SET created_at = strftime('%Y-%m-%dT%H:%M:%S', created_at, 'utc') || '.' || 
+                    CAST(CAST(strftime('%f', created_at) * 1000 AS INTEGER) % 1000 AS TEXT) || 
+                    'Z'
+				WHERE 
+					created_at NOT LIKE '%Z' 
+					AND created_at NOT LIKE '%+00%';
+				`
+
+			result := tx.Exec(updateSQL)
+			if result.Error != nil {
+				return fmt.Errorf("failed to update timestamp values: %w", result.Error)
+			}
+
+			return nil
+		},
+	}})
+
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running update timestamp for logs migration: %s", err.Error())
 	}
 	return nil
 }

@@ -204,7 +204,8 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 		return req, nil, nil
 	}
 
-	createdTimestamp := time.Now()
+	createdTimestamp := time.Now().UTC()
+
 	// If request type is streaming we create a stream accumulator
 	if bifrost.IsStreamRequestType(req.RequestType) {
 		p.accumulator.CreateStreamAccumulator(requestID, createdTimestamp)

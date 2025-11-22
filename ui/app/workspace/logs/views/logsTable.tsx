@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { LogEntry, LogFilters, Pagination } from "@/lib/types/logs";
 import { ColumnDef, flexRender, getCoreRowModel, SortingState, useReactTable } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pause, RefreshCw, X } from "lucide-react";
 import { useState } from "react";
 import { LogFilters as LogFiltersComponent } from "./filters";
 
@@ -19,6 +19,8 @@ interface DataTableProps {
 	onPaginationChange: (pagination: Pagination) => void;
 	onRowClick?: (log: LogEntry) => void;
 	isSocketConnected: boolean;
+	liveEnabled: boolean;
+	onLiveToggle: (enabled: boolean) => void;
 }
 
 export function LogsDataTable({
@@ -32,6 +34,8 @@ export function LogsDataTable({
 	onPaginationChange,
 	onRowClick,
 	isSocketConnected,
+	liveEnabled,
+	onLiveToggle,
 }: DataTableProps) {
 	const [sorting, setSorting] = useState<SortingState>([{ id: pagination.sort_by, desc: pagination.order === "desc" }]);
 
@@ -77,7 +81,7 @@ export function LogsDataTable({
 
 	return (
 		<div className="space-y-2">
-			<LogFiltersComponent filters={filters} onFiltersChange={onFiltersChange} />
+			<LogFiltersComponent filters={filters} onFiltersChange={onFiltersChange} liveEnabled={liveEnabled} onLiveToggle={onLiveToggle} />
 			<div className="max-h-[calc(100vh-16.5rem)] rounded-sm border">
 				<Table containerClassName="max-h-[calc(100vh-16.5rem)]">
 					<TableHeader className="px-2">
@@ -106,15 +110,20 @@ export function LogsDataTable({
 								<TableRow className="hover:bg-transparent">
 									<TableCell colSpan={columns.length} className="h-12 text-center">
 										<div className="flex items-center justify-center gap-2">
-											{isSocketConnected ? (
+											{!isSocketConnected ? (
+												<>
+													<X className="h-4 w-4" />
+													Not connected to socket, please refresh the page.
+												</>
+											) : liveEnabled ? (
 												<>
 													<RefreshCw className="h-4 w-4 animate-spin" />
 													Listening for logs...
 												</>
 											) : (
 												<>
-													<X className="h-4 w-4" />
-													Not connected to socket, please refresh the page.
+													<Pause className="h-4 w-4" />
+													Live updates paused
 												</>
 											)}
 										</div>
@@ -131,7 +140,7 @@ export function LogsDataTable({
 								) : (
 									<TableRow>
 										<TableCell colSpan={columns.length} className="h-24 text-center">
-											No results found.
+											No results found. Try adjusting your filters and/or time range.
 										</TableCell>
 									</TableRow>
 								)}

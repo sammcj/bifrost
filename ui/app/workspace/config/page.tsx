@@ -4,11 +4,13 @@ import FullPageLoader from "@/components/fullPageLoader";
 import { useGetCoreConfigQuery } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import APIKeysView from "@enterprise/components/api-keys/APIKeysView";
-import { Gauge, KeyRound, Landmark, Settings, Shield, Sliders, Zap } from "lucide-react";
+import { Gauge, KeyRound, Landmark, Settings, Shield, Telescope, Zap } from "lucide-react";
 import { useQueryState } from "nuqs";
 import { useEffect } from "react";
+import CachingView from "./views/cachingView";
 import ClientSettingsView from "./views/clientSettingsView";
-import FeatureTogglesView from "./views/featureTogglesView";
+import GovernanceView from "./views/governanceView";
+import LoggingView from "./views/loggingView";
 import ObservabilityView from "./views/observabilityView";
 import PerformanceTuningView from "./views/performanceTuningView";
 import PricingConfigView from "./views/pricingConfigView";
@@ -26,9 +28,19 @@ const tabs = [
 		icon: <Landmark className="size-4" />,
 	},
 	{
-		id: "feature-toggles",
-		label: "Feature Toggles",
-		icon: <Sliders className="size-4" />,
+		id: "logging",
+		label: "Logging",
+		icon: <Telescope className="size-4" />,
+	},
+	{
+		id: "governance",
+		label: "Governance",
+		icon: <Landmark className="size-4" />,
+	},
+	{
+		id: "caching",
+		label: "Caching",
+		icon: <Zap className="size-4" />,
 	},
 	{
 		id: "observability",
@@ -89,7 +101,9 @@ export default function ConfigPage() {
 			<div className="w-full pt-4">
 				{activeTab === "client-settings" && <ClientSettingsView />}
 				{activeTab === "pricing-config" && <PricingConfigView />}
-				{activeTab === "feature-toggles" && <FeatureTogglesView />}
+				{activeTab === "logging" && <LoggingView />}
+				{activeTab === "governance" && <GovernanceView />}
+				{activeTab === "caching" && <CachingView />}
 				{activeTab === "observability" && <ObservabilityView />}
 				{activeTab === "security" && <SecurityView />}
 				{activeTab === "api-keys" && <APIKeysView />}

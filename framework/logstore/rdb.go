@@ -88,6 +88,7 @@ func (s *RDBLogStore) Update(ctx context.Context, id string, entry any) error {
 
 // SearchLogs searches for logs in the database without calculating statistics.
 func (s *RDBLogStore) SearchLogs(ctx context.Context, filters SearchFilters, pagination PaginationOptions) (*SearchResult, error) {
+	var err error
 	baseQuery := s.db.WithContext(ctx).Model(&Log{})
 
 	// Apply filters efficiently
@@ -130,7 +131,7 @@ func (s *RDBLogStore) SearchLogs(ctx context.Context, filters SearchFilters, pag
 		mainQuery = mainQuery.Offset(pagination.Offset)
 	}
 
-	if err := mainQuery.Find(&logs).Error; err != nil {
+	if err = mainQuery.Find(&logs).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return &SearchResult{
 				Logs:       logs,
@@ -143,12 +144,21 @@ func (s *RDBLogStore) SearchLogs(ctx context.Context, filters SearchFilters, pag
 		return nil, err
 	}
 
+	hasLogs := len(logs) > 0
+	if !hasLogs {
+		hasLogs, err = s.HasLogs(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &SearchResult{
 		Logs:       logs,
 		Pagination: pagination,
 		Stats: SearchStats{
 			TotalRequests: totalCount,
 		},
+		HasLogs: hasLogs,
 	}, nil
 }
 
@@ -188,7 +198,7 @@ func (s *RDBLogStore) GetStats(ctx context.Context, filters SearchFilters) (*Sea
 			successQuery := s.db.WithContext(ctx).Model(&Log{})
 			successQuery = s.applyFilters(successQuery, filters)
 			successQuery = successQuery.Where("status = ?", "success")
-			
+
 			var successCount int64
 			if err := successQuery.Count(&successCount).Error; err != nil {
 				return nil, err
@@ -205,7 +215,7 @@ func (s *RDBLogStore) GetStats(ctx context.Context, filters SearchFilters) (*Sea
 			statsQuery := s.db.WithContext(ctx).Model(&Log{})
 			statsQuery = s.applyFilters(statsQuery, filters)
 			statsQuery = statsQuery.Where("status IN ?", []string{"success", "error"})
-			
+
 			if err := statsQuery.Select("AVG(latency) as avg_latency, SUM(total_tokens) as total_tokens, SUM(cost) as total_cost").Scan(&result).Error; err != nil {
 				return nil, err
 			}
@@ -223,6 +233,19 @@ func (s *RDBLogStore) GetStats(ctx context.Context, filters SearchFilters) (*Sea
 	}
 
 	return stats, nil
+}
+
+// HasLogs checks if there are any logs in the database.
+func (s *RDBLogStore) HasLogs(ctx context.Context) (bool, error) {
+	var log Log
+	err := s.db.WithContext(ctx).Select("id").Limit(1).Take(&log).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return false, err
+	}	
+	return true, nil
 }
 
 // FindFirst gets a log entry from the database.
@@ -258,6 +281,32 @@ func (s *RDBLogStore) FindAll(ctx context.Context, query any, fields ...string) 
 	return logs, nil
 }
 
+// DeleteLogsBatch deletes logs older than the cutoff time in batches.
+func (s *RDBLogStore) DeleteLogsBatch(ctx context.Context, cutoff time.Time, batchSize int) (deletedCount int64, err error) {
+	// First, select the IDs of logs to delete with proper LIMIT
+	var ids []string
+	if err := s.db.WithContext(ctx).
+		Model(&Log{}).
+		Select("id").
+		Where("created_at < ?", cutoff).
+		Limit(batchSize).
+		Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+
+	// If no IDs found, return early
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	// Delete the selected IDs
+	result := s.db.WithContext(ctx).Where("id IN ?", ids).Delete(&Log{})
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
+}
+
 // Close closes the log store.
 func (s *RDBLogStore) Close(ctx context.Context) error {
 	sqlDB, err := s.db.WithContext(ctx).DB()
@@ -265,4 +314,23 @@ func (s *RDBLogStore) Close(ctx context.Context) error {
 		return err
 	}
 	return sqlDB.Close()
+}
+
+// DeleteLog deletes a log entry from the database by its ID.
+func (s *RDBLogStore) DeleteLog(ctx context.Context, id string) error {
+	if err := s.db.WithContext(ctx).Where("id = ?", id).Delete(&Log{}).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteLogs deletes multiple log entries from the database by their IDs.
+func (s *RDBLogStore) DeleteLogs(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := s.db.WithContext(ctx).Where("id IN ?", ids).Delete(&Log{}).Error; err != nil {
+		return err
+	}
+	return nil
 }
