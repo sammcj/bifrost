@@ -113,7 +113,7 @@ Configure semantic caching with vector stores:
 | `postgresql.enabled` | Deploy PostgreSQL | `false` |
 | `postgresql.external.enabled` | Use external PostgreSQL | `false` |
 | `vectorStore.enabled` | Enable vector store | `false` |
-| `vectorStore.type` | Vector store type (none/weaviate/redis) | `none` |
+| `vectorStore.type` | Vector store type (none/weaviate/redis/qdrant) | `none` |
 | `bifrost.encryptionKey` | Encryption key for sensitive data | `""` |
 | `bifrost.client.enableLogging` | Enable request/response logging | `true` |
 | `bifrost.providers` | LLM provider configurations | `{}` |
@@ -324,6 +324,12 @@ Check Redis:
 ```bash
 kubectl logs -l app.kubernetes.io/component=redis
 kubectl exec -it deployment/bifrost-redis-master -- redis-cli ping
+```
+
+Check Qdrant:
+```bash
+kubectl logs -l app.kubernetes.io/component=vectorstore
+kubectl port-forward svc/bifrost-qdrant 6334:6334
 ```
 
 ## Examples
