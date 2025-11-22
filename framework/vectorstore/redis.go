@@ -249,6 +249,13 @@ func (s *RedisStore) GetAll(ctx context.Context, namespace string, queries []Que
 	offset := 0
 	if cursor != nil && *cursor != "" {
 		if parsedOffset, err := strconv.ParseInt(*cursor, 10, 64); err == nil {
+			// Check for integer overflow before conversion
+			if parsedOffset > math.MaxInt32 {
+				return nil, nil, fmt.Errorf("offset value %d exceeds maximum allowed value", parsedOffset)
+			}
+			if parsedOffset < 0 {
+				return nil, nil, fmt.Errorf("offset value %d cannot be negative", parsedOffset)
+			}
 			offset = int(parsedOffset)
 		}
 	}
