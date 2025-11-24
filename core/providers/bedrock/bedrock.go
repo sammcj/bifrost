@@ -186,7 +186,7 @@ func (provider *BedrockProvider) completeRequest(ctx context.Context, jsonData [
 // makeStreamingRequest creates a streaming request to Bedrock's API.
 // It formats the request, sends it to Bedrock, and returns the response.
 // Returns the response body and an error if the request fails.
-func (provider *BedrockProvider) makeStreamingRequest(ctx context.Context, jsonData []byte, key schemas.Key, model string) (*http.Response, string, *schemas.BifrostError) {
+func (provider *BedrockProvider) makeStreamingRequest(ctx context.Context, jsonData []byte, key schemas.Key, model string, action string) (*http.Response, string, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	if key.BedrockKeyConfig == nil {
@@ -194,7 +194,7 @@ func (provider *BedrockProvider) makeStreamingRequest(ctx context.Context, jsonD
 	}
 
 	// Format the path with proper model identifier for streaming
-	path, deployment := provider.getModelPath("converse-stream", model, key)
+	path, deployment := provider.getModelPath(action, model, key)
 
 	region := DefaultBedrockRegion
 	if key.BedrockKeyConfig.Region != nil {
@@ -567,7 +567,106 @@ func (provider *BedrockProvider) TextCompletion(ctx context.Context, key schemas
 // It formats the request, sends it to Bedrock, and processes the response.
 // Returns a channel of BifrostStream objects or an error if the request fails.
 func (provider *BedrockProvider) TextCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, providerUtils.NewUnsupportedOperationError(schemas.TextCompletionStreamRequest, schemas.Bedrock)
+	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.TextCompletionStreamRequest); err != nil {
+		return nil, err
+	}
+
+	providerName := provider.GetProviderKey()
+
+	if key.BedrockKeyConfig == nil {
+		return nil, providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
+	}
+
+	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
+		ctx,
+		request,
+		func() (any, error) { return ToBedrockTextCompletionRequest(request), nil },
+		provider.GetProviderKey())
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	resp, deployment, bifrostErr := provider.makeStreamingRequest(ctx, jsonData, key, request.Model, "invoke-with-response-stream")
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	// Create response channel
+	responseChan := make(chan *schemas.BifrostStream, schemas.DefaultStreamBufferSize)
+
+	// Start streaming in a goroutine
+	go func() {
+		defer close(responseChan)
+		defer resp.Body.Close()
+
+		// Process AWS Event Stream format
+		startTime := time.Now()
+		decoder := eventstream.NewDecoder()
+		payloadBuf := make([]byte, 0, 1024*1024) // 1MB payload buffer
+
+		for {
+			// Decode a single EventStream message
+			message, err := decoder.Decode(resp.Body, payloadBuf)
+			if err != nil {
+				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+				if err == io.EOF {
+					// End of stream - this is normal
+					break
+				}
+				provider.logger.Warn(fmt.Sprintf("Error decoding %s EventStream message: %v", providerName, err))
+				providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.TextCompletionStreamRequest, providerName, request.Model, provider.logger)
+				return
+			}
+
+			// Process the decoded message payload (contains JSON for normal events)
+			if len(message.Payload) > 0 {
+				if msgTypeHeader := message.Headers.Get(":message-type"); msgTypeHeader != nil {
+					if msgType := msgTypeHeader.String(); msgType != "event" {
+						excType := msgType
+						if excHeader := message.Headers.Get(":exception-type"); excHeader != nil {
+							if v := excHeader.String(); v != "" {
+								excType = v
+							}
+						}
+						errMsg := string(message.Payload)
+						var bedrockErr BedrockError
+						if err := sonic.Unmarshal(message.Payload, &bedrockErr); err == nil && bedrockErr.Message != "" {
+							errMsg = bedrockErr.Message
+						}
+						err := fmt.Errorf("%s stream %s: %s", providerName, excType, errMsg)
+						providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.TextCompletionStreamRequest, providerName, request.Model, provider.logger)
+						return
+					}
+				}
+
+				// Parse the chunk payload
+				var chunkPayload struct {
+					Bytes []byte `json:"bytes"`
+				}
+				if err := sonic.Unmarshal(message.Payload, &chunkPayload); err != nil {
+					provider.logger.Debug(fmt.Sprintf("Failed to parse JSON from event buffer: %v, data: %s", err, string(message.Payload)))
+					return
+				}
+
+				// Create BifrostStream response containing the raw model-specific JSON chunk
+				textResponse := &schemas.BifrostTextCompletionResponse{
+					ExtraFields: schemas.BifrostResponseExtraFields{
+						RequestType:     schemas.TextCompletionStreamRequest,
+						Provider:        providerName,
+						ModelRequested:  request.Model,
+						ModelDeployment: deployment,
+						Latency:         time.Since(startTime).Milliseconds(),
+						// Pass the raw JSON string from the chunk bytes
+						RawResponse: string(chunkPayload.Bytes),
+					},
+				}
+
+				providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(textResponse, nil, nil, nil, nil), responseChan)
+			}
+		}
+	}()
+
+	return responseChan, nil
 }
 
 // ChatCompletion performs a chat completion request to Bedrock's API.
@@ -655,7 +754,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 		return nil, bifrostErr
 	}
 
-	resp, deployment, bifrostErr := provider.makeStreamingRequest(ctx, jsonData, key, request.Model)
+	resp, deployment, bifrostErr := provider.makeStreamingRequest(ctx, jsonData, key, request.Model, "converse-stream")
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -870,7 +969,7 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 		return nil, bifrostErr
 	}
 
-	resp, deployment, bifrostErr := provider.makeStreamingRequest(ctx, jsonData, key, request.Model)
+	resp, deployment, bifrostErr := provider.makeStreamingRequest(ctx, jsonData, key, request.Model, "converse-stream")
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}

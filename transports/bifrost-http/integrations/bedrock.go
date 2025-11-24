@@ -95,6 +95,51 @@ func createBedrockConverseStreamRouteConfig(pathPrefix string, handlerStore lib.
 	}
 }
 
+// createBedrockInvokeWithResponseStreamRouteConfig creates a route configuration for the Bedrock Invoke With Response Stream API endpoint
+// Handles POST /bedrock/model/{modelId}/invoke-with-response-stream
+func createBedrockInvokeWithResponseStreamRouteConfig(pathPrefix string, handlerStore lib.HandlerStore) RouteConfig {
+	return RouteConfig{
+		Type:   RouteConfigTypeBedrock,
+		Path:   pathPrefix + "/model/{modelId}/invoke-with-response-stream",
+		Method: "POST",
+		GetRequestTypeInstance: func() interface{} {
+			return &bedrock.BedrockTextCompletionRequest{}
+		},
+		RequestConverter: func(ctx *context.Context, req interface{}) (*schemas.BifrostRequest, error) {
+			if bedrockReq, ok := req.(*bedrock.BedrockTextCompletionRequest); ok {
+				// Mark as streaming request
+				bedrockReq.Stream = true
+				return &schemas.BifrostRequest{
+					TextCompletionRequest: bedrockReq.ToBifrostTextCompletionRequest(),
+				}, nil
+			}
+			return nil, errors.New("invalid request type")
+		},
+		ErrorConverter: func(ctx *context.Context, err *schemas.BifrostError) interface{} {
+			return bedrock.ToBedrockError(err)
+		},
+		StreamConfig: &StreamConfig{
+			TextStreamResponseConverter: func(ctx *context.Context, resp *schemas.BifrostTextCompletionResponse) (string, interface{}, error) {
+				if resp == nil {
+					return "", nil, nil
+				}
+
+				// Check if we have raw response (which holds the chunk payload)
+				if rawResp, ok := resp.ExtraFields.RawResponse.(string); ok {
+					// Create BedrockStreamEvent with InvokeModelRawChunk
+					// The payload bytes are the raw JSON string
+					bedrockEvent := &bedrock.BedrockStreamEvent{
+						InvokeModelRawChunk: []byte(rawResp),
+					}
+					return "", bedrockEvent, nil
+				}
+				return "", nil, nil
+			},
+		},
+		PreCallback: bedrockPreCallback(handlerStore),
+	}
+}
+
 // createBedrockInvokeRouteConfig creates a route configuration for the Bedrock Invoke API endpoint
 // Handles POST /bedrock/model/{modelId}/invoke
 func createBedrockInvokeRouteConfig(pathPrefix string, handlerStore lib.HandlerStore) RouteConfig {
@@ -128,6 +173,7 @@ func CreateBedrockRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore)
 	return []RouteConfig{
 		createBedrockConverseRouteConfig(pathPrefix, handlerStore),
 		createBedrockConverseStreamRouteConfig(pathPrefix, handlerStore),
+		createBedrockInvokeWithResponseStreamRouteConfig(pathPrefix, handlerStore),
 		createBedrockInvokeRouteConfig(pathPrefix, handlerStore),
 	}
 }

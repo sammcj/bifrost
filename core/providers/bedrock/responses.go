@@ -1556,9 +1556,23 @@ type BedrockEncodedEvent struct {
 	Payload   interface{}
 }
 
+// BedrockInvokeStreamChunkEvent represents the chunk event for invoke-with-response-stream
+type BedrockInvokeStreamChunkEvent struct {
+	Bytes []byte `json:"bytes"`
+}
+
 // ToEncodedEvents converts the flat BedrockStreamEvent into a sequence of specific events
 func (event *BedrockStreamEvent) ToEncodedEvents() []BedrockEncodedEvent {
 	var events []BedrockEncodedEvent
+
+	if event.InvokeModelRawChunk != nil {
+		events = append(events, BedrockEncodedEvent{
+			EventType: "chunk",
+			Payload: BedrockInvokeStreamChunkEvent{
+				Bytes: event.InvokeModelRawChunk,
+			},
+		})
+	}
 
 	if event.Role != nil {
 		events = append(events, BedrockEncodedEvent{

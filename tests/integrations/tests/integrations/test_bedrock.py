@@ -210,7 +210,6 @@ class TestBedrockIntegration:
                     "status": "success"
                 }
             })
-
         messages.append({
             "role": "user",
             "content": tool_result_content
@@ -380,3 +379,99 @@ class TestBedrockIntegration:
         
         # Verify we got a reasonable response
         assert len(combined_text.strip()) > 0, f"Streaming response should not be empty. Combined text: {repr(combined_text[:100])}"
+
+    @skip_if_no_api_key("bedrock")
+    def test_05_invoke_streaming(self, bedrock_client, test_config):
+        """Test Case 5: Streaming text completion using invoke-with-response-stream API
+        
+        Follows boto3 Bedrock Runtime invoke_model_with_response_stream API.
+        The response is a stream of chunks where each chunk's 'bytes' contains the model-specific JSON response.
+        """
+        model_id = get_model("bedrock", "text_completion")
+        prompt = "Say hello in exactly 3 words."
+        
+        # Prepare request body based on model type
+        if "mistral" in model_id.lower():
+            body = {
+                "prompt": f"<s>[INST] {prompt} [/INST]",
+                "max_tokens": 100,
+                "temperature": 0.5,
+            }
+        elif "claude" in model_id.lower():
+             body = {
+                "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
+                "max_tokens_to_sample": 100,
+                "temperature": 0.5,
+            }
+        else:
+            # Generic/Titan fallback
+            body = {
+                "inputText": prompt,
+                "textGenerationConfig": {
+                    "maxTokenCount": 100,
+                    "temperature": 0.5,
+                }
+            }
+            
+        request_body = json.dumps(body)
+
+        try:
+            response = bedrock_client.invoke_model_with_response_stream(
+                modelId=model_id,
+                contentType="application/json",
+                accept="application/json",
+                body=request_body
+            )
+        except AttributeError:
+            pytest.skip("invoke_model_with_response_stream method not available in this boto3 version.")
+        except Exception as e:
+            pytest.fail(f"invoke_model_with_response_stream failed: {e}")
+
+        # Collect streaming chunks
+        chunks = []
+        text_parts = []
+        
+        start_time = time.time()
+        timeout = 30
+        
+        try:
+            stream = response.get("body")
+            if stream is None:
+                pytest.fail("Response missing 'body' stream")
+
+            for event in stream:
+                if time.time() - start_time > timeout:
+                    pytest.fail(f"Streaming took longer than {timeout} seconds")
+                
+                chunks.append(event)
+                
+                if "chunk" in event:
+                    chunk = event["chunk"]
+                    if "bytes" in chunk:
+                        # The bytes contain the raw model response JSON
+                        chunk_data = chunk["bytes"].decode("utf-8")
+                        try:
+                            chunk_json = json.loads(chunk_data)
+                            
+                            # Extract text based on model type
+                            text_chunk = ""
+                            if "outputs" in chunk_json: # Mistral
+                                if len(chunk_json["outputs"]) > 0:
+                                    text_chunk = chunk_json["outputs"][0].get("text", "")
+                            elif "completion" in chunk_json: # Claude
+                                text_chunk = chunk_json.get("completion", "")
+                            elif "outputText" in chunk_json: # Titan
+                                text_chunk = chunk_json.get("outputText", "")
+                                
+                            if text_chunk:
+                                text_parts.append(text_chunk)
+                        except json.JSONDecodeError:
+                            # In case partial JSON is sent (unlikely for this API but possible)
+                            pass
+
+        except Exception as e:
+            pytest.fail(f"Error iterating event stream: {e}")
+
+        assert len(chunks) > 0, "Should receive at least one streaming chunk"
+        combined_text = "".join(text_parts)
+        assert len(combined_text.strip()) > 0, f"Streaming response should not be empty. Got: {combined_text}"

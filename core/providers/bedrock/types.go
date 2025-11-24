@@ -30,6 +30,12 @@ type BedrockTextCompletionRequest struct {
 	Messages         []BedrockMessage `json:"messages,omitempty"`
 	System           interface{}      `json:"system,omitempty"`
 	AnthropicVersion string           `json:"anthropic_version,omitempty"`
+	Stream           bool             `json:"-"` // Whether streaming is requested (internal)
+}
+
+// IsStreamingRequested implements the StreamingRequest interface
+func (r *BedrockTextCompletionRequest) IsStreamingRequested() bool {
+	return r.Stream
 }
 
 // BedrockConverseRequest represents a Bedrock Converse API request
@@ -392,6 +398,9 @@ type BedrockStreamEvent struct {
 
 	// Additional fields
 	AdditionalModelResponseFields interface{} `json:"additionalModelResponseFields,omitempty"`
+
+	// For InvokeModelWithResponseStream (Legacy API)
+	InvokeModelRawChunk []byte `json:"invokeModelRawChunk,omitempty"` // Raw bytes for legacy invoke stream
 }
 
 // BedrockMessageStartEvent indicates the start of a message
