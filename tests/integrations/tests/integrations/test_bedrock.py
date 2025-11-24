@@ -240,6 +240,7 @@ class TestBedrockIntegration:
                 text_content = item["text"]
                 break
         
+        assert text_content is not None, "Final response should contain a text content block"
         final_text = text_content.lower()
         assert any(word in final_text for word in WEATHER_KEYWORDS + LOCATION_KEYWORDS)
 
