@@ -28,25 +28,57 @@ func RunListModelsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Contex
 			Provider: testConfig.Provider,
 		}
 
-		// Execute list models request
-		response, bifrostErr := client.ListModelsRequest(ctx, request)
+		// Use retry framework - ALWAYS retries on any failure (errors, nil response, empty data, validation failures)
+		retryConfig := GetTestRetryConfigForScenario("ListModels", testConfig)
+		retryContext := TestRetryContext{
+			ScenarioName: "ListModels",
+			ExpectedBehavior: map[string]interface{}{
+				"should_return_models":  true,
+				"should_have_valid_ids": true,
+			},
+			TestMetadata: map[string]interface{}{
+				"provider": testConfig.Provider,
+			},
+		}
+
+		// Create expectations for list models
+		expectations := ResponseExpectations{
+			ShouldHaveLatency: true,
+			ProviderSpecific: map[string]interface{}{
+				"expected_provider": string(testConfig.Provider),
+				"min_model_count":   1, // At least one model should be returned
+			},
+		}
+
+		// Create ListModels retry config
+		listModelsRetryConfig := ListModelsRetryConfig{
+			MaxAttempts: retryConfig.MaxAttempts,
+			BaseDelay:   retryConfig.BaseDelay,
+			MaxDelay:    retryConfig.MaxDelay,
+			Conditions:  []ListModelsRetryCondition{}, // Empty - we retry on ALL failures
+			OnRetry:     retryConfig.OnRetry,
+			OnFinalFail: retryConfig.OnFinalFail,
+		}
+
+		response, bifrostErr := WithListModelsTestRetry(t, listModelsRetryConfig, retryContext, expectations, "ListModels", func() (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
+			return client.ListModelsRequest(ctx, request)
+		})
+
 		if bifrostErr != nil {
-			t.Fatalf("❌ List models request failed: %v", GetErrorMessage(bifrostErr))
+			t.Fatalf("❌ List models request failed after retries: %v", GetErrorMessage(bifrostErr))
 		}
 
-		// Validate response structure
 		if response == nil {
-			t.Fatal("❌ List models response is nil")
+			t.Fatal("❌ List models response is nil after retries")
 		}
 
-		// Validate that we have models in the response
 		if len(response.Data) == 0 {
-			t.Fatal("❌ List models response contains no models")
+			t.Fatal("❌ List models response contains no models after retries")
 		}
 
 		t.Logf("✅ List models returned %d models", len(response.Data))
 
-		// Validate individual model entries
+		// Validate individual model entries (already validated in ValidateListModelsResponse, but log for visibility)
 		validModels := 0
 		for i, model := range response.Data {
 			if model.ID == "" {
@@ -62,20 +94,7 @@ func RunListModelsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Contex
 			validModels++
 		}
 
-		if validModels == 0 {
-			t.Fatal("❌ No valid models found in response")
-		}
-
 		t.Logf("✅ Validated %d models with proper structure", validModels)
-
-		// Validate extra fields
-		if response.ExtraFields.Provider != testConfig.Provider {
-			t.Fatalf("❌ Provider mismatch: expected %s, got %s", testConfig.Provider, response.ExtraFields.Provider)
-		}
-
-		if response.ExtraFields.RequestType != schemas.ListModelsRequest {
-			t.Fatalf("❌ Request type mismatch: expected %s, got %s", schemas.ListModelsRequest, response.ExtraFields.RequestType)
-		}
 
 		// Validate latency is reasonable (non-negative and not absurdly high)
 		if response.ExtraFields.Latency < 0 {
@@ -109,13 +128,49 @@ func RunListModelsPaginationTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 			PageSize: pageSize,
 		}
 
-		response, bifrostErr := client.ListModelsRequest(ctx, request)
+		// Use retry framework - ALWAYS retries on any failure (errors, nil response, empty data, validation failures)
+		retryConfig := GetTestRetryConfigForScenario("ListModelsPagination", testConfig)
+		retryContext := TestRetryContext{
+			ScenarioName: "ListModelsPagination",
+			ExpectedBehavior: map[string]interface{}{
+				"should_return_paginated_models": true,
+				"should_respect_page_size":       true,
+			},
+			TestMetadata: map[string]interface{}{
+				"provider":  string(testConfig.Provider),
+				"page_size": pageSize,
+			},
+		}
+
+		// Create expectations for pagination test
+		expectations := ResponseExpectations{
+			ShouldHaveLatency: true,
+			ProviderSpecific: map[string]interface{}{
+				"expected_provider": string(testConfig.Provider),
+				"min_model_count":   0, // Pagination might return 0 models if page size is larger than total
+			},
+		}
+
+		// Create ListModels retry config
+		listModelsRetryConfig := ListModelsRetryConfig{
+			MaxAttempts: retryConfig.MaxAttempts,
+			BaseDelay:   retryConfig.BaseDelay,
+			MaxDelay:    retryConfig.MaxDelay,
+			Conditions:  []ListModelsRetryCondition{}, // Empty - we retry on ALL failures
+			OnRetry:     retryConfig.OnRetry,
+			OnFinalFail: retryConfig.OnFinalFail,
+		}
+
+		response, bifrostErr := WithListModelsTestRetry(t, listModelsRetryConfig, retryContext, expectations, "ListModelsPagination", func() (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
+			return client.ListModelsRequest(ctx, request)
+		})
+
 		if bifrostErr != nil {
-			t.Fatalf("❌ List models pagination request failed: %v", GetErrorMessage(bifrostErr))
+			t.Fatalf("❌ List models pagination request failed after retries: %v", GetErrorMessage(bifrostErr))
 		}
 
 		if response == nil {
-			t.Fatal("❌ List models pagination response is nil")
+			t.Fatal("❌ List models pagination response is nil after retries")
 		}
 
 		// Check that pagination was applied
@@ -129,16 +184,31 @@ func RunListModelsPaginationTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 		if response.NextPageToken != "" {
 			t.Logf("✅ Next page token available: %s", response.NextPageToken)
 
-			// Fetch next page
+			// Fetch next page - also use retry wrapper
 			nextPageRequest := &schemas.BifrostListModelsRequest{
 				Provider:  testConfig.Provider,
 				PageSize:  pageSize,
 				PageToken: response.NextPageToken,
 			}
 
-			nextPageResponse, nextPageErr := client.ListModelsRequest(ctx, nextPageRequest)
+			nextPageRetryContext := TestRetryContext{
+				ScenarioName: "ListModelsPagination_NextPage",
+				ExpectedBehavior: map[string]interface{}{
+					"should_return_next_page": true,
+				},
+				TestMetadata: map[string]interface{}{
+					"provider":   testConfig.Provider,
+					"page_size":  pageSize,
+					"page_token": response.NextPageToken,
+				},
+			}
+
+			nextPageResponse, nextPageErr := WithListModelsTestRetry(t, listModelsRetryConfig, nextPageRetryContext, expectations, "ListModelsPagination_NextPage", func() (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
+				return client.ListModelsRequest(ctx, nextPageRequest)
+			})
+
 			if nextPageErr != nil {
-				t.Fatalf("❌ Failed to fetch next page: %v", GetErrorMessage(nextPageErr))
+				t.Fatalf("❌ Failed to fetch next page after retries: %v", GetErrorMessage(nextPageErr))
 			} else if nextPageResponse != nil {
 				t.Logf("✅ Successfully fetched next page with %d models", len(nextPageResponse.Data))
 

@@ -82,21 +82,43 @@ func RunSpeechSynthesisTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 					Fallbacks: testConfig.SpeechSynthesisFallbacks,
 				}
 
+				// Use retry framework with enhanced validation
+				retryConfig := GetTestRetryConfigForScenario("SpeechSynthesis", testConfig)
+				retryContext := TestRetryContext{
+					ScenarioName: "SpeechSynthesis_" + tc.name,
+					ExpectedBehavior: map[string]interface{}{
+						"should_generate_audio": true,
+					},
+					TestMetadata: map[string]interface{}{
+						"provider": testConfig.Provider,
+						"model":    testConfig.SpeechSynthesisModel,
+						"format":   tc.format,
+						"voice":    voice,
+					},
+				}
+
 				// Enhanced validation for speech synthesis
 				expectations := SpeechExpectations(tc.expectMinBytes)
 				expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 
-				requestCtx := context.Background()
-
-				speechResponse, bifrostErr := client.SpeechRequest(requestCtx, request)
-				if bifrostErr != nil {
-					t.Fatalf("❌ SpeechSynthesis_"+tc.name+" request failed: %v", GetErrorMessage(bifrostErr))
+				// Create Speech retry config
+				speechRetryConfig := SpeechRetryConfig{
+					MaxAttempts: retryConfig.MaxAttempts,
+					BaseDelay:   retryConfig.BaseDelay,
+					MaxDelay:    retryConfig.MaxDelay,
+					Conditions:  []SpeechRetryCondition{}, // Add specific speech retry conditions as needed
+					OnRetry:     retryConfig.OnRetry,
+					OnFinalFail: retryConfig.OnFinalFail,
 				}
 
-				// Validate using the new validation framework
-				result := ValidateSpeechResponse(t, speechResponse, bifrostErr, expectations, "SpeechSynthesis_"+tc.name)
-				if !result.Passed {
-					t.Fatalf("❌ Speech synthesis validation failed: %v", result.Errors)
+				requestCtx := context.Background()
+
+				speechResponse, bifrostErr := WithSpeechTestRetry(t, speechRetryConfig, retryContext, expectations, "SpeechSynthesis_"+tc.name, func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
+					return client.SpeechRequest(requestCtx, request)
+				})
+
+				if bifrostErr != nil {
+					t.Fatalf("❌ SpeechSynthesis_"+tc.name+" request failed after retries: %v", GetErrorMessage(bifrostErr))
 				}
 
 				// Additional speech-specific validations (complementary to main validation)
@@ -185,33 +207,39 @@ func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx c
 			expectations := SpeechExpectations(5000) // HD should produce substantial audio
 			expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 
+			// Create Speech retry config
+			speechRetryConfig := SpeechRetryConfig{
+				MaxAttempts: retryConfig.MaxAttempts,
+				BaseDelay:   retryConfig.BaseDelay,
+				MaxDelay:    retryConfig.MaxDelay,
+				Conditions:  []SpeechRetryCondition{}, // Add specific speech retry conditions as needed
+				OnRetry:     retryConfig.OnRetry,
+				OnFinalFail: retryConfig.OnFinalFail,
+			}
+
 			requestCtx := context.Background()
 
-			responseFormat, bifrostErr := WithTestRetry(t, retryConfig, retryContext, expectations, "SpeechSynthesis_HD", func() (*schemas.BifrostResponse, *schemas.BifrostError) {
-				c, err := client.SpeechRequest(requestCtx, request)
-				if err != nil {
-					return nil, err
-				}
-				return &schemas.BifrostResponse{SpeechResponse: c}, nil
+			speechResponse, bifrostErr := WithSpeechTestRetry(t, speechRetryConfig, retryContext, expectations, "SpeechSynthesis_HD", func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
+				return client.SpeechRequest(requestCtx, request)
 			})
 			if bifrostErr != nil {
 				t.Fatalf("❌ SpeechSynthesis_HD request failed after retries: %v", GetErrorMessage(bifrostErr))
 			}
 
-			if responseFormat.SpeechResponse == nil || responseFormat.SpeechResponse.Audio == nil {
+			if speechResponse == nil || speechResponse.Audio == nil {
 				t.Fatal("HD speech synthesis response missing audio data")
 			}
 
-			audioSize := len(responseFormat.SpeechResponse.Audio)
+			audioSize := len(speechResponse.Audio)
 			if audioSize < 5000 {
 				t.Fatalf("HD audio data too small: got %d bytes, expected at least 5000", audioSize)
 			}
 
-			if responseFormat.SpeechResponse.ExtraFields.ModelRequested != testConfig.SpeechSynthesisModel {
-				t.Logf("⚠️ Expected HD model, got: %s", responseFormat.SpeechResponse.ExtraFields.ModelRequested)
+			if speechResponse.ExtraFields.ModelRequested != testConfig.SpeechSynthesisModel {
+				t.Logf("⚠️ Expected HD model, got: %s", speechResponse.ExtraFields.ModelRequested)
 			}
 
-			t.Logf("✅ HD speech synthesis successful: %d bytes generated", len(responseFormat.SpeechResponse.Audio))
+			t.Logf("✅ HD speech synthesis successful: %d bytes generated", len(speechResponse.Audio))
 		})
 
 		t.Run("AllVoiceOptions", func(t *testing.T) {
@@ -248,15 +276,41 @@ func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx c
 					expectations := SpeechExpectations(500)
 					expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 
-					requestCtx := context.Background()
-
-					speechResponse, bifrostErr := client.SpeechRequest(requestCtx, request)
-					if bifrostErr != nil {
-						t.Fatalf("❌ SpeechSynthesis_Voice_"+voiceType+" request failed: %v", GetErrorMessage(bifrostErr))
+					// Use retry framework for voice test
+					voiceRetryConfig := GetTestRetryConfigForScenario("SpeechSynthesis", testConfig)
+					voiceRetryContext := TestRetryContext{
+						ScenarioName: "SpeechSynthesis_VoiceType_" + voiceType,
+						ExpectedBehavior: map[string]interface{}{
+							"should_generate_audio": true,
+						},
+						TestMetadata: map[string]interface{}{
+							"provider":   testConfig.Provider,
+							"model":      testConfig.SpeechSynthesisModel,
+							"voice_type": voiceType,
+							"voice":      voice,
+						},
+					}
+					voiceSpeechRetryConfig := SpeechRetryConfig{
+						MaxAttempts: voiceRetryConfig.MaxAttempts,
+						BaseDelay:   voiceRetryConfig.BaseDelay,
+						MaxDelay:    voiceRetryConfig.MaxDelay,
+						Conditions:  []SpeechRetryCondition{},
+						OnRetry:     voiceRetryConfig.OnRetry,
+						OnFinalFail: voiceRetryConfig.OnFinalFail,
 					}
 
-					if speechResponse.Audio == nil {
-						t.Fatalf("Voice %s (%s) missing audio data", voice, voiceType)
+					requestCtx := context.Background()
+
+					speechResponse, bifrostErr := WithSpeechTestRetry(t, voiceSpeechRetryConfig, voiceRetryContext, expectations, "SpeechSynthesis_VoiceType_"+voiceType, func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
+						return client.SpeechRequest(requestCtx, request)
+					})
+
+					if bifrostErr != nil {
+						t.Fatalf("❌ SpeechSynthesis_Voice_"+voiceType+" request failed after retries: %v", GetErrorMessage(bifrostErr))
+					}
+
+					if speechResponse == nil || speechResponse.Audio == nil {
+						t.Fatalf("Voice %s (%s) missing audio data after retries", voice, voiceType)
 					}
 
 					audioSize := len(speechResponse.Audio)

@@ -72,19 +72,40 @@ func RunEmbeddingTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context
 			Fallbacks: testConfig.EmbeddingFallbacks,
 		}
 
+		// Use retry framework with enhanced validation
+		retryConfig := GetTestRetryConfigForScenario("Embedding", testConfig)
+		retryContext := TestRetryContext{
+			ScenarioName: "Embedding",
+			ExpectedBehavior: map[string]interface{}{
+				"should_return_embeddings":  true,
+				"should_have_valid_vectors": true,
+			},
+			TestMetadata: map[string]interface{}{
+				"provider": testConfig.Provider,
+				"model":    testConfig.EmbeddingModel,
+			},
+		}
+
 		// Enhanced embedding validation
 		expectations := EmbeddingExpectations(testTexts)
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 
-		embeddingResponse, bifrostErr := client.EmbeddingRequest(ctx, request)
-		if bifrostErr != nil {
-			t.Fatalf("❌ Embedding request failed: %v", GetErrorMessage(bifrostErr))
+		// Create Embedding retry config
+		embeddingRetryConfig := EmbeddingRetryConfig{
+			MaxAttempts: retryConfig.MaxAttempts,
+			BaseDelay:   retryConfig.BaseDelay,
+			MaxDelay:    retryConfig.MaxDelay,
+			Conditions:  []EmbeddingRetryCondition{}, // Add specific embedding retry conditions as needed
+			OnRetry:     retryConfig.OnRetry,
+			OnFinalFail: retryConfig.OnFinalFail,
 		}
 
-		// Validate using the new validation framework
-		result := ValidateEmbeddingResponse(t, embeddingResponse, bifrostErr, expectations, "Embedding")
-		if !result.Passed {
-			t.Fatalf("❌ Embedding validation failed: %v", result.Errors)
+		embeddingResponse, bifrostErr := WithEmbeddingTestRetry(t, embeddingRetryConfig, retryContext, expectations, "Embedding", func() (*schemas.BifrostEmbeddingResponse, *schemas.BifrostError) {
+			return client.EmbeddingRequest(ctx, request)
+		})
+
+		if bifrostErr != nil {
+			t.Fatalf("❌ Embedding request failed after retries: %v", GetErrorMessage(bifrostErr))
 		}
 
 		// Additional embedding-specific validation (complementary to the main validation)

@@ -1,0 +1,4 @@
+- fix: bedrock responses streaming last chunk indicator fixes
+- fix: gemini nil content check fixes
+- fix: handle responses.incomplete event in openai responses streaming
+- enhancements: provider tests enhancements

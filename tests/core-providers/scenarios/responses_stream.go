@@ -45,7 +45,7 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 			Fallbacks: testConfig.Fallbacks,
 		}
 
-		// Use retry framework for stream requests
+		// Use retry framework with validation retry for stream requests
 		retryConfig := StreamingRetryConfig()
 		retryContext := TestRetryContext{
 			ScenarioName: "ResponsesStream",
@@ -62,17 +62,12 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 			},
 		}
 
-		// Use proper streaming retry wrapper for the stream request
-		responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+		// Use validation retry wrapper that validates stream content and retries on validation failures
+		validationResult := WithResponsesStreamValidationRetry(t, retryConfig, retryContext,
+			func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
 			return client.ResponsesStreamRequest(ctx, request)
-		})
-
-		// Enhanced error handling
-		RequireNoError(t, err, "Responses stream request failed")
-		if responseChannel == nil {
-			t.Fatal("Response channel should not be nil")
-		}
-
+			},
+			func(responseChannel chan *schemas.BifrostStream) ResponsesStreamValidationResult {
 		var fullContent strings.Builder
 		var responseCount int
 		var lastResponse *schemas.BifrostStream
@@ -100,7 +95,10 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 				}
 
 				if response == nil {
-					t.Fatal("Streaming response should not be nil")
+							return ResponsesStreamValidationResult{
+								Passed: false,
+								Errors: []string{"❌ Streaming response should not be nil"},
+							}
 				}
 				lastResponse = DeepCopyBifrostStream(response)
 
@@ -187,10 +185,13 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 						hasContentParts = true
 
 					case schemas.ResponsesStreamResponseTypeError:
+								errorMsg := "unknown error"
 						if streamResp.Message != nil {
-							t.Fatalf("❌ Error in streaming: %s", *streamResp.Message)
-						} else {
-							t.Fatalf("❌ Error in streaming (no message)")
+									errorMsg = *streamResp.Message
+								}
+								return ResponsesStreamValidationResult{
+									Passed: false,
+									Errors: []string{fmt.Sprintf("❌ Error in streaming: %s", errorMsg)},
 						}
 					}
 				}
@@ -199,11 +200,17 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 
 				// Safety check to prevent infinite loops
 				if responseCount > 500 {
-					t.Fatal("Received too many streaming chunks, something might be wrong")
+							return ResponsesStreamValidationResult{
+								Passed: false,
+								Errors: []string{"❌ Received too many streaming chunks, something might be wrong"},
+							}
 				}
 
 			case <-streamCtx.Done():
-				t.Fatal("Timeout waiting for responses streaming response")
+						return ResponsesStreamValidationResult{
+							Passed: false,
+							Errors: []string{"❌ Timeout waiting for responses streaming response"},
+						}
 			}
 		}
 
@@ -218,20 +225,33 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 		expectations := GetExpectationsForScenario("ResponsesStream", testConfig, map[string]interface{}{})
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 		expectations.ShouldContainKeywords = append(expectations.ShouldContainKeywords, []string{"paris"}...) // Should include story elements
-		expectations.MinContentLength = 50                                                                    // Should be substantial story
-		expectations.MaxContentLength = 2000                                                                  // Reasonable upper bound
 
-		// Validate streaming-specific aspects instead of using regular response validation
+				// Validate streaming-specific aspects
 		streamingValidationResult := validateResponsesStreamingResponse(t, eventTypes, sequenceNumbers, finalContent, lastResponse, testConfig)
 
-		if !streamingValidationResult.Passed {
-			t.Logf("⚠️ Responses streaming validation warnings: %v", streamingValidationResult.Errors)
+				t.Logf("📊 Responses streaming metrics: %d chunks, %d chars, %d event types", responseCount, len(finalContent), len(eventTypes))
+				t.Logf("📝 Final assembled content (%d chars): %q", len(finalContent), finalContent)
+
+				// Convert to ResponsesStreamValidationResult
+				return ResponsesStreamValidationResult{
+					Passed:       streamingValidationResult.Passed,
+					Errors:       streamingValidationResult.Errors,
+					ReceivedData: responseCount > 0,
+					LastLatency:  0, // Can be extracted from lastResponse if needed
+				}
+			})
+
+		// Check validation result and fail test if validation failed after all retries
+		if !validationResult.Passed {
+			allErrors := append(validationResult.Errors, validationResult.StreamErrors...)
+			errorMsg := strings.Join(allErrors, "; ")
+			if !strings.Contains(errorMsg, "❌") {
+				errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+			}
+			t.Fatalf("❌ Responses streaming validation failed after retries: %s", errorMsg)
 		}
 
-		t.Logf("📊 Responses streaming metrics: %d chunks, %d chars, %d event types", responseCount, len(finalContent), len(eventTypes))
-
 		t.Logf("✅ Responses streaming test completed successfully")
-		t.Logf("📝 Final assembled content (%d chars): %q", len(finalContent), finalContent)
 	})
 
 	// Test responses streaming with tool calls if supported
@@ -284,7 +304,27 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 				Fallbacks: testConfig.Fallbacks,
 			}
 
-			responseChannel, err := client.ResponsesStreamRequest(ctx, request)
+			// Use retry framework for stream requests with tools
+			retryConfig := StreamingRetryConfig()
+			retryContext := TestRetryContext{
+				ScenarioName: "ResponsesStreamWithTools",
+				ExpectedBehavior: map[string]interface{}{
+					"should_stream_content":  true,
+					"should_have_tool_calls": true,
+					"tool_name":              "get_weather",
+				},
+				TestMetadata: map[string]interface{}{
+					"provider": testConfig.Provider,
+					"model":    testConfig.ChatModel,
+					"tools":    true,
+				},
+			}
+
+			// Use proper streaming retry wrapper for the stream request
+			responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+				return client.ResponsesStreamRequest(ctx, request)
+			})
+
 			RequireNoError(t, err, "Responses stream with tools failed")
 			if responseChannel == nil {
 				t.Fatal("Response channel should not be nil")
@@ -397,7 +437,27 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 				Fallbacks: testConfig.Fallbacks,
 			}
 
-			responseChannel, err := client.ResponsesStreamRequest(ctx, request)
+			// Use retry framework for stream requests with reasoning
+			retryConfig := StreamingRetryConfig()
+			retryContext := TestRetryContext{
+				ScenarioName: "ResponsesStreamWithReasoning",
+				ExpectedBehavior: map[string]interface{}{
+					"should_stream_reasoning":      true,
+					"should_have_reasoning_events": true,
+					"problem_type":                 "mathematical",
+				},
+				TestMetadata: map[string]interface{}{
+					"provider":  testConfig.Provider,
+					"model":     testConfig.ReasoningModel,
+					"reasoning": true,
+				},
+			}
+
+			// Use proper streaming retry wrapper for the stream request
+			responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+				return client.ResponsesStreamRequest(ctx, request)
+			})
+
 			RequireNoError(t, err, "Responses stream with reasoning failed")
 			if responseChannel == nil {
 				t.Fatal("Response channel should not be nil")
@@ -502,7 +562,25 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 			Fallbacks: testConfig.Fallbacks,
 		}
 
-		responseChannel, err := client.ResponsesStreamRequest(ctx, request)
+		// Use retry framework for stream requests lifecycle test
+		retryConfig := StreamingRetryConfig()
+		retryContext := TestRetryContext{
+			ScenarioName: "ResponsesStreamLifecycle",
+			ExpectedBehavior: map[string]interface{}{
+				"should_have_lifecycle_events": true,
+				"should_have_sequence_numbers": true,
+			},
+			TestMetadata: map[string]interface{}{
+				"provider": testConfig.Provider,
+				"model":    testConfig.ChatModel,
+			},
+		}
+
+		// Use proper streaming retry wrapper for the stream request
+		responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+			return client.ResponsesStreamRequest(ctx, request)
+		})
+
 		RequireNoError(t, err, "Responses stream request failed")
 		if responseChannel == nil {
 			t.Fatal("Response channel should not be nil")

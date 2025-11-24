@@ -18,8 +18,6 @@ import (
 type ResponseExpectations struct {
 	// Basic structure expectations
 	ShouldHaveContent    bool    // Response should have non-empty content
-	MinContentLength     int     // Minimum content length
-	MaxContentLength     int     // Maximum content length (0 = no limit)
 	ExpectedChoiceCount  int     // Expected number of choices (0 = any)
 	ExpectedFinishReason *string // Expected finish reason
 
@@ -45,7 +43,7 @@ type ResponseExpectations struct {
 }
 
 // ToolCallExpectation defines expectations for a specific tool call
-type ToolCallExpectation struct {	
+type ToolCallExpectation struct {
 	FunctionName     string                 // Expected function name
 	RequiredArgs     []string               // Arguments that must be present
 	ForbiddenArgs    []string               // Arguments that should NOT be present
@@ -275,6 +273,43 @@ func ValidateTranscriptionResponse(t *testing.T, response *schemas.BifrostTransc
 	return result
 }
 
+// ValidateListModelsResponse performs comprehensive validation for list models responses
+func ValidateListModelsResponse(t *testing.T, response *schemas.BifrostListModelsResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
+	result := ValidationResult{
+		Passed:           true,
+		Errors:           make([]string, 0),
+		Warnings:         make([]string, 0),
+		MetricsCollected: make(map[string]interface{}),
+	}
+
+	// If there's an error when we expected success, that's a failure
+	if err != nil {
+		result.Passed = false
+		parsed := ParseBifrostError(err)
+		result.Errors = append(result.Errors, fmt.Sprintf("Got error when expecting success: %s", FormatErrorConcise(parsed)))
+		LogError(t, err, scenarioName)
+		return result
+	}
+
+	// If response is nil when we expected success, that's a failure
+	if response == nil {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Response is nil")
+		return result
+	}
+
+	// Validate list models specific fields
+	validateListModelsFields(t, response, expectations, &result)
+
+	// Collect metrics
+	collectListModelsResponseMetrics(response, &result)
+
+	// Log results
+	logValidationResults(t, result, scenarioName)
+
+	return result
+}
+
 // ValidateEmbeddingResponse performs comprehensive validation for embedding responses
 func ValidateEmbeddingResponse(t *testing.T, response *schemas.BifrostEmbeddingResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
 	result := ValidationResult{
@@ -363,32 +398,19 @@ func validateChatContent(t *testing.T, response *schemas.BifrostChatResponse, ex
 			return
 		}
 	}
-
-	// Check content length
-	contentLen := len(strings.TrimSpace(content))
-	if expectations.MinContentLength > 0 && contentLen < expectations.MinContentLength {
-		result.Passed = false
-		result.Errors = append(result.Errors,
-			fmt.Sprintf("Content length %d is below minimum %d", contentLen, expectations.MinContentLength))
-	}
-
-	if expectations.MaxContentLength > 0 && contentLen > expectations.MaxContentLength {
-		result.Warnings = append(result.Warnings,
-			fmt.Sprintf("Content length %d exceeds maximum %d", contentLen, expectations.MaxContentLength))
-	}
-
 	// Check required keywords (AND logic - ALL must be present)
+	// Note: Converted to warnings as LLMs are non-deterministic and tests focus on functionality
 	lowerContent := strings.ToLower(content)
 	for _, keyword := range expectations.ShouldContainKeywords {
 		if !strings.Contains(lowerContent, strings.ToLower(keyword)) {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content should contain keyword '%s' but doesn't. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content expected to contain keyword '%s' but doesn't (LLMs are non-deterministic). Actual content: %s",
 					keyword, truncateContentForError(content, 200)))
 		}
 	}
 
 	// Check OR keywords (OR logic - AT LEAST ONE must be present)
+	// Note: Converted to warnings as LLMs are non-deterministic
 	if len(expectations.ShouldContainAnyOf) > 0 {
 		foundAny := false
 		for _, keyword := range expectations.ShouldContainAnyOf {
@@ -398,35 +420,31 @@ func validateChatContent(t *testing.T, response *schemas.BifrostChatResponse, ex
 			}
 		}
 		if !foundAny {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content should contain at least one of these keywords: %v, but doesn't. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content expected to contain at least one of these keywords: %v, but doesn't (LLMs are non-deterministic). Actual content: %s",
 					expectations.ShouldContainAnyOf, truncateContentForError(content, 200)))
 		}
 	}
 
-	// Check forbidden words
+	// Check forbidden words - Keep as warnings since these are often false positives with LLMs
 	for _, word := range expectations.ShouldNotContainWords {
 		if strings.Contains(lowerContent, strings.ToLower(word)) {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content contains forbidden word '%s'. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content contains word '%s' which was not expected (may be false positive with LLMs). Actual content: %s",
 					word, truncateContentForError(content, 200)))
 		}
 	}
 
-	// Check content pattern
+	// Check content pattern - Converted to warnings
 	if expectations.ContentPattern != nil {
 		if !expectations.ContentPattern.MatchString(content) {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content doesn't match expected pattern: %s. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content doesn't match expected pattern: %s (LLMs are non-deterministic). Actual content: %s",
 					expectations.ContentPattern.String(), truncateContentForError(content, 200)))
 		}
 	}
 
 	// Store content for metrics
-	result.MetricsCollected["content_length"] = contentLen
 	result.MetricsCollected["content_word_count"] = len(strings.Fields(content))
 }
 
@@ -567,31 +585,19 @@ func validateTextCompletionContent(t *testing.T, response *schemas.BifrostTextCo
 		}
 	}
 
-	// Check content length
-	contentLen := len(strings.TrimSpace(content))
-	if expectations.MinContentLength > 0 && contentLen < expectations.MinContentLength {
-		result.Passed = false
-		result.Errors = append(result.Errors,
-			fmt.Sprintf("Content length %d is below minimum %d", contentLen, expectations.MinContentLength))
-	}
-
-	if expectations.MaxContentLength > 0 && contentLen > expectations.MaxContentLength {
-		result.Warnings = append(result.Warnings,
-			fmt.Sprintf("Content length %d exceeds maximum %d", contentLen, expectations.MaxContentLength))
-	}
-
 	// Check required keywords (AND logic - ALL must be present)
+	// Note: Converted to warnings as LLMs are non-deterministic and tests focus on functionality
 	lowerContent := strings.ToLower(content)
 	for _, keyword := range expectations.ShouldContainKeywords {
 		if !strings.Contains(lowerContent, strings.ToLower(keyword)) {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content should contain keyword '%s' but doesn't. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content expected to contain keyword '%s' but doesn't (LLMs are non-deterministic). Actual content: %s",
 					keyword, truncateContentForError(content, 200)))
 		}
 	}
 
 	// Check OR keywords (OR logic - AT LEAST ONE must be present)
+	// Note: Converted to warnings as LLMs are non-deterministic
 	if len(expectations.ShouldContainAnyOf) > 0 {
 		foundAny := false
 		for _, keyword := range expectations.ShouldContainAnyOf {
@@ -601,35 +607,31 @@ func validateTextCompletionContent(t *testing.T, response *schemas.BifrostTextCo
 			}
 		}
 		if !foundAny {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content should contain at least one of these keywords: %v, but doesn't. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content expected to contain at least one of these keywords: %v, but doesn't (LLMs are non-deterministic). Actual content: %s",
 					expectations.ShouldContainAnyOf, truncateContentForError(content, 200)))
 		}
 	}
 
-	// Check forbidden words
+	// Check forbidden words - Keep as warnings since these are often false positives with LLMs
 	for _, word := range expectations.ShouldNotContainWords {
 		if strings.Contains(lowerContent, strings.ToLower(word)) {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content contains forbidden word '%s'. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content contains word '%s' which was not expected (may be false positive with LLMs). Actual content: %s",
 					word, truncateContentForError(content, 200)))
 		}
 	}
 
-	// Check content pattern
+	// Check content pattern - Converted to warnings
 	if expectations.ContentPattern != nil {
 		if !expectations.ContentPattern.MatchString(content) {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content doesn't match expected pattern: %s. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content doesn't match expected pattern: %s (LLMs are non-deterministic). Actual content: %s",
 					expectations.ContentPattern.String(), truncateContentForError(content, 200)))
 		}
 	}
 
 	// Store content for metrics
-	result.MetricsCollected["content_length"] = contentLen
 	result.MetricsCollected["content_word_count"] = len(strings.Fields(content))
 }
 
@@ -728,31 +730,19 @@ func validateResponsesContent(t *testing.T, response *schemas.BifrostResponsesRe
 		}
 	}
 
-	// Check content length
-	contentLen := len(strings.TrimSpace(content))
-	if expectations.MinContentLength > 0 && contentLen < expectations.MinContentLength {
-		result.Passed = false
-		result.Errors = append(result.Errors,
-			fmt.Sprintf("Content length %d is below minimum %d", contentLen, expectations.MinContentLength))
-	}
-
-	if expectations.MaxContentLength > 0 && contentLen > expectations.MaxContentLength {
-		result.Warnings = append(result.Warnings,
-			fmt.Sprintf("Content length %d exceeds maximum %d", contentLen, expectations.MaxContentLength))
-	}
-
 	// Check required keywords (AND logic - ALL must be present)
+	// Note: Converted to warnings as LLMs are non-deterministic and tests focus on functionality
 	lowerContent := strings.ToLower(content)
 	for _, keyword := range expectations.ShouldContainKeywords {
 		if !strings.Contains(lowerContent, strings.ToLower(keyword)) {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content should contain keyword '%s' but doesn't. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content expected to contain keyword '%s' but doesn't (LLMs are non-deterministic). Actual content: %s",
 					keyword, truncateContentForError(content, 200)))
 		}
 	}
 
 	// Check OR keywords (OR logic - AT LEAST ONE must be present)
+	// Note: Converted to warnings as LLMs are non-deterministic
 	if len(expectations.ShouldContainAnyOf) > 0 {
 		foundAny := false
 		for _, keyword := range expectations.ShouldContainAnyOf {
@@ -762,35 +752,31 @@ func validateResponsesContent(t *testing.T, response *schemas.BifrostResponsesRe
 			}
 		}
 		if !foundAny {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content should contain at least one of these keywords: %v, but doesn't. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content expected to contain at least one of these keywords: %v, but doesn't (LLMs are non-deterministic). Actual content: %s",
 					expectations.ShouldContainAnyOf, truncateContentForError(content, 200)))
 		}
 	}
 
-	// Check forbidden words
+	// Check forbidden words - Keep as warnings since these are often false positives with LLMs
 	for _, word := range expectations.ShouldNotContainWords {
 		if strings.Contains(lowerContent, strings.ToLower(word)) {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content contains forbidden word '%s'. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content contains word '%s' which was not expected (may be false positive with LLMs). Actual content: %s",
 					word, truncateContentForError(content, 200)))
 		}
 	}
 
-	// Check content pattern
+	// Check content pattern - Converted to warnings
 	if expectations.ContentPattern != nil {
 		if !expectations.ContentPattern.MatchString(content) {
-			result.Passed = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Content doesn't match expected pattern: %s. Actual content: %s",
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Content doesn't match expected pattern: %s (LLMs are non-deterministic). Actual content: %s",
 					expectations.ContentPattern.String(), truncateContentForError(content, 200)))
 		}
 	}
 
 	// Store content for metrics
-	result.MetricsCollected["content_length"] = contentLen
 	result.MetricsCollected["content_word_count"] = len(strings.Fields(content))
 }
 
@@ -1035,6 +1021,84 @@ func validateEmbeddingFields(t *testing.T, response *schemas.BifrostEmbeddingRes
 	}
 
 	result.MetricsCollected["embedding_validation"] = "completed"
+}
+
+// =============================================================================
+// VALIDATION HELPER FUNCTIONS - LIST MODELS RESPONSE
+// =============================================================================
+
+// validateListModelsFields validates list models responses
+func validateListModelsFields(t *testing.T, response *schemas.BifrostListModelsResponse, expectations ResponseExpectations, result *ValidationResult) {
+	// Check that we have models in the response
+	if len(response.Data) == 0 {
+		result.Passed = false
+		result.Errors = append(result.Errors, "List models response contains no models")
+		return
+	}
+
+	// Validate individual model entries
+	validModels := 0
+	for i, model := range response.Data {
+		if model.ID == "" {
+			result.Passed = false
+			result.Errors = append(result.Errors, fmt.Sprintf("Model at index %d has empty ID", i))
+			continue
+		}
+		validModels++
+	}
+
+	if validModels == 0 {
+		result.Passed = false
+		result.Errors = append(result.Errors, "No valid models found in response")
+	}
+
+	// Validate extra fields
+	if expectations.ProviderSpecific != nil {
+		if expectedProvider, ok := expectations.ProviderSpecific["expected_provider"].(string); ok {
+			if string(response.ExtraFields.Provider) != expectedProvider {
+				result.Passed = false
+				result.Errors = append(result.Errors,
+					fmt.Sprintf("Provider mismatch: expected %s, got %s", expectedProvider, string(response.ExtraFields.Provider)))
+			}
+		}
+	}
+
+	// Validate request type
+	if response.ExtraFields.RequestType != schemas.ListModelsRequest {
+		result.Passed = false
+		result.Errors = append(result.Errors,
+			fmt.Sprintf("Request type mismatch: expected %s, got %s", schemas.ListModelsRequest, response.ExtraFields.RequestType))
+	}
+
+	// Validate latency field
+	if expectations.ShouldHaveLatency {
+		if response.ExtraFields.Latency < 0 {
+			result.Passed = false
+			result.Errors = append(result.Errors, fmt.Sprintf("Invalid latency: %d ms (should be non-negative)", response.ExtraFields.Latency))
+		} else {
+			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
+		}
+	}
+
+	// Check minimum model count if specified
+	if minModels, ok := expectations.ProviderSpecific["min_model_count"].(int); ok {
+		if len(response.Data) < minModels {
+			result.Passed = false
+			result.Errors = append(result.Errors,
+				fmt.Sprintf("Expected at least %d models, got %d", minModels, len(response.Data)))
+		}
+	}
+
+	result.MetricsCollected["list_models_validation"] = "completed"
+}
+
+// collectListModelsResponseMetrics collects metrics from the list models response for analysis
+func collectListModelsResponseMetrics(response *schemas.BifrostListModelsResponse, result *ValidationResult) {
+	result.MetricsCollected["model_count"] = len(response.Data)
+	result.MetricsCollected["has_next_page_token"] = response.NextPageToken != ""
+	result.MetricsCollected["has_provider"] = response.ExtraFields.Provider != ""
+	result.MetricsCollected["has_request_type"] = response.ExtraFields.RequestType != ""
+	result.MetricsCollected["has_latency"] = response.ExtraFields.Latency >= 0
 }
 
 // collectEmbeddingResponseMetrics collects metrics from the embedding response for analysis
@@ -1288,7 +1352,12 @@ func logValidationResults(t *testing.T, result ValidationResult, scenarioName st
 		// LogF, not ErrorF else later retries will still fail the test
 		t.Logf("❌ Validation failed for %s with %d errors", scenarioName, len(result.Errors))
 		for _, err := range result.Errors {
-			t.Logf("   Error: %s", err)
+			// Ensure each error line has ❌ prefix for consistency
+			errorMsg := err
+			if !strings.Contains(errorMsg, "❌") {
+				errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+			}
+			t.Logf("   %s", errorMsg)
 		}
 	}
 

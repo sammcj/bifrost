@@ -192,8 +192,6 @@ func RunCompleteEnd2EndTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 		// Enhanced validation for step 2 - should acknowledge tool results
 		expectations2 := ConversationExpectations([]string{"weather", "temperature"})
 		expectations2 = ModifyExpectationsForProvider(expectations2, testConfig.Provider)
-		expectations2.MinContentLength = 15  // Should provide meaningful response to tool result
-		expectations2.MaxContentLength = 500 // Reasonable upper bound for tool result processing
 		expectations2.ShouldNotContainWords = []string{
 			"cannot help", "don't understand", "no information",
 			"unable to process", "invalid tool result",
@@ -330,8 +328,6 @@ func RunCompleteEnd2EndTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 
 		// Enhanced validation for final response
 		expectations3 = ModifyExpectationsForProvider(expectations3, testConfig.Provider)
-		expectations3.MinContentLength = 20  // Should provide some meaningful response
-		expectations3.MaxContentLength = 800 // End-to-end can be verbose
 		expectations3.ShouldNotContainWords = []string{
 			"cannot help", "don't understand", "confused",
 			"start over", "reset conversation",

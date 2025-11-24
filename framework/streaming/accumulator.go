@@ -243,7 +243,7 @@ func (a *Accumulator) accumulateToolCallsInMessage(message *schemas.ChatMessage,
 			}
 			toolCallToModify = &schemas.ChatAssistantMessageToolCall{
 				Index: uint16(len(existingToolCalls)),
-				ID: deltaToolCall.ID,
+				ID:    deltaToolCall.ID,
 				Function: schemas.ChatAssistantMessageToolCallFunction{
 					Name:      deltaToolCall.Function.Name,
 					Arguments: args,
@@ -269,10 +269,10 @@ func (a *Accumulator) appendContentToMessage(message *schemas.ChatMessage, newCo
 	if message == nil {
 		return
 	}
-	if message.Content.ContentStr != nil {
+	if message.Content != nil && message.Content.ContentStr != nil {
 		// Append to existing string content
 		*message.Content.ContentStr += newContent
-	} else if message.Content.ContentBlocks != nil {
+	} else if message.Content != nil && message.Content.ContentBlocks != nil {
 		// Find the last text block and append, or create new one
 		blocks := message.Content.ContentBlocks
 		if len(blocks) > 0 && blocks[len(blocks)-1].Type == schemas.ChatContentBlockTypeText && blocks[len(blocks)-1].Text != nil {
@@ -287,6 +287,9 @@ func (a *Accumulator) appendContentToMessage(message *schemas.ChatMessage, newCo
 			message.Content.ContentBlocks = blocks
 		}
 	} else {
+		if message.Content == nil {
+			message.Content = &schemas.ChatMessageContent{}
+		}
 		// Initialize with string content
 		message.Content.ContentStr = &newContent
 	}

@@ -2,13 +2,13 @@ package scenarios
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/maximhq/bifrost/tests/core-providers/config"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	bifrost "github.com/maximhq/bifrost/core"
@@ -77,10 +77,38 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Con
 					Fallbacks: testConfig.TranscriptionFallbacks,
 				}
 
-				ttsResponse, err := client.SpeechRequest(ctx, ttsRequest)
-				RequireNoError(t, err, "TTS generation failed for round-trip test")
+				// Use retry framework for TTS generation
+				ttsRetryConfig := GetTestRetryConfigForScenario("SpeechSynthesis", testConfig)
+				ttsRetryContext := TestRetryContext{
+					ScenarioName: "Transcription_RoundTrip_TTS_" + tc.name,
+					ExpectedBehavior: map[string]interface{}{
+						"should_generate_audio": true,
+					},
+					TestMetadata: map[string]interface{}{
+						"provider": testConfig.Provider,
+						"model":    testConfig.SpeechSynthesisModel,
+						"format":   tc.format,
+					},
+				}
+				ttsExpectations := SpeechExpectations(100) // Minimum expected bytes
+				ttsExpectations = ModifyExpectationsForProvider(ttsExpectations, testConfig.Provider)
+				speechRetryConfig := SpeechRetryConfig{
+					MaxAttempts: ttsRetryConfig.MaxAttempts,
+					BaseDelay:   ttsRetryConfig.BaseDelay,
+					MaxDelay:    ttsRetryConfig.MaxDelay,
+					Conditions:  []SpeechRetryCondition{},
+					OnRetry:     ttsRetryConfig.OnRetry,
+					OnFinalFail: ttsRetryConfig.OnFinalFail,
+				}
+
+				ttsResponse, err := WithSpeechTestRetry(t, speechRetryConfig, ttsRetryContext, ttsExpectations, "Transcription_RoundTrip_TTS_"+tc.name, func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
+					return client.SpeechRequest(ctx, ttsRequest)
+				})
+				if err != nil {
+					t.Fatalf("❌ TTS generation failed for round-trip test after retries: %v", GetErrorMessage(err))
+				}
 				if ttsResponse == nil || len(ttsResponse.Audio) == 0 {
-					t.Fatal("TTS returned invalid or empty audio for round-trip test")
+					t.Fatal("❌ TTS returned invalid or empty audio for round-trip test after retries")
 				}
 
 				// Save temp audio file
@@ -111,19 +139,41 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Con
 					Fallbacks: testConfig.TranscriptionFallbacks,
 				}
 
+				// Use retry framework for transcription
+				retryConfig := GetTestRetryConfigForScenario("Transcription", testConfig)
+				retryContext := TestRetryContext{
+					ScenarioName: "Transcription_RoundTrip_" + tc.name,
+					ExpectedBehavior: map[string]interface{}{
+						"should_transcribe_audio": true,
+						"round_trip_test":         true,
+					},
+					TestMetadata: map[string]interface{}{
+						"provider": testConfig.Provider,
+						"model":    testConfig.TranscriptionModel,
+						"format":   tc.format,
+					},
+				}
+
 				// Enhanced validation for transcription
 				expectations := TranscriptionExpectations(10) // Expect at least some content
 				expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 
-				transcriptionResponse, bifrostErr := client.TranscriptionRequest(ctx, transcriptionRequest)
-				if bifrostErr != nil {
-					t.Fatalf("❌ Transcription_RoundTrip_"+tc.name+" request failed: %v", GetErrorMessage(bifrostErr))
+				// Create Transcription retry config
+				transcriptionRetryConfig := TranscriptionRetryConfig{
+					MaxAttempts: retryConfig.MaxAttempts,
+					BaseDelay:   retryConfig.BaseDelay,
+					MaxDelay:    retryConfig.MaxDelay,
+					Conditions:  []TranscriptionRetryCondition{}, // Add specific transcription retry conditions as needed
+					OnRetry:     retryConfig.OnRetry,
+					OnFinalFail: retryConfig.OnFinalFail,
 				}
 
-				// Validate using the new validation framework
-				result := ValidateTranscriptionResponse(t, transcriptionResponse, bifrostErr, expectations, "Transcription_RoundTrip_"+tc.name)
-				if !result.Passed {
-					t.Fatalf("❌ Transcription validation failed: %v", result.Errors)
+				transcriptionResponse, bifrostErr := WithTranscriptionTestRetry(t, transcriptionRetryConfig, retryContext, expectations, "Transcription_RoundTrip_"+tc.name, func() (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
+					return client.TranscriptionRequest(ctx, transcriptionRequest)
+				})
+
+				if bifrostErr != nil {
+					t.Fatalf("❌ Transcription_RoundTrip_"+tc.name+" request failed after retries: %v", GetErrorMessage(bifrostErr))
 				}
 
 				// Validate round-trip transcription (complementary to main validation)
@@ -178,10 +228,45 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Con
 						Fallbacks: testConfig.TranscriptionFallbacks,
 					}
 
-					response, err := client.TranscriptionRequest(ctx, request)
-					require.Nilf(t, err, "Custom transcription failed: %v", err)
-					require.NotNil(t, response, "Custom transcription returned nil response")
-					assert.NotEmpty(t, response.Text)
+					// Use retry framework for custom transcription
+					customRetryConfig := GetTestRetryConfigForScenario("Transcription", testConfig)
+					customRetryContext := TestRetryContext{
+						ScenarioName: "Transcription_Custom_" + tc.name,
+						ExpectedBehavior: map[string]interface{}{
+							"should_transcribe_audio": true,
+						},
+						TestMetadata: map[string]interface{}{
+							"provider": testConfig.Provider,
+							"model":    testConfig.TranscriptionModel,
+						},
+					}
+					customExpectations := TranscriptionExpectations(5)
+					customExpectations = ModifyExpectationsForProvider(customExpectations, testConfig.Provider)
+					customTranscriptionRetryConfig := TranscriptionRetryConfig{
+						MaxAttempts: customRetryConfig.MaxAttempts,
+						BaseDelay:   customRetryConfig.BaseDelay,
+						MaxDelay:    customRetryConfig.MaxDelay,
+						Conditions:  []TranscriptionRetryCondition{},
+						OnRetry:     customRetryConfig.OnRetry,
+						OnFinalFail: customRetryConfig.OnFinalFail,
+					}
+
+					response, err := WithTranscriptionTestRetry(t, customTranscriptionRetryConfig, customRetryContext, customExpectations, "Transcription_Custom_"+tc.name, func() (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
+						return client.TranscriptionRequest(ctx, request)
+					})
+					if err != nil {
+						errorMsg := GetErrorMessage(err)
+						if !strings.Contains(errorMsg, "❌") {
+							errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+						}
+						t.Fatalf("❌ Custom transcription failed after retries: %s", errorMsg)
+					}
+					if response == nil {
+						t.Fatalf("❌ Custom transcription returned nil response after retries")
+					}
+					if response.Text == "" {
+						t.Fatalf("❌ Custom transcription returned empty text after retries")
+					}
 
 					t.Logf("✅ Custom transcription successful: '%s' → '%s'", tc.text, response.Text)
 				})
@@ -225,12 +310,46 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx con
 						Fallbacks: testConfig.TranscriptionFallbacks,
 					}
 
-					response, err := client.TranscriptionRequest(ctx, request)
-					require.Nilf(t, err, "Transcription failed for format %s: %v", format, err)
-					require.NotNil(t, response, "Transcription returned nil response for format %s", format)
+					// Use retry framework for format test
+					formatRetryConfig := GetTestRetryConfigForScenario("Transcription", testConfig)
+					formatRetryContext := TestRetryContext{
+						ScenarioName: "Transcription_Format_" + format,
+						ExpectedBehavior: map[string]interface{}{
+							"should_transcribe_audio": true,
+						},
+						TestMetadata: map[string]interface{}{
+							"provider": testConfig.Provider,
+							"model":    testConfig.TranscriptionModel,
+							"format":   format,
+						},
+					}
+					formatExpectations := TranscriptionExpectations(5)
+					formatExpectations = ModifyExpectationsForProvider(formatExpectations, testConfig.Provider)
+					formatTranscriptionRetryConfig := TranscriptionRetryConfig{
+						MaxAttempts: formatRetryConfig.MaxAttempts,
+						BaseDelay:   formatRetryConfig.BaseDelay,
+						MaxDelay:    formatRetryConfig.MaxDelay,
+						Conditions:  []TranscriptionRetryCondition{},
+						OnRetry:     formatRetryConfig.OnRetry,
+						OnFinalFail: formatRetryConfig.OnFinalFail,
+					}
 
-					// All formats should return some text
-					assert.NotEmpty(t, response.Text)
+					response, err := WithTranscriptionTestRetry(t, formatTranscriptionRetryConfig, formatRetryContext, formatExpectations, "Transcription_Format_"+format, func() (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
+						return client.TranscriptionRequest(ctx, request)
+					})
+					if err != nil {
+						errorMsg := GetErrorMessage(err)
+						if !strings.Contains(errorMsg, "❌") {
+							errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+						}
+						t.Fatalf("❌ Transcription failed for format %s after retries: %s", format, errorMsg)
+					}
+					if response == nil {
+						t.Fatalf("❌ Transcription returned nil response for format %s after retries", format)
+					}
+					if response.Text == "" {
+						t.Fatalf("❌ Transcription returned empty text for format %s after retries", format)
+					}
 
 					t.Logf("✅ Format %s successful: '%s'", format, response.Text)
 				})
@@ -261,10 +380,45 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx con
 				Fallbacks: testConfig.TranscriptionFallbacks,
 			}
 
-			response, err := client.TranscriptionRequest(ctx, request)
-			require.Nilf(t, err, "Advanced transcription failed: %v", err)
-			require.NotNil(t, response, "Advanced transcription returned nil response")
-			assert.NotEmpty(t, response.Text)
+			// Use retry framework for advanced transcription
+			advancedRetryConfig := GetTestRetryConfigForScenario("Transcription", testConfig)
+			advancedRetryContext := TestRetryContext{
+				ScenarioName: "Transcription_Advanced_CustomParams",
+				ExpectedBehavior: map[string]interface{}{
+					"should_transcribe_audio": true,
+				},
+				TestMetadata: map[string]interface{}{
+					"provider": testConfig.Provider,
+					"model":    testConfig.TranscriptionModel,
+				},
+			}
+			advancedExpectations := TranscriptionExpectations(5)
+			advancedExpectations = ModifyExpectationsForProvider(advancedExpectations, testConfig.Provider)
+			advancedTranscriptionRetryConfig := TranscriptionRetryConfig{
+				MaxAttempts: advancedRetryConfig.MaxAttempts,
+				BaseDelay:   advancedRetryConfig.BaseDelay,
+				MaxDelay:    advancedRetryConfig.MaxDelay,
+				Conditions:  []TranscriptionRetryCondition{},
+				OnRetry:     advancedRetryConfig.OnRetry,
+				OnFinalFail: advancedRetryConfig.OnFinalFail,
+			}
+
+			response, err := WithTranscriptionTestRetry(t, advancedTranscriptionRetryConfig, advancedRetryContext, advancedExpectations, "Transcription_Advanced_CustomParams", func() (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
+				return client.TranscriptionRequest(ctx, request)
+			})
+			if err != nil {
+				errorMsg := GetErrorMessage(err)
+				if !strings.Contains(errorMsg, "❌") {
+					errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+				}
+				t.Fatalf("❌ Advanced transcription failed after retries: %s", errorMsg)
+			}
+			if response == nil {
+				t.Fatalf("❌ Advanced transcription returned nil response after retries")
+			}
+			if response.Text == "" {
+				t.Fatalf("❌ Advanced transcription returned empty text after retries")
+			}
 
 			t.Logf("✅ Advanced transcription successful: '%s'", response.Text)
 		})
@@ -296,10 +450,46 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx con
 						Fallbacks: testConfig.TranscriptionFallbacks,
 					}
 
-					response, err := client.TranscriptionRequest(ctx, request)
-					require.Nilf(t, err, "Transcription failed for language %s: %v", lang, err)
-					require.NotNil(t, response, "Transcription returned nil response for language %s", lang)
-					assert.NotEmpty(t, response.Text)
+					// Use retry framework for language test
+					langRetryConfig := GetTestRetryConfigForScenario("Transcription", testConfig)
+					langRetryContext := TestRetryContext{
+						ScenarioName: "Transcription_Language_" + lang,
+						ExpectedBehavior: map[string]interface{}{
+							"should_transcribe_audio": true,
+						},
+						TestMetadata: map[string]interface{}{
+							"provider": testConfig.Provider,
+							"model":    testConfig.TranscriptionModel,
+							"language": lang,
+						},
+					}
+					langExpectations := TranscriptionExpectations(5)
+					langExpectations = ModifyExpectationsForProvider(langExpectations, testConfig.Provider)
+					langTranscriptionRetryConfig := TranscriptionRetryConfig{
+						MaxAttempts: langRetryConfig.MaxAttempts,
+						BaseDelay:   langRetryConfig.BaseDelay,
+						MaxDelay:    langRetryConfig.MaxDelay,
+						Conditions:  []TranscriptionRetryCondition{},
+						OnRetry:     langRetryConfig.OnRetry,
+						OnFinalFail: langRetryConfig.OnFinalFail,
+					}
+
+					response, err := WithTranscriptionTestRetry(t, langTranscriptionRetryConfig, langRetryContext, langExpectations, "Transcription_Language_"+lang, func() (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
+						return client.TranscriptionRequest(ctx, request)
+					})
+					if err != nil {
+						errorMsg := GetErrorMessage(err)
+						if !strings.Contains(errorMsg, "❌") {
+							errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+						}
+						t.Fatalf("❌ Transcription failed for language %s after retries: %s", lang, errorMsg)
+					}
+					if response == nil {
+						t.Fatalf("❌ Transcription returned nil response for language %s after retries", lang)
+					}
+					if response.Text == "" {
+						t.Fatalf("❌ Transcription returned empty text for language %s after retries", lang)
+					}
 					t.Logf("✅ Language %s transcription successful: '%s'", lang, response.Text)
 				})
 			}

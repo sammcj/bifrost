@@ -638,14 +638,6 @@ func (a *Accumulator) processAccumulatedResponsesStreamingChunks(requestID strin
 	data.EndTimestamp = accumulator.FinalTimestamp
 	data.OutputMessages = completeMessages
 
-	// Extract tool calls from messages
-	for _, msg := range completeMessages {
-		if msg.ResponsesToolMessage != nil {
-			// Add tool call info to accumulated data
-			// This is simplified - you might want to extract specific tool call info
-		}
-	}
-
 	data.ErrorDetails = respErr
 
 	// Update token usage from final chunk if available

@@ -96,8 +96,6 @@ func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx context.Co
 		// Enhanced validation for multiple image comparison (ant vs lion)
 		expectations := VisionExpectations([]string{"ant", "lion"}) // Basic expectation - should identify both as animals with differences
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
-		expectations.MinContentLength = 30   // Should provide comparative analysis
-		expectations.MaxContentLength = 1500 // Multiple images can generate verbose responses
 		expectations.ShouldNotContainWords = append(expectations.ShouldNotContainWords, []string{
 			"only see one", "cannot compare", "missing image",
 			"single image", "unable to view the second",

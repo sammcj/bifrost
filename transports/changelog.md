@@ -1,1 +1,5 @@
-feature: Qdrant Vector Search Support (#893)
+- feat: Qdrant Vector Search Support (#893)
+- fix: bedrock responses streaming last chunk indicator fixes
+- fix: gemini nil content check fixes
+- fix: handle responses.incomplete event in openai responses streaming
+- fix: stream accumulator nil content check fixes

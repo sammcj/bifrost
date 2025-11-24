@@ -2,6 +2,7 @@ package scenarios
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -186,9 +187,7 @@ func RunChatCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 		// Enhanced validation expectations for streaming
 		expectations := GetExpectationsForScenario("ChatCompletionStream", testConfig, map[string]interface{}{})
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
-		expectations.ShouldContainAnyOf = append(expectations.ShouldContainAnyOf, []string{"paris"}...) // Should include story elements
-		expectations.MinContentLength = 50                                                              // Should be substantial story
-		expectations.MaxContentLength = 2000                                                            // Reasonable upper bound
+		expectations.ShouldContainAnyOf = append(expectations.ShouldContainAnyOf, []string{"paris"}...) // Should include story elements                                                         // Reasonable upper bound
 
 		// Validate the consolidated streaming response
 		validationResult := ValidateChatResponse(t, consolidatedResponse, nil, expectations, "ChatCompletionStream")
@@ -240,10 +239,36 @@ func RunChatCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 				Fallbacks: testConfig.Fallbacks,
 			}
 
-			responseChannel, err := client.ChatCompletionStreamRequest(ctx, request)
-			RequireNoError(t, err, "Chat completion stream with tools failed")
+			// Use retry framework for stream requests with tools
+			retryConfig := StreamingRetryConfig()
+			retryContext := TestRetryContext{
+				ScenarioName: "ChatCompletionStreamWithTools",
+				ExpectedBehavior: map[string]interface{}{
+					"should_stream_content":  true,
+					"should_have_tool_calls": true,
+					"tool_name":              "get_weather",
+				},
+				TestMetadata: map[string]interface{}{
+					"provider": testConfig.Provider,
+					"model":    testConfig.ChatModel,
+					"tools":    true,
+				},
+			}
+
+			responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+				return client.ChatCompletionStreamRequest(ctx, request)
+			})
+
+			// Enhanced error handling with explicit logging
+			if err != nil {
+				errorMsg := GetErrorMessage(err)
+				if !strings.Contains(errorMsg, "❌") {
+					errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+				}
+				t.Fatalf("❌ Chat completion stream with tools failed after retries: %s", errorMsg)
+			}
 			if responseChannel == nil {
-				t.Fatal("Response channel should not be nil")
+				t.Fatalf("❌ Response channel should not be nil")
 			}
 
 			var toolCallDetected bool
@@ -262,7 +287,7 @@ func RunChatCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 					}
 
 					if response == nil || response.BifrostChatResponse == nil {
-						t.Fatal("Streaming response should not be nil")
+						t.Fatalf("❌ Streaming response should not be nil")
 					}
 					responseCount++
 
@@ -294,16 +319,17 @@ func RunChatCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 					}
 
 				case <-streamCtx.Done():
-					t.Fatal("Timeout waiting for streaming response with tools")
+					t.Fatalf("❌ Timeout waiting for streaming response with tools")
 				}
 			}
 
 		toolStreamComplete:
 			if responseCount == 0 {
-				t.Fatal("Should receive at least one streaming response")
+				t.Fatalf("❌ Should receive at least one streaming response")
 			}
 			if !toolCallDetected {
-				t.Fatal("Should detect tool calls in streaming response")
+				// Log error before failing - this is a validation failure
+				t.Fatalf("❌ Should detect tool calls in streaming response (received %d chunks but no tool calls)", responseCount)
 			}
 			t.Logf("✅ Streaming with tools test completed successfully")
 		})

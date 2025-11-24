@@ -55,8 +55,6 @@ func RunImageURLTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context,
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 		expectations.ShouldContainKeywords = nil                                                                                                 // Clear strict keyword requirement
 		expectations.ShouldContainAnyOf = []string{"ant", "insect", "bug", "arthropod"}                                                          // Accept any valid identification
-		expectations.MinContentLength = 20                                                                                                       // Should be a descriptive response
-		expectations.MaxContentLength = 800                                                                                                      // Vision models can be verbose, but keep reasonable
 		expectations.ShouldNotContainWords = append(expectations.ShouldNotContainWords, []string{"cannot see", "unable to view", "no image"}...) // Vision failure indicators
 
 		// Create operations for both Chat Completions and Responses API

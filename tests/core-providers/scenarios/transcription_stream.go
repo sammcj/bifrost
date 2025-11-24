@@ -81,10 +81,37 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 					Fallbacks: testConfig.TranscriptionFallbacks,
 				}
 
-				ttsResponse, err := client.SpeechRequest(ctx, ttsRequest)
-				RequireNoError(t, err, "TTS generation failed for stream round-trip test")
+				// Use retry framework for TTS generation
+				ttsRetryConfig := GetTestRetryConfigForScenario("SpeechSynthesis", testConfig)
+				ttsRetryContext := TestRetryContext{
+					ScenarioName: "TranscriptionStream_TTS",
+					ExpectedBehavior: map[string]interface{}{
+						"should_generate_audio": true,
+					},
+					TestMetadata: map[string]interface{}{
+						"provider": testConfig.Provider,
+						"model":    testConfig.SpeechSynthesisModel,
+					},
+				}
+				ttsExpectations := SpeechExpectations(100)
+				ttsExpectations = ModifyExpectationsForProvider(ttsExpectations, testConfig.Provider)
+				ttsSpeechRetryConfig := SpeechRetryConfig{
+					MaxAttempts: ttsRetryConfig.MaxAttempts,
+					BaseDelay:   ttsRetryConfig.BaseDelay,
+					MaxDelay:    ttsRetryConfig.MaxDelay,
+					Conditions:  []SpeechRetryCondition{},
+					OnRetry:     ttsRetryConfig.OnRetry,
+					OnFinalFail: ttsRetryConfig.OnFinalFail,
+				}
+
+				ttsResponse, err := WithSpeechTestRetry(t, ttsSpeechRetryConfig, ttsRetryContext, ttsExpectations, "TranscriptionStream_TTS", func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
+					return client.SpeechRequest(ctx, ttsRequest)
+				})
+				if err != nil {
+					t.Fatalf("❌ TTS generation failed for stream round-trip test after retries: %v", GetErrorMessage(err))
+				}
 				if ttsResponse == nil || len(ttsResponse.Audio) == 0 {
-					t.Fatal("TTS returned invalid or empty audio for stream round-trip test")
+					t.Fatal("❌ TTS returned invalid or empty audio for stream round-trip test after retries")
 				}
 
 				// Save temp audio file

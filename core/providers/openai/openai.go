@@ -1360,7 +1360,7 @@ func HandleOpenAIResponsesStreaming(
 			response.ExtraFields.ModelRequested = request.Model
 			response.ExtraFields.ChunkIndex = response.SequenceNumber
 
-			if response.Type == schemas.ResponsesStreamResponseTypeCompleted {
+			if response.Type == schemas.ResponsesStreamResponseTypeCompleted || response.Type == schemas.ResponsesStreamResponseTypeIncomplete {
 				response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
 				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
 				providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, &response, nil, nil), responseChan)
