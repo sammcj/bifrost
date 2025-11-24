@@ -1,5 +1,11 @@
 package elevenlabs
 
+import (
+	"strings"
+
+	"github.com/bytedance/sonic"
+)
+
 // SPEECH TYPES
 
 type ElevenlabsSpeechRequest struct {
@@ -149,11 +155,92 @@ type ElevenlabsSpeechToTextWebhookResponse struct {
 
 // ERROR TYPES
 type ElevenlabsError struct {
-	Detail []struct {
-		Loc  []string `json:"loc,omitempty"`
-		Msg  *string  `json:"msg,omitempty"`
-		Type *string  `json:"type,omitempty"`
-	} `json:"detail"`
+	Detail ElevenlabsErrorDetail `json:"detail"`
+}
+
+// ElevenlabsErrorDetail handles both single object (non-validation errors) and
+// array of objects (validation errors) formats from ElevenLabs API.
+type ElevenlabsErrorDetail struct {
+	// Non-validation error fields (when detail is a single object)
+	Status  *string `json:"status,omitempty"`
+	Message *string `json:"message,omitempty"`
+
+	// Validation error fields (when detail is an array)
+	ValidationErrors []ElevenlabsValidationError `json:"-"`
+}
+
+// ElevenlabsValidationError represents a single validation error entry
+type ElevenlabsValidationError struct {
+	Loc     []string `json:"loc"`
+	Msg     string   `json:"msg"`
+	Message string   `json:"message"` // Some APIs use "message" instead of "msg"
+	Type    string   `json:"type"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling to handle both
+// single object and array formats from ElevenLabs API.
+func (d *ElevenlabsErrorDetail) UnmarshalJSON(data []byte) error {
+	// First, try to unmarshal as an array (validation errors)
+	// Check if it's an array by looking at the first non-whitespace character
+	trimmed := strings.TrimSpace(string(data))
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		var validationErrors []ElevenlabsValidationError
+		if err := sonic.Unmarshal(data, &validationErrors); err != nil {
+			return err
+		}
+		d.ValidationErrors = validationErrors
+		// Extract message from first validation error if available
+		if len(validationErrors) > 0 {
+			if validationErrors[0].Message != "" {
+				d.Message = &validationErrors[0].Message
+			} else if validationErrors[0].Msg != "" {
+				d.Message = &validationErrors[0].Msg
+			}
+		}
+		return nil
+	}
+
+	// If not an array, try to unmarshal as a single object (non-validation error)
+	var obj struct {
+		Type    *string  `json:"type,omitempty"`
+		Loc     []string `json:"loc,omitempty"`
+		Message *string  `json:"message,omitempty"`
+		Status  *string  `json:"status,omitempty"`
+		Msg     *string  `json:"msg,omitempty"` // Some APIs use "msg" instead of "message"
+	}
+	if err := sonic.Unmarshal(data, &obj); err != nil {
+		return err
+	}
+
+	// Populate non-validation error fields
+	d.Status = obj.Status
+	if obj.Message != nil {
+		d.Message = obj.Message
+	} else if obj.Msg != nil {
+		d.Message = obj.Msg
+	}
+
+	// If this object has validation-like fields (Loc, Type), treat it as a single validation error
+	if len(obj.Loc) > 0 || obj.Type != nil {
+		validationErr := ElevenlabsValidationError{
+			Loc: obj.Loc,
+			Type: func() string {
+				if obj.Type != nil {
+					return *obj.Type
+				}
+				return ""
+			}(),
+		}
+		if obj.Message != nil {
+			validationErr.Message = *obj.Message
+		} else if obj.Msg != nil {
+			validationErr.Msg = *obj.Msg
+			validationErr.Message = *obj.Msg
+		}
+		d.ValidationErrors = []ElevenlabsValidationError{validationErr}
+	}
+
+	return nil
 }
 
 // MODEL TYPES
