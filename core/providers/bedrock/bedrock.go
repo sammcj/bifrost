@@ -645,6 +645,7 @@ func (provider *BedrockProvider) TextCompletionStream(ctx context.Context, postH
 				}
 				if err := sonic.Unmarshal(message.Payload, &chunkPayload); err != nil {
 					provider.logger.Debug(fmt.Sprintf("Failed to parse JSON from event buffer: %v, data: %s", err, string(message.Payload)))
+					providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.TextCompletionStreamRequest, providerName, request.Model, provider.logger)
 					return
 				}
 
@@ -813,6 +814,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 				var streamEvent BedrockStreamEvent
 				if err := sonic.Unmarshal(message.Payload, &streamEvent); err != nil {
 					provider.logger.Debug(fmt.Sprintf("Failed to parse JSON from event buffer: %v, data: %s", err, string(message.Payload)))
+					providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.ChatCompletionStreamRequest, providerName, request.Model, provider.logger)
 					return
 				}
 
@@ -1051,6 +1053,7 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 				var streamEvent BedrockStreamEvent
 				if err := sonic.Unmarshal(message.Payload, &streamEvent); err != nil {
 					provider.logger.Debug(fmt.Sprintf("Failed to parse JSON from event buffer: %v, data: %s", err, string(message.Payload)))
+					providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.ResponsesStreamRequest, providerName, request.Model, provider.logger)
 					return
 				}
 

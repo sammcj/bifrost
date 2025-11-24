@@ -1574,3 +1574,45 @@ func TestBedrockToBifrostResponseConversion(t *testing.T) {
 		})
 	}
 }
+
+func TestToBedrockResponsesRequest_AdditionalFields(t *testing.T) {
+	req := &schemas.BifrostResponsesRequest{
+		Model: "bedrock/anthropic.claude-3-sonnet-20240229-v1:0",
+		Params: &schemas.ResponsesParameters{
+			ExtraParams: map[string]interface{}{
+				"additionalModelRequestFieldPaths": map[string]interface{}{
+					"top_k": 200,
+				},
+				"additionalModelResponseFieldPaths": []string{
+					"/amazon-bedrock-invocationMetrics/inputTokenCount",
+				},
+			},
+		},
+	}
+
+	bedrockReq, err := ToBedrockResponsesRequest(req)
+	require.NoError(t, err)
+	require.NotNil(t, bedrockReq)
+
+	assert.Equal(t, map[string]interface{}{"top_k": 200}, bedrockReq.AdditionalModelRequestFields)
+	assert.Equal(t, []string{"/amazon-bedrock-invocationMetrics/inputTokenCount"}, bedrockReq.AdditionalModelResponseFieldPaths)
+}
+
+func TestToBedrockResponsesRequest_AdditionalFields_InterfaceSlice(t *testing.T) {
+	req := &schemas.BifrostResponsesRequest{
+		Model: "bedrock/anthropic.claude-3-sonnet-20240229-v1:0",
+		Params: &schemas.ResponsesParameters{
+			ExtraParams: map[string]interface{}{
+				"additionalModelResponseFieldPaths": []interface{}{
+					"/amazon-bedrock-invocationMetrics/inputTokenCount",
+				},
+			},
+		},
+	}
+
+	bedrockReq, err := ToBedrockResponsesRequest(req)
+	require.NoError(t, err)
+	require.NotNil(t, bedrockReq)
+
+	assert.Equal(t, []string{"/amazon-bedrock-invocationMetrics/inputTokenCount"}, bedrockReq.AdditionalModelResponseFieldPaths)
+}

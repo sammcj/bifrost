@@ -418,6 +418,28 @@ func ToBedrockResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) (*Be
 			if stop, ok := schemas.SafeExtractStringSlice(bifrostReq.Params.ExtraParams["stop"]); ok {
 				inferenceConfig.StopSequences = stop
 			}
+
+			if requestFields, exists := bifrostReq.Params.ExtraParams["additionalModelRequestFieldPaths"]; exists {
+				if fields, ok := requestFields.(map[string]interface{}); ok {
+					bedrockReq.AdditionalModelRequestFields = fields
+				}
+			}
+
+			if responseFields, exists := bifrostReq.Params.ExtraParams["additionalModelResponseFieldPaths"]; exists {
+				if fields, ok := responseFields.([]string); ok {
+					bedrockReq.AdditionalModelResponseFieldPaths = fields
+				} else if fieldsInterface, ok := responseFields.([]interface{}); ok {
+					stringFields := make([]string, 0, len(fieldsInterface))
+					for _, field := range fieldsInterface {
+						if fieldStr, ok := field.(string); ok {
+							stringFields = append(stringFields, fieldStr)
+						}
+					}
+					if len(stringFields) > 0 {
+						bedrockReq.AdditionalModelResponseFieldPaths = stringFields
+					}
+				}
+			}
 		}
 
 		bedrockReq.InferenceConfig = inferenceConfig
@@ -752,48 +774,65 @@ func convertResponsesItemsToBedrockMessages(messages []schemas.ResponsesMessage)
 
 		case schemas.ResponsesMessageTypeFunctionCallOutput:
 			// Handle function call outputs from Responses
-			if msg.ResponsesToolMessage != nil && msg.ResponsesToolMessage.Output != nil &&
-				(msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil ||
-					msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil) {
-				var toolUseID string
-				if msg.ResponsesToolMessage.CallID != nil {
-					toolUseID = *msg.ResponsesToolMessage.CallID
-				}
-				toolResultBlock := BedrockContentBlock{
-					ToolResult: &BedrockToolResult{
-						ToolUseID: toolUseID,
-						Status:    schemas.Ptr("success"), // Default to success
-					},
-				}
-				// Set content based on available data
-				if msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil {
-					raw := *msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr
-					var parsed interface{}
-					if err := json.Unmarshal([]byte(raw), &parsed); err == nil {
-						toolResultBlock.ToolResult.Content = []BedrockContentBlock{
-							{JSON: parsed},
-						}
-					} else {
-						toolResultBlock.ToolResult.Content = []BedrockContentBlock{
-							{Text: &raw},
-						}
-					}
-				} else if msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
-					toolResultContent, err := convertBifrostResponsesMessageContentBlocksToBedrockContentBlocks(schemas.ResponsesMessageContent{
-						ContentBlocks: msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks,
-					})
-					if err != nil {
-						return nil, nil, fmt.Errorf("failed to convert tool result content blocks: %w", err)
-					}
-					toolResultBlock.ToolResult.Content = toolResultContent
-				}
+			if msg.ResponsesToolMessage != nil {
+				// Check if we have output or error
+				hasOutput := msg.ResponsesToolMessage.Output != nil &&
+					(msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil ||
+						msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil)
+				hasError := msg.ResponsesToolMessage.Error != nil
 
-				// Create user message with tool result
-				userMsg := BedrockMessage{
-					Role:    BedrockMessageRoleUser,
-					Content: []BedrockContentBlock{toolResultBlock},
+				if hasOutput || hasError {
+					var toolUseID string
+					if msg.ResponsesToolMessage.CallID != nil {
+						toolUseID = *msg.ResponsesToolMessage.CallID
+					}
+
+					status := "success"
+					if hasError {
+						status = "error"
+					}
+
+					toolResultBlock := BedrockContentBlock{
+						ToolResult: &BedrockToolResult{
+							ToolUseID: toolUseID,
+							Status:    schemas.Ptr(status),
+						},
+					}
+
+					// Set content based on available data
+					if hasError {
+						toolResultBlock.ToolResult.Content = []BedrockContentBlock{
+							{Text: msg.ResponsesToolMessage.Error},
+						}
+					} else if msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil {
+						raw := *msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr
+						var parsed interface{}
+						if err := json.Unmarshal([]byte(raw), &parsed); err == nil {
+							toolResultBlock.ToolResult.Content = []BedrockContentBlock{
+								{JSON: parsed},
+							}
+						} else {
+							toolResultBlock.ToolResult.Content = []BedrockContentBlock{
+								{Text: &raw},
+							}
+						}
+					} else if msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
+						toolResultContent, err := convertBifrostResponsesMessageContentBlocksToBedrockContentBlocks(schemas.ResponsesMessageContent{
+							ContentBlocks: msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks,
+						})
+						if err != nil {
+							return nil, nil, fmt.Errorf("failed to convert tool result content blocks: %w", err)
+						}
+						toolResultBlock.ToolResult.Content = toolResultContent
+					}
+
+					// Create user message with tool result
+					userMsg := BedrockMessage{
+						Role:    BedrockMessageRoleUser,
+						Content: []BedrockContentBlock{toolResultBlock},
+					}
+					bedrockMessages = append(bedrockMessages, userMsg)
 				}
-				bedrockMessages = append(bedrockMessages, userMsg)
 			}
 		}
 	}
