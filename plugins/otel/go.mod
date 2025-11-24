@@ -3,8 +3,8 @@ module github.com/maximhq/bifrost/plugins/otel
 go 1.24.3
 
 require (
-	github.com/maximhq/bifrost/core v1.2.29
-	github.com/maximhq/bifrost/framework v1.1.37
+	github.com/maximhq/bifrost/core v1.2.30
+	github.com/maximhq/bifrost/framework v1.1.38
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.10
 )
@@ -73,6 +73,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.32 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/qdrant/go-client v1.16.1 // indirect
 	github.com/redis/go-redis/v9 v9.14.0 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
