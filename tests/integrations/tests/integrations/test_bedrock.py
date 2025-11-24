@@ -18,6 +18,7 @@ import boto3
 import json
 import base64
 import requests
+import time
 from typing import List, Dict, Any
 
 from ..utils.common import (
@@ -298,3 +299,84 @@ class TestBedrockIntegration:
             f"Response should reference the image or provide some description. "
             f"Got: {text_content[:100]}"
         )
+
+    @skip_if_no_api_key("bedrock")
+    def test_04_converse_streaming(self, bedrock_client, test_config):
+        """Test Case 4: Streaming chat completion using converse-stream API with boto3
+        
+        Follows boto3 Bedrock Runtime converse_stream API:
+        https://boto3.amazonaws.com/v1/documentation/api/1.35.6/reference/services/bedrock-runtime/client/converse_stream.html
+        """
+        messages = convert_to_bedrock_messages([{"role": "user", "content": "Say hello in exactly 3 words."}])
+        model_id = get_model("bedrock", "chat")
+
+
+        try:
+            response_stream = bedrock_client.converse_stream(
+                modelId=model_id,
+                messages=messages,
+                inferenceConfig={"maxTokens": 100}
+            )
+        except AttributeError:
+            pytest.skip("converse_stream method not available in this boto3 version. Please upgrade boto3.")
+        except Exception as e:
+            pytest.fail(f"converse_stream failed: {e}")
+        
+        # Collect streaming chunks
+        chunks = []
+        text_parts = []
+        
+        # Process the event stream from boto3
+        start_time = time.time()
+        timeout = 30  # 30 second timeout
+        stream_completed = False
+        
+        try:
+            # Use the simplified access pattern via ["stream"] which boto3 provides
+            stream = response_stream.get("stream")
+            if stream is None:
+                # Fallback if "stream" key is missing (shouldn't happen with recent boto3)
+                stream = response_stream.get("eventStream")
+            
+            if stream is None:
+                pytest.fail(f"Response missing 'stream' or 'eventStream'. Keys: {list(response_stream.keys())}")
+
+            for event in stream:
+                # Check timeout
+                if time.time() - start_time > timeout:
+                    pytest.fail(f"Streaming took longer than {timeout} seconds. Received {len(chunks)} chunks so far.")
+                
+                chunks.append(event)
+                
+                # Extract text from contentBlockDelta events
+                if "contentBlockDelta" in event:
+                    delta = event["contentBlockDelta"].get("delta", {})
+                    if "text" in delta and delta["text"]:
+                        text_parts.append(delta["text"])
+                
+                # Check for messageStop event (stream completion)
+                elif "messageStop" in event:
+                    # Message stop - stream is complete
+                    stream_completed = True
+                
+                # Handle messageStart event (contains role)
+                elif "messageStart" in event:
+                    # Message start - stream beginning
+                    pass
+                    
+        except Exception as e:
+            pytest.fail(f"Error iterating event stream: {e}. Response type: {type(response_stream)}, Chunks received: {len(chunks)}")
+        
+        # Verify we received streaming chunks
+        assert len(chunks) > 0, f"Should receive at least one streaming chunk. Stream completed: {stream_completed}, Total chunks: {len(chunks)}"
+        
+        # Verify we received text content
+        combined_text = "".join(text_parts)
+        if len(combined_text) == 0:
+            chunk_debug = []
+            for i, chunk in enumerate(chunks[:5]):  # First 5 chunks for debugging
+                chunk_debug.append(f"Chunk {i}: {str(chunk)[:200]}")
+            pytest.fail(f"Streaming response should contain text content. Received {len(chunks)} chunks. Stream completed: {stream_completed}. First chunks: {chunk_debug}")
+        
+        # Verify we got a reasonable response
+        assert len(combined_text.strip()) > 0, f"Streaming response should not be empty. Combined text: {repr(combined_text[:100])}"

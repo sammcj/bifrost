@@ -50,6 +50,51 @@ func createBedrockConverseRouteConfig(pathPrefix string, handlerStore lib.Handle
 	}
 }
 
+// createBedrockConverseStreamRouteConfig creates a route configuration for the Bedrock Converse Streaming API endpoint
+// Handles POST /bedrock/model/{modelId}/converse-stream
+func createBedrockConverseStreamRouteConfig(pathPrefix string, handlerStore lib.HandlerStore) RouteConfig {
+	return RouteConfig{
+		Type:   RouteConfigTypeBedrock,
+		Path:   pathPrefix + "/model/{modelId}/converse-stream",
+		Method: "POST",
+		GetRequestTypeInstance: func() interface{} {
+			return &bedrock.BedrockConverseRequest{}
+		},
+		RequestConverter: func(ctx *context.Context, req interface{}) (*schemas.BifrostRequest, error) {
+			if bedrockReq, ok := req.(*bedrock.BedrockConverseRequest); ok {
+				// Mark as streaming request
+				bedrockReq.Stream = true
+				bifrostReq, err := bedrockReq.ToBifrostResponsesRequest()
+				if err != nil {
+					return nil, fmt.Errorf("failed to convert bedrock request: %w", err)
+				}
+				return &schemas.BifrostRequest{
+					ResponsesRequest: bifrostReq,
+				}, nil
+			}
+			return nil, errors.New("invalid request type")
+		},
+		ErrorConverter: func(ctx *context.Context, err *schemas.BifrostError) interface{} {
+			return bedrock.ToBedrockError(err)
+		},
+		StreamConfig: &StreamConfig{
+			ResponsesStreamResponseConverter: func(ctx *context.Context, resp *schemas.BifrostResponsesStreamResponse) (string, interface{}, error) {
+				bedrockEvent, err := bedrock.ToBedrockConverseStreamResponse(resp)
+				if err != nil {
+					return "", nil, err
+				}
+				// Return empty event type (will use default SSE format) and the event
+				// If bedrockEvent is nil, it means we should skip this chunk
+				if bedrockEvent == nil {
+					return "", nil, nil
+				}
+				return "", bedrockEvent, nil
+			},
+		},
+		PreCallback: bedrockPreCallback(handlerStore),
+	}
+}
+
 // createBedrockInvokeRouteConfig creates a route configuration for the Bedrock Invoke API endpoint
 // Handles POST /bedrock/model/{modelId}/invoke
 func createBedrockInvokeRouteConfig(pathPrefix string, handlerStore lib.HandlerStore) RouteConfig {
@@ -82,6 +127,7 @@ func createBedrockInvokeRouteConfig(pathPrefix string, handlerStore lib.HandlerS
 func CreateBedrockRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) []RouteConfig {
 	return []RouteConfig{
 		createBedrockConverseRouteConfig(pathPrefix, handlerStore),
+		createBedrockConverseStreamRouteConfig(pathPrefix, handlerStore),
 		createBedrockInvokeRouteConfig(pathPrefix, handlerStore),
 	}
 }

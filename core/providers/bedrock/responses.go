@@ -1434,3 +1434,186 @@ func FinalizeBedrockStream(state *BedrockResponsesStreamState, sequenceNumber in
 
 	return responses
 }
+
+// ToBedrockConverseStreamResponse converts a Bifrost Responses stream response to Bedrock streaming format
+// Returns a BedrockStreamEvent that represents the streaming event in Bedrock's format
+func ToBedrockConverseStreamResponse(bifrostResp *schemas.BifrostResponsesStreamResponse) (*BedrockStreamEvent, error) {
+	if bifrostResp == nil {
+		return nil, fmt.Errorf("bifrost stream response is nil")
+	}
+
+	event := &BedrockStreamEvent{}
+
+	switch bifrostResp.Type {
+	case schemas.ResponsesStreamResponseTypeCreated:
+		// Message start - emit role event
+		// Always set role for message start event
+		role := "assistant"
+		event.Role = &role
+
+	case schemas.ResponsesStreamResponseTypeInProgress:
+		// In progress - no-op for Bedrock (it doesn't have an explicit in_progress event)
+		// Return nil to skip this event
+		return nil, nil
+
+	case schemas.ResponsesStreamResponseTypeOutputItemAdded:
+		// Content block start
+		if bifrostResp.Item != nil && bifrostResp.Item.ResponsesToolMessage != nil {
+			// Tool use start
+			if bifrostResp.Item.ResponsesToolMessage.Name != nil && bifrostResp.Item.ResponsesToolMessage.CallID != nil {
+				contentBlockIndex := 0
+				if bifrostResp.ContentIndex != nil {
+					contentBlockIndex = *bifrostResp.ContentIndex
+				}
+				event.ContentBlockIndex = &contentBlockIndex
+				event.Start = &BedrockContentBlockStart{
+					ToolUse: &BedrockToolUseStart{
+						ToolUseID: *bifrostResp.Item.ResponsesToolMessage.CallID,
+						Name:      *bifrostResp.Item.ResponsesToolMessage.Name,
+					},
+				}
+			}
+		} else if bifrostResp.Item != nil {
+			// Text item added - Bedrock doesn't have an explicit text start event, so we skip it
+			// Check if it's a text message (has content blocks or is a message type)
+			if bifrostResp.Item.Content != nil || (bifrostResp.Item.Type != nil && *bifrostResp.Item.Type == schemas.ResponsesMessageTypeMessage) {
+				return nil, nil
+			}
+		}
+
+	case schemas.ResponsesStreamResponseTypeOutputTextDelta:
+		// Text delta
+		if bifrostResp.Delta != nil && *bifrostResp.Delta != "" {
+			contentBlockIndex := 0
+			if bifrostResp.ContentIndex != nil {
+				contentBlockIndex = *bifrostResp.ContentIndex
+			}
+			event.ContentBlockIndex = &contentBlockIndex
+			event.Delta = &BedrockContentBlockDelta{
+				Text: bifrostResp.Delta,
+			}
+		} else {
+			// Skip empty deltas
+			return nil, nil
+		}
+
+	case schemas.ResponsesStreamResponseTypeFunctionCallArgumentsDelta:
+		// Tool use delta (function call arguments)
+		if bifrostResp.Delta != nil {
+			contentBlockIndex := 0
+			if bifrostResp.ContentIndex != nil {
+				contentBlockIndex = *bifrostResp.ContentIndex
+			}
+			event.ContentBlockIndex = &contentBlockIndex
+			event.Delta = &BedrockContentBlockDelta{
+				ToolUse: &BedrockToolUseDelta{
+					Input: *bifrostResp.Delta,
+				},
+			}
+		}
+
+	case schemas.ResponsesStreamResponseTypeOutputTextDone, schemas.ResponsesStreamResponseTypeContentPartDone:
+		// Content block done - Bedrock doesn't have explicit done events, so we skip them
+		return nil, nil
+
+	case schemas.ResponsesStreamResponseTypeOutputItemDone:
+		// Item done - Bedrock doesn't have explicit done events, so we skip them
+		return nil, nil
+
+	case schemas.ResponsesStreamResponseTypeCompleted:
+		// Message stop - always set stopReason
+		stopReason := "end_turn"
+		if bifrostResp.Response != nil && bifrostResp.Response.IncompleteDetails != nil {
+			stopReason = bifrostResp.Response.IncompleteDetails.Reason
+		}
+		event.StopReason = &stopReason
+
+		// Add usage if available
+		if bifrostResp.Response != nil && bifrostResp.Response.Usage != nil {
+			event.Usage = &BedrockTokenUsage{
+				InputTokens:  bifrostResp.Response.Usage.InputTokens,
+				OutputTokens: bifrostResp.Response.Usage.OutputTokens,
+				TotalTokens:  bifrostResp.Response.Usage.TotalTokens,
+			}
+		}
+
+	case schemas.ResponsesStreamResponseTypeError:
+		// Error - errors are handled separately by the router via BifrostError in the stream chunk
+		// Return nil to skip this chunk
+		return nil, nil
+
+	default:
+		// Unknown type - skip
+		return nil, nil
+	}
+
+	return event, nil
+}
+
+// BedrockEncodedEvent represents a single event ready for encoding to AWS Event Stream
+type BedrockEncodedEvent struct {
+	EventType string
+	Payload   interface{}
+}
+
+// ToEncodedEvents converts the flat BedrockStreamEvent into a sequence of specific events
+func (event *BedrockStreamEvent) ToEncodedEvents() []BedrockEncodedEvent {
+	var events []BedrockEncodedEvent
+
+	if event.Role != nil {
+		events = append(events, BedrockEncodedEvent{
+			EventType: "messageStart",
+			Payload: BedrockMessageStartEvent{
+				Role: *event.Role,
+			},
+		})
+	}
+
+	if event.Start != nil {
+		events = append(events, BedrockEncodedEvent{
+			EventType: "contentBlockStart",
+			Payload: struct {
+				Start             *BedrockContentBlockStart `json:"start"`
+				ContentBlockIndex *int                      `json:"contentBlockIndex"`
+			}{
+				Start:             event.Start,
+				ContentBlockIndex: event.ContentBlockIndex,
+			},
+		})
+	}
+
+	if event.Delta != nil {
+		events = append(events, BedrockEncodedEvent{
+			EventType: "contentBlockDelta",
+			Payload: struct {
+				Delta             *BedrockContentBlockDelta `json:"delta"`
+				ContentBlockIndex *int                      `json:"contentBlockIndex"`
+			}{
+				Delta:             event.Delta,
+				ContentBlockIndex: event.ContentBlockIndex,
+			},
+		})
+	}
+
+	if event.StopReason != nil {
+		events = append(events, BedrockEncodedEvent{
+			EventType: "messageStop",
+			Payload: BedrockMessageStopEvent{
+				StopReason: *event.StopReason,
+			},
+		})
+	}
+
+	if event.Usage != nil || event.Metrics != nil {
+		events = append(events, BedrockEncodedEvent{
+			EventType: "metadata",
+			Payload: BedrockMetadataEvent{
+				Usage:   event.Usage,
+				Metrics: event.Metrics,
+				Trace:   event.Trace,
+			},
+		})
+	}
+
+	return events
+}

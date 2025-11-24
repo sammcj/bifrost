@@ -45,6 +45,12 @@ type BedrockConverseRequest struct {
 	PerformanceConfig                 *BedrockPerformanceConfig        `json:"performanceConfig,omitempty"`                 // Performance configuration
 	PromptVariables                   map[string]BedrockPromptVariable `json:"promptVariables,omitempty"`                   // Prompt variables for prompt management
 	RequestMetadata                   map[string]string                `json:"requestMetadata,omitempty"`                   // Request metadata
+	Stream                            bool                             `json:"-"`                                           // Whether streaming is requested (internal, not in JSON)
+}
+
+// IsStreamingRequested implements the StreamingRequest interface
+func (r *BedrockConverseRequest) IsStreamingRequested() bool {
+	return r.Stream
 }
 
 type BedrockMessageRole string
