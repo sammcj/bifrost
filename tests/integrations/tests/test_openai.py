@@ -56,7 +56,7 @@ import json
 from openai import OpenAI
 from typing import List, Dict, Any
 
-from ..utils.common import (
+from .utils.common import (
     Config,
     SIMPLE_CHAT_MESSAGES,
     MULTI_TURN_MESSAGES,
@@ -130,12 +130,12 @@ from ..utils.common import (
     assert_valid_text_completion_response,
     collect_text_completion_streaming_content,
 )
-from ..utils.config_loader import get_model
-from ..utils.parametrize import (
+from .utils.config_loader import get_model
+from .utils.parametrize import (
     get_cross_provider_params_for_scenario,
     format_provider_model,
 )
-from ..utils.config_loader import get_config
+from .utils.config_loader import get_config
 
 
 # Helper functions (defined early for use in test methods)
@@ -183,7 +183,7 @@ def convert_to_openai_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]
 @pytest.fixture
 def openai_client():
     """Create OpenAI client for testing"""
-    from ..utils.config_loader import get_integration_url, get_config
+    from .utils.config_loader import get_integration_url, get_config
 
     api_key = get_api_key("openai")
     base_url = get_integration_url("openai")
@@ -220,6 +220,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("simple_chat"))
     def test_01_simple_chat(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 1: Simple chat interaction - runs across all available providers"""
         response = openai_client.chat.completions.create(
             model=format_provider_model(provider, model),
@@ -233,6 +235,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("multi_turn_conversation"))
     def test_02_multi_turn_conversation(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 2: Multi-turn conversation - runs across all available providers"""
         response = openai_client.chat.completions.create(
             model=format_provider_model(provider, model),
@@ -250,6 +254,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("tool_calls"))
     def test_03_single_tool_call(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 3: Single tool call - auto-skips providers without tool support"""
         response = openai_client.chat.completions.create(
             model=format_provider_model(provider, model),
@@ -265,6 +271,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("multiple_tool_calls"))
     def test_04_multiple_tool_calls(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 4: Multiple tool calls in one response - auto-skips providers without multiple tool support"""
         response = openai_client.chat.completions.create(
             model=format_provider_model(provider, model),
@@ -284,6 +292,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("end2end_tool_calling"))
     def test_05_end2end_tool_calling(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 5: Complete tool calling flow with responses"""
         # Initial request
         messages = [{"role": "user", "content": "What's the weather in Boston in fahrenheit?"}]
@@ -326,6 +336,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("automatic_function_calling"))
     def test_06_automatic_function_calling(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 6: Automatic function calling (tool_choice='auto')"""
         response = openai_client.chat.completions.create(
             model=format_provider_model(provider, model),
@@ -342,6 +354,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("image_url"))
     def test_07_image_url(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 7: Image analysis from URL - auto-skips providers without image URL support (e.g., Gemini, Bedrock)"""
         response = openai_client.chat.completions.create(
             model=format_provider_model(provider, model),
@@ -353,6 +367,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("image_base64"))
     def test_08_image_base64(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 8: Image analysis from base64 - runs for all providers with base64 image support"""
         response = openai_client.chat.completions.create(
             model=format_provider_model(provider, model),
@@ -364,6 +380,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("multiple_images"))
     def test_09_multiple_images(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 9: Multiple image analysis - auto-skips providers without multiple image support"""
         response = openai_client.chat.completions.create(
             model=format_provider_model(provider, model),
@@ -494,6 +512,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("streaming"))
     def test_13_streaming(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 13: Streaming chat completion - auto-skips providers without streaming support"""
         # Test basic streaming
         stream = openai_client.chat.completions.create(
@@ -1105,6 +1125,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("responses"))
     def test_32_responses_simple_text(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 32: Responses API with simple text input"""
         response = openai_client.responses.create(
             model=format_provider_model(provider, model),
@@ -1138,6 +1160,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("responses"))
     def test_33_responses_with_system_message(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 33: Responses API with system message"""
         response = openai_client.responses.create(
             model=format_provider_model(provider, model),
@@ -1168,6 +1192,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("responses_image"))
     def test_34_responses_with_image(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 34: Responses API with image input"""
         response = openai_client.responses.create(
             model=format_provider_model(provider, model),
@@ -1210,6 +1236,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("responses"))
     def test_35_responses_with_tools(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 35: Responses API with tool calls"""
         # Convert tools to responses format
         tools = convert_to_responses_tools([WEATHER_TOOL])
@@ -1260,6 +1288,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("responses"))
     def test_36_responses_streaming(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 36: Responses API streaming"""
         stream = openai_client.responses.create(
             model=format_provider_model(provider, model),
@@ -1314,6 +1344,8 @@ class TestOpenAIIntegration:
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("responses"))
     def test_37_responses_streaming_with_tools(self, openai_client, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 37: Responses API streaming with tools"""
         tools = convert_to_responses_tools([WEATHER_TOOL])
 

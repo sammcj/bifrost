@@ -167,10 +167,13 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest() (*schemas.Bif
 	// Convert regular messages
 	for _, msg := range request.Messages {
 		var role schemas.ResponsesMessageRoleType
-		if msg.Role == BedrockMessageRoleUser {
+		switch msg.Role {
+		case BedrockMessageRoleUser:
 			role = schemas.ResponsesInputMessageRoleUser
-		} else if msg.Role == BedrockMessageRoleAssistant {
+		case BedrockMessageRoleAssistant:
 			role = schemas.ResponsesInputMessageRoleAssistant
+		default:
+			continue
 		}
 
 		bifrostMsg := schemas.ResponsesMessage{
