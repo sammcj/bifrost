@@ -3,8 +3,8 @@ module github.com/maximhq/bifrost/plugins/telemetry
 go 1.24.3
 
 require (
-	github.com/maximhq/bifrost/core v1.2.29
-	github.com/maximhq/bifrost/framework v1.1.37
+	github.com/maximhq/bifrost/core v1.2.30
+	github.com/maximhq/bifrost/framework v1.1.38
 	github.com/prometheus/client_golang v1.23.0
 	github.com/valyala/fasthttp v1.67.0
 )
@@ -81,6 +81,7 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.65.0 // indirect
 	github.com/prometheus/procfs v0.17.0 // indirect
+	github.com/qdrant/go-client v1.16.1 // indirect
 	github.com/redis/go-redis/v9 v9.14.0 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
