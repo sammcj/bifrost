@@ -14,25 +14,82 @@ import (
 func parseElevenlabsError(providerName schemas.ModelProvider, resp *fasthttp.Response) *schemas.BifrostError {
 	body := append([]byte(nil), resp.Body()...)
 
+	var message string
 	// Try to parse as JSON first
 	var errorResp ElevenlabsError
 	if err := sonic.Unmarshal(body, &errorResp); err == nil {
-		var messages []string
-		for _, detail := range errorResp.Detail {
-			location := "unknown"
-			if len(detail.Loc) > 0 {
-				location = strings.Join(detail.Loc, ".")
+		// Handle validation errors (array format)
+		if len(errorResp.Detail.ValidationErrors) > 0 {
+			var messages []string
+			var locations []string
+			var errorTypes []string
+
+			for _, validationErr := range errorResp.Detail.ValidationErrors {
+				// Get message from either Message or Msg field
+				msg := validationErr.Message
+				if msg == "" {
+					msg = validationErr.Msg
+				}
+				if msg != "" {
+					messages = append(messages, msg)
+				}
+
+				// Collect location if available
+				if len(validationErr.Loc) > 0 {
+					locations = append(locations, strings.Join(validationErr.Loc, "."))
+				}
+
+				// Collect error type if available
+				if validationErr.Type != "" {
+					errorTypes = append(errorTypes, validationErr.Type)
+				}
 			}
-			messages = append(messages, fmt.Sprintf("[%s] %s (%s)", location, *detail.Msg, *detail.Type))
+
+			// Build combined message
+			if len(messages) > 0 {
+				message = strings.Join(messages, "; ")
+			}
+			if len(locations) > 0 {
+				locationStr := strings.Join(locations, ", ")
+				message = message + " [" + locationStr + "]"
+			}
+
+			errorType := ""
+			if len(errorTypes) > 0 {
+				errorType = strings.Join(errorTypes, ", ")
+			}
+
+			if message != "" {
+				return &schemas.BifrostError{
+					IsBifrostError: false,
+					StatusCode:     schemas.Ptr(resp.StatusCode()),
+					Error: &schemas.ErrorField{
+						Type:    schemas.Ptr(errorType),
+						Message: message,
+					},
+				}
+			}
 		}
-		errorMessage := strings.Join(messages, "; ")
-		return &schemas.BifrostError{
-			IsBifrostError: false,
-			StatusCode:     schemas.Ptr(resp.StatusCode()),
-			Error: &schemas.ErrorField{
-				Code:    schemas.Ptr("validation_error"),
-				Message: fmt.Sprintf("Elevenlabs validation error: %s", errorMessage),
-			},
+
+		// Handle non-validation errors (single object format)
+		if errorResp.Detail.Message != nil {
+			message = *errorResp.Detail.Message
+		}
+
+		errorType := ""
+		if errorResp.Detail.Status != nil {
+			errorType = *errorResp.Detail.Status
+		}
+
+		if message != "" {
+			return &schemas.BifrostError{
+				IsBifrostError: false,
+				StatusCode:     schemas.Ptr(resp.StatusCode()),
+				Error: &schemas.ErrorField{
+					Type:    schemas.Ptr(errorType),
+					Message: message,
+				},
+			}
 		}
 	}
 
