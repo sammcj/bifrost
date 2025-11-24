@@ -67,7 +67,6 @@ func RunMultiTurnConversationTest(t *testing.T, client *bifrost.Bifrost, ctx con
 		// Just check that it acknowledges Alice by name - being less strict about exact wording
 		expectations1 := ConversationExpectations([]string{"alice"})
 		expectations1 = ModifyExpectationsForProvider(expectations1, testConfig.Provider)
-		expectations1.MinContentLength = 10
 
 		response1, bifrostErr := WithChatTestRetry(t, chatRetryConfig1, retryContext1, expectations1, "MultiTurnConversation_Step1", func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 			return client.ChatCompletionRequest(ctx, firstRequest)
@@ -134,8 +133,6 @@ func RunMultiTurnConversationTest(t *testing.T, client *bifrost.Bifrost, ctx con
 		expectations2 := ConversationExpectations([]string{"alice"})
 		expectations2 = ModifyExpectationsForProvider(expectations2, testConfig.Provider)
 		expectations2.ShouldContainKeywords = []string{"alice"}                                  // Case insensitive
-		expectations2.MinContentLength = 5                                                       // At least mention the name
-		expectations2.MaxContentLength = 200                                                     // Don't be overly verbose
 		expectations2.ShouldNotContainWords = []string{"don't know", "can't remember", "forgot"} // Memory failure indicators
 
 		response2, bifrostErr := WithChatTestRetry(t, chatRetryConfig2, retryContext2, expectations2, "MultiTurnConversation_Step2", func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {

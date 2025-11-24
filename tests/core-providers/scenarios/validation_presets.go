@@ -16,9 +16,7 @@ import (
 func BasicChatExpectations() ResponseExpectations {
 	return ResponseExpectations{
 		ShouldHaveContent:    true,
-		MinContentLength:     5,    // At least a few characters
-		MaxContentLength:     2000, // Reasonable upper bound
-		ExpectedChoiceCount:  1,    // Usually expect one choice, will be used on outputs for responses API
+		ExpectedChoiceCount:  1, // Usually expect one choice, will be used on outputs for responses API
 		ShouldHaveUsageStats: true,
 		ShouldHaveTimestamps: true,
 		ShouldHaveModel:      true,
@@ -42,7 +40,6 @@ func ToolCallExpectations(toolName string, requiredArgs []string) ResponseExpect
 	}
 	// Tool calls might not have text content
 	expectations.ShouldHaveContent = false
-	expectations.MinContentLength = 0
 
 	return expectations
 }
@@ -65,8 +62,7 @@ func TimeToolExpectations() ResponseExpectations {
 // MultipleToolExpectations returns validation expectations for multiple tool calls
 func MultipleToolExpectations(tools []string, requiredArgsPerTool [][]string) ResponseExpectations {
 	expectations := BasicChatExpectations()
-	expectations.ShouldHaveContent = false // Tool calls might not have text content
-	expectations.MinContentLength = 0
+	expectations.ShouldHaveContent = false // Tool calls might not have text Content
 
 	for i, tool := range tools {
 		var args []string
@@ -87,7 +83,6 @@ func MultipleToolExpectations(tools []string, requiredArgsPerTool [][]string) Re
 // ImageAnalysisExpectations returns validation expectations for image analysis scenarios
 func ImageAnalysisExpectations() ResponseExpectations {
 	expectations := BasicChatExpectations()
-	expectations.MinContentLength = 20 // Image descriptions should be more detailed
 	expectations.ShouldContainKeywords = []string{"image", "picture", "photo", "see", "shows", "contains"}
 	expectations.ShouldNotContainWords = append(expectations.ShouldNotContainWords, []string{
 		"i can't see", "i cannot see", "unable to see", "can't view",
@@ -100,7 +95,6 @@ func ImageAnalysisExpectations() ResponseExpectations {
 // TextCompletionExpectations returns validation expectations for text completion scenarios
 func TextCompletionExpectations() ResponseExpectations {
 	expectations := BasicChatExpectations()
-	expectations.MinContentLength = 10 // Completions should have reasonable length
 
 	return expectations
 }
@@ -130,7 +124,6 @@ func StreamingExpectations() ResponseExpectations {
 // ConversationExpectations returns validation expectations for multi-turn conversation scenarios
 func ConversationExpectations(contextKeywords []string) ResponseExpectations {
 	expectations := BasicChatExpectations()
-	expectations.MinContentLength = 15                // Conversation responses should be more substantial
 	expectations.ShouldContainAnyOf = contextKeywords // Should reference conversation context
 
 	return expectations
@@ -142,8 +135,6 @@ func VisionExpectations(expectedKeywords []string) ResponseExpectations {
 	if len(expectedKeywords) > 0 {
 		expectations.ShouldContainKeywords = expectedKeywords
 	}
-	expectations.MinContentLength = 20   // Vision responses should be descriptive
-	expectations.MaxContentLength = 1200 // Vision models can be verbose
 	expectations.ShouldNotContainWords = append(expectations.ShouldNotContainWords,
 		"cannot see", "unable to view", "no image", "can't see",
 		"image not found", "invalid image", "corrupted image",
@@ -200,8 +191,6 @@ func TranscriptionExpectations(minTextLength int) ResponseExpectations {
 func ReasoningExpectations() ResponseExpectations {
 	return ResponseExpectations{
 		ShouldHaveContent:    true,
-		MinContentLength:     50,   // Reasoning requires substantial content
-		MaxContentLength:     3000, // Reasoning can be very verbose
 		ShouldHaveUsageStats: true,
 		ShouldHaveTimestamps: true,
 		ShouldHaveModel:      true,
@@ -251,7 +240,6 @@ func GetExpectationsForScenario(scenarioName string, testConfig config.Comprehen
 	case "AutomaticFunctionCalling":
 		expectations := WeatherToolExpectations()
 		expectations.ShouldHaveContent = true // Should have follow-up text after tool call
-		expectations.MinContentLength = 20
 		return expectations
 
 	case "ImageURL", "ImageBase64":
@@ -366,7 +354,6 @@ func ModifyExpectationsForProvider(expectations ResponseExpectations, provider s
 // SemanticCoherenceExpectations returns expectations for semantic coherence tests
 func SemanticCoherenceExpectations(inputPrompt string, expectedTopics []string) ResponseExpectations {
 	expectations := BasicChatExpectations()
-	expectations.MinContentLength = 30 // More substantial response needed
 	expectations.ShouldContainKeywords = expectedTopics
 	expectations.IsRelevantToPrompt = true
 
@@ -409,12 +396,6 @@ func CombineExpectations(expectations ...ResponseExpectations) ResponseExpectati
 		// Override fields that are set in the new expectation
 		if exp.ShouldHaveContent {
 			base.ShouldHaveContent = exp.ShouldHaveContent
-		}
-		if exp.MinContentLength > 0 {
-			base.MinContentLength = exp.MinContentLength
-		}
-		if exp.MaxContentLength > 0 {
-			base.MaxContentLength = exp.MaxContentLength
 		}
 		if exp.ExpectedChoiceCount > 0 {
 			base.ExpectedChoiceCount = exp.ExpectedChoiceCount

@@ -413,18 +413,20 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []Content {
 		var parts []*Part
 
 		// Handle content
-		if message.Content.ContentStr != nil && *message.Content.ContentStr != "" {
-			parts = append(parts, &Part{
-				Text: *message.Content.ContentStr,
-			})
-		} else if message.Content.ContentBlocks != nil {
-			for _, block := range message.Content.ContentBlocks {
-				if block.Text != nil {
-					parts = append(parts, &Part{
-						Text: *block.Text,
-					})
+		if message.Content != nil {
+			if message.Content.ContentStr != nil && *message.Content.ContentStr != "" {
+				parts = append(parts, &Part{
+					Text: *message.Content.ContentStr,
+				})
+			} else if message.Content.ContentBlocks != nil {
+				for _, block := range message.Content.ContentBlocks {
+					if block.Text != nil {
+						parts = append(parts, &Part{
+							Text: *block.Text,
+						})
+					}
+					// Handle other content block types as needed
 				}
-				// Handle other content block types as needed
 			}
 		}
 
@@ -472,19 +474,21 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []Content {
 			var responseData map[string]any
 			var contentStr string
 
-			// Extract content string from ContentStr or ContentBlocks
-			if message.Content.ContentStr != nil && *message.Content.ContentStr != "" {
-				contentStr = *message.Content.ContentStr
-			} else if message.Content.ContentBlocks != nil {
-				// Fallback: try to extract text from content blocks
-				var textParts []string
-				for _, block := range message.Content.ContentBlocks {
-					if block.Text != nil && *block.Text != "" {
-						textParts = append(textParts, *block.Text)
+			if message.Content != nil {
+				// Extract content string from ContentStr or ContentBlocks
+				if message.Content.ContentStr != nil && *message.Content.ContentStr != "" {
+					contentStr = *message.Content.ContentStr
+				} else if message.Content.ContentBlocks != nil {
+					// Fallback: try to extract text from content blocks
+					var textParts []string
+					for _, block := range message.Content.ContentBlocks {
+						if block.Text != nil && *block.Text != "" {
+							textParts = append(textParts, *block.Text)
+						}
 					}
-				}
-				if len(textParts) > 0 {
-					contentStr = strings.Join(textParts, "\n")
+					if len(textParts) > 0 {
+						contentStr = strings.Join(textParts, "\n")
+					}
 				}
 			}
 

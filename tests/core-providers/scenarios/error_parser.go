@@ -376,6 +376,7 @@ func LogErrorConcise(t *testing.T, err *schemas.BifrostError, context string) {
 }
 
 // RequireNoError is like require.NoError but with better error formatting
+// ALWAYS includes ❌ prefix in error messages for consistency
 func RequireNoError(t *testing.T, err *schemas.BifrostError, msgAndArgs ...interface{}) {
 	if err != nil {
 		parsed := ParseBifrostError(err)
@@ -388,6 +389,10 @@ func RequireNoError(t *testing.T, err *schemas.BifrostError, msgAndArgs ...inter
 					message = msg
 				}
 			}
+		}
+		// Ensure message has ❌ prefix
+		if !strings.Contains(message, "❌") {
+			message = fmt.Sprintf("❌ %s", message)
 		}
 		t.Fatalf("%s, but got:\n%s", message, FormatError(parsed))
 	}

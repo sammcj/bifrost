@@ -101,20 +101,18 @@ func printTestSummary(t *testing.T, testConfig config.ComprehensiveTestConfig) {
 	for _, scenario := range testScenarios {
 		if scenario.supported {
 			supported++
-			t.Logf("✅ SUPPORTED:   %-25s ✅ Configured to run", scenario.name)
+			t.Logf("[ENABLED]  SUPPORTED:   %-25s [ENABLED]  Configured to run", scenario.name)
 		} else {
 			unsupported++
-			t.Logf("❌ UNSUPPORTED: %-25s ❌ Not supported by provider", scenario.name)
+			t.Logf("[SKIPPED]  UNSUPPORTED: %-25s [SKIPPED]  Not supported by provider", scenario.name)
 		}
 	}
 
 	t.Logf("%s", strings.Repeat("-", 80))
 	t.Logf("CONFIGURATION SUMMARY:")
-	t.Logf("  ✅ Supported Tests:   %d", supported)
-	t.Logf("  ❌ Unsupported Tests: %d", unsupported)
-	t.Logf("  📊 Total Test Types:  %d", len(testScenarios))
+	t.Logf("  [ENABLED]  Supported Tests:   %d", supported)
+	t.Logf("  [SKIPPED]  Unsupported Tests: %d", unsupported)
+	t.Logf("  [TOTAL]    Total Test Types:  %d", len(testScenarios))
 	t.Logf("")
-	t.Logf("ℹ️  NOTE: Actual PASS/FAIL results are shown in the individual test output above.")
-	t.Logf("ℹ️  Look for individual test results like 'PASS: TestOpenAI/SimpleChat' or 'FAIL: TestOpenAI/ToolCalls'")
 	t.Logf("%s\n", strings.Repeat("=", 80))
 }

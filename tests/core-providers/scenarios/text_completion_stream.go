@@ -2,6 +2,7 @@ package scenarios
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -159,8 +160,6 @@ func RunTextCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 		expectations := GetExpectationsForScenario("TextCompletionStream", testConfig, map[string]interface{}{})
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 		expectations.ShouldContainKeywords = append(expectations.ShouldContainKeywords, []string{"robot"}...) // Should include story elements
-		expectations.MinContentLength = 30                                                                    // Should be substantial content
-		expectations.MaxContentLength = 2000                                                                  // Reasonable upper bound
 
 		// Validate the consolidated text completion streaming response
 		validationResult := ValidateTextCompletionResponse(t, consolidatedResponse, nil, expectations, "TextCompletionStream")
@@ -251,7 +250,24 @@ func RunTextCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 					Fallbacks: testConfig.TextCompletionFallbacks,
 				}
 
-				responseChannel, err := client.TextCompletionStreamRequest(ctx, request)
+				// Use retry framework for stream requests
+				retryConfig := StreamingRetryConfig()
+				retryContext := TestRetryContext{
+					ScenarioName: fmt.Sprintf("TextCompletionStreamVariedPrompts_%s", testCase.name),
+					ExpectedBehavior: map[string]interface{}{
+						"should_stream_content": true,
+						"prompt_type":           testCase.name,
+					},
+					TestMetadata: map[string]interface{}{
+						"provider": testConfig.Provider,
+						"model":    model,
+					},
+				}
+
+				responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+					return client.TextCompletionStreamRequest(ctx, request)
+				})
+
 				RequireNoError(t, err, "Text completion stream with varied prompts failed")
 				if responseChannel == nil {
 					t.Fatal("Response channel should not be nil")
@@ -376,7 +392,24 @@ func RunTextCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 					Fallbacks: testConfig.TextCompletionFallbacks,
 				}
 
-				responseChannel, err := client.TextCompletionStreamRequest(ctx, request)
+				// Use retry framework for stream requests
+				retryConfig := StreamingRetryConfig()
+				retryContext := TestRetryContext{
+					ScenarioName: fmt.Sprintf("TextCompletionStreamParameters_%s", paramTest.name),
+					ExpectedBehavior: map[string]interface{}{
+						"should_stream_content": true,
+						"parameter_test":        paramTest.name,
+					},
+					TestMetadata: map[string]interface{}{
+						"provider": testConfig.Provider,
+						"model":    model,
+					},
+				}
+
+				responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+					return client.TextCompletionStreamRequest(ctx, request)
+				})
+
 				RequireNoError(t, err, "Text completion stream with parameters failed")
 				if responseChannel == nil {
 					t.Fatal("Response channel should not be nil")

@@ -1,1 +1,2 @@
-feature: Qdrant Vector Search Support (#893)
+- feat: Qdrant Vector Search Support (#893)
+- fix: stream accumulator nil content check fixes

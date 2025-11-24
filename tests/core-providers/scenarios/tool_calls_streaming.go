@@ -3,7 +3,6 @@ package scenarios
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -228,154 +227,118 @@ func RunToolCallsStreamingTest(t *testing.T, client *bifrost.Bifrost, ctx contex
 
 		chatTool := GetSampleChatTool(SampleToolTypeWeather)
 
-		maxAttempts := 3
-		var lastErrorMsg string
+		request := &schemas.BifrostChatRequest{
+			Provider: testConfig.Provider,
+			Model:    testConfig.ChatModel,
+			Input:    chatMessages,
+			Params: &schemas.ChatParameters{
+				MaxCompletionTokens: bifrost.Ptr(150),
+				Tools:               []schemas.ChatTool{*chatTool},
+			},
+			Fallbacks: testConfig.Fallbacks,
+		}
 
-		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			if attempt > 1 {
-				t.Logf("🔄 Retry attempt %d/%d for Chat Completions streaming with tool calls...", attempt, maxAttempts)
+		// Use retry framework for stream requests with tools
+		retryConfig := StreamingRetryConfig()
+		retryContext := TestRetryContext{
+			ScenarioName: "ToolCallsStreamingChatCompletions",
+			ExpectedBehavior: map[string]interface{}{
+				"should_stream_content":  true,
+				"should_have_tool_calls": true,
+				"tool_name":              "get_weather",
+			},
+			TestMetadata: map[string]interface{}{
+				"provider": testConfig.Provider,
+				"model":    testConfig.ChatModel,
+				"tools":    true,
+			},
+		}
+
+		responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+			return client.ChatCompletionStreamRequest(ctx, request)
+		})
+
+		RequireNoError(t, err, "Chat completion stream with tools failed")
+		if responseChannel == nil {
+			t.Fatal("Response channel should not be nil")
+		}
+
+		accumulator := NewStreamingToolCallAccumulator()
+		var responseCount int
+
+		t.Logf("🔧 Testing Chat Completions streaming with tool calls...")
+
+		for response := range responseChannel {
+			if response == nil || response.BifrostChatResponse == nil {
+				t.Fatal("Streaming response should not be nil")
 			}
+			responseCount++
 
-			request := &schemas.BifrostChatRequest{
-				Provider: testConfig.Provider,
-				Model:    testConfig.ChatModel,
-				Input:    chatMessages,
-				Params: &schemas.ChatParameters{
-					MaxCompletionTokens: bifrost.Ptr(150),
-					Tools:               []schemas.ChatTool{*chatTool},
-				},
-				Fallbacks: testConfig.Fallbacks,
-			}
+			// Process tool calls from this chunk
+			if response.BifrostChatResponse.Choices != nil {
+				for _, choice := range response.BifrostChatResponse.Choices {
+					if choice.ChatStreamResponseChoice != nil && choice.ChatStreamResponseChoice.Delta != nil {
+						delta := choice.ChatStreamResponseChoice.Delta
 
-			responseChannel, err := client.ChatCompletionStreamRequest(ctx, request)
-			if err != nil {
-				if attempt == maxAttempts {
-					RequireNoError(t, err, "Chat completion stream with tools failed")
-				}
-				lastErrorMsg = GetErrorMessage(err)
-				continue
-			}
-			if responseChannel == nil {
-				if attempt == maxAttempts {
-					t.Fatal("Response channel should not be nil")
-				}
-				lastErrorMsg = "response channel is nil"
-				continue
-			}
+						// Check for tool calls in delta
+						if len(delta.ToolCalls) > 0 {
+							for _, toolCall := range delta.ToolCalls {
+								// Debug logging: what fields are present in this chunk
+								chunkType := "ChatCompletions.Delta.ToolCalls"
+								hasID := toolCall.ID != nil && *toolCall.ID != ""
+								hasName := toolCall.Function.Name != nil && *toolCall.Function.Name != ""
+								hasArgs := toolCall.Function.Arguments != ""
 
-			accumulator := NewStreamingToolCallAccumulator()
-			var responseCount int
-			streamError := false
+								t.Logf("📊 [%s] Chunk fields: ID=%v (field: toolCall.ID), Name=%v (field: toolCall.Function.Name), Args=%v (field: toolCall.Function.Arguments, len=%d)",
+									chunkType, hasID, hasName, hasArgs, len(toolCall.Function.Arguments))
 
-			if attempt == 1 {
-				t.Logf("🔧 Testing Chat Completions streaming with tool calls...")
-			}
-
-			for response := range responseChannel {
-				if response == nil || response.BifrostChatResponse == nil {
-					if attempt == maxAttempts {
-						t.Fatal("Streaming response should not be nil")
-					}
-					lastErrorMsg = "streaming response is nil"
-					streamError = true
-					break
-				}
-				responseCount++
-
-				// Process tool calls from this chunk
-				if response.BifrostChatResponse.Choices != nil {
-					for _, choice := range response.BifrostChatResponse.Choices {
-						if choice.ChatStreamResponseChoice != nil && choice.ChatStreamResponseChoice.Delta != nil {
-							delta := choice.ChatStreamResponseChoice.Delta
-
-							// Check for tool calls in delta
-							if len(delta.ToolCalls) > 0 {
-								for _, toolCall := range delta.ToolCalls {
-									// Debug logging: what fields are present in this chunk
-									chunkType := "ChatCompletions.Delta.ToolCalls"
-									hasID := toolCall.ID != nil && *toolCall.ID != ""
-									hasName := toolCall.Function.Name != nil && *toolCall.Function.Name != ""
-									hasArgs := toolCall.Function.Arguments != ""
-
-									t.Logf("📊 [%s] Chunk fields: ID=%v (field: toolCall.ID), Name=%v (field: toolCall.Function.Name), Args=%v (field: toolCall.Function.Arguments, len=%d)",
-										chunkType, hasID, hasName, hasArgs, len(toolCall.Function.Arguments))
-
-									if hasID {
-										t.Logf("  ✅ ID found in %s: %s", chunkType, *toolCall.ID)
-									}
-									if hasName {
-										t.Logf("  ✅ Name found in %s: %s", chunkType, *toolCall.Function.Name)
-									}
-									if hasArgs {
-										t.Logf("  ✅ Arguments found in %s: %s", chunkType, toolCall.Function.Arguments)
-									}
-
-									accumulator.AccumulateChatToolCall(choice.Index, toolCall)
-									t.Logf("🔧 Accumulated tool call chunk: index=%d, id=%v, name=%v, args_len=%d",
-										choice.Index,
-										toolCall.ID,
-										toolCall.Function.Name,
-										len(toolCall.Function.Arguments))
+								if hasID {
+									t.Logf("  ✅ ID found in %s: %s", chunkType, *toolCall.ID)
 								}
+								if hasName {
+									t.Logf("  ✅ Name found in %s: %s", chunkType, *toolCall.Function.Name)
+								}
+								if hasArgs {
+									t.Logf("  ✅ Arguments found in %s: %s", chunkType, toolCall.Function.Arguments)
+								}
+
+								accumulator.AccumulateChatToolCall(choice.Index, toolCall)
+								t.Logf("🔧 Accumulated tool call chunk: index=%d, id=%v, name=%v, args_len=%d",
+									choice.Index,
+									toolCall.ID,
+									toolCall.Function.Name,
+									len(toolCall.Function.Arguments))
 							}
 						}
 					}
 				}
-
-				if responseCount > 500 {
-					break
-				}
 			}
 
-			if streamError {
-				continue
-			}
-
-			if responseCount == 0 {
-				if attempt == maxAttempts {
-					t.Fatal("Should receive at least one streaming response")
-				}
-				lastErrorMsg = "no streaming responses received"
-				continue
-			}
-
-			// Validate final tool calls
-			finalToolCalls := accumulator.GetFinalChatToolCalls()
-
-			// Check if validation passes
-			validationPassed := true
-			if len(finalToolCalls) == 0 {
-				validationPassed = false
-				lastErrorMsg = "no tool calls found in streaming response"
-			} else {
-				for i, toolCall := range finalToolCalls {
-					if toolCall.ID == "" || toolCall.Name == "" || toolCall.Arguments == "" {
-						validationPassed = false
-						lastErrorMsg = fmt.Sprintf("tool call %d missing required fields: ID=%v, Name=%v, Arguments=%v",
-							i, toolCall.ID != "", toolCall.Name != "", toolCall.Arguments != "")
-						break
-					}
-				}
-			}
-
-			if validationPassed {
-				validateStreamingToolCalls(t, finalToolCalls, "Chat Completions")
-				t.Logf("✅ Chat Completions streaming with tools test completed successfully")
-				return
-			}
-
-			// Validation failed, retry if we have attempts left
-			if attempt < maxAttempts {
-				t.Logf("⚠️ Validation failed on attempt %d: %s", attempt, lastErrorMsg)
-				continue
+			if responseCount > 500 {
+				break
 			}
 		}
 
-		// All retries failed
-		if lastErrorMsg != "" {
-			t.Fatalf("❌ Chat Completions streaming with tools test failed after %d attempts: %s", maxAttempts, lastErrorMsg)
+		if responseCount == 0 {
+			t.Fatal("Should receive at least one streaming response")
 		}
-		t.Fatalf("❌ Chat Completions streaming with tools test failed after %d attempts", maxAttempts)
+
+		// Validate final tool calls
+		finalToolCalls := accumulator.GetFinalChatToolCalls()
+
+		if len(finalToolCalls) == 0 {
+			t.Fatal("❌ No tool calls found in streaming response")
+		}
+
+		for i, toolCall := range finalToolCalls {
+			if toolCall.ID == "" || toolCall.Name == "" || toolCall.Arguments == "" {
+				t.Fatalf("❌ Tool call %d missing required fields: ID=%v, Name=%v, Arguments=%v",
+					i, toolCall.ID != "", toolCall.Name != "", toolCall.Arguments != "")
+			}
+		}
+
+		validateStreamingToolCalls(t, finalToolCalls, "Chat Completions")
+		t.Logf("✅ Chat Completions streaming with tools test completed successfully")
 	})
 
 	// Test Responses API streaming with tool calls
@@ -390,223 +353,148 @@ func RunToolCallsStreamingTest(t *testing.T, client *bifrost.Bifrost, ctx contex
 
 		responsesTool := GetSampleResponsesTool(SampleToolTypeWeather)
 
-		maxAttempts := 3
-		var lastErrorMsg string
+		request := &schemas.BifrostResponsesRequest{
+			Provider: testConfig.Provider,
+			Model:    testConfig.ChatModel,
+			Input:    responsesMessages,
+			Params: &schemas.ResponsesParameters{
+				Tools: []schemas.ResponsesTool{*responsesTool},
+			},
+			Fallbacks: testConfig.Fallbacks,
+		}
 
-		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			if attempt > 1 {
-				t.Logf("🔄 Retry attempt %d/%d for Responses API streaming with tool calls...", attempt, maxAttempts)
+		// Use retry framework for stream requests with tools
+		retryConfig := StreamingRetryConfig()
+		retryContext := TestRetryContext{
+			ScenarioName: "ToolCallsStreamingResponses",
+			ExpectedBehavior: map[string]interface{}{
+				"should_stream_content":  true,
+				"should_have_tool_calls": true,
+				"tool_name":              "get_weather",
+			},
+			TestMetadata: map[string]interface{}{
+				"provider": testConfig.Provider,
+				"model":    testConfig.ChatModel,
+				"tools":    true,
+			},
+		}
+
+		responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+			return client.ResponsesStreamRequest(ctx, request)
+		})
+
+		RequireNoError(t, err, "Responses stream with tools failed")
+		if responseChannel == nil {
+			t.Fatal("Response channel should not be nil")
+		}
+
+		accumulator := NewStreamingToolCallAccumulator()
+		var responseCount int
+
+		t.Logf("🔧 Testing Responses API streaming with tool calls...")
+
+		for response := range responseChannel {
+			if response == nil {
+				t.Fatal("Streaming response should not be nil")
 			}
+			responseCount++
 
-			request := &schemas.BifrostResponsesRequest{
-				Provider: testConfig.Provider,
-				Model:    testConfig.ChatModel,
-				Input:    responsesMessages,
-				Params: &schemas.ResponsesParameters{
-					Tools: []schemas.ResponsesTool{*responsesTool},
-				},
-				Fallbacks: testConfig.Fallbacks,
-			}
+			if response.BifrostResponsesStreamResponse != nil {
+				streamResp := response.BifrostResponsesStreamResponse
 
-			responseChannel, err := client.ResponsesStreamRequest(ctx, request)
-			if err != nil {
-				if attempt == maxAttempts {
-					RequireNoError(t, err, "Responses stream with tools failed")
-				}
-				lastErrorMsg = GetErrorMessage(err)
-				continue
-			}
-			if responseChannel == nil {
-				if attempt == maxAttempts {
-					t.Fatal("Response channel should not be nil")
-				}
-				lastErrorMsg = "response channel is nil"
-				continue
-			}
-
-			accumulator := NewStreamingToolCallAccumulator()
-			var responseCount int
-			streamError := false
-
-			if attempt == 1 {
-				t.Logf("🔧 Testing Responses API streaming with tool calls...")
-			}
-
-			for response := range responseChannel {
-				if response == nil {
-					if attempt == maxAttempts {
-						t.Fatal("Streaming response should not be nil")
+				// Check for function call events
+				switch streamResp.Type {
+				case schemas.ResponsesStreamResponseTypeFunctionCallArgumentsDelta:
+					// Arguments are being streamed - check both Delta and Arguments fields
+					// Delta is used by most providers (Anthropic, Cohere, Bedrock, OpenAI)
+					// Arguments is used by some providers (OpenAI-compatible via mux)
+					chunkType := string(streamResp.Type)
+					var arguments *string
+					argsField := "<none>"
+					if streamResp.Delta != nil {
+						arguments = streamResp.Delta
+						argsField = "streamResp.Delta"
+					} else if streamResp.Arguments != nil {
+						arguments = streamResp.Arguments
+						argsField = "streamResp.Arguments"
 					}
-					lastErrorMsg = "streaming response is nil"
-					streamError = true
-					break
-				}
-				responseCount++
 
-				if response.BifrostResponsesStreamResponse != nil {
-					streamResp := response.BifrostResponsesStreamResponse
+					if arguments != nil {
+						// Try to get call ID, name, and item ID
+						var callID *string
+						var name *string
+						var itemID *string
+						callIDField := "<none>"
+						nameField := "<none>"
+						itemIDField := "<none>"
 
-					// Check for function call events
-					switch streamResp.Type {
-					case schemas.ResponsesStreamResponseTypeFunctionCallArgumentsDelta:
-						// Arguments are being streamed - check both Delta and Arguments fields
-						// Delta is used by most providers (Anthropic, Cohere, Bedrock, OpenAI)
-						// Arguments is used by some providers (OpenAI-compatible via mux)
-						chunkType := string(streamResp.Type)
-						var arguments *string
-						argsField := "<none>"
-						if streamResp.Delta != nil {
-							arguments = streamResp.Delta
-							argsField = "streamResp.Delta"
-						} else if streamResp.Arguments != nil {
-							arguments = streamResp.Arguments
-							argsField = "streamResp.Arguments"
+						// Item ID is often in the delta event itself (for OpenAI)
+						if streamResp.ItemID != nil {
+							itemID = streamResp.ItemID
+							itemIDField = "streamResp.ItemID"
 						}
 
-						if arguments != nil {
-							// Try to get call ID, name, and item ID
-							var callID *string
-							var name *string
-							var itemID *string
-							callIDField := "<none>"
-							nameField := "<none>"
-							itemIDField := "<none>"
-
-							// Item ID is often in the delta event itself (for OpenAI)
-							if streamResp.ItemID != nil {
-								itemID = streamResp.ItemID
-								itemIDField = "streamResp.ItemID"
+						// Try to get call ID and name from item if available
+						if streamResp.Item != nil && streamResp.Item.ResponsesToolMessage != nil {
+							if streamResp.Item.ResponsesToolMessage.CallID != nil {
+								callID = streamResp.Item.ResponsesToolMessage.CallID
+								callIDField = "streamResp.Item.ResponsesToolMessage.CallID"
 							}
-
-							// Try to get call ID and name from item if available
-							if streamResp.Item != nil && streamResp.Item.ResponsesToolMessage != nil {
-								if streamResp.Item.ResponsesToolMessage.CallID != nil {
-									callID = streamResp.Item.ResponsesToolMessage.CallID
-									callIDField = "streamResp.Item.ResponsesToolMessage.CallID"
-								}
-								if streamResp.Item.ResponsesToolMessage.Name != nil {
-									name = streamResp.Item.ResponsesToolMessage.Name
-									nameField = "streamResp.Item.ResponsesToolMessage.Name"
-								}
-							}
-
-							// Also check if item has an ID
-							if streamResp.Item != nil && streamResp.Item.ID != nil {
-								itemID = streamResp.Item.ID
-								itemIDField = "streamResp.Item.ID"
-							}
-
-							// Debug logging: what fields are present in this chunk
-							hasID := callID != nil && *callID != ""
-							hasName := name != nil && *name != ""
-							hasArgs := *arguments != ""
-							hasItemID := itemID != nil && *itemID != ""
-
-							t.Logf("📊 [%s] Chunk fields: ID=%v (%s), Name=%v (%s), Args=%v (%s, len=%d), ItemID=%v (%s)",
-								chunkType, hasID, callIDField, hasName, nameField, hasArgs, argsField, len(*arguments), hasItemID, itemIDField)
-
-							if hasID {
-								t.Logf("  ✅ ID found in %s: %s", chunkType, *callID)
-							}
-							if hasName {
-								t.Logf("  ✅ Name found in %s: %s", chunkType, *name)
-							}
-							if hasArgs {
-								t.Logf("  ✅ Arguments found in %s: %s", chunkType, *arguments)
-							}
-							if hasItemID {
-								t.Logf("  ✅ ItemID found in %s: %s", chunkType, *itemID)
-							}
-
-							accumulator.AccumulateResponsesToolCall(callID, name, arguments, itemID)
-							callIDStr := "<nil>"
-							if callID != nil {
-								callIDStr = *callID
-							}
-							nameStr := "<nil>"
-							if name != nil {
-								nameStr = *name
-							}
-							itemIDStr := "<nil>"
-							if itemID != nil {
-								itemIDStr = *itemID
-							}
-							t.Logf("🔧 Accumulated function call arguments chunk: callID=%s, name=%s, itemID=%s, args_len=%d",
-								callIDStr, nameStr, itemIDStr, len(*arguments))
-						}
-
-					case schemas.ResponsesStreamResponseTypeOutputItemAdded:
-						// A new function call item was added
-						if streamResp.Item != nil && streamResp.Item.Type != nil {
-							if *streamResp.Item.Type == schemas.ResponsesMessageTypeFunctionCall {
-								chunkType := string(streamResp.Type)
-								var callID *string
-								var name *string
-								var itemID *string
-								callIDField := "<none>"
-								nameField := "<none>"
-								itemIDField := "<none>"
-
-								if streamResp.Item.ResponsesToolMessage != nil {
-									if streamResp.Item.ResponsesToolMessage.CallID != nil {
-										callID = streamResp.Item.ResponsesToolMessage.CallID
-										callIDField = "streamResp.Item.ResponsesToolMessage.CallID"
-									}
-									if streamResp.Item.ResponsesToolMessage.Name != nil {
-										name = streamResp.Item.ResponsesToolMessage.Name
-										nameField = "streamResp.Item.ResponsesToolMessage.Name"
-									}
-									if streamResp.Item.ResponsesToolMessage.Arguments != nil {
-										argsField := "streamResp.Item.ResponsesToolMessage.Arguments"
-										t.Logf("📊 [%s] Arguments also found in item: %s (len=%d)", chunkType, argsField, len(*streamResp.Item.ResponsesToolMessage.Arguments))
-									}
-								}
-
-								if streamResp.Item.ID != nil {
-									itemID = streamResp.Item.ID
-									itemIDField = "streamResp.Item.ID"
-								}
-
-								// Debug logging: what fields are present in this chunk
-								hasID := callID != nil && *callID != ""
-								hasName := name != nil && *name != ""
-								hasItemID := itemID != nil && *itemID != ""
-
-								t.Logf("📊 [%s] Chunk fields: ID=%v (%s), Name=%v (%s), ItemID=%v (%s)",
-									chunkType, hasID, callIDField, hasName, nameField, hasItemID, itemIDField)
-
-								if hasID {
-									t.Logf("  ✅ ID found in %s: %s", chunkType, *callID)
-								}
-								if hasName {
-									t.Logf("  ✅ Name found in %s: %s", chunkType, *name)
-								}
-								if hasItemID {
-									t.Logf("  ✅ ItemID found in %s: %s", chunkType, *itemID)
-								}
-
-								// Initialize or update the tool call
-								accumulator.AccumulateResponsesToolCall(callID, name, nil, itemID)
-								callIDStr := "<nil>"
-								if callID != nil {
-									callIDStr = *callID
-								}
-								nameStr := "<nil>"
-								if name != nil {
-									nameStr = *name
-								}
-								itemIDStr := "<nil>"
-								if itemID != nil {
-									itemIDStr = *itemID
-								}
-								t.Logf("🔧 Function call item added: callID=%s, name=%s, itemID=%s",
-									callIDStr, nameStr, itemIDStr)
+							if streamResp.Item.ResponsesToolMessage.Name != nil {
+								name = streamResp.Item.ResponsesToolMessage.Name
+								nameField = "streamResp.Item.ResponsesToolMessage.Name"
 							}
 						}
 
-					case schemas.ResponsesStreamResponseTypeFunctionCallArgumentsDone:
-						// Function call arguments are complete - use the complete arguments
-						if streamResp.Arguments != nil {
+						// Also check if item has an ID
+						if streamResp.Item != nil && streamResp.Item.ID != nil {
+							itemID = streamResp.Item.ID
+							itemIDField = "streamResp.Item.ID"
+						}
+
+						// Debug logging: what fields are present in this chunk
+						hasID := callID != nil && *callID != ""
+						hasName := name != nil && *name != ""
+						hasArgs := *arguments != ""
+						hasItemID := itemID != nil && *itemID != ""
+
+						t.Logf("📊 [%s] Chunk fields: ID=%v (%s), Name=%v (%s), Args=%v (%s, len=%d), ItemID=%v (%s)",
+							chunkType, hasID, callIDField, hasName, nameField, hasArgs, argsField, len(*arguments), hasItemID, itemIDField)
+
+						if hasID {
+							t.Logf("  ✅ ID found in %s: %s", chunkType, *callID)
+						}
+						if hasName {
+							t.Logf("  ✅ Name found in %s: %s", chunkType, *name)
+						}
+						if hasArgs {
+							t.Logf("  ✅ Arguments found in %s: %s", chunkType, *arguments)
+						}
+						if hasItemID {
+							t.Logf("  ✅ ItemID found in %s: %s", chunkType, *itemID)
+						}
+
+						accumulator.AccumulateResponsesToolCall(callID, name, arguments, itemID)
+						callIDStr := "<nil>"
+						if callID != nil {
+							callIDStr = *callID
+						}
+						nameStr := "<nil>"
+						if name != nil {
+							nameStr = *name
+						}
+						itemIDStr := "<nil>"
+						if itemID != nil {
+							itemIDStr = *itemID
+						}
+						t.Logf("🔧 Accumulated function call arguments chunk: callID=%s, name=%s, itemID=%s, args_len=%d",
+							callIDStr, nameStr, itemIDStr, len(*arguments))
+					}
+
+				case schemas.ResponsesStreamResponseTypeOutputItemAdded:
+					// A new function call item was added
+					if streamResp.Item != nil && streamResp.Item.Type != nil {
+						if *streamResp.Item.Type == schemas.ResponsesMessageTypeFunctionCall {
 							chunkType := string(streamResp.Type)
 							var callID *string
 							var name *string
@@ -614,14 +502,8 @@ func RunToolCallsStreamingTest(t *testing.T, client *bifrost.Bifrost, ctx contex
 							callIDField := "<none>"
 							nameField := "<none>"
 							itemIDField := "<none>"
-							argsField := "streamResp.Arguments"
 
-							if streamResp.ItemID != nil {
-								itemID = streamResp.ItemID
-								itemIDField = "streamResp.ItemID"
-							}
-
-							if streamResp.Item != nil && streamResp.Item.ResponsesToolMessage != nil {
+							if streamResp.Item.ResponsesToolMessage != nil {
 								if streamResp.Item.ResponsesToolMessage.CallID != nil {
 									callID = streamResp.Item.ResponsesToolMessage.CallID
 									callIDField = "streamResp.Item.ResponsesToolMessage.CallID"
@@ -630,9 +512,13 @@ func RunToolCallsStreamingTest(t *testing.T, client *bifrost.Bifrost, ctx contex
 									name = streamResp.Item.ResponsesToolMessage.Name
 									nameField = "streamResp.Item.ResponsesToolMessage.Name"
 								}
+								if streamResp.Item.ResponsesToolMessage.Arguments != nil {
+									argsField := "streamResp.Item.ResponsesToolMessage.Arguments"
+									t.Logf("📊 [%s] Arguments also found in item: %s (len=%d)", chunkType, argsField, len(*streamResp.Item.ResponsesToolMessage.Arguments))
+								}
 							}
 
-							if streamResp.Item != nil && streamResp.Item.ID != nil {
+							if streamResp.Item.ID != nil {
 								itemID = streamResp.Item.ID
 								itemIDField = "streamResp.Item.ID"
 							}
@@ -640,11 +526,10 @@ func RunToolCallsStreamingTest(t *testing.T, client *bifrost.Bifrost, ctx contex
 							// Debug logging: what fields are present in this chunk
 							hasID := callID != nil && *callID != ""
 							hasName := name != nil && *name != ""
-							hasArgs := streamResp.Arguments != nil && *streamResp.Arguments != ""
 							hasItemID := itemID != nil && *itemID != ""
 
-							t.Logf("📊 [%s] Chunk fields: ID=%v (%s), Name=%v (%s), Args=%v (%s, len=%d), ItemID=%v (%s)",
-								chunkType, hasID, callIDField, hasName, nameField, hasArgs, argsField, len(*streamResp.Arguments), hasItemID, itemIDField)
+							t.Logf("📊 [%s] Chunk fields: ID=%v (%s), Name=%v (%s), ItemID=%v (%s)",
+								chunkType, hasID, callIDField, hasName, nameField, hasItemID, itemIDField)
 
 							if hasID {
 								t.Logf("  ✅ ID found in %s: %s", chunkType, *callID)
@@ -652,15 +537,12 @@ func RunToolCallsStreamingTest(t *testing.T, client *bifrost.Bifrost, ctx contex
 							if hasName {
 								t.Logf("  ✅ Name found in %s: %s", chunkType, *name)
 							}
-							if hasArgs {
-								t.Logf("  ✅ Complete Arguments found in %s: %s", chunkType, *streamResp.Arguments)
-							}
 							if hasItemID {
 								t.Logf("  ✅ ItemID found in %s: %s", chunkType, *itemID)
 							}
 
-							// Use the complete arguments from the done event
-							accumulator.AccumulateResponsesToolCall(callID, name, streamResp.Arguments, itemID)
+							// Initialize or update the tool call
+							accumulator.AccumulateResponsesToolCall(callID, name, nil, itemID)
 							callIDStr := "<nil>"
 							if callID != nil {
 								callIDStr = *callID
@@ -673,66 +555,111 @@ func RunToolCallsStreamingTest(t *testing.T, client *bifrost.Bifrost, ctx contex
 							if itemID != nil {
 								itemIDStr = *itemID
 							}
-							t.Logf("🔧 Function call arguments done: callID=%s, name=%s, itemID=%s, complete_args=%s",
-								callIDStr, nameStr, itemIDStr, *streamResp.Arguments)
+							t.Logf("🔧 Function call item added: callID=%s, name=%s, itemID=%s",
+								callIDStr, nameStr, itemIDStr)
 						}
 					}
-				}
 
-				if responseCount > 500 {
-					break
-				}
-			}
+				case schemas.ResponsesStreamResponseTypeFunctionCallArgumentsDone:
+					// Function call arguments are complete - use the complete arguments
+					if streamResp.Arguments != nil {
+						chunkType := string(streamResp.Type)
+						var callID *string
+						var name *string
+						var itemID *string
+						callIDField := "<none>"
+						nameField := "<none>"
+						itemIDField := "<none>"
+						argsField := "streamResp.Arguments"
 
-			if streamError {
-				continue
-			}
+						if streamResp.ItemID != nil {
+							itemID = streamResp.ItemID
+							itemIDField = "streamResp.ItemID"
+						}
 
-			if responseCount == 0 {
-				if attempt == maxAttempts {
-					t.Fatal("Should receive at least one streaming response")
-				}
-				lastErrorMsg = "no streaming responses received"
-				continue
-			}
+						if streamResp.Item != nil && streamResp.Item.ResponsesToolMessage != nil {
+							if streamResp.Item.ResponsesToolMessage.CallID != nil {
+								callID = streamResp.Item.ResponsesToolMessage.CallID
+								callIDField = "streamResp.Item.ResponsesToolMessage.CallID"
+							}
+							if streamResp.Item.ResponsesToolMessage.Name != nil {
+								name = streamResp.Item.ResponsesToolMessage.Name
+								nameField = "streamResp.Item.ResponsesToolMessage.Name"
+							}
+						}
 
-			// Validate final tool calls
-			finalToolCalls := accumulator.GetFinalResponsesToolCalls()
+						if streamResp.Item != nil && streamResp.Item.ID != nil {
+							itemID = streamResp.Item.ID
+							itemIDField = "streamResp.Item.ID"
+						}
 
-			// Check if validation passes
-			validationPassed := true
-			if len(finalToolCalls) == 0 {
-				validationPassed = false
-				lastErrorMsg = "no tool calls found in streaming response"
-			} else {
-				for i, toolCall := range finalToolCalls {
-					if toolCall.ID == "" || toolCall.Name == "" || toolCall.Arguments == "" {
-						validationPassed = false
-						lastErrorMsg = fmt.Sprintf("tool call %d missing required fields: ID=%v, Name=%v, Arguments=%v",
-							i, toolCall.ID != "", toolCall.Name != "", toolCall.Arguments != "")
-						break
+						// Debug logging: what fields are present in this chunk
+						hasID := callID != nil && *callID != ""
+						hasName := name != nil && *name != ""
+						hasArgs := streamResp.Arguments != nil && *streamResp.Arguments != ""
+						hasItemID := itemID != nil && *itemID != ""
+
+						t.Logf("📊 [%s] Chunk fields: ID=%v (%s), Name=%v (%s), Args=%v (%s, len=%d), ItemID=%v (%s)",
+							chunkType, hasID, callIDField, hasName, nameField, hasArgs, argsField, len(*streamResp.Arguments), hasItemID, itemIDField)
+
+						if hasID {
+							t.Logf("  ✅ ID found in %s: %s", chunkType, *callID)
+						}
+						if hasName {
+							t.Logf("  ✅ Name found in %s: %s", chunkType, *name)
+						}
+						if hasArgs {
+							t.Logf("  ✅ Complete Arguments found in %s: %s", chunkType, *streamResp.Arguments)
+						}
+						if hasItemID {
+							t.Logf("  ✅ ItemID found in %s: %s", chunkType, *itemID)
+						}
+
+						// Use the complete arguments from the done event
+						accumulator.AccumulateResponsesToolCall(callID, name, streamResp.Arguments, itemID)
+						callIDStr := "<nil>"
+						if callID != nil {
+							callIDStr = *callID
+						}
+						nameStr := "<nil>"
+						if name != nil {
+							nameStr = *name
+						}
+						itemIDStr := "<nil>"
+						if itemID != nil {
+							itemIDStr = *itemID
+						}
+						t.Logf("🔧 Function call arguments done: callID=%s, name=%s, itemID=%s, complete_args=%s",
+							callIDStr, nameStr, itemIDStr, *streamResp.Arguments)
 					}
 				}
 			}
 
-			if validationPassed {
-				validateStreamingToolCalls(t, finalToolCalls, "Responses API")
-				t.Logf("✅ Responses API streaming with tools test completed successfully")
-				return
-			}
-
-			// Validation failed, retry if we have attempts left
-			if attempt < maxAttempts {
-				t.Logf("⚠️ Validation failed on attempt %d: %s", attempt, lastErrorMsg)
-				continue
+			if responseCount > 500 {
+				break
 			}
 		}
 
-		// All retries failed
-		if lastErrorMsg != "" {
-			t.Fatalf("❌ Responses API streaming with tools test failed after %d attempts: %s", maxAttempts, lastErrorMsg)
+		if responseCount == 0 {
+			t.Fatal("Should receive at least one streaming response")
 		}
-		t.Fatalf("❌ Responses API streaming with tools test failed after %d attempts", maxAttempts)
+
+		// Validate final tool calls
+		finalToolCalls := accumulator.GetFinalResponsesToolCalls()
+
+		if len(finalToolCalls) == 0 {
+			t.Fatal("❌ No tool calls found in streaming response")
+		}
+
+		for i, toolCall := range finalToolCalls {
+			if toolCall.ID == "" || toolCall.Name == "" || toolCall.Arguments == "" {
+				t.Fatalf("❌ Tool call %d missing required fields: ID=%v, Name=%v, Arguments=%v",
+					i, toolCall.ID != "", toolCall.Name != "", toolCall.Arguments != "")
+			}
+		}
+
+		validateStreamingToolCalls(t, finalToolCalls, "Responses API")
+		t.Logf("✅ Responses API streaming with tools test completed successfully")
 	})
 }
 

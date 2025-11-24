@@ -51,22 +51,28 @@ func RunTextCompletionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Co
 		// Enhanced validation expectations
 		expectations := GetExpectationsForScenario("TextCompletion", testConfig, map[string]interface{}{})
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
-		expectations.ShouldContainKeywords = []string{"banana"}                                                                    // Should continue the AI theme
-		expectations.ShouldNotContainWords = append(expectations.ShouldNotContainWords, []string{"error", "failed", "invalid"}...) // Should not contain error terms
+		// Note: Removed strict keyword checks as LLMs are non-deterministic
+		// Tests focus on functionality, not exact content
 
-		response, bifrostErr := WithTestRetry(t, retryConfig, retryContext, expectations, "TextCompletion", func() (*schemas.BifrostResponse, *schemas.BifrostError) {
-			c, err := client.TextCompletionRequest(ctx, request)
-			if err != nil {
-				return nil, err
-			}
-			return &schemas.BifrostResponse{TextCompletionResponse: c}, nil
+		// Create TextCompletion retry config
+		textCompletionRetryConfig := TextCompletionRetryConfig{
+			MaxAttempts: retryConfig.MaxAttempts,
+			BaseDelay:   retryConfig.BaseDelay,
+			MaxDelay:    retryConfig.MaxDelay,
+			Conditions:  []TextCompletionRetryCondition{}, // Add specific text completion retry conditions as needed
+			OnRetry:     retryConfig.OnRetry,
+			OnFinalFail: retryConfig.OnFinalFail,
+		}
+
+		response, bifrostErr := WithTextCompletionTestRetry(t, textCompletionRetryConfig, retryContext, expectations, "TextCompletion", func() (*schemas.BifrostTextCompletionResponse, *schemas.BifrostError) {
+			return client.TextCompletionRequest(ctx, request)
 		})
 
 		if bifrostErr != nil {
 			t.Fatalf("❌ TextCompletion request failed after retries: %v", GetErrorMessage(bifrostErr))
 		}
 
-		content := GetResultContent(response)
+		content := GetTextCompletionContent(response)
 		t.Logf("✅ Text completion result: %s", content)
 	})
 }

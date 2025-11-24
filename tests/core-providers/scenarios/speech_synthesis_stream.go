@@ -373,12 +373,12 @@ func RunSpeechSynthesisStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost,
 			}
 
 			for _, voice := range voices {
-				t.Run("StreamingVoice_"+voice, func(t *testing.T) {
+				voiceCopy := voice
+				t.Run("StreamingVoice_"+voiceCopy, func(t *testing.T) {
 					if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
 						t.Parallel()
 					}
 
-					voiceCopy := voice
 					request := &schemas.BifrostSpeechRequest{
 						Provider: testConfig.Provider,
 						Model:    testConfig.SpeechSynthesisModel,
@@ -396,61 +396,85 @@ func RunSpeechSynthesisStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost,
 
 					retryConfig := GetTestRetryConfigForScenario("SpeechSynthesisStreamVoice", testConfig)
 					retryContext := TestRetryContext{
-						ScenarioName: "SpeechSynthesisStream_Voice_" + voice,
+						ScenarioName: "SpeechSynthesisStream_Voice_" + voiceCopy,
 						ExpectedBehavior: map[string]interface{}{
 							"generate_streaming_audio": true,
-							"voice_type":               voice,
+							"voice_type":               voiceCopy,
 						},
 						TestMetadata: map[string]interface{}{
 							"provider": testConfig.Provider,
-							"voice":    voice,
+							"voice":    voiceCopy,
 						},
 					}
 
 					requestCtx := context.Background()
 
-					responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-						return client.SpeechStreamRequest(requestCtx, request)
-					})
+					// Use retry framework with stream validation
+					validationResult := WithSpeechStreamValidationRetry(
+						t,
+						retryConfig,
+						retryContext,
+						func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+							return client.SpeechStreamRequest(requestCtx, request)
+						},
+						func(responseChannel chan *schemas.BifrostStream) SpeechStreamValidationResult {
+							// Validate stream content
+							var receivedData bool
+							var streamErrors []string
+							var lastTokenLatency int64
+							var validationErrors []string
 
-					RequireNoError(t, err, fmt.Sprintf("Streaming failed for voice %s", voice))
+							for response := range responseChannel {
+								if response == nil {
+									streamErrors = append(streamErrors, fmt.Sprintf("Received nil stream response for voice %s", voiceCopy))
+									continue
+								}
 
-					var receivedData bool
-					var streamErrors []string
-					var lastTokenLatency int64
+								if response.BifrostError != nil {
+									streamErrors = append(streamErrors, fmt.Sprintf("Error in stream for voice %s: %s", voiceCopy, FormatErrorConcise(ParseBifrostError(response.BifrostError))))
+									continue
+								}
 
-					for response := range responseChannel {
-						if response == nil {
-							streamErrors = append(streamErrors, fmt.Sprintf("Received nil stream response for voice %s", voice))
-							continue
-						}
+								if response.BifrostSpeechStreamResponse != nil {
+									lastTokenLatency = response.BifrostSpeechStreamResponse.ExtraFields.Latency
+								}
 
-						if response.BifrostError != nil {
-							streamErrors = append(streamErrors, fmt.Sprintf("Error in stream for voice %s: %s", voice, FormatErrorConcise(ParseBifrostError(response.BifrostError))))
-							continue
-						}
+								if response.BifrostSpeechStreamResponse != nil && response.BifrostSpeechStreamResponse.Audio != nil && len(response.BifrostSpeechStreamResponse.Audio) > 0 {
+									receivedData = true
+									t.Logf("✅ Received data for voice %s: %d bytes", voiceCopy, len(response.BifrostSpeechStreamResponse.Audio))
+								}
+							}
 
-						if response.BifrostSpeechStreamResponse != nil {
-							lastTokenLatency = response.BifrostSpeechStreamResponse.ExtraFields.Latency
-						}
+							// Build validation errors
+							if len(streamErrors) > 0 {
+								validationErrors = append(validationErrors, fmt.Sprintf("Stream errors: %v", streamErrors))
+							}
 
-						if response.BifrostSpeechStreamResponse != nil && response.BifrostSpeechStreamResponse.Audio != nil && len(response.BifrostSpeechStreamResponse.Audio) > 0 {
-							receivedData = true
-							t.Logf("✅ Received data for voice %s: %d bytes", voice, len(response.BifrostSpeechStreamResponse.Audio))
-						}
+							if !receivedData {
+								validationErrors = append(validationErrors, fmt.Sprintf("Should receive audio data for voice %s", voiceCopy))
+							}
+
+							if lastTokenLatency == 0 {
+								validationErrors = append(validationErrors, "Last token latency is 0")
+							}
+
+							return SpeechStreamValidationResult{
+								Passed:       len(validationErrors) == 0,
+								Errors:       validationErrors,
+								ReceivedData: receivedData,
+								StreamErrors: streamErrors,
+								LastLatency:  lastTokenLatency,
+							}
+						},
+					)
+
+					// Check validation result
+					if !validationResult.Passed {
+						allErrors := append(validationResult.Errors, validationResult.StreamErrors...)
+						t.Fatalf("❌ Speech streaming validation failed for voice %s: %s", voiceCopy, strings.Join(allErrors, "; "))
 					}
 
-					if len(streamErrors) > 0 {
-						t.Fatalf("❌ Stream errors for voice %s: %v", voice, streamErrors)
-					}
-
-					if !receivedData {
-						t.Fatalf("❌ Should receive audio data for voice %s", voice)
-					}
-					if lastTokenLatency == 0 {
-						t.Fatalf("❌ Last token latency is 0")
-					}
-					t.Logf("✅ Streaming successful for voice: %s", voice)
+					t.Logf("✅ Streaming successful for voice: %s", voiceCopy)
 				})
 			}
 		})

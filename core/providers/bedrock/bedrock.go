@@ -906,7 +906,7 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 				if err == io.EOF {
 					// End of stream - finalize any open items
 					finalResponses := FinalizeBedrockStream(streamState, chunkIndex, usage)
-					for _, finalResponse := range finalResponses {
+					for i, finalResponse := range finalResponses {
 						finalResponse.ExtraFields = schemas.BifrostResponseExtraFields{
 							RequestType:     schemas.ResponsesStreamRequest,
 							Provider:        providerName,
@@ -920,6 +920,10 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 
 						if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
 							finalResponse.ExtraFields.RawResponse = "{}" // Final event has no payload
+						}
+
+						if i == len(finalResponses)-1 {
+							finalResponse.ExtraFields.Latency = time.Since(startTime).Milliseconds()
 						}
 
 						providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, finalResponse, nil, nil), responseChan)

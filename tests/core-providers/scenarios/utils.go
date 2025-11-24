@@ -533,12 +533,39 @@ func GenerateTTSAudioForTest(ctx context.Context, t *testing.T, client *bifrost.
 		},
 	}
 
-	resp, err := client.SpeechRequest(ctx, req)
+	// Use retry framework for TTS generation in helper function
+	// Use default speech retry config since we don't have full test config in helper
+	retryConfig := DefaultSpeechRetryConfig()
+	retryContext := TestRetryContext{
+		ScenarioName: "GenerateTTSAudioForTest",
+		ExpectedBehavior: map[string]interface{}{
+			"should_generate_audio": true,
+		},
+		TestMetadata: map[string]interface{}{
+			"provider": provider,
+			"model":    ttsModel,
+			"format":   format,
+		},
+	}
+	expectations := SpeechExpectations(100) // Minimum expected bytes
+	expectations = ModifyExpectationsForProvider(expectations, provider)
+	speechRetryConfig := SpeechRetryConfig{
+		MaxAttempts: retryConfig.MaxAttempts,
+		BaseDelay:   retryConfig.BaseDelay,
+		MaxDelay:    retryConfig.MaxDelay,
+		Conditions:  []SpeechRetryCondition{},
+		OnRetry:     retryConfig.OnRetry,
+		OnFinalFail: retryConfig.OnFinalFail,
+	}
+
+	resp, err := WithSpeechTestRetry(t, speechRetryConfig, retryContext, expectations, "GenerateTTSAudioForTest", func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
+		return client.SpeechRequest(ctx, req)
+	})
 	if err != nil {
-		t.Fatalf("TTS request failed: %v", err)
+		t.Fatalf("TTS request failed after retries: %v", GetErrorMessage(err))
 	}
 	if resp == nil || resp.Audio == nil || len(resp.Audio) == 0 {
-		t.Fatalf("TTS response missing audio data")
+		t.Fatalf("TTS response missing audio data after retries")
 	}
 
 	suffix := "." + format
@@ -561,6 +588,15 @@ func GenerateTTSAudioForTest(ctx context.Context, t *testing.T, client *bifrost.
 func GetErrorMessage(err *schemas.BifrostError) string {
 	if err == nil {
 		return ""
+	}
+
+	// Check if err.Error is nil before accessing its fields
+	if err.Error == nil {
+		// Return a sensible default when Error field is nil
+		if err.Type != nil && *err.Type != "" {
+			return *err.Type
+		}
+		return "unknown error"
 	}
 
 	errorType := ""

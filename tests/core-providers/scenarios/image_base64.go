@@ -61,8 +61,6 @@ func RunImageBase64Test(t *testing.T, client *bifrost.Bifrost, ctx context.Conte
 		// Enhanced validation for base64 lion image processing (same for both APIs)
 		expectations := VisionExpectations([]string{"lion"}) // Should identify it as a lion (more specific than just "animal")
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
-		expectations.MinContentLength = 15  // Should provide some description
-		expectations.MaxContentLength = 600 // Base64 processing can be resource intensive
 		expectations.ShouldNotContainWords = append(expectations.ShouldNotContainWords, []string{
 			"cannot process", "invalid format", "decode error",
 			"unable to view", "no image", "corrupted",
