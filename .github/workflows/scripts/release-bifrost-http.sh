@@ -160,9 +160,21 @@ cd ../../..
 echo "🔨 Validating transport build..."
 cd transports
 
-# Run unit tests
-echo "🧪 Running unit tests..."
-go test ./...
+# Run unit tests with coverage
+echo "🧪 Running unit tests with coverage..."
+go test -coverprofile=coverage.txt -coverpkg=./... ./...
+
+# Upload coverage to Codecov
+if [ -n "${CODECOV_TOKEN:-}" ]; then
+  echo "📊 Uploading coverage to Codecov..."
+  curl -Os https://uploader.codecov.io/latest/linux/codecov
+  chmod +x codecov
+  ./codecov -t "$CODECOV_TOKEN" -f coverage.txt -F transports
+  rm -f codecov coverage.txt
+else
+  echo "ℹ️ CODECOV_TOKEN not set, skipping coverage upload"
+  rm -f coverage.txt
+fi
 
 # Build the binary for integration testing
 echo "🔨 Building binary for integration testing..."
