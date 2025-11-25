@@ -56,11 +56,11 @@ func (a *Accumulator) processAccumulatedChatStreamingChunks(requestID string, re
 	// Lock the accumulator
 	accumulator.mu.Lock()
 	defer func() {
-		accumulator.mu.Unlock()
 		if isFinalChunk {
-			// Before unlocking, we cleanup
-			defer a.cleanupStreamAccumulator(requestID)
+			// Cleanup BEFORE unlocking to prevent other goroutines from accessing chunks being returned to pool			
+			a.cleanupStreamAccumulator(requestID)
 		}
+		accumulator.mu.Unlock()
 	}()
 	// Initialize accumulated data
 	data := &AccumulatedData{
