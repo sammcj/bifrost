@@ -2,6 +2,20 @@
 title: "v1.2.21"
 description: "v1.2.21 changelog"
 ---
+<Tabs>
+  <Tab title="NPX">
+    ```bash
+    npx -y @maximhq/bifrost --transport-version v1.2.21
+    ```
+  </Tab>
+  <Tab title="Docker">
+    ```bash
+    docker pull maximhq/bifrost:v1.2.21
+    docker run -p 8080:8080 maximhq/bifrost:v1.2.21
+    ```
+  </Tab>
+</Tabs>
+
 <Update label="Bifrost(HTTP)" description="v1.2.21">
 
 - Fixes pricing computation for nested model names i.e. groq/openai/gpt-oss-20b.

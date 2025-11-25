@@ -2,6 +2,20 @@
 title: "v1.3.32"
 description: "v1.3.32 changelog - 2025-11-20"
 ---
+<Tabs>
+  <Tab title="NPX">
+    ```bash
+    npx -y @maximhq/bifrost --transport-version v1.3.32
+    ```
+  </Tab>
+  <Tab title="Docker">
+    ```bash
+    docker pull maximhq/bifrost:v1.3.32
+    docker run -p 8080:8080 maximhq/bifrost:v1.3.32
+    ```
+  </Tab>
+</Tabs>
+
 <Update label="Bifrost(HTTP)" description="1.3.32">
 - feat: support added for structured output Anthropic provider
 - fix: Gemini thought signature preservation for multi-turn function calling (#879)

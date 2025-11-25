@@ -2,6 +2,20 @@
 title: "v1.3.2"
 description: "v1.3.2 changelog"
 ---
+<Tabs>
+  <Tab title="NPX">
+    ```bash
+    npx -y @maximhq/bifrost --transport-version v1.3.2
+    ```
+  </Tab>
+  <Tab title="Docker">
+    ```bash
+    docker pull maximhq/bifrost:v1.3.2
+    docker run -p 8080:8080 maximhq/bifrost:v1.3.2
+    ```
+  </Tab>
+</Tabs>
+
 <Update label="Bifrost(HTTP)" description="v1.3.2">
 
 - Refactor: Moves all context key types to schemas.BifrostContextKey
