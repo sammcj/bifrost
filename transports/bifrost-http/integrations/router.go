@@ -56,9 +56,11 @@ import (
 
 	"bufio"
 
+	"github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream"
 	"github.com/bytedance/sonic"
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
+	"github.com/maximhq/bifrost/core/providers/bedrock"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
 	"github.com/valyala/fasthttp"
@@ -184,6 +186,7 @@ const (
 	RouteConfigTypeOpenAI    RouteConfigType = "openai"
 	RouteConfigTypeAnthropic RouteConfigType = "anthropic"
 	RouteConfigTypeGenAI     RouteConfigType = "genai"
+	RouteConfigTypeBedrock   RouteConfigType = "bedrock"
 )
 
 // RouteConfig defines the configuration for a single route in an integration.
@@ -548,8 +551,16 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 
 // handleStreamingRequest handles streaming requests using Server-Sent Events (SSE)
 func (g *GenericRouter) handleStreamingRequest(ctx *fasthttp.RequestCtx, config RouteConfig, bifrostReq *schemas.BifrostRequest, bifrostCtx *context.Context, cancel context.CancelFunc) {
-	// Set common SSE headers
-	ctx.SetContentType("text/event-stream")
+	// Set headers based on route type
+	if config.Type == RouteConfigTypeBedrock {
+		// AWS Event Stream headers for Bedrock
+		ctx.SetContentType("application/vnd.amazon.eventstream")
+		ctx.Response.Header.Set("x-amzn-bedrock-content-type", "application/json")
+	} else {
+		// Common SSE headers for other providers
+		ctx.SetContentType("text/event-stream")
+	}
+
 	ctx.Response.Header.Set("Cache-Control", "no-cache")
 	ctx.Response.Header.Set("Connection", "keep-alive")
 	ctx.Response.Header.Set("Access-Control-Allow-Origin", "*")
@@ -658,6 +669,12 @@ func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, bifrostCtx *co
 	// Use streaming response writer
 	ctx.Response.SetBodyStreamWriter(func(w *bufio.Writer) {
 		defer w.Flush()
+
+		// Create encoder for AWS Event Stream if needed
+		var eventStreamEncoder *eventstream.Encoder
+		if config.Type == RouteConfigTypeBedrock {
+			eventStreamEncoder = eventstream.NewEncoder()
+		}
 
 		var shouldSendDoneMarker bool
 
@@ -779,14 +796,64 @@ func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, bifrostCtx *co
 					}
 				}
 
-				// Check if the converter returned a raw SSE string or JSON object
-				if sseString, ok := convertedResponse.(string); ok {
-					if !strings.HasPrefix(sseString, "data: ") {
-						sseString = fmt.Sprintf("data: %s\n\n", sseString)
+				// Handle Bedrock Event Stream format
+				if config.Type == RouteConfigTypeBedrock && eventStreamEncoder != nil {
+					// We need to cast to BedrockStreamEvent to determine event type and structure
+					if bedrockEvent, ok := convertedResponse.(*bedrock.BedrockStreamEvent); ok {
+						// Convert to sequence of specific Bedrock events
+						events := bedrockEvent.ToEncodedEvents()
+
+						// Send all collected events
+						for _, evt := range events {
+							jsonData, err := sonic.Marshal(evt.Payload)
+							if err != nil {
+								log.Printf("Failed to marshal bedrock payload: %v", err)
+								continue
+							}
+
+							headers := eventstream.Headers{
+								{
+									Name:  ":content-type",
+									Value: eventstream.StringValue("application/json"),
+								},
+								{
+									Name:  ":event-type",
+									Value: eventstream.StringValue(evt.EventType),
+								},
+								{
+									Name:  ":message-type",
+									Value: eventstream.StringValue("event"),
+								},
+							}
+
+							message := eventstream.Message{
+								Headers: headers,
+								Payload: jsonData,
+							}
+
+							if err := eventStreamEncoder.Encode(w, message); err != nil {
+								log.Printf("[Bedrock Stream] Failed to encode message: %v", err)
+								cancel()
+								return
+							}
+
+							// Flush each message to ensure proper delivery
+							if err := w.Flush(); err != nil {
+								log.Printf("[Bedrock Stream] Failed to flush writer: %v", err)
+								cancel()
+								return
+							}
+						}
 					}
+					// Continue to next chunk (we handled flushing internally)
+					continue
+				} else if sseString, ok := convertedResponse.(string); ok {
 					// CUSTOM SSE FORMAT: The converter returned a complete SSE string
 					// This is used by providers like Anthropic that need custom event types
 					// Example: "event: content_block_delta\ndata: {...}\n\n"
+					if !strings.HasPrefix(sseString, "data: ") {
+						sseString = fmt.Sprintf("data: %s\n\n", sseString)
+					}
 					if _, err := fmt.Fprint(w, sseString); err != nil {
 						cancel() // Client disconnected (write error), cancel upstream stream
 						return
@@ -817,15 +884,17 @@ func (g *GenericRouter) handleStreaming(ctx *fasthttp.RequestCtx, bifrostCtx *co
 			}
 		}
 
-		// Send [DONE] marker only for non-responses APIs (OpenAI responses API and Anthropic messages API don't use [DONE])
-		if shouldSendDoneMarker && config.Type != RouteConfigTypeGenAI {
+		// Only send the [DONE] marker for plain SSE APIs that expect it.
+		// Do NOT send [DONE] for the following cases:
+		//   - OpenAI "responses" API and Anthropic messages API: they signal completion by simply closing the stream, not sending [DONE].
+		//   - Bedrock: uses AWS Event Stream format rather than SSE with [DONE].
+		// Bifrost handles any additional cleanup internally on normal stream completion.
+		if shouldSendDoneMarker && config.Type != RouteConfigTypeGenAI && config.Type != RouteConfigTypeBedrock {
 			if _, err := fmt.Fprint(w, "data: [DONE]\n\n"); err != nil {
 				g.logger.Warn("Failed to write SSE done marker: %v", err)
 				cancel()
 				return // End stream on error, Bifrost handles cleanup internally
 			}
 		}
-		// Note: OpenAI responses API doesn't use [DONE] marker, it ends when the stream closes
-		// Stream completed normally, Bifrost handles cleanup internally
 	})
 }

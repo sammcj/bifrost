@@ -8,6 +8,8 @@ const DefaultBedrockRegion = "us-east-1"
 // BedrockTextCompletionRequest represents a Bedrock text completion request
 // Combines both Anthropic-style and standard completion parameters
 type BedrockTextCompletionRequest struct {
+	ModelID string `json:"-"` // Model ID (sent in URL path, not body)
+
 	// Required field
 	Prompt string `json:"prompt"` // The text prompt to complete
 
@@ -23,6 +25,17 @@ type BedrockTextCompletionRequest struct {
 	// Stop sequences (both naming conventions supported)
 	Stop          []string `json:"stop,omitempty"`           // Stop sequences (standard format)
 	StopSequences []string `json:"stop_sequences,omitempty"` // Stop sequences (Anthropic format)
+
+	// Messages API parameters (Anthropic Claude 3)
+	Messages         []BedrockMessage `json:"messages,omitempty"`
+	System           interface{}      `json:"system,omitempty"`
+	AnthropicVersion string           `json:"anthropic_version,omitempty"`
+	Stream           bool             `json:"-"` // Whether streaming is requested (internal)
+}
+
+// IsStreamingRequested implements the StreamingRequest interface
+func (r *BedrockTextCompletionRequest) IsStreamingRequested() bool {
+	return r.Stream
 }
 
 // BedrockConverseRequest represents a Bedrock Converse API request
@@ -38,6 +51,12 @@ type BedrockConverseRequest struct {
 	PerformanceConfig                 *BedrockPerformanceConfig        `json:"performanceConfig,omitempty"`                 // Performance configuration
 	PromptVariables                   map[string]BedrockPromptVariable `json:"promptVariables,omitempty"`                   // Prompt variables for prompt management
 	RequestMetadata                   map[string]string                `json:"requestMetadata,omitempty"`                   // Request metadata
+	Stream                            bool                             `json:"-"`                                           // Whether streaming is requested (internal, not in JSON)
+}
+
+// IsStreamingRequested implements the StreamingRequest interface
+func (r *BedrockConverseRequest) IsStreamingRequested() bool {
+	return r.Stream
 }
 
 type BedrockMessageRole string
@@ -379,6 +398,9 @@ type BedrockStreamEvent struct {
 
 	// Additional fields
 	AdditionalModelResponseFields interface{} `json:"additionalModelResponseFields,omitempty"`
+
+	// For InvokeModelWithResponseStream (Legacy API)
+	InvokeModelRawChunk []byte `json:"invokeModelRawChunk,omitempty"` // Raw bytes for legacy invoke stream
 }
 
 // BedrockMessageStartEvent indicates the start of a message
