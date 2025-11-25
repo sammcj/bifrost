@@ -165,58 +165,46 @@ if ! grep -q "\"$route\"" docs/docs.json; then
     const topLevelEntries = changelogsTab.pages.filter(p => typeof p === 'string');
     const existingGroups = changelogsTab.pages.filter(p => typeof p === 'object');
     
-    // If there are any existing top-level entries, group them all together
+    // Check if we need to group existing top-level entries
     if (topLevelEntries.length > 0) {
-      console.log(\`📦 Moving \${topLevelEntries.length} top-level entries to their month group...\`);
+      // Get the month of the first top-level entry (they should all be from same month)
+      const firstEntryPath = topLevelEntries[0].replace('changelogs/', '') + '.mdx';
+      const firstEntryFile = 'docs/changelogs/' + firstEntryPath;
       
-      // Group entries by their month/year
-      const entriesByMonth = {};
-      
-      for (const entry of topLevelEntries) {
-        const entryPath = entry.replace('changelogs/', '') + '.mdx';
-        const entryFile = 'docs/changelogs/' + entryPath;
-        
-        try {
-          const content = fs.readFileSync(entryFile, 'utf8');
-          const descMatch = content.match(/description:\\s*\"[^\"]*?(\\d{4}-\\d{2}-\\d{2})[^\"]*\"/);
-          
-          if (descMatch) {
-            const entryDate = new Date(descMatch[1]);
-            const monthYear = entryDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-            
-            if (!entriesByMonth[monthYear]) {
-              entriesByMonth[monthYear] = [];
-            }
-            entriesByMonth[monthYear].push(entry);
-          } else {
-            console.log(\`Warning: Could not find date for entry \${entry}\`);
-          }
-        } catch (e) {
-          console.log(\`Warning: Could not read entry file \${entryFile}: \${e.message}\`);
+      let topLevelMonth = null;
+      try {
+        const content = fs.readFileSync(firstEntryFile, 'utf8');
+        const descMatch = content.match(/description:\\s*\"[^\"]*?(\\d{4}-\\d{2}-\\d{2})[^\"]*\"/);
+        if (descMatch) {
+          const entryDate = new Date(descMatch[1]);
+          topLevelMonth = entryDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
         }
+      } catch (e) {
+        console.log(\`Warning: Could not read entry file \${firstEntryFile}: \${e.message}\`);
       }
       
-      // Add or merge entries into month groups
-      for (const [monthYear, entries] of Object.entries(entriesByMonth)) {
-        let monthGroup = existingGroups.find(g => g.group === monthYear);
+      // Only group if the month has changed
+      if (topLevelMonth && topLevelMonth !== releaseMonthYear) {
+        console.log(\`📦 Month changed from \${topLevelMonth} to \${releaseMonthYear}\`);
+        console.log(\`📦 Grouping \${topLevelEntries.length} top-level entries into \${topLevelMonth} group...\`);
         
-        if (monthGroup) {
-          // Merge entries and sort by semver
-          monthGroup.pages = sortPagesBySemver([...entries, ...monthGroup.pages]);
-          console.log(\`✅ Merged \${entries.length} entries into existing \${monthYear} group (sorted)\`);
-        } else {
-          // Create new group with sorted pages
-          const newGroup = {
-            group: monthYear,
-            pages: sortPagesBySemver(entries)
-          };
-          existingGroups.push(newGroup);
-          console.log(\`✅ Created new \${monthYear} group with \${entries.length} entries (sorted)\`);
-        }
+        // Create a group for all existing top-level entries
+        const previousMonthGroup = {
+          group: topLevelMonth,
+          pages: sortPagesBySemver(topLevelEntries)
+        };
+        
+        // Add this group at the top of existing groups
+        existingGroups.unshift(previousMonthGroup);
+        console.log(\`✅ Created \${topLevelMonth} group with \${topLevelEntries.length} entries (sorted)\`);
+        
+        // Clear top-level entries (they're now in the group)
+        changelogsTab.pages = existingGroups;
+      } else {
+        console.log(\`📋 Same month (\${releaseMonthYear}), keeping existing top-level entries\`);
+        // Keep existing structure (top-level entries + groups)
+        changelogsTab.pages = [...topLevelEntries, ...existingGroups];
       }
-      
-      // Rebuild pages array with groups only (no top-level entries)
-      changelogsTab.pages = existingGroups;
     }
     
     const newRoute = '$route';
