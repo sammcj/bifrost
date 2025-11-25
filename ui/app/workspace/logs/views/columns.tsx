@@ -6,14 +6,7 @@ import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
 import { ProviderName, RequestTypeColors, RequestTypeLabels, Status, StatusColors } from "@/lib/constants/logs";
 import { LogEntry, ResponsesMessageContentBlock } from "@/lib/types/logs";
 import { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown } from "lucide-react";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdownMenu";
-import { MoreHorizontal } from "lucide-react";
+import { ArrowUpDown, Trash2 } from "lucide-react";
 import moment from "moment"
 
 function getMessage(log?: LogEntry) {
@@ -181,21 +174,8 @@ export const createColumns = (
 		id: "actions",
 		cell: ({ row }) => {
 			const log = row.original;
-
 			return (
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" className="h-8 w-8 p-0">
-							<span className="sr-only">Open menu</span>
-							<MoreHorizontal className="h-4 w-4" />
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem onClick={() => onDelete(log)}>
-							Delete log
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
+				<Button variant="outline" size="icon" onClick={() => onDelete(log)}><Trash2 /></Button>
 			);
 		},
 	},
