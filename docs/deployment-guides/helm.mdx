@@ -26,8 +26,12 @@ helm repo update
 ### Install Bifrost
 
 ```bash
-helm install bifrost bifrost/bifrost
+helm install bifrost bifrost/bifrost --set image.tag=v1.3.36
 ```
+
+<Note>
+The `image.tag` parameter is required. Check [Docker Hub](https://hub.docker.com/r/maximhq/bifrost/tags) for available versions.
+</Note>
 
 This deploys Bifrost with:
 - SQLite storage (10Gi PVC)
@@ -52,6 +56,7 @@ Simple setup for local testing and development.
 
 ```bash
 helm install bifrost bifrost/bifrost \
+  --set image.tag=v1.3.36 \
   --set bifrost.providers.openai.keys[0].value="sk-your-key" \
   --set bifrost.providers.openai.keys[0].weight=1
 ```
@@ -77,6 +82,9 @@ High-availability setup with PostgreSQL and auto-scaling.
 
 ```yaml
 # production.yaml
+image:
+  tag: "v1.3.36"  # Required: specify the Bifrost version
+
 replicaCount: 3
 
 storage:
@@ -172,6 +180,9 @@ Optimized for high-volume AI inference with caching.
 
 ```yaml
 # ai-workload.yaml
+image:
+  tag: "v1.3.36"  # Required: specify the Bifrost version
+
 storage:
   mode: postgres
 
@@ -186,8 +197,6 @@ postgresql:
 vectorStore:
   enabled: true
   type: weaviate
-
-vectorStore:
   weaviate:
     enabled: true
     persistence:
@@ -214,12 +223,12 @@ bifrost:
       enabled: true
       config:
         provider: "openai"
-        embeddingModel: "text-embedding-3-small"
+        embedding_model: "text-embedding-3-small"
         dimension: 1536
         threshold: 0.8
         ttl: "5m"
-        cacheByModel: true
-        cacheByProvider: true
+        cache_by_model: true
+        cache_by_provider: true
 ```
 
 **Install:**
@@ -243,6 +252,9 @@ Support multiple LLM providers with load balancing.
 
 ```yaml
 # multi-provider.yaml
+image:
+  tag: "v1.3.36"  # Required: specify the Bifrost version
+
 bifrost:
   encryptionKey: "your-encryption-key"
   
@@ -296,6 +308,9 @@ Use existing PostgreSQL instance.
 
 ```yaml
 # external-db.yaml
+image:
+  tag: "v1.3.36"  # Required: specify the Bifrost version
+
 storage:
   mode: postgres
 
@@ -339,12 +354,13 @@ helm install bifrost bifrost/bifrost -f external-db.yaml
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
+| `image.tag` | **Required.** Bifrost image version (e.g., v1.3.36) | `""` |
 | `replicaCount` | Number of replicas | `1` |
 | `storage.mode` | Storage backend (sqlite/postgres) | `sqlite` |
 | `storage.persistence.size` | PVC size for SQLite | `10Gi` |
 | `postgresql.enabled` | Deploy PostgreSQL | `false` |
 | `vectorStore.enabled` | Enable vector store | `false` |
-| `vectorStore.type` | Vector store type (weaviate/redis) | `none` |
+| `vectorStore.type` | Vector store type (weaviate/redis/qdrant) | `none` |
 | `bifrost.encryptionKey` | Encryption key | `""` |
 | `ingress.enabled` | Enable ingress | `false` |
 | `autoscaling.enabled` | Enable HPA | `false` |
@@ -370,6 +386,7 @@ Or via command line:
 
 ```bash
 helm install bifrost bifrost/bifrost \
+  --set image.tag=v1.3.36 \
   --set bifrost.providers.openai.keys[0].value="sk-..." \
   --set bifrost.providers.openai.keys[0].weight=1
 ```
@@ -392,15 +409,18 @@ bifrost:
     governance:
       enabled: true
       config:
-        isVkMandatory: false
+        is_vk_mandatory: false
     
     semanticCache:
       enabled: true
       config:
         provider: "openai"
-        embeddingModel: "text-embedding-3-small"
+        embedding_model: "text-embedding-3-small"
+        dimension: 1536
         threshold: 0.8
         ttl: "5m"
+        cache_by_model: true
+        cache_by_provider: true
 ```
 
 ## Operations
@@ -558,6 +578,9 @@ nslookup bifrost.yourdomain.com
 Create `my-values.yaml`:
 
 ```yaml
+image:
+  tag: "v1.3.36"  # Required: specify the Bifrost version
+
 replicaCount: 3
 
 storage:

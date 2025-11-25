@@ -75,7 +75,20 @@ else
   exit 1
 fi
 sleep 20
-go test ./...
+go test -coverprofile=coverage.txt -coverpkg=./... ./...
+
+# Upload coverage to Codecov
+if [ -n "${CODECOV_TOKEN:-}" ]; then
+  echo "📊 Uploading coverage to Codecov..."
+  curl -Os https://uploader.codecov.io/latest/linux/codecov
+  chmod +x codecov
+  ./codecov -t "$CODECOV_TOKEN" -f coverage.txt -F framework
+  rm -f codecov coverage.txt
+else
+  echo "ℹ️ CODECOV_TOKEN not set, skipping coverage upload"
+  rm -f coverage.txt
+fi
+
 # Shutting down dependencies
 echo "🔧 Shutting down dependencies of framework tests..."
 # Use docker compose (v2) if available, fallback to docker-compose (v1)

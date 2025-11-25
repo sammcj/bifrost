@@ -78,10 +78,22 @@ if [ -f "go.mod" ]; then
   echo "🔨 Validating plugin build..."
   go build ./...
 
-  # Run tests if any exist
+  # Run tests with coverage if any exist
   if go list ./... | grep -q .; then
-    echo "🧪 Running plugin tests..."
-    # go test -v -run .
+    echo "🧪 Running plugin tests with coverage..."
+    go test -coverprofile=coverage.txt -coverpkg=./... ./...
+    
+    # Upload coverage to Codecov
+    if [ -n "${CODECOV_TOKEN:-}" ]; then
+      echo "📊 Uploading coverage to Codecov..."
+      curl -Os https://uploader.codecov.io/latest/linux/codecov
+      chmod +x codecov
+      ./codecov -t "$CODECOV_TOKEN" -f coverage.txt -F "plugin-${PLUGIN_NAME}"
+      rm -f codecov coverage.txt
+    else
+      echo "ℹ️ CODECOV_TOKEN not set, skipping coverage upload"
+      rm -f coverage.txt
+    fi
   fi
 
   echo "✅ Plugin $PLUGIN_NAME build validation successful"
