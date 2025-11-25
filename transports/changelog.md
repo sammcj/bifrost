@@ -1,3 +1,0 @@
-- feat: opus 4.5 is supported
-- chore: changelog structure update
-- fix: race conditions in stream accumulator

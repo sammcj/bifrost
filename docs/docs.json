@@ -255,28 +255,7 @@
         "tab": "Changelogs",
         "icon": "bolt",
         "pages": [
-          "changelogs/v1.3.35",
-          "changelogs/v1.3.34",
-          "changelogs/v1.3.33",          
-          "changelogs/v1.3.32",
-          "changelogs/v1.3.31",
-          "changelogs/v1.3.30",          
-          "changelogs/v1.3.29",
-          "changelogs/v1.3.28",
-          "changelogs/v1.3.27",
-          "changelogs/v1.3.26",
-          "changelogs/v1.3.25",
-          "changelogs/v1.3.24",
-          "changelogs/v1.3.23",
-          "changelogs/v1.3.22",
-          "changelogs/v1.3.19",
-          "changelogs/v1.3.20",
-          "changelogs/v1.3.21",
-          "changelogs/v1.3.18",
-          "changelogs/v1.3.17",
-          "changelogs/v1.3.16",
-          "changelogs/v1.3.15",
-          "changelogs/v1.3.14",
+          "changelogs/v1.3.36",
           {
             "group": "October 2025",
             "pages": [
@@ -284,8 +263,8 @@
               "changelogs/v1.3.12",
               "changelogs/v1.3.11",
               "changelogs/v1.3.10",
-              "changelogs/v1.3.8",
               "changelogs/v1.3.9",
+              "changelogs/v1.3.8",
               "changelogs/v1.3.7",
               "changelogs/v1.3.6",
               "changelogs/v1.3.5",
@@ -300,16 +279,35 @@
               "changelogs/v1.3.0-prerelease3",
               "changelogs/v1.3.0-prerelease2",
               "changelogs/v1.3.0-prerelease1",
-              "changelogs/v1.2.23",
-              "changelogs/v1.2.24"
+              "changelogs/v1.2.24",
+              "changelogs/v1.2.23"
             ]
           },
           {
             "group": "September 2025",
             "pages": [
+              "changelogs/v1.3.0",
               "changelogs/v1.2.22",
-              "changelogs/v1.2.21",
-              "changelogs/v1.3.0"
+              "changelogs/v1.2.21"
+            ]
+          },
+          {
+            "group": "November 2025",
+            "pages": [
+              "changelogs/v1.3.35",
+              "changelogs/v1.3.34",
+              "changelogs/v1.3.33",
+              "changelogs/v1.3.32",
+              "changelogs/v1.3.31",
+              "changelogs/v1.3.30",
+              "changelogs/v1.3.29",
+              "changelogs/v1.3.28",
+              "changelogs/v1.3.27",
+              "changelogs/v1.3.26",
+              "changelogs/v1.3.25",
+              "changelogs/v1.3.24",
+              "changelogs/v1.3.23",
+              "changelogs/v1.3.22"
             ]
           }
         ]
