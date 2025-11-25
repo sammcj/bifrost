@@ -2,6 +2,20 @@
 title: "v1.3.34"
 description: "v1.3.34 changelog - 2025-11-21"
 ---
+<Tabs>
+  <Tab title="NPX">
+    ```bash
+    npx -y @maximhq/bifrost --transport-version v1.3.34
+    ```
+  </Tab>
+  <Tab title="Docker">
+    ```bash
+    docker pull maximhq/bifrost:v1.3.34
+    docker run -p 8080:8080 maximhq/bifrost:v1.3.34
+    ```
+  </Tab>
+</Tabs>
+
 <Update label="Bifrost(HTTP)" description="1.3.34">
 - feat: Log view is enabled even if config_store is disabled
 - fix: Add missing cache and batch pricing columns to ensure we compute costs for those operations accurately.

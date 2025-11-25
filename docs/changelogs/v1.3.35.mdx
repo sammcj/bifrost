@@ -2,6 +2,20 @@
 title: "v1.3.35"
 description: "v1.3.35 changelog - 2025-11-24"
 ---
+<Tabs>
+  <Tab title="NPX">
+    ```bash
+    npx -y @maximhq/bifrost --transport-version v1.3.35
+    ```
+  </Tab>
+  <Tab title="Docker">
+    ```bash
+    docker pull maximhq/bifrost:v1.3.35
+    docker run -p 8080:8080 maximhq/bifrost:v1.3.35
+    ```
+  </Tab>
+</Tabs>
+
 <Update label="Bifrost(HTTP)" description="1.3.35">
 - feat: Qdrant Vector Search Support (#893)
 - fix: bedrock responses streaming last chunk indicator fixes

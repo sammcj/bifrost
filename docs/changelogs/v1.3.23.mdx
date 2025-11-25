@@ -2,6 +2,20 @@
 title: "v1.3.23"
 description: "v1.3.23 changelog - 2025-11-10"
 ---
+<Tabs>
+  <Tab title="NPX">
+    ```bash
+    npx -y @maximhq/bifrost --transport-version v1.3.23
+    ```
+  </Tab>
+  <Tab title="Docker">
+    ```bash
+    docker pull maximhq/bifrost:v1.3.23
+    docker run -p 8080:8080 maximhq/bifrost:v1.3.23
+    ```
+  </Tab>
+</Tabs>
+
 <Update label="Bifrost(HTTP)" description="v1.3.23">
 - chore: version update core to 1.2.21 and framework to 1.1.26
 - feat: add headers to MCP client config and provider config

@@ -2,6 +2,20 @@
 title: "v1.3.0-prerelease5"
 description: "v1.3.0-prerelease5 changelog"
 ---
+<Tabs>
+  <Tab title="NPX">
+    ```bash
+    npx -y @maximhq/bifrost --transport-version v1.3.0-prerelease5
+    ```
+  </Tab>
+  <Tab title="Docker">
+    ```bash
+    docker pull maximhq/bifrost:v1.3.0-prerelease5
+    docker run -p 8080:8080 maximhq/bifrost:v1.3.0-prerelease5
+    ```
+  </Tab>
+</Tabs>
+
 <Update label="Bifrost(HTTP)" description="v1.3.0-prerelease5">
 
 - Fix: Anthropic tool results aggregation logic (core 1.2.4)

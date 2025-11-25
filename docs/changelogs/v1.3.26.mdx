@@ -2,6 +2,20 @@
 title: "v1.3.26"
 description: "v1.3.26 changelog - 2025-11-16"
 ---
+<Tabs>
+  <Tab title="NPX">
+    ```bash
+    npx -y @maximhq/bifrost --transport-version v1.3.26
+    ```
+  </Tab>
+  <Tab title="Docker">
+    ```bash
+    docker pull maximhq/bifrost:v1.3.26
+    docker run -p 8080:8080 maximhq/bifrost:v1.3.26
+    ```
+  </Tab>
+</Tabs>
+
 <Update label="Bifrost(HTTP)" description="1.3.26">
 - feat: adds support for elevenlabs provider
 - fix: fixes security settings form submission with empty cors domains.
