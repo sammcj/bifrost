@@ -200,11 +200,14 @@ func (a *Accumulator) addResponsesStreamChunk(requestID string, chunk *Responses
 	return nil
 }
 
-// cleanupStreamAccumulator removes the stream accumulator for a request
+// cleanupStreamAccumulator removes the stream accumulator for a request.
+// IMPORTANT: Caller must hold accumulator.mu lock before calling this function
+// to prevent races when returning chunks to pools.
 func (a *Accumulator) cleanupStreamAccumulator(requestID string) {
 	if accumulator, exists := a.streamAccumulators.Load(requestID); exists {
-		// Return all chunks to the pool before deleting
 		acc := accumulator.(*StreamAccumulator)
+
+		// Return all chunks to the pool before deleting
 		for _, chunk := range acc.ChatStreamChunks {
 			a.putChatStreamChunk(chunk)
 		}
@@ -331,6 +334,9 @@ func (a *Accumulator) Cleanup() {
 	// Clean up all stream accumulators
 	a.streamAccumulators.Range(func(key, value interface{}) bool {
 		accumulator := value.(*StreamAccumulator)
+
+		// Lock before accessing chunk slices
+		accumulator.mu.Lock()
 		for _, chunk := range accumulator.ChatStreamChunks {
 			a.chatStreamChunkPool.Put(chunk)
 		}
@@ -343,6 +349,8 @@ func (a *Accumulator) Cleanup() {
 		for _, chunk := range accumulator.AudioStreamChunks {
 			a.audioStreamChunkPool.Put(chunk)
 		}
+		accumulator.mu.Unlock()
+
 		a.streamAccumulators.Delete(key)
 		return true
 	})
@@ -354,13 +362,24 @@ func (a *Accumulator) Cleanup() {
 // CreateStreamAccumulator creates a new stream accumulator for a request
 func (a *Accumulator) CreateStreamAccumulator(requestID string, startTimestamp time.Time) *StreamAccumulator {
 	sc := a.getOrCreateStreamAccumulator(requestID)
+	// Lock before writing to StartTimestamp
+	sc.mu.Lock()
 	sc.StartTimestamp = startTimestamp
+	sc.mu.Unlock()
 	return sc
 }
 
 // CleanupStreamAccumulator cleans up the stream accumulator for a request
 func (a *Accumulator) CleanupStreamAccumulator(requestID string) error {
-	a.cleanupStreamAccumulator(requestID)
+	acc, exists := a.streamAccumulators.Load(requestID)
+	if !exists {
+		return fmt.Errorf("accumulator not found for request ID: %s", requestID)
+	}
+	if accumulator, ok := acc.(*StreamAccumulator); ok {
+		accumulator.mu.Lock()
+		defer accumulator.mu.Unlock()
+		a.cleanupStreamAccumulator(requestID)
+	}
 	return nil
 }
 
@@ -369,6 +388,8 @@ func (a *Accumulator) cleanupOldAccumulators() {
 	count := 0
 	a.streamAccumulators.Range(func(key, value interface{}) bool {
 		accumulator := value.(*StreamAccumulator)
+		accumulator.mu.Lock()
+		defer accumulator.mu.Unlock()
 		if accumulator.Timestamp.Before(time.Now().Add(-a.ttl)) {
 			a.cleanupStreamAccumulator(key.(string))
 		}

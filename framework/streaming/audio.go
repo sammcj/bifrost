@@ -30,11 +30,11 @@ func (a *Accumulator) processAccumulatedAudioStreamingChunks(requestID string, b
 	// Lock the accumulator
 	accumulator.mu.Lock()
 	defer func() {
-		accumulator.mu.Unlock()
 		if isFinalChunk {
-			// Before unlocking, we cleanup
-			defer a.cleanupStreamAccumulator(requestID)
+			// Cleanup BEFORE unlocking to prevent other goroutines from accessing chunks being returned to pool			
+			a.cleanupStreamAccumulator(requestID)
 		}
+		accumulator.mu.Unlock()
 	}()
 	data := &AccumulatedData{
 		RequestID:      requestID,
