@@ -17,7 +17,7 @@ interface DataTableProps {
 	pagination: Pagination;
 	onFiltersChange: (filters: LogFilters) => void;
 	onPaginationChange: (pagination: Pagination) => void;
-	onRowClick?: (log: LogEntry) => void;
+	onRowClick?: (log: LogEntry, columnId: string) => void;
 	isSocketConnected: boolean;
 	liveEnabled: boolean;
 	onLiveToggle: (enabled: boolean) => void;
@@ -131,9 +131,9 @@ export function LogsDataTable({
 								</TableRow>
 								{table.getRowModel().rows.length ? (
 									table.getRowModel().rows.map((row) => (
-										<TableRow key={row.id} className="hover:bg-muted/50 h-12 cursor-pointer" onClick={() => onRowClick?.(row.original)}>
+										<TableRow key={row.id} className="hover:bg-muted/50 h-12 cursor-pointer">
 											{row.getVisibleCells().map((cell) => (
-												<TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+												<TableCell onClick={() => onRowClick?.(row.original, cell.column.id)} key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
 											))}
 										</TableRow>
 									))

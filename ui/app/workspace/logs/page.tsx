@@ -531,7 +531,10 @@ export default function LogsPage() {
 							pagination={pagination}
 							onFiltersChange={setFilters}
 							onPaginationChange={setPagination}
-							onRowClick={setSelectedLog}
+							onRowClick={(row, columnId) => {
+								if (columnId==="actions") return;
+								setSelectedLog(row);
+							}}
 							isSocketConnected={isSocketConnected}
 							liveEnabled={liveEnabled}
 							onLiveToggle={handleLiveToggle}
