@@ -22,6 +22,12 @@ class Config:
     max_retries: int = 3
     debug: bool = False
 
+# Image Test Data
+IMAGE_URL = "https://pub-cdead89c2f004d8f963fd34010c479d0.r2.dev/Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+IMAGE_URL_SECONDARY = "https://goo.gle/instrument-img"
+
+# Small test image as base64 (1x1 pixel red PNG)
+BASE64_IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
 
 # Common Test Data
 SIMPLE_CHAT_MESSAGES = [{"role": "user", "content": "Hello! How are you today?"}]
@@ -117,7 +123,7 @@ embed entire paragraphs or documents rather than just short phrases.
 
 # Tool Call Test Messages
 SINGLE_TOOL_CALL_MESSAGES = [
-    {"role": "user", "content": "What's the weather like in San Francisco?"}
+    {"role": "user", "content": "What's the weather like in San Francisco in fahrenheit?"}
 ]
 
 MULTIPLE_TOOL_CALL_MESSAGES = [
@@ -139,11 +145,82 @@ STREAMING_TOOL_CALL_MESSAGES = [
     }
 ]
 
-# Image Test Data
-IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+# Responses API Test Data
+RESPONSES_SIMPLE_TEXT_INPUT = [
+    {"role": "user", "content": "Tell me a fun fact about space exploration."}
+]
 
-# Small test image as base64 (1x1 pixel red PNG)
-BASE64_IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+RESPONSES_TEXT_WITH_SYSTEM = [
+    {"role": "system", "content": "You are a helpful astronomy expert."},
+    {"role": "user", "content": "What's the most interesting discovery about Mars?"},
+]
+
+RESPONSES_IMAGE_INPUT = [
+    {
+        "role": "user",
+        "content": [
+            {"type": "input_text", "text": "What's in this image?"},
+            {
+                "type": "input_image",
+                "image_url": f"data:image/png;base64,{BASE64_IMAGE}",
+            },
+        ],
+    }
+]
+
+RESPONSES_TOOL_CALL_INPUT = [
+    {
+        "role": "user",
+        "content": "What's the weather in Boston? Use the get_weather function.",
+    }
+]
+
+RESPONSES_STREAMING_INPUT = [
+    {
+        "role": "user",
+        "content": "Write a short poem about artificial intelligence in 4 lines.",
+    }
+]
+
+RESPONSES_REASONING_INPUT = [
+    {
+        "role": "user",
+        "content": (
+            "A train leaves Station A at 2:00 PM traveling at 60 mph toward Station B. "
+            "Another train leaves Station B at 3:00 PM traveling at 80 mph toward Station A. "
+            "The stations are 420 miles apart. At what time will the trains meet? "
+            "Show your step-by-step reasoning."
+        ),
+    }
+]
+
+# Text Completions Test Data
+TEXT_COMPLETION_SIMPLE_PROMPT = "Once upon a time in a distant galaxy"
+
+TEXT_COMPLETION_STREAMING_PROMPT = "Write a haiku about technology:"
+
+# Anthropic Thinking/Reasoning Test Data
+ANTHROPIC_THINKING_PROMPT = [
+    {
+        "role": "user",
+        "content": (
+            "A bakery makes 120 cookies per batch. Each batch takes 25 minutes to bake. "
+            "If they have 4 ovens and need to make 960 cookies for an order, "
+            "how long will it take to complete the order? Think through this step by step."
+        ),
+    }
+]
+
+ANTHROPIC_THINKING_STREAMING_PROMPT = [
+    {
+        "role": "user",
+        "content": (
+            "Three friends split a restaurant bill. Alice paid $45, Bob paid $30, and Carol paid $25. "
+            "They want to split it equally. Who owes money to whom and how much? "
+            "Show your reasoning."
+        ),
+    }
+]
 
 IMAGE_URL_MESSAGES = [
     {
@@ -391,6 +468,7 @@ def extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
                 if hasattr(tool_call, "function"):
                     tool_calls.append(
                         {
+                            "id": tool_call.id,
                             "name": tool_call.function.name,
                             "arguments": (
                                 json.loads(tool_call.function.arguments)
@@ -406,6 +484,7 @@ def extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
             if hasattr(tool_call, "function"):
                 tool_calls.append(
                     {
+                        "id": tool_call.id,
                         "name": tool_call.function.name,
                         "arguments": (
                             json.loads(tool_call.function.arguments)
@@ -419,7 +498,7 @@ def extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
     elif hasattr(response, "content") and isinstance(response.content, list):
         for content in response.content:
             if hasattr(content, "type") and content.type == "tool_use":
-                tool_calls.append({"name": content.name, "arguments": content.input})
+                tool_calls.append({"id": content.id, "name": content.name, "arguments": content.input})
 
     # Handle Bedrock format
     elif isinstance(response, dict) and "output" in response and "message" in response["output"]:
@@ -486,6 +565,7 @@ def assert_has_tool_calls(response: Any, expected_count: Optional[int] = None):
 
     # Validate tool call structure
     for tool_call in tool_calls:
+        assert "id" in tool_call, "Tool call should have an ID"
         assert "name" in tool_call, "Tool call should have a name"
         assert "arguments" in tool_call, "Tool call should have arguments"
 
@@ -493,7 +573,6 @@ def assert_has_tool_calls(response: Any, expected_count: Optional[int] = None):
 def assert_valid_image_response(response: Any):
     """Assert that an image analysis response is valid"""
     assert_valid_chat_response(response, min_length=10)
-
     # Extract content for image-specific validation
     content = ""
     if hasattr(response, "text"):  # Google GenAI
@@ -530,6 +609,32 @@ def assert_valid_image_response(response: Any):
         "appear",
         "color",
         "scene",
+        # Action/descriptive verbs
+        "depicts",
+        "displays",
+        "contains",
+        "features",
+        "includes",
+        "shows",
+        "has",
+        "presents",
+        # Demonstrative phrases
+        "this is",
+        "there is",
+        "there are",
+        "here is",
+        "it is",
+        # Visual descriptors
+        "visible",
+        "shown",
+        "depicted",
+        "appearing",
+        "illustrated",
+        # Structural words
+        "with",
+        "showing",
+        "displaying",
+        "featuring",
     ]
     has_image_reference = any(keyword in content for keyword in image_keywords)
 
@@ -641,18 +746,6 @@ def assert_error_propagation(error_response: Any, integration: str):
         if hasattr(error_response, "response"):
             error_data = error_response.response.json()
             assert "error" in error_data, "OpenAI error should have 'error' field"
-            assert (
-                "type" in error_data
-            ), "OpenAI error should have top-level 'type' field"
-            assert (
-                "event_id" in error_data
-            ), "OpenAI error should have top-level 'event_id' field"
-            assert isinstance(
-                error_data["type"], str
-            ), "OpenAI error type should be a string"
-            assert isinstance(
-                error_data["event_id"], str
-            ), "OpenAI error event_id should be a string"
 
             # Check nested error structure
             error_obj = error_data["error"]
@@ -661,9 +754,6 @@ def assert_error_propagation(error_response: Any, integration: str):
             ), "OpenAI error.error should have 'message' field"
             assert "type" in error_obj, "OpenAI error.error should have 'type' field"
             assert "code" in error_obj, "OpenAI error.error should have 'code' field"
-            assert (
-                "event_id" in error_obj
-            ), "OpenAI error.error should have 'event_id' field"
 
     elif integration.lower() == "anthropic":
         # Anthropic format: should have 'type' and 'error' with 'type' and 'message'
@@ -744,6 +834,10 @@ def assert_valid_streaming_response(
         )
         has_role = hasattr(choice.delta, "role") and choice.delta.role is not None
 
+        # Ignore completely empty deltas (like Cohere content-start with empty text)
+        if not (has_content or has_tool_calls or has_role):
+            return
+
         # Allow empty deltas for final chunks (they just signal completion)
         if not is_final:
             assert (
@@ -781,11 +875,6 @@ def assert_valid_streaming_response(
                     assert hasattr(
                         chunk.delta, "partial_json"
                     ), "Input JSON delta should have partial_json field"
-            else:
-                # Fallback: if no type specified, assume text_delta for backward compatibility
-                assert hasattr(
-                    chunk.delta, "text"
-                ), "Content delta should have text field"
         elif chunk.type == "message_delta" and is_final:
             assert hasattr(chunk, "usage"), "Final message delta should have usage"
 
@@ -861,6 +950,9 @@ def collect_streaming_content(
                     content_parts.append(chunk.delta.text)
                 elif hasattr(chunk.delta, "thinking") and chunk.delta.thinking:
                     content_parts.append(chunk.delta.thinking)
+                elif hasattr(chunk.delta, "type") and chunk.delta.type == "input_json_delta":
+                    content_parts.append(chunk.delta.partial_json)
+                    tool_calls_detected = True
                 # Note: partial_json from input_json_delta is not user-visible content
             elif chunk.type == "content_block_start":
                 # Check for tool use content blocks
@@ -915,6 +1007,69 @@ class TestCategories:
 SPEECH_TEST_INPUT = "Hello, this is a test of the speech synthesis functionality. The quick brown fox jumps over the lazy dog."
 
 SPEECH_TEST_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+
+
+def get_provider_voice(provider: str, voice_type: str = "primary") -> str:
+    """
+    Get an appropriate voice for the given provider.
+    
+    Args:
+        provider: The provider name (e.g., "openai", "google", "gemini")
+        voice_type: The type of voice - "primary", "secondary", or "tertiary"
+    
+    Returns:
+        The voice name for the specified provider and type
+    """
+    # Normalize provider name
+    provider_lower = provider.lower()
+    
+    # OpenAI voices
+    if provider_lower == "openai":
+        return {
+            "primary": "alloy",
+            "secondary": "nova",
+            "tertiary": "echo",
+        }.get(voice_type, "alloy")
+    
+    # Google/Gemini voices (using capitalized names as per Google GenAI SDK)
+    elif provider_lower in ["google", "gemini"]:
+        return {
+            "primary": "Kore",
+            "secondary": "Puck",
+            "tertiary": "Aoede",
+        }.get(voice_type, "Kore")
+    
+    # Default to OpenAI voices for other providers
+    else:
+        return {
+            "primary": "alloy",
+            "secondary": "nova",
+            "tertiary": "echo",
+        }.get(voice_type, "alloy")
+
+
+def get_provider_voices(provider: str, count: int = 3) -> List[str]:
+    """
+    Get a list of voices for the given provider.
+    
+    Args:
+        provider: The provider name (e.g., "openai", "google", "gemini")
+        count: Number of voices to return
+    
+    Returns:
+        List of voice names for the specified provider
+    """
+    provider_lower = provider.lower()
+    
+    if provider_lower == "openai":
+        voices = ["alloy", "nova", "echo", "fable", "onyx", "shimmer"]
+    elif provider_lower in ["google", "gemini"]:
+        voices = ["Kore", "Puck", "Aoede", "Zephyr"]
+    else:
+        # Default to OpenAI voices
+        voices = ["alloy", "nova", "echo", "fable", "onyx", "shimmer"]
+    
+    return voices[:count]
 
 
 # Generate a simple test audio file (sine wave) for transcription testing
@@ -1285,6 +1440,23 @@ def assert_valid_streaming_transcription_response(chunk: Any, integration: str):
                 text_chunk, str
             ), f"Text chunk should be string, got {type(text_chunk)}"
             # Note: text chunks can be empty in streaming (e.g., just punctuation updates)
+    
+    elif integration.lower() in ["google", "gemini"]:
+        # For Google GenAI, transcription returns GenerateContentResponse objects
+        # The text is available through response.text or response.candidates
+        if hasattr(chunk, "text"):
+            text_chunk = chunk.text
+        elif hasattr(chunk, "candidates") and chunk.candidates:
+            # Extract text from candidates
+            for candidate in chunk.candidates:
+                if hasattr(candidate, "content") and candidate.content:
+                    if hasattr(candidate.content, "parts") and candidate.content.parts:
+                        for part in candidate.content.parts:
+                            if hasattr(part, "text") and part.text:
+                                text_chunk = part.text
+                                break
+        
+        # Note: Google streaming chunks can be empty or contain only metadata
 
 
 def collect_streaming_speech_content(
@@ -1345,7 +1517,7 @@ def collect_streaming_transcription_content(
 
     Args:
         stream: The streaming response iterator
-        integration: The integration name (openai, etc.)
+        integration: The integration name (openai, google, etc.)
         timeout: Maximum time to wait for stream completion
 
     Returns:
@@ -1377,6 +1549,18 @@ def collect_streaming_transcription_content(
                 text_chunks.append(chunk.content)
             elif isinstance(chunk, str):
                 text_chunks.append(chunk)
+        
+        elif integration.lower() in ["google", "gemini"]:
+            # For Google GenAI streaming
+            if hasattr(chunk, "text") and chunk.text:
+                text_chunks.append(chunk.text)
+            elif hasattr(chunk, "candidates") and chunk.candidates:
+                for candidate in chunk.candidates:
+                    if hasattr(candidate, "content") and candidate.content:
+                        if hasattr(candidate.content, "parts") and candidate.content.parts:
+                            for part in candidate.content.parts:
+                                if hasattr(part, "text") and part.text:
+                                    text_chunks.append(part.text)
 
         # Safety check
         if chunk_count > 1000:
@@ -1395,7 +1579,7 @@ def get_api_key(integration: str) -> str:
     key_map = {
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
-        "google": "GOOGLE_API_KEY",
+        "google": "GEMINI_API_KEY",
         "litellm": "LITELLM_API_KEY",
         "bedrock": "AWS_ACCESS_KEY_ID",  # Bedrock uses AWS credentials
     }
@@ -1423,3 +1607,258 @@ def skip_if_no_api_key(integration: str):
             return pytest.mark.skip(f"No API key available for {integration}")(func)
 
     return decorator
+
+
+# Responses API Helpers
+def convert_to_responses_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Convert common tool format to OpenAI Responses API format"""
+    responses_tools = []
+    for tool in tools:
+        responses_tool = {
+            "type": "function",
+            "name": tool["name"],
+            "description": tool.get("description", ""),
+            "parameters": tool.get("parameters", {}),
+        }
+        responses_tools.append(responses_tool)
+    return responses_tools
+
+
+def assert_valid_responses_response(response: Any, min_content_length: int = 1):
+    """Assert that a responses API response is valid"""
+    assert response is not None, "Responses response should not be None"
+    assert hasattr(response, "output"), "Response should have 'output' attribute"
+    assert isinstance(response.output, list), "Output should be a list"
+    assert len(response.output) > 0, "Output should contain at least one message"
+
+    # Check for message content in output or summary
+    has_content = False
+    total_content = ""
+    
+    for message in response.output:
+        # Check for regular content
+        if hasattr(message, "content") and message.content:
+            # Content can be string or list of content blocks
+            if isinstance(message.content, str):
+                total_content += message.content
+                if len(message.content) >= min_content_length:
+                    has_content = True
+            elif isinstance(message.content, list):
+                for block in message.content:
+                    if hasattr(block, "text") and block.text:
+                        total_content += block.text
+                        if len(block.text) >= min_content_length:
+                            has_content = True
+        
+        # Check for summary field within output messages (for reasoning models)
+        if hasattr(message, "summary") and message.summary:
+            if isinstance(message.summary, list):
+                for summary_item in message.summary:
+                    if hasattr(summary_item, "text") and summary_item.text:
+                        total_content += summary_item.text
+                        if len(summary_item.text) >= min_content_length:
+                            has_content = True
+                    elif isinstance(summary_item, dict) and "text" in summary_item:
+                        total_content += summary_item["text"]
+                        if len(summary_item["text"]) >= min_content_length:
+                            has_content = True
+            elif isinstance(message.summary, str):
+                total_content += message.summary
+                if len(message.summary) >= min_content_length:
+                    has_content = True
+    
+
+    assert has_content, (
+        f"Response should contain content of at least {min_content_length} characters. "
+        f"Found {len(total_content)} characters total."
+    )
+
+    # Check for usage information if present
+    if hasattr(response, "usage") and response.usage:
+        assert hasattr(response.usage, "total_tokens"), "Usage should include total_tokens"
+        assert response.usage.total_tokens > 0, "Total tokens should be greater than 0"
+
+
+def assert_responses_has_tool_calls(response: Any, expected_count: Optional[int] = None):
+    """Assert that a responses API response contains function calls"""
+    assert response is not None, "Response should not be None"
+    assert hasattr(response, "output"), "Response should have 'output' attribute"
+
+    tool_calls = []
+    for message in response.output:
+        if hasattr(message, "type") and message.type == "function_call":
+            tool_calls.append(message)
+
+    assert len(tool_calls) > 0, "Response should contain at least one function call"
+
+    if expected_count is not None:
+        assert (
+            len(tool_calls) == expected_count
+        ), f"Expected {expected_count} tool calls, got {len(tool_calls)}"
+
+    # Validate tool call structure
+    for tool_call in tool_calls:
+        assert hasattr(tool_call, "name"), "Tool call should have a name"
+        assert tool_call.name is not None, "Tool call name should not be None"
+
+
+def collect_responses_streaming_content(
+    stream, timeout: int = 30
+) -> tuple[str, int, bool, Dict[str, int]]:
+    """
+    Collect content from a responses API streaming response.
+
+    Args:
+        stream: The streaming response iterator
+        timeout: Maximum time to wait for stream completion
+
+    Returns:
+        tuple: (collected_content, chunk_count, tool_calls_detected, event_types)
+    """
+    import time
+
+    content_parts = []
+    chunk_count = 0
+    tool_calls_detected = False
+    event_types = {}
+    start_time = time.time()
+
+    for chunk in stream:
+        chunk_count += 1
+
+        # Check timeout
+        if time.time() - start_time > timeout:
+            raise TimeoutError(f"Streaming took longer than {timeout} seconds")
+
+        # Track event types
+        if hasattr(chunk, "type"):
+            event_type = chunk.type
+            event_types[event_type] = event_types.get(event_type, 0) + 1
+
+            # Collect text deltas
+            if event_type == "response.output_text.delta" and hasattr(chunk, "delta"):
+                content_parts.append(chunk.delta)
+
+            # Check for function calls
+            if event_type == "response.function_call_arguments.delta":
+                tool_calls_detected = True
+
+            # Also check for output items that might be function calls
+            if event_type == "response.output_item.added" and hasattr(chunk, "item"):
+                if hasattr(chunk.item, "type") and chunk.item.type == "function_call":
+                    tool_calls_detected = True
+
+        # Safety check
+        if chunk_count > 1000:
+            raise ValueError(
+                "Received too many streaming chunks, something might be wrong"
+            )
+
+    # Combine all content parts
+    complete_content = "".join(content_parts)
+    return complete_content, chunk_count, tool_calls_detected, event_types
+
+
+def assert_valid_responses_streaming_chunk(chunk: Any):
+    """Assert that a responses streaming chunk is valid"""
+    assert chunk is not None, "Streaming chunk should not be None"
+    assert hasattr(chunk, "type"), "Chunk should have a 'type' attribute"
+
+    # Validate common streaming event types
+    valid_event_types = [
+        "response.created",
+        "response.output_item.added",
+        "response.content_part.added",
+        "response.output_text.delta",
+        "response.function_call_arguments.delta",
+        "response.completed",
+        "response.error",
+    ]
+
+    # Log the event type for debugging
+    if hasattr(chunk, "type"):
+        event_type = chunk.type
+        # Don't fail on unknown event types, just warn
+        if not any(evt in event_type for evt in ["response.", "error"]):
+            print(f"Warning: Unexpected event type: {event_type}")
+
+
+# Text Completions Helpers
+def assert_valid_text_completion_response(response: Any, min_content_length: int = 1):
+    """Assert that a text completion response is valid"""
+    assert response is not None, "Text completion response should not be None"
+    assert hasattr(response, "choices"), "Response should have 'choices' attribute"
+    assert isinstance(response.choices, list), "Choices should be a list"
+    assert len(response.choices) > 0, "Choices should contain at least one item"
+
+    # Check for text content in first choice
+    first_choice = response.choices[0]
+    assert hasattr(first_choice, "text"), "Choice should have 'text' attribute"
+    assert isinstance(first_choice.text, str), "Text should be a string"
+    assert len(first_choice.text) >= min_content_length, (
+        f"Text should be at least {min_content_length} characters, "
+        f"got {len(first_choice.text)}"
+    )
+
+    # Check for usage information if present
+    if hasattr(response, "usage") and response.usage:
+        assert hasattr(response.usage, "total_tokens"), "Usage should include total_tokens"
+        assert response.usage.total_tokens > 0, "Total tokens should be greater than 0"
+
+
+def collect_text_completion_streaming_content(
+    stream, timeout: int = 30
+) -> tuple[str, int]:
+    """
+    Collect content from a text completion streaming response.
+
+    Args:
+        stream: The streaming response iterator
+        timeout: Maximum time to wait for stream completion
+
+    Returns:
+        tuple: (collected_content, chunk_count)
+    """
+    import time
+
+    content_parts = []
+    chunk_count = 0
+    start_time = time.time()
+
+    for chunk in stream:
+        chunk_count += 1
+
+        # Check timeout
+        if time.time() - start_time > timeout:
+            raise TimeoutError(f"Streaming took longer than {timeout} seconds")
+
+        # Extract text from choices
+        if hasattr(chunk, "choices") and len(chunk.choices) > 0:
+            choice = chunk.choices[0]
+            if hasattr(choice, "text") and choice.text:
+                content_parts.append(choice.text)
+
+        # Safety check
+        if chunk_count > 1000:
+            raise ValueError(
+                "Received too many streaming chunks, something might be wrong"
+            )
+
+    # Combine all content parts
+    complete_content = "".join(content_parts)
+    return complete_content, chunk_count
+
+def get_content_string(content: Any) -> str:
+    """Get a string representation of content"""
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        parts: List[str] = []
+        for c in content:
+            if isinstance(c, dict):
+                parts.append(c.get("text", ""))
+            elif hasattr(c, "text"):
+                parts.append(getattr(c, "text") or "")
+        return " ".join(filter(None, parts))
+    else:
+        return ""

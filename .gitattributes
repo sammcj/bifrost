@@ -7,3 +7,6 @@ docker-entrypoint.sh text eol=lf
 # Default behavior for all other files
 * text=auto
 
+# Mark dummy credentials as generated to avoid security scanner false positives
+tests/integrations/dummy-gcp-credentials.json linguist-generated=true
+

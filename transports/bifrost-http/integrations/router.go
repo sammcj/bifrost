@@ -101,6 +101,10 @@ type ResponsesResponseConverter func(ctx *context.Context, resp *schemas.Bifrost
 // It takes a BifrostEmbeddingResponse and returns the format expected by the specific integration.
 type EmbeddingResponseConverter func(ctx *context.Context, resp *schemas.BifrostEmbeddingResponse) (interface{}, error)
 
+// SpeechResponseConverter is a function that converts BifrostSpeechResponse to integration-specific format.
+// It takes a BifrostSpeechResponse and returns the format expected by the specific integration.
+type SpeechResponseConverter func(ctx *context.Context, resp *schemas.BifrostSpeechResponse) (interface{}, error)
+
 // TranscriptionResponseConverter is a function that converts BifrostTranscriptionResponse to integration-specific format.
 // It takes a BifrostTranscriptionResponse and returns the format expected by the specific integration.
 type TranscriptionResponseConverter func(ctx *context.Context, resp *schemas.BifrostTranscriptionResponse) (interface{}, error)
@@ -203,6 +207,7 @@ type RouteConfig struct {
 	ChatResponseConverter          ChatResponseConverter          // Function to convert BifrostChatResponse to integration format (SHOULD NOT BE NIL)
 	ResponsesResponseConverter     ResponsesResponseConverter     // Function to convert BifrostResponsesResponse to integration format (SHOULD NOT BE NIL)
 	EmbeddingResponseConverter     EmbeddingResponseConverter     // Function to convert BifrostEmbeddingResponse to integration format (SHOULD NOT BE NIL)
+	SpeechResponseConverter        SpeechResponseConverter        // Function to convert BifrostSpeechResponse to integration format (SHOULD NOT BE NIL)
 	TranscriptionResponseConverter TranscriptionResponseConverter // Function to convert BifrostTranscriptionResponse to integration format (SHOULD NOT BE NIL)
 	ErrorConverter                 ErrorConverter                 // Function to convert BifrostError to integration format (SHOULD NOT BE NIL)
 	StreamConfig                   *StreamConfig                  // Optional: Streaming configuration (if nil, streaming not supported)
@@ -296,7 +301,7 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		// Parse request body into the integration-specific request type
 		// Note: config validation is performed at startup in RegisterRoutes
 		req := config.GetRequestTypeInstance()
-		var rawBody []byte
+		var rawBody []byte		
 
 		// Execute the request through Bifrost
 		bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, g.handlerStore.ShouldAllowDirectKeys())
@@ -320,7 +325,7 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 						g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "Invalid JSON"))
 						return
 					}
-				}
+				}							
 			}
 		}
 
@@ -508,11 +513,33 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 			return
 		}
 
-		ctx.Response.Header.Set("Content-Type", "audio/mpeg")
-		ctx.Response.Header.Set("Content-Disposition", "attachment; filename=speech.mp3")
-		ctx.Response.Header.Set("Content-Length", strconv.Itoa(len(speechResponse.Audio)))
-		ctx.Response.SetBody(speechResponse.Audio)
-		return
+		if config.PostCallback != nil {
+			if err := config.PostCallback(ctx, req, speechResponse); err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to execute post-request callback"))
+				return
+			}
+		}
+
+		if speechResponse == nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Bifrost response is nil after post-request callback"))
+			return
+		}
+
+		if config.SpeechResponseConverter != nil {
+			response, err = config.SpeechResponseConverter(bifrostCtx, speechResponse)
+			if err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to convert speech response"))
+				return
+			}
+			g.sendSuccess(ctx, bifrostCtx, config.ErrorConverter, response)
+			return
+		}else {
+			ctx.Response.Header.Set("Content-Type", "audio/mpeg")
+			ctx.Response.Header.Set("Content-Disposition", "attachment; filename=speech.mp3")
+			ctx.Response.Header.Set("Content-Length", strconv.Itoa(len(speechResponse.Audio)))
+			ctx.Response.SetBody(speechResponse.Audio)
+			return
+		}
 	case bifrostReq.TranscriptionRequest != nil:
 		transcriptionResponse, bifrostErr := g.client.TranscriptionRequest(requestCtx, bifrostReq.TranscriptionRequest)
 		if bifrostErr != nil {

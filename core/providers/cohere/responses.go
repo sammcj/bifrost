@@ -326,7 +326,7 @@ func convertResponsesMessagesToCohereMessages(messages []schemas.ResponsesMessag
 				cohereMessages = append(cohereMessages, cohereMsg)
 			}
 
-		case "function_call":
+		case schemas.ResponsesMessageTypeFunctionCall:
 			// Handle function calls from Responses
 			assistantMsg := CohereMessage{
 				Role: "assistant",
@@ -339,8 +339,8 @@ func convertResponsesMessagesToCohereMessages(messages []schemas.ResponsesMessag
 				Function: &CohereFunction{},
 			}
 
-			if msg.ID != nil {
-				toolCall.ID = msg.ID
+			if msg.CallID != nil {
+				toolCall.ID = msg.CallID
 			}
 
 			// Get function details from AssistantMessage

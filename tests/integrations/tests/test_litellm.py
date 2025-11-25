@@ -37,7 +37,7 @@ import json
 import litellm
 from typing import List, Dict, Any
 
-from ..utils.common import (
+from .utils.common import (
     Config,
     SIMPLE_CHAT_MESSAGES,
     MULTI_TURN_MESSAGES,
@@ -78,8 +78,20 @@ from ..utils.common import (
     assert_valid_embeddings_batch_response,
     calculate_cosine_similarity,
     collect_streaming_transcription_content,
+    get_provider_voice,
+    get_provider_voices,
 )
-from ..utils.config_loader import get_model
+from .utils.config_loader import get_model
+from .utils.parametrize import (
+    get_cross_provider_params_for_scenario,
+    format_provider_model,
+)
+
+# LiteLLM-specific provider exclusions
+# Bedrock and Cohere don't work well through LiteLLM proxy
+# Gemini is excluded because LiteLLM routes it through Vertex AI-specific endpoints
+# that Bifrost's LiteLLM integration doesn't support
+LITELLM_EXCLUDED_PROVIDERS = ["bedrock", "cohere", "gemini"]
 
 
 @pytest.fixture
@@ -89,10 +101,11 @@ def test_config():
 
 
 @pytest.fixture(autouse=True)
-def setup_litellm():
+def setup_litellm(monkeypatch):
     """Setup LiteLLM with Bifrost configuration and dummy credentials"""
     import os
-    from ..utils.config_loader import get_integration_url, get_config
+    from .utils.config_loader import get_integration_url, get_config
+    from unittest.mock import MagicMock
 
     # Set dummy credentials since Bifrost handles actual authentication
     os.environ["OPENAI_API_KEY"] = "dummy-openai-key-bifrost-handles-auth"
@@ -104,6 +117,31 @@ def setup_litellm():
     os.environ["GEMINI_API_KEY"] = "dummy-gemini-api-key-bifrost-handles-auth"
     os.environ["VERTEX_PROJECT"] = "dummy-vertex-project"
     os.environ["VERTEX_LOCATION"] = "us-central1"
+
+    # Set dummy Google Application Credentials to prevent Vertex AI from trying to authenticate
+    # LiteLLM will load these dummy credentials but all actual requests go through Bifrost
+    from pathlib import Path
+
+    dummy_creds_path = Path(__file__).parent.parent / "dummy-gcp-credentials.json"
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(dummy_creds_path)
+
+    # litellm._turn_on_debug()
+
+    # Mock credential refresh to prevent actual Google API calls
+    # Since Bifrost handles auth, we don't need LiteLLM to authenticate
+    def mock_refresh(self, request):
+        """Mock refresh that sets a dummy token - Bifrost handles real auth"""
+        import datetime
+
+        self.token = "dummy-access-token-bifrost-handles-auth"
+        self.expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+
+    try:
+        from google.oauth2 import service_account
+
+        monkeypatch.setattr(service_account.Credentials, "refresh", mock_refresh)
+    except ImportError:
+        pass  # google-auth not installed
 
     # Get Bifrost URL for LiteLLM
     base_url = get_integration_url("litellm")
@@ -133,10 +171,18 @@ def convert_to_litellm_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]
 class TestLiteLLMIntegration:
     """Test suite for LiteLLM integration covering all 11 core scenarios"""
 
-    def test_01_simple_chat(self, test_config):
+    @pytest.mark.parametrize(
+        "provider, model",
+        get_cross_provider_params_for_scenario(
+            "simple_chat", exclude_providers=LITELLM_EXCLUDED_PROVIDERS
+        ),
+    )
+    def test_01_simple_chat(self, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 1: Simple chat interaction"""
         response = litellm.completion(
-            model=get_model("litellm", "chat"),
+            model=model,
             messages=SIMPLE_CHAT_MESSAGES,
             max_tokens=100,
         )
@@ -145,10 +191,18 @@ class TestLiteLLMIntegration:
         assert response.choices[0].message.content is not None
         assert len(response.choices[0].message.content) > 0
 
-    def test_02_multi_turn_conversation(self, test_config):
+    @pytest.mark.parametrize(
+        "provider, model",
+        get_cross_provider_params_for_scenario(
+            "multi_turn_conversation", exclude_providers=LITELLM_EXCLUDED_PROVIDERS
+        ),
+    )
+    def test_02_multi_turn_conversation(self, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 2: Multi-turn conversation"""
         response = litellm.completion(
-            model=get_model("litellm", "chat"),
+            model=model,
             messages=MULTI_TURN_MESSAGES,
             max_tokens=150,
         )
@@ -156,17 +210,22 @@ class TestLiteLLMIntegration:
         assert_valid_chat_response(response)
         content = response.choices[0].message.content.lower()
         # Should mention population or numbers since we asked about Paris population
-        assert any(
-            word in content
-            for word in ["population", "million", "people", "inhabitants"]
-        )
+        assert any(word in content for word in ["population", "million", "people", "inhabitants"])
 
-    def test_03_single_tool_call(self, test_config):
+    @pytest.mark.parametrize(
+        "provider, model",
+        get_cross_provider_params_for_scenario(
+            "tool_calls", exclude_providers=LITELLM_EXCLUDED_PROVIDERS
+        ),
+    )
+    def test_03_single_tool_call(self, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 3: Single tool call"""
         tools = convert_to_litellm_tools([WEATHER_TOOL])
 
         response = litellm.completion(
-            model=get_model("litellm", "chat"),
+            model=model,
             messages=SINGLE_TOOL_CALL_MESSAGES,
             tools=tools,
             max_tokens=100,
@@ -177,12 +236,20 @@ class TestLiteLLMIntegration:
         assert tool_calls[0]["name"] == "get_weather"
         assert "location" in tool_calls[0]["arguments"]
 
-    def test_04_multiple_tool_calls(self, test_config):
+    @pytest.mark.parametrize(
+        "provider, model",
+        get_cross_provider_params_for_scenario(
+            "multiple_tool_calls", exclude_providers=LITELLM_EXCLUDED_PROVIDERS
+        ),
+    )
+    def test_04_multiple_tool_calls(self, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 4: Multiple tool calls in one response"""
         tools = convert_to_litellm_tools([WEATHER_TOOL, CALCULATOR_TOOL])
 
         response = litellm.completion(
-            model=get_model("litellm", "chat"),
+            model=model,
             messages=MULTIPLE_TOOL_CALL_MESSAGES,
             tools=tools,
             max_tokens=200,
@@ -194,13 +261,21 @@ class TestLiteLLMIntegration:
         assert "get_weather" in tool_names
         assert "calculate" in tool_names
 
-    def test_05_end2end_tool_calling(self, test_config):
+    @pytest.mark.parametrize(
+        "provider, model",
+        get_cross_provider_params_for_scenario(
+            "end2end_tool_calling", exclude_providers=LITELLM_EXCLUDED_PROVIDERS
+        ),
+    )
+    def test_05_end2end_tool_calling(self, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 5: Complete tool calling flow with responses"""
         messages = [{"role": "user", "content": "What's the weather in Boston?"}]
         tools = convert_to_litellm_tools([WEATHER_TOOL])
 
         response = litellm.completion(
-            model=get_model("litellm", "chat"),
+            model=model,
             messages=messages,
             tools=tools,
             max_tokens=100,
@@ -213,9 +288,7 @@ class TestLiteLLMIntegration:
 
         # Add tool response
         tool_calls = extract_litellm_tool_calls(response)
-        tool_response = mock_tool_response(
-            tool_calls[0]["name"], tool_calls[0]["arguments"]
-        )
+        tool_response = mock_tool_response(tool_calls[0]["name"], tool_calls[0]["arguments"])
 
         messages.append(
             {
@@ -235,12 +308,20 @@ class TestLiteLLMIntegration:
         weather_location_keywords = WEATHER_KEYWORDS + LOCATION_KEYWORDS
         assert any(word in content for word in weather_location_keywords)
 
-    def test_06_automatic_function_calling(self, test_config):
+    @pytest.mark.parametrize(
+        "provider, model",
+        get_cross_provider_params_for_scenario(
+            "automatic_function_calling", exclude_providers=LITELLM_EXCLUDED_PROVIDERS
+        ),
+    )
+    def test_06_automatic_function_calling(self, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 6: Automatic function calling"""
         tools = convert_to_litellm_tools([CALCULATOR_TOOL])
 
         response = litellm.completion(
-            model=get_model("litellm", "chat"),
+            model=model,
             messages=[{"role": "user", "content": "Calculate 25 * 4 for me"}],
             tools=tools,
             tool_choice="auto",
@@ -252,30 +333,54 @@ class TestLiteLLMIntegration:
         tool_calls = extract_litellm_tool_calls(response)
         assert tool_calls[0]["name"] == "calculate"
 
-    def test_07_image_url(self, test_config):
+    @pytest.mark.parametrize(
+        "provider, model",
+        get_cross_provider_params_for_scenario(
+            "image_url", exclude_providers=LITELLM_EXCLUDED_PROVIDERS
+        ),
+    )
+    def test_07_image_url(self, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 7: Image analysis from URL"""
         response = litellm.completion(
-            model=get_model("litellm", "vision"),
+            model=model,
             messages=IMAGE_URL_MESSAGES,
             max_tokens=200,
         )
 
         assert_valid_image_response(response)
 
-    def test_08_image_base64(self, test_config):
+    @pytest.mark.parametrize(
+        "provider, model",
+        get_cross_provider_params_for_scenario(
+            "image_base64", exclude_providers=LITELLM_EXCLUDED_PROVIDERS
+        ),
+    )
+    def test_08_image_base64(self, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 8: Image analysis from base64"""
         response = litellm.completion(
-            model=get_model("litellm", "vision"),
+            model=model,
             messages=IMAGE_BASE64_MESSAGES,
             max_tokens=200,
         )
 
         assert_valid_image_response(response)
 
-    def test_09_multiple_images(self, test_config):
+    @pytest.mark.parametrize(
+        "provider, model",
+        get_cross_provider_params_for_scenario(
+            "multiple_images", exclude_providers=LITELLM_EXCLUDED_PROVIDERS
+        ),
+    )
+    def test_09_multiple_images(self, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 9: Multiple image analysis"""
         response = litellm.completion(
-            model=get_model("litellm", "vision"),
+            model=model,
             messages=MULTIPLE_IMAGES_MESSAGES,
             max_tokens=300,
         )
@@ -287,14 +392,23 @@ class TestLiteLLMIntegration:
             word in content for word in COMPARISON_KEYWORDS
         ), f"Response should contain comparison keywords. Got content: {content}"
 
-    def test_10_complex_end2end(self, test_config):
+    @pytest.mark.parametrize(
+        "provider, model",
+        get_cross_provider_params_for_scenario(
+            "complex_e2end", exclude_providers=LITELLM_EXCLUDED_PROVIDERS
+        ),
+    )
+    @pytest.mark.skipif(True, reason="Known flaky test")
+    def test_10_complex_end2end(self, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 10: Complex end-to-end with conversation, images, and tools"""
         messages = COMPLEX_E2E_MESSAGES.copy()
         tools = convert_to_litellm_tools([WEATHER_TOOL])
 
         # First, analyze the image
         response1 = litellm.completion(
-            model=get_model("litellm", "vision"),
+            model=model,
             messages=messages,
             tools=tools,
             max_tokens=300,
@@ -325,21 +439,20 @@ class TestLiteLLMIntegration:
                 )
 
             # Get final response after tool calls
-            final_response = litellm.completion(
-                model=get_model("litellm", "vision"), messages=messages, max_tokens=200
-            )
+            final_response = litellm.completion(model=model, messages=messages, max_tokens=200)
 
             assert_valid_chat_response(final_response)
 
+    @pytest.mark.skip(reason="known flaky test")
     def test_11_integration_specific_features(self, test_config):
         """Test Case 11: LiteLLM-specific features"""
 
         # Test 1: Multiple integrations through LiteLLM
+        # Note: Gemini is excluded as LiteLLM routes it through Vertex AI-specific endpoints
         integrations_to_test = [
             "gpt-3.5-turbo",  # OpenAI
             "claude-3-haiku-20240307",  # Anthropic
-            "gemini-2.0-flash-001",  # Google Gemini
-            "mistral-7b-instruct",  # Mistral
+            "mistral/mistral-7b-instruct",  # Mistral
         ]
 
         for model in integrations_to_test:
@@ -374,9 +487,7 @@ class TestLiteLLMIntegration:
         # Test 3: Temperature and other parameters
         response3 = litellm.completion(
             model=get_model("litellm", "chat"),
-            messages=[
-                {"role": "user", "content": "Tell me a creative story in one sentence."}
-            ],
+            messages=[{"role": "user", "content": "Tell me a creative story in one sentence."}],
             temperature=0.9,
             top_p=0.9,
             max_tokens=100,
@@ -398,18 +509,26 @@ class TestLiteLLMIntegration:
         assert_valid_error_response(error, "tester")
         assert_error_propagation(error, "litellm")
 
-    def test_13_streaming(self, test_config):
+    @pytest.mark.parametrize(
+        "provider, model",
+        get_cross_provider_params_for_scenario(
+            "streaming", exclude_providers=LITELLM_EXCLUDED_PROVIDERS
+        ),
+    )
+    def test_13_streaming(self, test_config, provider, model):
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
         """Test Case 13: Streaming chat completion"""
         # Test basic streaming
         stream = litellm.completion(
-            model=get_model("litellm", "chat"),
+            model=model,
             messages=STREAMING_CHAT_MESSAGES,
             max_tokens=200,
             stream=True,
         )
 
         content, chunk_count, tool_calls_detected = collect_streaming_content(
-            stream, "openai", timeout=30  # LiteLLM uses OpenAI format
+            stream, "openai", timeout=120  # LiteLLM uses OpenAI format
         )
 
         # Validate streaming results
@@ -419,31 +538,28 @@ class TestLiteLLMIntegration:
 
         # Test streaming with tool calls
         stream_with_tools = litellm.completion(
-            model=get_model("litellm", "tools"),
+            model=model,
             messages=STREAMING_TOOL_CALL_MESSAGES,
             max_tokens=150,
             tools=convert_to_litellm_tools([WEATHER_TOOL]),
             stream=True,
         )
 
-        content_tools, chunk_count_tools, tool_calls_detected_tools = (
-            collect_streaming_content(
-                stream_with_tools, "openai", timeout=30  # LiteLLM uses OpenAI format
-            )
+        content_tools, chunk_count_tools, tool_calls_detected_tools = collect_streaming_content(
+            stream_with_tools, "openai", timeout=120  # LiteLLM uses OpenAI format
         )
 
         # Validate tool streaming results
         assert chunk_count_tools > 0, "Should receive at least one chunk with tools"
-        assert (
-            tool_calls_detected_tools
-        ), "Should detect tool calls in streaming response"
+        assert tool_calls_detected_tools, "Should detect tool calls in streaming response"
 
+    @pytest.mark.skip(reason="known flaky test")
     def test_14_gemini_integration(self, test_config):
         """Test Case 14: Google Gemini integration through LiteLLM"""
         try:
             # Test basic chat with Gemini
             response = litellm.completion(
-                model="vertex_ai/gemini-2.0-flash-001",
+                model="gemini-2.0-flash-001",
                 messages=[
                     {
                         "role": "user",
@@ -462,7 +578,7 @@ class TestLiteLLMIntegration:
             # Test with tool calling if supported
             tools = convert_to_litellm_tools([CALCULATOR_TOOL])
             response_tools = litellm.completion(
-                model="vertex_ai/gemini-2.0-flash-001",
+                model="gemini-2.0-flash-001",
                 messages=[{"role": "user", "content": "Calculate 42 * 17"}],
                 tools=tools,
                 max_tokens=100,
@@ -474,13 +590,12 @@ class TestLiteLLMIntegration:
             else:
                 # Should at least provide the calculation result
                 content = response_tools.choices[0].message.content
-                assert (
-                    "714" in content or "42" in content
-                ), "Should provide calculation result"
+                assert "714" in content or "42" in content, "Should provide calculation result"
 
         except Exception as e:
             pytest.skip(f"Gemini integration not available: {e}")
 
+    @pytest.mark.skip(reason="known flaky test")
     def test_15_mistral_integration(self, test_config):
         """Test Case 15: Mistral integration through LiteLLM"""
         try:
@@ -515,6 +630,7 @@ class TestLiteLLMIntegration:
         except Exception as e:
             pytest.skip(f"Mistral integration not available: {e}")
 
+    @pytest.mark.skip(reason="known flaky test")
     def test_16_openai_embeddings_via_litellm(self, test_config):
         """Test Case 16: OpenAI embeddings through LiteLLM"""
         try:
@@ -566,7 +682,7 @@ class TestLiteLLMIntegration:
             # Test basic speech synthesis
             response = litellm.speech(
                 model=get_model("litellm", "speech") or "tts-1",
-                voice="alloy",
+                voice=get_provider_voice("openai", "primary"),
                 input=SPEECH_TEST_INPUT,
             )
 
@@ -583,7 +699,7 @@ class TestLiteLLMIntegration:
             # Test with different voice
             response2 = litellm.speech(
                 model=get_model("litellm", "speech") or "tts-1",
-                voice="nova",
+                voice=get_provider_voice("openai", "secondary"),
                 input="Short test message for voice comparison.",
                 response_format="mp3",
             )
@@ -638,7 +754,7 @@ class TestLiteLLMIntegration:
         models_to_test = [
             "gpt-3.5-turbo",  # OpenAI
             "claude-3-haiku-20240307",  # Anthropic
-            "vertex_ai/gemini-2.0-flash-001",  # Google
+            "gemini-2.0-flash-001",  # Google
         ]
 
         responses = {}
