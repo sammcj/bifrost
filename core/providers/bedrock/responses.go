@@ -176,48 +176,27 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest() (*schemas.Bif
 			continue
 		}
 
-		bifrostMsg := schemas.ResponsesMessage{
-			Role: &role,
-			Content: &schemas.ResponsesMessageContent{
-				ContentBlocks: []schemas.ResponsesMessageContentBlock{},
-			},
-		}
-
-		// Convert content blocks
+		// Convert content blocks - each content block may become its own message
+		// (e.g., tool calls and tool results are separate items in Responses API)
 		for _, content := range msg.Content {
-			if content.Text != nil {
-				bifrostMsg.Content.ContentBlocks = append(bifrostMsg.Content.ContentBlocks, schemas.ResponsesMessageContentBlock{
-					Type: schemas.ResponsesInputMessageContentBlockTypeText,
-					Text: content.Text,
-				})
-			}
-			if content.Image != nil {
-				imageBlock := schemas.ResponsesMessageContentBlock{
-					Type: schemas.ResponsesInputMessageContentBlockTypeImage,
-				}
-				if content.Image != nil && content.Image.Source.Bytes != nil {
-					imageBlock.ResponsesInputMessageContentBlockImage = &schemas.ResponsesInputMessageContentBlockImage{
-						ImageURL: content.Image.Source.Bytes,
-					}
-				}
-				bifrostMsg.Content.ContentBlocks = append(bifrostMsg.Content.ContentBlocks, imageBlock)
-			}
 			if content.ToolUse != nil {
+				// Tool calls are separate function_call type items (no role field)
 				callType := schemas.ResponsesMessageTypeFunctionCall
 				callStatus := "in_progress"
-				bifrostMsg.Type = &callType
-				bifrostMsg.Status = &callStatus
-				bifrostMsg.ResponsesToolMessage = &schemas.ResponsesToolMessage{
-					CallID:    &content.ToolUse.ToolUseID,
-					Name:      &content.ToolUse.Name,
-					Arguments: schemas.Ptr(schemas.JsonifyInput(content.ToolUse.Input)),
+				toolCallMsg := schemas.ResponsesMessage{
+					Type:   &callType,
+					Status: &callStatus,
+					ResponsesToolMessage: &schemas.ResponsesToolMessage{
+						CallID:    &content.ToolUse.ToolUseID,
+						Name:      &content.ToolUse.Name,
+						Arguments: schemas.Ptr(schemas.JsonifyInput(content.ToolUse.Input)),
+					},
 				}
-			}
-			if content.ToolResult != nil {
+				bifrostReq.Input = append(bifrostReq.Input, toolCallMsg)
+			} else if content.ToolResult != nil {
+				// Tool results are separate function_call_output type items (no role field)
 				resultType := schemas.ResponsesMessageTypeFunctionCallOutput
 				resultStatus := "completed"
-				bifrostMsg.Type = &resultType
-				bifrostMsg.Status = &resultStatus
 				var toolResultContent []schemas.ResponsesMessageContentBlock
 				for _, resultContent := range content.ToolResult.Content {
 					if resultContent.Text != nil {
@@ -227,16 +206,63 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest() (*schemas.Bif
 						})
 					}
 				}
-				bifrostMsg.ResponsesToolMessage = &schemas.ResponsesToolMessage{
-					CallID: &content.ToolResult.ToolUseID,
-					Output: &schemas.ResponsesToolMessageOutputStruct{
-						ResponsesFunctionToolCallOutputBlocks: toolResultContent,
+				toolResultMsg := schemas.ResponsesMessage{
+					Type:   &resultType,
+					Status: &resultStatus,
+					ResponsesToolMessage: &schemas.ResponsesToolMessage{
+						CallID: &content.ToolResult.ToolUseID,
+						Output: &schemas.ResponsesToolMessageOutputStruct{
+							ResponsesFunctionToolCallOutputBlocks: toolResultContent,
+						},
 					},
 				}
+				bifrostReq.Input = append(bifrostReq.Input, toolResultMsg)
+			} else if content.Text != nil {
+				// Regular text content - use role-based message
+				// For assistant messages (previous model outputs), use output_text type
+				// For user/system messages, use input_text type
+				textBlockType := schemas.ResponsesInputMessageContentBlockTypeText
+				if msg.Role == BedrockMessageRoleAssistant {
+					textBlockType = schemas.ResponsesOutputMessageContentTypeText
+				}
+				bifrostMsg := schemas.ResponsesMessage{
+					Role: &role,
+					Content: &schemas.ResponsesMessageContent{
+						ContentBlocks: []schemas.ResponsesMessageContentBlock{
+							{
+								Type: textBlockType,
+								Text: content.Text,
+							},
+						},
+					},
+				}
+				bifrostReq.Input = append(bifrostReq.Input, bifrostMsg)
+			} else if content.Image != nil {
+				// Image content - use role-based message
+				imageBlock := schemas.ResponsesMessageContentBlock{
+					Type: schemas.ResponsesInputMessageContentBlockTypeImage,
+				}
+				if content.Image.Source.Bytes != nil {
+					// Construct proper data URI from format and base64 bytes
+					// Format should be "png", "jpeg", "gif", "webp" etc.
+					format := content.Image.Format
+					if format == "" {
+						format = "jpeg" // default to jpeg if format not specified
+					}
+					dataURI := fmt.Sprintf("data:image/%s;base64,%s", format, *content.Image.Source.Bytes)
+					imageBlock.ResponsesInputMessageContentBlockImage = &schemas.ResponsesInputMessageContentBlockImage{
+						ImageURL: &dataURI,
+					}
+				}
+				bifrostMsg := schemas.ResponsesMessage{
+					Role: &role,
+					Content: &schemas.ResponsesMessageContent{
+						ContentBlocks: []schemas.ResponsesMessageContentBlock{imageBlock},
+					},
+				}
+				bifrostReq.Input = append(bifrostReq.Input, bifrostMsg)
 			}
 		}
-
-		bifrostReq.Input = append(bifrostReq.Input, bifrostMsg)
 	}
 
 	// Convert inference config to parameters

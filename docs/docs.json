@@ -87,7 +87,8 @@
               "integrations/bedrock-sdk",
               "integrations/genai-sdk",
               "integrations/litellm-sdk",
-              "integrations/langchain-sdk"
+              "integrations/langchain-sdk",
+              "integrations/pydanticai-sdk"
             ]
           },
           {

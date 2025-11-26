@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 
 	"github.com/google/uuid"
 	bifrost "github.com/maximhq/bifrost/core"
@@ -202,8 +203,24 @@ func bedrockPreCallback(handlerStore lib.HandlerStore) func(ctx *fasthttp.Reques
 			return errors.New("modelId cannot be empty")
 		}
 
-		// Set the model ID with bedrock/ prefix for provider routing
-		fullModelID := "bedrock/" + modelIDStr
+		// URL-decode the model ID (handles cases like cohere%2Fcommand-a-03-2025 -> cohere/command-a-03-2025)
+		decodedModelID, err := url.PathUnescape(modelIDStr)
+		if err != nil {
+			// If decoding fails, use the original string
+			decodedModelID = modelIDStr
+		}
+
+		// Determine model ID - use ParseModelString to check if provider prefix exists
+		provider, _ := schemas.ParseModelString(decodedModelID, "")
+
+		var fullModelID string
+		if provider == "" {
+			// No provider prefix found, add bedrock/ for native Bedrock models
+			fullModelID = "bedrock/" + decodedModelID
+		} else {
+			// Provider prefix already present (e.g., "anthropic/claude-...")
+			fullModelID = decodedModelID
+		}
 
 		switch r := req.(type) {
 		case *bedrock.BedrockConverseRequest:

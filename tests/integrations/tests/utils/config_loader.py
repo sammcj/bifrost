@@ -20,6 +20,7 @@ INTEGRATION_TO_PROVIDER_MAP = {
     "google": "gemini",  # Google integration uses Gemini provider
     "litellm": "openai",  # LiteLLM defaults to OpenAI
     "langchain": "openai",  # LangChain defaults to OpenAI
+    "pydanticai": "openai",  # Pydantic AI defaults to OpenAI
     "bedrock": "bedrock",  # Bedrock defaults to Amazon provider
 }
 

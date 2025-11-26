@@ -501,16 +501,20 @@ def extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
                 tool_calls.append({"id": content.id, "name": content.name, "arguments": content.input})
 
     # Handle Bedrock format
-    elif isinstance(response, dict) and "output" in response and "message" in response["output"]:
-        message = response["output"]["message"]
-        if "content" in message:
-            for content in message["content"]:
-                if "toolUse" in content:
-                    tool_use = content["toolUse"]
-                    tool_calls.append({
-                        "name": tool_use["name"],
-                        "arguments": tool_use["input"]
-                    })
+    elif isinstance(response, dict) and "output" in response:
+        output = response.get("output")
+        if output and isinstance(output, dict) and "message" in output:
+            message = output.get("message")
+            if message and isinstance(message, dict) and "content" in message:
+                for content in message.get("content", []):
+                    if isinstance(content, dict) and "toolUse" in content:
+                        tool_use = content["toolUse"]
+                        if isinstance(tool_use, dict):
+                            tool_calls.append({
+                                "id": tool_use.get("toolUseId"),
+                                "name": tool_use.get("name"),
+                                "arguments": tool_use.get("input")
+                            })
 
     return tool_calls
 

@@ -1,16 +1,23 @@
 """
-Bedrock Integration Tests
+Bedrock Integration Tests - Cross-Provider Support
 
-🤖 MODELS USED:
-- Text Completion (invoke): mistral.mistral-7b-instruct-v0:2
-- Chat (converse): anthropic.claude-3-haiku-20240307-v1:0
-- Vision (converse): anthropic.claude-3-haiku-20240307-v1:0
-- Tools (converse): anthropic.claude-3-haiku-20240307-v1:0
+🌉 CROSS-PROVIDER TESTING:
+This test suite uses the AWS SDK (boto3) to test against multiple AI providers through Bifrost.
+Tests automatically run against all available providers with proper capability filtering.
+
+Note: Tests automatically skip for providers that don't support specific capabilities.
 
 Tests core scenarios using AWS SDK (boto3) directly against Bifrost:
-1. Text completion (invoke)
-2. Chat with tool calling and tool result (converse)
-3. Image analysis (converse)
+1. Text completion (invoke) - Bedrock-specific
+2. Chat with tool calling and tool result (converse) - Cross-provider
+3. Image analysis (converse) - Cross-provider
+4. Streaming chat (converse-stream) - Cross-provider
+5. Streaming text completion (invoke-with-response-stream) - Bedrock-specific
+6. Simple chat (converse) - Cross-provider
+7. Multi-turn conversation (converse) - Cross-provider
+8. Multiple tool calls (converse) - Cross-provider
+9. System message handling (converse) - Bedrock-specific
+10. End-to-end tool calling (converse) - Cross-provider
 """
 
 import pytest
@@ -25,14 +32,23 @@ from .utils.common import (
     Config,
     BASE64_IMAGE,
     WEATHER_TOOL,
+    CALCULATOR_TOOL,
+    SIMPLE_CHAT_MESSAGES,
+    MULTI_TURN_MESSAGES,
+    MULTIPLE_TOOL_CALL_MESSAGES,
     mock_tool_response,
     assert_valid_chat_response,
     assert_has_tool_calls,
+    extract_tool_calls,
     skip_if_no_api_key,
     WEATHER_KEYWORDS,
     LOCATION_KEYWORDS,
 )
 from .utils.config_loader import get_model, get_config, get_integration_url
+from .utils.parametrize import (
+    get_cross_provider_params_for_scenario,
+    format_provider_model,
+)
 
 
 @pytest.fixture
@@ -133,6 +149,15 @@ def convert_to_bedrock_tools(tools: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {"tools": bedrock_tools}
 
 
+def extract_system_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Extract system messages from message list for Bedrock Converse API"""
+    system_messages = []
+    for msg in messages:
+        if msg["role"] == "system":
+            system_messages.append({"text": msg["content"]})
+    return system_messages
+
+
 class TestBedrockIntegration:
     """Test suite for Bedrock integration covering core scenarios"""
 
@@ -169,12 +194,17 @@ class TestBedrockIntegration:
         
         assert text is not None and len(text) > 0, "Response should contain text"
 
-    @skip_if_no_api_key("bedrock")
-    def test_02_converse_with_tool_calling(self, bedrock_client, test_config):
-        """Test Case 2: Chat with tool calling and tool result using converse API"""
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("tool_calls"))
+    def test_02_converse_with_tool_calling(self, bedrock_client, test_config, provider, model):
+        """Test Case 2: Chat with tool calling and tool result using converse API - runs across all available providers"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
+        
         messages = convert_to_bedrock_messages([{"role": "user", "content": "What's the weather in Boston?"}])
         tool_config = convert_to_bedrock_tools([WEATHER_TOOL])
-        model_id = get_model("bedrock", "chat")
+        # Add toolChoice to force the model to use a tool
+        tool_config["toolChoice"] = {"any": {}}
+        model_id = format_provider_model(provider, model)
 
         # 1. Initial Request - should trigger tool call
         response = bedrock_client.converse(
@@ -245,9 +275,12 @@ class TestBedrockIntegration:
         assert any(word in final_text for word in WEATHER_KEYWORDS + LOCATION_KEYWORDS)
 
 
-    @skip_if_no_api_key("bedrock")
-    def test_03_image_analysis(self, bedrock_client, test_config):
-        """Test Case 3: Image analysis using converse API"""
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("image_base64"))
+    def test_03_image_analysis(self, bedrock_client, test_config, provider, model):
+        """Test Case 3: Image analysis using converse API - runs across all available providers with base64 image support"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
+        
         # Use base64 image instead of URL to avoid 403 errors
         messages = convert_to_bedrock_messages([
             {
@@ -259,8 +292,9 @@ class TestBedrockIntegration:
             }
         ])
         
+        model_id = format_provider_model(provider, model)
         response = bedrock_client.converse(
-            modelId=get_model("bedrock", "vision"),
+            modelId=model_id,
             messages=messages,
             inferenceConfig={"maxTokens": 200}
         )
@@ -300,15 +334,18 @@ class TestBedrockIntegration:
             f"Got: {text_content[:100]}"
         )
 
-    @skip_if_no_api_key("bedrock")
-    def test_04_converse_streaming(self, bedrock_client, test_config):
-        """Test Case 4: Streaming chat completion using converse-stream API with boto3
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("streaming"))
+    def test_04_converse_streaming(self, bedrock_client, test_config, provider, model):
+        """Test Case 4: Streaming chat completion using converse-stream API with boto3 - runs across all available providers
         
         Follows boto3 Bedrock Runtime converse_stream API:
         https://boto3.amazonaws.com/v1/documentation/api/1.35.6/reference/services/bedrock-runtime/client/converse_stream.html
         """
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
+        
         messages = convert_to_bedrock_messages([{"role": "user", "content": "Say hello in exactly 3 words."}])
-        model_id = get_model("bedrock", "chat")
+        model_id = format_provider_model(provider, model)
 
 
         try:
@@ -476,3 +513,240 @@ class TestBedrockIntegration:
         assert len(chunks) > 0, "Should receive at least one streaming chunk"
         combined_text = "".join(text_parts)
         assert len(combined_text.strip()) > 0, f"Streaming response should not be empty. Got: {combined_text}"
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("simple_chat"))
+    def test_06_simple_chat(self, bedrock_client, test_config, provider, model):
+        """Test Case 6: Simple chat interaction using converse API without tools - runs across all available providers"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
+        
+        messages = convert_to_bedrock_messages(SIMPLE_CHAT_MESSAGES)
+        model_id = format_provider_model(provider, model)
+
+        response = bedrock_client.converse(
+            modelId=model_id,
+            messages=messages,
+            inferenceConfig={"maxTokens": 100}
+        )
+
+        # Validate response structure
+        assert_valid_chat_response(response)
+        assert "output" in response
+        assert "message" in response["output"], "Response should have message in output"
+
+        # Check if response has content
+        output_message = response["output"]["message"]
+        assert "content" in output_message, "Response message should have content"
+        assert len(output_message["content"]) > 0, "Response message should have at least one content item"
+
+        # Extract and validate text content
+        text_content = None
+        for item in output_message["content"]:
+            if "text" in item:
+                text_content = item["text"]
+                break
+
+        assert text_content is not None, "Response should contain text content"
+        assert len(text_content) > 0, "Response text should not be empty"
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("multi_turn_conversation"))
+    def test_07_multi_turn_conversation(self, bedrock_client, test_config, provider, model):
+        """Test Case 7: Multi-turn conversation using converse API - runs across all available providers"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
+        
+        messages = convert_to_bedrock_messages(MULTI_TURN_MESSAGES)
+        model_id = format_provider_model(provider, model)
+
+        response = bedrock_client.converse(
+            modelId=model_id,
+            messages=messages,
+            inferenceConfig={"maxTokens": 150}
+        )
+
+        # Validate response structure
+        assert_valid_chat_response(response)
+        assert "output" in response
+        assert "message" in response["output"], "Response should have message in output"
+
+        # Extract text content
+        output_message = response["output"]["message"]
+        text_content = None
+        for item in output_message["content"]:
+            if "text" in item:
+                text_content = item["text"]
+                break
+
+        assert text_content is not None, "Response should contain text content"
+        
+        # Should mention population or numbers since we asked about Paris population
+        text_lower = text_content.lower()
+        population_keywords = ["population", "million", "people", "inhabitants", "resident"]
+        assert any(
+            word in text_lower for word in population_keywords
+        ), f"Response should mention population. Got: {text_content[:200]}"
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("multiple_tool_calls"))
+    def test_08_multiple_tool_calls(self, bedrock_client, test_config, provider, model):
+        """Test Case 8: Multiple tool calls in one response using converse API - runs across all available providers"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
+        
+        messages = convert_to_bedrock_messages(MULTIPLE_TOOL_CALL_MESSAGES)
+        tool_config = convert_to_bedrock_tools([WEATHER_TOOL, CALCULATOR_TOOL])
+        # Add toolChoice to force the model to use a tool
+        tool_config["toolChoice"] = {"any": {}}
+        model_id = format_provider_model(provider, model)
+
+        response = bedrock_client.converse(
+            modelId=model_id,
+            messages=messages,
+            toolConfig=tool_config,
+            inferenceConfig={"maxTokens": 200}
+        )
+
+        # Validate that we have tool calls
+        assert_has_tool_calls(response)
+        tool_calls = extract_tool_calls(response)
+        
+        # Should have at least one tool call, ideally both
+        assert len(tool_calls) >= 1, "Should have at least one tool call"
+        
+        tool_names = [tc["name"] for tc in tool_calls]
+        expected_tools = ["get_weather", "calculate"]
+        
+        # Should call relevant tools
+        made_relevant_calls = any(name in expected_tools for name in tool_names)
+        assert made_relevant_calls, f"Expected tool calls from {expected_tools}, got {tool_names}"
+
+    @skip_if_no_api_key("bedrock")
+    def test_09_system_message(self, bedrock_client, test_config):
+        """Test Case 9: System message handling using converse API"""
+        system_content = "You are a helpful assistant that always responds in exactly 5 words."
+        user_content = "Hello, how are you?"
+        
+        messages_with_system = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_content}
+        ]
+        
+        # Extract system messages and convert user messages
+        system_messages = extract_system_messages(messages_with_system)
+        bedrock_messages = convert_to_bedrock_messages(messages_with_system)
+        model_id = get_model("bedrock", "chat")
+
+        response = bedrock_client.converse(
+            modelId=model_id,
+            messages=bedrock_messages,
+            system=system_messages,
+            inferenceConfig={"maxTokens": 50}
+        )
+
+        # Validate response structure
+        assert_valid_chat_response(response)
+        
+        # Extract text content
+        output_message = response["output"]["message"]
+        text_content = None
+        for item in output_message["content"]:
+            if "text" in item:
+                text_content = item["text"]
+                break
+
+        assert text_content is not None, "Response should contain text content"
+        
+        # Check if response is approximately 5 words (allow some flexibility)
+        word_count = len(text_content.split())
+        assert 3 <= word_count <= 10, f"Expected ~5 words, got {word_count}: {text_content}"
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("end2end_tool_calling"))
+    def test_10_end2end_tool_calling(self, bedrock_client, test_config, provider, model):
+        """Test Case 10: Complete end-to-end tool calling flow - runs across all available providers
+        
+        This test covers the full cycle:
+        1. User asks a question that requires a tool
+        2. Model responds with tool call
+        3. We execute the tool and send the result back
+        4. Model generates final response using the tool result
+        """
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
+        
+        messages = convert_to_bedrock_messages([
+            {"role": "user", "content": "What's the weather in San Francisco?"}
+        ])
+        tool_config = convert_to_bedrock_tools([WEATHER_TOOL])
+        # Add toolChoice to force the model to use a tool
+        tool_config["toolChoice"] = {"any": {}}
+        model_id = format_provider_model(provider, model)
+
+        # Step 1: Initial request - should trigger tool call
+        response = bedrock_client.converse(
+            modelId=model_id,
+            messages=messages,
+            toolConfig=tool_config,
+            inferenceConfig={"maxTokens": 100}
+        )
+
+        assert_has_tool_calls(response, expected_count=1)
+        tool_calls = extract_tool_calls(response)
+        
+        # Validate tool call structure
+        assert tool_calls[0]["name"] == "get_weather", f"Expected get_weather tool, got {tool_calls[0]['name']}"
+        assert "id" in tool_calls[0], "Tool call should have an ID"
+        assert "location" in tool_calls[0]["arguments"], "Tool call should have location argument"
+
+        # Step 2: Append assistant response to messages
+        assistant_message = response["output"]["message"]
+        messages.append(assistant_message)
+
+        # Step 3: Execute tool and append result
+        content = assistant_message["content"]
+        tool_uses = [c["toolUse"] for c in content if "toolUse" in c]
+        tool_use = tool_uses[0]
+        tool_id = tool_use["toolUseId"]
+        tool_name = tool_use["name"]
+        tool_input = tool_use["input"]
+        
+        tool_response_text = mock_tool_response(tool_name, tool_input)
+        
+        messages.append({
+            "role": "user",
+            "content": [{
+                "toolResult": {
+                    "toolUseId": tool_id,
+                    "content": [{"text": tool_response_text}],
+                    "status": "success"
+                }
+            }]
+        })
+
+        # Step 4: Final request with tool results
+        final_response = bedrock_client.converse(
+            modelId=model_id,
+            messages=messages,
+            toolConfig=tool_config,
+            inferenceConfig={"maxTokens": 150}
+        )
+
+        # Validate final response
+        assert_valid_chat_response(final_response)
+        assert "output" in final_response
+        assert "message" in final_response["output"]
+
+        # Extract final text content
+        output_message = final_response["output"]["message"]
+        text_content = None
+        for item in output_message["content"]:
+            if "text" in item:
+                text_content = item["text"]
+                break
+
+        assert text_content is not None, "Final response should contain text content"
+        
+        # Should mention weather-related terms or location
+        final_text = text_content.lower()
+        weather_location_keywords = WEATHER_KEYWORDS + LOCATION_KEYWORDS + ["san francisco", "sf"]
+        assert any(
+            word in final_text for word in weather_location_keywords
+        ), f"Final response should mention weather or location. Got: {text_content[:200]}"
