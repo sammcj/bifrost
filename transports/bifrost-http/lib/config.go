@@ -178,7 +178,7 @@ var DefaultClientConfig = configstore.ClientConfig{
 	EnableGovernance:        true,
 	EnforceGovernanceHeader: false,
 	AllowDirectKeys:         false,
-	AllowedOrigins:          []string{},
+	AllowedOrigins:          []string{"*"},
 	MaxRequestBodySizeMB:    100,
 	EnableLiteLLMFallbacks:  false,
 }

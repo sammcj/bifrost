@@ -13,6 +13,7 @@ bifrost:
     google: "genai"
     litellm: "litellm"
     langchain: "langchain"
+    pydanticai: "pydanticai"
     bedrock: "bedrock"
 
   # Full URLs constructed as: {base_url.rstrip('/')}/{endpoints[integration]}
@@ -98,7 +99,7 @@ provider_api_keys:
   openai: "OPENAI_API_KEY"
   anthropic: "ANTHROPIC_API_KEY"
   gemini: "GEMINI_API_KEY"
-  bedrock: "BEDROCK_API_KEY"
+  bedrock: "AWS_ACCESS_KEY_ID"
   cohere: "COHERE_API_KEY"
 
 # Provider test scenarios - which tests each provider supports
@@ -124,6 +125,8 @@ provider_scenarios:
     responses: true
     responses_image: true
     text_completion: false
+    structured_output: true  # PydanticAI structured output works reliably with OpenAI
+    pydanticai_streaming: true  # PydanticAI streaming works with OpenAI
     
   anthropic:
     simple_chat: true
@@ -146,6 +149,8 @@ provider_scenarios:
     responses: true
     responses_image: true
     text_completion: false
+    structured_output: true  # PydanticAI structured output works with Anthropic
+    pydanticai_streaming: true  # PydanticAI streaming works with Anthropic
     
   gemini:
     simple_chat: true
@@ -168,6 +173,8 @@ provider_scenarios:
     responses: true
     responses_image: true
     text_completion: false
+    structured_output: false  # PydanticAI structured output unreliable via Bifrost for Gemini
+    pydanticai_streaming: false  # PydanticAI GoogleModel streaming has asyncio issues
     
   bedrock:
     simple_chat: true
@@ -190,6 +197,8 @@ provider_scenarios:
     responses: true
     responses_image: true
     text_completion: false
+    structured_output: false  # Bedrock not supported in PydanticAI tests
+    pydanticai_streaming: false  # Bedrock not supported in PydanticAI tests
     
   cohere:
     simple_chat: true
@@ -212,6 +221,8 @@ provider_scenarios:
     responses: true
     responses_image: true
     text_completion: false
+    structured_output: false  # PydanticAI CohereModel doesn't reliably support structured output
+    pydanticai_streaming: false  # PydanticAI CohereModel doesn't implement streaming
 
 # Scenario to capability mapping
 # Maps test scenario names to their corresponding capability types
@@ -236,6 +247,8 @@ scenario_capabilities:
   embeddings: "embeddings"
   thinking: "thinking"
   list_models: "chat"
+  structured_output: "chat"  # Structured output uses chat capability
+  pydanticai_streaming: "streaming"  # PydanticAI streaming uses streaming capability
 
 # Model capabilities matrix
 model_capabilities:

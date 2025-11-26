@@ -415,7 +415,8 @@ func convertResponsesMessageContentBlocksToCohere(blocks []schemas.ResponsesMess
 
 	for _, block := range blocks {
 		switch block.Type {
-		case schemas.ResponsesInputMessageContentBlockTypeText:
+		case schemas.ResponsesInputMessageContentBlockTypeText, schemas.ResponsesOutputMessageContentTypeText:
+			// Handle both input_text (user messages) and output_text (assistant messages)
 			if block.Text != nil {
 				cohereBlocks = append(cohereBlocks, CohereContentBlock{
 					Type: CohereContentBlockTypeText,
@@ -525,7 +526,7 @@ func convertCohereContentBlockToBifrost(cohereBlock CohereContentBlock) schemas.
 	switch cohereBlock.Type {
 	case CohereContentBlockTypeText:
 		return schemas.ResponsesMessageContentBlock{
-			Type: schemas.ResponsesInputMessageContentBlockTypeText,
+			Type: schemas.ResponsesOutputMessageContentTypeText,
 			Text: cohereBlock.Text,
 		}
 	case CohereContentBlockTypeImage:

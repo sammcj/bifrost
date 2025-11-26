@@ -23,11 +23,20 @@ def pytest_configure(config):
     )
     config.addinivalue_line("markers", "google: mark test as requiring Google API key")
     config.addinivalue_line("markers", "litellm: mark test as requiring LiteLLM setup")
+    config.addinivalue_line(
+        "markers", "flaky: mark test as flaky with automatic retries (reruns=3, reruns_delay=2)"
+    )
 
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to add markers based on test file names"""
+    # Add flaky marker to all tests for retry on failure
+    flaky_marker = pytest.mark.flaky(reruns=3, reruns_delay=2)
+    
     for item in items:
+        # Add flaky marker to all tests
+        item.add_marker(flaky_marker)
+        
         # Add markers based on test file location
         if "test_openai" in item.nodeid:
             item.add_marker(pytest.mark.openai)

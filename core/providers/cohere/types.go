@@ -29,6 +29,11 @@ type CohereChatRequest struct {
 	Thinking         *CohereThinking         `json:"thinking,omitempty"`           // Optional: Reasoning configuration
 }
 
+// IsStreamingRequested implements the StreamingRequest interface
+func (r *CohereChatRequest) IsStreamingRequested() bool {
+	return r.Stream != nil && *r.Stream
+}
+
 type CohereChatRequestTool struct {
 	Type     string                    `json:"type"` // always "function"
 	Function CohereChatRequestFunction `json:"function"`
