@@ -193,7 +193,7 @@ interface AsyncMultiSelectProps<T> {
 	portalTarget?: HTMLElement;
 
 	/** callback function to be called when input value changes */
-	onInputChange?: (inputValue: string) => void;
+	onInputChange?: (inputValue: string, actionMeta: { action: string }) => void;
 	onKeyDown?: KeyboardEventHandler;
 
 	/** custom no options message */
@@ -382,7 +382,11 @@ export function AsyncMultiSelect<T>(props: AsyncMultiSelectProps<T>) {
 				blurInputOnSelect={false}
 				menuPortalTarget={props.portalTarget}
 				menuPosition={props.menuPosition}
-				onInputChange={props.onInputChange}
+				onInputChange={(newValue, actionMeta) => {
+					if (props.onInputChange) {
+						props.onInputChange(newValue, { action: actionMeta.action });
+					}
+				}}
 				onBlur={(e) => {
 					radixDialogOnBlurWorkaround(e);
 					if (props.onBlur) props.onBlur();

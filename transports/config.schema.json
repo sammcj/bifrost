@@ -626,6 +626,13 @@
             "type": "string",
             "description": "Path to the plugin (optional, required for dynamic plugins)",
             "optional": true
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Version of the plugin (default: 1). Increment in this number will force a reload of the plugin and DB update.",
+            "optional": true,
+            "default": 1
           }
         },
         "allOf": [

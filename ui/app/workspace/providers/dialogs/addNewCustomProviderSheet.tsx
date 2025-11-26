@@ -3,17 +3,17 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { getErrorMessage, useCreateProviderMutation } from "@/lib/store";
 import { BaseProvider, ModelProviderName } from "@/lib/types/config";
+import { allowedRequestsSchema } from "@/lib/types/schemas";
+import { cleanPathOverrides } from "@/lib/utils/validation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AllowedRequestsFields } from "../fragments/allowedRequestsFields";
-import { allowedRequestsSchema } from "@/lib/types/schemas";
-import { cleanPathOverrides } from "@/lib/utils/validation";
-import { Switch } from "@/components/ui/switch";
 
 const formSchema = z.object({
 	name: z.string().min(1),
@@ -101,8 +101,8 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 
 	return (
 		<Sheet open={show} onOpenChange={(open) => !open && onClose()}>
-			<SheetContent className="custom-scrollbar dark:bg-card flex min-w-[600px] flex-col bg-white py-4">
-				<SheetHeader>
+			<SheetContent className="custom-scrollbar dark:bg-card flex flex-col bg-white p-4">
+				<SheetHeader className="flex flex-col items-start">
 					<SheetTitle>Add Custom Provider</SheetTitle>
 					<SheetDescription>Enter the details of your custom provider.</SheetDescription>
 				</SheetHeader>

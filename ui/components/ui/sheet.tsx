@@ -1,10 +1,26 @@
 "use client";
 
 import * as SheetPrimitive from "@radix-ui/react-dialog";
-import { XIcon } from "lucide-react";
+import { ArrowLeftFromLineIcon, ArrowRightFromLineIcon, XIcon } from "lucide-react";
 import * as React from "react";
+import { createContext, useContext, useState } from "react";
 
 import { cn } from "@/lib/utils";
+
+// Context to share expanded state between SheetContent and SheetHeader
+type SheetContextValue = {
+	expanded: boolean;
+	setExpanded: (expanded: boolean) => void;
+	side: "top" | "right" | "bottom" | "left";
+	expandable: boolean;
+};
+
+const SheetContext = createContext<SheetContextValue | null>(null);
+
+function useSheetContext() {
+	const context = useContext(SheetContext);
+	return context;
+}
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
 	return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -39,40 +55,74 @@ function SheetContent({
 	className,
 	children,
 	side = "right",
+	expandable = false,
 	...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
 	side?: "top" | "right" | "bottom" | "left";
+	expandable?: boolean;
 }) {
+	const [expanded, setExpanded] = useState(false);
+
 	return (
-		<SheetPortal>
-			<SheetOverlay />
-			<SheetPrimitive.Content
-				data-slot="sheet-content"
-				className={cn(
-					"bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-100 data-[state=open]:duration-100",
-					side === "right" &&
-						"data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
-					side === "left" &&
-						"data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
-					side === "top" && "data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b",
-					side === "bottom" &&
-						"data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
-					className,
-				)}
-				{...props}
-			>
-				{children}
-				<SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
-					<XIcon className="size-4" />
-					<span className="sr-only">Close</span>
-				</SheetPrimitive.Close>
-			</SheetPrimitive.Content>
-		</SheetPortal>
+		<SheetContext.Provider value={{ expanded, setExpanded, side, expandable }}>
+			<SheetPortal>
+				<SheetOverlay />
+				<SheetPrimitive.Content
+					data-slot="sheet-content"
+					className={cn(
+						"bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col shadow-lg transition-all ease-in-out data-[state=closed]:duration-100 data-[state=open]:duration-100",
+						side === "right" &&
+							"data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right top-2 bottom-2 right-0 h-auto w-3/4 border-l rounded-l-lg",
+						side === "right" && (!expandable || !expanded) && "sm:max-w-2xl",
+						side === "right" && expandable && expanded && "sm:max-w-5xl",
+						side === "left" &&
+							"data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left top-2 bottom-2 left-0 h-auto w-3/4 border-r rounded-r-lg sm:max-w-sm",
+						side === "top" && "data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b",
+						side === "bottom" &&
+							"data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
+						className,
+					)}
+					{...props}
+				>
+					{children}
+				</SheetPrimitive.Content>
+			</SheetPortal>
+		</SheetContext.Provider>
 	);
 }
 
-function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
-	return <div data-slot="sheet-header" className={cn("flex flex-col gap-1.5 p-4", className)} {...props} />;
+function SheetHeader({ className, children, ...props }: React.ComponentProps<"div">) {
+	const sheetContext = useSheetContext();
+
+	return (
+		<div
+			data-slot="sheet-header"
+			className={cn("flex items-center gap-3 mb-6", sheetContext?.expandable ? "p-4" : "mb-6")}
+			{...props}
+		>
+			{sheetContext?.expandable && sheetContext?.side === "right" && (
+				<button
+					type="button"
+					onClick={() => sheetContext?.setExpanded(!sheetContext?.expanded)}
+					className="opacity-70 transition-opacity hover:opacity-100 cursor-pointer hover:scale-105 shrink-0 -ml-5"
+				>
+					{sheetContext?.expanded ? (
+						<ArrowRightFromLineIcon className="size-4" />
+					) : (
+						<ArrowLeftFromLineIcon className="size-4" />
+					)}
+					<span className="sr-only">{sheetContext?.expanded ? "Collapse" : "Expand"}</span>
+				</button>
+			)}
+			<div className={cn("flex flex-row flex-1 min-w-0 h-full items-center", className)}>
+				{children}
+			</div>
+			<SheetPrimitive.Close className="opacity-70 transition-opacity hover:opacity-100 cursor-pointer hover:scale-105 shrink-0">
+				<XIcon className="size-4" />
+				<span className="sr-only">Close</span>
+			</SheetPrimitive.Close>
+		</div>
+	);
 }
 
 function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {

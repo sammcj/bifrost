@@ -24,6 +24,7 @@ import (
 type ModelsManager interface {
 	RefetchModelsForProvider(ctx context.Context, provider schemas.ModelProvider) error
 	DeleteModelsForProvider(ctx context.Context, provider schemas.ModelProvider) error
+	GetModelsForProvider(provider schemas.ModelProvider) []string
 }
 
 // ProviderHandler manages HTTP requests for provider operations
@@ -83,6 +84,7 @@ func (h *ProviderHandler) RegisterRoutes(r *router.Router, middlewares ...lib.Bi
 	r.PUT("/api/providers/{provider}", lib.ChainMiddlewares(h.updateProvider, middlewares...))
 	r.DELETE("/api/providers/{provider}", lib.ChainMiddlewares(h.deleteProvider, middlewares...))
 	r.GET("/api/keys", lib.ChainMiddlewares(h.listKeys, middlewares...))
+	r.GET("/api/models", lib.ChainMiddlewares(h.listModels, middlewares...))
 }
 
 // listProviders handles GET /api/providers - List all providers
@@ -499,6 +501,174 @@ func (h *ProviderHandler) listKeys(ctx *fasthttp.RequestCtx) {
 	}
 
 	SendJSON(ctx, keys)
+}
+
+// ModelResponse represents a single model in the response
+type ModelResponse struct {
+	Name              string   `json:"name"`
+	Provider          string   `json:"provider"`
+	AccessibleByKeys  []string `json:"accessible_by_keys,omitempty"`
+}
+
+// ListModelsResponse represents the response for listing models
+type ListModelsResponse struct {
+	Models []ModelResponse `json:"models"`
+	Total  int             `json:"total"`
+}
+
+// listModels handles GET /api/models - List models with filtering
+// Query parameters:
+//   - query: Filter models by name (case-insensitive partial match)
+//   - provider: Filter by specific provider name
+//   - keys: Comma-separated list of key IDs to filter models accessible by those keys
+//   - limit: Maximum number of results to return (default: 5)
+func (h *ProviderHandler) listModels(ctx *fasthttp.RequestCtx) {
+	// Parse query parameters
+	queryParam := string(ctx.QueryArgs().Peek("query"))
+	providerParam := string(ctx.QueryArgs().Peek("provider"))
+	keysParam := string(ctx.QueryArgs().Peek("keys"))
+	limitParam := string(ctx.QueryArgs().Peek("limit"))
+
+	// Parse limit with default
+	limit := 5
+	if limitParam != "" {
+		if n, err := ctx.QueryArgs().GetUint("limit"); err == nil {
+			limit = n
+		}
+	}
+
+	var allModels []ModelResponse
+
+	// If provider is specified, get models for that provider only
+	if providerParam != "" {
+		provider := schemas.ModelProvider(providerParam)
+		models := h.modelsManager.GetModelsForProvider(provider)
+		
+		// Filter by keys if specified
+		if keysParam != "" {
+			keyIDs := strings.Split(keysParam, ",")
+			models = h.filterModelsByKeys(provider, models, keyIDs)
+		}
+
+		for _, model := range models {
+			allModels = append(allModels, ModelResponse{
+				Name:     model,
+				Provider: string(provider),
+			})
+		}
+	} else {
+		// Get all providers
+		providers, err := h.store.GetAllProviders()
+		if err != nil {
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to get providers: %v", err))
+			return
+		}
+
+		// Collect models from all providers
+		for _, provider := range providers {
+			models := h.modelsManager.GetModelsForProvider(provider)
+			
+			// Filter by keys if specified
+			if keysParam != "" {
+				keyIDs := strings.Split(keysParam, ",")
+				models = h.filterModelsByKeys(provider, models, keyIDs)
+			}
+
+			for _, model := range models {
+				allModels = append(allModels, ModelResponse{
+					Name:     model,
+					Provider: string(provider),
+				})
+			}
+		}
+	}
+
+	// Apply query filter if provided (fuzzy search)
+	// We are currently doing it in memory to later make use of in memory model pools
+	if queryParam != "" {
+		filtered := []ModelResponse{}
+		queryLower := strings.ToLower(queryParam)
+		// Remove common separators for more flexible matching
+		queryNormalized := strings.ReplaceAll(strings.ReplaceAll(queryLower, "-", ""), "_", "")
+		
+		for _, model := range allModels {
+			modelLower := strings.ToLower(model.Name)
+			modelNormalized := strings.ReplaceAll(strings.ReplaceAll(modelLower, "-", ""), "_", "")
+			
+			// Match if:
+			// 1. Direct substring match
+			// 2. Normalized substring match (ignoring - and _)
+			// 3. All query characters appear in order (fuzzy match)
+			if strings.Contains(modelLower, queryLower) ||
+				strings.Contains(modelNormalized, queryNormalized) ||
+				fuzzyMatch(modelLower, queryLower) {
+				filtered = append(filtered, model)
+			}
+		}
+		allModels = filtered
+	}
+
+	// Apply limit
+	total := len(allModels)
+	if limit > 0 && limit < len(allModels) {
+		allModels = allModels[:limit]
+	}
+
+	response := ListModelsResponse{
+		Models: allModels,
+		Total:  total,
+	}
+
+	SendJSON(ctx, response)
+}
+
+// filterModelsByKeys filters models based on key-level model restrictions
+func (h *ProviderHandler) filterModelsByKeys(provider schemas.ModelProvider, models []string, keyIDs []string) []string {
+	// Get provider config to access keys
+	config, err := h.store.GetProviderConfigRaw(provider)
+	if err != nil {
+		logger.Warn(fmt.Sprintf("Failed to get config for provider %s: %v", provider, err))
+		return models
+	}
+	// Build a set of allowed models from the specified keys
+	// Track whether we have any unrestricted keys (which grant access to all models)
+	// and whether we have any restricted keys (which limit to specific models)
+	allowedModels := make(map[string]bool)
+	hasRestrictedKey := false
+	hasUnrestrictedKey := false
+	for _, keyID := range keyIDs {
+		for _, key := range config.Keys {
+			if key.ID == keyID {
+				if len(key.Models) > 0 {
+					// Key has model restrictions - add them to allowedModels
+					hasRestrictedKey = true
+					for _, model := range key.Models {
+						allowedModels[model] = true
+					}
+				} else {
+					// Key has no model restrictions - grants access to all models
+					hasUnrestrictedKey = true
+				}
+				break
+			}
+		}
+	}
+	// If any key is unrestricted, return all models (union of "all" and restricted subsets is "all")
+	if hasUnrestrictedKey {
+		return models
+	}
+	// If no keys have model restrictions (e.g., unknown key IDs), return all models
+	if !hasRestrictedKey {
+		return models
+	}
+	// Filter models based on restrictions from restricted keys only
+	filtered := []string{}
+	for _, model := range models {
+		if allowedModels[model] {
+			filtered = append(filtered, model)
+		}
+	}
+	return filtered
 }
 
 // mergeKeys merges new keys with old, preserving values that are redacted in the new config

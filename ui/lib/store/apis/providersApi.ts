@@ -2,6 +2,25 @@ import { AddProviderRequest, ListProvidersResponse, ModelProvider, ModelProvider
 import { DBKey } from "@/lib/types/governance";
 import { baseApi } from "./baseApi";
 
+// Types for models API
+export interface ModelResponse {
+	name: string;
+	provider: string;
+	accessible_by_keys?: string[];
+}
+
+export interface ListModelsResponse {
+	models: ModelResponse[];
+	total: number;
+}
+
+export interface GetModelsRequest {
+	query?: string;
+	provider?: string;
+	keys?: string[];
+	limit?: number;
+}
+
 export const providersApi = baseApi.injectEndpoints({
 	endpoints: (builder) => ({
 		// Get all providers
@@ -51,6 +70,19 @@ export const providersApi = baseApi.injectEndpoints({
 			query: () => "/keys",
 			providesTags: ["DBKeys"],
 		}),
+
+		// Get models with optional filtering
+		getModels: builder.query<ListModelsResponse, GetModelsRequest>({
+			query: ({ query, provider, keys, limit }) => {
+				const params = new URLSearchParams();
+				if (query) params.append("query", query);
+				if (provider) params.append("provider", provider);
+				if (keys && keys.length > 0) params.append("keys", keys.join(","));
+				if (limit !== undefined) params.append("limit", limit.toString());
+				return `/models?${params.toString()}`;
+			},
+			providesTags: ["Models"],
+		}),
 	}),
 });
 
@@ -61,7 +93,9 @@ export const {
 	useUpdateProviderMutation,
 	useDeleteProviderMutation,
 	useGetAllKeysQuery,
+	useGetModelsQuery,
 	useLazyGetProvidersQuery,
 	useLazyGetProviderQuery,
 	useLazyGetAllKeysQuery,
+	useLazyGetModelsQuery,
 } = providersApi;

@@ -1091,11 +1091,12 @@ func (s *RDBConfigStore) GetVirtualKeys(ctx context.Context) ([]tables.TableVirt
 		Preload("ProviderConfigs").
 		Preload("ProviderConfigs.Budget").
 		Preload("ProviderConfigs.RateLimit").
+		Preload("ProviderConfigs.Keys", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, name, key_id, models_json, provider")
+		}).
 		Preload("MCPConfigs").
 		Preload("MCPConfigs.MCPClient").
-		Preload("Keys", func(db *gorm.DB) *gorm.DB {
-			return db.Select("id, name, key_id, models_json, provider")
-		}).Find(&virtualKeys).Error; err != nil {
+		Find(&virtualKeys).Error; err != nil {
 		return nil, err
 	}
 
@@ -1114,11 +1115,12 @@ func (s *RDBConfigStore) GetVirtualKey(ctx context.Context, id string) (*tables.
 		Preload("ProviderConfigs").
 		Preload("ProviderConfigs.Budget").
 		Preload("ProviderConfigs.RateLimit").
+		Preload("ProviderConfigs.Keys", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, name, key_id, models_json, provider")
+		}).
 		Preload("MCPConfigs").
 		Preload("MCPConfigs.MCPClient").
-		Preload("Keys", func(db *gorm.DB) *gorm.DB {
-			return db.Select("id, name, key_id, models_json, provider")
-		}).First(&virtualKey, "id = ?", id).Error; err != nil {
+		First(&virtualKey, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -1139,11 +1141,12 @@ func (s *RDBConfigStore) GetVirtualKeyByValue(ctx context.Context, value string)
 		Preload("ProviderConfigs").
 		Preload("ProviderConfigs.Budget").
 		Preload("ProviderConfigs.RateLimit").
+		Preload("ProviderConfigs.Keys", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, name, key_id, models_json, provider")
+		}).
 		Preload("MCPConfigs").
 		Preload("MCPConfigs.MCPClient").
-		Preload("Keys", func(db *gorm.DB) *gorm.DB {
-			return db.Select("id, name, key_id, models_json, provider")
-		}).First(&virtualKey, "value = ?", value).Error; err != nil {
+		First(&virtualKey, "value = ?", value).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
@@ -1159,15 +1162,9 @@ func (s *RDBConfigStore) CreateVirtualKey(ctx context.Context, virtualKey *table
 	} else {
 		txDB = s.db
 	}
-	// Create virtual key first
+	// Create virtual key
 	if err := txDB.WithContext(ctx).Create(virtualKey).Error; err != nil {
 		return s.parseGormError(err)
-	}
-	// Create key associations after the virtual key has an ID
-	if len(virtualKey.Keys) > 0 {
-		if err := txDB.WithContext(ctx).Model(virtualKey).Association("Keys").Append(virtualKey.Keys); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -1180,23 +1177,11 @@ func (s *RDBConfigStore) UpdateVirtualKey(ctx context.Context, virtualKey *table
 		txDB = s.db
 	}
 
-	// Store the keys before Save() clears them
-	keysToAssociate := virtualKey.Keys
-	// Update virtual key first (this will clear the Keys field)
+	// Update virtual key
 	// Use Select() to explicitly update all fields, including nil pointer fields
 	// This ensures TeamID gets set to NULL when switching from team to customer association
 	if err := txDB.WithContext(ctx).Select("name", "description", "value", "is_active", "team_id", "customer_id", "budget_id", "rate_limit_id", "updated_at").Updates(virtualKey).Error; err != nil {
 		return s.parseGormError(err)
-	}
-	// Clear existing key associations
-	if err := txDB.WithContext(ctx).Model(virtualKey).Association("Keys").Clear(); err != nil {
-		return err
-	}
-	// Create new key associations using the stored keys
-	if len(keysToAssociate) > 0 {
-		if err := txDB.WithContext(ctx).Model(virtualKey).Association("Keys").Append(keysToAssociate); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -1208,6 +1193,15 @@ func (s *RDBConfigStore) GetKeysByIDs(ctx context.Context, ids []string) ([]tabl
 	}
 	var keys []tables.TableKey
 	if err := s.db.WithContext(ctx).Where("key_id IN ?", ids).Find(&keys).Error; err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
+// GetKeysByProvider retrieves all keys for a specific provider
+func (s *RDBConfigStore) GetKeysByProvider(ctx context.Context, provider string) ([]tables.TableKey, error) {
+	var keys []tables.TableKey
+	if err := s.db.WithContext(ctx).Where("provider = ?", provider).Find(&keys).Error; err != nil {
 		return nil, err
 	}
 	return keys, nil
@@ -1271,8 +1265,18 @@ func (s *RDBConfigStore) CreateVirtualKeyProviderConfig(ctx context.Context, vir
 	} else {
 		txDB = s.db
 	}
+	// Store keys before create
+	keysToAssociate := virtualKeyProviderConfig.Keys
+
 	if err := txDB.WithContext(ctx).Create(virtualKeyProviderConfig).Error; err != nil {
 		return s.parseGormError(err)
+	}
+
+	// Associate keys after the provider config has an ID
+	if len(keysToAssociate) > 0 {
+		if err := txDB.WithContext(ctx).Model(virtualKeyProviderConfig).Association("Keys").Append(keysToAssociate); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1285,8 +1289,22 @@ func (s *RDBConfigStore) UpdateVirtualKeyProviderConfig(ctx context.Context, vir
 	} else {
 		txDB = s.db
 	}
+
+	// Store keys before save
+	keysToAssociate := virtualKeyProviderConfig.Keys
+
 	if err := txDB.WithContext(ctx).Save(virtualKeyProviderConfig).Error; err != nil {
 		return s.parseGormError(err)
+	}
+
+	// Clear existing key associations and set new ones
+	if err := txDB.WithContext(ctx).Model(virtualKeyProviderConfig).Association("Keys").Clear(); err != nil {
+		return err
+	}
+	if len(keysToAssociate) > 0 {
+		if err := txDB.WithContext(ctx).Model(virtualKeyProviderConfig).Association("Keys").Append(keysToAssociate); err != nil {
+			return err
+		}
 	}
 	return nil
 }

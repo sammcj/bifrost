@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ModelMultiselect } from "@/components/ui/modelMultiselect";
 import { MultiSelect } from "@/components/ui/multiSelect";
 import NumberAndSelect from "@/components/ui/numberAndSelect";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DottedSeparator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TagInput } from "@/components/ui/tagInput";
 import { Textarea } from "@/components/ui/textarea";
 import Toggle from "@/components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -35,7 +35,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Building, Info, Trash2, Users, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { MultiValueProps, OptionProps } from "react-select";
+import { components, MultiValueProps, OptionProps } from "react-select";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -53,6 +53,7 @@ const providerConfigSchema = z.object({
 	provider: z.string().min(1, "Provider is required"),
 	weight: z.union([z.number().min(0, "Weight must be at least 0").max(1, "Weight must be at most 1"), z.string()]),
 	allowed_models: z.array(z.string()).optional(),
+	key_ids: z.array(z.string()).optional(), // Keys associated with this provider config
 	// Provider-level budget
 	budget: z
 		.object({
@@ -88,7 +89,6 @@ const formSchema = z
 		teamId: z.string().optional(),
 		customerId: z.string().optional(),
 		isActive: z.boolean(),
-		selectedDBKeys: z.array(z.string()).optional(),
 		// Budget
 		budgetMaxLimit: z.string().optional(),
 		budgetResetDuration: z.string().optional(),
@@ -127,7 +127,15 @@ type VirtualKeyType = {
 };
 
 export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, onCancel }: VirtualKeySheetProps) {
+	const [isOpen, setIsOpen] = useState(true);
 	const isEditing = !!virtualKey;
+
+	const handleClose = () => {
+		setIsOpen(false);
+		setTimeout(() => {
+			onCancel();
+		}, 150); // Slightly longer than the 100ms animation duration
+	};
 
 	// RTK Query hooks
 	const { data: providersData, error: providersError, isLoading: providersLoading } = useGetProvidersQuery();
@@ -149,6 +157,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 			providerConfigs:
 				virtualKey?.provider_configs?.map((config) => ({
 					...config,
+					key_ids: config.keys?.map((key) => key.key_id) || [],
 					budget: config.budget
 						? {
 								max_limit: String(config.budget.max_limit),
@@ -174,7 +183,6 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 			teamId: virtualKey?.team_id || "",
 			customerId: virtualKey?.customer_id || "",
 			isActive: virtualKey?.is_active ?? true,
-			selectedDBKeys: virtualKey?.keys?.map((key) => key.key_id) || [],
 			budgetMaxLimit: virtualKey?.budget ? String(virtualKey.budget.max_limit) : "",
 			budgetResetDuration: virtualKey?.budget?.reset_duration || "1M",
 			tokenMaxLimit: virtualKey?.rate_limit?.token_max_limit ? String(virtualKey.rate_limit.token_max_limit) : "",
@@ -242,6 +250,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 			provider: provider,
 			weight: 0.5, // Default weight, user can adjust
 			allowed_models: [],
+			key_ids: [],
 		};
 
 		form.setValue("providerConfigs", [...providerConfigs, newConfig], { shouldDirty: true });
@@ -326,18 +335,17 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 		try {
 			// Normalize provider configs to ensure weights are numbers and handle budget/rate limits
 			const normalizedProviderConfigs = data.providerConfigs ? normalizeProviderConfigs(data.providerConfigs) : [];
-			if (isEditing && virtualKey) {
-				// Update existing virtual key
-				const updateData: UpdateVirtualKeyRequest = {
-					name: data.name || undefined,
-					description: data.description || undefined,
-					provider_configs: normalizedProviderConfigs,
-					mcp_configs: data.mcpConfigs,
-					team_id: data.entityType === "team" && data.teamId && data.teamId.trim() !== "" ? data.teamId : undefined,
-					customer_id: data.entityType === "customer" && data.customerId && data.customerId.trim() !== "" ? data.customerId : undefined,
-					key_ids: data.selectedDBKeys,
-					is_active: data.isActive,
-				};
+		if (isEditing && virtualKey) {
+			// Update existing virtual key
+			const updateData: UpdateVirtualKeyRequest = {
+				name: data.name || undefined,
+				description: data.description || undefined,
+				provider_configs: normalizedProviderConfigs,
+				mcp_configs: data.mcpConfigs,
+				team_id: data.entityType === "team" && data.teamId && data.teamId.trim() !== "" ? data.teamId : undefined,
+				customer_id: data.entityType === "customer" && data.customerId && data.customerId.trim() !== "" ? data.customerId : undefined,
+				is_active: data.isActive,
+			};
 
 				// Add budget if enabled
 				const budgetMaxLimit = normalizeNumericField(data.budgetMaxLimit);
@@ -362,18 +370,17 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 
 				await updateVirtualKey({ vkId: virtualKey.id, data: updateData }).unwrap();
 				toast.success("Virtual key updated successfully");
-			} else {
-				// Create new virtual key
-				const createData: CreateVirtualKeyRequest = {
-					name: data.name,
-					description: data.description || undefined,
-					provider_configs: normalizedProviderConfigs,
-					mcp_configs: data.mcpConfigs,
-					team_id: data.entityType === "team" && data.teamId && data.teamId.trim() !== "" ? data.teamId : undefined,
-					customer_id: data.entityType === "customer" && data.customerId && data.customerId.trim() !== "" ? data.customerId : undefined,
-					key_ids: data.selectedDBKeys,
-					is_active: data.isActive,
-				};
+		} else {
+			// Create new virtual key
+			const createData: CreateVirtualKeyRequest = {
+				name: data.name,
+				description: data.description || undefined,
+				provider_configs: normalizedProviderConfigs,
+				mcp_configs: data.mcpConfigs,
+				team_id: data.entityType === "team" && data.teamId && data.teamId.trim() !== "" ? data.teamId : undefined,
+				customer_id: data.entityType === "customer" && data.customerId && data.customerId.trim() !== "" ? data.customerId : undefined,
+				is_active: data.isActive,
+			};
 
 				// Add budget if enabled
 				const budgetMaxLimit = normalizeNumericField(data.budgetMaxLimit);
@@ -407,9 +414,13 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 	};
 
 	return (
-		<Sheet open onOpenChange={onCancel}>
-			<SheetContent className="dark:bg-card flex w-full flex-col overflow-x-hidden bg-white p-8 sm:max-w-2xl">
-				<SheetHeader className="p-0">
+		<Sheet open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+			<SheetContent
+				className="dark:bg-card flex w-full flex-col overflow-x-hidden bg-white p-8"
+				onInteractOutside={(e) => e.preventDefault()}
+				onEscapeKeyDown={(e) => e.preventDefault()}
+			>
+				<SheetHeader className="p-0 flex flex-col items-start">
 					<SheetTitle className="flex items-center gap-2">{isEditing ? virtualKey?.name : "Create Virtual Key"}</SheetTitle>
 					<SheetDescription>
 						{isEditing
@@ -459,112 +470,6 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 											<Toggle label="Is this key active?" val={field.value} setVal={field.onChange} />
 										</FormItem>
 									)}
-								/>
-							</div>
-
-							<DottedSeparator className="mt-6 mb-5" />
-
-							{/* DBKey Selection */}
-							<div className="space-y-2">
-								<div className="flex items-center gap-2">
-									<Label className="text-sm font-medium">Allowed Keys</Label>
-									<TooltipProvider>
-										<Tooltip>
-											<TooltipTrigger asChild>
-												<span>
-													<Info className="text-muted-foreground h-3 w-3" />
-												</span>
-											</TooltipTrigger>
-											<TooltipContent>
-												<p>Select specific database keys to associate with this virtual key. Leave empty to allow all keys.</p>
-											</TooltipContent>
-										</Tooltip>
-									</TooltipProvider>
-								</div>
-								<FormField
-									control={form.control}
-									name="selectedDBKeys"
-									render={({ field }) => {
-										const selectedKeyValues = availableKeys
-											.filter((key) => field.value?.includes(key.key_id))
-											.map((key) => ({
-												label: key.name,
-												value: key.key_id,
-												description: key.models.join(", "),
-												provider: key.provider,
-											}));
-
-										return (
-											<FormItem>
-												<FormControl>
-													<AsyncMultiSelect
-														hideSelectedOptions
-														isNonAsync
-														closeMenuOnSelect={false}
-														defaultOptions={availableKeys.map((key) => ({
-															label: key.name,
-															value: key.key_id,
-															description: key.models.join(", "),
-															provider: key.provider,
-														}))}
-														views={{
-															multiValue: (multiValueProps: MultiValueProps<VirtualKeyType>) => {
-																return (
-																	<div
-																		{...multiValueProps.innerProps}
-																		className="bg-accent dark:!bg-card flex cursor-pointer items-center gap-1 rounded-sm px-1 py-0.5 text-sm"
-																	>
-																		<RenderProviderIcon
-																			provider={multiValueProps.data.provider as ProviderIconType}
-																			size="sm"
-																			className="h-4 w-4"
-																		/>{" "}
-																		{multiValueProps.data.label}{" "}
-																		<X
-																			className="hover:text-foreground text-muted-foreground h-4 w-4 cursor-pointer"
-																			onClick={(e) => {
-																				e.stopPropagation();
-																				multiValueProps.removeProps.onClick?.(e as any);
-																			}}
-																		/>
-																	</div>
-																);
-															},
-															option: (optionProps: OptionProps<VirtualKeyType>) => {
-																return (
-																	<div
-																		{...optionProps.innerProps}
-																		className={cn(
-																			"flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm",
-																			optionProps.isFocused && "bg-accent dark:!bg-card",
-																			"hover:bg-accent",
-																			optionProps.isSelected && "bg-accent dark:!bg-card",
-																		)}
-																	>
-																		<RenderProviderIcon
-																			provider={optionProps.data.provider as ProviderIconType}
-																			size="sm"
-																			className="h-4 w-4"
-																		/>
-																		<span className="text-content-primary grow truncate text-sm">{optionProps.data.label}</span>
-																		{optionProps.data.description && (
-																			<span className="text-content-tertiary max-w-[70%] text-sm">{optionProps.data.description}</span>
-																		)}
-																	</div>
-																);
-															},
-														}}
-														value={selectedKeyValues}
-														onChange={(keys) => field.onChange(keys.map((key) => key.value as string))}
-														placeholder="Select keys..."
-														className="hover:bg-accent w-full"
-														menuClassName="z-[60] max-h-[300px] overflow-y-auto w-full cursor-pointer custom-scrollbar"
-													/>
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										);
-									}}
 								/>
 							</div>
 
@@ -671,13 +576,13 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 																</div>
 															</div>
 														</AccordionTrigger>
-														<AccordionContent className="flex flex-col gap-4 text-balance">
+														<AccordionContent className="flex flex-col gap-4 px-1 text-balance">
 															<div className="flex w-full items-start gap-2">
 																<div className="w-1/4 space-y-2">
 																	<Label className="text-sm font-medium">Weight</Label>
 																	<Input
 																		placeholder="0.5"
-																		className="h-10 w-full border-none"
+																		className="h-10 w-full"
 																		value={config.weight}
 																		onChange={(e) => {
 																			const inputValue = e.target.value;
@@ -703,19 +608,112 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 																	/>
 																</div>
 																<div className="w-3/4 space-y-2">
-																	<Label className="text-sm font-medium">Allowed Models</Label>
-																	<TagInput
+																	<Label className="text-sm font-medium">
+																		Allowed Models <span className="ml-auto text-muted-foreground text-xs italic">type to search</span>
+																	</Label>
+																	<ModelMultiselect
+																		provider={config.provider}
+																		keys={(() => {
+																			const providerKeys = availableKeys.filter((key) => key.provider === config.provider);
+																			const configKeyIds = config.key_ids || [];
+																			return providerKeys.filter((key) => configKeyIds.includes(key.key_id)).map((key) => key.key_id);
+																		})()}
+																		value={config.allowed_models || []}
+																		onChange={(models: string[]) => handleUpdateProviderConfig(index, "allowed_models", models)}
 																		placeholder={
 																			config.provider
 																				? ModelPlaceholders[config.provider as keyof typeof ModelPlaceholders] || ModelPlaceholders.default
 																				: ModelPlaceholders.default
 																		}
-																		value={config.allowed_models || []}
-																		onValueChange={(models: string[]) => handleUpdateProviderConfig(index, "allowed_models", models)}
-																		className="min-h-10 max-w-[500px] min-w-[200px] border-none"
+																		className="min-h-10 max-w-[500px] min-w-[200px]"
 																	/>
+																	<p className="text-muted-foreground text-xs">Keep empty to use all available models for the provider</p>
 																</div>
 															</div>
+
+														{/* Allowed Keys for this provider */}
+														{(() => {
+															const providerKeys = availableKeys.filter((key) => key.provider === config.provider);
+															const configKeyIds = config.key_ids || [];
+															const selectedProviderKeys = providerKeys
+																.filter((key) => configKeyIds.includes(key.key_id))
+																.map((key) => ({
+																	label: key.name,
+																	value: key.key_id,
+																	description: key.models.join(", "),
+																	provider: key.provider,
+																}));
+
+															if (providerKeys.length === 0) return null;
+
+															return (
+																<div className="mx-0.5 space-y-2">
+																	<Label className="text-sm font-medium">Allowed Keys</Label>
+																	<p className="text-muted-foreground text-xs">Keep empty to use all available keys for the provider</p>
+																	<AsyncMultiSelect
+																		hideSelectedOptions
+																		isNonAsync
+																		closeMenuOnSelect={false}
+																		menuPlacement="auto"
+																		defaultOptions={providerKeys.map((key) => ({
+																			label: key.name,
+																			value: key.key_id,
+																			description: key.models.join(", "),
+																			provider: key.provider,
+																		}))}
+																		views={{
+																			multiValue: (multiValueProps: MultiValueProps<VirtualKeyType>) => {
+																				return (
+																					<div
+																						{...multiValueProps.innerProps}
+																						className="bg-accent dark:!bg-card flex cursor-pointer items-center gap-1 rounded-sm px-1 py-0.5 text-sm"
+																					>
+																						{multiValueProps.data.label}{" "}
+																						<X
+																							className="hover:text-foreground text-muted-foreground h-4 w-4 cursor-pointer"
+																							onClick={(e) => {
+																								e.stopPropagation();
+																								multiValueProps.removeProps.onClick?.(e as any);
+																							}}
+																						/>
+																					</div>
+																				);
+																			},
+																			option: (optionProps: OptionProps<VirtualKeyType>) => {
+																				const { Option } = components;
+																				return (
+																					<Option
+																						{...optionProps}
+																						className={cn(
+																							"flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm",
+																							optionProps.isFocused && "bg-accent dark:!bg-card",
+																							"hover:bg-accent",
+																							optionProps.isSelected && "bg-accent dark:!bg-card",
+																						)}
+																					>
+																						<span className="text-content-primary grow truncate text-sm">{optionProps.data.label}</span>
+																						{optionProps.data.description && (
+																							<span className="text-content-tertiary max-w-[70%] text-sm">
+																								{optionProps.data.description}
+																							</span>
+																						)}
+																					</Option>
+																				);
+																			},
+																		}}
+																		value={selectedProviderKeys}
+																		onChange={(keys) => {
+																			// Update key_ids for this provider config
+																			const newKeyIds = keys.map((key) => key.value as string);
+																			handleUpdateProviderConfig(index, "key_ids", newKeyIds);
+																		}}
+																		placeholder="Select keys..."
+																		className="hover:bg-accent w-full"
+																		menuClassName="z-[60] max-h-[300px] overflow-y-auto w-full cursor-pointer custom-scrollbar"
+																	/>
+																</div>
+															);
+														})()}
 
 															<DottedSeparator />
 
@@ -1156,7 +1154,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 						{/* Form Footer */}
 						<div className="dark:bg-card border-border bg-white py-6">
 							<div className="flex justify-end gap-2">
-								<Button type="button" variant="outline" onClick={onCancel}>
+								<Button type="button" variant="outline" onClick={handleClose}>
 									Cancel
 								</Button>
 								<TooltipProvider>

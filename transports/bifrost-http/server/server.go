@@ -52,6 +52,7 @@ type ServerCallbacks interface {
 	GetPluginStatus(ctx context.Context) []schemas.PluginStatus
 	RefetchModelsForProvider(ctx context.Context, provider schemas.ModelProvider) error
 	DeleteModelsForProvider(ctx context.Context, provider schemas.ModelProvider) error
+	GetModelsForProvider(provider schemas.ModelProvider) []string
 	UpdateAuthConfig(ctx context.Context, authConfig *configstore.AuthConfig) error
 	ReloadClientConfigFromConfigStore(ctx context.Context) error
 	ReloadPricingManager(ctx context.Context) error
@@ -802,6 +803,15 @@ func (s *BifrostHTTPServer) DeleteModelsForProvider(ctx context.Context, provide
 	s.Config.PricingManager.DeleteModelDataForProvider(provider)
 
 	return nil
+}
+
+// GetModelsForProvider returns all models for a specific provider from the model catalog
+func (s *BifrostHTTPServer) GetModelsForProvider(provider schemas.ModelProvider) []string {
+	if s.Config == nil || s.Config.PricingManager == nil {
+		return []string{}
+	}
+
+	return s.Config.PricingManager.GetModelsForProvider(provider)
 }
 
 // RemovePlugin removes a plugin from the server.
