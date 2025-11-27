@@ -41,12 +41,10 @@ func (p *LoggerPlugin) insertInitialLogEntry(
 		SpeechInputParsed:           data.SpeechInput,
 		TranscriptionInputParsed:    data.TranscriptionInput,
 	}
-
 	if parentRequestID != "" {
 		entry.ParentRequestID = &parentRequestID
 	}
-
-	return p.store.Create(ctx, entry)
+	return p.store.CreateIfNotExists(ctx, entry)
 }
 
 // updateLogEntry updates an existing log entry using GORM

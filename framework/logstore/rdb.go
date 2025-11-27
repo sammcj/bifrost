@@ -9,6 +9,7 @@ import (
 
 	"github.com/maximhq/bifrost/core/schemas"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // RDBLogStore represents a log store that uses a SQLite database.
@@ -72,6 +73,15 @@ func (s *RDBLogStore) Create(ctx context.Context, entry *Log) error {
 	return s.db.WithContext(ctx).Create(entry).Error
 }
 
+// CreateIfNotExists inserts a new log entry only if it doesn't already exist.
+// Uses ON CONFLICT DO NOTHING to handle duplicate key errors gracefully.
+func (s *RDBLogStore) CreateIfNotExists(ctx context.Context, entry *Log) error {
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoNothing: true,
+	}).Create(entry).Error
+}
+
 // Ping checks if the database is reachable.
 func (s *RDBLogStore) Ping(ctx context.Context) error {
 	return s.db.WithContext(ctx).Exec("SELECT 1").Error
@@ -80,10 +90,13 @@ func (s *RDBLogStore) Ping(ctx context.Context) error {
 // Update updates a log entry in the database.
 func (s *RDBLogStore) Update(ctx context.Context, id string, entry any) error {
 	tx := s.db.WithContext(ctx).Model(&Log{}).Where("id = ?", id).Updates(entry)
-	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if tx.RowsAffected == 0 {
 		return ErrNotFound
 	}
-	return tx.Error
+	return nil
 }
 
 // SearchLogs searches for logs in the database without calculating statistics.
