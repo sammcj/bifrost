@@ -270,42 +270,42 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 	logMsg.NumberOfRetries = numberOfRetries
 	logMsg.FallbackIndex = fallbackIndex
 
-	go func(logMsg *LogMessage) {
-		defer p.putLogMessage(logMsg) // Return to pool when done
+	go func(msg *LogMessage) {
+		defer p.putLogMessage(msg) // Return to pool when done
 		if err := p.insertInitialLogEntry(
 			p.ctx,
-			logMsg.RequestID,
-			logMsg.ParentRequestID,
-			logMsg.Timestamp,
-			logMsg.NumberOfRetries,
-			logMsg.FallbackIndex,
-			logMsg.InitialData,
+			msg.RequestID,
+			msg.ParentRequestID,
+			msg.Timestamp,
+			msg.NumberOfRetries,
+			msg.FallbackIndex,
+			msg.InitialData,
 		); err != nil {
-			p.logger.Warn("failed to insert initial log entry for request %s: %v", logMsg.RequestID, err)
+			p.logger.Warn("failed to insert initial log entry for request %s: %v", msg.RequestID, err)
 		} else {
 			// Call callback for initial log creation (WebSocket "create" message)
 			// Construct LogEntry directly from data we have to avoid database query
 			p.mu.Lock()
+			defer p.mu.Unlock()
 			if p.logCallback != nil {
 				initialEntry := &logstore.Log{
-					ID:                          logMsg.RequestID,
-					Timestamp:                   logMsg.Timestamp,
-					Object:                      logMsg.InitialData.Object,
-					Provider:                    logMsg.InitialData.Provider,
-					Model:                       logMsg.InitialData.Model,
-					NumberOfRetries:             logMsg.NumberOfRetries,
-					FallbackIndex:               logMsg.FallbackIndex,
-					InputHistoryParsed:          logMsg.InitialData.InputHistory,
-					ResponsesInputHistoryParsed: logMsg.InitialData.ResponsesInputHistory,
-					ParamsParsed:                logMsg.InitialData.Params,
-					ToolsParsed:                 logMsg.InitialData.Tools,
+					ID:                          msg.RequestID,
+					Timestamp:                   msg.Timestamp,
+					Object:                      msg.InitialData.Object,
+					Provider:                    msg.InitialData.Provider,
+					Model:                       msg.InitialData.Model,
+					NumberOfRetries:             msg.NumberOfRetries,
+					FallbackIndex:               msg.FallbackIndex,
+					InputHistoryParsed:          msg.InitialData.InputHistory,
+					ResponsesInputHistoryParsed: msg.InitialData.ResponsesInputHistory,
+					ParamsParsed:                msg.InitialData.Params,
+					ToolsParsed:                 msg.InitialData.Tools,
 					Status:                      "processing",
 					Stream:                      false, // Initially false, will be updated if streaming
-					CreatedAt:                   logMsg.Timestamp,
+					CreatedAt:                   msg.Timestamp,
 				}
 				p.logCallback(initialEntry)
-			}
-			p.mu.Unlock()
+			}			
 		}
 	}(logMsg)
 
