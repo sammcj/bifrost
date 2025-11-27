@@ -77,7 +77,6 @@ export interface VirtualKey {
 	customer?: Customer;
 	budget?: Budget;
 	rate_limit?: RateLimit;
-	keys?: DBKey[]; // Associated database keys
 }
 
 export interface VirtualKeyProviderConfig {
@@ -87,6 +86,7 @@ export interface VirtualKeyProviderConfig {
 	allowed_models: string[];
 	budget?: Budget;
 	rate_limit?: RateLimit;
+	keys?: DBKey[]; // Associated database keys for this provider
 }
 
 export interface VirtualKeyMCPConfig {
@@ -129,6 +129,7 @@ export interface VirtualKeyProviderConfigRequest {
 	allowed_models?: string[];
 	budget?: CreateBudgetRequest;
 	rate_limit?: CreateRateLimitRequest;
+	key_ids?: string[]; // List of DBKey UUIDs to associate with this provider config
 }
 
 export interface VirtualKeyProviderConfigUpdateRequest {
@@ -138,6 +139,7 @@ export interface VirtualKeyProviderConfigUpdateRequest {
 	allowed_models?: string[];
 	budget?: UpdateBudgetRequest;
 	rate_limit?: UpdateRateLimitRequest;
+	key_ids?: string[]; // List of DBKey UUIDs to associate with this provider config
 }
 
 // Request types for API calls
@@ -150,7 +152,6 @@ export interface CreateVirtualKeyRequest {
 	customer_id?: string;
 	budget?: CreateBudgetRequest;
 	rate_limit?: CreateRateLimitRequest;
-	key_ids?: string[]; // List of DBKey UUIDs to associate
 	is_active?: boolean;
 }
 
@@ -163,7 +164,6 @@ export interface UpdateVirtualKeyRequest {
 	customer_id?: string;
 	budget?: UpdateBudgetRequest;
 	rate_limit?: UpdateRateLimitRequest;
-	key_ids?: string[]; // List of DBKey UUIDs to associate
 	is_active?: boolean;
 }
 

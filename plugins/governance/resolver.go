@@ -137,14 +137,15 @@ func (r *BudgetResolver) EvaluateRequest(ctx *context.Context, evaluationRequest
 		return budgetResult
 	}
 
-	if vk.Keys != nil {
-		includeOnlyKeys := make([]string, 0, len(vk.Keys))
-		for _, dbKey := range vk.Keys {
-			includeOnlyKeys = append(includeOnlyKeys, dbKey.KeyID)
-		}
-
-		if len(includeOnlyKeys) > 0 {
+	// Find the provider config that matches the request's provider and get its allowed keys
+	for _, pc := range vk.ProviderConfigs {
+		if schemas.ModelProvider(pc.Provider) == evaluationRequest.Provider && len(pc.Keys) > 0 {
+			includeOnlyKeys := make([]string, 0, len(pc.Keys))
+			for _, dbKey := range pc.Keys {
+				includeOnlyKeys = append(includeOnlyKeys, dbKey.KeyID)
+			}
 			*ctx = context.WithValue(*ctx, schemas.BifrostContextKey("bf-governance-include-only-keys"), includeOnlyKeys)
+			break
 		}
 	}
 

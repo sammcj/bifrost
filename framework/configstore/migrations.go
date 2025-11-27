@@ -82,6 +82,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddBatchAndCachePricingColumns(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationMoveKeysToProviderConfig(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1118,4 +1121,123 @@ func migrationAddBatchAndCachePricingColumns(ctx context.Context, db *gorm.DB) e
 		},
 	}})
 	return m.Migrate()
+}
+
+// migrationMoveKeysToProviderConfig migrates keys from virtual key level to provider config level
+func migrationMoveKeysToProviderConfig(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "move_keys_to_provider_config",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			gormMigrator := tx.Migrator()
+
+		// Step 1: Create the new join table for provider config -> keys relationship
+		// Setup the join table so GORM knows about the custom structure
+		if err := tx.SetupJoinTable(&tables.TableVirtualKeyProviderConfig{}, "Keys", &tables.TableVirtualKeyProviderConfigKey{}); err != nil {
+			return fmt.Errorf("failed to setup join table for provider config keys: %w", err)
+		}
+
+		// Create the join table if it doesn't exist
+		if !gormMigrator.HasTable(&tables.TableVirtualKeyProviderConfigKey{}) {
+			if err := gormMigrator.CreateTable(&tables.TableVirtualKeyProviderConfigKey{}); err != nil {
+				return fmt.Errorf("failed to create join table for provider config keys: %w", err)
+			}
+		}
+
+			// Step 2: Migrate existing key associations from virtual key to provider config level
+			// Check if old join table exists
+			hasOldTable := gormMigrator.HasTable("governance_virtual_key_keys")
+
+			if hasOldTable {
+				// Get all existing associations from old table using GORM's Table method
+				type OldAssociation struct {
+					VirtualKeyID string `gorm:"column:table_virtual_key_id"`
+					KeyID        uint   `gorm:"column:table_key_id"`
+				}
+				var oldAssociations []OldAssociation
+				if err := tx.Table("governance_virtual_key_keys").Find(&oldAssociations).Error; err == nil {
+					// Process each association
+					for _, assoc := range oldAssociations {
+						// Get the key to find its provider
+						var key tables.TableKey
+						if err := tx.First(&key, assoc.KeyID).Error; err != nil {
+							// Key might have been deleted, skip
+							continue
+						}
+
+						// Find existing provider config for this virtual key and provider
+						var providerConfig tables.TableVirtualKeyProviderConfig
+						result := tx.Where("virtual_key_id = ? AND provider = ?", assoc.VirtualKeyID, key.Provider).First(&providerConfig)
+
+						if result.Error != nil {
+							if result.Error == gorm.ErrRecordNotFound {
+								// Create a new provider config for this provider
+								providerConfig = tables.TableVirtualKeyProviderConfig{
+									VirtualKeyID:  assoc.VirtualKeyID,
+									Provider:      key.Provider,
+									Weight:        1.0,
+									AllowedModels: []string{},
+								}
+								if err := tx.Create(&providerConfig).Error; err != nil {
+									return fmt.Errorf("failed to create provider config for migration: %w", err)
+								}
+							} else {
+								return fmt.Errorf("failed to query provider config: %w", result.Error)
+							}
+						}
+
+						// Use GORM's Association to append the key
+						if err := tx.Model(&providerConfig).Association("Keys").Append(&key); err != nil {
+							return fmt.Errorf("failed to associate key %d with provider config %d: %w", key.ID, providerConfig.ID, err)
+						}
+					}
+				}
+
+				// Step 3: Drop the old join table
+				if err := gormMigrator.DropTable("governance_virtual_key_keys"); err != nil {
+					return fmt.Errorf("failed to drop old governance_virtual_key_keys table: %w", err)
+				}
+			}
+
+			// Note: Empty keys in provider config means all keys are allowed at runtime
+			// We don't pre-populate keys here - this is handled at runtime
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			gormMigrator := tx.Migrator()
+
+			// Recreate the old join table structure
+			type OldJoinTable struct {
+				VirtualKeyID string `gorm:"column:table_virtual_key_id;primaryKey"`
+				KeyID        uint   `gorm:"column:table_key_id;primaryKey"`
+			}
+			if err := gormMigrator.CreateTable(&OldJoinTable{}); err != nil {
+				// Table might already exist, ignore error
+				_ = err
+			}
+			// Rename to correct table name if needed
+			if gormMigrator.HasTable(&OldJoinTable{}) && !gormMigrator.HasTable("governance_virtual_key_keys") {
+				if err := gormMigrator.RenameTable(&OldJoinTable{}, "governance_virtual_key_keys"); err != nil {
+					return fmt.Errorf("failed to rename old join table: %w", err)
+				}
+			}
+
+			// Note: We cannot fully rollback the data migration as it would require
+			// reconstructing which keys belonged to which virtual keys
+
+			// Drop the new join table
+			if err := gormMigrator.DropTable("governance_virtual_key_provider_config_keys"); err != nil {
+				return fmt.Errorf("failed to drop governance_virtual_key_provider_config_keys table: %w", err)
+			}
+
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running move keys to provider config migration: %s", err.Error())
+	}
+	return nil
 }

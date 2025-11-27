@@ -957,29 +957,12 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 						}
 					}
 
-					// Create virtual keys
-					for _, virtualKey := range virtualKeysToAdd {
-						// Look up existing provider keys by key_id and populate the Keys field
-						var existingKeys []configstoreTables.TableKey
-						for _, keyRef := range virtualKey.Keys {
-							if keyRef.KeyID != "" {
-								var existingKey configstoreTables.TableKey
-								if err := tx.Where("key_id = ?", keyRef.KeyID).First(&existingKey).Error; err != nil {
-									if errors.Is(err, gorm.ErrRecordNotFound) {
-										logger.Warn("referenced key %s not found for virtual key %s", keyRef.KeyID, virtualKey.ID)
-										continue
-									}
-									return fmt.Errorf("failed to lookup key %s for virtual key %s: %w", keyRef.KeyID, virtualKey.ID, err)
-								}
-								existingKeys = append(existingKeys, existingKey)
-							}
-						}
-						virtualKey.Keys = existingKeys
-
-						if err := config.ConfigStore.CreateVirtualKey(ctx, &virtualKey, tx); err != nil {
-							return fmt.Errorf("failed to create virtual key %s: %w", virtualKey.ID, err)
-						}
+				// Create virtual keys
+				for _, virtualKey := range virtualKeysToAdd {
+					if err := config.ConfigStore.CreateVirtualKey(ctx, &virtualKey, tx); err != nil {
+						return fmt.Errorf("failed to create virtual key %s: %w", virtualKey.ID, err)
 					}
+				}
 
 					return nil
 				}); err != nil {
@@ -1022,29 +1005,12 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					}
 				}
 
-				// Create virtual keys
-				for _, virtualKey := range config.GovernanceConfig.VirtualKeys {
-					// Look up existing provider keys by key_id and populate the Keys field
-					var existingKeys []configstoreTables.TableKey
-					for _, keyRef := range virtualKey.Keys {
-						if keyRef.KeyID != "" {
-							var existingKey configstoreTables.TableKey
-							if err := tx.Where("key_id = ?", keyRef.KeyID).First(&existingKey).Error; err != nil {
-								if errors.Is(err, gorm.ErrRecordNotFound) {
-									logger.Warn("referenced key %s not found for virtual key %s", keyRef.KeyID, virtualKey.ID)
-									continue
-								}
-								return fmt.Errorf("failed to lookup key %s for virtual key %s: %w", keyRef.KeyID, virtualKey.ID, err)
-							}
-							existingKeys = append(existingKeys, existingKey)
-						}
-					}
-					virtualKey.Keys = existingKeys
-
-					if err := config.ConfigStore.CreateVirtualKey(ctx, &virtualKey, tx); err != nil {
-						return fmt.Errorf("failed to create virtual key %s: %w", virtualKey.ID, err)
-					}
+			// Create virtual keys
+			for _, virtualKey := range config.GovernanceConfig.VirtualKeys {
+				if err := config.ConfigStore.CreateVirtualKey(ctx, &virtualKey, tx); err != nil {
+					return fmt.Errorf("failed to create virtual key %s: %w", virtualKey.ID, err)
 				}
+			}
 
 				return nil
 			}); err != nil {

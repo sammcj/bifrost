@@ -154,3 +154,25 @@ func ParseModel(model string) (string, string, error) {
 	}
 	return provider, name, nil
 }
+
+// fuzzyMatch checks if all characters in query appear in text in order (case-insensitive)
+// Example: "gpt4" matches "gpt-4", "gpt-4-turbo", etc.
+func fuzzyMatch(text, query string) bool {
+	if query == "" {
+		return true
+	}
+
+	text = strings.ToLower(text)
+	query = strings.ToLower(query)
+
+	queryIndex := 0
+	queryRunes := []rune(query)
+
+	for _, textChar := range text {
+		if queryIndex < len(queryRunes) && textChar == queryRunes[queryIndex] {
+			queryIndex++
+		}
+	}
+
+	return queryIndex == len(queryRunes)
+}

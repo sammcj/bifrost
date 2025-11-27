@@ -1,0 +1,2 @@
+- feat: adds support for bedrock, pydantic and cohere SDK.
+- fix: minor fixes around audio streaming for gemini and vertex

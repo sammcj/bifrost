@@ -57,6 +57,7 @@ type CreateVirtualKeyRequest struct {
 		AllowedModels []string                `json:"allowed_models,omitempty"` // Empty means all models allowed
 		Budget        *CreateBudgetRequest    `json:"budget,omitempty"`         // Provider-level budget
 		RateLimit     *CreateRateLimitRequest `json:"rate_limit,omitempty"`     // Provider-level rate limit
+		KeyIDs        []string                `json:"key_ids,omitempty"`        // List of DBKey UUIDs to associate with this provider config
 	} `json:"provider_configs,omitempty"` // Empty means all providers allowed
 	MCPConfigs []struct {
 		MCPClientName  string   `json:"mcp_client_name" validate:"required"`
@@ -66,7 +67,6 @@ type CreateVirtualKeyRequest struct {
 	CustomerID *string                 `json:"customer_id,omitempty"` // Mutually exclusive with TeamID
 	Budget     *CreateBudgetRequest    `json:"budget,omitempty"`
 	RateLimit  *CreateRateLimitRequest `json:"rate_limit,omitempty"`
-	KeyIDs     []string                `json:"key_ids,omitempty"` // List of DBKey UUIDs to associate with this VirtualKey
 	IsActive   *bool                   `json:"is_active,omitempty"`
 }
 
@@ -81,6 +81,7 @@ type UpdateVirtualKeyRequest struct {
 		AllowedModels []string                `json:"allowed_models,omitempty"` // Empty means all models allowed
 		Budget        *UpdateBudgetRequest    `json:"budget,omitempty"`         // Provider-level budget
 		RateLimit     *UpdateRateLimitRequest `json:"rate_limit,omitempty"`     // Provider-level rate limit
+		KeyIDs        []string                `json:"key_ids,omitempty"`        // List of DBKey UUIDs to associate with this provider config
 	} `json:"provider_configs,omitempty"`
 	MCPConfigs []struct {
 		ID             *uint    `json:"id,omitempty"` // null for new entries
@@ -91,7 +92,6 @@ type UpdateVirtualKeyRequest struct {
 	CustomerID *string                 `json:"customer_id,omitempty"`
 	Budget     *UpdateBudgetRequest    `json:"budget,omitempty"`
 	RateLimit  *UpdateRateLimitRequest `json:"rate_limit,omitempty"`
-	KeyIDs     []string                `json:"key_ids,omitempty"` // List of DBKey UUIDs to associate with this VirtualKey
 	IsActive   *bool                   `json:"is_active,omitempty"`
 }
 
@@ -226,18 +226,6 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 	}
 	var vk configstoreTables.TableVirtualKey
 	if err := h.configStore.ExecuteTransaction(ctx, func(tx *gorm.DB) error {
-		// Get the keys if DBKeyIDs are provided
-		var keys []configstoreTables.TableKey
-		if len(req.KeyIDs) > 0 {
-			var err error
-			keys, err = h.configStore.GetKeysByIDs(ctx, req.KeyIDs)
-			if err != nil {
-				return fmt.Errorf("failed to get keys by IDs: %w", err)
-			}
-			if len(keys) != len(req.KeyIDs) {
-				return fmt.Errorf("some keys not found: expected %d, found %d", len(req.KeyIDs), len(keys))
-			}
-		}
 		vk = configstoreTables.TableVirtualKey{
 			ID:          uuid.NewString(),
 			Name:        req.Name,
@@ -246,7 +234,6 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 			TeamID:      req.TeamID,
 			CustomerID:  req.CustomerID,
 			IsActive:    isActive,
-			Keys:        keys, // Set the keys for the many-to-many relationship
 		}
 		if req.Budget != nil {
 			budget := configstoreTables.TableBudget{
@@ -297,15 +284,30 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 						return fmt.Errorf("invalid provider config budget reset duration format: %s", pc.Budget.ResetDuration)
 					}
 				}
-				providerConfig := &configstoreTables.TableVirtualKeyProviderConfig{
-					VirtualKeyID:  vk.ID,
-					Provider:      pc.Provider,
-					Weight:        pc.Weight,
-					AllowedModels: pc.AllowedModels,
-				}
 
-				// Create budget for provider config if provided
-				if pc.Budget != nil {
+			// Get keys for this provider config if specified
+			var keys []configstoreTables.TableKey
+			if len(pc.KeyIDs) > 0 {
+				var err error
+				keys, err = h.configStore.GetKeysByIDs(ctx, pc.KeyIDs)
+				if err != nil {
+					return fmt.Errorf("failed to get keys by IDs for provider %s: %w", pc.Provider, err)
+				}
+				if len(keys) != len(pc.KeyIDs) {
+					return fmt.Errorf("some keys not found for provider %s: expected %d, found %d", pc.Provider, len(pc.KeyIDs), len(keys))
+				}
+			}
+
+			providerConfig := &configstoreTables.TableVirtualKeyProviderConfig{
+				VirtualKeyID:  vk.ID,
+				Provider:      pc.Provider,
+				Weight:        pc.Weight,
+				AllowedModels: pc.AllowedModels,
+				Keys:          keys,
+			}
+
+			// Create budget for provider config if provided
+			if pc.Budget != nil {
 					budget := configstoreTables.TableBudget{
 						ID:            uuid.NewString(),
 						MaxLimit:      pc.Budget.MaxLimit,
@@ -553,24 +555,6 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 			}
 		}
 
-		// Handle DBKey associations if provided
-		if req.KeyIDs != nil {
-			// Get the keys if DBKeyIDs are provided
-			var keys []configstoreTables.TableKey
-			if len(req.KeyIDs) > 0 {
-				var err error
-				keys, err = h.configStore.GetKeysByIDs(ctx, req.KeyIDs)
-				if err != nil {
-					return fmt.Errorf("failed to get keys by IDs: %w", err)
-				}
-				if len(keys) != len(req.KeyIDs) {
-					return fmt.Errorf("some keys not found: expected %d, found %d", len(req.KeyIDs), len(keys))
-				}
-			}
-
-			// Set the keys for the many-to-many relationship
-			vk.Keys = keys
-		}
 		if err := h.configStore.UpdateVirtualKey(ctx, vk, tx); err != nil {
 			return err
 		}
@@ -604,15 +588,29 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 							return fmt.Errorf("both max_limit and reset_duration are required when creating a new provider budget")
 						}
 					}
-					// Create new provider config
-					providerConfig := &configstoreTables.TableVirtualKeyProviderConfig{
-						VirtualKeyID:  vk.ID,
-						Provider:      pc.Provider,
-						Weight:        pc.Weight,
-						AllowedModels: pc.AllowedModels,
-					}
-					// Create budget for provider config if provided
-					if pc.Budget != nil {
+			// Get keys for this provider config if specified
+			var keys []configstoreTables.TableKey
+			if len(pc.KeyIDs) > 0 {
+				var err error
+				keys, err = h.configStore.GetKeysByIDs(ctx, pc.KeyIDs)
+				if err != nil {
+					return fmt.Errorf("failed to get keys by IDs for provider %s: %w", pc.Provider, err)
+				}
+				if len(keys) != len(pc.KeyIDs) {
+					return fmt.Errorf("some keys not found for provider %s: expected %d, found %d", pc.Provider, len(pc.KeyIDs), len(keys))
+				}
+			}
+
+				// Create new provider config
+				providerConfig := &configstoreTables.TableVirtualKeyProviderConfig{
+					VirtualKeyID:  vk.ID,
+					Provider:      pc.Provider,
+					Weight:        pc.Weight,
+					AllowedModels: pc.AllowedModels,
+					Keys:          keys,
+				}
+				// Create budget for provider config if provided
+				if pc.Budget != nil {
 						budget := configstoreTables.TableBudget{
 							ID:            uuid.NewString(),
 							MaxLimit:      *pc.Budget.MaxLimit,
@@ -650,17 +648,32 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 					if err := h.configStore.CreateVirtualKeyProviderConfig(ctx, providerConfig, tx); err != nil {
 						return err
 					}
-				} else {
-					// Update existing provider config
-					existing, ok := existingConfigsMap[*pc.ID]
-					if !ok {
-						return fmt.Errorf("provider config %d does not belong to this virtual key", *pc.ID)
+			} else {
+			// Update existing provider config
+			existing, ok := existingConfigsMap[*pc.ID]
+			if !ok {
+				return fmt.Errorf("provider config %d does not belong to this virtual key", *pc.ID)
+			}
+			requestConfigsMap[*pc.ID] = true
+			existing.Provider = pc.Provider
+			existing.Weight = pc.Weight
+			existing.AllowedModels = pc.AllowedModels
+
+				// Get keys for this provider config if specified
+				var keys []configstoreTables.TableKey
+				if len(pc.KeyIDs) > 0 {
+					var err error
+					keys, err = h.configStore.GetKeysByIDs(ctx, pc.KeyIDs)
+					if err != nil {
+						return fmt.Errorf("failed to get keys by IDs for provider %s: %w", pc.Provider, err)
 					}
-					requestConfigsMap[*pc.ID] = true
-					existing.Provider = pc.Provider
-					existing.Weight = pc.Weight
-					existing.AllowedModels = pc.AllowedModels
-					// Handle budget updates for provider config
+					if len(keys) != len(pc.KeyIDs) {
+						return fmt.Errorf("some keys not found for provider %s: expected %d, found %d", pc.Provider, len(pc.KeyIDs), len(keys))
+					}
+				}
+				existing.Keys = keys
+
+				// Handle budget updates for provider config
 					if pc.Budget != nil {
 						if existing.BudgetID != nil {
 							// Update existing budget
