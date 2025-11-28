@@ -17,6 +17,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/fasthttp/router"
+	"github.com/google/uuid"
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
@@ -57,6 +58,7 @@ type ServerCallbacks interface {
 	ReloadClientConfigFromConfigStore(ctx context.Context) error
 	ReloadPricingManager(ctx context.Context) error
 	UpdateDropExcessRequests(ctx context.Context, value bool)
+	UpdateMCPToolManagerConfig(ctx context.Context, maxAgentDepth int, toolExecutionTimeoutInSeconds int) error
 	ReloadTeam(ctx context.Context, id string) (*tables.TableTeam, error)
 	RemoveTeam(ctx context.Context, id string) error
 	ReloadCustomer(ctx context.Context, id string) (*tables.TableCustomer, error)
@@ -684,6 +686,14 @@ func (s *BifrostHTTPServer) UpdateDropExcessRequests(ctx context.Context, value 
 	s.Client.UpdateDropExcessRequests(value)
 }
 
+// UpdateMCPToolManagerConfig updates the MCP tool manager config
+func (s *BifrostHTTPServer) UpdateMCPToolManagerConfig(ctx context.Context, maxAgentDepth int, toolExecutionTimeoutInSeconds int) error {
+	if s.Config == nil {
+		return fmt.Errorf("config not found")
+	}
+	return s.Client.UpdateToolManagerConfig(maxAgentDepth, toolExecutionTimeoutInSeconds)
+}
+
 // UpdatePluginStatus updates the status of a plugin
 func (s *BifrostHTTPServer) UpdatePluginStatus(name string, status string, logs []string) error {
 	s.pluginStatusMutex.Lock()
@@ -1052,6 +1062,12 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to load plugins %v", err)
 	}
+	mcpConfig := s.Config.MCPConfig
+	if mcpConfig != nil {
+		mcpConfig.FetchNewRequestIDFunc = func(ctx context.Context) string {
+			return uuid.New().String()
+		}
+	}
 	// Initialize bifrost client
 	// Create account backed by the high-performance store (all processing is done in LoadFromDatabase)
 	// The account interface now benefits from ultra-fast config access times via in-memory storage
@@ -1061,7 +1077,7 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 		InitialPoolSize:    s.Config.ClientConfig.InitialPoolSize,
 		DropExcessRequests: s.Config.ClientConfig.DropExcessRequests,
 		Plugins:            s.Plugins,
-		MCPConfig:          s.Config.MCPConfig,
+		MCPConfig:          mcpConfig,
 		Logger:             logger,
 	})
 	if err != nil {

@@ -31,6 +31,8 @@ const defaultConfig: CoreConfig = {
 	max_request_body_size_mb: 100,
 	enable_litellm_fallbacks: false,
 	log_retention_days: 365,
+	mcp_agent_depth: 10,
+	mcp_tool_execution_timeout: 30,
 };
 
 export default function SecurityView() {
@@ -173,7 +175,7 @@ export default function SecurityView() {
 					<h2 className="text-2xl font-semibold tracking-tight">Security Settings</h2>
 					<p className="text-muted-foreground text-sm">Configure security and access control settings.</p>
 				</div>
-				<Button onClick={handleSave} disabled={!hasChanges || isLoading || !hasSettingsUpdateAccess	}>
+				<Button onClick={handleSave} disabled={!hasChanges || isLoading || !hasSettingsUpdateAccess}>
 					{isLoading ? "Saving..." : "Save Changes"}
 				</Button>
 			</div>

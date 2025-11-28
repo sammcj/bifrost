@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
@@ -189,13 +190,28 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid tools_to_execute: %v", err))
 		return
 	}
+
+	// Auto-clear tools_to_auto_execute if tools_to_execute is empty
+	// If no tools are allowed to execute, no tools can be auto-executed
+	if len(req.ToolsToExecute) == 0 {
+		req.ToolsToAutoExecute = []string{}
+	}
+
+	if err := validateToolsToAutoExecute(req.ToolsToAutoExecute, req.ToolsToExecute); err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid tools_to_auto_execute: %v", err))
+		return
+	}
+	if err := validateMCPClientName(req.Name); err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid client name: %v", err))
+		return
+	}
 	if err := h.mcpManager.AddMCPClient(ctx, req); err != nil {
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to add MCP client: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to connect MCP client: %v", err))
 		return
 	}
 	SendJSON(ctx, map[string]any{
 		"status":  "success",
-		"message": "MCP client added successfully",
+		"message": "MCP client connected successfully",
 	})
 }
 
@@ -216,6 +232,24 @@ func (h *MCPHandler) editMCPClient(ctx *fasthttp.RequestCtx) {
 	// Validate tools_to_execute
 	if err := validateToolsToExecute(req.ToolsToExecute); err != nil {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid tools_to_execute: %v", err))
+		return
+	}
+
+	// Auto-clear tools_to_auto_execute if tools_to_execute is empty
+	// If no tools are allowed to execute, no tools can be auto-executed
+	if len(req.ToolsToExecute) == 0 {
+		req.ToolsToAutoExecute = []string{}
+	}
+
+	// Validate tools_to_auto_execute
+	if err := validateToolsToAutoExecute(req.ToolsToAutoExecute, req.ToolsToExecute); err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid tools_to_auto_execute: %v", err))
+		return
+	}
+
+	// Validate client name
+	if err := validateMCPClientName(req.Name); err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid client name: %v", err))
 		return
 	}
 
@@ -278,5 +312,71 @@ func validateToolsToExecute(toolsToExecute []string) error {
 		}
 	}
 
+	return nil
+}
+
+func validateToolsToAutoExecute(toolsToAutoExecute []string, toolsToExecute []string) error {
+	if len(toolsToAutoExecute) > 0 {
+		// Check if wildcard "*" is combined with other tool names
+		hasWildcard := slices.Contains(toolsToAutoExecute, "*")
+		if hasWildcard && len(toolsToAutoExecute) > 1 {
+			return fmt.Errorf("wildcard '*' cannot be combined with other tool names")
+		}
+
+		// Check for duplicate entries
+		seen := make(map[string]bool)
+		for _, tool := range toolsToAutoExecute {
+			if seen[tool] {
+				return fmt.Errorf("duplicate tool name '%s'", tool)
+			}
+			seen[tool] = true
+		}
+
+		// Check that all tools in ToolsToAutoExecute are also in ToolsToExecute
+		// Create a set of allowed tools from ToolsToExecute
+		allowedTools := make(map[string]bool)
+		hasWildcardInExecute := slices.Contains(toolsToExecute, "*")
+		if hasWildcardInExecute {
+			// If "*" is in ToolsToExecute, all tools are allowed
+			return nil
+		}
+		for _, tool := range toolsToExecute {
+			allowedTools[tool] = true
+		}
+
+		// Validate each tool in ToolsToAutoExecute
+		for _, tool := range toolsToAutoExecute {
+			if tool == "*" {
+				// Wildcard is allowed if "*" is in ToolsToExecute
+				if !hasWildcardInExecute {
+					return fmt.Errorf("tool '%s' in tools_to_auto_execute is not in tools_to_execute", tool)
+				}
+			} else if !allowedTools[tool] {
+				return fmt.Errorf("tool '%s' in tools_to_auto_execute is not in tools_to_execute", tool)
+			}
+		}
+	}
+
+	return nil
+}
+
+func validateMCPClientName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("client name is required")
+	}
+	for _, r := range name {
+		if r > 127 { // non-ASCII
+			return fmt.Errorf("name must contain only ASCII characters")
+		}
+	}
+	if strings.Contains(name, "-") {
+		return fmt.Errorf("client name cannot contain hyphens")
+	}
+	if strings.Contains(name, " ") {
+		return fmt.Errorf("client name cannot contain spaces")
+	}
+	if len(name) > 0 && name[0] >= '0' && name[0] <= '9' {
+		return fmt.Errorf("client name cannot start with a number")
+	}
 	return nil
 }

@@ -437,6 +437,8 @@ export const coreConfigSchema = z.object({
 	allow_direct_keys: z.boolean().default(false),
 	allowed_origins: z.array(z.string()).default(["*"]),
 	max_request_body_size_mb: z.number().min(1).default(100),
+	mcp_agent_depth: z.number().min(1).default(10),
+	mcp_tool_execution_timeout: z.number().min(1).default(30),
 });
 
 // Bifrost config schema
@@ -574,9 +576,33 @@ export const maximFormSchema = z.object({
 
 // MCP Client update schema
 export const mcpClientUpdateSchema = z.object({
-	name: z.string().min(1, "Name is required"),
+	is_code_mode_client: z.boolean().optional(),
+	name: z
+		.string()
+		.min(1, "Name is required")
+		.refine((val) => !val.includes("-"), { message: "Client name cannot contain hyphens" })
+		.refine((val) => !val.includes(" "), { message: "Client name cannot contain spaces" })
+		.refine((val) => !/^[0-9]/.test(val), { message: "Client name cannot start with a number" }),
 	headers: z.record(z.string(), z.string()).optional(),
 	tools_to_execute: z
+		.array(z.string())
+		.optional()
+		.refine(
+			(tools) => {
+				if (!tools || tools.length === 0) return true;
+				const hasWildcard = tools.includes("*");
+				return !hasWildcard || tools.length === 1;
+			},
+			{ message: "Wildcard '*' cannot be combined with other tool names" },
+		)
+		.refine(
+			(tools) => {
+				if (!tools) return true;
+				return tools.length === new Set(tools).size;
+			},
+			{ message: "Duplicate tool names are not allowed" },
+		),
+	tools_to_auto_execute: z
 		.array(z.string())
 		.optional()
 		.refine(
