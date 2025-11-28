@@ -728,13 +728,14 @@ func TestUpdateProvider(t *testing.T) {
 			t.Fatalf("Failed to initialize Bifrost: %v", err)
 		}
 
-		// Add provider to account after bifrost initialization
-		account.AddProvider(schemas.Anthropic, 3, 500)
-
+		
 		// Verify provider doesn't exist initially
 		if bifrost.getProviderByKey(schemas.Anthropic) != nil {
 			t.Fatal("Provider should not exist initially")
 		}
+
+		// Add provider to account after bifrost initialization
+		account.AddProvider(schemas.Anthropic, 3, 500)
 
 		// Update should succeed and initialize the provider
 		err = bifrost.UpdateProvider(schemas.Anthropic)
