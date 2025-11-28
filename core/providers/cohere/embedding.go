@@ -61,6 +61,56 @@ func ToCohereEmbeddingRequest(bifrostReq *schemas.BifrostEmbeddingRequest) *Cohe
 	return cohereReq
 }
 
+// ToBifrostEmbeddingRequest converts a Cohere embedding request to Bifrost format
+func (req *CohereEmbeddingRequest) ToBifrostEmbeddingRequest() *schemas.BifrostEmbeddingRequest {
+	if req == nil {
+		return nil
+	}
+
+	provider, model := schemas.ParseModelString(req.Model, schemas.Cohere)
+
+	bifrostReq := &schemas.BifrostEmbeddingRequest{
+		Provider: provider,
+		Model:    model,
+		Input:    &schemas.EmbeddingInput{},
+		Params:   &schemas.EmbeddingParameters{},
+	}
+
+	// Convert texts
+	if len(req.Texts) > 0 {
+		if len(req.Texts) == 1 {
+			bifrostReq.Input.Text = &req.Texts[0]
+		} else {
+			bifrostReq.Input.Texts = req.Texts
+		}
+	}
+
+	// Convert parameters
+	if req.OutputDimension != nil {
+		bifrostReq.Params.Dimensions = req.OutputDimension
+	}
+
+	// Convert extra params
+	extraParams := make(map[string]interface{})
+	if req.InputType != "" {
+		extraParams["input_type"] = req.InputType
+	}
+	if req.EmbeddingTypes != nil {
+		extraParams["embedding_types"] = req.EmbeddingTypes
+	}
+	if req.Truncate != nil {
+		extraParams["truncate"] = *req.Truncate
+	}
+	if req.MaxTokens != nil {
+		extraParams["max_tokens"] = *req.MaxTokens
+	}
+	if len(extraParams) > 0 {
+		bifrostReq.Params.ExtraParams = extraParams
+	}
+
+	return bifrostReq
+}
+
 // ToBifrostEmbeddingResponse converts a Cohere embedding response to Bifrost format
 func (response *CohereEmbeddingResponse) ToBifrostEmbeddingResponse() *schemas.BifrostEmbeddingResponse {
 	if response == nil {

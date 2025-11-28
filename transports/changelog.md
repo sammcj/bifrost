@@ -3,3 +3,5 @@
 - fix: gemini tts fixes with audio encoding for cross SDK compatibility
 - feat: improved virtual key configuration flows
 - chore: improved test coverage
+- feat: check allowed models from model catalog for provider routing using virtual keys
+- fix: log cleanup timestamp in UTC to match log entry timestamps for processing logs
