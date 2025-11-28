@@ -162,7 +162,6 @@ github.com/maximhq/bifrost/framework v1.1.40 h1:E16MF32Qu7McoH5RdlC0d+TJ2wZeC1bv
 github.com/maximhq/bifrost/framework v1.1.40/go.mod h1:wePOCdYePyKiUS/pLjf2R2CKTWfJhZ7oWX1dpyu5onY=
 github.com/maximhq/bifrost/plugins/mocker v1.3.40 h1:42/NppC7Vlwsjnjd2GRu/Bf3D/Jpo0JW0RDYwamIOMk=
 github.com/maximhq/bifrost/plugins/mocker v1.3.40/go.mod h1:6B4dtTixMsdGtot/6U7nEIzJxFsM8j6ZYCmk7qSHNr8=
->>>>>>> f3d082ef (semantic cache plugin fixes)
 github.com/oklog/ulid v1.3.1 h1:EGfNDEx6MqHz8B3uNV6QAib1UR2Lm97sHi3ocA6ESJ4=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
