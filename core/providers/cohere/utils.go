@@ -57,8 +57,8 @@ func convertInterfaceToToolFunctionParameters(params interface{}) *schemas.ToolF
 	}
 
 	// Extract properties
-	if propsVal, ok := paramsMap["properties"].(map[string]interface{}); ok {
-		result.Properties = &propsVal
+	if orderedProps, ok := schemas.SafeExtractOrderedMap(paramsMap["properties"]); ok {
+		result.Properties = &orderedProps
 	}
 
 	// Extract enum

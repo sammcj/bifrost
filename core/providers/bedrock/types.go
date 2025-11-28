@@ -1,5 +1,7 @@
 package bedrock
 
+import "github.com/maximhq/bifrost/core/schemas"
+
 // DefaultBedrockRegion is the default region for Bedrock
 const DefaultBedrockRegion = "us-east-1"
 
@@ -46,7 +48,7 @@ type BedrockConverseRequest struct {
 	InferenceConfig                   *BedrockInferenceConfig          `json:"inferenceConfig,omitempty"`                   // Inference parameters
 	ToolConfig                        *BedrockToolConfig               `json:"toolConfig,omitempty"`                        // Tool configuration
 	GuardrailConfig                   *BedrockGuardrailConfig          `json:"guardrailConfig,omitempty"`                   // Guardrail configuration
-	AdditionalModelRequestFields      map[string]interface{}           `json:"additionalModelRequestFields,omitempty"`      // Model-specific parameters (untyped)
+	AdditionalModelRequestFields      schemas.OrderedMap               `json:"additionalModelRequestFields,omitempty"`      // Model-specific parameters (untyped)
 	AdditionalModelResponseFieldPaths []string                         `json:"additionalModelResponseFieldPaths,omitempty"` // Additional response field paths
 	PerformanceConfig                 *BedrockPerformanceConfig        `json:"performanceConfig,omitempty"`                 // Performance configuration
 	PromptVariables                   map[string]BedrockPromptVariable `json:"promptVariables,omitempty"`                   // Prompt variables for prompt management

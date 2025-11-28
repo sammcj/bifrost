@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/bytedance/sonic"
+	"github.com/maximhq/bifrost/core/schemas"
 )
 
 // ==================== REQUEST TYPES ====================
@@ -161,8 +162,8 @@ type CohereImageURL struct {
 
 // CohereDocument represents a document content block
 type CohereDocument struct {
-	Data map[string]interface{} `json:"data"`         // Required: Document data as key-value pairs
-	ID   *string                `json:"id,omitempty"` // Optional: Document ID for citations
+	Data schemas.OrderedMap `json:"data"`         // Required: Document data as key-value pairs
+	ID   *string            `json:"id,omitempty"` // Optional: Document ID for citations
 }
 
 // CohereThinking represents reasoning configuration

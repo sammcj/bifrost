@@ -48,6 +48,7 @@ type ComprehensiveTestConfig struct {
 	Provider                 schemas.ModelProvider
 	TextModel                string
 	ChatModel                string
+	PromptCachingModel       string
 	VisionModel              string
 	ReasoningModel           string
 	EmbeddingModel           string
@@ -170,12 +171,7 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 					Deployments: map[string]string{
 						"gpt-4o":        "gpt-4o",
 						"gpt-4o-backup": "gpt-4o-aug",
-						"o1":            "o1",
 					},
-					// Use environment variable for API version with fallback to current preview version
-					// Note: This is a preview API version that may change over time. Update as needed.
-					// Set AZURE_API_VERSION environment variable to override the default.
-					APIVersion: bifrost.Ptr(getEnvWithDefault("AZURE_API_VERSION", "2024-08-01-preview")),
 				},
 			},
 			{
@@ -187,9 +183,17 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 					Deployments: map[string]string{
 						"text-embedding-ada-002": "text-embedding-ada-002",
 					},
-					// Use environment variable for API version with fallback to current stable version
-					// Set AZURE_API_VERSION environment variable to override the default.
-					APIVersion: bifrost.Ptr(getEnvWithDefault("AZURE_API_VERSION", "2024-10-21")),
+				},
+			},
+			{
+				Value:  os.Getenv("AZURE_REASONING_API_KEY"),
+				Models: []string{},
+				Weight: 1.0,
+				AzureKeyConfig: &schemas.AzureKeyConfig{
+					Endpoint: os.Getenv("AZURE_REASONING_ENDPOINT"),
+					Deployments: map[string]string{
+						"o1": "o1",
+					},
 				},
 			},
 		}, nil
@@ -527,6 +531,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		ChatModel:            "gpt-4o-mini",
 		TextModel:            "",        // OpenAI doesn't support text completion in newer models
 		ReasoningModel:       "o1-mini", // OpenAI reasoning model
+		PromptCachingModel:   "gpt-4.1",
 		TranscriptionModel:   "whisper-1",
 		SpeechSynthesisModel: "tts-1",
 		Scenarios: TestScenarios{

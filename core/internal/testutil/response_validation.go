@@ -517,6 +517,36 @@ func validateChatTechnicalFields(t *testing.T, response *schemas.BifrostChatResp
 			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
 		}
 	}
+
+	// Check cached tokens percentage (for prompt caching tests)
+	if expectations.ProviderSpecific != nil {
+		if minPercentage, ok := expectations.ProviderSpecific["min_cached_tokens_percentage"].(float64); ok {
+			if response.Usage == nil {
+				result.Passed = false
+				result.Errors = append(result.Errors, "Expected usage statistics for cached tokens validation but not present")
+			} else if response.Usage.PromptTokensDetails == nil {
+				result.Passed = false
+				result.Errors = append(result.Errors, "Expected prompt tokens details for cached tokens validation but not present")
+			} else {
+				cachedTokens := response.Usage.PromptTokensDetails.CachedTokens
+				promptTokens := response.Usage.PromptTokens
+				if promptTokens > 0 {
+					cachedPercentage := float64(cachedTokens) / float64(promptTokens)
+					result.MetricsCollected["cached_tokens"] = cachedTokens
+					result.MetricsCollected["prompt_tokens"] = promptTokens
+					result.MetricsCollected["cached_percentage"] = cachedPercentage
+					if cachedPercentage < minPercentage {
+						result.Passed = false
+						result.Errors = append(result.Errors, fmt.Sprintf("Cached tokens percentage %.2f%% is below required minimum %.2f%% (cached: %d, prompt: %d)",
+							cachedPercentage*100, minPercentage*100, cachedTokens, promptTokens))
+					}
+				} else {
+					result.Passed = false
+					result.Errors = append(result.Errors, "Prompt tokens is 0, cannot validate cached tokens percentage")
+				}
+			}
+		}
+	}
 }
 
 // collectChatResponseMetrics collects metrics from the chat response for analysis

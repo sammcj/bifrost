@@ -100,7 +100,7 @@ func (r *GeminiGenerationRequest) convertSchemaToFunctionParameters(schema *Sche
 	return params
 }
 
-func convertSchemaToMap(schema *Schema) map[string]interface{} {
+func convertSchemaToMap(schema *Schema) schemas.OrderedMap {
 	// Convert map[string]*Schema to map[string]interface{} using JSON marshaling
 	data, err := sonic.Marshal(schema.Properties)
 	if err != nil {

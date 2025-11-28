@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
@@ -254,81 +253,104 @@ func RunChatCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 				},
 			}
 
-			responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-				return client.ChatCompletionStreamRequest(ctx, request)
-			})
+			// Use validation retry wrapper that includes stream reading and validation
+			validationResult := WithChatStreamValidationRetry(
+				t,
+				retryConfig,
+				retryContext,
+				func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+					return client.ChatCompletionStreamRequest(ctx, request)
+				},
+				func(responseChannel chan *schemas.BifrostStream) ChatStreamValidationResult {
+					var toolCallDetected bool
+					var responseCount int
+					var streamErrors []string
 
-			// Enhanced error handling with explicit logging
-			if err != nil {
-				errorMsg := GetErrorMessage(err)
-				if !strings.Contains(errorMsg, "❌") {
-					errorMsg = fmt.Sprintf("❌ %s", errorMsg)
-				}
-				t.Fatalf("❌ Chat completion stream with tools failed after retries: %s", errorMsg)
-			}
-			if responseChannel == nil {
-				t.Fatalf("❌ Response channel should not be nil")
-			}
+					streamCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+					defer cancel()
 
-			var toolCallDetected bool
-			var responseCount int
+					t.Logf("🔧 Testing streaming with tool calls...")
 
-			streamCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-			defer cancel()
+					for {
+						select {
+						case response, ok := <-responseChannel:
+							if !ok {
+								goto toolStreamComplete
+							}
 
-			t.Logf("🔧 Testing streaming with tool calls...")
+							if response == nil || response.BifrostChatResponse == nil {
+								streamErrors = append(streamErrors, "❌ Streaming response should not be nil")
+								continue
+							}
+							responseCount++
 
-			for {
-				select {
-				case response, ok := <-responseChannel:
-					if !ok {
-						goto toolStreamComplete
-					}
+							if response.BifrostChatResponse.Choices != nil {
+								for _, choice := range response.BifrostChatResponse.Choices {
+									if choice.ChatStreamResponseChoice != nil && choice.ChatStreamResponseChoice.Delta != nil {
+										delta := choice.ChatStreamResponseChoice.Delta
 
-					if response == nil || response.BifrostChatResponse == nil {
-						t.Fatalf("❌ Streaming response should not be nil")
-					}
-					responseCount++
+										// Check for tool calls in delta
+										if len(delta.ToolCalls) > 0 {
+											toolCallDetected = true
+											t.Logf("🔧 Tool call detected in streaming response")
 
-					if response.BifrostChatResponse.Choices != nil {
-						for _, choice := range response.BifrostChatResponse.Choices {
-							if choice.ChatStreamResponseChoice != nil && choice.ChatStreamResponseChoice.Delta != nil {
-								delta := choice.ChatStreamResponseChoice.Delta
-
-								// Check for tool calls in delta
-								if len(delta.ToolCalls) > 0 {
-									toolCallDetected = true
-									t.Logf("🔧 Tool call detected in streaming response")
-
-									for _, toolCall := range delta.ToolCalls {
-										if toolCall.Function.Name != nil {
-											t.Logf("🔧 Tool: %s", *toolCall.Function.Name)
-											if toolCall.Function.Arguments != "" {
-												t.Logf("🔧 Args: %s", toolCall.Function.Arguments)
+											for _, toolCall := range delta.ToolCalls {
+												if toolCall.Function.Name != nil {
+													t.Logf("🔧 Tool: %s", *toolCall.Function.Name)
+													if toolCall.Function.Arguments != "" {
+														t.Logf("🔧 Args: %s", toolCall.Function.Arguments)
+													}
+												}
 											}
 										}
 									}
 								}
 							}
+
+							if responseCount > 100 {
+								goto toolStreamComplete
+							}
+
+						case <-streamCtx.Done():
+							streamErrors = append(streamErrors, "❌ Timeout waiting for streaming response with tools")
+							goto toolStreamComplete
 						}
 					}
 
-					if responseCount > 100 {
-						goto toolStreamComplete
+				toolStreamComplete:
+					var errors []string
+					if responseCount == 0 {
+						errors = append(errors, "❌ Should receive at least one streaming response")
+					}
+					if !toolCallDetected {
+						errors = append(errors, fmt.Sprintf("❌ Should detect tool calls in streaming response (received %d chunks but no tool calls)", responseCount))
+					}
+					if len(streamErrors) > 0 {
+						errors = append(errors, streamErrors...)
 					}
 
-				case <-streamCtx.Done():
-					t.Fatalf("❌ Timeout waiting for streaming response with tools")
-				}
+					return ChatStreamValidationResult{
+						Passed:           len(errors) == 0,
+						Errors:           errors,
+						ReceivedData:     responseCount > 0,
+						StreamErrors:     streamErrors,
+						ToolCallDetected: toolCallDetected,
+						ResponseCount:    responseCount,
+					}
+				},
+			)
+
+			// Check validation result
+			if !validationResult.Passed {
+				allErrors := append(validationResult.Errors, validationResult.StreamErrors...)
+				t.Fatalf("❌ Chat completion stream with tools validation failed after retries: %s", strings.Join(allErrors, "; "))
 			}
 
-		toolStreamComplete:
-			if responseCount == 0 {
+			if validationResult.ResponseCount == 0 {
 				t.Fatalf("❌ Should receive at least one streaming response")
 			}
-			if !toolCallDetected {
-				// Log error before failing - this is a validation failure
-				t.Fatalf("❌ Should detect tool calls in streaming response (received %d chunks but no tool calls)", responseCount)
+			if !validationResult.ToolCallDetected {
+				t.Fatalf("❌ Should detect tool calls in streaming response (received %d chunks but no tool calls)", validationResult.ResponseCount)
 			}
 			t.Logf("✅ Streaming with tools test completed successfully")
 		})
