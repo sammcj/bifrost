@@ -1,1 +1,2 @@
 - chore: upgrades core to 1.2.31 and framework to 1.1.40
+- fix: log cleanup timestamp in UTC to match log entry timestamps

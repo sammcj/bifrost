@@ -235,13 +235,22 @@ func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *
 	}
 	allowedProviderConfigs := make([]configstoreTables.TableVirtualKeyProviderConfig, 0)
 	for _, config := range providerConfigs {
-		if len(config.AllowedModels) == 0 || slices.Contains(config.AllowedModels, modelStr) {
+		var allAllowedModelsForProvider []string
+		if p.modelCatalog != nil {
+			allAllowedModelsForProvider = p.modelCatalog.GetModelsForProvider(schemas.ModelProvider(config.Provider))
+		}
+		isProviderAllowed := false
+		if len(config.AllowedModels) == 0 {
+			isProviderAllowed = len(allAllowedModelsForProvider) == 0 || slices.Contains(allAllowedModelsForProvider, modelStr)
+		} else {
+			isProviderAllowed = slices.Contains(config.AllowedModels, modelStr)
+		}
+		if isProviderAllowed {
 			// Check if the provider's budget or rate limits are violated using resolver helper methods
 			if p.resolver.isProviderBudgetViolated(config) || p.resolver.isProviderRateLimitViolated(config) {
 				// Provider config violated budget or rate limits, skip this provider
 				continue
 			}
-
 			allowedProviderConfigs = append(allowedProviderConfigs, config)
 		}
 	}
