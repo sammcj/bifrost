@@ -53,8 +53,12 @@ func NewBifrostContext(parent context.Context, deadline time.Time) *BifrostConte
 		done:        make(chan struct{}),
 		userValues:  make(map[any]any),
 	}
-	// Start goroutine to handle cancellation
-	go ctx.watchCancellation()
+	// Only start goroutine if there's something to watch:
+	// - If we have a deadline, we need the timer
+	// - If parent can be cancelled (Done() != nil), we need to propagate cancellation
+	if ctx.hasDeadline || parent.Done() != nil {
+		go ctx.watchCancellation()
+	}
 	return ctx
 }
 

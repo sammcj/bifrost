@@ -26,7 +26,7 @@ helm repo update
 ### Install Bifrost
 
 ```bash
-helm install bifrost bifrost/bifrost --set image.tag=v1.3.36
+helm install bifrost bifrost/bifrost --set image.tag=v1.3.37
 ```
 
 <Note>
@@ -56,7 +56,7 @@ Simple setup for local testing and development.
 
 ```bash
 helm install bifrost bifrost/bifrost \
-  --set image.tag=v1.3.36 \
+  --set image.tag=v1.3.37 \
   --set bifrost.providers.openai.keys[0].value="sk-your-key" \
   --set bifrost.providers.openai.keys[0].weight=1
 ```
@@ -83,7 +83,7 @@ High-availability setup with PostgreSQL and auto-scaling.
 ```yaml
 # production.yaml
 image:
-  tag: "v1.3.36"  # Required: specify the Bifrost version
+  tag: "v1.3.37"  # Required: specify the Bifrost version
 
 replicaCount: 3
 
@@ -181,7 +181,7 @@ Optimized for high-volume AI inference with caching.
 ```yaml
 # ai-workload.yaml
 image:
-  tag: "v1.3.36"  # Required: specify the Bifrost version
+  tag: "v1.3.37"  # Required: specify the Bifrost version
 
 storage:
   mode: postgres
@@ -253,7 +253,7 @@ Support multiple LLM providers with load balancing.
 ```yaml
 # multi-provider.yaml
 image:
-  tag: "v1.3.36"  # Required: specify the Bifrost version
+  tag: "v1.3.37"  # Required: specify the Bifrost version
 
 bifrost:
   encryptionKey: "your-encryption-key"
@@ -309,7 +309,7 @@ Use existing PostgreSQL instance.
 ```yaml
 # external-db.yaml
 image:
-  tag: "v1.3.36"  # Required: specify the Bifrost version
+  tag: "v1.3.37"  # Required: specify the Bifrost version
 
 storage:
   mode: postgres
@@ -346,6 +346,107 @@ helm install bifrost bifrost/bifrost -f external-db.yaml
 - SSL connection support
 
 </Tab>
+
+<Tab title="Kubernetes Secrets">
+
+### Using Kubernetes Secrets
+
+Store all sensitive values in Kubernetes secrets instead of values files.
+
+**Prerequisites:** Create Kubernetes secrets first:
+
+```bash
+# PostgreSQL password
+kubectl create secret generic postgres-credentials \
+  --from-literal=password='your-postgres-password'
+
+# Encryption key
+kubectl create secret generic bifrost-encryption \
+  --from-literal=key='your-encryption-key'
+
+# Provider API keys
+kubectl create secret generic provider-api-keys \
+  --from-literal=openai-api-key='sk-...' \
+  --from-literal=anthropic-api-key='sk-ant-...'
+
+# Qdrant API key (if using)
+kubectl create secret generic qdrant-credentials \
+  --from-literal=api-key='your-qdrant-api-key'
+```
+
+```yaml
+# secrets-config.yaml
+image:
+  tag: "v1.3.37"
+
+storage:
+  mode: postgres
+
+# External PostgreSQL with secret reference
+postgresql:
+  enabled: false
+  external:
+    enabled: true
+    host: "postgres.example.com"
+    port: 5432
+    user: "bifrost"
+    database: "bifrost"
+    sslMode: "require"
+    existingSecret: "postgres-credentials"
+    passwordKey: "password"
+
+# Vector store with secret reference
+vectorStore:
+  enabled: true
+  type: qdrant
+  qdrant:
+    external:
+      enabled: true
+      host: "qdrant.example.com"
+      port: 6334
+      existingSecret: "qdrant-credentials"
+      apiKeyKey: "api-key"
+
+bifrost:
+  # Encryption key from secret
+  encryptionKeySecret:
+    name: "bifrost-encryption"
+    key: "key"
+  
+  # Provider configs using env var references
+  providers:
+    openai:
+      keys:
+        - value: "env.OPENAI_API_KEY"
+          weight: 1
+    anthropic:
+      keys:
+        - value: "env.ANTHROPIC_API_KEY"
+          weight: 1
+  
+  # Inject provider secrets as env vars
+  providerSecrets:
+    openai:
+      existingSecret: "provider-api-keys"
+      key: "openai-api-key"
+      envVar: "OPENAI_API_KEY"
+    anthropic:
+      existingSecret: "provider-api-keys"
+      key: "anthropic-api-key"
+      envVar: "ANTHROPIC_API_KEY"
+```
+
+**Install:**
+```bash
+helm install bifrost bifrost/bifrost -f secrets-config.yaml
+```
+
+**Features:**
+- No sensitive values in values files
+- Secrets managed by Kubernetes
+- Works with external secret managers (Vault, AWS Secrets Manager via External Secrets Operator)
+
+</Tab>
 </Tabs>
 
 ## Configuration
@@ -354,7 +455,7 @@ helm install bifrost bifrost/bifrost -f external-db.yaml
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.tag` | **Required.** Bifrost image version (e.g., v1.3.36) | `""` |
+| `image.tag` | **Required.** Bifrost image version (e.g., v1.3.37) | `""` |
 | `replicaCount` | Number of replicas | `1` |
 | `storage.mode` | Storage backend (sqlite/postgres) | `sqlite` |
 | `storage.persistence.size` | PVC size for SQLite | `10Gi` |
@@ -364,6 +465,28 @@ helm install bifrost bifrost/bifrost -f external-db.yaml
 | `bifrost.encryptionKey` | Encryption key | `""` |
 | `ingress.enabled` | Enable ingress | `false` |
 | `autoscaling.enabled` | Enable HPA | `false` |
+
+### Secret Reference Parameters
+
+Use existing Kubernetes secrets instead of plain-text values:
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `bifrost.encryptionKeySecret.name` | Secret name for encryption key | `""` |
+| `bifrost.encryptionKeySecret.key` | Key within the secret | `""` |
+| `postgresql.external.existingSecret` | Secret name for PostgreSQL password | `""` |
+| `postgresql.external.passwordKey` | Key within the secret | `"password"` |
+| `vectorStore.redis.external.existingSecret` | Secret name for Redis password | `""` |
+| `vectorStore.redis.external.passwordKey` | Key within the secret | `"password"` |
+| `vectorStore.weaviate.external.existingSecret` | Secret name for Weaviate API key | `""` |
+| `vectorStore.weaviate.external.apiKeyKey` | Key within the secret | `"api-key"` |
+| `vectorStore.qdrant.external.existingSecret` | Secret name for Qdrant API key | `""` |
+| `vectorStore.qdrant.external.apiKeyKey` | Key within the secret | `"api-key"` |
+| `bifrost.plugins.maxim.secretRef.name` | Secret name for Maxim API key | `""` |
+| `bifrost.plugins.maxim.secretRef.key` | Key within the secret | `"api-key"` |
+| `bifrost.providerSecrets.<provider>.existingSecret` | Secret name for provider API key | `""` |
+| `bifrost.providerSecrets.<provider>.key` | Key within the secret | `"api-key"` |
+| `bifrost.providerSecrets.<provider>.envVar` | Environment variable name to inject | `""` |
 
 ### Provider Configuration
 
@@ -386,10 +509,35 @@ Or via command line:
 
 ```bash
 helm install bifrost bifrost/bifrost \
-  --set image.tag=v1.3.36 \
+  --set image.tag=v1.3.37 \
   --set bifrost.providers.openai.keys[0].value="sk-..." \
   --set bifrost.providers.openai.keys[0].weight=1
 ```
+
+#### Using Environment Variables for Provider Keys
+
+Bifrost supports `env.VAR_NAME` syntax to reference environment variables. Combined with `providerSecrets`, you can keep API keys in Kubernetes secrets:
+
+```yaml
+bifrost:
+  providers:
+    openai:
+      keys:
+        - value: "env.OPENAI_API_KEY"  # References environment variable
+          weight: 1
+  
+  # Inject secrets as environment variables
+  providerSecrets:
+    openai:
+      existingSecret: "my-openai-secret"
+      key: "api-key"
+      envVar: "OPENAI_API_KEY"
+```
+
+This pattern:
+1. Creates a Kubernetes secret with the API key
+2. Injects the secret as an environment variable (`OPENAI_API_KEY`)
+3. Bifrost resolves `env.OPENAI_API_KEY` at runtime
 
 ### Plugin Configuration
 
@@ -579,7 +727,7 @@ Create `my-values.yaml`:
 
 ```yaml
 image:
-  tag: "v1.3.36"  # Required: specify the Bifrost version
+  tag: "v1.3.37"  # Required: specify the Bifrost version
 
 replicaCount: 3
 
@@ -664,6 +812,7 @@ tolerations:
 - [Helm Chart Repository](https://github.com/maximhq/bifrost/tree/main/helm-charts)
 - [Complete Installation Guide](https://github.com/maximhq/bifrost/blob/main/helm-charts/INSTALL.md)
 - [Example Configurations](https://github.com/maximhq/bifrost/tree/main/helm-charts/bifrost/values-examples)
+- [Kubernetes Secrets Example](https://github.com/maximhq/bifrost/blob/main/helm-charts/bifrost/values-examples/secrets-from-k8s.yaml)
 - [GitHub Issues](https://github.com/maximhq/bifrost/issues)
 
 ## Next Steps
