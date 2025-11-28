@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
@@ -44,8 +43,8 @@ func RunReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context
 				MaxOutputTokens: bifrost.Ptr(800),
 				// Configure reasoning-specific parameters
 				Reasoning: &schemas.ResponsesParametersReasoning{
-					Effort:  bifrost.Ptr("high"),     // High effort for complex reasoning
-					Summary: bifrost.Ptr("detailed"), // Detailed summary of reasoning process
+					Effort: bifrost.Ptr("high"), // High effort for complex reasoning
+					// Summary: bifrost.Ptr("detailed"), // Detailed summary of reasoning process
 				},
 				// Include reasoning content in response
 				Include: []string{"reasoning.encrypted_content"},

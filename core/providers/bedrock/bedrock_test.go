@@ -16,7 +16,7 @@ var (
 	testStop      = []string{"STOP"}
 	testTrace     = "enabled"
 	testLatency   = "optimized"
-	testProps     = map[string]interface{}{
+	testProps     = schemas.OrderedMap{
 		"location": map[string]interface{}{
 			"type":        "string",
 			"description": "The city name",
@@ -174,7 +174,7 @@ func TestBifrostToBedrockRequestConversion(t *testing.T) {
 								Description: schemas.Ptr("Get weather information"),
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "object",
-									Properties: &map[string]interface{}{
+									Properties: &schemas.OrderedMap{
 										"location": map[string]interface{}{
 											"type":        "string",
 											"description": "The city name",
@@ -285,7 +285,7 @@ func TestBifrostToBedrockRequestConversion(t *testing.T) {
 				RequestMetadata: map[string]string{
 					"user": "test-user",
 				},
-				AdditionalModelRequestFields: map[string]interface{}{
+				AdditionalModelRequestFields: schemas.OrderedMap{
 					"customField": "customValue",
 				},
 				AdditionalModelResponseFieldPaths: []string{"field1", "field2"},
@@ -616,7 +616,7 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 				RequestMetadata: map[string]string{
 					"user": "test-user",
 				},
-				AdditionalModelRequestFields: map[string]interface{}{
+				AdditionalModelRequestFields: schemas.OrderedMap{
 					"customField": "customValue",
 				},
 				AdditionalModelResponseFieldPaths: []string{"field1", "field2"},
@@ -689,16 +689,12 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 				Model:    "claude-3-sonnet",
 				Input: []schemas.ResponsesMessage{
 					{
-						Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 						Type:   schemas.Ptr(schemas.ResponsesMessageTypeFunctionCall),
 						Status: schemas.Ptr("in_progress"),
 						ResponsesToolMessage: &schemas.ResponsesToolMessage{
 							CallID:    schemas.Ptr("tool-use-123"),
 							Name:      schemas.Ptr("get_weather"),
 							Arguments: schemas.Ptr(`{"location":"NYC"}`),
-						},
-						Content: &schemas.ResponsesMessageContent{
-							ContentBlocks: []schemas.ResponsesMessageContentBlock{},
 						},
 					},
 				},
@@ -732,7 +728,6 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 				Model:    "claude-3-sonnet",
 				Input: []schemas.ResponsesMessage{
 					{
-						Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleUser),
 						Type:   schemas.Ptr(schemas.ResponsesMessageTypeFunctionCallOutput),
 						Status: schemas.Ptr("completed"),
 						ResponsesToolMessage: &schemas.ResponsesToolMessage{
@@ -745,9 +740,6 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 									},
 								},
 							},
-						},
-						Content: &schemas.ResponsesMessageContent{
-							ContentBlocks: []schemas.ResponsesMessageContentBlock{},
 						},
 					},
 				},
@@ -795,7 +787,6 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 				Model:    "claude-3-sonnet",
 				Input: []schemas.ResponsesMessage{
 					{
-						Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 						Type:   schemas.Ptr(schemas.ResponsesMessageTypeFunctionCall),
 						Status: schemas.Ptr("in_progress"),
 						ResponsesToolMessage: &schemas.ResponsesToolMessage{
@@ -803,12 +794,8 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 							Name:      schemas.Ptr("calculate"),
 							Arguments: schemas.Ptr(`{"expression":"2+2"}`),
 						},
-						Content: &schemas.ResponsesMessageContent{
-							ContentBlocks: []schemas.ResponsesMessageContentBlock{},
-						},
 					},
 					{
-						Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleUser),
 						Type:   schemas.Ptr(schemas.ResponsesMessageTypeFunctionCallOutput),
 						Status: schemas.Ptr("completed"),
 						ResponsesToolMessage: &schemas.ResponsesToolMessage{
@@ -821,9 +808,6 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 									},
 								},
 							},
-						},
-						Content: &schemas.ResponsesMessageContent{
-							ContentBlocks: []schemas.ResponsesMessageContentBlock{},
 						},
 					},
 				},
@@ -1594,7 +1578,13 @@ func TestToBedrockResponsesRequest_AdditionalFields(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, bedrockReq)
 
-	assert.Equal(t, map[string]interface{}{"top_k": 200}, bedrockReq.AdditionalModelRequestFields)
+	// Convert OrderedMap to map[string]interface{} for comparison
+	expectedFields := map[string]interface{}{"top_k": 200}
+	actualFields := make(map[string]interface{})
+	for k, v := range bedrockReq.AdditionalModelRequestFields {
+		actualFields[k] = v
+	}
+	assert.Equal(t, expectedFields, actualFields)
 	assert.Equal(t, []string{"/amazon-bedrock-invocationMetrics/inputTokenCount"}, bedrockReq.AdditionalModelResponseFieldPaths)
 }
 

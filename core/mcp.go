@@ -807,6 +807,12 @@ func (m *MCPManager) shouldSkipToolForRequest(clientID, toolName string, ctx con
 
 // convertMCPToolToBifrostSchema converts an MCP tool definition to Bifrost format.
 func (m *MCPManager) convertMCPToolToBifrostSchema(mcpTool *mcp.Tool) schemas.ChatTool {
+	var properties *schemas.OrderedMap
+	if len(mcpTool.InputSchema.Properties) > 0 {
+		orderedProps := make(schemas.OrderedMap, len(mcpTool.InputSchema.Properties))
+		maps.Copy(orderedProps, mcpTool.InputSchema.Properties)
+		properties = &orderedProps
+	}
 	return schemas.ChatTool{
 		Type: schemas.ChatToolTypeFunction,
 		Function: &schemas.ChatToolFunction{
@@ -814,7 +820,7 @@ func (m *MCPManager) convertMCPToolToBifrostSchema(mcpTool *mcp.Tool) schemas.Ch
 			Description: Ptr(mcpTool.Description),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type:       mcpTool.InputSchema.Type,
-				Properties: Ptr(mcpTool.InputSchema.Properties),
+				Properties: properties,
 				Required:   mcpTool.InputSchema.Required,
 			},
 		},

@@ -45,7 +45,9 @@ func convertChatParameters(bifrostReq *schemas.BifrostChatRequest, bedrockReq *B
 		// Handle additional model request field paths
 		if bifrostReq.Params != nil && bifrostReq.Params.ExtraParams != nil {
 			if requestFields, exists := bifrostReq.Params.ExtraParams["additionalModelRequestFieldPaths"]; exists {
-				bedrockReq.AdditionalModelRequestFields = requestFields.(map[string]interface{})
+				if orderedFields, ok := schemas.SafeExtractOrderedMap(requestFields); ok {
+					bedrockReq.AdditionalModelRequestFields = orderedFields
+				}
 			}
 
 			// Handle additional model response field paths

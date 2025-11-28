@@ -524,6 +524,31 @@ func SafeExtractFromMap(m map[string]interface{}, key string) (interface{}, bool
 	return value, exists
 }
 
+func SafeExtractOrderedMap(value interface{}) (OrderedMap, bool) {
+	if value == nil {
+		return OrderedMap{}, false
+	}
+	switch v := value.(type) {
+	case map[string]interface{}:
+		orderedMap := OrderedMap(v)
+		return orderedMap, true
+	case *map[string]interface{}:
+		if v != nil {
+			orderedMap := OrderedMap(*v)
+			return orderedMap, true
+		}
+		return OrderedMap{}, false
+	case OrderedMap:
+		return v, true
+	case *OrderedMap:
+		if v != nil {
+			return *v, true
+		}
+		return OrderedMap{}, false
+	}
+	return OrderedMap{}, false
+}
+
 // GET DEEP COPY UNTIL
 
 func DeepCopy(in interface{}) interface{} {
