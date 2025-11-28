@@ -1,6 +1,0 @@
-- **breaking change**: plugins now accept *schemas.BifrostContext instead of *context.Context
-- feat: adds support for bedrock, pydantic and cohere SDK.
-- fix: minor fixes around audio streaming for gemini and vertex
-- fix: prompt caching issue fixes for openai chat completions
-- feat: add versioning support for plugins
-- [BREAKING CHANGE]: ToolFunctionParameters.Properties is now an *OrderedMap instead of *map[string]interface{}
