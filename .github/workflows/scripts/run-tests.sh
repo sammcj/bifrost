@@ -47,13 +47,13 @@ cd ..
 echo ""
 echo "🔧 2/4 - Running Core Provider Tests..."
 echo "-----------------------------------"
-cd tests/core-providers
-if go test -v -run .; then
+cd core
+if go test -v -run . ./...; then
   report_result "Core Provider Tests" 0
 else
   report_result "Core Provider Tests" 1
 fi
-cd ../..
+cd ..
 
 # 3. Governance Tests
 echo ""
