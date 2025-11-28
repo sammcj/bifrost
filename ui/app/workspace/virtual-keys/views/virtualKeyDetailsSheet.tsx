@@ -1,8 +1,8 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { DottedSeparator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
 import { ProviderLabels, ProviderName } from "@/lib/constants/logs";
@@ -85,54 +85,7 @@ export default function VirtualKeyDetailSheet({ virtualKey, onClose }: VirtualKe
 					</div>
 
 					<DottedSeparator />
-
-					{/* Allowed Keys */}
-					<div className="space-y-4">
-						<h3 className="font-semibold">Allowed Keys</h3>
-
-						<div className="space-y-3">
-							{virtualKey.keys && virtualKey.keys.length > 0 ? (
-								<div className="rounded-md border">
-									<Table>
-										<TableHeader>
-											<TableRow>
-												<TableHead>Name</TableHead>
-												<TableHead>Allowed Models</TableHead>
-											</TableRow>
-										</TableHeader>
-										<TableBody>
-											{virtualKey.keys.map((key) => (
-												<TableRow key={key.key_id}>
-													<TableCell className="max-w-[200px]">
-														<span className="flex items-center font-mono text-sm">
-															<RenderProviderIcon provider={key.provider as ProviderIconType} size="sm" className="mr-2 h-4 w-4 shrink-0" />
-															<span className="truncate">{key.name}</span>
-														</span>
-													</TableCell>
-													<TableCell>
-														{key.models && key.models.length > 0 ? (
-															<div className="flex flex-wrap gap-1">
-																{key.models.map((model: string) => (
-																	<Badge key={model} variant="secondary" className="text-xs">
-																		{model}
-																	</Badge>
-																))}
-															</div>
-														) : (
-															<span className="text-muted-foreground text-sm">All models allowed</span>
-														)}
-													</TableCell>
-												</TableRow>
-											))}
-										</TableBody>
-									</Table>
-								</div>
-							) : (
-								<span className="text-muted-foreground text-sm">No specific keys assigned - all keys allowed</span>
-							)}
-						</div>
-					</div>
-
+					
 					{/* Provider Configurations */}
 					<div className="space-y-4">
 						<h3 className="font-semibold">Provider Configurations</h3>
@@ -158,7 +111,7 @@ export default function VirtualKeyDetailSheet({ virtualKey, onClose }: VirtualKe
 											{/* Basic Config */}
 											<div className="space-y-3">
 												<div className="grid grid-cols-3 items-start gap-4">
-													<span className="text-muted-foreground text-sm">Allowed Models</span>
+													<span className="text-muted-foreground text-sm pt-0.5 font-medium">Allowed Models</span>
 													<div className="col-span-2">
 														{config.allowed_models && config.allowed_models.length > 0 ? (
 															<div className="flex flex-wrap gap-1">
@@ -170,6 +123,23 @@ export default function VirtualKeyDetailSheet({ virtualKey, onClose }: VirtualKe
 															</div>
 														) : (
 															<span className="text-muted-foreground text-sm">All models allowed</span>
+														)}
+													</div>
+												</div>
+
+												<div className="grid grid-cols-3 items-start gap-4">
+													<span className="text-muted-foreground text-sm pt-0.5 font-medium">Allowed Keys</span>
+													<div className="col-span-2">
+														{config.keys && config.keys.length > 0 ? (
+															<div className="flex flex-wrap gap-1">
+																{config.keys.map((key) => (
+																	<Badge key={key.key_id} variant="outline" className="text-xs">
+																		{key.name}
+																	</Badge>
+																))}
+															</div>
+														) : (
+															<span className="text-muted-foreground text-sm">All keys allowed</span>
 														)}
 													</div>
 												</div>

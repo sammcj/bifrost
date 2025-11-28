@@ -128,7 +128,6 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefr
 							<TableRow>
 								<TableHead>Name</TableHead>
 								<TableHead>Key</TableHead>
-								<TableHead>Allowed Keys</TableHead>
 								<TableHead>Budget</TableHead>
 								<TableHead>Status</TableHead>
 								<TableHead className="text-right"></TableHead>
@@ -137,7 +136,7 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefr
 						<TableBody>
 							{virtualKeys?.length === 0 ? (
 								<TableRow>
-									<TableCell colSpan={6} className="text-muted-foreground py-8 text-center">
+									<TableCell colSpan={5} className="text-muted-foreground py-8 text-center">
 										No virtual keys found. Create your first virtual key to get started.
 									</TableCell>
 								</TableRow>
@@ -168,11 +167,6 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefr
 														<Copy className="h-4 w-4" />
 													</Button>
 												</div>
-											</TableCell>
-											<TableCell>
-												<Badge variant="outline" className="text-xs">
-													{vk.keys && vk.keys.length > 0 ? vk.keys.length : "All"} keys
-												</Badge>
 											</TableCell>
 											<TableCell>
 												{vk.budget ? (
