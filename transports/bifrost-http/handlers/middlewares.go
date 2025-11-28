@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
 	"github.com/maximhq/bifrost/framework/encrypt"
 	"github.com/maximhq/bifrost/plugins/governance"
@@ -91,8 +92,8 @@ func TransportInterceptorMiddleware(config *lib.Config) lib.BifrostHTTPMiddlewar
 			}
 			for _, plugin := range plugins {
 				// Call TransportInterceptor on all plugins
-				pluginCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				modifiedHeaders, modifiedBody, err := plugin.TransportInterceptor(&pluginCtx, string(ctx.Request.URI().RequestURI()), headers, requestBody)
+				pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(ctx, 10*time.Second)				
+				modifiedHeaders, modifiedBody, err := plugin.TransportInterceptor(pluginCtx, string(ctx.Request.URI().RequestURI()), headers, requestBody)
 				cancel()
 				if err != nil {
 					logger.Warn(fmt.Sprintf("TransportInterceptor: Plugin '%s' returned error: %v", plugin.GetName(), err))
@@ -105,6 +106,10 @@ func TransportInterceptorMiddleware(config *lib.Config) lib.BifrostHTTPMiddlewar
 				}
 				if modifiedBody != nil {
 					requestBody = modifiedBody
+				}
+				// Capturing plugin ctx values and putting them in the request context
+				for k, v := range pluginCtx.GetUserValues() {
+					ctx.SetUserValue(k, v)
 				}
 			}
 

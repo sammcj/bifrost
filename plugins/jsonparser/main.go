@@ -1,7 +1,6 @@
 package jsonparser
 
 import (
-	"context"
 	"strings"
 	"sync"
 	"time"
@@ -85,17 +84,41 @@ func (p *JsonParserPlugin) GetName() string {
 }
 
 // TransportInterceptor is not used for this plugin
-func (p *JsonParserPlugin) TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+// Parameters:
+//   - ctx: The Bifrost context
+//   - url: The URL of the request
+//   - headers: The request headers
+//   - body: The request body
+// Returns:
+//   - map[string]string: The updated request headers
+//   - map[string]any: The updated request body
+//   - error: Any error that occurred during processing
+func (p *JsonParserPlugin) TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	return headers, body, nil
 }
 
 // PreHook is not used for this plugin as we only process responses
-func (p *JsonParserPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+// Parameters:
+//   - ctx: The Bifrost context
+//   - req: The Bifrost request
+// Returns:
+//   - *schemas.BifrostRequest: The processed request
+//   - *schemas.PluginShortCircuit: The plugin short circuit if the request is not allowed
+//   - error: Any error that occurred during processing
+func (p *JsonParserPlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	return req, nil, nil
 }
 
 // PostHook processes streaming responses by accumulating chunks and making accumulated content valid JSON
-func (p *JsonParserPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+// Parameters:
+//   - ctx: The Bifrost context
+//   - result: The Bifrost response to be processed
+//   - err: The Bifrost error to be processed
+// Returns:
+//   - *schemas.BifrostResponse: The processed response
+//   - *schemas.BifrostError: The processed error
+//   - error: Any error that occurred during processing
+func (p *JsonParserPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	// If there's an error, don't process
 	if err != nil {
 		return result, err, nil
@@ -164,7 +187,7 @@ func (p *JsonParserPlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 	}
 
 	// If this is the final chunk, cleanup the accumulated content for this request
-	if streamEndIndicatorValue := (*ctx).Value(schemas.BifrostContextKeyStreamEndIndicator); streamEndIndicatorValue != nil {
+	if streamEndIndicatorValue := ctx.Value(schemas.BifrostContextKeyStreamEndIndicator); streamEndIndicatorValue != nil {
 		isFinalChunk, ok := streamEndIndicatorValue.(bool)
 		if ok && isFinalChunk {
 			p.ClearRequestState(requestID)

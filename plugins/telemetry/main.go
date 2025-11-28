@@ -4,9 +4,7 @@
 package telemetry
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
@@ -35,6 +33,8 @@ const (
 type PrometheusPlugin struct {
 	pricingManager *modelcatalog.ModelCatalog
 	registry       *prometheus.Registry
+
+	logger schemas.Logger
 
 	// Built-in collectors registered by this plugin
 	GoCollector      prometheus.Collector
@@ -242,6 +242,7 @@ func Init(config *Config, pricingManager *modelcatalog.ModelCatalog, logger sche
 	)
 
 	return &PrometheusPlugin{
+		logger:                         logger,
 		pricingManager:                 pricingManager,
 		registry:                       registry,
 		GoCollector:                    goCollector,
@@ -276,15 +277,14 @@ func (p *PrometheusPlugin) GetName() string {
 }
 
 // TransportInterceptor is not used for this plugin
-func (p *PrometheusPlugin) TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+func (p *PrometheusPlugin) TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	return headers, body, nil
 }
 
 // PreHook records the start time of the request in the context.
 // This time is used later in PostHook to calculate request duration.
-func (p *PrometheusPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
-	*ctx = context.WithValue(*ctx, startTimeKey, time.Now())
-
+func (p *PrometheusPlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+	ctx.SetValue(startTimeKey, time.Now())
 	return req, nil, nil
 }
 
@@ -292,28 +292,28 @@ func (p *PrometheusPlugin) PreHook(ctx *context.Context, req *schemas.BifrostReq
 // It records:
 //   - Request latency
 //   - Total request count
-func (p *PrometheusPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+func (p *PrometheusPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	requestType, provider, model := bifrost.GetResponseFields(result, bifrostErr)
 
-	startTime, ok := (*ctx).Value(startTimeKey).(time.Time)
+	startTime, ok := ctx.Value(startTimeKey).(time.Time)
 	if !ok {
-		log.Println("Warning: startTime not found in context for Prometheus PostHook")
+		p.logger.Warn("Warning: startTime not found in context for Prometheus PostHook")
 		return result, bifrostErr, nil
 	}
 
-	virtualKeyID := getStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-virtual-key-id"))
-	virtualKeyName := getStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-virtual-key-name"))
+	virtualKeyID := getStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-virtual-key-id"))
+	virtualKeyName := getStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-virtual-key-name"))
 
-	selectedKeyID := getStringFromContext(*ctx, schemas.BifrostContextKeySelectedKeyID)
-	selectedKeyName := getStringFromContext(*ctx, schemas.BifrostContextKeySelectedKeyName)
+	selectedKeyID := getStringFromContext(ctx, schemas.BifrostContextKeySelectedKeyID)
+	selectedKeyName := getStringFromContext(ctx, schemas.BifrostContextKeySelectedKeyName)
 
-	numberOfRetries := getIntFromContext(*ctx, schemas.BifrostContextKeyNumberOfRetries)
-	fallbackIndex := getIntFromContext(*ctx, schemas.BifrostContextKeyFallbackIndex)
+	numberOfRetries := getIntFromContext(ctx, schemas.BifrostContextKeyNumberOfRetries)
+	fallbackIndex := getIntFromContext(ctx, schemas.BifrostContextKeyFallbackIndex)
 
-	teamID := getStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-team-id"))
-	teamName := getStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-team-name"))
-	customerID := getStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-customer-id"))
-	customerName := getStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-customer-name"))
+	teamID := getStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-team-id"))
+	teamName := getStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-team-name"))
+	customerID := getStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-customer-id"))
+	customerName := getStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-customer-name"))
 
 	// Calculate cost and record metrics in a separate goroutine to avoid blocking the main thread
 	go func() {

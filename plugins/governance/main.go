@@ -154,7 +154,16 @@ func (p *GovernancePlugin) GetName() string {
 }
 
 // TransportInterceptor intercepts requests before they are processed (governance decision point)
-func (p *GovernancePlugin) TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+// Parameters:
+//   - ctx: The Bifrost context
+//   - url: The URL of the request
+//   - headers: The request headers
+//   - body: The request body
+// Returns:
+//   - map[string]string: The updated request headers
+//   - map[string]any: The updated request body
+//   - error: Any error that occurred during processing
+func (p *GovernancePlugin) TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	var virtualKeyValue string
 	var err error
 
@@ -202,6 +211,13 @@ func (p *GovernancePlugin) TransportInterceptor(ctx *context.Context, url string
 	return headers, body, nil
 }
 
+// loadBalanceProvider loads balances the provider for the request
+// Parameters:
+//   - body: The request body
+//   - virtualKey: The virtual key configuration
+// Returns:
+//   - map[string]any: The updated request body
+//   - error: Any error that occurred during processing
 func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *configstoreTables.TableVirtualKey) (map[string]any, error) {
 	// Check if the request has a model field
 	modelValue, hasModel := body["model"]
@@ -305,6 +321,13 @@ func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *
 	return body, nil
 }
 
+// addMCPIncludeTools adds the x-bf-mcp-include-tools header to the request headers
+// Parameters:
+//   - headers: The request headers
+//   - virtualKey: The virtual key configuration
+// Returns:
+//   - map[string]string: The updated request headers
+//   - error: Any error that occurred during processing
 func (p *GovernancePlugin) addMCPIncludeTools(headers map[string]string, virtualKey *configstoreTables.TableVirtualKey) (map[string]string, error) {
 	if len(virtualKey.MCPConfigs) > 0 {
 		if headers == nil {
@@ -340,10 +363,17 @@ func (p *GovernancePlugin) addMCPIncludeTools(headers map[string]string, virtual
 }
 
 // PreHook intercepts requests before they are processed (governance decision point)
-func (p *GovernancePlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+// Parameters:
+//   - ctx: The Bifrost context
+//   - req: The Bifrost request to be processed
+// Returns:
+//   - *schemas.BifrostRequest: The processed request
+//   - *schemas.PluginShortCircuit: The plugin short circuit if the request is not allowed
+//   - error: Any error that occurred during processing
+func (p *GovernancePlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	// Extract governance headers and virtual key using utility functions
-	virtualKeyValue := getStringFromContext(*ctx, schemas.BifrostContextKeyVirtualKey)
-	requestID := getStringFromContext(*ctx, schemas.BifrostContextKeyRequestID)
+	virtualKeyValue := getStringFromContext(ctx, schemas.BifrostContextKeyVirtualKey)
+	requestID := getStringFromContext(ctx, schemas.BifrostContextKeyRequestID)
 	if virtualKeyValue == "" {
 		if p.isVkMandatory != nil && *p.isVkMandatory {
 			return req, &schemas.PluginShortCircuit{
@@ -376,7 +406,7 @@ func (p *GovernancePlugin) PreHook(ctx *context.Context, req *schemas.BifrostReq
 	if result.Decision != DecisionAllow {
 		if ctx != nil {
 			if _, ok := (*ctx).Value(governanceRejectedContextKey).(bool); !ok {
-				*ctx = context.WithValue(*ctx, governanceRejectedContextKey, true)
+				ctx.SetValue(governanceRejectedContextKey, true)
 			}
 		}
 	}
@@ -433,14 +463,22 @@ func (p *GovernancePlugin) PreHook(ctx *context.Context, req *schemas.BifrostReq
 }
 
 // PostHook processes the response and updates usage tracking (business logic execution)
-func (p *GovernancePlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
-	if _, ok := (*ctx).Value(governanceRejectedContextKey).(bool); ok {
+// Parameters:
+//   - ctx: The Bifrost context
+//   - result: The Bifrost response to be processed
+//   - err: The Bifrost error to be processed
+// Returns:
+//   - *schemas.BifrostResponse: The processed response
+//   - *schemas.BifrostError: The processed error
+//   - error: Any error that occurred during processing
+func (p *GovernancePlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+	if _, ok := ctx.Value(governanceRejectedContextKey).(bool); ok {
 		return result, err, nil
 	}
 
 	// Extract governance information
-	virtualKey := getStringFromContext(*ctx, schemas.BifrostContextKeyVirtualKey)
-	requestID := getStringFromContext(*ctx, schemas.BifrostContextKeyRequestID)
+	virtualKey := getStringFromContext(ctx, schemas.BifrostContextKeyVirtualKey)
+	requestID := getStringFromContext(ctx, schemas.BifrostContextKeyRequestID)
 
 	// Skip if no virtual key
 	if virtualKey == "" {
@@ -453,7 +491,7 @@ func (p *GovernancePlugin) PostHook(ctx *context.Context, result *schemas.Bifros
 	// Extract cache and batch flags from context
 	isCacheRead := false
 	isBatch := false
-	if val := (*ctx).Value(governanceIsCacheReadContextKey); val != nil {
+	if val := ctx.Value(governanceIsCacheReadContextKey); val != nil {
 		if b, ok := val.(bool); ok {
 			isCacheRead = b
 		}
@@ -486,7 +524,19 @@ func (p *GovernancePlugin) Cleanup() error {
 	return nil
 }
 
-func (p *GovernancePlugin) postHookWorker(result *schemas.BifrostResponse, provider schemas.ModelProvider, model string, requestType schemas.RequestType, virtualKey, requestID string, isCacheRead, isBatch bool, isFinalChunk bool) {
+// postHookWorker is a worker function that processes the response and updates usage tracking
+// It is used to avoid blocking the main thread when updating usage tracking
+// Parameters:
+//   - result: The Bifrost response to be processed
+//   - provider: The provider of the request
+//   - model: The model of the request
+//   - requestType: The type of the request
+//   - virtualKey: The virtual key of the request
+//   - requestID: The request ID
+//   - isCacheRead: Whether the request is a cache read
+//   - isBatch: Whether the request is a batch request
+//   - isFinalChunk: Whether the request is the final chunk
+func (p *GovernancePlugin) postHookWorker(result *schemas.BifrostResponse, provider schemas.ModelProvider, model string, requestType schemas.RequestType, virtualKey, requestID string, _, _, isFinalChunk bool) {
 	// Determine if request was successful
 	success := (result != nil)
 

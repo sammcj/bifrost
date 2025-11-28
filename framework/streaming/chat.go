@@ -1,7 +1,6 @@
 package streaming
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -57,7 +56,7 @@ func (a *Accumulator) processAccumulatedChatStreamingChunks(requestID string, re
 	accumulator.mu.Lock()
 	defer func() {
 		if isFinalChunk {
-			// Cleanup BEFORE unlocking to prevent other goroutines from accessing chunks being returned to pool			
+			// Cleanup BEFORE unlocking to prevent other goroutines from accessing chunks being returned to pool
 			a.cleanupStreamAccumulator(requestID)
 		}
 		accumulator.mu.Unlock()
@@ -122,7 +121,7 @@ func (a *Accumulator) processAccumulatedChatStreamingChunks(requestID string, re
 }
 
 // processChatStreamingResponse processes a chat streaming response
-func (a *Accumulator) processChatStreamingResponse(ctx *context.Context, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*ProcessedStreamResponse, error) {
+func (a *Accumulator) processChatStreamingResponse(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*ProcessedStreamResponse, error) {
 	a.logger.Debug("[streaming] processing chat streaming response")
 	// Extract request ID from context
 	requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)

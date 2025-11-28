@@ -2270,9 +2270,14 @@ func (bifrost *Bifrost) handleProviderStreamRequest(provider schemas.Provider, r
 func (p *PluginPipeline) RunPreHooks(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, int) {
 	var shortCircuit *schemas.PluginShortCircuit
 	var err error
+	pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(*ctx, 10*time.Second)
+	defer cancel()
+	defer func() {
+		*ctx = pluginCtx.GetParentCtxWithUserValues()
+	}()
 	for i, plugin := range p.plugins {
 		p.logger.Debug("running pre-hook for plugin %s", plugin.GetName())
-		req, shortCircuit, err = plugin.PreHook(ctx, req)
+		req, shortCircuit, err = plugin.PreHook(pluginCtx, req)
 		if err != nil {
 			p.preHookErrors = append(p.preHookErrors, err)
 			p.logger.Warn("error in PreHook for plugin %s: %v", plugin.GetName(), err)
@@ -2298,10 +2303,12 @@ func (p *PluginPipeline) RunPostHooks(ctx *context.Context, resp *schemas.Bifros
 		runFrom = len(p.plugins)
 	}
 	var err error
+	pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(*ctx, 10*time.Second)
+	defer cancel()
 	for i := runFrom - 1; i >= 0; i-- {
 		plugin := p.plugins[i]
 		p.logger.Debug("running post-hook for plugin %s", plugin.GetName())
-		resp, bifrostErr, err = plugin.PostHook(ctx, resp, bifrostErr)
+		resp, bifrostErr, err = plugin.PostHook(pluginCtx, resp, bifrostErr)
 		if err != nil {
 			p.postHookErrors = append(p.postHookErrors, err)
 			p.logger.Warn("error in PostHook for plugin %s: %v", plugin.GetName(), err)
@@ -2309,6 +2316,8 @@ func (p *PluginPipeline) RunPostHooks(ctx *context.Context, resp *schemas.Bifros
 		// If a plugin recovers from an error (sets bifrostErr to nil and sets resp), allow that
 		// If a plugin invalidates a response (sets resp to nil and sets bifrostErr), allow that
 	}
+	// Capturing plugin ctx values and putting them in the request context
+	*ctx = pluginCtx.GetParentCtxWithUserValues()
 	// Final logic: if both are set, error takes precedence, unless error is nil
 	if bifrostErr != nil {
 		if resp != nil && bifrostErr.StatusCode == nil && bifrostErr.Error != nil && bifrostErr.Error.Type == nil &&

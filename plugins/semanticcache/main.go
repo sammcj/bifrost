@@ -336,7 +336,7 @@ func (plugin *Plugin) GetName() string {
 }
 
 // TransportInterceptor is not used for this plugin
-func (plugin *Plugin) TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+func (plugin *Plugin) TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	return headers, body, nil
 }
 
@@ -345,14 +345,14 @@ func (plugin *Plugin) TransportInterceptor(ctx *context.Context, url string, hea
 // Uses UUID-based keys for entries stored in the VectorStore.
 //
 // Parameters:
-//   - ctx: Pointer to the context.Context
+//   - ctx: Pointer to the schemas.BifrostContext
 //   - req: The incoming Bifrost request
 //
 // Returns:
 //   - *schemas.BifrostRequest: The original request
 //   - *schemas.BifrostResponse: Cached response if found, nil otherwise
 //   - error: Any error that occurred during cache lookup
-func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+func (plugin *Plugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	provider, model, _ := req.GetRequestFields()
 
 	// Get the cache key from the context
@@ -374,10 +374,10 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	requestID := uuid.New().String()
 
 	// Store request ID, model, and provider in context for PostHook
-	*ctx = context.WithValue(*ctx, requestIDKey, requestID)
-	*ctx = context.WithValue(*ctx, requestModelKey, model)
-	*ctx = context.WithValue(*ctx, requestProviderKey, provider)
-
+	ctx.SetValue(requestIDKey, requestID)
+	ctx.SetValue(requestModelKey, model)
+	ctx.SetValue(requestProviderKey, provider)
+	
 	performDirectSearch, performSemanticSearch := true, true
 	if (*ctx).Value(CacheTypeKey) != nil {
 		cacheTypeVal, ok := (*ctx).Value(CacheTypeKey).(CacheType)
@@ -437,7 +437,7 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 // ensuring that response processing is never interrupted by caching issues.
 //
 // Parameters:
-//   - ctx: Pointer to the context.Context containing the request hash and ID
+//   - ctx: Pointer to the schemas.BifrostContext containing the request hash and ID
 //   - res: The response from the provider to be cached
 //   - bifrostErr: The error from the provider, if any (used for success determination)
 //
@@ -445,7 +445,7 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 //   - *schemas.BifrostResponse: The original response, unmodified
 //   - *schemas.BifrostError: The original error, unmodified
 //   - error: Any error that occurred during caching preparation (always nil as errors are handled gracefully)
-func (plugin *Plugin) PostHook(ctx *context.Context, res *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, res *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	if bifrostErr != nil {
 		return res, bifrostErr, nil
 	}

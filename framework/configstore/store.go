@@ -60,6 +60,7 @@ type ConfigStore interface {
 	GetPlugins(ctx context.Context) ([]*tables.TablePlugin, error)
 	GetPlugin(ctx context.Context, name string) (*tables.TablePlugin, error)
 	CreatePlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error
+	UpsertPlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error
 	UpdatePlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error
 	DeletePlugin(ctx context.Context, name string, tx ...*gorm.DB) error
 

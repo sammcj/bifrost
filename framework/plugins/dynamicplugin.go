@@ -1,7 +1,6 @@
 package plugins
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"plugin"
@@ -23,9 +22,9 @@ type DynamicPlugin struct {
 	plugin   *plugin.Plugin
 
 	getName              func() string
-	transportInterceptor func(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error)
-	preHook              func(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error)
-	postHook             func(ctx *context.Context, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)
+	transportInterceptor func(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error)
+	preHook              func(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error)
+	postHook             func(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)
 	cleanup              func() error
 }
 
@@ -35,17 +34,17 @@ func (dp *DynamicPlugin) GetName() string {
 }
 
 // TransportInterceptor is not used for dynamic plugins
-func (dp *DynamicPlugin) TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+func (dp *DynamicPlugin) TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	return dp.transportInterceptor(ctx, url, headers, body)
 }
 
 // PreHook is not used for dynamic plugins
-func (dp *DynamicPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+func (dp *DynamicPlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	return dp.preHook(ctx, req)
 }
 
 // PostHook is not used for dynamic plugins
-func (dp *DynamicPlugin) PostHook(ctx *context.Context, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+func (dp *DynamicPlugin) PostHook(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	return dp.postHook(ctx, resp, bifrostErr)
 }
 
@@ -143,24 +142,24 @@ func loadDynamicPlugin(path string, config any) (schemas.Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	if dp.transportInterceptor, ok = transportInterceptorSym.(func(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error)); !ok {
-		return nil, fmt.Errorf("failed to cast TransportInterceptor to func(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error)")
+	if dp.transportInterceptor, ok = transportInterceptorSym.(func(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error)); !ok {
+		return nil, fmt.Errorf("failed to cast TransportInterceptor to func(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error)")
 	}
 	// Looking up for PreHook method
 	preHookSym, err := plugin.Lookup("PreHook")
 	if err != nil {
 		return nil, err
 	}
-	if dp.preHook, ok = preHookSym.(func(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error)); !ok {
-		return nil, fmt.Errorf("failed to cast PreHook to func(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error)")
+	if dp.preHook, ok = preHookSym.(func(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error)); !ok {
+		return nil, fmt.Errorf("failed to cast PreHook to func(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error)")
 	}
 	// Looking up for PostHook method
 	postHookSym, err := plugin.Lookup("PostHook")
 	if err != nil {
 		return nil, err
 	}
-	if dp.postHook, ok = postHookSym.(func(ctx *context.Context, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)); !ok {
-		return nil, fmt.Errorf("failed to cast PostHook to func(ctx *context.Context, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)")
+	if dp.postHook, ok = postHookSym.(func(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)); !ok {
+		return nil, fmt.Errorf("failed to cast PostHook to func(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)")
 	}
 	// Looking up for Cleanup method
 	cleanupSym, err := plugin.Lookup("Cleanup")

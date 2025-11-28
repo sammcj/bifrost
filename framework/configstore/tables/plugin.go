@@ -1,4 +1,4 @@
-	package tables
+package tables
 
 import (
 	"encoding/json"
@@ -16,6 +16,7 @@ type TablePlugin struct {
 	Path       *string   `json:"path,omitempty"`
 	ConfigJSON string    `gorm:"type:text" json:"-"` // JSON serialized plugin.Config
 	CreatedAt  time.Time `gorm:"index;not null" json:"created_at"`
+	Version    int16     `gorm:"not null;default:1" json:"version"`
 	UpdatedAt  time.Time `gorm:"index;not null" json:"updated_at"`
 	IsCustom   bool      `gorm:"not null;default:false" json:"isCustom"`
 

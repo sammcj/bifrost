@@ -144,7 +144,7 @@ func (p *OtelPlugin) GetName() string {
 }
 
 // TransportInterceptor is not used for this plugin
-func (p *OtelPlugin) TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+func (p *OtelPlugin) TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	return headers, body, nil
 }
 
@@ -185,12 +185,12 @@ func (p *OtelPlugin) ValidateConfig(config any) (*Config, error) {
 }
 
 // PreHook function for the OTEL plugin
-func (p *OtelPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+func (p *OtelPlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	if p.client == nil {
 		logger.Warn("otel client is not initialized")
 		return req, nil, nil
 	}
-	traceIDValue := (*ctx).Value(schemas.BifrostContextKeyRequestID)
+	traceIDValue := ctx.Value(schemas.BifrostContextKeyRequestID)
 	if traceIDValue == nil {
 		logger.Warn("trace id not found in context")
 		return req, nil, nil
@@ -210,8 +210,8 @@ func (p *OtelPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) 
 }
 
 // PostHook function for the OTEL plugin
-func (p *OtelPlugin) PostHook(ctx *context.Context, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
-	traceIDValue := (*ctx).Value(schemas.BifrostContextKeyRequestID)
+func (p *OtelPlugin) PostHook(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+	traceIDValue := ctx.Value(schemas.BifrostContextKeyRequestID)
 	if traceIDValue == nil {
 		logger.Warn("trace id not found in context")
 		return resp, bifrostErr, nil
@@ -222,19 +222,19 @@ func (p *OtelPlugin) PostHook(ctx *context.Context, resp *schemas.BifrostRespons
 		return resp, bifrostErr, nil
 	}
 
-	virtualKeyID := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-virtual-key-id"))
-	virtualKeyName := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-virtual-key-name"))
+	virtualKeyID := bifrost.GetStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-virtual-key-id"))
+	virtualKeyName := bifrost.GetStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-virtual-key-name"))
 
-	selectedKeyID := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKeySelectedKeyID)
-	selectedKeyName := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKeySelectedKeyName)
+	selectedKeyID := bifrost.GetStringFromContext(ctx, schemas.BifrostContextKeySelectedKeyID)
+	selectedKeyName := bifrost.GetStringFromContext(ctx, schemas.BifrostContextKeySelectedKeyName)
 
-	numberOfRetries := bifrost.GetIntFromContext(*ctx, schemas.BifrostContextKeyNumberOfRetries)
-	fallbackIndex := bifrost.GetIntFromContext(*ctx, schemas.BifrostContextKeyFallbackIndex)
+	numberOfRetries := bifrost.GetIntFromContext(ctx, schemas.BifrostContextKeyNumberOfRetries)
+	fallbackIndex := bifrost.GetIntFromContext(ctx, schemas.BifrostContextKeyFallbackIndex)
 
-	teamID := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-team-id"))
-	teamName := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-team-name"))
-	customerID := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-customer-id"))
-	customerName := bifrost.GetStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-customer-name"))
+	teamID := bifrost.GetStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-team-id"))
+	teamName := bifrost.GetStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-team-name"))
+	customerID := bifrost.GetStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-customer-id"))
+	customerName := bifrost.GetStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-customer-name"))
 
 	// Track every PostHook emission, stream and non-stream.
 	p.emitWg.Add(1)

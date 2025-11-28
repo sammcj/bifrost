@@ -80,7 +80,10 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) (*c
 		requestID = uuid.New().String()
 	}
 	bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeyRequestID, requestID)
-
+	// Populating all user values from the request context
+	ctx.VisitUserValuesAll(func(key, value any) {
+		bifrostCtx = context.WithValue(bifrostCtx, key, value)
+	})
 	// Initialize tags map for collecting maxim tags
 	maximTags := make(map[string]string)
 
