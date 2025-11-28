@@ -490,7 +490,7 @@ func (p *MockerPlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.Bifrost
 	if !p.config.Enabled {
 		return req, nil, nil
 	}
-	
+
 	skipMocker, ok := ctx.Value(schemas.BifrostContextKey("skip-mocker")).(bool)
 	if ok && skipMocker {
 		return req, nil, nil
@@ -540,9 +540,10 @@ func (p *MockerPlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.Bifrost
 	p.ruleHitsMu.Unlock()
 
 	// Generate appropriate mock response based on type
-	if response.Type == ResponseTypeSuccess {
+	switch response.Type {
+	case ResponseTypeSuccess:
 		return p.generateSuccessShortCircuit(req, response, startTime)
-	} else if response.Type == ResponseTypeError {
+	case ResponseTypeError:
 		return p.generateErrorShortCircuit(req, response)
 	}
 
