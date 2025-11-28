@@ -94,7 +94,7 @@ The following snippet from the `logging` plugin shows how the `streaming` packag
 ```go
 // In plugins/logging/main.go
 
-func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+func (p *LoggerPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
     // ... setup, get requestID ...
 
     go func() {
