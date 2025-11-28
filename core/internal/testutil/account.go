@@ -186,11 +186,11 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 				},
 			},
 			{
-				Value:  os.Getenv("AZURE_REASONING_API_KEY"),
+				Value:  os.Getenv("AZURE_API_KEY"),
 				Models: []string{},
 				Weight: 1.0,
 				AzureKeyConfig: &schemas.AzureKeyConfig{
-					Endpoint: os.Getenv("AZURE_REASONING_ENDPOINT"),
+					Endpoint: os.Getenv("AZURE_API_KEY"),
 					Deployments: map[string]string{
 						"o1": "o1",
 					},
