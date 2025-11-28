@@ -85,6 +85,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationMoveKeysToProviderConfig(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddPluginVersionColumn(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -825,6 +828,7 @@ func migrationAddHeadersJSONColumnIntoMCPClient(ctx context.Context, db *gorm.DB
 	return nil
 }
 
+// migrationAddDisableContentLoggingColumn adds the disable_content_logging column to the client config table
 func migrationAddDisableContentLoggingColumn(ctx context.Context, db *gorm.DB) error {
 	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
 		ID: "add_disable_content_logging_column",
@@ -922,6 +926,7 @@ func migrationAddMCPClientIDColumn(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
+// migrationAddVertexProjectNumberColumn adds the vertex_project_number column to the key table
 func migrationAddVertexProjectNumberColumn(ctx context.Context, db *gorm.DB) error {
 	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
 		ID: "add_vertex_project_number_column",
@@ -951,6 +956,7 @@ func migrationAddVertexProjectNumberColumn(ctx context.Context, db *gorm.DB) err
 	return nil
 }
 
+// migrationAddVertexDeploymentsJSONColumn adds the vertex_deployments_json column to the key table
 func migrationAddVertexDeploymentsJSONColumn(ctx context.Context, db *gorm.DB) error {
 	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
 		ID: "add_vertex_deployments_json_column",
@@ -1238,6 +1244,36 @@ func migrationMoveKeysToProviderConfig(ctx context.Context, db *gorm.DB) error {
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while running move keys to provider config migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddPluginVersionColumn adds the version column to the plugin table
+func migrationAddPluginVersionColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_plugin_version_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasColumn(&tables.TablePlugin{}, "version") {
+				if err := migrator.AddColumn(&tables.TablePlugin{}, "version"); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if err := migrator.DropColumn(&tables.TablePlugin{}, "version"); err != nil {
+				return err
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running add plugin version column migration: %s", err.Error())
 	}
 	return nil
 }

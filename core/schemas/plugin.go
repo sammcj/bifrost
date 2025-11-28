@@ -1,8 +1,6 @@
 // Package schemas defines the core schemas and types used by the Bifrost system.
 package schemas
 
-import "context"
-
 // PluginShortCircuit represents a plugin's decision to short-circuit the normal flow.
 // It can contain either a response (success short-circuit), a stream (streaming short-circuit), or an error (error short-circuit).
 type PluginShortCircuit struct {
@@ -68,19 +66,19 @@ type Plugin interface {
 	// It allows plugins to modify raw HTTP headers and body before transformation into BifrostRequest.
 	// Only invoked when using HTTP transport (bifrost-http), not when using Bifrost as a Go SDK directly.
 	// Returns modified headers, modified body, and any error that occurred during interception.
-	TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error)
+	TransportInterceptor(ctx *BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error)
 
 	// PreHook is called before a request is processed by a provider.
 	// It allows plugins to modify the request before it is sent to the provider.
 	// The context parameter can be used to maintain state across plugin calls.
 	// Returns the modified request, an optional short-circuit decision, and any error that occurred during processing.
-	PreHook(ctx *context.Context, req *BifrostRequest) (*BifrostRequest, *PluginShortCircuit, error)
+	PreHook(ctx *BifrostContext, req *BifrostRequest) (*BifrostRequest, *PluginShortCircuit, error)
 
 	// PostHook is called after a response is received from a provider or a PreHook short-circuit.
 	// It allows plugins to modify the response and/or error before it is returned to the caller.
 	// Plugins can recover from errors (set error to nil and provide a response), or invalidate a response (set response to nil and provide an error).
 	// Returns the modified response, bifrost error, and any error that occurred during processing.
-	PostHook(ctx *context.Context, result *BifrostResponse, err *BifrostError) (*BifrostResponse, *BifrostError, error)
+	PostHook(ctx *BifrostContext, result *BifrostResponse, err *BifrostError) (*BifrostResponse, *BifrostError, error)
 
 	// Cleanup is called on bifrost shutdown.
 	// It allows plugins to clean up any resources they have allocated.
@@ -94,5 +92,6 @@ type PluginConfig struct {
 	Enabled bool    `json:"enabled"`
 	Name    string  `json:"name"`
 	Path    *string `json:"path,omitempty"`
+	Version *int16  `json:"version,omitempty"`
 	Config  any     `json:"config,omitempty"`
 }

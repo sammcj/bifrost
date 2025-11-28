@@ -393,6 +393,10 @@ func LoadPlugins(ctx context.Context, config *lib.Config) ([]schemas.Plugin, []s
 		})
 	}
 	for _, plugin := range config.PluginConfigs {
+		// Skip built-in plugins that are already handled above
+		if plugin.Name == telemetry.PluginName || plugin.Name == logging.PluginName || plugin.Name == governance.PluginName {
+			continue
+		}
 		if !plugin.Enabled {
 			pluginStatus = append(pluginStatus, schemas.PluginStatus{
 				Name:   plugin.Name,
@@ -706,12 +710,35 @@ func (s *BifrostHTTPServer) UpdatePluginStatus(name string, status string, logs 
 	return nil
 }
 
+// DeletePluginStatus completely removes a plugin status entry
+func (s *BifrostHTTPServer) DeletePluginStatus(name string) {
+	s.pluginStatusMutex.Lock()
+	defer s.pluginStatusMutex.Unlock()
+	for i, pluginStatus := range s.pluginStatus {
+		if pluginStatus.Name == name {
+			s.pluginStatus = append(s.pluginStatus[:i], s.pluginStatus[i+1:]...)
+			return
+		}
+	}
+}
+
 // GetPluginStatus returns the status of all plugins
 func (s *BifrostHTTPServer) GetPluginStatus(ctx context.Context) []schemas.PluginStatus {
 	s.pluginStatusMutex.RLock()
 	defer s.pluginStatusMutex.RUnlock()
-	result := make([]schemas.PluginStatus, len(s.pluginStatus))
-	copy(result, s.pluginStatus)
+	// De-duplicate by name, keeping the last occurrence (most recent status)
+	statusMap := make(map[string]schemas.PluginStatus)
+	order := make([]string, 0, len(s.pluginStatus))
+	for _, status := range s.pluginStatus {
+		if _, exists := statusMap[status.Name]; !exists {
+			order = append(order, status.Name)
+		}
+		statusMap[status.Name] = status
+	}
+	result := make([]schemas.PluginStatus, 0, len(statusMap))
+	for _, name := range order {
+		result = append(result, statusMap[name])
+	}
 	return result
 }
 
@@ -824,8 +851,8 @@ func (s *BifrostHTTPServer) RemovePlugin(ctx context.Context, name string) error
 	if isDisabled != nil && isDisabled.(bool) {
 		s.UpdatePluginStatus(name, schemas.PluginStatusDisabled, []string{fmt.Sprintf("plugin %s is disabled", name)})
 	} else {
-		// Removing plugin from plugin status
-		s.UpdatePluginStatus(name, schemas.PluginStatusDisabled, []string{fmt.Sprintf("plugin %s is removed", name)})
+		// Plugin is being deleted - remove the status entry completely
+		s.DeletePluginStatus(name)
 	}
 	// CAS retry loop (matching bifrost.go pattern)
 	for {
@@ -856,6 +883,7 @@ func (s *BifrostHTTPServer) RemovePlugin(ctx context.Context, name string) error
 func (s *BifrostHTTPServer) RegisterInferenceRoutes(ctx context.Context, middlewares ...lib.BifrostHTTPMiddleware) error {
 	inferenceHandler := handlers.NewInferenceHandler(s.Client, s.Config)
 	integrationHandler := handlers.NewIntegrationHandler(s.Client, s.Config)
+
 	integrationHandler.RegisterRoutes(s.Router, middlewares...)
 	inferenceHandler.RegisterRoutes(s.Router, middlewares...)
 	return nil
@@ -1111,6 +1139,7 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 		inferenceMiddlewares = append(inferenceMiddlewares, handlers.AuthMiddleware(s.Config.ConfigStore))
 	}
 	// Registering inference middlewares
+	inferenceMiddlewares = append([]lib.BifrostHTTPMiddleware{handlers.TransportInterceptorMiddleware(s.Config)}, inferenceMiddlewares...)
 	err = s.RegisterInferenceRoutes(s.ctx, inferenceMiddlewares...)
 	if err != nil {
 		return fmt.Errorf("failed to initialize inference routes: %v", err)
@@ -1119,7 +1148,7 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	s.RegisterUIRoutes()
 	// Create fasthttp server instance
 	s.Server = &fasthttp.Server{
-		Handler:            handlers.CorsMiddleware(s.Config)(handlers.TransportInterceptorMiddleware(s.Config)(s.Router.Handler)),
+		Handler:            handlers.CorsMiddleware(s.Config)(s.Router.Handler),
 		MaxRequestBodySize: s.Config.ClientConfig.MaxRequestBodySizeMB * 1024 * 1024,
 		ReadBufferSize:     1024 * 16, // 16kb
 	}

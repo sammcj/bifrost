@@ -1,2 +1,4 @@
+- **breaking change**: plugins now accept *schemas.BifrostContext instead of *context.Context
 - feat: adds support for bedrock, pydantic and cohere SDK.
 - fix: minor fixes around audio streaming for gemini and vertex
+- feat: add versioning support for plugins

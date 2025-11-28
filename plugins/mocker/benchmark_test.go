@@ -50,7 +50,7 @@ func BenchmarkMockerPlugin_PreHook_SimpleRule(b *testing.B) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -62,7 +62,7 @@ func BenchmarkMockerPlugin_PreHook_SimpleRule(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		_, _, _ = plugin.PreHook(&ctx, bifrostReq)
+		_, _, _ = plugin.PreHook(ctx, bifrostReq)
 	}
 }
 
@@ -107,7 +107,7 @@ func BenchmarkMockerPlugin_PreHook_RegexRule(b *testing.B) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -119,7 +119,7 @@ func BenchmarkMockerPlugin_PreHook_RegexRule(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		_, _, _ = plugin.PreHook(&ctx, bifrostReq)
+		_, _, _ = plugin.PreHook(ctx, bifrostReq)
 	}
 }
 
@@ -186,7 +186,7 @@ func BenchmarkMockerPlugin_PreHook_MultipleRules(b *testing.B) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -198,7 +198,7 @@ func BenchmarkMockerPlugin_PreHook_MultipleRules(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		_, _, _ = plugin.PreHook(&ctx, bifrostReq)
+		_, _, _ = plugin.PreHook(ctx, bifrostReq)
 	}
 }
 
@@ -244,7 +244,7 @@ func BenchmarkMockerPlugin_PreHook_NoMatch(b *testing.B) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -256,7 +256,7 @@ func BenchmarkMockerPlugin_PreHook_NoMatch(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		_, _, _ = plugin.PreHook(&ctx, bifrostReq)
+		_, _, _ = plugin.PreHook(ctx, bifrostReq)
 	}
 }
 
@@ -299,7 +299,7 @@ func BenchmarkMockerPlugin_PreHook_Template(b *testing.B) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -311,6 +311,6 @@ func BenchmarkMockerPlugin_PreHook_Template(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		_, _, _ = plugin.PreHook(&ctx, bifrostReq)
+		_, _, _ = plugin.PreHook(ctx, bifrostReq)
 	}
 }

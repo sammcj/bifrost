@@ -1,7 +1,6 @@
 package streaming
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -108,7 +107,7 @@ func (a *Accumulator) processAccumulatedTranscriptionStreamingChunks(requestID s
 }
 
 // processTranscriptionStreamingResponse processes a transcription streaming response
-func (a *Accumulator) processTranscriptionStreamingResponse(ctx *context.Context, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*ProcessedStreamResponse, error) {
+func (a *Accumulator) processTranscriptionStreamingResponse(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*ProcessedStreamResponse, error) {
 	// Extract request ID from context
 	requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)
 	if !ok || requestID == "" {

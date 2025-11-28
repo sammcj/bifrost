@@ -1,7 +1,6 @@
 package streaming
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -665,7 +664,7 @@ func (a *Accumulator) processAccumulatedResponsesStreamingChunks(requestID strin
 }
 
 // processResponsesStreamingResponse processes a responses streaming response
-func (a *Accumulator) processResponsesStreamingResponse(ctx *context.Context, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*ProcessedStreamResponse, error) {
+func (a *Accumulator) processResponsesStreamingResponse(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*ProcessedStreamResponse, error) {
 	a.logger.Debug("[streaming] processing responses streaming response")
 
 	// Extract request ID from context

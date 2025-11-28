@@ -1,7 +1,6 @@
 package jsonparser
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"time"
@@ -10,7 +9,7 @@ import (
 )
 
 // getRequestID extracts a unique identifier for the request to maintain state
-func (p *JsonParserPlugin) getRequestID(ctx *context.Context, result *schemas.BifrostResponse) string {
+func (p *JsonParserPlugin) getRequestID(ctx *schemas.BifrostContext, result *schemas.BifrostResponse) string {
 
 	// Try to get from result
 	if result != nil && result.ChatResponse != nil && result.ChatResponse.ID != "" {
@@ -19,7 +18,7 @@ func (p *JsonParserPlugin) getRequestID(ctx *context.Context, result *schemas.Bi
 
 	// Try to get from context if not available in result
 	if ctx != nil {
-		if requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string); ok && requestID != "" {
+		if requestID, ok := ctx.Value(schemas.BifrostContextKeyRequestID).(string); ok && requestID != "" {
 			return requestID
 		}
 	}
@@ -28,7 +27,7 @@ func (p *JsonParserPlugin) getRequestID(ctx *context.Context, result *schemas.Bi
 }
 
 // shouldRun determines if the plugin should process the request based on usage type
-func (p *JsonParserPlugin) shouldRun(ctx *context.Context, requestType schemas.RequestType) bool {
+func (p *JsonParserPlugin) shouldRun(ctx *schemas.BifrostContext, requestType schemas.RequestType) bool {
 	// Run only for chat completion stream requests
 	if requestType != schemas.ChatCompletionStreamRequest {
 		return false
@@ -40,7 +39,7 @@ func (p *JsonParserPlugin) shouldRun(ctx *context.Context, requestType schemas.R
 	case PerRequest:
 		// Check if the context contains the plugin-specific key
 		if ctx != nil {
-			if value, ok := (*ctx).Value(EnableStreamingJSONParser).(bool); ok {
+			if value, ok := ctx.Value(EnableStreamingJSONParser).(bool); ok {
 				return value
 			}
 		}

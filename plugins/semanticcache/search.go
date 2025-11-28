@@ -13,7 +13,7 @@ import (
 	"github.com/maximhq/bifrost/framework/vectorstore"
 )
 
-func (plugin *Plugin) performDirectSearch(ctx *context.Context, req *schemas.BifrostRequest, cacheKey string) (*schemas.PluginShortCircuit, error) {
+func (plugin *Plugin) performDirectSearch(ctx *schemas.BifrostContext, req *schemas.BifrostRequest, cacheKey string) (*schemas.PluginShortCircuit, error) {
 	// Generate hash for the request
 	hash, err := plugin.generateRequestHash(req)
 	if err != nil {
@@ -29,8 +29,8 @@ func (plugin *Plugin) performDirectSearch(ctx *context.Context, req *schemas.Bif
 	}
 
 	// Store has and metadata in context
-	*ctx = context.WithValue(*ctx, requestHashKey, hash)
-	*ctx = context.WithValue(*ctx, requestParamsHashKey, paramsHash)
+	ctx.SetValue(requestHashKey, hash)
+	ctx.SetValue(requestParamsHashKey, paramsHash)
 
 	provider, model, _ := req.GetRequestFields()
 
@@ -61,7 +61,7 @@ func (plugin *Plugin) performDirectSearch(ctx *context.Context, req *schemas.Bif
 
 	// Search for entries with matching hash and all params
 	var cursor *string
-	results, _, err := plugin.store.GetAll(*ctx, plugin.config.VectorStoreNamespace, filters, selectFields, cursor, 1)
+	results, _, err := plugin.store.GetAll(ctx, plugin.config.VectorStoreNamespace, filters, selectFields, cursor, 1)
 	if err != nil {
 		if errors.Is(err, vectorstore.ErrNotFound) {
 			return nil, nil
@@ -83,7 +83,7 @@ func (plugin *Plugin) performDirectSearch(ctx *context.Context, req *schemas.Bif
 }
 
 // performSemanticSearch performs semantic similarity search and returns matching response if found.
-func (plugin *Plugin) performSemanticSearch(ctx *context.Context, req *schemas.BifrostRequest, cacheKey string) (*schemas.PluginShortCircuit, error) {
+func (plugin *Plugin) performSemanticSearch(ctx *schemas.BifrostContext, req *schemas.BifrostRequest, cacheKey string) (*schemas.PluginShortCircuit, error) {
 	// Extract text and metadata for embedding
 	text, paramsHash, err := plugin.extractTextForEmbedding(req)
 	if err != nil {
@@ -91,15 +91,15 @@ func (plugin *Plugin) performSemanticSearch(ctx *context.Context, req *schemas.B
 	}
 
 	// Generate embedding
-	embedding, inputTokens, err := plugin.generateEmbedding(*ctx, text)
+	embedding, inputTokens, err := plugin.generateEmbedding(ctx, text)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	// Store embedding and metadata in context for PostHook
-	*ctx = context.WithValue(*ctx, requestEmbeddingKey, embedding)
-	*ctx = context.WithValue(*ctx, requestEmbeddingTokensKey, inputTokens)
-	*ctx = context.WithValue(*ctx, requestParamsHashKey, paramsHash)
+	ctx.SetValue(requestEmbeddingKey, embedding)
+	ctx.SetValue(requestEmbeddingTokensKey, inputTokens)
+	ctx.SetValue(requestParamsHashKey, paramsHash)
 
 	cacheThreshold := plugin.config.Threshold
 
@@ -140,7 +140,7 @@ func (plugin *Plugin) performSemanticSearch(ctx *context.Context, req *schemas.B
 	}
 
 	// For semantic search, we want semantic similarity in content but exact parameter matching
-	results, err := plugin.store.GetNearest(*ctx, plugin.config.VectorStoreNamespace, embedding, strictFilters, selectFields, cacheThreshold, 1)
+	results, err := plugin.store.GetNearest(ctx, plugin.config.VectorStoreNamespace, embedding, strictFilters, selectFields, cacheThreshold, 1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search semantic cache: %w", err)
 	}
@@ -159,7 +159,7 @@ func (plugin *Plugin) performSemanticSearch(ctx *context.Context, req *schemas.B
 }
 
 // buildResponseFromResult constructs a PluginShortCircuit response from a cached VectorEntry result
-func (plugin *Plugin) buildResponseFromResult(ctx *context.Context, req *schemas.BifrostRequest, result vectorstore.SearchResult, cacheType CacheType, threshold float64, inputTokens int) (*schemas.PluginShortCircuit, error) {
+func (plugin *Plugin) buildResponseFromResult(ctx *schemas.BifrostContext, req *schemas.BifrostRequest, result vectorstore.SearchResult, cacheType CacheType, threshold float64, inputTokens int) (*schemas.PluginShortCircuit, error) {
 	// Extract response data from the result properties
 	properties := result.Properties
 	if properties == nil {
@@ -238,7 +238,7 @@ func (plugin *Plugin) buildResponseFromResult(ctx *context.Context, req *schemas
 }
 
 // buildSingleResponseFromResult constructs a single response from cached data
-func (plugin *Plugin) buildSingleResponseFromResult(ctx *context.Context, req *schemas.BifrostRequest, result vectorstore.SearchResult, responseData interface{}, cacheType CacheType, threshold float64, similarity float64, inputTokens int) (*schemas.PluginShortCircuit, error) {
+func (plugin *Plugin) buildSingleResponseFromResult(ctx *schemas.BifrostContext, req *schemas.BifrostRequest, result vectorstore.SearchResult, responseData interface{}, cacheType CacheType, threshold float64, similarity float64, inputTokens int) (*schemas.PluginShortCircuit, error) {
 	provider, _, _ := req.GetRequestFields()
 
 	responseStr, ok := responseData.(string)
@@ -276,8 +276,8 @@ func (plugin *Plugin) buildSingleResponseFromResult(ctx *context.Context, req *s
 
 	extraFields.Provider = provider
 
-	*ctx = context.WithValue(*ctx, isCacheHitKey, true)
-	*ctx = context.WithValue(*ctx, cacheHitTypeKey, cacheType)
+	ctx.SetValue(isCacheHitKey, true)
+	ctx.SetValue(cacheHitTypeKey, cacheType)
 
 	return &schemas.PluginShortCircuit{
 		Response: &cachedResponse,
@@ -285,7 +285,7 @@ func (plugin *Plugin) buildSingleResponseFromResult(ctx *context.Context, req *s
 }
 
 // buildStreamingResponseFromResult constructs a streaming response from cached data
-func (plugin *Plugin) buildStreamingResponseFromResult(ctx *context.Context, req *schemas.BifrostRequest, result vectorstore.SearchResult, streamData interface{}, cacheType CacheType, threshold float64, similarity float64, inputTokens int) (*schemas.PluginShortCircuit, error) {
+func (plugin *Plugin) buildStreamingResponseFromResult(ctx *schemas.BifrostContext, req *schemas.BifrostRequest, result vectorstore.SearchResult, streamData interface{}, cacheType CacheType, threshold float64, similarity float64, inputTokens int) (*schemas.PluginShortCircuit, error) {
 	provider, _, _ := req.GetRequestFields()
 
 	// Parse stream_chunks
@@ -295,9 +295,9 @@ func (plugin *Plugin) buildStreamingResponseFromResult(ctx *context.Context, req
 	}
 
 	// Mark cache-hit once to avoid concurrent ctx writes
-	*ctx = context.WithValue(*ctx, isCacheHitKey, true)
-	*ctx = context.WithValue(*ctx, cacheHitTypeKey, cacheType)
-
+	ctx.SetValue(isCacheHitKey, true)
+	ctx.SetValue(cacheHitTypeKey, cacheType)
+	
 	// Create stream channel
 	streamChan := make(chan *schemas.BifrostStream)
 
@@ -305,8 +305,8 @@ func (plugin *Plugin) buildStreamingResponseFromResult(ctx *context.Context, req
 		defer close(streamChan)
 
 		// Set cache-hit markers inside the streaming goroutine to avoid races
-		*ctx = context.WithValue(*ctx, isCacheHitKey, true)
-		*ctx = context.WithValue(*ctx, cacheHitTypeKey, cacheType)
+		ctx.SetValue(isCacheHitKey, true)
+		ctx.SetValue(cacheHitTypeKey, cacheType)
 
 		// Process each stream chunk
 		for i, chunkData := range streamArray {
@@ -327,7 +327,7 @@ func (plugin *Plugin) buildStreamingResponseFromResult(ctx *context.Context, req
 
 			// Add cache debug to only the last chunk and set stream end indicator
 			if i == len(streamArray)-1 {
-				*ctx = context.WithValue(*ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+				ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 				cacheDebug := schemas.BifrostCacheDebug{
 					CacheHit: true,
 					HitType:  bifrost.Ptr(string(cacheType)),

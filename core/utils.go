@@ -195,12 +195,12 @@ func IsStreamRequestType(reqType schemas.RequestType) bool {
 }
 
 // IsFinalChunk returns true if the given context is a final chunk.
-func IsFinalChunk(ctx *context.Context) bool {
+func IsFinalChunk(ctx *schemas.BifrostContext) bool {
 	if ctx == nil {
 		return false
 	}
 
-	isStreamEndIndicator := (*ctx).Value(schemas.BifrostContextKeyStreamEndIndicator)
+	isStreamEndIndicator := ctx.Value(schemas.BifrostContextKeyStreamEndIndicator)
 	if isStreamEndIndicator == nil {
 		return false
 	}

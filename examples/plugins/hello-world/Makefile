@@ -1,4 +1,4 @@
-.PHONY: all build clean install help test deps
+.PHONY: all build dev clean install help test deps
 
 # Note: Go plugins only support Linux and macOS (Darwin)
 # - Native builds: Use native Go compiler
@@ -58,7 +58,8 @@ help: ## Show this help message
 	@echo '$(COLOR_BOLD)Usage:$(COLOR_RESET) make [target] [GOOS=...] [GOARCH=...]'
 	@echo ''
 	@echo '$(COLOR_BOLD)Examples:$(COLOR_RESET)'
-	@echo '  make build                           # Build for current platform'
+	@echo '  make dev                             # Build for development (fast, no optimizations)'
+	@echo '  make build                           # Build for current platform (production)'
 	@echo '  make build GOOS=linux GOARCH=amd64   # Build for Linux AMD64'
 	@echo '  make build GOOS=darwin GOARCH=arm64  # Build for macOS ARM64'
 	@echo ''
@@ -97,6 +98,11 @@ build: _clean_build_dir ## Build the plugin (supports: make build GOOS=linux GOA
 	if [ "$$TARGET_OS" = "$$HOST_OS" ] && [ "$$TARGET_ARCH" = "$$HOST_ARCH" ]; then \
 		echo "$(COLOR_INFO)Building plugin for $$TARGET_OS/$$TARGET_ARCH (native build)...$(COLOR_RESET)"; \
 		CGO_ENABLED=1 GOOS=$$TARGET_OS GOARCH=$$TARGET_ARCH \
+			go build -buildmode=plugin -o $(OUTPUT) main.go; \
+		echo "$(COLOR_SUCCESS)✓ Plugin built successfully: $(OUTPUT)$(COLOR_RESET)"; \
+	elif [ "$$HOST_OS" = "darwin" ] && [ "$$TARGET_OS" = "darwin" ]; then \
+		echo "$(COLOR_INFO)Building plugin for $$TARGET_OS/$$TARGET_ARCH (macOS cross-arch)...$(COLOR_RESET)"; \
+		CGO_ENABLED=1 GOOS=$$TARGET_OS GOARCH=$$TARGET_ARCH \
 			go build -buildmode=plugin -ldflags="-w -s" -trimpath -o $(OUTPUT) main.go; \
 		echo "$(COLOR_SUCCESS)✓ Plugin built successfully: $(OUTPUT)$(COLOR_RESET)"; \
 	else \
@@ -104,6 +110,12 @@ build: _clean_build_dir ## Build the plugin (supports: make build GOOS=linux GOA
 		echo "$(COLOR_INFO)Using Docker for cross-compilation...$(COLOR_RESET)"; \
 		$(MAKE) _build-with-docker TARGET_OS=$$TARGET_OS TARGET_ARCH=$$TARGET_ARCH; \
 	fi
+
+dev: _clean_build_dir ## Build the plugin for development (no optimization flags)
+	@mkdir -p $(OUTPUT_DIR)
+	@echo "$(COLOR_INFO)Building plugin for development (native build, no optimizations)...$(COLOR_RESET)"
+	CGO_ENABLED=1 go build -buildmode=plugin -o $(OUTPUT) main.go
+	@echo "$(COLOR_SUCCESS)✓ Plugin built successfully: $(OUTPUT)$(COLOR_RESET)"
 
 _build-with-docker: # Internal target for Docker-based cross-compilation
 	@if [ "$(TARGET_OS)" = "linux" ]; then \
