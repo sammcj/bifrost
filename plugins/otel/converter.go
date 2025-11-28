@@ -440,7 +440,7 @@ func completeResourceSpan(
 	teamID string,
 	teamName string,
 	customerID string,
-	customerName string,	
+	customerName string,
 ) *ResourceSpan {
 	params := []*KeyValue{}
 
@@ -667,11 +667,13 @@ func completeResourceSpan(
 	status := tracepb.Status_STATUS_CODE_OK
 	if bifrostErr != nil {
 		status = tracepb.Status_STATUS_CODE_ERROR
-		if bifrostErr.Error.Type != nil {
-			params = append(params, kvStr("gen_ai.error.type", *bifrostErr.Error.Type))
-		}
-		if bifrostErr.Error.Code != nil {
-			params = append(params, kvStr("gen_ai.error.code", *bifrostErr.Error.Code))
+		if bifrostErr.Error != nil {
+			if bifrostErr.Error.Type != nil {
+				params = append(params, kvStr("gen_ai.error.type", *bifrostErr.Error.Type))
+			}
+			if bifrostErr.Error.Code != nil {
+				params = append(params, kvStr("gen_ai.error.code", *bifrostErr.Error.Code))
+			}
 		}
 		params = append(params, kvStr("gen_ai.error", bifrostErr.Error.Message))
 	}
@@ -697,7 +699,7 @@ func completeResourceSpan(
 	span.ScopeSpans[0].Spans[0].Attributes = append(span.ScopeSpans[0].Spans[0].Attributes, params...)
 	span.ScopeSpans[0].Spans[0].Status = &tracepb.Status{Code: status}
 	span.ScopeSpans[0].Spans[0].EndTimeUnixNano = uint64(timestamp.UnixNano())
-	// Attaching virtual keys as resource attributes as well	
+	// Attaching virtual keys as resource attributes as well
 	span.Resource.Attributes = append(span.Resource.Attributes, kvStr("virtual_key_id", virtualKeyID))
 	span.Resource.Attributes = append(span.Resource.Attributes, kvStr("virtual_key_name", virtualKeyName))
 	span.Resource.Attributes = append(span.Resource.Attributes, kvStr("selected_key_id", selectedKeyID))

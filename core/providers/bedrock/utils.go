@@ -781,7 +781,7 @@ func ToBedrockError(bifrostErr *schemas.BifrostError) *BedrockError {
 	}
 
 	// Map error type/code
-	if bifrostErr.Error.Code != nil {
+	if bifrostErr.Error != nil && bifrostErr.Error.Code != nil {
 		bedrockErr.Type = *bifrostErr.Error.Code
 		bedrockErr.Code = bifrostErr.Error.Code
 	} else if bifrostErr.Type != nil {

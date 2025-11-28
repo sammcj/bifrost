@@ -1246,11 +1246,31 @@ func (s *RDBConfigStore) UpdateVirtualKey(ctx context.Context, virtualKey *table
 		txDB = s.db
 	}
 
-	// Update virtual key
-	// Use Select() to explicitly update all fields, including nil pointer fields
-	// This ensures TeamID gets set to NULL when switching from team to customer association
-	if err := txDB.WithContext(ctx).Select("name", "description", "value", "is_active", "team_id", "customer_id", "budget_id", "rate_limit_id", "config_hash", "updated_at").Updates(virtualKey).Error; err != nil {
+	// Check if record exists by ID or Name
+	var existing tables.TableVirtualKey
+	err := txDB.WithContext(ctx).
+		Where("id = ? OR name = ?", virtualKey.ID, virtualKey.Name).
+		First(&existing).Error
+
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return s.parseGormError(err)
+	}
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// Create new record
+		if err := txDB.WithContext(ctx).Create(virtualKey).Error; err != nil {
+			return s.parseGormError(err)
+		}
+	} else {
+		// Update existing record (use existing.ID to ensure we update the found record)
+		virtualKey.ID = existing.ID
+		// Use Select() to explicitly update all fields, including nil pointer fields
+		// This ensures TeamID gets set to NULL when switching from team to customer association
+		if err := txDB.WithContext(ctx).
+			Select("name", "description", "value", "is_active", "team_id", "customer_id", "budget_id", "rate_limit_id", "config_hash", "updated_at").
+			Updates(virtualKey).Error; err != nil {
+			return s.parseGormError(err)
+		}
 	}
 	return nil
 }
