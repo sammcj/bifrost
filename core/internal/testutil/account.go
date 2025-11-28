@@ -170,7 +170,7 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 					Endpoint: os.Getenv("AZURE_ENDPOINT"),
 					Deployments: map[string]string{
 						"gpt-4o":        "gpt-4o",
-						"gpt-4o-backup": "gpt-4o-aug",
+						"gpt-4o-backup": "gpt-4o-3",
 					},
 				},
 			},
@@ -190,7 +190,7 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 				Models: []string{},
 				Weight: 1.0,
 				AzureKeyConfig: &schemas.AzureKeyConfig{
-					Endpoint: os.Getenv("AZURE_API_KEY"),
+					Endpoint: os.Getenv("AZURE_ENDPOINT"),
 					Deployments: map[string]string{
 						"o1": "o1",
 					},
