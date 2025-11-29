@@ -251,6 +251,15 @@ anthropic_response = client.chat.completions.create(
         "x-api-key": "sk-ant-your-anthropic-key"
     }
 )
+
+# Use Gemini key for Gemini models
+gemini_response = client.chat.completions.create(
+    model="gemini/gemini-2.5-flash",
+    messages=[{"role": "user", "content": "Hello Gemini!"}],
+    extra_headers={
+        "x-goog-api-key": "sk-gemini-your-gemini-key"
+    }
+)
 ```
 
 </Tab>
@@ -291,6 +300,15 @@ const anthropicResponseWithHeader = await openai.chat.completions.create({
   messages: [{ role: "user", content: "Hello Claude!" }],
   headers: {
     "x-api-key": "sk-ant-your-anthropic-key",
+  },
+});
+
+// Use Gemini key for Gemini models
+const geminiResponseWithHeader = await openai.chat.completions.create({
+  model: "gemini/gemini-2.5-flash",
+  messages: [{ role: "user", content: "Hello Gemini!" }],
+  headers: {
+    "x-goog-api-key": "sk-gemini-your-gemini-key",
   },
 });
 ```

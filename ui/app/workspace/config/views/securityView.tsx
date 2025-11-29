@@ -173,7 +173,7 @@ export default function SecurityView() {
 					<h2 className="text-2xl font-semibold tracking-tight">Security Settings</h2>
 					<p className="text-muted-foreground text-sm">Configure security and access control settings.</p>
 				</div>
-				<Button onClick={handleSave} disabled={!hasChanges || isLoading || !hasSettingsUpdateAccess	}>
+				<Button onClick={handleSave} disabled={!hasChanges || isLoading || !hasSettingsUpdateAccess}>
 					{isLoading ? "Saving..." : "Save Changes"}
 				</Button>
 			</div>
@@ -285,8 +285,8 @@ export default function SecurityView() {
 							Allow Direct API Keys
 						</label>
 						<p className="text-muted-foreground text-sm">
-							Allow API keys to be passed directly in request headers (<b>Authorization</b> or <b>x-api-key</b>). Bifrost will directly use
-							the key.
+							Allow API keys to be passed directly in request headers (<b>Authorization</b>, <b>x-api-key</b>, or <b>x-goog-api-key</b>).
+							Bifrost will directly use the key.
 						</p>
 					</div>
 					<Switch
