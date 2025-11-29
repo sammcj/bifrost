@@ -197,7 +197,7 @@ const response = await model.generateContent("Hello with custom headers!");
 
 ## Using Direct Keys
 
-Pass API keys directly in requests to bypass Bifrost's load balancing. You can pass any provider's API key (OpenAI, Anthropic, Mistral, etc.) since Bifrost only looks for `Authorization` or `x-api-key` headers. This requires the **Allow Direct API keys** option to be enabled in Bifrost configuration.
+Pass API keys directly in requests to bypass Bifrost's load balancing. You can pass any provider's API key (OpenAI, Anthropic, Mistral, etc.) since Bifrost only looks for `Authorization`, `x-api-key` and `x-goog-api-key` headers. This requires the **Allow Direct API keys** option to be enabled in Bifrost configuration.
 
 > **Learn more:** See [Quickstart Configuration](../quickstart/README) for enabling direct API key usage.
 
@@ -210,8 +210,14 @@ from google.genai.types import HttpOptions
 
 # Pass different provider keys per request using headers
 client = genai.Client(
-    api_key="dummy-key",
+    api_key="gemini-key",
     http_options=HttpOptions(base_url="http://localhost:8080/genai")
+)
+
+# Use Gemini key directly
+gemini_response = client.models.generate_content(
+    model="gemini-1.5-flash",
+    contents="Hello Gemini!"
 )
 
 # Use Anthropic key for Claude models
@@ -240,9 +246,15 @@ openai_response = client.models.generate_content(
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Pass different provider keys per request using headers
-const genAI = new GoogleGenerativeAI("dummy-key", {
+const genAI = new GoogleGenerativeAI("gemini-key", {
   baseUrl: "http://localhost:8080/genai",
 });
+
+// Use Gemini key directly
+const geminiModel = genAI.getGenerativeModel({ 
+  model: "gemini-1.5-flash"
+});
+const geminiResponse = await geminiModel.generateContent("Hello Gemini!");
 
 // Use Anthropic key for Claude models
 const anthropicModel = genAI.getGenerativeModel({ 

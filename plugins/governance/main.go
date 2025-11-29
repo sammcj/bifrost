@@ -159,6 +159,7 @@ func (p *GovernancePlugin) GetName() string {
 //   - url: The URL of the request
 //   - headers: The request headers
 //   - body: The request body
+//
 // Returns:
 //   - map[string]string: The updated request headers
 //   - map[string]any: The updated request body
@@ -184,7 +185,7 @@ func (p *GovernancePlugin) TransportInterceptor(ctx *schemas.BifrostContext, url
 				}
 			}
 		}
-		if headerStr == "x-api-key" && strings.HasPrefix(strings.ToLower(string(value)), VirtualKeyPrefix) {
+		if (headerStr == "x-api-key" || headerStr == "x-goog-api-key") && strings.HasPrefix(strings.ToLower(string(value)), VirtualKeyPrefix) {
 			virtualKeyValue = string(value)
 			break
 		}
@@ -215,6 +216,7 @@ func (p *GovernancePlugin) TransportInterceptor(ctx *schemas.BifrostContext, url
 // Parameters:
 //   - body: The request body
 //   - virtualKey: The virtual key configuration
+//
 // Returns:
 //   - map[string]any: The updated request body
 //   - error: Any error that occurred during processing
@@ -325,6 +327,7 @@ func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *
 // Parameters:
 //   - headers: The request headers
 //   - virtualKey: The virtual key configuration
+//
 // Returns:
 //   - map[string]string: The updated request headers
 //   - error: Any error that occurred during processing
@@ -366,6 +369,7 @@ func (p *GovernancePlugin) addMCPIncludeTools(headers map[string]string, virtual
 // Parameters:
 //   - ctx: The Bifrost context
 //   - req: The Bifrost request to be processed
+//
 // Returns:
 //   - *schemas.BifrostRequest: The processed request
 //   - *schemas.PluginShortCircuit: The plugin short circuit if the request is not allowed
@@ -467,6 +471,7 @@ func (p *GovernancePlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.Bif
 //   - ctx: The Bifrost context
 //   - result: The Bifrost response to be processed
 //   - err: The Bifrost error to be processed
+//
 // Returns:
 //   - *schemas.BifrostResponse: The processed response
 //   - *schemas.BifrostError: The processed error

@@ -1,0 +1,1 @@
+- feat: support added for x-goog-api-key header for Google Gemini style
