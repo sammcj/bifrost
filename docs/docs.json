@@ -158,6 +158,7 @@
                 "icon": "shield-check",
                 "pages": [
                   "enterprise/advanced-governance",
+                  "enterprise/rbac",
                   {
                     "group": "Identity Providers",
                     "icon": "id-card",
