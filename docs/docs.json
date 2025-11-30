@@ -215,7 +215,8 @@
             "group": "Common setup instructions",
             "icon": "book",
             "pages": [
-              "deployment-guides/how-to/install-make"
+              "deployment-guides/how-to/install-make",
+              "deployment-guides/how-to/multinode"
             ]
           }
         ]
