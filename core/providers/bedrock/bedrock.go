@@ -770,7 +770,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 
 		// Process AWS Event Stream format
 		var messageID string
-		var usage *schemas.BifrostLLMUsage
+		usage := &schemas.BifrostLLMUsage{}
 		var finishReason *string
 		chunkIndex := 0
 
@@ -819,20 +819,32 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 				}
 
 				if streamEvent.Usage != nil {
-					usage = &schemas.BifrostLLMUsage{
-						PromptTokens:     streamEvent.Usage.InputTokens,
-						CompletionTokens: streamEvent.Usage.OutputTokens,
-						TotalTokens:      streamEvent.Usage.TotalTokens,
+					// Accumulate usage information instead of overwriting
+					// In some cases usage comes in multiple events, so we need to take the maximum values
+					if streamEvent.Usage.InputTokens > usage.PromptTokens {
+						usage.PromptTokens = streamEvent.Usage.InputTokens
+					}
+					if streamEvent.Usage.OutputTokens > usage.CompletionTokens {
+						usage.CompletionTokens = streamEvent.Usage.OutputTokens
+					}
+					if streamEvent.Usage.TotalTokens > usage.TotalTokens {
+						usage.TotalTokens = streamEvent.Usage.TotalTokens
 					}
 					// Handle cached tokens if present
 					if streamEvent.Usage.CacheReadInputTokens > 0 {
-						usage.PromptTokensDetails = &schemas.ChatPromptTokensDetails{
-							CachedTokens: streamEvent.Usage.CacheReadInputTokens,
+						if usage.PromptTokensDetails == nil {
+							usage.PromptTokensDetails = &schemas.ChatPromptTokensDetails{}
+						}
+						if streamEvent.Usage.CacheReadInputTokens > usage.PromptTokensDetails.CachedTokens {
+							usage.PromptTokensDetails.CachedTokens = streamEvent.Usage.CacheReadInputTokens
 						}
 					}
 					if streamEvent.Usage.CacheWriteInputTokens > 0 {
-						usage.CompletionTokensDetails = &schemas.ChatCompletionTokensDetails{
-							CachedTokens: streamEvent.Usage.CacheWriteInputTokens,
+						if usage.CompletionTokensDetails == nil {
+							usage.CompletionTokensDetails = &schemas.ChatCompletionTokensDetails{}
+						}
+						if streamEvent.Usage.CacheWriteInputTokens > usage.CompletionTokensDetails.CachedTokens {
+							usage.CompletionTokensDetails.CachedTokens = streamEvent.Usage.CacheWriteInputTokens
 						}
 					}
 				}
@@ -985,7 +997,7 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 		defer resp.Body.Close()
 
 		// Process AWS Event Stream format
-		var usage *schemas.ResponsesResponseUsage
+		usage := &schemas.ResponsesResponseUsage{}
 		chunkIndex := 0
 
 		// Create stream state for stateful conversions
@@ -1062,20 +1074,32 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 				}
 
 				if streamEvent.Usage != nil {
-					usage = &schemas.ResponsesResponseUsage{
-						InputTokens:  streamEvent.Usage.InputTokens,
-						OutputTokens: streamEvent.Usage.OutputTokens,
-						TotalTokens:  streamEvent.Usage.TotalTokens,
+					// Accumulate usage information instead of overwriting
+					// In some cases usage comes in multiple events, so we need to take the maximum values
+					if streamEvent.Usage.InputTokens > usage.InputTokens {
+						usage.InputTokens = streamEvent.Usage.InputTokens
+					}
+					if streamEvent.Usage.OutputTokens > usage.OutputTokens {
+						usage.OutputTokens = streamEvent.Usage.OutputTokens
+					}
+					if streamEvent.Usage.TotalTokens > usage.TotalTokens {
+						usage.TotalTokens = streamEvent.Usage.TotalTokens
 					}
 					// Handle cached tokens if present
 					if streamEvent.Usage.CacheReadInputTokens > 0 {
-						usage.InputTokensDetails = &schemas.ResponsesResponseInputTokens{
-							CachedTokens: streamEvent.Usage.CacheReadInputTokens,
+						if usage.InputTokensDetails == nil {
+							usage.InputTokensDetails = &schemas.ResponsesResponseInputTokens{}
+						}
+						if streamEvent.Usage.CacheReadInputTokens > usage.InputTokensDetails.CachedTokens {
+							usage.InputTokensDetails.CachedTokens = streamEvent.Usage.CacheReadInputTokens
 						}
 					}
 					if streamEvent.Usage.CacheWriteInputTokens > 0 {
-						usage.OutputTokensDetails = &schemas.ResponsesResponseOutputTokens{
-							CachedTokens: streamEvent.Usage.CacheWriteInputTokens,
+						if usage.OutputTokensDetails == nil {
+							usage.OutputTokensDetails = &schemas.ResponsesResponseOutputTokens{}
+						}
+						if streamEvent.Usage.CacheWriteInputTokens > usage.OutputTokensDetails.CachedTokens {
+							usage.OutputTokensDetails.CachedTokens = streamEvent.Usage.CacheWriteInputTokens
 						}
 					}
 				}

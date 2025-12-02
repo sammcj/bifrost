@@ -493,8 +493,9 @@ func HandleAnthropicChatCompletionStreaming(
 		// Track minimal state needed for response format
 		var messageID string
 		var modelName string
-		var usage *schemas.BifrostLLMUsage
 		var finishReason *string
+
+		usage := &schemas.BifrostLLMUsage{}
 
 		// Track SSE event parsing state
 		var eventType string
@@ -533,13 +534,32 @@ func HandleAnthropicChatCompletionStreaming(
 				messageID = event.Message.ID
 			}
 
+			// Check for usage in both top-level event.Usage and nested event.Message.Usage
+			// message_start events have usage nested in message.usage, while message_delta has it at top level
+			var usageToProcess *AnthropicUsage
 			if event.Usage != nil {
-				usage = &schemas.BifrostLLMUsage{
-					PromptTokens:     event.Usage.InputTokens,
-					CompletionTokens: event.Usage.OutputTokens,
-					TotalTokens:      event.Usage.InputTokens + event.Usage.OutputTokens,
+				usageToProcess = event.Usage
+			} else if event.Message != nil && event.Message.Usage != nil {
+				usageToProcess = event.Message.Usage
+			}
+
+			if usageToProcess != nil {
+				// Collect usage information and send at the end of the stream
+				// Here in some cases usage comes before final message
+				// So we need to check if the response.Usage is nil and then if usage != nil
+				// then add up all tokens
+				if usageToProcess.InputTokens > usage.PromptTokens {
+					usage.PromptTokens = usageToProcess.InputTokens
+				}
+				if usageToProcess.OutputTokens > usage.CompletionTokens {
+					usage.CompletionTokens = usageToProcess.OutputTokens
+				}
+				calculatedTotal := usage.PromptTokens + usage.CompletionTokens
+				if calculatedTotal > usage.TotalTokens {
+					usage.TotalTokens = calculatedTotal
 				}
 			}
+
 			if event.Delta != nil && event.Delta.StopReason != nil {
 				mappedReason := ConvertAnthropicFinishReasonToBifrost(*event.Delta.StopReason)
 				finishReason = &mappedReason
@@ -561,6 +581,13 @@ func HandleAnthropicChatCompletionStreaming(
 				break
 			}
 			if response != nil {
+				response.ExtraFields = schemas.BifrostResponseExtraFields{
+					RequestType:    schemas.ChatCompletionStreamRequest,
+					Provider:       providerName,
+					ModelRequested: modelName,
+					ChunkIndex:     chunkIndex,
+					Latency:        time.Since(lastChunkTime).Milliseconds(),
+				}
 				if postResponseConverter != nil {
 					response = postResponseConverter(response)
 					if response == nil {
@@ -569,13 +596,6 @@ func HandleAnthropicChatCompletionStreaming(
 					}
 				}
 				response.ID = messageID
-				response.ExtraFields = schemas.BifrostResponseExtraFields{
-					RequestType:    schemas.ChatCompletionStreamRequest,
-					Provider:       providerName,
-					ModelRequested: modelName,
-					ChunkIndex:     chunkIndex,
-					Latency:        time.Since(lastChunkTime).Milliseconds(),
-				}
 				lastChunkTime = time.Now()
 				chunkIndex++
 
@@ -600,6 +620,13 @@ func HandleAnthropicChatCompletionStreaming(
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.ChatCompletionStreamRequest, providerName, modelName, logger)
 		} else {
 			response := providerUtils.CreateBifrostChatCompletionChunkResponse(messageID, usage, finishReason, chunkIndex, schemas.ChatCompletionStreamRequest, providerName, modelName)
+			if postResponseConverter != nil {
+				response = postResponseConverter(response)
+				if response == nil {
+					logger.Warn("postResponseConverter returned nil; skipping chunk")
+					return
+				}
+			}
 			response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
 			ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
 			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, response, nil, nil, nil), responseChan)
@@ -791,7 +818,7 @@ func HandleAnthropicResponsesStream(
 		lastChunkTime := startTime
 
 		// Track minimal state needed for response format
-		var usage *schemas.ResponsesResponseUsage
+		usage := &schemas.ResponsesResponseUsage{}
 
 		// Create stream state for stateful conversions
 		streamState := acquireAnthropicResponsesStreamState()
@@ -838,11 +865,29 @@ func HandleAnthropicResponsesStream(
 			// Note: response.created and response.in_progress are now emitted by ToBifrostResponsesStream
 			// from the message_start event, so we don't need to call them manually here
 
+			// Check for usage in both top-level event.Usage and nested event.Message.Usage
+			// message_start events have usage nested in message.usage, while message_delta has it at top level
+			var usageToProcess *AnthropicUsage
 			if event.Usage != nil {
-				usage = &schemas.ResponsesResponseUsage{
-					InputTokens:  event.Usage.InputTokens,
-					OutputTokens: event.Usage.OutputTokens,
-					TotalTokens:  event.Usage.InputTokens + event.Usage.OutputTokens,
+				usageToProcess = event.Usage
+			} else if event.Message != nil && event.Message.Usage != nil {
+				usageToProcess = event.Message.Usage
+			}
+
+			if usageToProcess != nil {
+				// Collect usage information and send at the end of the stream
+				// Here in some cases usage comes before final message
+				// So we need to check if the response.Usage is nil and then if usage != nil
+				// then add up all tokens
+				if usageToProcess.InputTokens > usage.InputTokens {
+					usage.InputTokens = usageToProcess.InputTokens
+				}
+				if usageToProcess.OutputTokens > usage.OutputTokens {
+					usage.OutputTokens = usageToProcess.OutputTokens
+				}
+				calculatedTotal := usage.InputTokens + usage.OutputTokens
+				if calculatedTotal > usage.TotalTokens {
+					usage.TotalTokens = calculatedTotal
 				}
 			}
 
@@ -860,19 +905,19 @@ func HandleAnthropicResponsesStream(
 			// Handle each response in the slice
 			for i, response := range responses {
 				if response != nil {
-					if postResponseConverter != nil {
-						response = postResponseConverter(response)
-						if response == nil {
-							logger.Warn("postResponseConverter returned nil; skipping chunk")
-							continue
-						}
-					}
 					response.ExtraFields = schemas.BifrostResponseExtraFields{
 						RequestType:    schemas.ResponsesStreamRequest,
 						Provider:       providerName,
 						ModelRequested: modelName,
 						ChunkIndex:     chunkIndex,
 						Latency:        time.Since(lastChunkTime).Milliseconds(),
+					}
+					if postResponseConverter != nil {
+						response = postResponseConverter(response)
+						if response == nil {
+							logger.Warn("postResponseConverter returned nil; skipping chunk")
+							continue
+						}
 					}
 					lastChunkTime = time.Now()
 					chunkIndex++
