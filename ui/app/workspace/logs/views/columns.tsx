@@ -68,7 +68,7 @@ export const createColumns = (onDelete: (log: LogEntry) => void): ColumnDef<LogE
 		),
 		cell: ({ row }) => {
 			const timestamp = row.original.timestamp;
-			return <div className="font-mono text-sm">{moment(timestamp).format("YYYY-MM-DD hh:mm:ss A (Z)")}</div>;
+			return <div className="font-mono text-xs">{moment(timestamp).format("YYYY-MM-DD hh:mm:ss A (Z)")}</div>;
 		},
 	},
 	{
@@ -88,7 +88,7 @@ export const createColumns = (onDelete: (log: LogEntry) => void): ColumnDef<LogE
 		cell: ({ row }) => {
 			const input = getMessage(row.original);
 			return (
-				<div className="max-w-[400px] truncate font-mono text-xs font-normal" title={input || "-"}>
+				<div className="max-w-[400px] truncate font-mono text-sm font-normal" title={input || "-"}>
 					{input}
 				</div>
 			);
