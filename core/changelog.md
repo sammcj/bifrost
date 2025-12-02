@@ -1,0 +1,1 @@
+fix: vertex and bedrock usage aggregation improvements for streaming

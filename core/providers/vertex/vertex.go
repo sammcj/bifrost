@@ -460,7 +460,8 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 			Latency:        latency.Milliseconds(),
 		}
 
-		if response.ExtraFields.ModelRequested != deployment {
+		response.ExtraFields.ModelRequested = request.Model
+		if request.Model != deployment {
 			response.ExtraFields.ModelDeployment = deployment
 		}
 
@@ -481,11 +482,10 @@ func (provider *VertexProvider) ChatCompletion(ctx context.Context, key schemas.
 		response.ExtraFields.RequestType = schemas.ChatCompletionRequest
 		response.ExtraFields.Provider = providerName
 		response.ExtraFields.ModelRequested = request.Model
-		response.ExtraFields.Latency = latency.Milliseconds()
-
-		if response.ExtraFields.ModelRequested != deployment {
+		if request.Model != deployment {
 			response.ExtraFields.ModelDeployment = deployment
 		}
+		response.ExtraFields.Latency = latency.Milliseconds()
 
 		if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
 			response.ExtraFields.RawResponse = rawResponse
@@ -517,7 +517,8 @@ func (provider *VertexProvider) ChatCompletionStream(ctx context.Context, postHo
 	deployment := provider.getModelDeployment(key, request.Model)
 
 	postResponseConverter := func(response *schemas.BifrostChatResponse) *schemas.BifrostChatResponse {
-		if response.ExtraFields.ModelRequested != deployment {
+		response.ExtraFields.ModelRequested = request.Model
+		if request.Model != deployment {
 			response.ExtraFields.ModelDeployment = deployment
 		}
 		return response
@@ -801,7 +802,8 @@ func (provider *VertexProvider) Responses(ctx context.Context, key schemas.Key, 
 			Latency:        latency.Milliseconds(),
 		}
 
-		if response.ExtraFields.ModelRequested != deployment {
+		response.ExtraFields.ModelRequested = request.Model
+		if request.Model != deployment {
 			response.ExtraFields.ModelDeployment = deployment
 		}
 
@@ -821,7 +823,8 @@ func (provider *VertexProvider) Responses(ctx context.Context, key schemas.Key, 
 		response.ExtraFields.Provider = provider.GetProviderKey()
 		response.ExtraFields.ModelRequested = request.Model
 
-		if response.ExtraFields.ModelRequested != deployment {
+		response.ExtraFields.ModelRequested = request.Model
+		if request.Model != deployment {
 			response.ExtraFields.ModelDeployment = deployment
 		}
 
@@ -912,7 +915,8 @@ func (provider *VertexProvider) ResponsesStream(ctx context.Context, postHookRun
 		headers["Authorization"] = "Bearer " + token.AccessToken
 
 		postResponseConverter := func(response *schemas.BifrostResponsesStreamResponse) *schemas.BifrostResponsesStreamResponse {
-			if response.ExtraFields.ModelRequested != deployment {
+			response.ExtraFields.ModelRequested = request.Model
+			if request.Model != deployment {
 				response.ExtraFields.ModelDeployment = deployment
 			}
 			return response
