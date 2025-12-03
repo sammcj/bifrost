@@ -533,6 +533,8 @@ func (provider *CohereProvider) Responses(ctx context.Context, key schemas.Key, 
 
 	bifrostResponse := response.ToBifrostResponsesResponse()
 
+	bifrostResponse.Model = request.Model
+
 	// Set ExtraFields
 	bifrostResponse.ExtraFields.Provider = provider.GetProviderKey()
 	bifrostResponse.ExtraFields.ModelRequested = request.Model
