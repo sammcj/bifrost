@@ -1161,9 +1161,13 @@ func (s *BifrostHTTPServer) Start() error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	// Start server in a goroutine
 	serverAddr := net.JoinHostPort(s.Host, s.Port)
+	ln, err := net.Listen("tcp", serverAddr)
+	if err != nil {
+		return fmt.Errorf("failed to create listener on %s: %v", serverAddr, err)
+	}
 	go func() {
 		logger.Info("successfully started bifrost, serving UI on http://%s:%s", s.Host, s.Port)
-		if err := s.Server.ListenAndServe(serverAddr); err != nil {
+		if err := s.Server.Serve(ln); err != nil {
 			errChan <- err
 		}
 	}()
