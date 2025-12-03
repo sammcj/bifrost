@@ -946,6 +946,8 @@ func (provider *BedrockProvider) Responses(ctx context.Context, key schemas.Key,
 		return nil, providerUtils.NewBifrostOperationError("failed to convert bedrock response", err, providerName)
 	}
 
+	bifrostResponse.Model = deployment
+
 	// Set ExtraFields
 	bifrostResponse.ExtraFields.Provider = providerName
 	bifrostResponse.ExtraFields.ModelRequested = request.Model
@@ -1002,7 +1004,7 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 
 		// Create stream state for stateful conversions
 		streamState := acquireBedrockResponsesStreamState()
-		streamState.Model = &request.Model
+		streamState.Model = &deployment
 		defer releaseBedrockResponsesStreamState(streamState)
 
 		// Process AWS Event Stream format using proper decoder
