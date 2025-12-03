@@ -165,7 +165,7 @@ func (provider *GeminiProvider) listModelsByKey(ctx context.Context, key schemas
 		return nil, bifrostErr
 	}
 
-	response := geminiResponse.ToBifrostListModelsResponse(providerName)
+	response := geminiResponse.ToBifrostListModelsResponse(providerName, key.Models)
 
 	response.ExtraFields.Latency = latency.Milliseconds()
 

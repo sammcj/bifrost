@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/maximhq/bifrost/core/providers/anthropic"
@@ -131,8 +130,7 @@ func (provider *AzureProvider) completeRequest(
 	return bodyCopy, deployment, latency, nil
 }
 
-// listModelsForKey performs a list models request for a single key.
-
+// listModelsByKey performs a list models request for a single key.
 // Returns the response and latency, or an error if the request fails.
 func (provider *AzureProvider) listModelsByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
 	// Validate Azure key configuration
@@ -200,20 +198,9 @@ func (provider *AzureProvider) listModelsByKey(ctx context.Context, key schemas.
 	}
 
 	// Convert to Bifrost response
-	response := azureResponse.ToBifrostListModelsResponse()
+	response := azureResponse.ToBifrostListModelsResponse(key.Models, key.AzureKeyConfig.Deployments)
 	if response == nil {
 		return nil, providerUtils.NewBifrostOperationError("failed to convert Azure model list response", nil, schemas.Azure)
-	}
-
-	// Add deployment aliases to the response
-	for i, model := range response.Data {
-		for keyDeploymentAlias, keyDeploymentName := range key.AzureKeyConfig.Deployments {
-			if strings.TrimPrefix(model.ID, string(schemas.Azure)+"/") == keyDeploymentName {
-				response.Data[i].ID = string(schemas.Azure) + "/" + keyDeploymentAlias
-				response.Data[i].Deployment = schemas.Ptr(keyDeploymentName)
-				break
-			}
-		}
 	}
 
 	response.ExtraFields.Latency = latency.Milliseconds()

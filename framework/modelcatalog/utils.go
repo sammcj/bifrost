@@ -24,6 +24,8 @@ func normalizeProvider(p string) string {
 		return string(schemas.Vertex)
 	} else if strings.Contains(p, "bedrock") {
 		return string(schemas.Bedrock)
+	} else if strings.Contains(p, "cohere") {
+		return string(schemas.Cohere)
 	} else {
 		return p
 	}

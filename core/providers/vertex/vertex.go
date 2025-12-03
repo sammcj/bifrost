@@ -219,7 +219,7 @@ func (provider *VertexProvider) listModelsByKey(ctx context.Context, key schemas
 	aggregatedResponse := &VertexListModelsResponse{
 		Models: allModels,
 	}
-	response := aggregatedResponse.ToBifrostListModelsResponse()
+	response := aggregatedResponse.ToBifrostListModelsResponse(key.Models, key.VertexKeyConfig.Deployments)
 
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
 		response.ExtraFields.RawResponse = rawResponses
@@ -240,24 +240,6 @@ func (provider *VertexProvider) ListModels(ctx context.Context, keys []schemas.K
 	)
 	if bifrostErr != nil {
 		return nil, bifrostErr
-	}
-
-	providerName := provider.GetProviderKey()
-
-	// Add deployment aliases to the response
-	for i, model := range finalResponse.Data {
-		for _, key := range keys {
-			if key.VertexKeyConfig == nil {
-				continue
-			}
-			for keyDeploymentAlias, keyDeploymentName := range key.VertexKeyConfig.Deployments {
-				if strings.TrimPrefix(model.ID, string(providerName)+"/") == keyDeploymentName {
-					finalResponse.Data[i].ID = string(providerName) + "/" + keyDeploymentAlias
-					finalResponse.Data[i].Deployment = schemas.Ptr(keyDeploymentName)
-					break
-				}
-			}
-		}
 	}
 
 	return finalResponse, nil
