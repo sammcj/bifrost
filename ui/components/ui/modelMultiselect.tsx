@@ -118,7 +118,7 @@ export function ModelMultiselect({
 	// Convert API data to options for default display
 	const defaultOptions: ModelOption[] = useMemo(
 		() =>
-			modelsData?.models.map((model) => ({
+			modelsData?.models?.map((model) => ({
 				label: model.name,
 				value: model.name,
 				provider: model.provider,
@@ -133,6 +133,7 @@ export function ModelMultiselect({
 			onChange={handleChange}
 			reload={loadOptions}
 			debounce={300}
+			isCreatable={true}
 			defaultOptions={defaultOptions}
 			isLoading={isLoading}
 			placeholder={placeholder}
