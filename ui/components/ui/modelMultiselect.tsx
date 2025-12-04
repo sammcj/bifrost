@@ -134,6 +134,8 @@ export function ModelMultiselect({
 			reload={loadOptions}
 			debounce={300}
 			isCreatable={true}
+			dynamicOptionCreation={true}
+			createOptionText="Press enter to add new model"			
 			defaultOptions={defaultOptions}
 			isLoading={isLoading}
 			placeholder={placeholder}
