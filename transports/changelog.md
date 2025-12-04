@@ -1,4 +1,6 @@
-fix: vertex and bedrock usage aggregation improvements for streaming
-fix: choice index fixed to 0 for anthropic and bedrock streaming
-feat: model field added to responses api response
-feat: check allowed models and deployments of key for list models
+- fix: vertex and bedrock usage aggregation improvements for streaming
+- fix: choice index fixed to 0 for anthropic and bedrock streaming
+- feat: model field added to responses api response
+- feat: check allowed models and deployments of key for list models
+- bug: ui breaking when list models is empty on virtual key provider config
+- chore: update core version to 1.2.33 and framework version to 1.1.42
