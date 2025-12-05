@@ -1,1 +1,0 @@
-- fix: remove UPX binary compression from Docker build to resolve segmentation faults when combined with PIE (Position Independent Executable)
