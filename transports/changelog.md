@@ -1,0 +1,2 @@
+- fix: added region prefix check for bedrock list models
+- chore: update core version to 1.2.34 and framework version to 1.1.43

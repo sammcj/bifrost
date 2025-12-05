@@ -1,0 +1,1 @@
+- chore: upgraded core version to 1.2.34
