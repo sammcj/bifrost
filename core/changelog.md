@@ -1,1 +1,0 @@
-- fix: added region prefix check for bedrock list models
