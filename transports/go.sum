@@ -174,8 +174,8 @@ github.com/maximhq/bifrost/plugins/governance v1.3.43 h1:YNCVaRMmV1yH6ap0MN2+6FC
 github.com/maximhq/bifrost/plugins/governance v1.3.43/go.mod h1:Q4wQeR7cYQJRe9fEVhk0hPnqCe6lFzadXiiaATnr6/Y=
 github.com/maximhq/bifrost/plugins/logging v1.3.43 h1:qWr6JuiPACqCJTAoK+LaUQdUwBp86LYjA03cb7AaSMQ=
 github.com/maximhq/bifrost/plugins/logging v1.3.43/go.mod h1:58NcjHPOM0lXwL8Iyvla1NSIplzKao0GLNCGkQG+Fhg=
-github.com/maximhq/bifrost/plugins/maxim v1.4.42 h1:0vXdwrG0vYcpnYS/ECo+WVhO847UKxJjxchxjqV2AYk=
-github.com/maximhq/bifrost/plugins/maxim v1.4.42/go.mod h1:2Ob/S6Git50S9zdsfJem6SWyxZW+ABSlS6zLBKKHxC4=
+github.com/maximhq/bifrost/plugins/maxim v1.4.43 h1:uy58xP9xKVAKzksC3utRS7zPaHEXfItUqUQp51WdW7Y=
+github.com/maximhq/bifrost/plugins/maxim v1.4.43/go.mod h1:2Ob/S6Git50S9zdsfJem6SWyxZW+ABSlS6zLBKKHxC4=
 github.com/maximhq/bifrost/plugins/mocker v1.3.42 h1:+de2ORV0MFT7veGsKE1sPc+4IXZJmzpfnTRPPIfyJN0=
 github.com/maximhq/bifrost/plugins/mocker v1.3.42/go.mod h1:rTFuLMHCz9G+o3MqJUZTnb2afXwt5MH0FkKYaA/BU4E=
 github.com/maximhq/bifrost/plugins/otel v1.0.42 h1:8K5PTJSP+YE5ai5KTPFKtjP9MA76To8rKchuDFrjvnQ=

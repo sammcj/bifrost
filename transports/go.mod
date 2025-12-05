@@ -12,7 +12,7 @@ require (
 	github.com/maximhq/bifrost/framework v1.1.42
 	github.com/maximhq/bifrost/plugins/governance v1.3.43
 	github.com/maximhq/bifrost/plugins/logging v1.3.43
-	github.com/maximhq/bifrost/plugins/maxim v1.4.42
+	github.com/maximhq/bifrost/plugins/maxim v1.4.43
 	github.com/maximhq/bifrost/plugins/otel v1.0.42
 	github.com/maximhq/bifrost/plugins/semanticcache v1.3.42
 	github.com/maximhq/bifrost/plugins/telemetry v1.3.42
