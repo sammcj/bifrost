@@ -7,46 +7,83 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
-const globalPrefix = "global."
+// regionPrefixes is a list of region prefixes used in Bedrock deployments
+// Based on AWS region naming patterns and Bedrock deployment configurations
+var regionPrefixes = []string{
+	"us.",     // US regions (us-east-1, us-west-2, etc.)
+	"eu.",     // Europe regions (eu-west-1, eu-central-1, etc.)
+	"ap.",     // Asia Pacific regions (ap-southeast-1, ap-northeast-1, etc.)
+	"ca.",     // Canada regions (ca-central-1, etc.)
+	"sa.",     // South America regions (sa-east-1, etc.)
+	"af.",     // Africa regions (af-south-1, etc.)
+	"global.", // Global deployment prefix
+}
+
+// extractPrefix extracts the region prefix ending with '.' from a string
+// Only recognizes common region prefixes like "us.", "global.", "eu.", etc.
+// Returns the prefix (including the dot) if found, empty string otherwise
+func extractPrefix(s string) string {
+	for _, prefix := range regionPrefixes {
+		if strings.HasPrefix(s, prefix) {
+			return prefix
+		}
+	}
+	return ""
+}
+
+// removePrefix removes any region prefix ending with '.' from a string
+// Only removes common region prefixes like "us.", "global.", "eu.", etc.
+// Returns the string without the prefix
+func removePrefix(s string) string {
+	for _, prefix := range regionPrefixes {
+		if strings.HasPrefix(s, prefix) {
+			return s[len(prefix):]
+		}
+	}
+	return s
+}
 
 // findMatchingAllowedModel finds a matching item in a slice, considering both
-// exact match and match with/without the "global." prefix,
+// exact match and match with/without region prefixes (e.g., "global.", "us.", "eu."),
 // and also checks base model matches (ignoring version suffixes).
 // Returns the matched item from the slice if found, empty string otherwise.
 // If matched via base model, returns the item from slice (not the value parameter).
 func findMatchingAllowedModel(slice []string, value string) string {
-	// First check exact matches with global prefix variations
+	// First check exact matches
 	if slices.Contains(slice, value) {
 		return value
 	}
-	// Check with global prefix added/removed
-	if strings.HasPrefix(value, globalPrefix) {
-		withoutPrefix := strings.TrimPrefix(value, globalPrefix)
+
+	// Check with region prefix added/removed
+	valuePrefix := extractPrefix(value)
+	if valuePrefix != "" {
+		// value has a prefix, check if slice contains version without prefix
+		withoutPrefix := removePrefix(value)
 		if slices.Contains(slice, withoutPrefix) {
 			return withoutPrefix
 		}
-	} else {
-		// Check with global prefix added
-		withPrefix := globalPrefix + value
-		if slices.Contains(slice, withPrefix) {
-			return withPrefix
+	}
+
+	// Check if any item in slice has a prefix that matches value without prefix
+	for _, item := range slice {
+		itemPrefix := extractPrefix(item)
+		if itemPrefix != "" {
+			// item has prefix, check if value matches without the prefix
+			itemWithoutPrefix := removePrefix(item)
+			if itemWithoutPrefix == value {
+				return item
+			}
 		}
 	}
 
 	// Additional layer: check base model matches (ignoring version suffixes)
 	// This handles cases where model versions differ but base model is the same
-	// Normalize value by removing global prefix for base model comparison
-	valueNormalized := value
-	if strings.HasPrefix(value, globalPrefix) {
-		valueNormalized = strings.TrimPrefix(value, globalPrefix)
-	}
+	// Normalize value by removing any region prefix for base model comparison
+	valueNormalized := removePrefix(value)
 
 	for _, item := range slice {
-		// Normalize item by removing global prefix for base model comparison
-		itemNormalized := item
-		if strings.HasPrefix(item, globalPrefix) {
-			itemNormalized = strings.TrimPrefix(item, globalPrefix)
-		}
+		// Normalize item by removing any region prefix for base model comparison
+		itemNormalized := removePrefix(item)
 
 		// Check base model match with normalized values (prefix removed from both)
 		// Return the item from slice (not value) to use the actual name from allowedModels
@@ -58,7 +95,7 @@ func findMatchingAllowedModel(slice []string, value string) string {
 }
 
 // findDeploymentMatch finds a matching deployment value in the deployments map,
-// considering both exact match and match with/without "global." prefix,
+// considering both exact match and match with/without region prefixes (e.g., "global.", "us.", "eu."),
 // and also checks base model matches (ignoring version suffixes).
 // The modelID from the API response should match a deployment value (not the alias/key).
 // Returns the deployment value and alias if found, empty strings otherwise.
@@ -69,41 +106,37 @@ func findDeploymentMatch(deployments map[string]string, modelID string) (deploym
 		if deploymentValue == modelID {
 			return deploymentValue, aliasKey
 		}
-		// Check if modelID matches deployment value with global prefix variations
-		if strings.HasPrefix(deploymentValue, globalPrefix) {
-			// deploymentValue has prefix, check if modelID matches without prefix
-			if strings.TrimPrefix(deploymentValue, globalPrefix) == modelID {
-				return deploymentValue, aliasKey
-			}
-		} else {
-			// deploymentValue doesn't have prefix, check if modelID matches with prefix
-			if globalPrefix+deploymentValue == modelID {
+
+		// Check prefix variations
+		deploymentPrefix := extractPrefix(deploymentValue)
+		modelIDPrefix := extractPrefix(modelID)
+
+		// Case 1: deploymentValue has prefix, modelID doesn't
+		if deploymentPrefix != "" && modelIDPrefix == "" {
+			if removePrefix(deploymentValue) == modelID {
 				return deploymentValue, aliasKey
 			}
 		}
-		// Check reverse: modelID has prefix, deployment value doesn't
-		if strings.HasPrefix(modelID, globalPrefix) {
-			if strings.TrimPrefix(modelID, globalPrefix) == deploymentValue {
+
+		// Case 2: modelID has prefix, deploymentValue doesn't
+		if modelIDPrefix != "" && deploymentPrefix == "" {
+			if removePrefix(modelID) == deploymentValue {
 				return deploymentValue, aliasKey
 			}
-		} else {
-			// modelID doesn't have prefix, deployment value does
-			if globalPrefix+modelID == deploymentValue {
+		}
+
+		// Case 3: Both have prefixes but different prefixes
+		if deploymentPrefix != "" && modelIDPrefix != "" && deploymentPrefix != modelIDPrefix {
+			if removePrefix(deploymentValue) == removePrefix(modelID) {
 				return deploymentValue, aliasKey
 			}
 		}
 
 		// Additional layer: check base model matches (ignoring version suffixes)
 		// This handles cases where model versions differ but base model is the same
-		// Normalize both values by removing global prefix for base model comparison
-		deploymentNormalized := deploymentValue
-		if strings.HasPrefix(deploymentValue, globalPrefix) {
-			deploymentNormalized = strings.TrimPrefix(deploymentValue, globalPrefix)
-		}
-		modelIDNormalized := modelID
-		if strings.HasPrefix(modelID, globalPrefix) {
-			modelIDNormalized = strings.TrimPrefix(modelID, globalPrefix)
-		}
+		// Normalize both values by removing any region prefix for base model comparison
+		deploymentNormalized := removePrefix(deploymentValue)
+		modelIDNormalized := removePrefix(modelID)
 
 		// Check base model match with normalized values (prefix removed from both)
 		if schemas.SameBaseModel(deploymentNormalized, modelIDNormalized) {
