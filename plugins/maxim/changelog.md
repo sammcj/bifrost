@@ -1,0 +1,1 @@
+chore: Refactored the Maxim plugin to move tag handling from pre-hook to post-hook, improving the tag management process for generations.
