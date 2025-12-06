@@ -23,7 +23,7 @@ import {
 	Telescope,
 	User,
 	UserRoundCheck,
-	Users
+	Users,
 } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -43,13 +43,15 @@ import {
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { IS_ENTERPRISE } from "@/lib/constants/config";
+import { IS_ENTERPRISE, TRIAL_EXPIRY } from "@/lib/constants/config";
 import { useGetCoreConfigQuery, useGetLatestReleaseQuery, useGetVersionQuery, useLogoutMutation } from "@/lib/store";
+import { cn } from "@/lib/utils";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import type { UserInfo } from "@enterprise/lib/store/utils/tokenManager";
 import { getUserInfo } from "@enterprise/lib/store/utils/tokenManager";
 import { BooksIcon, DiscordLogoIcon, GithubLogoIcon } from "@phosphor-icons/react";
 import { ChevronRight } from "lucide-react";
+import moment from "moment";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import Link from "next/link";
@@ -214,7 +216,7 @@ const SidebarItemView = ({
 						{!hasSubItems && item.url === "/logs" && isWebSocketConnected && (
 							<div className="h-2 w-2 animate-pulse rounded-full bg-green-800 dark:bg-green-200" />
 						)}
-						{isExternal && <ArrowUpRight className="h-4 w-4 text-muted-foreground" size={16} />}
+						{isExternal && <ArrowUpRight className="text-muted-foreground h-4 w-4" size={16} />}
 					</div>
 				</SidebarMenuButton>
 				{hasSubItems && isExpanded && (
@@ -588,6 +590,14 @@ export default function AppSidebar() {
 		}
 	};
 
+	const trialDaysRemaining = useMemo(() => {
+		if (IS_ENTERPRISE && TRIAL_EXPIRY) {
+			const daysRemaining = moment(TRIAL_EXPIRY).diff(moment(), "days");
+			return daysRemaining > 0 ? daysRemaining : 0;
+		}
+		return null;
+	}, []);
+
 	return (
 		<Sidebar className="overflow-y-clip border-none bg-transparent">
 			<SidebarHeader className="mt-1 ml-2 flex h-12 justify-between px-0">
@@ -689,7 +699,14 @@ export default function AppSidebar() {
 							) : null}
 						</div>
 					</div>
-					<div className="mx-auto font-mono text-xs">{version ?? ""}</div>
+					<div className="mx-auto flex flex-col items-center gap-1">
+						<div className="font-mono text-xs">{version ?? ""}</div>
+						{trialDaysRemaining !== null && (
+							<div className={cn("text-xs", trialDaysRemaining < 3 ? "text-red-500" : "text-muted-foreground")}>
+								{trialDaysRemaining} {trialDaysRemaining === 1 ? "day" : "days"} remaining
+							</div>
+						)}
+					</div>
 				</div>
 			</SidebarContent>
 		</Sidebar>
