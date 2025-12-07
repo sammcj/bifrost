@@ -600,6 +600,61 @@ export const mcpClientUpdateSchema = z.object({
 		),
 });
 
+// Global proxy type schema
+export const globalProxyTypeSchema = z.enum(['http', 'socks5', 'tcp']);
+
+// Global proxy configuration schema
+export const globalProxyConfigSchema = z
+	.object({
+		enabled: z.boolean(),
+		type: globalProxyTypeSchema,
+		url: z.string(),
+		username: z.string().optional(),
+		password: z.string().optional(),
+		no_proxy: z.string().optional(),
+		timeout: z.number().min(0).optional(),
+		skip_tls_verify: z.boolean().optional(),
+		enable_for_scim: z.boolean(),
+		enable_for_inference: z.boolean(),
+		enable_for_api: z.boolean(),
+	})
+	.refine(
+		(data) => {
+			// URL is required when proxy is enabled
+			if (data.enabled && (!data.url || data.url.trim().length === 0)) {
+				return false;
+			}
+			return true;
+		},
+		{
+			message: 'Proxy URL is required when proxy is enabled',
+			path: ['url'],
+		},
+	)
+	.refine(
+		(data) => {
+			// Validate URL format when provided and enabled
+			if (data.enabled && data.url && data.url.trim().length > 0) {
+				try {
+					new URL(data.url);
+					return true;
+				} catch {
+					return false;
+				}
+			}
+			return true;
+		},
+		{
+			message: 'Must be a valid URL (e.g., http://proxy.example.com:8080)',
+			path: ['url'],
+		},
+	);
+
+// Global proxy form schema for the ProxyView
+export const globalProxyFormSchema = z.object({
+	proxy_config: globalProxyConfigSchema,
+});
+
 // Export type inference helpers
 export type MCPClientUpdateSchema = z.infer<typeof mcpClientUpdateSchema>;
 export type ModelProviderKeySchema = z.infer<typeof modelProviderKeySchema>;
@@ -615,3 +670,5 @@ export type MaximFormSchema = z.infer<typeof maximFormSchema>;
 export type NetworkOnlyFormSchema = z.infer<typeof networkOnlyFormSchema>;
 export type PerformanceFormSchema = z.infer<typeof performanceFormSchema>;
 export type CustomProviderConfigSchema = z.infer<typeof customProviderConfigSchema>;
+export type GlobalProxyConfigSchema = z.infer<typeof globalProxyConfigSchema>;
+export type GlobalProxyFormSchema = z.infer<typeof globalProxyFormSchema>;

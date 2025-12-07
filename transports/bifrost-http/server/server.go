@@ -56,6 +56,7 @@ type ServerCallbacks interface {
 	UpdateAuthConfig(ctx context.Context, authConfig *configstore.AuthConfig) error
 	ReloadClientConfigFromConfigStore(ctx context.Context) error
 	ReloadPricingManager(ctx context.Context) error
+	ReloadProxyConfig(ctx context.Context, config *tables.GlobalProxyConfig) error
 	UpdateDropExcessRequests(ctx context.Context, value bool)
 	ReloadTeam(ctx context.Context, id string) (*tables.TableTeam, error)
 	RemoveTeam(ctx context.Context, id string) error
@@ -798,6 +799,17 @@ func (s *BifrostHTTPServer) ReloadPricingManager(ctx context.Context) error {
 		return fmt.Errorf("framework config not found")
 	}
 	return s.Config.PricingManager.ReloadPricing(ctx, s.Config.FrameworkConfig.Pricing)
+}
+
+// ReloadProxyConfig reloads the proxy configuration
+func (s *BifrostHTTPServer) ReloadProxyConfig(ctx context.Context, config *tables.GlobalProxyConfig) error {
+	if s.Config == nil {
+		return fmt.Errorf("config not found")
+	}
+	// Store the proxy config in memory for use by components that need it
+	s.Config.ProxyConfig = config
+	logger.Info("proxy configuration reloaded: enabled=%t, type=%s", config.Enabled, config.Type)
+	return nil
 }
 
 // RefetchModelsForProvider deletes existing models for a provider and re-fetches them from the provider
