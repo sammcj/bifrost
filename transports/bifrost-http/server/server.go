@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -44,6 +45,10 @@ const (
 	DefaultLogLevel       = string(schemas.LogLevelInfo)
 	DefaultLogOutputStyle = string(schemas.LoggerOutputTypeJSON)
 )
+
+var enterprisePlugins = []string{
+	"datadog",
+}
 
 // ServerCallbacks is a interface that defines the callbacks for the server.
 type ServerCallbacks interface {
@@ -409,6 +414,9 @@ func LoadPlugins(ctx context.Context, config *lib.Config) ([]schemas.Plugin, []s
 		}
 		pluginInstance, err := LoadPlugin[schemas.Plugin](ctx, plugin.Name, plugin.Path, plugin.Config, config)
 		if err != nil {
+			if slices.Contains(enterprisePlugins, plugin.Name) {
+				continue
+			}
 			logger.Error("failed to load plugin %s: %v", plugin.Name, err)
 			pluginStatus = append(pluginStatus, schemas.PluginStatus{
 				Name:   plugin.Name,

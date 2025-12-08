@@ -938,11 +938,6 @@
                       "description": "Address of the Datadog Agent for APM traces",
                       "default": "localhost:8126"
                     },
-                    "dogstatsd_addr": {
-                      "type": "string",
-                      "description": "Address of the DogStatsD server for metrics",
-                      "default": "localhost:8125"
-                    },
                     "env": {
                       "type": "string",
                       "description": "Environment tag (e.g., production, staging)"
@@ -957,11 +952,6 @@
                         "type": "string"
                       },
                       "description": "Additional tags to add to all traces and metrics"
-                    },
-                    "enable_metrics": {
-                      "type": "boolean",
-                      "description": "Enable DogStatsD metrics (default: true)",
-                      "default": true
                     },
                     "enable_traces": {
                       "type": "boolean",
