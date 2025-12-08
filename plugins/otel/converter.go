@@ -397,13 +397,11 @@ func (p *OtelPlugin) createResourceSpan(traceID, spanID string, timestamp time.T
 		spanName = "gen_ai.responses"
 		params = append(params, getResponsesRequestParams(req.ResponsesRequest)...)
 	}
+	attributes := append(p.attributesFromEnvironment, kvStr("service.name", p.serviceName), kvStr("service.version", p.bifrostVersion))
 	// Preparing final resource span
 	return &ResourceSpan{
 		Resource: &resourcepb.Resource{
-			Attributes: []*commonpb.KeyValue{
-				kvStr("service.name", p.serviceName),
-				kvStr("service.version", p.bifrostVersion),
-			},
+			Attributes: attributes,
 		},
 		ScopeSpans: []*ScopeSpan{
 			{
@@ -442,7 +440,7 @@ func completeResourceSpan(
 	teamID string,
 	teamName string,
 	customerID string,
-	customerName string,
+	customerName string,	
 ) *ResourceSpan {
 	params := []*KeyValue{}
 
@@ -697,7 +695,7 @@ func completeResourceSpan(
 	span.ScopeSpans[0].Spans[0].Attributes = append(span.ScopeSpans[0].Spans[0].Attributes, params...)
 	span.ScopeSpans[0].Spans[0].Status = &tracepb.Status{Code: status}
 	span.ScopeSpans[0].Spans[0].EndTimeUnixNano = uint64(timestamp.UnixNano())
-	// Attaching virtual keys as resource attributes as well
+	// Attaching virtual keys as resource attributes as well	
 	span.Resource.Attributes = append(span.Resource.Attributes, kvStr("virtual_key_id", virtualKeyID))
 	span.Resource.Attributes = append(span.Resource.Attributes, kvStr("virtual_key_name", virtualKeyName))
 	span.Resource.Attributes = append(span.Resource.Attributes, kvStr("selected_key_id", selectedKeyID))
