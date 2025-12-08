@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/maximhq/bifrost/core/schemas"
-	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttpproxy"
 )
@@ -43,12 +42,37 @@ var DefaultClientConfig = struct {
 	MaxConnsPerHost:     200,
 }
 
+// GlobalProxyType represents the type of global proxy
+type GlobalProxyType string
+
+const (
+	GlobalProxyTypeHTTP   GlobalProxyType = "http"
+	GlobalProxyTypeSOCKS5 GlobalProxyType = "socks5"
+	GlobalProxyTypeTCP    GlobalProxyType = "tcp"
+)
+
+// GlobalProxyConfig represents the global proxy configuration
+type GlobalProxyConfig struct {
+	Enabled       bool            `json:"enabled"`
+	Type          GlobalProxyType `json:"type"`                      // "http", "socks5", "tcp"
+	URL           string          `json:"url"`                       // Proxy URL (e.g., http://proxy.example.com:8080)
+	Username      string          `json:"username,omitempty"`        // Optional authentication username
+	Password      string          `json:"password,omitempty"`        // Optional authentication password
+	NoProxy       string          `json:"no_proxy,omitempty"`        // Comma-separated list of hosts to bypass proxy
+	Timeout       int             `json:"timeout,omitempty"`         // Connection timeout in seconds
+	SkipTLSVerify bool            `json:"skip_tls_verify,omitempty"` // Skip TLS certificate verification
+	// Entity enablement flags
+	EnableForSCIM      bool `json:"enable_for_scim"`      // Enable proxy for SCIM requests (enterprise only)
+	EnableForInference bool `json:"enable_for_inference"` // Enable proxy for inference requests
+	EnableForAPI       bool `json:"enable_for_api"`       // Enable proxy for API requests
+}
+
 // HTTPClientFactory manages HTTP clients with centralized proxy configuration.
 // It supports both fasthttp and standard net/http clients with purpose-based
 // proxy enablement (SCIM, Inference, API).
 type HTTPClientFactory struct {
 	mu          sync.RWMutex
-	proxyConfig *configstoreTables.GlobalProxyConfig
+	proxyConfig *GlobalProxyConfig
 
 	// Cached clients per purpose - lazily initialized
 	fasthttpClients map[ClientPurpose]*fasthttp.Client
@@ -59,7 +83,7 @@ type HTTPClientFactory struct {
 
 // NewHTTPClientFactory creates a new HTTP client factory with the given proxy configuration.
 // Pass nil for proxyConfig if proxy is not yet configured.
-func NewHTTPClientFactory(proxyConfig *configstoreTables.GlobalProxyConfig, logger schemas.Logger) *HTTPClientFactory {
+func NewHTTPClientFactory(proxyConfig *GlobalProxyConfig, logger schemas.Logger) *HTTPClientFactory {
 	return &HTTPClientFactory{
 		proxyConfig:     proxyConfig,
 		fasthttpClients: make(map[ClientPurpose]*fasthttp.Client, 3),
@@ -70,7 +94,7 @@ func NewHTTPClientFactory(proxyConfig *configstoreTables.GlobalProxyConfig, logg
 
 // UpdateProxyConfig updates the proxy configuration and recreates all cached clients.
 // This is thread-safe and can be called at runtime.
-func (f *HTTPClientFactory) UpdateProxyConfig(config *configstoreTables.GlobalProxyConfig) {
+func (f *HTTPClientFactory) UpdateProxyConfig(config *GlobalProxyConfig) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -82,7 +106,7 @@ func (f *HTTPClientFactory) UpdateProxyConfig(config *configstoreTables.GlobalPr
 }
 
 // GetProxyConfig returns the current proxy configuration (thread-safe read)
-func (f *HTTPClientFactory) GetProxyConfig() *configstoreTables.GlobalProxyConfig {
+func (f *HTTPClientFactory) GetProxyConfig() *GlobalProxyConfig {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return f.proxyConfig
@@ -234,9 +258,9 @@ func (f *HTTPClientFactory) configureFasthttpProxy(client *fasthttp.Client) {
 	var dialFunc fasthttp.DialFunc
 
 	switch f.proxyConfig.Type {
-	case configstoreTables.GlobalProxyTypeHTTP:
+	case GlobalProxyTypeHTTP:
 		dialFunc = fasthttpproxy.FasthttpHTTPDialer(proxyURL)
-	case configstoreTables.GlobalProxyTypeSOCKS5:
+	case GlobalProxyTypeSOCKS5:
 		dialFunc = fasthttpproxy.FasthttpSocksDialer(proxyURL)
 	}
 
