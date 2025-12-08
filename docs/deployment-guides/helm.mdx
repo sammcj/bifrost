@@ -26,7 +26,7 @@ helm repo update
 ### Install Bifrost
 
 ```bash
-helm install bifrost bifrost/bifrost --set image.tag=v1.3.37
+helm install bifrost bifrost/bifrost --set image.tag=v1.3.42
 ```
 
 <Note>
@@ -56,7 +56,7 @@ Simple setup for local testing and development.
 
 ```bash
 helm install bifrost bifrost/bifrost \
-  --set image.tag=v1.3.37 \
+  --set image.tag=v1.3.42 \
   --set bifrost.providers.openai.keys[0].value="sk-your-key" \
   --set bifrost.providers.openai.keys[0].weight=1
 ```
@@ -83,7 +83,7 @@ High-availability setup with PostgreSQL and auto-scaling.
 ```yaml
 # production.yaml
 image:
-  tag: "v1.3.37"  # Required: specify the Bifrost version
+  tag: "v1.3.42"  # Required: specify the Bifrost version
 
 replicaCount: 3
 
@@ -181,7 +181,7 @@ Optimized for high-volume AI inference with caching.
 ```yaml
 # ai-workload.yaml
 image:
-  tag: "v1.3.37"  # Required: specify the Bifrost version
+  tag: "v1.3.42"  # Required: specify the Bifrost version
 
 storage:
   mode: postgres
@@ -253,7 +253,7 @@ Support multiple LLM providers with load balancing.
 ```yaml
 # multi-provider.yaml
 image:
-  tag: "v1.3.37"  # Required: specify the Bifrost version
+  tag: "v1.3.42"  # Required: specify the Bifrost version
 
 bifrost:
   encryptionKey: "your-encryption-key"
@@ -309,7 +309,7 @@ Use existing PostgreSQL instance.
 ```yaml
 # external-db.yaml
 image:
-  tag: "v1.3.37"  # Required: specify the Bifrost version
+  tag: "v1.3.42"  # Required: specify the Bifrost version
 
 storage:
   mode: postgres
@@ -377,7 +377,7 @@ kubectl create secret generic qdrant-credentials \
 ```yaml
 # secrets-config.yaml
 image:
-  tag: "v1.3.37"
+  tag: "v1.3.42"
 
 storage:
   mode: postgres
@@ -455,7 +455,7 @@ helm install bifrost bifrost/bifrost -f secrets-config.yaml
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.tag` | **Required.** Bifrost image version (e.g., v1.3.37) | `""` |
+| `image.tag` | **Required.** Bifrost image version (e.g., v1.3.42) | `""` |
 | `replicaCount` | Number of replicas | `1` |
 | `storage.mode` | Storage backend (sqlite/postgres) | `sqlite` |
 | `storage.persistence.size` | PVC size for SQLite | `10Gi` |
@@ -509,7 +509,7 @@ Or via command line:
 
 ```bash
 helm install bifrost bifrost/bifrost \
-  --set image.tag=v1.3.37 \
+  --set image.tag=v1.3.42 \
   --set bifrost.providers.openai.keys[0].value="sk-..." \
   --set bifrost.providers.openai.keys[0].weight=1
 ```
@@ -727,7 +727,7 @@ Create `my-values.yaml`:
 
 ```yaml
 image:
-  tag: "v1.3.37"  # Required: specify the Bifrost version
+  tag: "v1.3.42"  # Required: specify the Bifrost version
 
 replicaCount: 3
 

@@ -46,7 +46,7 @@ const supportedPlatformsList = (resolvedTheme: string): SupportedPlatform[] => [
 	{
 		id: "datadog",
 		name: "Datadog",
-		icon: <Image alt="Datadog" src="/images/datadog-logo.png" width={32} height={32} />,
+		icon: <Image alt="Datadog" src="/images/datadog-logo.png" width={32} height={32} className="-ml-0.5" />,
 	},
 	{
 		id: "newrelic",
