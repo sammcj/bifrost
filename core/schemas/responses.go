@@ -64,6 +64,7 @@ type BifrostResponsesResponse struct {
 	Reasoning          *ResponsesParametersReasoning       `json:"reasoning,omitempty"`         // Configuration options for reasoning models
 	SafetyIdentifier   *string                             `json:"safety_identifier,omitempty"` // Safety identifier
 	ServiceTier        *string                             `json:"service_tier,omitempty"`
+	Status             *string                             `json:"status,omitempty"` // completed, failed, in_progress, cancelled, queued, or incomplete
 	StreamOptions      *ResponsesStreamOptions             `json:"stream_options,omitempty"`
 	Store              *bool                               `json:"store,omitempty"`
 	Temperature        *float64                            `json:"temperature,omitempty"`
