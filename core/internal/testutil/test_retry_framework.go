@@ -2249,9 +2249,47 @@ func WithResponsesStreamValidationRetry(
 
 		// Validation failed - ALWAYS retry validation failures (non-structural issues)
 		if attempt < config.MaxAttempts {
+			// Check if this is a timeout error or empty stream - these should retry immediately
+			isTimeout := false
+			isEmptyStream := false
+			allErrors := append(validationResult.Errors, validationResult.StreamErrors...)
+			for _, errMsg := range allErrors {
+				lowerErr := strings.ToLower(errMsg)
+				if strings.Contains(lowerErr, "timeout") {
+					isTimeout = true
+					break
+				}
+				if strings.Contains(lowerErr, "no data") || strings.Contains(lowerErr, "without receiving") {
+					isEmptyStream = true
+					break
+				}
+			}
+
+			// Also check ReceivedData flag
+			if !validationResult.ReceivedData {
+				isEmptyStream = true
+			}
+
 			retryReason := fmt.Sprintf("❌ validation failure (content/functionality check): %s", strings.Join(validationResult.Errors, "; "))
 			if len(validationResult.StreamErrors) > 0 {
 				retryReason += fmt.Sprintf(" | stream errors: %s", strings.Join(validationResult.StreamErrors, "; "))
+			}
+
+			// Use shorter delay for timeout/empty stream errors
+			var delay time.Duration
+			if isTimeout || isEmptyStream {
+				// Use shorter delay for transient errors (timeout or empty stream)
+				delay = config.BaseDelay / 2
+				if delay < 500*time.Millisecond {
+					delay = 500 * time.Millisecond
+				}
+				if isTimeout {
+					retryReason = fmt.Sprintf("❌ timeout error detected: %s", strings.Join(validationResult.Errors, "; "))
+				} else {
+					retryReason = fmt.Sprintf("❌ empty stream detected (no data received): %s", strings.Join(validationResult.Errors, "; "))
+				}
+			} else {
+				delay = calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
 			}
 
 			if config.OnRetry != nil {
@@ -2260,7 +2298,6 @@ func WithResponsesStreamValidationRetry(
 				t.Logf("🔄 Retrying responses stream validation (attempt %d/%d) for %s: %s", attempt+1, config.MaxAttempts, context.ScenarioName, retryReason)
 			}
 
-			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
 			time.Sleep(delay)
 			continue
 		}
@@ -2282,6 +2319,166 @@ func WithResponsesStreamValidationRetry(
 			errorMsg = fmt.Sprintf("❌ %s", errorMsg)
 		}
 		t.Logf("❌ Responses stream validation failed after %d attempts for %s: %s", config.MaxAttempts, context.ScenarioName, errorMsg)
+	}
+
+	return lastResult
+}
+
+// ChatStreamValidationResult represents the result of chat streaming validation
+type ChatStreamValidationResult struct {
+	Passed           bool
+	Errors           []string
+	ReceivedData     bool
+	StreamErrors     []string
+	ToolCallDetected bool
+	ResponseCount    int
+}
+
+// WithChatStreamValidationRetry wraps a chat streaming operation with retry logic that includes stream content validation
+// This function wraps the entire operation (request + stream reading + validation) and retries on validation failures
+func WithChatStreamValidationRetry(
+	t *testing.T,
+	config TestRetryConfig,
+	context TestRetryContext,
+	operation func() (chan *schemas.BifrostStream, *schemas.BifrostError),
+	validateStream func(chan *schemas.BifrostStream) ChatStreamValidationResult,
+) ChatStreamValidationResult {
+	var lastResult ChatStreamValidationResult
+
+	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+		context.AttemptNumber = attempt
+
+		// Execute the operation to get the stream
+		responseChannel, err := operation()
+
+		// If we have an error getting the stream, check if we should retry
+		if err != nil {
+			// Log error with ❌ prefix for first attempt
+			if attempt == 1 {
+				errorMsg := GetErrorMessage(err)
+				if !strings.Contains(errorMsg, "❌") {
+					errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+				}
+				t.Logf("❌ Chat stream request failed (attempt %d/%d) for %s: %s", attempt, config.MaxAttempts, context.ScenarioName, errorMsg)
+			}
+
+			// Check if we should retry
+			if attempt < config.MaxAttempts {
+				var shouldRetry bool
+				var retryReason string
+
+				// ALWAYS retry on timeout errors
+				if isTimeoutError(err) {
+					shouldRetry = true
+					retryReason = fmt.Sprintf("❌ timeout error detected: %s", GetErrorMessage(err))
+				} else {
+					// Check retry conditions
+					shouldRetryFromConditions, conditionReason := checkStreamRetryConditions(err, context, config.Conditions)
+					if shouldRetryFromConditions {
+						shouldRetry = true
+						if !strings.Contains(conditionReason, "❌") {
+							retryReason = fmt.Sprintf("❌ %s", conditionReason)
+						} else {
+							retryReason = conditionReason
+						}
+					} else {
+						// Retry on any error for streaming
+						shouldRetry = true
+						errorMsg := GetErrorMessage(err)
+						if !strings.Contains(errorMsg, "❌") {
+							errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+						}
+						retryReason = fmt.Sprintf("❌ streaming error (will retry): %s", errorMsg)
+					}
+				}
+
+				if shouldRetry {
+					if config.OnRetry != nil {
+						config.OnRetry(attempt, retryReason, t)
+					} else {
+						t.Logf("🔄 Retrying chat stream request (attempt %d/%d) for %s: %s", attempt+1, config.MaxAttempts, context.ScenarioName, retryReason)
+					}
+
+					delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+					time.Sleep(delay)
+					continue
+				}
+			}
+
+			// All retries exhausted
+			if config.OnFinalFail != nil {
+				errorMsg := GetErrorMessage(err)
+				if !strings.Contains(errorMsg, "❌") {
+					errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+				}
+				config.OnFinalFail(attempt, fmt.Errorf("❌ chat stream request failed after %d attempts: %s", attempt, errorMsg), t)
+			}
+			return ChatStreamValidationResult{
+				Passed: false,
+				Errors: []string{fmt.Sprintf("❌ stream request failed: %s", GetErrorMessage(err))},
+			}
+		}
+
+		if responseChannel == nil {
+			if attempt < config.MaxAttempts {
+				retryReason := "❌ response channel is nil"
+				if config.OnRetry != nil {
+					config.OnRetry(attempt, retryReason, t)
+				}
+				delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+				time.Sleep(delay)
+				continue
+			}
+			return ChatStreamValidationResult{
+				Passed: false,
+				Errors: []string{"❌ response channel is nil"},
+			}
+		}
+
+		// Validate the stream content
+		validationResult := validateStream(responseChannel)
+		lastResult = validationResult
+
+		// If validation passes, we're done!
+		if validationResult.Passed {
+			return validationResult
+		}
+
+		// Validation failed - ALWAYS retry validation failures
+		if attempt < config.MaxAttempts {
+			retryReason := fmt.Sprintf("❌ validation failure (content/functionality check): %s", strings.Join(validationResult.Errors, "; "))
+			if len(validationResult.StreamErrors) > 0 {
+				retryReason += fmt.Sprintf(" | stream errors: %s", strings.Join(validationResult.StreamErrors, "; "))
+			}
+
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, retryReason, t)
+			} else {
+				t.Logf("🔄 Retrying chat stream validation (attempt %d/%d) for %s: %s", attempt+1, config.MaxAttempts, context.ScenarioName, retryReason)
+			}
+
+			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+			time.Sleep(delay)
+			continue
+		}
+	}
+
+	// All retries exhausted - log final failure
+	if config.OnFinalFail != nil {
+		allErrors := append(lastResult.Errors, lastResult.StreamErrors...)
+		errorMsg := strings.Join(allErrors, "; ")
+		if !strings.Contains(errorMsg, "❌") {
+			errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+		}
+		config.OnFinalFail(config.MaxAttempts, fmt.Errorf("❌ chat stream validation failed after %d attempts: %s", config.MaxAttempts, errorMsg), t)
+	} else {
+		// Fallback logging if OnFinalFail is not set
+		allErrors := append(lastResult.Errors, lastResult.StreamErrors...)
+		errorMsg := strings.Join(allErrors, "; ")
+		if !strings.Contains(errorMsg, "❌") {
+			errorMsg = fmt.Sprintf("❌ %s", errorMsg)
+		}
+		t.Logf("❌ Chat stream validation failed after %d attempts for %s: %s", config.MaxAttempts, context.ScenarioName, errorMsg)
 	}
 
 	return lastResult

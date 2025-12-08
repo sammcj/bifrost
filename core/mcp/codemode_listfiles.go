@@ -30,7 +30,7 @@ func (m *ToolsManager) createListToolFilesTool() schemas.ChatTool {
 			),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type:       "object",
-				Properties: &map[string]interface{}{},
+				Properties: &schemas.OrderedMap{},
 				Required:   []string{},
 			},
 		},

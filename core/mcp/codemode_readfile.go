@@ -16,7 +16,7 @@ import (
 // Returns:
 //   - schemas.ChatTool: The tool definition for reading tool files
 func (m *ToolsManager) createReadToolFileTool() schemas.ChatTool {
-	readToolFileProps := map[string]interface{}{
+	readToolFileProps := schemas.OrderedMap{
 		"fileName": map[string]interface{}{
 			"type":        "string",
 			"description": "The virtual filename (e.g., 'calculator-server.d.ts') from listToolFiles",

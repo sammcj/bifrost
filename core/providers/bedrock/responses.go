@@ -305,9 +305,7 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest() (*schemas.Bif
 						params.Type = typeVal
 					}
 					// Handle both pointer and non-pointer properties
-					if propsPtr, ok := paramsMap["properties"].(*map[string]interface{}); ok {
-						params.Properties = propsPtr
-					} else if props, ok := paramsMap["properties"].(map[string]interface{}); ok {
+					if props, ok := schemas.SafeExtractOrderedMap(paramsMap["properties"]); ok {
 						params.Properties = &props
 					}
 					if required, ok := paramsMap["required"].([]interface{}); ok {
@@ -350,7 +348,12 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest() (*schemas.Bif
 		if bifrostReq.Params.ExtraParams == nil {
 			bifrostReq.Params.ExtraParams = make(map[string]interface{})
 		}
-		bifrostReq.Params.ExtraParams["additionalModelRequestFieldPaths"] = request.AdditionalModelRequestFields
+		// Convert OrderedMap to map[string]interface{} for ExtraParams
+		requestFieldsMap := make(map[string]interface{})
+		for k, v := range request.AdditionalModelRequestFields {
+			requestFieldsMap[k] = v
+		}
+		bifrostReq.Params.ExtraParams["additionalModelRequestFieldPaths"] = requestFieldsMap
 	}
 
 	// Convert additional model response field paths to extra params
@@ -449,8 +452,8 @@ func ToBedrockResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) (*Be
 			}
 
 			if requestFields, exists := bifrostReq.Params.ExtraParams["additionalModelRequestFieldPaths"]; exists {
-				if fields, ok := requestFields.(map[string]interface{}); ok {
-					bedrockReq.AdditionalModelRequestFields = fields
+				if orderedFields, ok := schemas.SafeExtractOrderedMap(requestFields); ok {
+					bedrockReq.AdditionalModelRequestFields = orderedFields
 				}
 			}
 
@@ -573,7 +576,7 @@ func extractToolsFromResponsesConversationHistory(messages []schemas.ResponsesMe
 							ResponsesToolFunction: &schemas.ResponsesToolFunction{
 								Parameters: &schemas.ToolFunctionParameters{
 									Type:       "object",
-									Properties: &map[string]interface{}{},
+									Properties: &schemas.OrderedMap{},
 								},
 							},
 						}
@@ -591,7 +594,7 @@ func extractToolsFromResponsesConversationHistory(messages []schemas.ResponsesMe
 			if schemaObject == nil {
 				schemaObject = &schemas.ToolFunctionParameters{
 					Type:       "object",
-					Properties: &map[string]interface{}{},
+					Properties: &schemas.OrderedMap{},
 				}
 			}
 
@@ -1158,7 +1161,7 @@ func (chunk *BedrockStreamEvent) ToBifrostResponsesStream(sequenceNumber int, st
 				CreatedAt: state.CreatedAt,
 			}
 			if state.Model != nil {
-				// Note: Model field doesn't exist in BifrostResponsesResponse schema
+				response.Model = *state.Model
 			}
 			responses = append(responses, &schemas.BifrostResponsesStreamResponse{
 				Type:           schemas.ResponsesStreamResponseTypeCreated,
@@ -1173,6 +1176,9 @@ func (chunk *BedrockStreamEvent) ToBifrostResponsesStream(sequenceNumber int, st
 			response := &schemas.BifrostResponsesResponse{
 				ID:        state.MessageID,
 				CreatedAt: state.CreatedAt, // Use same timestamp
+			}
+			if state.Model != nil {
+				response.Model = *state.Model
 			}
 			responses = append(responses, &schemas.BifrostResponsesStreamResponse{
 				Type:           schemas.ResponsesStreamResponseTypeInProgress,
@@ -1492,6 +1498,10 @@ func FinalizeBedrockStream(state *BedrockResponsesStreamState, sequenceNumber in
 		ID:        state.MessageID,
 		CreatedAt: state.CreatedAt,
 		Usage:     usage,
+	}
+
+	if state.Model != nil {
+		response.Model = *state.Model
 	}
 
 	responses = append(responses, &schemas.BifrostResponsesStreamResponse{

@@ -60,6 +60,7 @@ type ConfigStore interface {
 	GetPlugins(ctx context.Context) ([]*tables.TablePlugin, error)
 	GetPlugin(ctx context.Context, name string) (*tables.TablePlugin, error)
 	CreatePlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error
+	UpsertPlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error
 	UpdatePlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error
 	DeletePlugin(ctx context.Context, name string, tx ...*gorm.DB) error
 
@@ -117,6 +118,10 @@ type ConfigStore interface {
 	// Auth config CRUD
 	GetAuthConfig(ctx context.Context) (*AuthConfig, error)
 	UpdateAuthConfig(ctx context.Context, config *AuthConfig) error
+
+	// Proxy config CRUD
+	GetProxyConfig(ctx context.Context) (*tables.GlobalProxyConfig, error)
+	UpdateProxyConfig(ctx context.Context, config *tables.GlobalProxyConfig) error
 
 	// Session CRUD
 	GetSession(ctx context.Context, token string) (*tables.SessionsTable, error)

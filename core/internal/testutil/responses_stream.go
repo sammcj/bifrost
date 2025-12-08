@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
@@ -64,177 +63,189 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 		// Use validation retry wrapper that validates stream content and retries on validation failures
 		validationResult := WithResponsesStreamValidationRetry(t, retryConfig, retryContext,
 			func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-			return client.ResponsesStreamRequest(ctx, request)
+				return client.ResponsesStreamRequest(ctx, request)
 			},
 			func(responseChannel chan *schemas.BifrostStream) ResponsesStreamValidationResult {
-		var fullContent strings.Builder
-		var responseCount int
-		var lastResponse *schemas.BifrostStream
+				var fullContent strings.Builder
+				var responseCount int
+				var lastResponse *schemas.BifrostStream
 
-		// Track streaming events for validation
-		eventTypes := make(map[schemas.ResponsesStreamResponseType]int)
-		var sequenceNumbers []int
-		var hasResponseCreated, hasResponseCompleted bool
-		var hasOutputItems, hasContentParts bool
+				// Track streaming events for validation
+				eventTypes := make(map[schemas.ResponsesStreamResponseType]int)
+				var sequenceNumbers []int
+				var hasResponseCreated, hasResponseCompleted bool
+				var hasOutputItems, hasContentParts bool
 
-		// Create a timeout context for the stream reading
-		streamCtx, cancel := context.WithTimeout(ctx, 200*time.Second)
-		defer cancel()
+				// Create a timeout context for the stream reading
+				streamCtx, cancel := context.WithTimeout(ctx, 200*time.Second)
+				defer cancel()
 
-		t.Logf("📡 Starting to read responses streaming response...")
+				t.Logf("📡 Starting to read responses streaming response...")
 
-		// Read streaming responses
-		for {
-			select {
-			case response, ok := <-responseChannel:
-				if !ok {
-					// Channel closed, streaming completed
-					t.Logf("✅ Responses streaming completed. Total chunks received: %d", responseCount)
-					goto streamComplete
-				}
+				// Read streaming responses
+				for {
+					select {
+					case response, ok := <-responseChannel:
+						if !ok {
+							// Channel closed, streaming completed
+							t.Logf("✅ Responses streaming completed. Total chunks received: %d", responseCount)
+							// If no data was received, this is a retryable error
+							if responseCount == 0 {
+								return ResponsesStreamValidationResult{
+									Passed:       false,
+									Errors:       []string{"❌ Stream closed without receiving any data"},
+									ReceivedData: false,
+								}
+							}
+							goto streamComplete
+						}
 
-				if response == nil {
+						if response == nil {
 							return ResponsesStreamValidationResult{
 								Passed: false,
 								Errors: []string{"❌ Streaming response should not be nil"},
 							}
-				}
-				lastResponse = DeepCopyBifrostStream(response)
-
-				// Basic validation of streaming response structure
-				if response.BifrostResponsesStreamResponse != nil {
-					if response.BifrostResponsesStreamResponse.ExtraFields.Provider != testConfig.Provider {
-						t.Logf("⚠️ Warning: Provider mismatch - expected %s, got %s", testConfig.Provider, response.BifrostResponsesStreamResponse.ExtraFields.Provider)
-					}
-
-					// Log latency for each chunk (can be 0 for inter-chunks)
-					t.Logf("📊 Chunk %d latency: %d ms", responseCount+1, response.BifrostResponsesStreamResponse.ExtraFields.Latency)
-
-					// Process the streaming response
-					streamResp := response.BifrostResponsesStreamResponse
-
-					// Track event types
-					eventTypes[streamResp.Type]++
-
-					// Track sequence numbers
-					sequenceNumbers = append(sequenceNumbers, streamResp.SequenceNumber)
-
-					// Log the streaming event
-					t.Logf("📊 Event: %s (seq: %d)", streamResp.Type, streamResp.SequenceNumber)
-
-					// Print chunk content for debugging
-					switch streamResp.Type {
-					case schemas.ResponsesStreamResponseTypeOutputTextDelta:
-						if streamResp.Delta != nil {
-							fullContent.WriteString(*streamResp.Delta)
-							t.Logf("📝 Text chunk: %q", *streamResp.Delta)
 						}
+						lastResponse = DeepCopyBifrostStream(response)
 
-					case schemas.ResponsesStreamResponseTypeOutputItemAdded:
-						if streamResp.Item != nil {
-							t.Logf("📦 Item added: type=%v, id=%v", streamResp.Item.Type, streamResp.Item.ID)
-							if streamResp.Item.Content != nil {
-								if streamResp.Item.Content.ContentStr != nil {
-									t.Logf("📝 Item content: %q", *streamResp.Item.Content.ContentStr)
-									fullContent.WriteString(*streamResp.Item.Content.ContentStr)
+						// Basic validation of streaming response structure
+						if response.BifrostResponsesStreamResponse != nil {
+							if response.BifrostResponsesStreamResponse.ExtraFields.Provider != testConfig.Provider {
+								t.Logf("⚠️ Warning: Provider mismatch - expected %s, got %s", testConfig.Provider, response.BifrostResponsesStreamResponse.ExtraFields.Provider)
+							}
+
+							// Log latency for each chunk (can be 0 for inter-chunks)
+							t.Logf("📊 Chunk %d latency: %d ms", responseCount+1, response.BifrostResponsesStreamResponse.ExtraFields.Latency)
+
+							// Process the streaming response
+							streamResp := response.BifrostResponsesStreamResponse
+
+							// Track event types
+							eventTypes[streamResp.Type]++
+
+							// Track sequence numbers
+							sequenceNumbers = append(sequenceNumbers, streamResp.SequenceNumber)
+
+							// Log the streaming event
+							t.Logf("📊 Event: %s (seq: %d)", streamResp.Type, streamResp.SequenceNumber)
+
+							// Print chunk content for debugging
+							switch streamResp.Type {
+							case schemas.ResponsesStreamResponseTypeOutputTextDelta:
+								if streamResp.Delta != nil {
+									fullContent.WriteString(*streamResp.Delta)
+									t.Logf("📝 Text chunk: %q", *streamResp.Delta)
 								}
-								if streamResp.Item.Content.ContentBlocks != nil {
-									for i, block := range streamResp.Item.Content.ContentBlocks {
-										if block.Text != nil {
-											t.Logf("📝 Item content block[%d]: %q", i, *block.Text)
-											fullContent.WriteString(*block.Text)
+
+							case schemas.ResponsesStreamResponseTypeOutputItemAdded:
+								if streamResp.Item != nil {
+									t.Logf("📦 Item added: type=%v, id=%v", streamResp.Item.Type, streamResp.Item.ID)
+									if streamResp.Item.Content != nil {
+										if streamResp.Item.Content.ContentStr != nil {
+											t.Logf("📝 Item content: %q", *streamResp.Item.Content.ContentStr)
+											fullContent.WriteString(*streamResp.Item.Content.ContentStr)
+										}
+										if streamResp.Item.Content.ContentBlocks != nil {
+											for i, block := range streamResp.Item.Content.ContentBlocks {
+												if block.Text != nil {
+													t.Logf("📝 Item content block[%d]: %q", i, *block.Text)
+													fullContent.WriteString(*block.Text)
+												}
+											}
 										}
 									}
 								}
+
+							case schemas.ResponsesStreamResponseTypeContentPartAdded:
+								if streamResp.Part != nil {
+									t.Logf("🧩 Content part: type=%s", streamResp.Part.Type)
+									if streamResp.Part.Text != nil {
+										t.Logf("📝 Part text: %q", *streamResp.Part.Text)
+										fullContent.WriteString(*streamResp.Part.Text)
+									}
+								}
 							}
-						}
 
-					case schemas.ResponsesStreamResponseTypeContentPartAdded:
-						if streamResp.Part != nil {
-							t.Logf("🧩 Content part: type=%s", streamResp.Part.Type)
-							if streamResp.Part.Text != nil {
-								t.Logf("📝 Part text: %q", *streamResp.Part.Text)
-								fullContent.WriteString(*streamResp.Part.Text)
+							// Log other event details for debugging
+							if streamResp.Arguments != nil {
+								t.Logf("🔧 Arguments: %q", *streamResp.Arguments)
 							}
-						}
-					}
+							if streamResp.Refusal != nil {
+								t.Logf("🚫 Refusal: %q", *streamResp.Refusal)
+							}
 
-					// Log other event details for debugging
-					if streamResp.Arguments != nil {
-						t.Logf("🔧 Arguments: %q", *streamResp.Arguments)
-					}
-					if streamResp.Refusal != nil {
-						t.Logf("🚫 Refusal: %q", *streamResp.Refusal)
-					}
+							// Update state tracking for event types
+							switch streamResp.Type {
+							case schemas.ResponsesStreamResponseTypeCreated:
+								hasResponseCreated = true
+								t.Logf("🎬 Response created event detected")
 
-					// Update state tracking for event types
-					switch streamResp.Type {
-					case schemas.ResponsesStreamResponseTypeCreated:
-						hasResponseCreated = true
-						t.Logf("🎬 Response created event detected")
+							case schemas.ResponsesStreamResponseTypeCompleted:
+								hasResponseCompleted = true
+								t.Logf("🏁 Response completed event detected")
 
-					case schemas.ResponsesStreamResponseTypeCompleted:
-						hasResponseCompleted = true
-						t.Logf("🏁 Response completed event detected")
+							case schemas.ResponsesStreamResponseTypeOutputItemAdded:
+								hasOutputItems = true
 
-					case schemas.ResponsesStreamResponseTypeOutputItemAdded:
-						hasOutputItems = true
+							case schemas.ResponsesStreamResponseTypeContentPartAdded:
+								hasContentParts = true
 
-					case schemas.ResponsesStreamResponseTypeContentPartAdded:
-						hasContentParts = true
-
-					case schemas.ResponsesStreamResponseTypeError:
+							case schemas.ResponsesStreamResponseTypeError:
 								errorMsg := "unknown error"
-						if streamResp.Message != nil {
+								if streamResp.Message != nil {
 									errorMsg = *streamResp.Message
 								}
 								return ResponsesStreamValidationResult{
 									Passed: false,
 									Errors: []string{fmt.Sprintf("❌ Error in streaming: %s", errorMsg)},
+								}
+							}
 						}
-					}
-				}
 
-				responseCount++
+						responseCount++
 
-				// Safety check to prevent infinite loops
-				if responseCount > 500 {
+						// Safety check to prevent infinite loops
+						if responseCount > 500 {
 							return ResponsesStreamValidationResult{
 								Passed: false,
 								Errors: []string{"❌ Received too many streaming chunks, something might be wrong"},
 							}
-				}
+						}
 
-			case <-streamCtx.Done():
+					case <-streamCtx.Done():
 						return ResponsesStreamValidationResult{
 							Passed: false,
 							Errors: []string{"❌ Timeout waiting for responses streaming response"},
 						}
-			}
-		}
+					}
+				}
 
-	streamComplete:
-		// Validate streaming events and structure
-		validateResponsesStreamingStructure(t, eventTypes, sequenceNumbers, hasResponseCreated, hasResponseCompleted, hasOutputItems, hasContentParts)
+			streamComplete:
+				// Validate streaming events and structure
+				structureErrors := validateResponsesStreamingStructure(t, eventTypes, sequenceNumbers, hasResponseCreated, hasResponseCompleted, hasOutputItems, hasContentParts)
 
-		// Validate final content
-		finalContent := strings.TrimSpace(fullContent.String())
+				// Validate final content
+				finalContent := strings.TrimSpace(fullContent.String())
 
-		// Enhanced validation expectations for responses streaming
-		expectations := GetExpectationsForScenario("ResponsesStream", testConfig, map[string]interface{}{})
-		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
-		expectations.ShouldContainKeywords = append(expectations.ShouldContainKeywords, []string{"paris"}...) // Should include story elements
+				// Enhanced validation expectations for responses streaming
+				expectations := GetExpectationsForScenario("ResponsesStream", testConfig, map[string]interface{}{})
+				expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
+				expectations.ShouldContainKeywords = append(expectations.ShouldContainKeywords, []string{"paris"}...) // Should include story elements
 
 				// Validate streaming-specific aspects
-		streamingValidationResult := validateResponsesStreamingResponse(t, eventTypes, sequenceNumbers, finalContent, lastResponse, testConfig)
+				streamingValidationResult := validateResponsesStreamingResponse(t, eventTypes, sequenceNumbers, finalContent, lastResponse, testConfig)
 
 				t.Logf("📊 Responses streaming metrics: %d chunks, %d chars, %d event types", responseCount, len(finalContent), len(eventTypes))
 				t.Logf("📝 Final assembled content (%d chars): %q", len(finalContent), finalContent)
 
+				// Combine structure errors with streaming validation errors
+				allErrors := append(structureErrors, streamingValidationResult.Errors...)
+				passed := len(allErrors) == 0 && streamingValidationResult.Passed
+
 				// Convert to ResponsesStreamValidationResult
 				return ResponsesStreamValidationResult{
-					Passed:       streamingValidationResult.Passed,
-					Errors:       streamingValidationResult.Errors,
+					Passed:       passed,
+					Errors:       allErrors,
 					ReceivedData: responseCount > 0,
 					LastLatency:  0, // Can be extracted from lastResponse if needed
 				}
@@ -277,7 +288,7 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 				ResponsesToolFunction: &schemas.ResponsesToolFunction{
 					Parameters: &schemas.ToolFunctionParameters{
 						Type: "object",
-						Properties: &map[string]interface{}{
+						Properties: &schemas.OrderedMap{
 							"location": map[string]interface{}{
 								"type":        "string",
 								"description": "The city and state, e.g. San Francisco, CA",
@@ -428,8 +439,8 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 				Params: &schemas.ResponsesParameters{
 					MaxOutputTokens: bifrost.Ptr(400),
 					Reasoning: &schemas.ResponsesParametersReasoning{
-						Effort:  bifrost.Ptr("high"),
-						Summary: bifrost.Ptr("detailed"),
+						Effort: bifrost.Ptr("high"),
+						// Summary: bifrost.Ptr("detailed"),
 					},
 					Include: []string{"reasoning.encrypted_content"},
 				},
@@ -575,195 +586,234 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 			},
 		}
 
-		// Use proper streaming retry wrapper for the stream request
-		responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-			return client.ResponsesStreamRequest(ctx, request)
-		})
+		// Use validation retry wrapper that validates lifecycle events and retries on validation failures
+		validationResult := WithResponsesStreamValidationRetry(t, retryConfig, retryContext,
+			func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+				return client.ResponsesStreamRequest(ctx, request)
+			},
+			func(responseChannel chan *schemas.BifrostStream) ResponsesStreamValidationResult {
+				// Track lifecycle events
+				var hasResponseCreated, hasResponseInProgress, hasResponseCompleted bool
+				var hasOutputItemAdded bool
+				var hasContentPartAdded, hasContentPartDone bool
+				var hasOutputTextDelta, hasOutputTextDone bool
+				var hasOutputItemDone bool
 
-		RequireNoError(t, err, "Responses stream request failed")
-		if responseChannel == nil {
-			t.Fatal("Response channel should not be nil")
-		}
+				var outputItemAddedSeq, contentPartAddedSeq, firstTextDeltaSeq int
+				var outputTextDoneSeq, contentPartDoneSeq, outputItemDoneSeq int
+				var textDeltaCount int
 
-		// Track lifecycle events
-		var hasResponseCreated, hasResponseInProgress, hasResponseCompleted bool
-		var hasOutputItemAdded bool
-		var hasContentPartAdded, hasContentPartDone bool
-		var hasOutputTextDelta, hasOutputTextDone bool
-		var hasOutputItemDone bool
+				streamCtx, cancel := context.WithTimeout(ctx, 200*time.Second)
+				defer cancel()
 
-		var outputItemAddedSeq, contentPartAddedSeq, firstTextDeltaSeq int
-		var outputTextDoneSeq, contentPartDoneSeq, outputItemDoneSeq int
-		var textDeltaCount int
+				t.Logf("🔄 Testing responses streaming lifecycle events...")
 
-		streamCtx, cancel := context.WithTimeout(ctx, 200*time.Second)
-		defer cancel()
-
-		t.Logf("🔄 Testing responses streaming lifecycle events...")
-
-		responseCount := 0
-		for {
-			select {
-			case response, ok := <-responseChannel:
-				if !ok {
-					goto lifecycleComplete
-				}
-
-				if response == nil {
-					t.Fatal("Streaming response should not be nil")
-				}
-				responseCount++
-
-				if response.BifrostResponsesStreamResponse != nil {
-					streamResp := response.BifrostResponsesStreamResponse
-					seqNum := streamResp.SequenceNumber
-
-					switch streamResp.Type {
-					case schemas.ResponsesStreamResponseTypeCreated:
-						hasResponseCreated = true
-						t.Logf("✅ Event %d: response.created", seqNum)
-
-					case schemas.ResponsesStreamResponseTypeInProgress:
-						hasResponseInProgress = true
-						t.Logf("✅ Event %d: response.in_progress", seqNum)
-
-					case schemas.ResponsesStreamResponseTypeOutputItemAdded:
-						hasOutputItemAdded = true
-						outputItemAddedSeq = seqNum
-						t.Logf("✅ Event %d: response.output_item.added", seqNum)
-
-					case schemas.ResponsesStreamResponseTypeContentPartAdded:
-						hasContentPartAdded = true
-						contentPartAddedSeq = seqNum
-						t.Logf("✅ Event %d: response.content_part.added", seqNum)
-
-					case schemas.ResponsesStreamResponseTypeOutputTextDelta:
-						hasOutputTextDelta = true
-						if textDeltaCount == 0 {
-							firstTextDeltaSeq = seqNum
-						}
-						textDeltaCount++
-						if streamResp.Delta != nil {
-							t.Logf("✅ Event %d: response.output_text.delta (chunk %d): %q", seqNum, textDeltaCount, *streamResp.Delta)
+				responseCount := 0
+				for {
+					select {
+					case response, ok := <-responseChannel:
+						if !ok {
+							// Channel closed, streaming completed
+							goto lifecycleComplete
 						}
 
-					case schemas.ResponsesStreamResponseTypeOutputTextDone:
-						hasOutputTextDone = true
-						outputTextDoneSeq = seqNum
-						t.Logf("✅ Event %d: response.output_text.done", seqNum)
+						if response == nil {
+							return ResponsesStreamValidationResult{
+								Passed: false,
+								Errors: []string{"❌ Streaming response should not be nil"},
+							}
+						}
+						responseCount++
 
-					case schemas.ResponsesStreamResponseTypeContentPartDone:
-						hasContentPartDone = true
-						contentPartDoneSeq = seqNum
-						t.Logf("✅ Event %d: response.content_part.done", seqNum)
+						if response.BifrostResponsesStreamResponse != nil {
+							streamResp := response.BifrostResponsesStreamResponse
+							seqNum := streamResp.SequenceNumber
 
-					case schemas.ResponsesStreamResponseTypeOutputItemDone:
-						hasOutputItemDone = true
-						outputItemDoneSeq = seqNum
-						t.Logf("✅ Event %d: response.output_item.done", seqNum)
+							switch streamResp.Type {
+							case schemas.ResponsesStreamResponseTypeCreated:
+								hasResponseCreated = true
+								t.Logf("✅ Event %d: response.created", seqNum)
 
-					case schemas.ResponsesStreamResponseTypeCompleted:
-						hasResponseCompleted = true
-						t.Logf("✅ Event %d: response.completed", seqNum)
+							case schemas.ResponsesStreamResponseTypeInProgress:
+								hasResponseInProgress = true
+								t.Logf("✅ Event %d: response.in_progress", seqNum)
 
-					case schemas.ResponsesStreamResponseTypeError:
-						if streamResp.Message != nil {
-							t.Fatalf("❌ Error in streaming: %s", *streamResp.Message)
-						} else {
-							t.Fatalf("❌ Error in streaming (no message)")
+							case schemas.ResponsesStreamResponseTypeOutputItemAdded:
+								hasOutputItemAdded = true
+								outputItemAddedSeq = seqNum
+								t.Logf("✅ Event %d: response.output_item.added", seqNum)
+
+							case schemas.ResponsesStreamResponseTypeContentPartAdded:
+								hasContentPartAdded = true
+								contentPartAddedSeq = seqNum
+								t.Logf("✅ Event %d: response.content_part.added", seqNum)
+
+							case schemas.ResponsesStreamResponseTypeOutputTextDelta:
+								hasOutputTextDelta = true
+								if textDeltaCount == 0 {
+									firstTextDeltaSeq = seqNum
+								}
+								textDeltaCount++
+								if streamResp.Delta != nil {
+									t.Logf("✅ Event %d: response.output_text.delta (chunk %d): %q", seqNum, textDeltaCount, *streamResp.Delta)
+								}
+
+							case schemas.ResponsesStreamResponseTypeOutputTextDone:
+								hasOutputTextDone = true
+								outputTextDoneSeq = seqNum
+								t.Logf("✅ Event %d: response.output_text.done", seqNum)
+
+							case schemas.ResponsesStreamResponseTypeContentPartDone:
+								hasContentPartDone = true
+								contentPartDoneSeq = seqNum
+								t.Logf("✅ Event %d: response.content_part.done", seqNum)
+
+							case schemas.ResponsesStreamResponseTypeOutputItemDone:
+								hasOutputItemDone = true
+								outputItemDoneSeq = seqNum
+								t.Logf("✅ Event %d: response.output_item.done", seqNum)
+
+							case schemas.ResponsesStreamResponseTypeCompleted:
+								hasResponseCompleted = true
+								t.Logf("✅ Event %d: response.completed", seqNum)
+
+							case schemas.ResponsesStreamResponseTypeError:
+								errorMsg := "unknown error"
+								if streamResp.Message != nil {
+									errorMsg = *streamResp.Message
+								}
+								return ResponsesStreamValidationResult{
+									Passed: false,
+									Errors: []string{fmt.Sprintf("❌ Error in streaming: %s", errorMsg)},
+								}
+							}
+						}
+
+						// Safety check to prevent infinite loops
+						if responseCount > 100 {
+							goto lifecycleComplete
+						}
+
+					case <-streamCtx.Done():
+						return ResponsesStreamValidationResult{
+							Passed:       false,
+							Errors:       []string{"❌ Timeout waiting for responses streaming lifecycle events"},
+							ReceivedData: responseCount > 0,
 						}
 					}
 				}
 
-				if responseCount > 100 {
-					goto lifecycleComplete
+			lifecycleComplete:
+				if responseCount == 0 {
+					return ResponsesStreamValidationResult{
+						Passed:       false,
+						Errors:       []string{"❌ Stream closed without receiving any data"},
+						ReceivedData: false,
+					}
 				}
 
-			case <-streamCtx.Done():
-				t.Fatal("Timeout waiting for responses streaming lifecycle events")
+				// Validate lifecycle events are present
+				t.Logf("\n📋 Lifecycle Event Validation:")
+				t.Logf("  response.created: %v", hasResponseCreated)
+				t.Logf("  response.in_progress: %v", hasResponseInProgress)
+				t.Logf("  response.output_item.added: %v (seq: %d)", hasOutputItemAdded, outputItemAddedSeq)
+				t.Logf("  response.content_part.added: %v (seq: %d)", hasContentPartAdded, contentPartAddedSeq)
+				t.Logf("  response.output_text.delta: %v (count: %d, first seq: %d)", hasOutputTextDelta, textDeltaCount, firstTextDeltaSeq)
+				t.Logf("  response.output_text.done: %v (seq: %d)", hasOutputTextDone, outputTextDoneSeq)
+				t.Logf("  response.content_part.done: %v (seq: %d)", hasContentPartDone, contentPartDoneSeq)
+				t.Logf("  response.output_item.done: %v (seq: %d)", hasOutputItemDone, outputItemDoneSeq)
+				t.Logf("  response.completed: %v", hasResponseCompleted)
+
+				// Collect validation errors
+				var validationErrors []string
+
+				// Validate required lifecycle events
+				if !hasResponseCreated {
+					validationErrors = append(validationErrors, "❌ Missing required event: response.created")
+				}
+				if !hasResponseInProgress {
+					validationErrors = append(validationErrors, "❌ Missing required event: response.in_progress")
+				}
+				if !hasOutputItemAdded {
+					validationErrors = append(validationErrors, "❌ Missing required event: response.output_item.added")
+				}
+				if !hasContentPartAdded {
+					validationErrors = append(validationErrors, "❌ Missing required event: response.content_part.added")
+				}
+				if !hasOutputTextDelta {
+					validationErrors = append(validationErrors, "❌ Missing required event: response.output_text.delta")
+				}
+				if !hasOutputTextDone {
+					validationErrors = append(validationErrors, "❌ Missing required event: response.output_text.done")
+				}
+				if !hasContentPartDone {
+					validationErrors = append(validationErrors, "❌ Missing required event: response.content_part.done")
+				}
+				if !hasOutputItemDone {
+					validationErrors = append(validationErrors, "❌ Missing required event: response.output_item.done")
+				}
+				if !hasResponseCompleted {
+					validationErrors = append(validationErrors, "❌ Missing required event: response.completed")
+				}
+
+				// Validate event ordering
+				if hasOutputItemAdded && hasContentPartAdded {
+					if contentPartAddedSeq > outputItemAddedSeq {
+						t.Logf("✅ Event ordering: output_item.added (%d) -> content_part.added (%d)", outputItemAddedSeq, contentPartAddedSeq)
+					} else {
+						validationErrors = append(validationErrors, fmt.Sprintf("❌ Invalid event ordering: content_part.added (%d) should come after output_item.added (%d)", contentPartAddedSeq, outputItemAddedSeq))
+					}
+				}
+
+				if hasContentPartAdded && hasOutputTextDelta {
+					if firstTextDeltaSeq > contentPartAddedSeq {
+						t.Logf("✅ Event ordering: content_part.added (%d) -> output_text.delta (%d)", contentPartAddedSeq, firstTextDeltaSeq)
+					} else {
+						validationErrors = append(validationErrors, fmt.Sprintf("❌ Invalid event ordering: output_text.delta (%d) should come after content_part.added (%d)", firstTextDeltaSeq, contentPartAddedSeq))
+					}
+				}
+
+				if hasOutputTextDone && hasContentPartDone && hasOutputItemDone {
+					if outputTextDoneSeq < contentPartDoneSeq && contentPartDoneSeq < outputItemDoneSeq {
+						t.Logf("✅ Event ordering: output_text.done (%d) -> content_part.done (%d) -> output_item.done (%d)", outputTextDoneSeq, contentPartDoneSeq, outputItemDoneSeq)
+					} else {
+						validationErrors = append(validationErrors, fmt.Sprintf("❌ Invalid event ordering: expected output_text.done (%d) -> content_part.done (%d) -> output_item.done (%d)", outputTextDoneSeq, contentPartDoneSeq, outputItemDoneSeq))
+					}
+				}
+
+				// Final validation
+				allEventsPresent := hasResponseCreated && hasResponseInProgress && hasOutputItemAdded &&
+					hasContentPartAdded && hasOutputTextDelta && hasOutputTextDone &&
+					hasContentPartDone && hasOutputItemDone && hasResponseCompleted
+
+				if allEventsPresent {
+					t.Logf("✅ All required lifecycle events are present and properly ordered")
+				} else {
+					// Errors already collected above
+				}
+
+				if len(validationErrors) > 0 {
+					return ResponsesStreamValidationResult{
+						Passed:       false,
+						Errors:       validationErrors,
+						ReceivedData: responseCount > 0,
+					}
+				}
+
+				return ResponsesStreamValidationResult{
+					Passed:       true,
+					ReceivedData: responseCount > 0,
+				}
+			})
+
+		// Check validation result and fail test if validation failed after all retries
+		if !validationResult.Passed {
+			allErrors := append(validationResult.Errors, validationResult.StreamErrors...)
+			errorMsg := strings.Join(allErrors, "; ")
+			if !strings.Contains(errorMsg, "❌") {
+				errorMsg = fmt.Sprintf("❌ %s", errorMsg)
 			}
-		}
-
-	lifecycleComplete:
-		if responseCount == 0 {
-			t.Fatal("Should receive at least one streaming response")
-		}
-
-		// Validate lifecycle events are present
-		t.Logf("\n📋 Lifecycle Event Validation:")
-		t.Logf("  response.created: %v", hasResponseCreated)
-		t.Logf("  response.in_progress: %v", hasResponseInProgress)
-		t.Logf("  response.output_item.added: %v (seq: %d)", hasOutputItemAdded, outputItemAddedSeq)
-		t.Logf("  response.content_part.added: %v (seq: %d)", hasContentPartAdded, contentPartAddedSeq)
-		t.Logf("  response.output_text.delta: %v (count: %d, first seq: %d)", hasOutputTextDelta, textDeltaCount, firstTextDeltaSeq)
-		t.Logf("  response.output_text.done: %v (seq: %d)", hasOutputTextDone, outputTextDoneSeq)
-		t.Logf("  response.content_part.done: %v (seq: %d)", hasContentPartDone, contentPartDoneSeq)
-		t.Logf("  response.output_item.done: %v (seq: %d)", hasOutputItemDone, outputItemDoneSeq)
-		t.Logf("  response.completed: %v", hasResponseCompleted)
-
-		// Validate required lifecycle events
-		if !hasResponseCreated {
-			t.Error("❌ Missing required event: response.created")
-		}
-		if !hasResponseInProgress {
-			t.Error("❌ Missing required event: response.in_progress")
-		}
-		if !hasOutputItemAdded {
-			t.Error("❌ Missing required event: response.output_item.added")
-		}
-		if !hasContentPartAdded {
-			t.Error("❌ Missing required event: response.content_part.added")
-		}
-		if !hasOutputTextDelta {
-			t.Error("❌ Missing required event: response.output_text.delta")
-		}
-		if !hasOutputTextDone {
-			t.Error("❌ Missing required event: response.output_text.done")
-		}
-		if !hasContentPartDone {
-			t.Error("❌ Missing required event: response.content_part.done")
-		}
-		if !hasOutputItemDone {
-			t.Error("❌ Missing required event: response.output_item.done")
-		}
-		if !hasResponseCompleted {
-			t.Error("❌ Missing required event: response.completed")
-		}
-
-		// Validate event ordering
-		if hasOutputItemAdded && hasContentPartAdded {
-			if contentPartAddedSeq > outputItemAddedSeq {
-				t.Logf("✅ Event ordering: output_item.added (%d) -> content_part.added (%d)", outputItemAddedSeq, contentPartAddedSeq)
-			} else {
-				t.Errorf("❌ Invalid event ordering: content_part.added (%d) should come after output_item.added (%d)", contentPartAddedSeq, outputItemAddedSeq)
-			}
-		}
-
-		if hasContentPartAdded && hasOutputTextDelta {
-			if firstTextDeltaSeq > contentPartAddedSeq {
-				t.Logf("✅ Event ordering: content_part.added (%d) -> output_text.delta (%d)", contentPartAddedSeq, firstTextDeltaSeq)
-			} else {
-				t.Errorf("❌ Invalid event ordering: output_text.delta (%d) should come after content_part.added (%d)", firstTextDeltaSeq, contentPartAddedSeq)
-			}
-		}
-
-		if hasOutputTextDone && hasContentPartDone && hasOutputItemDone {
-			if outputTextDoneSeq < contentPartDoneSeq && contentPartDoneSeq < outputItemDoneSeq {
-				t.Logf("✅ Event ordering: output_text.done (%d) -> content_part.done (%d) -> output_item.done (%d)", outputTextDoneSeq, contentPartDoneSeq, outputItemDoneSeq)
-			} else {
-				t.Errorf("❌ Invalid event ordering: expected output_text.done (%d) -> content_part.done (%d) -> output_item.done (%d)", outputTextDoneSeq, contentPartDoneSeq, outputItemDoneSeq)
-			}
-		}
-
-		// Final validation
-		allEventsPresent := hasResponseCreated && hasResponseInProgress && hasOutputItemAdded &&
-			hasContentPartAdded && hasOutputTextDelta && hasOutputTextDone &&
-			hasContentPartDone && hasOutputItemDone && hasResponseCompleted
-
-		if allEventsPresent {
-			t.Logf("✅ All required lifecycle events are present and properly ordered")
-		} else {
-			t.Error("❌ Not all required lifecycle events are present")
+			t.Fatalf("❌ Responses streaming lifecycle validation failed after retries: %s", errorMsg)
 		}
 
 		t.Logf("✅ Responses streaming lifecycle test completed")
@@ -771,11 +821,16 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 }
 
 // validateResponsesStreamingStructure validates the structure and events of responses streaming
-func validateResponsesStreamingStructure(t *testing.T, eventTypes map[schemas.ResponsesStreamResponseType]int, sequenceNumbers []int, hasResponseCreated, hasResponseCompleted, hasOutputItems, hasContentParts bool) {
+// Returns a list of validation errors (empty if validation passes)
+func validateResponsesStreamingStructure(t *testing.T, eventTypes map[schemas.ResponsesStreamResponseType]int, sequenceNumbers []int, hasResponseCreated, hasResponseCompleted, hasOutputItems, hasContentParts bool) []string {
+	var errors []string
+
 	// Validate sequence numbers are increasing
 	for i := 1; i < len(sequenceNumbers); i++ {
 		if sequenceNumbers[i] < sequenceNumbers[i-1] {
-			t.Fatalf("⚠️ Warning: Sequence numbers not in ascending order: %d -> %d", sequenceNumbers[i-1], sequenceNumbers[i])
+			errorMsg := fmt.Sprintf("⚠️ Warning: Sequence numbers not in ascending order: %d -> %d", sequenceNumbers[i-1], sequenceNumbers[i])
+			t.Logf("%s", errorMsg)
+			errors = append(errors, errorMsg)
 		}
 	}
 
@@ -809,6 +864,8 @@ func validateResponsesStreamingStructure(t *testing.T, eventTypes map[schemas.Re
 			t.Logf("⚠️ Warning: Expected event %s not found", expectedEvent)
 		}
 	}
+
+	return errors
 }
 
 // StreamingValidationResult represents the result of streaming validation

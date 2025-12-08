@@ -208,14 +208,23 @@ docker compose -f "$CONFIGS_DIR/docker-compose.yml" up -d
 echo "⏳ Waiting for Docker services to be ready..."
 sleep 10
 
-# Clean up SQLite database files from all config directories
-echo "🧹 Cleaning up SQLite database files from config directories..."
-find "$CONFIGS_DIR" -type f \( -name "*.db" -o -name "*.db-shm" -o -name "*.db-wal" \) -delete
-echo "✅ Cleanup complete"
-
 for config in "${CONFIGS_TO_TEST[@]}"; do
   echo "  🔍 Testing with config: $config"
   config_path="$CONFIGS_DIR/$config"
+
+  # Clean up databases before each config test for a clean slate
+  echo "    🧹 Resetting PostgreSQL database..."
+  # Note: DROP DATABASE cannot run inside a transaction, so we use separate -c flags
+  # First terminate any active connections, then drop and recreate the database
+  docker exec "$(docker compose -f "$CONFIGS_DIR/docker-compose.yml" ps -q postgres)" \
+    psql -U bifrost -d postgres \
+    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'bifrost' AND pid <> pg_backend_pid();" \
+    -c "DROP DATABASE IF EXISTS bifrost;" \
+    -c "CREATE DATABASE bifrost;"
+
+  echo "    🧹 Cleaning up SQLite database files for config: $config..."
+  find "$config_path" -type f \( -name "*.db" -o -name "*.db-shm" -o -name "*.db-wal" \) -delete 2>/dev/null || true
+  echo "    ✅ Database cleanup complete"
   
   if [ ! -d "$config_path" ]; then
     echo "    ⚠️  Warning: Config directory not found: $config_path (skipping)"

@@ -195,7 +195,7 @@ Keys can be restricted to specific models for access control and cost management
 
 For cloud providers with deployment-based routing, Bifrost validates deployment availability:
 
-**Azure OpenAI:**
+**Azure:**
 - Keys must have deployment mappings for specific models
 - Deployment name maps to actual Azure deployment identifier
 - Missing deployment excludes key from selection
@@ -219,7 +219,7 @@ For scenarios requiring explicit key control, Bifrost supports bypassing the ent
 Pass a key directly in the request context using `schemas.BifrostContextKeyDirectKey`. This completely bypasses provider key lookup and selection.
 
 **Gateway Header-based Keys:**
-Send API keys in `Authorization` (Bearer) or `x-api-key` headers. Requires `allow_direct_keys` setting to be enabled.
+Send API keys in `Authorization` (Bearer), `x-api-key` or `x-goog-api-key` headers. Requires `allow_direct_keys` setting to be enabled.
 
 **Enable Direct Keys:**
 

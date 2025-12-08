@@ -38,6 +38,12 @@ type HandlerStore interface {
 	ShouldAllowDirectKeys() bool
 }
 
+// Retry backoff constants for validation
+const (
+	MinRetryBackoff = 100 * time.Millisecond     // Minimum retry backoff: 100ms
+	MaxRetryBackoff = 1000000 * time.Millisecond // Maximum retry backoff: 1000000ms (1000 seconds)
+)
+
 // ConfigData represents the configuration data for the Bifrost HTTP transport.
 // It contains the client configuration, provider configurations, MCP configuration,
 // vector store configuration, config store configuration, and logs store configuration.
@@ -155,6 +161,7 @@ type Config struct {
 	MCPConfig        *schemas.MCPConfig
 	GovernanceConfig *configstore.GovernanceConfig
 	FrameworkConfig  *framework.FrameworkConfig
+	ProxyConfig      *configstoreTables.GlobalProxyConfig
 
 	// Track which keys come from environment variables
 	EnvKeys map[string][]configstore.EnvKeyInfo
@@ -963,12 +970,12 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 						}
 					}
 
-				// Create virtual keys
-				for _, virtualKey := range virtualKeysToAdd {
-					if err := config.ConfigStore.CreateVirtualKey(ctx, &virtualKey, tx); err != nil {
-						return fmt.Errorf("failed to create virtual key %s: %w", virtualKey.ID, err)
+					// Create virtual keys
+					for _, virtualKey := range virtualKeysToAdd {
+						if err := config.ConfigStore.CreateVirtualKey(ctx, &virtualKey, tx); err != nil {
+							return fmt.Errorf("failed to create virtual key %s: %w", virtualKey.ID, err)
+						}
 					}
-				}
 
 					return nil
 				}); err != nil {
@@ -1011,12 +1018,12 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					}
 				}
 
-			// Create virtual keys
-			for _, virtualKey := range config.GovernanceConfig.VirtualKeys {
-				if err := config.ConfigStore.CreateVirtualKey(ctx, &virtualKey, tx); err != nil {
-					return fmt.Errorf("failed to create virtual key %s: %w", virtualKey.ID, err)
+				// Create virtual keys
+				for _, virtualKey := range config.GovernanceConfig.VirtualKeys {
+					if err := config.ConfigStore.CreateVirtualKey(ctx, &virtualKey, tx); err != nil {
+						return fmt.Errorf("failed to create virtual key %s: %w", virtualKey.ID, err)
+					}
 				}
-			}
 
 				return nil
 			}); err != nil {
@@ -1077,16 +1084,34 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 
 	// First we are loading plugins from the db
 	if len(configData.Plugins) > 0 {
-		logger.Debug("no plugins found in store, processing from config file")
+		logger.Debug("processing plugins from config file")
 		if len(config.PluginConfigs) == 0 {
+			logger.Debug("no plugins found in store, using plugins from config file")
 			config.PluginConfigs = configData.Plugins
 		} else {
 			// Here we will append new plugins to the config.PluginConfigs
+			// We will also check if the version is incremented then we will also update the plugin in the db
+			// If a plugin with the same name exists, keep the one with the highest version
 			for _, plugin := range configData.Plugins {
-				if !slices.ContainsFunc(config.PluginConfigs, func(p *schemas.PluginConfig) bool {
+				if plugin.Version == nil {
+					plugin.Version = bifrost.Ptr(int16(1))
+				}
+				existingIdx := slices.IndexFunc(config.PluginConfigs, func(p *schemas.PluginConfig) bool {
 					return p.Name == plugin.Name
-				}) {
+				})
+				if existingIdx == -1 {
+					logger.Debug("adding new plugin %s to config.PluginConfigs", plugin.Name)
 					config.PluginConfigs = append(config.PluginConfigs, plugin)
+				} else {
+					existingPlugin := config.PluginConfigs[existingIdx]
+					existingVersion := int16(1)
+					if existingPlugin.Version != nil {
+						existingVersion = *existingPlugin.Version
+					}
+					if *plugin.Version > existingVersion {
+						logger.Debug("replacing plugin %s with higher version %d (was %d)", plugin.Name, *plugin.Version, existingVersion)
+						config.PluginConfigs[existingIdx] = plugin
+					}
 				}
 			}
 		}
@@ -1108,19 +1133,22 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					logger.Warn("failed to deep copy plugin config, skipping database update: %v", err)
 					continue
 				}
-
+				if plugin.Version == nil {
+					plugin.Version = bifrost.Ptr(int16(1))
+				}
 				pluginConfig := &configstoreTables.TablePlugin{
 					Name:    plugin.Name,
 					Enabled: plugin.Enabled,
 					Config:  pluginConfigCopy,
 					Path:    plugin.Path,
+					Version: *plugin.Version,
 				}
 				if plugin.Name == semanticcache.PluginName {
 					if err := config.RemoveProviderKeysFromSemanticCacheConfig(pluginConfig); err != nil {
 						logger.Warn("failed to remove provider keys from semantic cache config: %v", err)
 					}
 				}
-				if err := config.ConfigStore.CreatePlugin(ctx, pluginConfig); err != nil {
+				if err := config.ConfigStore.UpsertPlugin(ctx, pluginConfig); err != nil {
 					logger.Warn("failed to update plugin: %v", err)
 				}
 			}

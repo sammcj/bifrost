@@ -1,10 +1,11 @@
 "use client";
 
 import FullPageLoader from "@/components/fullPageLoader";
+import { IS_ENTERPRISE } from "@/lib/constants/config";
 import { useGetCoreConfigQuery } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import APIKeysView from "@enterprise/components/api-keys/APIKeysView";
-import { Gauge, KeyRound, Landmark, Settings, Shield, Telescope, Zap } from "lucide-react";
+import { Gauge, Globe, KeyRound, Landmark, Settings, Shield, Telescope, Zap } from "lucide-react";
 import { useQueryState } from "nuqs";
 import { useEffect } from "react";
 import CachingView from "./views/cachingView";
@@ -14,11 +15,12 @@ import LoggingView from "./views/loggingView";
 import ObservabilityView from "./views/observabilityView";
 import PerformanceTuningView from "./views/performanceTuningView";
 import PricingConfigView from "./views/pricingConfigView";
+import ProxyView from "./views/proxyView";
 import SecurityView from "./views/securityView";
 import { MCPIcon } from "@/components/ui/icons";
 import MCPView from "./views/mcpView";
 
-const tabs = [
+const baseTabs = [
 	{
 		id: "client-settings",
 		label: "Client Settings",
@@ -60,6 +62,12 @@ const tabs = [
 		icon: <Shield className="size-4" />,
 	},
 	{
+		id: "proxy",
+		label: "Proxy",
+		icon: <Globe className="size-4" />,
+		enterpriseOnly: true,
+	},
+	{
 		id: "api-keys",
 		label: "API Keys",
 		icon: <KeyRound className="size-4" />,
@@ -71,12 +79,15 @@ const tabs = [
 	},
 ];
 
+const tabs = baseTabs.filter((tab) => !tab.enterpriseOnly || IS_ENTERPRISE);
+
 export default function ConfigPage() {
 	const [activeTab, setActiveTab] = useQueryState("tab");
 	const { isLoading } = useGetCoreConfigQuery({ fromDB: true });
 
 	useEffect(() => {
-		if (!activeTab) {
+		const validTabIds = tabs.map((t) => t.id);
+		if (!activeTab || !validTabIds.includes(activeTab)) {
 			setActiveTab(tabs[0].id);
 		}
 	}, [activeTab, setActiveTab]);
@@ -114,6 +125,7 @@ export default function ConfigPage() {
 				{activeTab === "caching" && <CachingView />}
 				{activeTab === "observability" && <ObservabilityView />}
 				{activeTab === "security" && <SecurityView />}
+				{activeTab === "proxy" && IS_ENTERPRISE && <ProxyView />}
 				{activeTab === "api-keys" && <APIKeysView />}
 				{activeTab === "performance-tuning" && <PerformanceTuningView />}
 			</div>

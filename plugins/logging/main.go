@@ -185,12 +185,30 @@ func (p *LoggerPlugin) GetName() string {
 }
 
 // TransportInterceptor is not used for this plugin
-func (p *LoggerPlugin) TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+// Parameters:
+//   - ctx: The Bifrost context
+//   - url: The URL of the request
+//   - headers: The request headers
+//   - body: The request body
+//
+// Returns:
+//   - map[string]string: The updated request headers
+//   - map[string]any: The updated request body
+//   - error: Any error that occurred during processing
+func (p *LoggerPlugin) TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	return headers, body, nil
 }
 
 // PreHook is called before a request is processed - FULLY ASYNC, NO DATABASE I/O
-func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+// Parameters:
+//   - ctx: The Bifrost context
+//   - req: The Bifrost request
+//
+// Returns:
+//   - *schemas.BifrostRequest: The processed request
+//   - *schemas.PluginShortCircuit: The plugin short circuit if the request is not allowed
+//   - error: Any error that occurred during processing
+func (p *LoggerPlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	if ctx == nil {
 		// Log error but don't fail the request
 		p.logger.Error("context is nil in PreHook")
@@ -198,7 +216,7 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 	}
 
 	// Extract request ID from context
-	requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)
+	requestID, ok := ctx.Value(schemas.BifrostContextKeyRequestID).(string)
 	if !ok || requestID == "" {
 		// Log error but don't fail the request
 		p.logger.Error("request-id not found in context or is empty")
@@ -255,7 +273,7 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 	logMsg.Operation = LogOperationCreate
 
 	// If fallback request ID is present, use it instead of the primary request ID
-	fallbackRequestID, ok := (*ctx).Value(schemas.BifrostContextKeyFallbackRequestID).(string)
+	fallbackRequestID, ok := ctx.Value(schemas.BifrostContextKeyFallbackRequestID).(string)
 	if ok && fallbackRequestID != "" {
 		logMsg.RequestID = fallbackRequestID
 		logMsg.ParentRequestID = requestID
@@ -263,12 +281,10 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 		logMsg.RequestID = requestID
 	}
 
-	numberOfRetries := getIntFromContext(*ctx, schemas.BifrostContextKeyNumberOfRetries)
-	fallbackIndex := getIntFromContext(*ctx, schemas.BifrostContextKeyFallbackIndex)
+	fallbackIndex := getIntFromContext(ctx, schemas.BifrostContextKeyFallbackIndex)
 
 	logMsg.Timestamp = createdTimestamp
 	logMsg.InitialData = initialData
-	logMsg.NumberOfRetries = numberOfRetries
 	logMsg.FallbackIndex = fallbackIndex
 
 	go func(msg *LogMessage) {
@@ -278,7 +294,6 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 			msg.RequestID,
 			msg.ParentRequestID,
 			msg.Timestamp,
-			msg.NumberOfRetries,
 			msg.FallbackIndex,
 			msg.InitialData,
 		); err != nil {
@@ -295,7 +310,6 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 					Object:                      msg.InitialData.Object,
 					Provider:                    msg.InitialData.Provider,
 					Model:                       msg.InitialData.Model,
-					NumberOfRetries:             msg.NumberOfRetries,
 					FallbackIndex:               msg.FallbackIndex,
 					InputHistoryParsed:          msg.InitialData.InputHistory,
 					ResponsesInputHistoryParsed: msg.InitialData.ResponsesInputHistory,
@@ -314,26 +328,36 @@ func (p *LoggerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 }
 
 // PostHook is called after a response is received - FULLY ASYNC, NO DATABASE I/O
-func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+// Parameters:
+//   - ctx: The Bifrost context
+//   - result: The Bifrost response to be processed
+//   - bifrostErr: The Bifrost error to be processed
+//
+// Returns:
+//   - *schemas.BifrostResponse: The processed response
+//   - *schemas.BifrostError: The processed error
+//   - error: Any error that occurred during processing
+func (p *LoggerPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	if ctx == nil {
 		// Log error but don't fail the request
 		p.logger.Error("context is nil in PostHook")
 		return result, bifrostErr, nil
 	}
-	requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)
+	requestID, ok := ctx.Value(schemas.BifrostContextKeyRequestID).(string)
 	if !ok || requestID == "" {
 		p.logger.Error("request-id not found in context or is empty")
 		return result, bifrostErr, nil
 	}
 	// If fallback request ID is present, use it instead of the primary request ID
-	fallbackRequestID, ok := (*ctx).Value(schemas.BifrostContextKeyFallbackRequestID).(string)
+	fallbackRequestID, ok := ctx.Value(schemas.BifrostContextKeyFallbackRequestID).(string)
 	if ok && fallbackRequestID != "" {
 		requestID = fallbackRequestID
 	}
-	selectedKeyID := getStringFromContext(*ctx, schemas.BifrostContextKeySelectedKeyID)
-	selectedKeyName := getStringFromContext(*ctx, schemas.BifrostContextKeySelectedKeyName)
-	virtualKeyID := getStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-virtual-key-id"))
-	virtualKeyName := getStringFromContext(*ctx, schemas.BifrostContextKey("bf-governance-virtual-key-name"))
+	selectedKeyID := getStringFromContext(ctx, schemas.BifrostContextKeySelectedKeyID)
+	selectedKeyName := getStringFromContext(ctx, schemas.BifrostContextKeySelectedKeyName)
+	virtualKeyID := getStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-virtual-key-id"))
+	virtualKeyName := getStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-virtual-key-name"))
+	numberOfRetries := getIntFromContext(ctx, schemas.BifrostContextKeyNumberOfRetries)
 
 	go func() {
 		requestType, _, _ := bifrost.GetResponseFields(result, bifrostErr)
@@ -344,6 +368,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 		logMsg.VirtualKeyID = virtualKeyID
 		logMsg.SelectedKeyName = selectedKeyName
 		logMsg.VirtualKeyName = virtualKeyName
+		logMsg.NumberOfRetries = numberOfRetries
 		defer p.putLogMessage(logMsg) // Return to pool when done
 
 		if result != nil {
@@ -372,6 +397,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 					logMsg.Latency,
 					logMsg.VirtualKeyID,
 					logMsg.VirtualKeyName,
+					logMsg.NumberOfRetries,
 					logMsg.SemanticCacheDebug,
 					logMsg.UpdateData,
 				)
@@ -410,6 +436,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 						logMsg.SelectedKeyName,
 						logMsg.VirtualKeyID,
 						logMsg.VirtualKeyName,
+						logMsg.NumberOfRetries,
 						logMsg.SemanticCacheDebug,
 						logMsg.StreamResponse,
 						streamResponse.Type == streaming.StreamResponseTypeFinal,
@@ -536,6 +563,7 @@ func (p *LoggerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostRes
 					logMsg.Latency,
 					logMsg.VirtualKeyID,
 					logMsg.VirtualKeyName,
+					logMsg.NumberOfRetries,
 					logMsg.SemanticCacheDebug,
 					logMsg.UpdateData,
 				)

@@ -3,7 +3,6 @@
 package maxim
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -123,7 +122,7 @@ func (plugin *Plugin) GetName() string {
 }
 
 // TransportInterceptor is not used for this plugin
-func (plugin *Plugin) TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+func (plugin *Plugin) TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	return headers, body, nil
 }
 
@@ -131,10 +130,10 @@ func (plugin *Plugin) TransportInterceptor(ctx *context.Context, url string, hea
 // 1. Header log repo ID (if provided)
 // 2. Default log repo ID from config (if configured)
 // 3. Empty string (skip logging)
-func (plugin *Plugin) getEffectiveLogRepoID(ctx *context.Context) string {
+func (plugin *Plugin) getEffectiveLogRepoID(ctx *schemas.BifrostContext) string {
 	// Check for header log repo ID first (highest priority)
 	if ctx != nil {
-		if headerRepoID, ok := (*ctx).Value(LogRepoIDKey).(string); ok && headerRepoID != "" {
+		if headerRepoID, ok := ctx.Value(LogRepoIDKey).(string); ok && headerRepoID != "" {
 			return headerRepoID
 		}
 	}
@@ -192,18 +191,17 @@ func (plugin *Plugin) getOrCreateLogger(logRepoID string) (*logging.Logger, erro
 // - Model parameters
 //
 // Parameters:
-//   - ctx: Pointer to the context.Context that may contain existing trace/generation IDs
+//   - ctx: Pointer to the schemas.BifrostContext that may contain existing trace/generation IDs
 //   - req: The incoming Bifrost request to be traced
 //
 // Returns:
 //   - *schemas.BifrostRequest: The original request, unmodified
 //   - error: Any error that occurred during trace/generation creation
-func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+func (plugin *Plugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	var traceID string
 	var traceName string
 	var sessionID string
 	var generationName string
-	var tags map[string]string
 
 	// Get effective log repo ID (header > default > skip)
 	effectiveLogRepoID := plugin.getEffectiveLogRepoID(ctx)
@@ -236,17 +234,6 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 		if existingGenerationName, ok := (*ctx).Value(GenerationNameKey).(string); ok && existingGenerationName != "" {
 			generationName = existingGenerationName
 		}
-
-		// retrieve all tags from context
-		// the transport layer now stores all maxim tags in a single map
-		if tagsValue := (*ctx).Value(TagsKey); tagsValue != nil {
-			if tagsMap, ok := tagsValue.(map[string]string); ok {
-				tags = make(map[string]string)
-				for key, value := range tagsMap {
-					tags[key] = value
-				}
-			}
-		}
 	}
 
 	provider, model, _ := req.GetRequestFields()
@@ -254,14 +241,6 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	// Determine request type and set appropriate tags
 	var messages []logging.CompletionRequest
 	var latestMessage string
-
-	// Initialize tags map if not already initialized from context
-	if tags == nil {
-		tags = make(map[string]string)
-	}
-
-	// Add model to tags
-	tags["model"] = model
 
 	modelParams := make(map[string]interface{})
 
@@ -380,7 +359,6 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 	traceConfig := logging.TraceConfig{
 		Id:   traceID,
 		Name: maxim.StrPtr(name),
-		Tags: &tags,
 	}
 
 	if sessionID != "" {
@@ -401,7 +379,6 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 		Id:              generationID,
 		Model:           model,
 		Provider:        string(provider),
-		Tags:            &tags,
 		Messages:        messages,
 		ModelParameters: modelParams,
 	}
@@ -415,17 +392,17 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 
 	var requestID string
 	if ctx != nil {
-		if _, ok := (*ctx).Value(TraceIDKey).(string); !ok {
-			*ctx = context.WithValue(*ctx, TraceIDKey, traceID)
+		if _, ok := ctx.Value(TraceIDKey).(string); !ok {
+			ctx.SetValue(TraceIDKey, traceID)
 		}
-		*ctx = context.WithValue(*ctx, GenerationIDKey, generationID)
+		ctx.SetValue(GenerationIDKey, generationID)
 
 		// Extract request ID from context, if not present, create a new one
 		var ok bool
-		requestID, ok = (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)
+		requestID, ok = ctx.Value(schemas.BifrostContextKeyRequestID).(string)
 		if !ok || requestID == "" {
 			requestID = uuid.New().String()
-			*ctx = context.WithValue(*ctx, schemas.BifrostContextKeyRequestID, requestID)
+			ctx.SetValue(schemas.BifrostContextKeyRequestID, requestID)
 		}
 	}
 
@@ -448,7 +425,7 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 // ensuring that partial logging is still performed when possible.
 //
 // Parameters:
-//   - ctxRef: Pointer to the context.Context containing trace/generation IDs
+//   - ctx: Pointer to the schemas.BifrostContext containing trace/generation IDs
 //   - result: The Bifrost response to be traced
 //   - bifrostErr: The BifrostError returned by the request, if any
 //
@@ -456,20 +433,20 @@ func (plugin *Plugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest)
 //   - *schemas.BifrostResponse: The original response, unmodified
 //   - *schemas.BifrostError: The original error, unmodified
 //   - error: Never returns an error as it handles missing IDs gracefully
-func (plugin *Plugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	// Get effective log repo ID for this request
 	effectiveLogRepoID := plugin.getEffectiveLogRepoID(ctx)
 	if effectiveLogRepoID == "" {
 		return result, bifrostErr, nil
 	}
 
-	requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)
+	requestID, ok := ctx.Value(schemas.BifrostContextKeyRequestID).(string)
 	if !ok || requestID == "" {
 		return result, bifrostErr, nil
 	}
 
 	go func() {
-		requestType, _, _ := bifrost.GetResponseFields(result, bifrostErr)
+		requestType, _, model := bifrost.GetResponseFields(result, bifrostErr)
 
 		var streamResponse *streaming.ProcessedStreamResponse
 		var err error
@@ -528,12 +505,28 @@ func (plugin *Plugin) PostHook(ctx *context.Context, result *schemas.BifrostResp
 					plugin.accumulator.CleanupStreamAccumulator(requestID)
 				}
 			}
+
 			logger.EndGeneration(generationID)
 		}
 		traceID, ok := (*ctx).Value(TraceIDKey).(string)
 		if ok {
 			logger.EndTrace(traceID)
 		}
+
+		// add tags to the generation and trace
+		tags, ok := (*ctx).Value(TagsKey).(map[string]string)
+		if ok {
+			for key, value := range tags {
+				if generationID != "" {
+					logger.AddTagToGeneration(generationID, key, value)
+				}
+				if traceID != "" {
+					logger.AddTagToTrace(traceID, key, value)
+				}
+			}
+		}
+		logger.AddTagToGeneration(generationID, "model", string(model))
+		logger.AddTagToTrace(traceID, "model", string(model))
 		// Flush only the effective logger that was used for this request
 		logger.Flush()
 	}()

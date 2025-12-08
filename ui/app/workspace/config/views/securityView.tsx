@@ -287,8 +287,8 @@ export default function SecurityView() {
 							Allow Direct API Keys
 						</label>
 						<p className="text-muted-foreground text-sm">
-							Allow API keys to be passed directly in request headers (<b>Authorization</b> or <b>x-api-key</b>). Bifrost will directly use
-							the key.
+							Allow API keys to be passed directly in request headers (<b>Authorization</b>, <b>x-api-key</b>, or <b>x-goog-api-key</b>).
+							Bifrost will directly use the key.
 						</p>
 					</div>
 					<Switch

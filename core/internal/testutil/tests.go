@@ -49,6 +49,7 @@ func RunAllComprehensiveTests(t *testing.T, client *bifrost.Bifrost, ctx context
 		RunReasoningTest,
 		RunListModelsTest,
 		RunListModelsPaginationTest,
+		RunPromptCachingTest,
 	}
 
 	// Execute all test scenarios
@@ -86,6 +87,7 @@ func printTestSummary(t *testing.T, testConfig ComprehensiveTestConfig) {
 		{"Embedding", testConfig.Scenarios.Embedding && testConfig.EmbeddingModel != ""},
 		{"Reasoning", testConfig.Scenarios.Reasoning && testConfig.ReasoningModel != ""},
 		{"ListModels", testConfig.Scenarios.ListModels},
+		{"PromptCaching", testConfig.Scenarios.SimpleChat && testConfig.PromptCachingModel != ""},
 	}
 
 	supported := 0

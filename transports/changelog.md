@@ -1,5 +1,0 @@
-- feat: pydantic SDK support
-- feat: bedrock SDK support
-- fix: gemini tts fixes with audio encoding for cross SDK compatibility
-- feat: improved virtual key configuration flows
-- chore: improved test coverage

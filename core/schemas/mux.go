@@ -898,6 +898,7 @@ func (cr *BifrostChatResponse) ToBifrostResponsesResponse() *BifrostResponsesRes
 	// Create new BifrostResponsesResponse from Chat fields
 	responsesResp := &BifrostResponsesResponse{
 		CreatedAt:     cr.Created,
+		Model:         cr.Model,
 		Citations:     cr.Citations,
 		SearchResults: cr.SearchResults,
 		Videos:        cr.Videos,
@@ -941,6 +942,7 @@ func (responsesResp *BifrostResponsesResponse) ToBifrostChatResponse() *BifrostC
 	chatResp := &BifrostChatResponse{
 		Created:       responsesResp.CreatedAt,
 		Object:        "chat.completion",
+		Model:         responsesResp.Model,
 		Citations:     responsesResp.Citations,
 		SearchResults: responsesResp.SearchResults,
 		Videos:        responsesResp.Videos,
@@ -1501,6 +1503,10 @@ func (cr *BifrostChatResponse) ToBifrostResponsesStreamResponse(state *ChatToRes
 			ID:        state.MessageID,
 			CreatedAt: state.CreatedAt,
 			Usage:     usage,
+		}
+
+		if state.Model != nil {
+			response.Model = *state.Model
 		}
 
 		responses = append(responses, &BifrostResponsesStreamResponse{

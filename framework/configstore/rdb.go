@@ -11,6 +11,7 @@ import (
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
+	"github.com/maximhq/bifrost/framework/encrypt"
 	"github.com/maximhq/bifrost/framework/envutils"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/framework/migrator"
@@ -1021,6 +1022,7 @@ func (s *RDBConfigStore) GetPlugin(ctx context.Context, name string) (*tables.Ta
 	return &plugin, nil
 }
 
+// CreatePlugin creates a new plugin in the database.
 func (s *RDBConfigStore) CreatePlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	if len(tx) > 0 {
@@ -1040,6 +1042,43 @@ func (s *RDBConfigStore) CreatePlugin(ctx context.Context, plugin *tables.TableP
 	return nil
 }
 
+// UpsertPlugin creates a new plugin in the database if it doesn't exist, otherwise updates it.
+func (s *RDBConfigStore) UpsertPlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error {
+	var txDB *gorm.DB
+	if len(tx) > 0 {
+		txDB = tx[0]
+	} else {
+		txDB = s.db
+	}
+	// Mark plugin as custom if path is not empty
+	if plugin.Path != nil && strings.TrimSpace(*plugin.Path) != "" {
+		plugin.IsCustom = true
+	} else {
+		plugin.IsCustom = false
+	}
+	// Check if plugin exists and compare versions
+	// If the plugin exists and the version is lower, do nothing
+	var existing tables.TablePlugin
+	err := txDB.WithContext(ctx).Where("name = ?", plugin.Name).First(&existing).Error
+	if err == nil {
+		// Plugin exists, check version
+		if plugin.Version < existing.Version {
+			return nil
+		}
+	}
+	// Upsert plugin (create or update if exists based on unique name)
+	if err := txDB.WithContext(ctx).Clauses(
+		clause.OnConflict{
+			Columns:   []clause.Column{{Name: "name"}},
+			UpdateAll: true,
+		},
+	).Create(plugin).Error; err != nil {
+		return s.parseGormError(err)
+	}
+	return nil
+}
+
+// UpdatePlugin updates an existing plugin in the database.
 func (s *RDBConfigStore) UpdatePlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error {
 	var txDB *gorm.DB
 	var localTx bool
@@ -1794,6 +1833,62 @@ func (s *RDBConfigStore) UpdateAuthConfig(ctx context.Context, config *AuthConfi
 		}
 		return nil
 	})
+}
+
+// GetProxyConfig retrieves the proxy configuration from the database.
+func (s *RDBConfigStore) GetProxyConfig(ctx context.Context) (*tables.GlobalProxyConfig, error) {
+	var configEntry tables.TableGovernanceConfig
+	if err := s.db.WithContext(ctx).First(&configEntry, "key = ?", tables.ConfigProxyKey).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if configEntry.Value == "" {
+		return nil, nil
+	}
+	var proxyConfig tables.GlobalProxyConfig
+	if err := json.Unmarshal([]byte(configEntry.Value), &proxyConfig); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal proxy config: %w", err)
+	}
+	// Decrypt the password if it's not empty
+	if proxyConfig.Password != "" {
+		decryptedPassword, err := encrypt.Decrypt(proxyConfig.Password)
+		if err != nil {
+			// If decryption fails due to uninitialized key, the password might be stored in plaintext
+			// (from before encryption was enabled), so we return it as-is
+			if !errors.Is(err, encrypt.ErrEncryptionKeyNotInitialized) {
+				return nil, fmt.Errorf("failed to decrypt proxy password: %w", err)
+			}
+		} else {
+			proxyConfig.Password = decryptedPassword
+		}
+	}
+	return &proxyConfig, nil
+}
+
+// UpdateProxyConfig updates the proxy configuration in the database.
+func (s *RDBConfigStore) UpdateProxyConfig(ctx context.Context, config *tables.GlobalProxyConfig) error {
+	// Create a copy to avoid modifying the original config
+	configCopy := *config
+
+	// Encrypt the password if it's not empty
+	if configCopy.Password != "" {
+		encryptedPassword, err := encrypt.Encrypt(configCopy.Password)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt proxy password: %w", err)
+		}
+		configCopy.Password = encryptedPassword
+	}
+
+	configJSON, err := json.Marshal(&configCopy)
+	if err != nil {
+		return fmt.Errorf("failed to marshal proxy config: %w", err)
+	}
+	return s.db.WithContext(ctx).Save(&tables.TableGovernanceConfig{
+		Key:   tables.ConfigProxyKey,
+		Value: string(configJSON),
+	}).Error
 }
 
 // GetSession retrieves a session from the database.

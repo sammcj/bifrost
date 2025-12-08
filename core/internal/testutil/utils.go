@@ -108,7 +108,7 @@ var sampleToolDescriptions = map[SampleToolType]string{
 var WeatherToolFunction = &schemas.ChatToolFunction{
 	Parameters: &schemas.ToolFunctionParameters{
 		Type: "object",
-		Properties: &map[string]interface{}{
+		Properties: &schemas.OrderedMap{
 			"location": map[string]interface{}{
 				"type":        "string",
 				"description": "The city and state, e.g. San Francisco, CA",
@@ -125,7 +125,7 @@ var WeatherToolFunction = &schemas.ChatToolFunction{
 var CalculatorToolFunction = &schemas.ChatToolFunction{
 	Parameters: &schemas.ToolFunctionParameters{
 		Type: "object",
-		Properties: &map[string]interface{}{
+		Properties: &schemas.OrderedMap{
 			"expression": map[string]interface{}{
 				"type":        "string",
 				"description": "The mathematical expression to evaluate, e.g. '2 + 3' or '10 * 5'",
@@ -138,7 +138,7 @@ var CalculatorToolFunction = &schemas.ChatToolFunction{
 var TimeToolFunction = &schemas.ChatToolFunction{
 	Parameters: &schemas.ToolFunctionParameters{
 		Type: "object",
-		Properties: &map[string]interface{}{
+		Properties: &schemas.OrderedMap{
 			"timezone": map[string]interface{}{
 				"type":        "string",
 				"description": "The timezone identifier, e.g. 'America/New_York' or 'UTC'",
@@ -207,7 +207,7 @@ func GetLionBase64Image() (string, error) {
 	}
 	dir := filepath.Dir(filename)
 	filePath := filepath.Join(dir, "scenarios", "media", "lion_base64.txt")
-	
+
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", err

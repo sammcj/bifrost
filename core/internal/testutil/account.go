@@ -48,6 +48,7 @@ type ComprehensiveTestConfig struct {
 	Provider                 schemas.ModelProvider
 	TextModel                string
 	ChatModel                string
+	PromptCachingModel       string
 	VisionModel              string
 	ReasoningModel           string
 	EmbeddingModel           string
@@ -168,28 +169,12 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 				AzureKeyConfig: &schemas.AzureKeyConfig{
 					Endpoint: os.Getenv("AZURE_ENDPOINT"),
 					Deployments: map[string]string{
-						"gpt-4o":        "gpt-4o",
-						"gpt-4o-backup": "gpt-4o-aug",
-						"o1":            "o1",
-					},
-					// Use environment variable for API version with fallback to current preview version
-					// Note: This is a preview API version that may change over time. Update as needed.
-					// Set AZURE_API_VERSION environment variable to override the default.
-					APIVersion: bifrost.Ptr(getEnvWithDefault("AZURE_API_VERSION", "2024-08-01-preview")),
-				},
-			},
-			{
-				Value:  os.Getenv("AZURE_EMB_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
-				AzureKeyConfig: &schemas.AzureKeyConfig{
-					Endpoint: os.Getenv("AZURE_EMB_ENDPOINT"),
-					Deployments: map[string]string{
+						"gpt-4o":                 "gpt-4o",
+						"gpt-4o-backup":          "gpt-4o-3",
+						"claude-opus-4-5":        "claude-opus-4-5",
+						"o1":                     "o1",
 						"text-embedding-ada-002": "text-embedding-ada-002",
 					},
-					// Use environment variable for API version with fallback to current stable version
-					// Set AZURE_API_VERSION environment variable to override the default.
-					APIVersion: bifrost.Ptr(getEnvWithDefault("AZURE_API_VERSION", "2024-10-21")),
 				},
 			},
 		}, nil
@@ -527,6 +512,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		ChatModel:            "gpt-4o-mini",
 		TextModel:            "",        // OpenAI doesn't support text completion in newer models
 		ReasoningModel:       "o1-mini", // OpenAI reasoning model
+		PromptCachingModel:   "gpt-4.1",
 		TranscriptionModel:   "whisper-1",
 		SpeechSynthesisModel: "tts-1",
 		Scenarios: TestScenarios{
@@ -642,7 +628,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 	{
 		Provider:  schemas.Azure,
 		ChatModel: "gpt-4o",
-		TextModel: "", // Azure OpenAI doesn't support text completion in newer models
+		TextModel: "", // Azure doesn't support text completion in newer models
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,

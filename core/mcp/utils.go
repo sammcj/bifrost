@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -250,6 +251,12 @@ func shouldSkipToolForRequest(ctx context.Context, clientName, toolName string) 
 
 // convertMCPToolToBifrostSchema converts an MCP tool definition to Bifrost format.
 func convertMCPToolToBifrostSchema(mcpTool *mcp.Tool) schemas.ChatTool {
+	var properties *schemas.OrderedMap
+	if len(mcpTool.InputSchema.Properties) > 0 {
+		orderedProps := make(schemas.OrderedMap, len(mcpTool.InputSchema.Properties))
+		maps.Copy(orderedProps, mcpTool.InputSchema.Properties)
+		properties = &orderedProps
+	}
 	return schemas.ChatTool{
 		Type: schemas.ChatToolTypeFunction,
 		Function: &schemas.ChatToolFunction{
@@ -257,7 +264,7 @@ func convertMCPToolToBifrostSchema(mcpTool *mcp.Tool) schemas.ChatTool {
 			Description: schemas.Ptr(mcpTool.Description),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type:       mcpTool.InputSchema.Type,
-				Properties: schemas.Ptr(mcpTool.InputSchema.Properties),
+				Properties: properties,
 				Required:   mcpTool.InputSchema.Required,
 			},
 		},

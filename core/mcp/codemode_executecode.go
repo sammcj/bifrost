@@ -67,7 +67,7 @@ const (
 // Returns:
 //   - schemas.ChatTool: The tool definition for executing tool code
 func (m *ToolsManager) createExecuteToolCodeTool() schemas.ChatTool {
-	executeToolCodeProps := map[string]interface{}{
+	executeToolCodeProps := schemas.OrderedMap{
 		"code": map[string]interface{}{
 			"type":        "string",
 			"description": "TypeScript code to execute. The code will be transpiled to JavaScript and validated before execution. Import/export statements will be stripped. You can use async/await syntax for async operations. For simple use cases, directly return results. Check keys and value types only for debugging. Do not print entire outputs in console logs - only print structure (keys, types) when debugging. ALWAYS retry if code fails. Example (simple): const result = await serverName.toolName({arg: 'value'}); return result; Example (debugging): const result = await serverName.toolName({arg: 'value'}); const getStruct = (o, d=0) => d>2 ? '...' : o===null ? 'null' : Array.isArray(o) ? `Array[${o.length}]` : typeof o !== 'object' ? typeof o : Object.keys(o).reduce((a,k) => (a[k]=getStruct(o[k],d+1), a), {}); console.log('Structure:', getStruct(result)); return result;",

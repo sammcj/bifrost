@@ -66,7 +66,6 @@ Create `main.go` with the required plugin functions. Here's the complete hello-w
 package main
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/maximhq/bifrost/core/schemas"
@@ -87,7 +86,7 @@ func GetName() string {
 
 // TransportInterceptor modifies raw HTTP headers and body
 // Only called when using HTTP transport (bifrost-http)
-func TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+func TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	fmt.Println("TransportInterceptor called")
 	// Modify headers or body before they enter Bifrost core
 	return headers, body, nil
@@ -95,7 +94,7 @@ func TransportInterceptor(ctx *context.Context, url string, headers map[string]s
 
 // PreHook is called before the request is sent to the provider
 // This is where you can modify requests or short-circuit the flow
-func PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+func PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	fmt.Println("PreHook called")
 	// Modify the request or return a short-circuit to skip provider call
 	return req, nil, nil
@@ -103,7 +102,7 @@ func PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.Bifros
 
 // PostHook is called after receiving a response from the provider
 // This is where you can modify responses or handle errors
-func PostHook(ctx *context.Context, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+func PostHook(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	fmt.Println("PostHook called")
 	// Modify the response or error before returning to caller
 	return resp, bifrostErr, nil
@@ -168,7 +167,7 @@ Called before each provider request. Use this to:
 **Short-Circuiting Example:**
 
 ```go
-func PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+func PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	// Return cached response without calling provider
 	if cachedResponse := checkCache(req) {
 		return req, &schemas.PluginShortCircuit{
@@ -191,7 +190,7 @@ Called after provider responses (or short-circuits). Use this to:
 **Response Transformation Example:**
 
 ```go
-func PostHook(ctx *context.Context, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+func PostHook(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	if resp != nil && resp.ChatResponse != nil {
 		// Add custom metadata
 		resp.ChatResponse.ExtraFields.RawResponse = map[string]interface{}{
@@ -296,6 +295,7 @@ Add your plugin to Bifrost's `config.json`:
       "enabled": true,
       "name": "my-plugin",
       "path": "/path/to/my-plugin.so",
+      "version": 1,
       "config": {
         "api_key": "your-api-key",
         "custom_setting": "value"
@@ -311,6 +311,7 @@ Add your plugin to Bifrost's `config.json`:
 - `name` - Plugin identifier (used in logs)
 - `path` - Absolute or relative path to the `.so` file
 - `config` - Plugin-specific configuration passed to `Init()`
+- `version` - (Optional) Plugin version number (default: 1). Increment this value to force a reload of the plugin and database update when Bifrost restarts. Useful when you want to ensure config changes take effect without manually clearing plugin state.
 
 ## Step 6: Test Your Plugin
 
@@ -356,7 +357,6 @@ For plugins that need to maintain state across requests:
 package main
 
 import (
-	"context"
 	"sync"
 	"github.com/maximhq/bifrost/core/schemas"
 )
@@ -366,7 +366,7 @@ var (
 	mu           sync.Mutex
 )
 
-func PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+func PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	mu.Lock()
 	requestCount++
 	count := requestCount
@@ -382,7 +382,7 @@ func PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.Bifros
 Control whether Bifrost should try fallback providers:
 
 ```go
-func PostHook(ctx *context.Context, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+func PostHook(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	if bifrostErr != nil {
 		// Allow fallbacks for rate limit errors
 		if bifrostErr.Error.Type != nil && *bifrostErr.Error.Type == "rate_limit" {
@@ -403,7 +403,7 @@ func PostHook(ctx *context.Context, resp *schemas.BifrostResponse, bifrostErr *s
 ```go
 var cache sync.Map
 
-func PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+func PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	// Generate cache key from request
 	key := generateCacheKey(req)
 	
@@ -417,7 +417,7 @@ func PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.Bifros
 	return req, nil, nil
 }
 
-func PostHook(ctx *context.Context, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+func PostHook(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	if resp != nil && bifrostErr == nil {
 		// Store in cache
 		key := generateCacheKeyFromResponse(resp)

@@ -1,0 +1,22 @@
+services:
+  # mitmproxy - HTTP proxy with Web UI for debugging
+  # Web UI: http://localhost:8081
+  # Proxy: http://localhost:8082
+  mitmproxy:
+      image: mitmproxy/mitmproxy:latest
+      container_name: bifrost-mitmproxy
+      command: mitmweb --web-host 0.0.0.0 --web-port 8081 --listen-host 0.0.0.0 --listen-port 8082 --set proxyauth=bifrost:secret-token --set web_password=secret-token
+      ports:
+          - "8082:8082"   # Proxy port
+          - "8081:8081"   # Web UI
+      networks:
+          bifrost_network:
+              ipv4_address: 172.38.0.16
+
+networks:
+  bifrost_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.38.0.0/16
+          gateway: 172.38.0.1

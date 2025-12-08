@@ -173,13 +173,13 @@ func TestLogRepoIDSelection(t *testing.T) {
 			}
 
 			// Create context with header repo if provided
-			ctx := context.Background()
+			ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 			if tt.headerRepo != "" {
-				ctx = context.WithValue(ctx, LogRepoIDKey, tt.headerRepo)
+				ctx.SetValue(LogRepoIDKey, tt.headerRepo)
 			}
 
 			// Test the selection logic
-			result := plugin.getEffectiveLogRepoID(&ctx)
+			result := plugin.getEffectiveLogRepoID(ctx)
 
 			if result != tt.expectedRepo {
 				t.Errorf("Expected repo '%s', got '%s'", tt.expectedRepo, result)

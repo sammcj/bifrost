@@ -3,6 +3,7 @@ package schemas
 import (
 	"bytes"
 	"fmt"
+	"sort"
 
 	"github.com/bytedance/sonic"
 )
@@ -214,12 +215,92 @@ type ChatToolFunction struct {
 
 // ToolFunctionParameters represents the parameters for a function definition.
 type ToolFunctionParameters struct {
-	Type                 string                  `json:"type"`                           // Type of the parameters
-	Description          *string                 `json:"description,omitempty"`          // Description of the parameters
-	Required             []string                `json:"required,omitempty"`             // Required parameter names
-	Properties           *map[string]interface{} `json:"properties,omitempty"`           // Parameter properties
-	Enum                 []string                `json:"enum,omitempty"`                 // Enum values for the parameters
-	AdditionalProperties *bool                   `json:"additionalProperties,omitempty"` // Whether to allow additional properties
+	Type                 string      `json:"type"`                           // Type of the parameters
+	Description          *string     `json:"description,omitempty"`          // Description of the parameters
+	Required             []string    `json:"required,omitempty"`             // Required parameter names
+	Properties           *OrderedMap `json:"properties,omitempty"`           // Parameter properties
+	Enum                 []string    `json:"enum,omitempty"`                 // Enum values for the parameters
+	AdditionalProperties *bool       `json:"additionalProperties,omitempty"` // Whether to allow additional properties
+}
+
+type OrderedMap map[string]interface{}
+
+// normalizeOrderedMap recursively converts JSON-like data into a tree where
+// all objects are OrderedMap, and arrays are []interface{} of normalized values.
+func normalizeValueToOrderedMap(v interface{}) interface{} {
+	switch x := v.(type) {
+	case OrderedMap:
+		// normalize nested values
+		n := OrderedMap{}
+		for k, v2 := range x {
+			n[k] = normalizeValueToOrderedMap(v2)
+		}
+		return n
+
+	case map[string]interface{}:
+		n := OrderedMap{}
+		for k, v2 := range x {
+			n[k] = normalizeValueToOrderedMap(v2)
+		}
+		return n
+
+	case []interface{}:
+		out := make([]interface{}, len(x))
+		for i, elem := range x {
+			out[i] = normalizeValueToOrderedMap(elem)
+		}
+		return out
+
+	default:
+		// primitives, time.Time, types with their own MarshalJSON, etc.
+		return v
+	}
+}
+
+func (om OrderedMap) MarshalJSON() ([]byte, error) {
+	if om == nil {
+		return []byte("null"), nil
+	}
+
+	// Work on a normalized copy so we don't surprise callers by mutating om.
+	norm := OrderedMap{}
+	for k, v := range om {
+		norm[k] = normalizeValueToOrderedMap(v)
+	}
+
+	// Deterministic, sorted-key encoding for the top level.
+	keys := make([]string, 0, len(norm))
+	for k := range norm {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+
+	for i, k := range keys {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+
+		// key
+		keyBytes, err := sonic.Marshal(k)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(keyBytes)
+		buf.WriteByte(':')
+
+		// value
+		valBytes, err := sonic.Marshal(norm[k])
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(valBytes)
+	}
+
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
 }
 
 type ChatToolCustom struct {

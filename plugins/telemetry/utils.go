@@ -9,6 +9,7 @@ import (
 	"math"
 	"strings"
 
+	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/valyala/fasthttp"
 )
@@ -69,7 +70,7 @@ func safeObserve(histogram *prometheus.HistogramVec, value float64, labels ...st
 }
 
 // getStringFromContext safely extracts a string value from context
-func getStringFromContext(ctx context.Context, key any) string {
+func getStringFromContext(ctx *schemas.BifrostContext, key any) string {
 	if value := ctx.Value(key); value != nil {
 		if str, ok := value.(string); ok {
 			return str

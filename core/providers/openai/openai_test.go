@@ -22,9 +22,10 @@ func TestOpenAI(t *testing.T) {
 	defer cancel()
 
 	testConfig := testutil.ComprehensiveTestConfig{
-		Provider:  schemas.OpenAI,
-		TextModel: "gpt-3.5-turbo-instruct",
-		ChatModel: "gpt-4o-mini",
+		Provider:           schemas.OpenAI,
+		TextModel:          "gpt-3.5-turbo-instruct",
+		ChatModel:          "gpt-4o-mini",
+		PromptCachingModel: "gpt-4.1",
 		Fallbacks: []schemas.Fallback{
 			{Provider: schemas.OpenAI, Model: "gpt-4o"},
 		},
@@ -35,7 +36,7 @@ func TestOpenAI(t *testing.T) {
 			{Provider: schemas.OpenAI, Model: "whisper-1"},
 		},
 		SpeechSynthesisModel: "gpt-4o-mini-tts",
-		ReasoningModel:       "gpt-5",
+		ReasoningModel:       "o1",
 		Scenarios: testutil.TestScenarios{
 			TextCompletion:        true,
 			TextCompletionStream:  true,

@@ -89,7 +89,7 @@ export function ModelMultiselect({
 		(options: Option<ModelOption>[]) => {
 			const modelNames = options.map((opt) => opt.value);
 			onChange(modelNames);
-			
+
 			// Refresh the list with current query to update available options
 			const currentQuery = inputValueRef.current;
 			if (provider) {
@@ -108,7 +108,7 @@ export function ModelMultiselect({
 	// Per react-select docs: ignore input clear on blur, menu close, and set-value (selection)
 	const handleInputChange = useCallback((newValue: string, actionMeta: { action: string }) => {
 		// Don't clear input when selecting an option, blurring, or closing menu
-		if (actionMeta.action === 'set-value' || actionMeta.action === 'input-blur' || actionMeta.action === 'menu-close') {
+		if (actionMeta.action === "set-value" || actionMeta.action === "input-blur" || actionMeta.action === "menu-close") {
 			return;
 		}
 		setInputValue(newValue);
@@ -118,7 +118,7 @@ export function ModelMultiselect({
 	// Convert API data to options for default display
 	const defaultOptions: ModelOption[] = useMemo(
 		() =>
-			modelsData?.models.map((model) => ({
+			modelsData?.models?.map((model) => ({
 				label: model.name,
 				value: model.name,
 				provider: model.provider,
@@ -133,24 +133,25 @@ export function ModelMultiselect({
 			onChange={handleChange}
 			reload={loadOptions}
 			debounce={300}
+			isCreatable={true}
+			dynamicOptionCreation={true}
+			createOptionText="Press enter to add new model"			
 			defaultOptions={defaultOptions}
 			isLoading={isLoading}
 			placeholder={placeholder}
 			disabled={disabled || !provider}
-			className={cn("w-full !min-h-10", className)}            
+			className={cn("!min-h-10 w-full", className)}
 			triggerClassName="!shadow-none !border-border !min-h-10"
 			menuClassName="!z-[100] max-h-[300px] overflow-y-auto w-full cursor-pointer custom-scrollbar"
 			isClearable={false}
 			closeMenuOnSelect={false}
-			menuPlacement="auto"            
+			menuPlacement="auto"
 			inputValue={inputValue}
 			onInputChange={handleInputChange}
 			noResultsFoundPlaceholder="No models found"
-			emptyResultPlaceholder={
-				provider ? "Start typing to search models..." : "Please select a provider first"
-			}            
+			emptyResultPlaceholder={provider ? "Start typing to search models..." : "Please select a provider first"}
 			views={{
-                dropdownIndicator: () => <></>,
+				dropdownIndicator: () => <></>,
 				multiValue: (multiValueProps: MultiValueProps<ModelOption>) => {
 					return (
 						<div
@@ -188,4 +189,3 @@ export function ModelMultiselect({
 		/>
 	);
 }
-

@@ -1,7 +1,6 @@
 package mocker
 
 import (
-	"context"
 	"fmt"
 	"maps"
 	"math/rand"
@@ -480,19 +479,19 @@ func (p *MockerPlugin) GetName() string {
 }
 
 // TransportInterceptor is not used for this plugin
-func (p *MockerPlugin) TransportInterceptor(ctx *context.Context, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+func (p *MockerPlugin) TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
 	return headers, body, nil
 }
 
 // PreHook intercepts requests and applies mocking rules based on configuration
 // This is called before the actual provider request and can short-circuit the flow
-func (p *MockerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+func (p *MockerPlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	// Skip processing if plugin is disabled
 	if !p.config.Enabled {
 		return req, nil, nil
 	}
 
-	skipMocker, ok := (*ctx).Value(schemas.BifrostContextKey("skip-mocker")).(bool)
+	skipMocker, ok := ctx.Value(schemas.BifrostContextKey("skip-mocker")).(bool)
 	if ok && skipMocker {
 		return req, nil, nil
 	}
@@ -541,9 +540,10 @@ func (p *MockerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 	p.ruleHitsMu.Unlock()
 
 	// Generate appropriate mock response based on type
-	if response.Type == ResponseTypeSuccess {
+	switch response.Type {
+	case ResponseTypeSuccess:
 		return p.generateSuccessShortCircuit(req, response, startTime)
-	} else if response.Type == ResponseTypeError {
+	case ResponseTypeError:
 		return p.generateErrorShortCircuit(req, response)
 	}
 
@@ -552,7 +552,7 @@ func (p *MockerPlugin) PreHook(ctx *context.Context, req *schemas.BifrostRequest
 }
 
 // PostHook processes responses after provider calls
-func (p *MockerPlugin) PostHook(ctx *context.Context, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+func (p *MockerPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
 	return result, err, nil
 }
 

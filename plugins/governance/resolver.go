@@ -76,7 +76,7 @@ func NewBudgetResolver(store *GovernanceStore, logger schemas.Logger) *BudgetRes
 }
 
 // EvaluateRequest evaluates a request against the new hierarchical governance system
-func (r *BudgetResolver) EvaluateRequest(ctx *context.Context, evaluationRequest *EvaluationRequest) *EvaluationResult {
+func (r *BudgetResolver) EvaluateRequest(ctx *schemas.BifrostContext, evaluationRequest *EvaluationRequest) *EvaluationResult {
 	// 1. Validate virtual key exists and is active
 	vk, exists := r.store.GetVirtualKey(evaluationRequest.VirtualKey)
 	if !exists {
@@ -87,19 +87,19 @@ func (r *BudgetResolver) EvaluateRequest(ctx *context.Context, evaluationRequest
 	}
 
 	// Set virtual key id and name in context
-	*ctx = context.WithValue(*ctx, schemas.BifrostContextKey("bf-governance-virtual-key-id"), vk.ID)
-	*ctx = context.WithValue(*ctx, schemas.BifrostContextKey("bf-governance-virtual-key-name"), vk.Name)
+	ctx.SetValue(schemas.BifrostContextKey("bf-governance-virtual-key-id"), vk.ID)
+	ctx.SetValue(schemas.BifrostContextKey("bf-governance-virtual-key-name"), vk.Name)
 	if vk.Team != nil {
-		*ctx = context.WithValue(*ctx, schemas.BifrostContextKey("bf-governance-team-id"), vk.Team.ID)
-		*ctx = context.WithValue(*ctx, schemas.BifrostContextKey("bf-governance-team-name"), vk.Team.Name)
+		ctx.SetValue(schemas.BifrostContextKey("bf-governance-team-id"), vk.Team.ID)
+		ctx.SetValue(schemas.BifrostContextKey("bf-governance-team-name"), vk.Team.Name)
 		if vk.Team.Customer != nil {
-			*ctx = context.WithValue(*ctx, schemas.BifrostContextKey("bf-governance-customer-id"), vk.Team.Customer.ID)
-			*ctx = context.WithValue(*ctx, schemas.BifrostContextKey("bf-governance-customer-name"), vk.Team.Customer.Name)
+			ctx.SetValue(schemas.BifrostContextKey("bf-governance-customer-id"), vk.Team.Customer.ID)
+			ctx.SetValue(schemas.BifrostContextKey("bf-governance-customer-name"), vk.Team.Customer.Name)
 		}
 	}
 	if vk.Customer != nil {
-		*ctx = context.WithValue(*ctx, schemas.BifrostContextKey("bf-governance-customer-id"), vk.Customer.ID)
-		*ctx = context.WithValue(*ctx, schemas.BifrostContextKey("bf-governance-customer-name"), vk.Customer.Name)
+		ctx.SetValue(schemas.BifrostContextKey("bf-governance-customer-id"), vk.Customer.ID)
+		ctx.SetValue(schemas.BifrostContextKey("bf-governance-customer-name"), vk.Customer.Name)
 	}
 
 	if !vk.IsActive {
@@ -133,7 +133,7 @@ func (r *BudgetResolver) EvaluateRequest(ctx *context.Context, evaluationRequest
 	}
 
 	// 5. Check budget hierarchy (VK → Team → Customer)
-	if budgetResult := r.checkBudgetHierarchy(*ctx, vk); budgetResult != nil {
+	if budgetResult := r.checkBudgetHierarchy(ctx, vk); budgetResult != nil {
 		return budgetResult
 	}
 
@@ -144,7 +144,7 @@ func (r *BudgetResolver) EvaluateRequest(ctx *context.Context, evaluationRequest
 			for _, dbKey := range pc.Keys {
 				includeOnlyKeys = append(includeOnlyKeys, dbKey.KeyID)
 			}
-			*ctx = context.WithValue(*ctx, schemas.BifrostContextKey("bf-governance-include-only-keys"), includeOnlyKeys)
+			ctx.SetValue(schemas.BifrostContextKey("bf-governance-include-only-keys"), includeOnlyKeys)
 			break
 		}
 	}

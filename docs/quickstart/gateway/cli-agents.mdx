@@ -1,6 +1,6 @@
 ---
 title: "Tools, Editors & CLI Agents"
-description: "Use Bifrost with tools like LibreChat, Claude Code, Codex CLI and Qwen Code by just changing the base URL and unlock advanced features."
+description: "Use Bifrost with tools like LibreChat, Claude Code, Codex CLI, Gemini CLI and Qwen Code by just changing the base URL and unlock advanced features."
 icon: "robot"
 ---
 
@@ -65,7 +65,7 @@ It brings Sonnet 4.5 directly to your terminal with powerful coding capabilities
 
 2. **Configure Environment Variables**
    ```bash
-   export ANTHROPIC_API_KEY=dummy-key  # Handled by Bifrost (only set when using API key authentication)
+   export ANTHROPIC_API_KEY=dummy-key  # Handled by Bifrost (only set when using virtual keys)
    export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic
    ```
 
@@ -91,8 +91,9 @@ It provides powerful code generation and completion capabilities.
    npm install -g @openai/codex
    ```
 
-2. **Configure Base URL**
+2. **Configure Environment Variables**
    ```bash
+   export OPENAI_API_KEY=dummy-key  # Handled by Bifrost (only set when using virtual keys)
    export OPENAI_BASE_URL=http://localhost:8080/openai
    ```
 
@@ -100,6 +101,32 @@ It provides powerful code generation and completion capabilities.
    ```bash
    codex
    ```
+
+### [Gemini CLI](https://github.com/google-gemini/gemini-cli)
+
+It is Google's powerful coding assistant with advanced reasoning capabilities.
+
+**Setup:**
+
+1. **Install Gemini CLI**
+   ```bash
+   npm install -g @google/gemini-cli
+   ```
+
+2. **Configure Environment Variables**
+   ```bash
+   export GEMINI_API_KEY=dummy-key  # Handled by Bifrost (only set when using virtual keys)
+   export GOOGLE_GEMINI_BASE_URL=http://localhost:8080/genai
+   ```
+
+3. **Run Gemini CLI**
+   ```bash
+   gemini
+   ```
+
+4. Select **Use Gemini API Key** in the CLI prompt for authentication.
+
+![Gemini CLI authentication](../../media/gemini-cli.png)
 
 ### [Qwen Code](https://github.com/QwenLM/qwen-code)
 

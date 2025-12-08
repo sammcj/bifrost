@@ -2,7 +2,6 @@
 package streaming
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -300,7 +299,7 @@ func (a *Accumulator) appendContentToMessage(message *schemas.ChatMessage, newCo
 
 // ProcessStreamingResponse processes a streaming response
 // It handles chat, audio, and responses streaming responses
-func (a *Accumulator) ProcessStreamingResponse(ctx *context.Context, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*ProcessedStreamResponse, error) {
+func (a *Accumulator) ProcessStreamingResponse(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*ProcessedStreamResponse, error) {
 	// Check if this is a streaming response
 	if result == nil {
 		return nil, fmt.Errorf("result is nil")

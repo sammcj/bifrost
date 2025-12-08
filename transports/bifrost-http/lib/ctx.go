@@ -45,6 +45,7 @@ import (
 // 5. API Key Headers:
 //   - Authorization: Bearer token format only (e.g., "Bearer sk-...") - OpenAI style
 //   - x-api-key: Direct API key value - Anthropic style
+//   - x-goog-api-key: Direct API key value - Google Gemini style
 //   - Keys are extracted and stored in the context using schemas.BifrostContextKey
 //   - This enables explicit key usage for requests via headers
 //
@@ -80,7 +81,10 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) (*c
 		requestID = uuid.New().String()
 	}
 	bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeyRequestID, requestID)
-
+	// Populating all user values from the request context
+	ctx.VisitUserValuesAll(func(key, value any) {
+		bifrostCtx = context.WithValue(bifrostCtx, key, value)
+	})
 	// Initialize tags map for collecting maxim tags
 	maximTags := make(map[string]string)
 
@@ -134,7 +138,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) (*c
 				return true
 			}
 		}
-		// Handle virtual key header (x-bf-vk, authorization, x-api-key headers)
+		// Handle virtual key header (x-bf-vk, authorization, x-api-key, x-goog-api-key headers)
 		if keyStr == string(schemas.BifrostContextKeyVirtualKey) {
 			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(keyStr), string(value))
 			return true
@@ -151,6 +155,10 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) (*c
 			}
 		}
 		if keyStr == "x-api-key" && strings.HasPrefix(strings.ToLower(string(value)), governance.VirtualKeyPrefix) {
+			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeyVirtualKey, string(value))
+			return true
+		}
+		if keyStr == "x-goog-api-key" && strings.HasPrefix(strings.ToLower(string(value)), governance.VirtualKeyPrefix) {
 			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeyVirtualKey, string(value))
 			return true
 		}
@@ -223,7 +231,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) (*c
 	}
 
 	if allowDirectKeys {
-		// Extract API key from Authorization header (Bearer format) or x-api-key header
+		// Extract API key from Authorization header (Bearer format), x-api-key, or x-goog-api-key header
 		var apiKey string
 
 		// TODO: fix plugin data leak
@@ -241,11 +249,17 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool) (*c
 			}
 		}
 
-		// Check x-api-key header if no valid Authorization header found (Anthropic style)
 		if apiKey == "" {
+			// Check x-api-key (Anthropic style) header if no valid Authorization header found
 			xAPIKey := string(ctx.Request.Header.Peek("x-api-key"))
 			if xAPIKey != "" && !strings.HasPrefix(strings.ToLower(xAPIKey), governance.VirtualKeyPrefix) {
 				apiKey = strings.TrimSpace(xAPIKey)
+			} else {
+				// Check x-goog-api-key (Google Gemini style) header if no valid Authorization header found
+				xGoogleAPIKey := string(ctx.Request.Header.Peek("x-goog-api-key"))
+				if xGoogleAPIKey != "" && !strings.HasPrefix(strings.ToLower(xGoogleAPIKey), governance.VirtualKeyPrefix) {
+					apiKey = strings.TrimSpace(xGoogleAPIKey)
+				}
 			}
 		}
 

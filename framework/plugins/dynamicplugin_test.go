@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/stretchr/testify/assert"
@@ -63,8 +64,9 @@ func TestDynamicPluginLifecycle(t *testing.T) {
 				{"role": "user", "content": "Hello"},
 			},
 		}
-
-		modifiedHeaders, modifiedBody, err := plugin.TransportInterceptor(&ctx, url, headers, body)
+		pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		modifiedHeaders, modifiedBody, err := plugin.TransportInterceptor(pluginCtx, url, headers, body)
 		require.NoError(t, err, "TransportInterceptor should not return error")
 		assert.Equal(t, headers, modifiedHeaders, "Headers should be unchanged")
 		assert.Equal(t, body, modifiedBody, "Body should be unchanged")
@@ -89,7 +91,9 @@ func TestDynamicPluginLifecycle(t *testing.T) {
 			},
 		}
 
-		modifiedReq, shortCircuit, err := plugin.PreHook(&ctx, req)
+		pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		modifiedReq, shortCircuit, err := plugin.PreHook(pluginCtx, req)
 		require.NoError(t, err, "PreHook should not return error")
 		assert.Nil(t, shortCircuit, "PreHook should not return short circuit")
 		assert.Equal(t, req, modifiedReq, "Request should be unchanged")
@@ -118,8 +122,9 @@ func TestDynamicPluginLifecycle(t *testing.T) {
 			},
 		}
 		bifrostErr := (*schemas.BifrostError)(nil)
-
-		modifiedResp, modifiedErr, err := plugin.PostHook(&ctx, resp, bifrostErr)
+		pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		modifiedResp, modifiedErr, err := plugin.PostHook(pluginCtx, resp, bifrostErr)
 		require.NoError(t, err, "PostHook should not return error")
 		assert.Equal(t, resp, modifiedResp, "Response should be unchanged")
 		assert.Equal(t, bifrostErr, modifiedErr, "Error should be unchanged")
@@ -136,7 +141,9 @@ func TestDynamicPluginLifecycle(t *testing.T) {
 			},
 		}
 
-		modifiedResp, modifiedErr, err := plugin.PostHook(&ctx, nil, bifrostErr)
+		pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		modifiedResp, modifiedErr, err := plugin.PostHook(pluginCtx, nil, bifrostErr)
 		require.NoError(t, err, "PostHook should not return error")
 		assert.Nil(t, modifiedResp, "Response should be nil")
 		assert.Equal(t, bifrostErr, modifiedErr, "Error should be unchanged")
@@ -249,7 +256,9 @@ func TestDynamicPlugin_ContextPropagation(t *testing.T) {
 			Model:    "gpt-4",
 		},
 	}
-	_, _, err = plugin.PreHook(&ctx, req)
+	pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	_, _, err = plugin.PreHook(pluginCtx, req)
 	require.NoError(t, err, "PreHook should succeed with context")
 
 	// Test PostHook with context
@@ -259,7 +268,7 @@ func TestDynamicPlugin_ContextPropagation(t *testing.T) {
 			Model: "gpt-4",
 		},
 	}
-	_, _, err = plugin.PostHook(&ctx, resp, nil)
+	_, _, err = plugin.PostHook(pluginCtx, resp, nil)
 	require.NoError(t, err, "PostHook should succeed with context")
 }
 
@@ -289,7 +298,9 @@ func TestDynamicPlugin_ConcurrentCalls(t *testing.T) {
 			}
 
 			// Call PreHook
-			_, _, err := plugin.PreHook(&ctx, req)
+			pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			_, _, err := plugin.PreHook(pluginCtx, req)
 			assert.NoError(t, err, "PreHook should succeed in goroutine %d", id)
 
 			// Call PostHook
@@ -299,7 +310,7 @@ func TestDynamicPlugin_ConcurrentCalls(t *testing.T) {
 					Model: "gpt-4",
 				},
 			}
-			_, _, err = plugin.PostHook(&ctx, resp, nil)
+			_, _, err = plugin.PostHook(pluginCtx, resp, nil)
 			assert.NoError(t, err, "PostHook should succeed in goroutine %d", id)
 
 			// Call GetName
@@ -416,7 +427,9 @@ func TestDynamicPlugin_ShortCircuitNil(t *testing.T) {
 		},
 	}
 
-	modifiedReq, shortCircuit, err := plugin.PreHook(&ctx, req)
+	pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	modifiedReq, shortCircuit, err := plugin.PreHook(pluginCtx, req)
 	require.NoError(t, err, "PreHook should succeed")
 	assert.Nil(t, shortCircuit, "Short circuit should be nil")
 	assert.NotNil(t, modifiedReq, "Modified request should not be nil")
@@ -440,8 +453,10 @@ func BenchmarkDynamicPlugin_PreHook(b *testing.B) {
 	}
 
 	b.ResetTimer()
+	pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = plugin.PreHook(&ctx, req)
+		_, _, _ = plugin.PreHook(pluginCtx, req)
 	}
 }
 
@@ -460,10 +475,11 @@ func BenchmarkDynamicPlugin_PostHook(b *testing.B) {
 			Model: "gpt-4",
 		},
 	}
-
+	pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _ = plugin.PostHook(&ctx, resp, nil)
+		_, _, _ = plugin.PostHook(pluginCtx, resp, nil)
 	}
 }
 
