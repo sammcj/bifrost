@@ -161,6 +161,7 @@ type Config struct {
 	MCPConfig        *schemas.MCPConfig
 	GovernanceConfig *configstore.GovernanceConfig
 	FrameworkConfig  *framework.FrameworkConfig
+	ProxyConfig      *configstoreTables.GlobalProxyConfig
 
 	// Track which keys come from environment variables
 	EnvKeys map[string][]configstore.EnvKeyInfo
