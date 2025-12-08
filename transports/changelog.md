@@ -1,0 +1,2 @@
+- feat: adds foundation for global proxy setup
+- chore: adds placeholders for Datadog native observability integration (LLMObs)
