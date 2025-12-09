@@ -136,13 +136,14 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 					Region:       bifrost.Ptr(getEnvWithDefault("AWS_REGION", "us-east-1")),
 					ARN:          bifrost.Ptr(os.Getenv("AWS_ARN")),
 					Deployments: map[string]string{
-						"claude-sonnet-4":   "global.anthropic.claude-sonnet-4-20250514-v1:0",
 						"claude-3.7-sonnet": "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+						"claude-4-sonnet":   "global.anthropic.claude-sonnet-4-20250514-v1:0",
+						"claude-4.5-sonnet": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
 					},
 				},
 			},
 			{
-				Models: []string{"anthropic.claude-3-5-sonnet-20240620-v1:0", "cohere.embed-v4:0"},
+				Models: []string{"cohere.embed-v4:0"},
 				Weight: 1.0,
 				BedrockKeyConfig: &schemas.BedrockKeyConfig{
 					AccessKey:    os.Getenv("AWS_ACCESS_KEY_ID"),
