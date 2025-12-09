@@ -213,6 +213,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 			ProxyConfig:              providerConfig.ProxyConfig,
 			SendBackRawResponse:      providerConfig.SendBackRawResponse,
 			CustomProviderConfig:     providerConfig.CustomProviderConfig,
+			ConfigHash:               providerConfig.ConfigHash,
 		}
 
 		// Upsert provider (create or update if exists)
@@ -229,6 +230,11 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 		// Create keys for this provider
 		dbKeys := make([]tables.TableKey, 0, len(providerConfig.Keys))
 		for _, key := range providerConfig.Keys {
+			// Generate key hash
+			keyHash, err := GenerateKeyHash(key)
+			if err != nil {
+				return fmt.Errorf("failed to generate key hash: %w", err)
+			}
 			dbKey := tables.TableKey{
 				Provider:         dbProvider.Name,
 				ProviderID:       dbProvider.ID,
@@ -240,6 +246,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 				AzureKeyConfig:   key.AzureKeyConfig,
 				VertexKeyConfig:  key.VertexKeyConfig,
 				BedrockKeyConfig: key.BedrockKeyConfig,
+				ConfigHash:       keyHash,
 			}
 
 			// Handle Azure config
@@ -326,6 +333,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 	dbProvider.ProxyConfig = configCopy.ProxyConfig
 	dbProvider.SendBackRawResponse = configCopy.SendBackRawResponse
 	dbProvider.CustomProviderConfig = configCopy.CustomProviderConfig
+	dbProvider.ConfigHash = configCopy.ConfigHash
 
 	// Save the updated provider
 	if err := txDB.WithContext(ctx).Save(&dbProvider).Error; err != nil {
@@ -346,6 +354,11 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 
 	// Process each key in the new config
 	for _, key := range configCopy.Keys {
+		// Generate key hash
+		keyHash, err := GenerateKeyHash(key)
+		if err != nil {
+			return fmt.Errorf("failed to generate key hash: %w", err)
+		}
 		dbKey := tables.TableKey{
 			Provider:         dbProvider.Name,
 			ProviderID:       dbProvider.ID,
@@ -357,6 +370,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 			AzureKeyConfig:   key.AzureKeyConfig,
 			VertexKeyConfig:  key.VertexKeyConfig,
 			BedrockKeyConfig: key.BedrockKeyConfig,
+			ConfigHash:       keyHash,
 		}
 
 		// Handle Azure config
@@ -436,6 +450,7 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 		ProxyConfig:              configCopy.ProxyConfig,
 		SendBackRawResponse:      configCopy.SendBackRawResponse,
 		CustomProviderConfig:     configCopy.CustomProviderConfig,
+		ConfigHash:               configCopy.ConfigHash,
 	}
 
 	// Create the provider
@@ -445,6 +460,11 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 
 	// Create keys for this provider
 	for _, key := range configCopy.Keys {
+		// Generate key hash
+		keyHash, err := GenerateKeyHash(key)
+		if err != nil {
+			return fmt.Errorf("failed to generate key hash: %w", err)
+		}
 		dbKey := tables.TableKey{
 			Provider:         dbProvider.Name,
 			ProviderID:       dbProvider.ID,
@@ -456,6 +476,7 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 			AzureKeyConfig:   key.AzureKeyConfig,
 			VertexKeyConfig:  key.VertexKeyConfig,
 			BedrockKeyConfig: key.BedrockKeyConfig,
+			ConfigHash:       keyHash,
 		}
 
 		// Handle Azure config
@@ -624,6 +645,7 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 			ProxyConfig:              dbProvider.ProxyConfig,
 			SendBackRawResponse:      dbProvider.SendBackRawResponse,
 			CustomProviderConfig:     dbProvider.CustomProviderConfig,
+			ConfigHash:               dbProvider.ConfigHash,
 		}
 		processedProviders[provider] = providerConfig
 	}

@@ -1,6 +1,10 @@
 package configstore
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+
+	"github.com/bytedance/sonic"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
 )
@@ -28,18 +32,18 @@ type EnvKeyInfo struct {
 // ClientConfig represents the core configuration for Bifrost HTTP transport and the Bifrost Client.
 // It includes settings for excess request handling, Prometheus metrics, and initial pool size.
 type ClientConfig struct {
-	DropExcessRequests      bool     `json:"drop_excess_requests"`      // Drop excess requests if the provider queue is full
-	InitialPoolSize         int      `json:"initial_pool_size"`         // The initial pool size for the bifrost client
-	PrometheusLabels        []string `json:"prometheus_labels"`         // The labels to be used for prometheus metrics
+	DropExcessRequests      bool     `json:"drop_excess_requests"`                // Drop excess requests if the provider queue is full
+	InitialPoolSize         int      `json:"initial_pool_size"`                   // The initial pool size for the bifrost client
+	PrometheusLabels        []string `json:"prometheus_labels"`                   // The labels to be used for prometheus metrics
 	EnableLogging           bool     `json:"enable_logging"`                      // Enable logging of requests and responses
 	DisableContentLogging   bool     `json:"disable_content_logging"`             // Disable logging of content
 	LogRetentionDays        int      `json:"log_retention_days" validate:"min=1"` // Number of days to retain logs (minimum 1 day)
-	EnableGovernance        bool     `json:"enable_governance"`         // Enable governance on all requests
-	EnforceGovernanceHeader bool     `json:"enforce_governance_header"` // Enforce governance on all requests
-	AllowDirectKeys         bool     `json:"allow_direct_keys"`         // Allow direct keys to be used for requests
-	AllowedOrigins          []string `json:"allowed_origins,omitempty"` // Additional allowed origins for CORS and WebSocket (localhost is always allowed)
-	MaxRequestBodySizeMB    int      `json:"max_request_body_size_mb"`  // The maximum request body size in MB
-	EnableLiteLLMFallbacks  bool     `json:"enable_litellm_fallbacks"`  // Enable litellm-specific fallbacks for text completion for Groq
+	EnableGovernance        bool     `json:"enable_governance"`                   // Enable governance on all requests
+	EnforceGovernanceHeader bool     `json:"enforce_governance_header"`           // Enforce governance on all requests
+	AllowDirectKeys         bool     `json:"allow_direct_keys"`                   // Allow direct keys to be used for requests
+	AllowedOrigins          []string `json:"allowed_origins,omitempty"`           // Additional allowed origins for CORS and WebSocket (localhost is always allowed)
+	MaxRequestBodySizeMB    int      `json:"max_request_body_size_mb"`            // The maximum request body size in MB
+	EnableLiteLLMFallbacks  bool     `json:"enable_litellm_fallbacks"`            // Enable litellm-specific fallbacks for text completion for Groq
 }
 
 // ProviderConfig represents the configuration for a specific AI model provider.
@@ -51,14 +55,126 @@ type ProviderConfig struct {
 	ProxyConfig              *schemas.ProxyConfig              `json:"proxy_config,omitempty"`                // Proxy configuration
 	SendBackRawResponse      bool                              `json:"send_back_raw_response"`                // Include raw response in BifrostResponse
 	CustomProviderConfig     *schemas.CustomProviderConfig     `json:"custom_provider_config,omitempty"`      // Custom provider configuration
+	ConfigHash               string                            `json:"-"`
+}
+
+// GenerateConfigHash generates a SHA256 hash of the provider configuration.
+// This is used to detect changes between config.json and database config.
+// Keys are excluded as they are hashed separately.
+func (p *ProviderConfig) GenerateConfigHash(providerName string) (string, error) {
+	hash := sha256.New()
+
+	// Hash provider name
+	hash.Write([]byte(providerName))
+
+	// Hash NetworkConfig
+	if p.NetworkConfig != nil {
+		data, err := sonic.Marshal(p.NetworkConfig)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash ConcurrencyAndBufferSize
+	if p.ConcurrencyAndBufferSize != nil {
+		data, err := sonic.Marshal(p.ConcurrencyAndBufferSize)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash ProxyConfig
+	if p.ProxyConfig != nil {
+		data, err := sonic.Marshal(p.ProxyConfig)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash CustomProviderConfig
+	if p.CustomProviderConfig != nil {
+		data, err := sonic.Marshal(p.CustomProviderConfig)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash SendBackRawResponse
+	if p.SendBackRawResponse {
+		hash.Write([]byte("sendBackRawResponse"))
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// GenerateKeyHash generates a SHA256 hash for an individual key.
+// This is used to detect changes to keys between config.json and database.
+// Skips: ID (dynamic UUID), timestamps
+func GenerateKeyHash(key schemas.Key) (string, error) {
+	hash := sha256.New()
+
+	// Hash Name
+	hash.Write([]byte(key.Name))
+
+	// Hash Value
+	hash.Write([]byte(key.Value))
+
+	// Hash Models (key-level model restrictions)
+	if len(key.Models) > 0 {
+		data, err := sonic.Marshal(key.Models)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash Weight
+	data, err := sonic.Marshal(key.Weight)
+	if err != nil {
+		return "", err
+	}
+	hash.Write(data)
+
+	// Hash AzureKeyConfig
+	if key.AzureKeyConfig != nil {
+		data, err := sonic.Marshal(key.AzureKeyConfig)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash VertexKeyConfig
+	if key.VertexKeyConfig != nil {
+		data, err := sonic.Marshal(key.VertexKeyConfig)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash BedrockKeyConfig
+	if key.BedrockKeyConfig != nil {
+		data, err := sonic.Marshal(key.BedrockKeyConfig)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // AuthConfig represents configured auth config for Bifrost dashboard
 type AuthConfig struct {
-	AdminUserName           string `json:"admin_username"`
-	AdminPassword           string `json:"admin_password"`
-	IsEnabled               bool   `json:"is_enabled"`
-	DisableAuthOnInference  bool   `json:"disable_auth_on_inference"`
+	AdminUserName          string `json:"admin_username"`
+	AdminPassword          string `json:"admin_password"`
+	IsEnabled              bool   `json:"is_enabled"`
+	DisableAuthOnInference bool   `json:"disable_auth_on_inference"`
 }
 
 // ConfigMap maps provider names to their configurations.

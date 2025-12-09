@@ -648,18 +648,17 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 
 	// 2. Check for Providers
 
-	var processedProviders map[schemas.ModelProvider]configstore.ProviderConfig
+	var providersInConfigStore map[schemas.ModelProvider]configstore.ProviderConfig
 	if config.ConfigStore != nil {
 		logger.Debug("getting providers config from store")
-		processedProviders, err = config.ConfigStore.GetProvidersConfig(ctx)
+		providersInConfigStore, err = config.ConfigStore.GetProvidersConfig(ctx)
 		if err != nil {
 			logger.Warn("failed to get providers config from store: %v", err)
 		}
 	}
-	// If we don't have any data in the store, we will process the data from the config file
-	logger.Debug("no providers config found in store, processing from config file")
-	if processedProviders == nil {
-		processedProviders = make(map[schemas.ModelProvider]configstore.ProviderConfig)
+	if providersInConfigStore == nil {
+		logger.Debug("no providers config found in store, processing from config file")
+		providersInConfigStore = make(map[schemas.ModelProvider]configstore.ProviderConfig)
 	}
 	// Process provider configurations
 	if configData.Providers != nil {
@@ -720,38 +719,77 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 					}
 				}
 			}
-			if _, exists := processedProviders[provider]; !exists {
-				processedProviders[provider] = cfg
+			// Generate hash from config.json provider config
+			fileConfigHash, err := cfg.GenerateConfigHash(string(provider))
+			if err != nil {
+				logger.Warn("failed to generate config hash for %s: %v", provider, err)
+			}
+			cfg.ConfigHash = fileConfigHash
+			if existingCfg, exists := providersInConfigStore[provider]; !exists {
+				// New provider - add from config.json
+				providersInConfigStore[provider] = cfg
 			} else {
-				// Here we will merge the keys
-				existingCfg := processedProviders[provider]
-				// Here we will check if the key is already present
-				keysToAdd := make([]schemas.Key, 0)
-				for _, newKey := range cfg.Keys {
-					found := false
-					for _, existingKey := range existingCfg.Keys {
-						if existingKey.Name == newKey.Name || existingKey.ID == newKey.ID || existingKey.Value == newKey.Value {
-							// Here we will skip the key
-							found = true
-							break
+				// Provider exists in DB - compare hashes
+				if existingCfg.ConfigHash != fileConfigHash {
+					// Hash mismatch - config.json was changed, sync from file
+					logger.Debug("config hash mismatch for provider %s, syncing from config file", provider)
+					// Keep the file config but merge any keys that only exist in DB
+					// (keys added via dashboard that aren't in config.json)
+					mergedKeys := cfg.Keys
+					for _, dbKey := range existingCfg.Keys {
+						found := false
+						for i, fileKey := range cfg.Keys {
+							// Compare by hash to detect changes
+							fileKeyHash, err := configstore.GenerateKeyHash(fileKey)
+							if err != nil {
+								logger.Warn("failed to generate key hash for file key %s (%s): %v, falling back to name comparison", fileKey.Name, provider, err)
+								// Fall back to name-only comparison if hash generation fails
+								if fileKey.Name == dbKey.Name {
+									cfg.Keys[i].ID = dbKey.ID
+									found = true
+									break
+								}
+								continue
+							}
+							dbKeyHash, err := configstore.GenerateKeyHash(schemas.Key{
+								Name:             dbKey.Name,
+								Value:            dbKey.Value,
+								Models:           dbKey.Models,
+								Weight:           dbKey.Weight,
+								AzureKeyConfig:   dbKey.AzureKeyConfig,
+								VertexKeyConfig:  dbKey.VertexKeyConfig,
+								BedrockKeyConfig: dbKey.BedrockKeyConfig,
+							})
+							if err != nil {
+								logger.Fatal("failed to generate key hash for %s (%s): %v", dbKey.Name, provider, err)
+								continue
+							}
+							if fileKeyHash == dbKeyHash || fileKey.Name == dbKey.Name {
+								cfg.Keys[i].ID = dbKey.ID
+								found = true
+								break
+							}
+						}
+						if !found {
+							// Key exists in DB but not in file - preserve it (added via dashboard)
+							mergedKeys = append(mergedKeys, dbKey)
 						}
 					}
-					if !found {
-						keysToAdd = append(keysToAdd, newKey)
-					}
+					cfg.Keys = mergedKeys
+					providersInConfigStore[provider] = cfg
+				} else {
+					// Hash matches - keep DB config (no changes in config.json)
+					logger.Debug("config hash matches for provider %s, keeping DB config", provider)
+					providersInConfigStore[provider] = existingCfg
 				}
-				existingCfg.Keys = append(existingCfg.Keys, keysToAdd...)
-				processedProviders[provider] = existingCfg
 			}
 		}
-		// Store processed configurations in memory
-		config.Providers = processedProviders
 	} else {
 		config.autoDetectProviders(ctx)
 	}
 	if config.ConfigStore != nil {
 		logger.Debug("updating providers config in store")
-		err = config.ConfigStore.UpdateProvidersConfig(ctx, processedProviders)
+		err = config.ConfigStore.UpdateProvidersConfig(ctx, providersInConfigStore)
 		if err != nil {
 			logger.Fatal("failed to update providers config: %v", err)
 		}
@@ -759,7 +797,7 @@ func LoadConfig(ctx context.Context, configDirPath string) (*Config, error) {
 			logger.Fatal("failed to update env keys: %v", err)
 		}
 	}
-	config.Providers = processedProviders
+	config.Providers = providersInConfigStore
 	// 3. Check for MCP Config
 	var mcpConfig *schemas.MCPConfig
 	if config.ConfigStore != nil {
