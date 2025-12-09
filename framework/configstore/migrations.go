@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/migrator"
 	"gorm.io/gorm"
@@ -86,6 +87,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 		return err
 	}
 	if err := migrationAddPluginVersionColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := migrationAddConfigHashColumn(ctx, db); err != nil {
 		return err
 	}
 	return nil
@@ -1137,18 +1141,18 @@ func migrationMoveKeysToProviderConfig(ctx context.Context, db *gorm.DB) error {
 			tx = tx.WithContext(ctx)
 			gormMigrator := tx.Migrator()
 
-		// Step 1: Create the new join table for provider config -> keys relationship
-		// Setup the join table so GORM knows about the custom structure
-		if err := tx.SetupJoinTable(&tables.TableVirtualKeyProviderConfig{}, "Keys", &tables.TableVirtualKeyProviderConfigKey{}); err != nil {
-			return fmt.Errorf("failed to setup join table for provider config keys: %w", err)
-		}
-
-		// Create the join table if it doesn't exist
-		if !gormMigrator.HasTable(&tables.TableVirtualKeyProviderConfigKey{}) {
-			if err := gormMigrator.CreateTable(&tables.TableVirtualKeyProviderConfigKey{}); err != nil {
-				return fmt.Errorf("failed to create join table for provider config keys: %w", err)
+			// Step 1: Create the new join table for provider config -> keys relationship
+			// Setup the join table so GORM knows about the custom structure
+			if err := tx.SetupJoinTable(&tables.TableVirtualKeyProviderConfig{}, "Keys", &tables.TableVirtualKeyProviderConfigKey{}); err != nil {
+				return fmt.Errorf("failed to setup join table for provider config keys: %w", err)
 			}
-		}
+
+			// Create the join table if it doesn't exist
+			if !gormMigrator.HasTable(&tables.TableVirtualKeyProviderConfigKey{}) {
+				if err := gormMigrator.CreateTable(&tables.TableVirtualKeyProviderConfigKey{}); err != nil {
+					return fmt.Errorf("failed to create join table for provider config keys: %w", err)
+				}
+			}
 
 			// Step 2: Migrate existing key associations from virtual key to provider config level
 			// Check if old join table exists
@@ -1274,6 +1278,96 @@ func migrationAddPluginVersionColumn(ctx context.Context, db *gorm.DB) error {
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while running add plugin version column migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddConfigHashColumn adds the config_hash column to the provider and key tables
+func migrationAddConfigHashColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_config_hash_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			// Add config_hash to providers table
+			if !migrator.HasColumn(&tables.TableProvider{}, "config_hash") {
+				if err := migrator.AddColumn(&tables.TableProvider{}, "config_hash"); err != nil {
+					return err
+				}
+				// Pre-populate hashes for existing providers
+				var providers []tables.TableProvider
+				if err := tx.Find(&providers).Error; err != nil {
+					return fmt.Errorf("failed to fetch providers for hash migration: %w", err)
+				}
+				for _, provider := range providers {
+					if provider.ConfigHash == "" {
+						// Convert to ProviderConfig and generate hash
+						providerConfig := ProviderConfig{
+							NetworkConfig:            provider.NetworkConfig,
+							ConcurrencyAndBufferSize: provider.ConcurrencyAndBufferSize,
+							ProxyConfig:              provider.ProxyConfig,
+							SendBackRawResponse:      provider.SendBackRawResponse,
+							CustomProviderConfig:     provider.CustomProviderConfig,
+						}
+						hash, err := providerConfig.GenerateConfigHash(provider.Name)
+						if err != nil {
+							return fmt.Errorf("failed to generate hash for provider %s: %w", provider.Name, err)
+						}
+						if err := tx.Model(&provider).Update("config_hash", hash).Error; err != nil {
+							return fmt.Errorf("failed to update hash for provider %s: %w", provider.Name, err)
+						}
+					}
+				}
+			}
+			// Add config_hash to keys table
+			if !migrator.HasColumn(&tables.TableKey{}, "config_hash") {
+				if err := migrator.AddColumn(&tables.TableKey{}, "config_hash"); err != nil {
+					return err
+				}
+				// Pre-populate hashes for existing keys
+				var keys []tables.TableKey
+				if err := tx.Find(&keys).Error; err != nil {
+					return fmt.Errorf("failed to fetch keys for hash migration: %w", err)
+				}
+				for _, key := range keys {
+					if key.ConfigHash == "" {
+						// Convert to schemas.Key and generate hash
+						schemaKey := schemas.Key{
+							Name:             key.Name,
+							Value:            key.Value,
+							Models:           key.Models,
+							Weight:           key.Weight,
+							AzureKeyConfig:   key.AzureKeyConfig,
+							VertexKeyConfig:  key.VertexKeyConfig,
+							BedrockKeyConfig: key.BedrockKeyConfig,
+						}
+						hash, err := GenerateKeyHash(schemaKey)
+						if err != nil {
+							return fmt.Errorf("failed to generate hash for key %s: %w", key.Name, err)
+						}
+						if err := tx.Model(&key).Update("config_hash", hash).Error; err != nil {
+							return fmt.Errorf("failed to update hash for key %s: %w", key.Name, err)
+						}
+					}
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if err := migrator.DropColumn(&tables.TableProvider{}, "config_hash"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TableKey{}, "config_hash"); err != nil {
+				return err
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running add config hash column migration: %s", err.Error())
 	}
 	return nil
 }
