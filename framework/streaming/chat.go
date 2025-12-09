@@ -142,6 +142,31 @@ func (a *Accumulator) processChatStreamingResponse(ctx *schemas.BifrostContext, 
 	chunk.ErrorDetails = bifrostErr
 	if bifrostErr != nil {
 		chunk.FinishReason = bifrost.Ptr("error")
+	} else if result != nil && result.TextCompletionResponse != nil {
+		// Handle text completion response directly
+		if len(result.TextCompletionResponse.Choices) > 0 {
+			choice := result.TextCompletionResponse.Choices[0]
+
+			if choice.TextCompletionResponseChoice != nil {
+				deltaCopy := choice.TextCompletionResponseChoice.Text
+				chunk.Delta = &schemas.ChatStreamResponseChoiceDelta{
+					Content: deltaCopy,
+				}
+				chunk.FinishReason = choice.FinishReason
+			}
+		}
+		// Extract token usage
+		if result.TextCompletionResponse.Usage != nil && result.TextCompletionResponse.Usage.TotalTokens > 0 {
+			chunk.TokenUsage = result.TextCompletionResponse.Usage
+		}
+		chunk.ChunkIndex = result.TextCompletionResponse.ExtraFields.ChunkIndex
+		if isFinalChunk {
+			if a.pricingManager != nil {
+				cost := a.pricingManager.CalculateCostWithCacheDebug(result)
+				chunk.Cost = bifrost.Ptr(cost)
+			}
+			chunk.SemanticCacheDebug = result.GetExtraFields().CacheDebug
+		}
 	} else if result != nil && result.ChatResponse != nil {
 		// Extract delta and other information
 		if len(result.ChatResponse.Choices) > 0 {
