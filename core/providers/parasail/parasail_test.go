@@ -2,6 +2,7 @@ package parasail_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/maximhq/bifrost/core/internal/testutil"
@@ -11,7 +12,7 @@ import (
 
 func TestParasail(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("PARASAIL_API_KEY") == "" {
+	if strings.TrimSpace(os.Getenv("PARASAIL_API_KEY")) == "" {
 		t.Skip("Skipping Parasail tests because PARASAIL_API_KEY is not set")
 	}
 

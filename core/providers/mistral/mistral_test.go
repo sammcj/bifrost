@@ -2,6 +2,7 @@ package mistral_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/maximhq/bifrost/core/internal/testutil"
@@ -11,7 +12,7 @@ import (
 
 func TestMistral(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("MISTRAL_API_KEY") == "" {
+	if strings.TrimSpace(os.Getenv("MISTRAL_API_KEY")) == "" {
 		t.Skip("Skipping Mistral tests because MISTRAL_API_KEY is not set")
 	}
 

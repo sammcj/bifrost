@@ -2,6 +2,7 @@ package cerebras_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/maximhq/bifrost/core/internal/testutil"
@@ -11,7 +12,7 @@ import (
 
 func TestCerebras(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("CEREBRAS_API_KEY") == "" {
+	if strings.TrimSpace(os.Getenv("CEREBRAS_API_KEY")) == "" {
 		t.Skip("Skipping Cerebras tests because CEREBRAS_API_KEY is not set")
 	}
 

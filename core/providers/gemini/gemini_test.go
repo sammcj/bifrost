@@ -2,6 +2,7 @@ package gemini_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/maximhq/bifrost/core/internal/testutil"
@@ -11,7 +12,7 @@ import (
 
 func TestGemini(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("GEMINI_API_KEY") == "" {
+	if strings.TrimSpace(os.Getenv("GEMINI_API_KEY")) == "" {
 		t.Skip("Skipping Gemini tests because GEMINI_API_KEY is not set")
 	}
 

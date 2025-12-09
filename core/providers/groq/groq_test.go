@@ -3,6 +3,7 @@ package groq_test
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/maximhq/bifrost/core/internal/testutil"
@@ -12,7 +13,7 @@ import (
 
 func TestGroq(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("GROQ_API_KEY") == "" {
+	if strings.TrimSpace(os.Getenv("GROQ_API_KEY")) == "" {
 		t.Skip("Skipping Groq tests because GROQ_API_KEY is not set")
 	}
 

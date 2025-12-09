@@ -2,6 +2,7 @@ package openrouter_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/maximhq/bifrost/core/internal/testutil"
@@ -11,7 +12,7 @@ import (
 
 func TestOpenRouter(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("OPENROUTER_API_KEY") == "" {
+	if strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")) == "" {
 		t.Skip("Skipping OpenRouter tests because OPENROUTER_API_KEY is not set")
 	}
 

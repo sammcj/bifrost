@@ -2,6 +2,7 @@ package vertex_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/maximhq/bifrost/core/internal/testutil"
@@ -11,7 +12,7 @@ import (
 
 func TestVertex(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("VERTEX_API_KEY") == "" && (os.Getenv("VERTEX_PROJECT_ID") == "" || os.Getenv("VERTEX_CREDENTIALS") == "") {
+	if strings.TrimSpace(os.Getenv("VERTEX_API_KEY")) == "" && (strings.TrimSpace(os.Getenv("VERTEX_PROJECT_ID")) == "" || strings.TrimSpace(os.Getenv("VERTEX_CREDENTIALS")) == "") {
 		t.Skip("Skipping Vertex tests because VERTEX_API_KEY is not set and VERTEX_PROJECT_ID or VERTEX_CREDENTIALS is not set")
 	}
 
