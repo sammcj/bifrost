@@ -1,5 +1,0 @@
-- feat: adds global proxy support
-- feat: adds datadog native integration handling
-- feat: enterprise plugin handling for OSS
-- feat: adds support `OTEL_RESOURCE_ATTRIBUTES` for otel plugin
-- chore: some minor bug fixes

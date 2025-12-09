@@ -1,4 +1,0 @@
-- feat: added missing extrafields to errors in core
-- feat: adds global proxy support
-- feat: handle cached tokens in Anthropic streaming responses
-- fix: adds status field for responses API

@@ -1,3 +1,0 @@
-- feat: add custom CA TLS cert support for protocols
-- feat: enterprise plugin handling
-- chore: updating core to 1.2.35 and framework to 1.1.44
