@@ -53,6 +53,7 @@ type BedrockConverseRequest struct {
 	PerformanceConfig                 *BedrockPerformanceConfig        `json:"performanceConfig,omitempty"`                 // Performance configuration
 	PromptVariables                   map[string]BedrockPromptVariable `json:"promptVariables,omitempty"`                   // Prompt variables for prompt management
 	RequestMetadata                   map[string]string                `json:"requestMetadata,omitempty"`                   // Request metadata
+	ServiceTier                       *string                          `json:"service_tier,omitempty"`                      // Service tier ("reserved" | "priority" | "default" | "flex")
 	Stream                            bool                             `json:"-"`                                           // Whether streaming is requested (internal, not in JSON)
 }
 
@@ -255,6 +256,7 @@ type BedrockConverseResponse struct {
 	Metrics                       *BedrockConverseMetrics   `json:"metrics"`                                 // Required: Response metrics
 	AdditionalModelResponseFields map[string]interface{}    `json:"additionalModelResponseFields,omitempty"` // Optional: Additional model-specific response fields
 	PerformanceConfig             *BedrockPerformanceConfig `json:"performanceConfig,omitempty"`             // Optional: Performance configuration used
+	ServiceTier                   *string                   `json:"service_tier,omitempty"`                  // Optional: Service tier that was used
 	Trace                         *BedrockConverseTrace     `json:"trace,omitempty"`                         // Optional: Guardrail trace information
 }
 
