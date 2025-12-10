@@ -477,7 +477,9 @@ func ToBedrockResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) (*Be
 		bedrockReq.InferenceConfig = inferenceConfig
 
 		if bifrostReq.Params.ServiceTier != nil {
-			bedrockReq.ServiceTier = bifrostReq.Params.ServiceTier
+			bedrockReq.ServiceTier = &BedrockServiceTier{
+				Type: *bifrostReq.Params.ServiceTier,
+			}
 		}
 	}
 
@@ -659,8 +661,8 @@ func (response *BedrockConverseResponse) ToBifrostResponsesResponse() (*schemas.
 		bifrostResp.Output = outputMessages
 	}
 
-	if response.ServiceTier != nil && *response.ServiceTier != "" {
-		bifrostResp.ServiceTier = response.ServiceTier
+	if response.ServiceTier != nil && response.ServiceTier.Type != "" {
+		bifrostResp.ServiceTier = &response.ServiceTier.Type
 	}
 
 	return bifrostResp, nil

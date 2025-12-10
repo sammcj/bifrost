@@ -42,7 +42,9 @@ func convertChatParameters(bifrostReq *schemas.BifrostChatRequest, bedrockReq *B
 		}
 	}
 	if bifrostReq.Params.ServiceTier != nil {
-		bedrockReq.ServiceTier = bifrostReq.Params.ServiceTier
+		bedrockReq.ServiceTier = &BedrockServiceTier{
+			Type: *bifrostReq.Params.ServiceTier,
+		}
 	}
 	// Add extra parameters
 	if len(bifrostReq.Params.ExtraParams) > 0 {
