@@ -92,6 +92,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddConfigHashColumn(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddVirtualKeyConfigHashColumn(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1368,6 +1371,53 @@ func migrationAddConfigHashColumn(ctx context.Context, db *gorm.DB) error {
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while running add config hash column migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddVirtualKeyConfigHashColumn adds the config_hash column to the virtual keys table
+func migrationAddVirtualKeyConfigHashColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_virtual_key_config_hash_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			// Add config_hash to virtual keys table
+			if !migrator.HasColumn(&tables.TableVirtualKey{}, "config_hash") {
+				if err := migrator.AddColumn(&tables.TableVirtualKey{}, "config_hash"); err != nil {
+					return err
+				}
+				// Pre-populate hashes for existing virtual keys
+				var virtualKeys []tables.TableVirtualKey
+				if err := tx.Preload("ProviderConfigs").Preload("ProviderConfigs.Keys").Preload("MCPConfigs").Find(&virtualKeys).Error; err != nil {
+					return fmt.Errorf("failed to fetch virtual keys for hash migration: %w", err)
+				}
+				for _, vk := range virtualKeys {
+					if vk.ConfigHash == "" {
+						hash, err := GenerateVirtualKeyHash(vk)
+						if err != nil {
+							return fmt.Errorf("failed to generate hash for virtual key %s: %w", vk.ID, err)
+						}
+						if err := tx.Model(&vk).Update("config_hash", hash).Error; err != nil {
+							return fmt.Errorf("failed to update hash for virtual key %s: %w", vk.ID, err)
+						}
+					}
+				}				
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if err := migrator.DropColumn(&tables.TableVirtualKey{}, "config_hash"); err != nil {
+				return err
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running add virtual key config hash column migration: %s", err.Error())
 	}
 	return nil
 }

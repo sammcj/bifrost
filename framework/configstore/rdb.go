@@ -1241,7 +1241,7 @@ func (s *RDBConfigStore) UpdateVirtualKey(ctx context.Context, virtualKey *table
 	// Update virtual key
 	// Use Select() to explicitly update all fields, including nil pointer fields
 	// This ensures TeamID gets set to NULL when switching from team to customer association
-	if err := txDB.WithContext(ctx).Select("name", "description", "value", "is_active", "team_id", "customer_id", "budget_id", "rate_limit_id", "updated_at").Updates(virtualKey).Error; err != nil {
+	if err := txDB.WithContext(ctx).Select("name", "description", "value", "is_active", "team_id", "customer_id", "budget_id", "rate_limit_id", "config_hash", "updated_at").Updates(virtualKey).Error; err != nil {
 		return s.parseGormError(err)
 	}
 	return nil
@@ -1284,10 +1284,14 @@ func (s *RDBConfigStore) GetAllRedactedKeys(ctx context.Context, ids []string) (
 	}
 	redactedKeys := make([]schemas.Key, len(keys))
 	for i, key := range keys {
+		models := key.Models
+		if models == nil {
+			models = []string{} // Ensure models is never nil in JSON response
+		}
 		redactedKeys[i] = schemas.Key{
 			ID:     key.KeyID,
 			Name:   key.Name,
-			Models: key.Models,
+			Models: models,
 			Weight: key.Weight,
 		}
 	}

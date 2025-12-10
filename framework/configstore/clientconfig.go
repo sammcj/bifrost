@@ -3,6 +3,7 @@ package configstore
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"sort"
 
 	"github.com/bytedance/sonic"
 	"github.com/maximhq/bifrost/core/schemas"
@@ -125,7 +126,10 @@ func GenerateKeyHash(key schemas.Key) (string, error) {
 
 	// Hash Models (key-level model restrictions)
 	if len(key.Models) > 0 {
-		data, err := sonic.Marshal(key.Models)
+		sortedModels := make([]string, len(key.Models))
+		copy(sortedModels, key.Models)
+		sort.Strings(sortedModels)
+		data, err := sonic.Marshal(sortedModels)
 		if err != nil {
 			return "", err
 		}
@@ -160,6 +164,174 @@ func GenerateKeyHash(key schemas.Key) (string, error) {
 	// Hash BedrockKeyConfig
 	if key.BedrockKeyConfig != nil {
 		data, err := sonic.Marshal(key.BedrockKeyConfig)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// VirtualKeyHashInput represents the fields used for virtual key hash generation.
+// This struct is used to create a consistent hash from TableVirtualKey,
+// excluding dynamic fields like ID, timestamps, and relationship objects.
+type VirtualKeyHashInput struct {
+	Name        string
+	Description string
+	Value       string
+	IsActive    bool
+	TeamID      *string
+	CustomerID  *string
+	BudgetID    *string
+	RateLimitID *string
+	// ProviderConfigs and MCPConfigs are hashed separately as they contain nested data
+	ProviderConfigs []VirtualKeyProviderConfigHashInput
+	MCPConfigs      []VirtualKeyMCPConfigHashInput
+}
+
+// VirtualKeyProviderConfigHashInput represents provider config fields for hashing
+type VirtualKeyProviderConfigHashInput struct {
+	Provider      string
+	Weight        float64
+	AllowedModels []string
+	BudgetID      *string
+	RateLimitID   *string
+	KeyIDs        []string // Only key IDs, not full key objects
+}
+
+// VirtualKeyMCPConfigHashInput represents MCP config fields for hashing
+type VirtualKeyMCPConfigHashInput struct {
+	MCPClientID    uint
+	ToolsToExecute []string
+}
+
+// GenerateVirtualKeyHash generates a SHA256 hash for a virtual key.
+// This is used to detect changes to virtual keys between config.json and database.
+// Skips: ID (primary key), CreatedAt, UpdatedAt, and relationship objects (Team, Customer, Budget, RateLimit)
+func GenerateVirtualKeyHash(vk tables.TableVirtualKey) (string, error) {
+	hash := sha256.New()
+
+	// Hash Name
+	hash.Write([]byte(vk.Name))
+
+	// Hash Description
+	hash.Write([]byte(vk.Description))
+
+	// Hash Value
+	hash.Write([]byte(vk.Value))
+
+	// Hash IsActive
+	if vk.IsActive {
+		hash.Write([]byte("isActive:true"))
+	} else {
+		hash.Write([]byte("isActive:false"))
+	}
+
+	// Hash TeamID
+	if vk.TeamID != nil {
+		hash.Write([]byte("teamID:" + *vk.TeamID))
+	}
+
+	// Hash CustomerID
+	if vk.CustomerID != nil {
+		hash.Write([]byte("customerID:" + *vk.CustomerID))
+	}
+
+	// Hash BudgetID
+	if vk.BudgetID != nil {
+		hash.Write([]byte("budgetID:" + *vk.BudgetID))
+	}
+
+	// Hash RateLimitID
+	if vk.RateLimitID != nil {
+		hash.Write([]byte("rateLimitID:" + *vk.RateLimitID))
+	}
+
+	// Hash ProviderConfigs
+	if len(vk.ProviderConfigs) > 0 {
+		// Copy and sort provider configs for deterministic hashing
+		sortedProviderConfigs := make([]tables.TableVirtualKeyProviderConfig, len(vk.ProviderConfigs))
+		copy(sortedProviderConfigs, vk.ProviderConfigs)
+		sort.Slice(sortedProviderConfigs, func(i, j int) bool {
+			if sortedProviderConfigs[i].Provider != sortedProviderConfigs[j].Provider {
+				return sortedProviderConfigs[i].Provider < sortedProviderConfigs[j].Provider
+			}
+			bi, bj := "", ""
+			if sortedProviderConfigs[i].BudgetID != nil {
+				bi = *sortedProviderConfigs[i].BudgetID
+			}
+			if sortedProviderConfigs[j].BudgetID != nil {
+				bj = *sortedProviderConfigs[j].BudgetID
+			}
+			if bi != bj {
+				return bi < bj
+			}
+			ri, rj := "", ""
+			if sortedProviderConfigs[i].RateLimitID != nil {
+				ri = *sortedProviderConfigs[i].RateLimitID
+			}
+			if sortedProviderConfigs[j].RateLimitID != nil {
+				rj = *sortedProviderConfigs[j].RateLimitID
+			}
+			if ri != rj {
+				return ri < rj
+			}
+			return sortedProviderConfigs[i].Weight < sortedProviderConfigs[j].Weight
+		})
+
+		providerConfigsForHash := make([]VirtualKeyProviderConfigHashInput, len(sortedProviderConfigs))
+		for i, pc := range sortedProviderConfigs {
+			// Sort key IDs for deterministic hashing
+			keyIDs := make([]string, len(pc.Keys))
+			for j, k := range pc.Keys {
+				keyIDs[j] = k.KeyID
+			}
+			sort.Strings(keyIDs)
+
+			// Sort allowed models for deterministic hashing
+			sortedAllowedModels := make([]string, len(pc.AllowedModels))
+			copy(sortedAllowedModels, pc.AllowedModels)
+			sort.Strings(sortedAllowedModels)
+
+			providerConfigsForHash[i] = VirtualKeyProviderConfigHashInput{
+				Provider:      pc.Provider,
+				Weight:        pc.Weight,
+				AllowedModels: sortedAllowedModels,
+				BudgetID:      pc.BudgetID,
+				RateLimitID:   pc.RateLimitID,
+				KeyIDs:        keyIDs,
+			}
+		}
+		data, err := sonic.Marshal(providerConfigsForHash)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash MCPConfigs
+	if len(vk.MCPConfigs) > 0 {
+		// Copy and sort MCP configs for deterministic hashing
+		sortedMCPConfigs := make([]tables.TableVirtualKeyMCPConfig, len(vk.MCPConfigs))
+		copy(sortedMCPConfigs, vk.MCPConfigs)
+		sort.Slice(sortedMCPConfigs, func(i, j int) bool {
+			return sortedMCPConfigs[i].MCPClientID < sortedMCPConfigs[j].MCPClientID
+		})
+
+		mcpConfigsForHash := make([]VirtualKeyMCPConfigHashInput, len(sortedMCPConfigs))
+		for i, mc := range sortedMCPConfigs {
+			// Sort tools for deterministic hashing
+			sortedTools := make([]string, len(mc.ToolsToExecute))
+			copy(sortedTools, mc.ToolsToExecute)
+			sort.Strings(sortedTools)
+
+			mcpConfigsForHash[i] = VirtualKeyMCPConfigHashInput{
+				MCPClientID:    mc.MCPClientID,
+				ToolsToExecute: sortedTools,
+			}
+		}
+		data, err := sonic.Marshal(mcpConfigsForHash)
 		if err != nil {
 			return "", err
 		}

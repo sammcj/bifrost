@@ -169,6 +169,8 @@ func (k *TableKey) AfterFind(tx *gorm.DB) error {
 		if err := json.Unmarshal([]byte(k.ModelsJSON), &k.Models); err != nil {
 			return err
 		}
+	} else {
+		k.Models = []string{}
 	}
 
 	// Reconstruct Azure config if fields are present

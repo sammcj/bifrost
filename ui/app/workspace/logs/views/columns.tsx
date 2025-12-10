@@ -1,13 +1,13 @@
-"use client";
+"use client"
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
-import { ProviderName, RequestTypeColors, RequestTypeLabels, Status, StatusColors } from "@/lib/constants/logs";
-import { LogEntry, ResponsesMessageContentBlock } from "@/lib/types/logs";
-import { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, Trash2 } from "lucide-react";
-import moment from "moment";
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons"
+import { ProviderName, RequestTypeColors, RequestTypeLabels, Status, StatusColors } from "@/lib/constants/logs"
+import { LogEntry, ResponsesMessageContentBlock } from "@/lib/types/logs"
+import { ColumnDef } from "@tanstack/react-table"
+import { ArrowUpDown, Trash2 } from "lucide-react"
+import moment from "moment"
 
 function getMessage(log?: LogEntry) {
 	if (log?.input_history && log.input_history.length > 0) {
@@ -45,7 +45,7 @@ function getMessage(log?: LogEntry) {
 	return "";
 }
 
-export const createColumns = (onDelete: (log: LogEntry) => void): ColumnDef<LogEntry>[] => [
+export const createColumns = (onDelete: (log: LogEntry) => void, hasDeleteAccess = true): ColumnDef<LogEntry>[] => [
 	{
 		accessorKey: "status",
 		header: "Status",
@@ -174,12 +174,12 @@ export const createColumns = (onDelete: (log: LogEntry) => void): ColumnDef<LogE
 	{
 		id: "actions",
 		cell: ({ row }) => {
-			const log = row.original;
+			const log = row.original
 			return (
-				<Button variant="outline" size="icon" onClick={() => onDelete(log)}>
+				<Button variant="outline" size="icon" onClick={() => onDelete(log)} disabled={!hasDeleteAccess}>
 					<Trash2 />
 				</Button>
-			);
+			)
 		},
 	},
-];
+]
