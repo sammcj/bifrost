@@ -1,3 +1,0 @@
-- feat: adds rbac support across all pages
-- fix: fixes config.json <-> config store streaming cases for virtual keys, providers and keys. Improved test coverage for this flow.
-- fix: adds support for text streaming logging
