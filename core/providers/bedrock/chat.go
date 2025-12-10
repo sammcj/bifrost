@@ -58,42 +58,58 @@ func (response *BedrockConverseResponse) ToBifrostChatResponse(model string) (*s
 		if len(response.Output.Message.Content) == 1 && response.Output.Message.Content[0].Text != nil {
 			contentStr = response.Output.Message.Content[0].Text
 		} else {
-			for _, contentBlock := range response.Output.Message.Content {
-				// Handle text content
-				if contentBlock.Text != nil && *contentBlock.Text != "" {
-					contentBlocks = append(contentBlocks, schemas.ChatContentBlock{
-						Type: schemas.ChatContentBlockTypeText,
-						Text: contentBlock.Text,
-					})
-				}
-
-				// Handle tool use
-				if contentBlock.ToolUse != nil {
-					// Marshal the tool input to JSON string
-					var arguments string
-					if contentBlock.ToolUse.Input != nil {
-						if argBytes, err := sonic.Marshal(contentBlock.ToolUse.Input); err == nil {
-							arguments = string(argBytes)
-						} else {
-							arguments = fmt.Sprintf("%v", contentBlock.ToolUse.Input)
-						}
+			// Check if this is a single tool use for structured output (response_format)
+			// If there's only one tool use and no other content, treat it as structured output
+			if len(response.Output.Message.Content) == 1 && response.Output.Message.Content[0].ToolUse != nil {
+				toolUse := response.Output.Message.Content[0].ToolUse
+				// Marshal the tool input to JSON string and use as content
+				if toolUse.Input != nil {
+					if argBytes, err := sonic.Marshal(toolUse.Input); err == nil {
+						jsonStr := string(argBytes)
+						contentStr = &jsonStr
 					} else {
-						arguments = "{}"
+						jsonStr := fmt.Sprintf("%v", toolUse.Input)
+						contentStr = &jsonStr
+					}
+				}
+			} else {
+				for _, contentBlock := range response.Output.Message.Content {
+					// Handle text content
+					if contentBlock.Text != nil && *contentBlock.Text != "" {
+						contentBlocks = append(contentBlocks, schemas.ChatContentBlock{
+							Type: schemas.ChatContentBlockTypeText,
+							Text: contentBlock.Text,
+						})
 					}
 
-					// Create copies of the values to avoid range loop variable capture
-					toolUseID := contentBlock.ToolUse.ToolUseID
-					toolUseName := contentBlock.ToolUse.Name
+					// Handle tool use
+					if contentBlock.ToolUse != nil {
+						// Marshal the tool input to JSON string
+						var arguments string
+						if contentBlock.ToolUse.Input != nil {
+							if argBytes, err := sonic.Marshal(contentBlock.ToolUse.Input); err == nil {
+								arguments = string(argBytes)
+							} else {
+								arguments = fmt.Sprintf("%v", contentBlock.ToolUse.Input)
+							}
+						} else {
+							arguments = "{}"
+						}
 
-					toolCalls = append(toolCalls, schemas.ChatAssistantMessageToolCall{
-						Index: uint16(len(toolCalls)),
-						Type:  schemas.Ptr("function"),
-						ID:    &toolUseID,
-						Function: schemas.ChatAssistantMessageToolCallFunction{
-							Name:      &toolUseName,
-							Arguments: arguments,
-						},
-					})
+						// Create copies of the values to avoid range loop variable capture
+						toolUseID := contentBlock.ToolUse.ToolUseID
+						toolUseName := contentBlock.ToolUse.Name
+
+						toolCalls = append(toolCalls, schemas.ChatAssistantMessageToolCall{
+							Index: uint16(len(toolCalls)),
+							Type:  schemas.Ptr("function"),
+							ID:    &toolUseID,
+							Function: schemas.ChatAssistantMessageToolCallFunction{
+								Name:      &toolUseName,
+								Arguments: arguments,
+							},
+						})
+					}
 				}
 			}
 		}
@@ -189,12 +205,20 @@ func (chunk *BedrockStreamEvent) ToBifrostChatCompletionStream() (*schemas.Bifro
 	case chunk.Start != nil && chunk.Start.ToolUse != nil:
 		toolUseStart := chunk.Start.ToolUse
 
+		// Determine the tool call index from ContentBlockIndex
+		// ContentBlockIndex identifies which content block this tool call belongs to
+		var toolCallIndex uint16
+		if chunk.ContentBlockIndex != nil {
+			toolCallIndex = uint16(*chunk.ContentBlockIndex)
+		}
+
 		// Create tool call structure for start event
 		var toolCall schemas.ChatAssistantMessageToolCall
+		toolCall.Index = toolCallIndex
 		toolCall.ID = schemas.Ptr(toolUseStart.ToolUseID)
 		toolCall.Type = schemas.Ptr("function")
 		toolCall.Function.Name = schemas.Ptr(toolUseStart.Name)
-		toolCall.Function.Arguments = "{}" // Start with empty arguments
+		toolCall.Function.Arguments = "" // Start with empty arguments
 
 		streamResponse := &schemas.BifrostChatResponse{
 			Object: "chat.completion.chunk",
@@ -239,8 +263,16 @@ func (chunk *BedrockStreamEvent) ToBifrostChatCompletionStream() (*schemas.Bifro
 			// Handle tool use delta
 			toolUseDelta := chunk.Delta.ToolUse
 
+			// Determine the tool call index from ContentBlockIndex
+			// This must match the index used in the corresponding Start event
+			var toolCallIndex uint16
+			if chunk.ContentBlockIndex != nil {
+				toolCallIndex = uint16(*chunk.ContentBlockIndex)
+			}
+
 			// Create tool call structure
 			var toolCall schemas.ChatAssistantMessageToolCall
+			toolCall.Index = toolCallIndex
 			toolCall.Type = schemas.Ptr("function")
 
 			// For streaming, we need to accumulate tool use data

@@ -141,6 +141,61 @@ func parseJSONInput(jsonStr string) interface{} {
 	return result
 }
 
+// convertChatResponseFormatToAnthropicOutputFormat converts OpenAI Chat Completions response_format
+// to Anthropic's output_format structure.
+//
+// OpenAI Chat Completions format:
+//
+//	{
+//	  "type": "json_schema",
+//	  "json_schema": {
+//	    "name": "MySchema",
+//	    "schema": {...},
+//	    "strict": true
+//	  }
+//	}
+//
+// Anthropic's expected format (per https://docs.claude.com/en/docs/build-with-claude/structured-outputs):
+//
+//	{
+//	  "type": "json_schema",
+//	  "name": "MySchema",
+//	  "schema": {...},
+//	  "strict": true
+//	}
+func convertChatResponseFormatToAnthropicOutputFormat(responseFormat *interface{}) interface{} {
+	if responseFormat == nil {
+		return nil
+	}
+
+	formatMap, ok := (*responseFormat).(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	formatType, ok := formatMap["type"].(string)
+	if !ok || formatType != "json_schema" {
+		return nil
+	}
+
+	// Extract the nested json_schema object
+	jsonSchemaObj, ok := formatMap["json_schema"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	// Build the flattened Anthropic-compatible output_format structure
+	outputFormat := map[string]interface{}{
+		"type": formatType,
+	}
+
+	if schema, ok := jsonSchemaObj["schema"].(map[string]interface{}); ok {
+		outputFormat["schema"] = schema
+	}
+
+	return outputFormat
+}
+
 // convertResponsesTextConfigToAnthropicOutputFormat converts OpenAI Responses API text config
 // to Anthropic's output_format structure.
 //
@@ -177,11 +232,6 @@ func convertResponsesTextConfigToAnthropicOutputFormat(textConfig *schemas.Respo
 		"type": format.Type,
 	}
 
-	// Add optional fields if present
-	if format.Name != nil {
-		outputFormat["name"] = *format.Name
-	}
-
 	if format.JSONSchema != nil {
 		// Convert the schema structure
 		schema := map[string]interface{}{}
@@ -205,10 +255,6 @@ func convertResponsesTextConfigToAnthropicOutputFormat(textConfig *schemas.Respo
 		outputFormat["schema"] = schema
 	}
 
-	if format.Strict != nil {
-		outputFormat["strict"] = *format.Strict
-	}
-
 	return outputFormat
 }
 
@@ -220,8 +266,6 @@ func convertResponsesTextConfigToAnthropicOutputFormat(textConfig *schemas.Respo
 //	{
 //	  "type": "json_schema",
 //	  "schema": {...},
-//	  "name": "...",
-//	  "strict": true
 //	}
 //
 // OpenAI Responses API format:
@@ -255,16 +299,6 @@ func convertAnthropicOutputFormatToResponsesTextConfig(outputFormat interface{})
 
 	format := &schemas.ResponsesTextConfigFormat{
 		Type: formatType,
-	}
-
-	// Extract name if present
-	if name, ok := formatMap["name"].(string); ok {
-		format.Name = &name
-	}
-
-	// Extract strict if present
-	if strict, ok := formatMap["strict"].(bool); ok {
-		format.Strict = &strict
 	}
 
 	// Extract schema if present

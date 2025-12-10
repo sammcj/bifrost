@@ -408,7 +408,7 @@ func ToAnthropicChatRequest(bifrostReq *schemas.BifrostChatRequest) *AnthropicMe
 			anthropicReq.TopK = topK
 		}
 		if bifrostReq.Params.ResponseFormat != nil {
-			anthropicReq.OutputFormat = bifrostReq.Params.ResponseFormat
+			anthropicReq.OutputFormat = convertChatResponseFormatToAnthropicOutputFormat(bifrostReq.Params.ResponseFormat)
 		}
 
 		// Convert tools
