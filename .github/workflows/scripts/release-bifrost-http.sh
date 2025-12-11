@@ -310,10 +310,14 @@ cd ..
 echo "✅ Transport build validation successful"
 
 # Commit and push changes if any
-# First, stage any changes made to transports/
+# First, pull latest changes to avoid conflicts
+git pull origin main
+
+# Stage any changes made to transports/
 git add transports/
+
+# Check if there are staged changes after pulling
 if ! git diff --cached --quiet; then
-  git pull origin main
   git config user.name "github-actions[bot]"
   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
   echo "🔧 Committing and pushing changes..."
