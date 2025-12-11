@@ -231,7 +231,7 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
   # Services without healthchecks will show empty health status
   HEALTH_OUTPUT=$(docker compose -f "$CONFIGS_DIR/docker-compose.yml" ps --format "{{.Name}}:{{.Health}}" 2>/dev/null)
   HEALTHY_COUNT=$(echo "$HEALTH_OUTPUT" | grep -c ":healthy") || HEALTHY_COUNT=0
-  UNHEALTHY_COUNT=$(echo "$HEALTH_OUTPUT" | grep -E ":(starting|unhealthy)" | wc -l | tr -d ' ')
+  UNHEALTHY_COUNT=$(echo "$HEALTH_OUTPUT" | grep -cE ":(starting|unhealthy)") || UNHEALTHY_COUNT=0
   
   # All services are ready when:
   # 1. All expected services are running
