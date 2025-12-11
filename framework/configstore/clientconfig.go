@@ -3,6 +3,7 @@ package configstore
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"sort"
 
 	"github.com/bytedance/sonic"
@@ -45,6 +46,101 @@ type ClientConfig struct {
 	AllowedOrigins          []string `json:"allowed_origins,omitempty"`           // Additional allowed origins for CORS and WebSocket (localhost is always allowed)
 	MaxRequestBodySizeMB    int      `json:"max_request_body_size_mb"`            // The maximum request body size in MB
 	EnableLiteLLMFallbacks  bool     `json:"enable_litellm_fallbacks"`            // Enable litellm-specific fallbacks for text completion for Groq
+	ConfigHash              string   `json:"-"`                                   // Config hash for reconciliation (not serialized)
+}
+
+// GenerateClientConfigHash generates a SHA256 hash of the client configuration.
+// This is used to detect changes between config.json and database config.
+func (c *ClientConfig) GenerateClientConfigHash() (string, error) {
+	hash := sha256.New()
+
+	// Hash boolean fields
+	if c.DropExcessRequests {
+		hash.Write([]byte("dropExcessRequests:true"))
+	} else {
+		hash.Write([]byte("dropExcessRequests:false"))
+	}
+
+	if c.EnableLogging {
+		hash.Write([]byte("enableLogging:true"))
+	} else {
+		hash.Write([]byte("enableLogging:false"))
+	}
+
+	if c.DisableContentLogging {
+		hash.Write([]byte("disableContentLogging:true"))
+	} else {
+		hash.Write([]byte("disableContentLogging:false"))
+	}
+
+	if c.EnableGovernance {
+		hash.Write([]byte("enableGovernance:true"))
+	} else {
+		hash.Write([]byte("enableGovernance:false"))
+	}
+
+	if c.EnforceGovernanceHeader {
+		hash.Write([]byte("enforceGovernanceHeader:true"))
+	} else {
+		hash.Write([]byte("enforceGovernanceHeader:false"))
+	}
+
+	if c.AllowDirectKeys {
+		hash.Write([]byte("allowDirectKeys:true"))
+	} else {
+		hash.Write([]byte("allowDirectKeys:false"))
+	}
+
+	if c.EnableLiteLLMFallbacks {
+		hash.Write([]byte("enableLiteLLMFallbacks:true"))
+	} else {
+		hash.Write([]byte("enableLiteLLMFallbacks:false"))
+	}
+
+	// Hash integer fields
+	data, err := sonic.Marshal(c.InitialPoolSize)
+	if err != nil {
+		return "", err
+	}
+	hash.Write(data)
+
+	data, err = sonic.Marshal(c.LogRetentionDays)
+	if err != nil {
+		return "", err
+	}
+	hash.Write(data)
+
+	data, err = sonic.Marshal(c.MaxRequestBodySizeMB)
+	if err != nil {
+		return "", err
+	}
+	hash.Write(data)
+
+	// Hash PrometheusLabels (sorted for deterministic hashing)
+	if len(c.PrometheusLabels) > 0 {
+		sortedLabels := make([]string, len(c.PrometheusLabels))
+		copy(sortedLabels, c.PrometheusLabels)
+		sort.Strings(sortedLabels)
+		data, err := sonic.Marshal(sortedLabels)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash AllowedOrigins (sorted for deterministic hashing)
+	if len(c.AllowedOrigins) > 0 {
+		sortedOrigins := make([]string, len(c.AllowedOrigins))
+		copy(sortedOrigins, c.AllowedOrigins)
+		sort.Strings(sortedOrigins)
+		data, err := sonic.Marshal(sortedOrigins)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // ProviderConfig represents the configuration for a specific AI model provider.
@@ -337,6 +433,254 @@ func GenerateVirtualKeyHash(vk tables.TableVirtualKey) (string, error) {
 		}
 		hash.Write(data)
 	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// GenerateBudgetHash generates a SHA256 hash for a budget.
+// This is used to detect changes to budgets between config.json and database.
+// Skips: LastReset, CurrentUsage, CreatedAt, UpdatedAt (dynamic fields)
+func GenerateBudgetHash(b tables.TableBudget) (string, error) {
+	hash := sha256.New()
+
+	// Hash ID
+	hash.Write([]byte(b.ID))
+
+	// Hash MaxLimit
+	data, err := sonic.Marshal(b.MaxLimit)
+	if err != nil {
+		return "", err
+	}
+	hash.Write(data)
+
+	// Hash ResetDuration
+	hash.Write([]byte(b.ResetDuration))
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// GenerateRateLimitHash generates a SHA256 hash for a rate limit.
+// This is used to detect changes to rate limits between config.json and database.
+// Skips: CurrentUsage, LastReset, CreatedAt, UpdatedAt (dynamic fields)
+func GenerateRateLimitHash(rl tables.TableRateLimit) (string, error) {
+	hash := sha256.New()
+
+	// Hash ID
+	hash.Write([]byte(rl.ID))
+
+	// Hash TokenMaxLimit
+	if rl.TokenMaxLimit != nil {
+		data, err := sonic.Marshal(*rl.TokenMaxLimit)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash TokenResetDuration
+	if rl.TokenResetDuration != nil {
+		hash.Write([]byte(*rl.TokenResetDuration))
+	}
+
+	// Hash RequestMaxLimit
+	if rl.RequestMaxLimit != nil {
+		data, err := sonic.Marshal(*rl.RequestMaxLimit)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash RequestResetDuration
+	if rl.RequestResetDuration != nil {
+		hash.Write([]byte(*rl.RequestResetDuration))
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// GenerateCustomerHash generates a SHA256 hash for a customer.
+// This is used to detect changes to customers between config.json and database.
+// Skips: CreatedAt, UpdatedAt, and relationship objects (dynamic fields)
+func GenerateCustomerHash(c tables.TableCustomer) (string, error) {
+	hash := sha256.New()
+
+	// Hash ID
+	hash.Write([]byte(c.ID))
+
+	// Hash Name
+	hash.Write([]byte(c.Name))
+
+	// Hash BudgetID
+	if c.BudgetID != nil {
+		hash.Write([]byte("budgetID:" + *c.BudgetID))
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// GenerateTeamHash generates a SHA256 hash for a team.
+// This is used to detect changes to teams between config.json and database.
+// Skips: CreatedAt, UpdatedAt, and relationship objects (dynamic fields)
+func GenerateTeamHash(t tables.TableTeam) (string, error) {
+	hash := sha256.New()
+
+	// Hash ID
+	hash.Write([]byte(t.ID))
+
+	// Hash Name
+	hash.Write([]byte(t.Name))
+
+	// Hash CustomerID
+	if t.CustomerID != nil {
+		hash.Write([]byte("customerID:" + *t.CustomerID))
+	}
+
+	// Hash BudgetID
+	if t.BudgetID != nil {
+		hash.Write([]byte("budgetID:" + *t.BudgetID))
+	}
+
+	// Hash Profile - use Profile if set, else marshal ParsedProfile
+	// (Profile has json:"-" so when loading from JSON, only ParsedProfile is populated)
+	// Use encoding/json for consistency with BeforeSave hook serialization
+	if t.Profile != nil {
+		hash.Write([]byte("profile:" + *t.Profile))
+	} else if t.ParsedProfile != nil {
+		data, err := json.Marshal(t.ParsedProfile)
+		if err != nil {
+			return "", err
+		}
+		hash.Write([]byte("profile:" + string(data)))
+	}
+
+	// Hash Config - use Config if set, else marshal ParsedConfig
+	// Use encoding/json for consistency with BeforeSave hook serialization
+	if t.Config != nil {
+		hash.Write([]byte("config:" + *t.Config))
+	} else if t.ParsedConfig != nil {
+		data, err := json.Marshal(t.ParsedConfig)
+		if err != nil {
+			return "", err
+		}
+		hash.Write([]byte("config:" + string(data)))
+	}
+
+	// Hash Claims - use Claims if set, else marshal ParsedClaims
+	// Use encoding/json for consistency with BeforeSave hook serialization
+	if t.Claims != nil {
+		hash.Write([]byte("claims:" + *t.Claims))
+	} else if t.ParsedClaims != nil {
+		data, err := json.Marshal(t.ParsedClaims)
+		if err != nil {
+			return "", err
+		}
+		hash.Write([]byte("claims:" + string(data)))
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// GenerateMCPClientHash generates a SHA256 hash for an MCP client.
+// This is used to detect changes to MCP clients between config.json and database.
+// Skips: ID (autoIncrement), CreatedAt, UpdatedAt (dynamic fields)
+func GenerateMCPClientHash(m tables.TableMCPClient) (string, error) {
+	hash := sha256.New()
+
+	// Hash ClientID
+	hash.Write([]byte(m.ClientID))
+
+	// Hash Name
+	hash.Write([]byte(m.Name))
+
+	// Hash ConnectionType
+	hash.Write([]byte(m.ConnectionType))
+
+	// Hash ConnectionString
+	if m.ConnectionString != nil {
+		hash.Write([]byte(*m.ConnectionString))
+	}
+
+	// Hash StdioConfig
+	if m.StdioConfig != nil {
+		data, err := sonic.Marshal(m.StdioConfig)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash ToolsToExecute (sorted for deterministic hashing)
+	if len(m.ToolsToExecute) > 0 {
+		sortedTools := make([]string, len(m.ToolsToExecute))
+		copy(sortedTools, m.ToolsToExecute)
+		sort.Strings(sortedTools)
+		data, err := sonic.Marshal(sortedTools)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash Headers (sorted for deterministic hashing)
+	if len(m.Headers) > 0 {
+		keys := make([]string, 0, len(m.Headers))
+		for k := range m.Headers {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			hash.Write([]byte(k + ":" + m.Headers[k]))
+		}
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// GeneratePluginHash generates a SHA256 hash for a plugin.
+// This is used to detect changes to plugins between config.json and database.
+// Skips: ID (autoIncrement), CreatedAt, UpdatedAt, IsCustom (dynamic fields)
+func GeneratePluginHash(p tables.TablePlugin) (string, error) {
+	hash := sha256.New()
+
+	// Hash Name
+	hash.Write([]byte(p.Name))
+
+	// Hash Enabled
+	if p.Enabled {
+		hash.Write([]byte("enabled:true"))
+	} else {
+		hash.Write([]byte("enabled:false"))
+	}
+
+	// Hash Path
+	if p.Path != nil {
+		hash.Write([]byte("path:" + *p.Path))
+	}
+
+	// Hash Config (use ConfigJSON for consistent hashing)
+	// Normalize: nil and empty map ({}) are treated as equivalent (no hash contribution)
+	if p.ConfigJSON != "" && p.ConfigJSON != "{}" {
+		hash.Write([]byte(p.ConfigJSON))
+	} else if p.Config != nil {
+		// Check if Config is a non-empty map before hashing
+		// Use encoding/json for consistency with BeforeSave hook serialization
+		data, err := json.Marshal(p.Config)
+		if err != nil {
+			return "", err
+		}
+		// Only hash if it's not an empty object
+		if string(data) != "{}" && string(data) != "null" {
+			hash.Write(data)
+		}
+	}
+
+	// Hash Version
+	data, err := sonic.Marshal(p.Version)
+	if err != nil {
+		return "", err
+	}
+	hash.Write(data)
 
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }

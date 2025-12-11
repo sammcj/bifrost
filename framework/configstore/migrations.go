@@ -95,6 +95,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddVirtualKeyConfigHashColumn(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddAdditionalConfigHashColumns(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1418,6 +1421,226 @@ func migrationAddVirtualKeyConfigHashColumn(ctx context.Context, db *gorm.DB) er
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while running add virtual key config hash column migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddAdditionalConfigHashColumns adds config_hash columns to client config, budget, rate limit,
+// customer, team, MCP client, and plugin tables for reconciliation support
+func migrationAddAdditionalConfigHashColumns(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_additional_config_hash_columns",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			// Add config_hash to client config table
+			if !migrator.HasColumn(&tables.TableClientConfig{}, "config_hash") {
+				if err := migrator.AddColumn(&tables.TableClientConfig{}, "config_hash"); err != nil {
+					return err
+				}
+				// Pre-populate hashes for existing client configs
+				var clientConfigs []tables.TableClientConfig
+				if err := tx.Find(&clientConfigs).Error; err != nil {
+					return fmt.Errorf("failed to fetch client configs for hash migration: %w", err)
+				}
+				for _, cc := range clientConfigs {
+					if cc.ConfigHash == "" {
+						clientConfig := ClientConfig{
+							DropExcessRequests:      cc.DropExcessRequests,
+							InitialPoolSize:         cc.InitialPoolSize,
+							PrometheusLabels:        cc.PrometheusLabels,
+							EnableLogging:           cc.EnableLogging,
+							DisableContentLogging:   cc.DisableContentLogging,
+							LogRetentionDays:        cc.LogRetentionDays,
+							EnableGovernance:        cc.EnableGovernance,
+							EnforceGovernanceHeader: cc.EnforceGovernanceHeader,
+							AllowDirectKeys:         cc.AllowDirectKeys,
+							AllowedOrigins:          cc.AllowedOrigins,
+							MaxRequestBodySizeMB:    cc.MaxRequestBodySizeMB,
+							EnableLiteLLMFallbacks:  cc.EnableLiteLLMFallbacks,
+						}
+						hash, err := clientConfig.GenerateClientConfigHash()
+						if err != nil {
+							return fmt.Errorf("failed to generate hash for client config %d: %w", cc.ID, err)
+						}
+						if err := tx.Model(&cc).Update("config_hash", hash).Error; err != nil {
+							return fmt.Errorf("failed to update hash for client config %d: %w", cc.ID, err)
+						}
+					}
+				}
+			}
+
+			// Add config_hash to budgets table
+			if !migrator.HasColumn(&tables.TableBudget{}, "config_hash") {
+				if err := migrator.AddColumn(&tables.TableBudget{}, "config_hash"); err != nil {
+					return err
+				}
+				// Pre-populate hashes for existing budgets
+				var budgets []tables.TableBudget
+				if err := tx.Find(&budgets).Error; err != nil {
+					return fmt.Errorf("failed to fetch budgets for hash migration: %w", err)
+				}
+				for _, budget := range budgets {
+					if budget.ConfigHash == "" {
+						hash, err := GenerateBudgetHash(budget)
+						if err != nil {
+							return fmt.Errorf("failed to generate hash for budget %s: %w", budget.ID, err)
+						}
+						if err := tx.Model(&budget).Update("config_hash", hash).Error; err != nil {
+							return fmt.Errorf("failed to update hash for budget %s: %w", budget.ID, err)
+						}
+					}
+				}
+			}
+
+			// Add config_hash to rate limits table
+			if !migrator.HasColumn(&tables.TableRateLimit{}, "config_hash") {
+				if err := migrator.AddColumn(&tables.TableRateLimit{}, "config_hash"); err != nil {
+					return err
+				}
+				// Pre-populate hashes for existing rate limits
+				var rateLimits []tables.TableRateLimit
+				if err := tx.Find(&rateLimits).Error; err != nil {
+					return fmt.Errorf("failed to fetch rate limits for hash migration: %w", err)
+				}
+				for _, rl := range rateLimits {
+					if rl.ConfigHash == "" {
+						hash, err := GenerateRateLimitHash(rl)
+						if err != nil {
+							return fmt.Errorf("failed to generate hash for rate limit %s: %w", rl.ID, err)
+						}
+						if err := tx.Model(&rl).Update("config_hash", hash).Error; err != nil {
+							return fmt.Errorf("failed to update hash for rate limit %s: %w", rl.ID, err)
+						}
+					}
+				}
+			}
+
+			// Add config_hash to customers table
+			if !migrator.HasColumn(&tables.TableCustomer{}, "config_hash") {
+				if err := migrator.AddColumn(&tables.TableCustomer{}, "config_hash"); err != nil {
+					return err
+				}
+				// Pre-populate hashes for existing customers
+				var customers []tables.TableCustomer
+				if err := tx.Find(&customers).Error; err != nil {
+					return fmt.Errorf("failed to fetch customers for hash migration: %w", err)
+				}
+				for _, customer := range customers {
+					if customer.ConfigHash == "" {
+						hash, err := GenerateCustomerHash(customer)
+						if err != nil {
+							return fmt.Errorf("failed to generate hash for customer %s: %w", customer.ID, err)
+						}
+						if err := tx.Model(&customer).Update("config_hash", hash).Error; err != nil {
+							return fmt.Errorf("failed to update hash for customer %s: %w", customer.ID, err)
+						}
+					}
+				}
+			}
+
+			// Add config_hash to teams table
+			if !migrator.HasColumn(&tables.TableTeam{}, "config_hash") {
+				if err := migrator.AddColumn(&tables.TableTeam{}, "config_hash"); err != nil {
+					return err
+				}
+				// Pre-populate hashes for existing teams
+				var teams []tables.TableTeam
+				if err := tx.Find(&teams).Error; err != nil {
+					return fmt.Errorf("failed to fetch teams for hash migration: %w", err)
+				}
+				for _, team := range teams {
+					if team.ConfigHash == "" {
+						hash, err := GenerateTeamHash(team)
+						if err != nil {
+							return fmt.Errorf("failed to generate hash for team %s: %w", team.ID, err)
+						}
+						if err := tx.Model(&team).Update("config_hash", hash).Error; err != nil {
+							return fmt.Errorf("failed to update hash for team %s: %w", team.ID, err)
+						}
+					}
+				}
+			}
+
+			// Add config_hash to MCP clients table
+			if !migrator.HasColumn(&tables.TableMCPClient{}, "config_hash") {
+				if err := migrator.AddColumn(&tables.TableMCPClient{}, "config_hash"); err != nil {
+					return err
+				}
+				// Pre-populate hashes for existing MCP clients
+				var mcpClients []tables.TableMCPClient
+				if err := tx.Find(&mcpClients).Error; err != nil {
+					return fmt.Errorf("failed to fetch MCP clients for hash migration: %w", err)
+				}
+				for _, mcp := range mcpClients {
+					if mcp.ConfigHash == "" {
+						hash, err := GenerateMCPClientHash(mcp)
+						if err != nil {
+							return fmt.Errorf("failed to generate hash for MCP client %s: %w", mcp.Name, err)
+						}
+						if err := tx.Model(&mcp).Update("config_hash", hash).Error; err != nil {
+							return fmt.Errorf("failed to update hash for MCP client %s: %w", mcp.Name, err)
+						}
+					}
+				}
+			}
+
+			// Add config_hash to plugins table
+			if !migrator.HasColumn(&tables.TablePlugin{}, "config_hash") {
+				if err := migrator.AddColumn(&tables.TablePlugin{}, "config_hash"); err != nil {
+					return err
+				}
+				// Pre-populate hashes for existing plugins
+				var plugins []tables.TablePlugin
+				if err := tx.Find(&plugins).Error; err != nil {
+					return fmt.Errorf("failed to fetch plugins for hash migration: %w", err)
+				}
+				for _, plugin := range plugins {
+					if plugin.ConfigHash == "" {
+						hash, err := GeneratePluginHash(plugin)
+						if err != nil {
+							return fmt.Errorf("failed to generate hash for plugin %s: %w", plugin.Name, err)
+						}
+						if err := tx.Model(&plugin).Update("config_hash", hash).Error; err != nil {
+							return fmt.Errorf("failed to update hash for plugin %s: %w", plugin.Name, err)
+						}
+					}
+				}
+			}
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if err := migrator.DropColumn(&tables.TableClientConfig{}, "config_hash"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TableBudget{}, "config_hash"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TableRateLimit{}, "config_hash"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TableCustomer{}, "config_hash"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TableTeam{}, "config_hash"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TableMCPClient{}, "config_hash"); err != nil {
+				return err
+			}
+			if err := migrator.DropColumn(&tables.TablePlugin{}, "config_hash"); err != nil {
+				return err
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running add additional config hash columns migration: %s", err.Error())
 	}
 	return nil
 }
