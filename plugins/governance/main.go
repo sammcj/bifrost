@@ -37,6 +37,15 @@ type InMemoryStore interface {
 	GetConfiguredProviders() map[schemas.ModelProvider]configstore.ProviderConfig
 }
 
+type BaseGovernancePlugin interface {
+	GetName() string
+	TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error)
+	PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error)
+	PostHook(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)
+	Cleanup() error
+	GetGovernanceStore() GovernanceStore
+}
+
 // GovernancePlugin implements the main governance plugin with hierarchical budget system
 type GovernancePlugin struct {
 	ctx        context.Context
@@ -67,7 +76,9 @@ type GovernancePlugin struct {
 //
 // Behavior and defaults:
 //   - Enables all governance features with optimized defaults.
-//   - If `store` is nil, the plugin runs in-memory only (no persistence).
+//   - If `configStore` is nil, the plugin will use an in-memory LocalGovernanceStore
+//     (no persistence). Init constructs a LocalGovernanceStore internally when
+//     configStore is nil.
 //   - If `modelCatalog` is nil, cost calculation is skipped.
 //   - `config.IsVkMandatory` controls whether `x-bf-vk` is required in PreHook.
 //   - `inMemoryStore` is used by TransportInterceptor to validate configured providers
@@ -80,7 +91,7 @@ type GovernancePlugin struct {
 //   - ctx: base context for the plugin; a child context with cancel is created.
 //   - config: plugin flags; may be nil.
 //   - logger: logger used by all subcomponents.
-//   - store: configuration store used for persistence; may be nil.
+//   - configStore: configuration store used for persistence; may be nil.
 //   - governanceConfig: initial/seed governance configuration for the store.
 //   - modelCatalog: optional model catalog to compute request cost.
 //   - inMemoryStore: provider registry used for routing/validation in transports.
@@ -91,7 +102,11 @@ type GovernancePlugin struct {
 //
 // Side effects:
 //   - Logs warnings when optional dependencies are missing.
-//   - May perform startup resets via the usage tracker when `store` is non-nil.
+//   - May perform startup resets via the usage tracker when `configStore` is non-nil.
+//
+// Alternative entry point:
+//   - Use InitFromStore to inject a custom GovernanceStore implementation instead
+//     of constructing a LocalGovernanceStore internally.
 func Init(
 	ctx context.Context,
 	config *Config,
@@ -148,6 +163,18 @@ func Init(
 	return plugin, nil
 }
 
+// InitFromStore initializes and returns a governance plugin instance with a custom store.
+//
+// This constructor allows providing a custom GovernanceStore implementation instead of
+// creating a new LocalGovernanceStore. Use this when you need to:
+//   - Inject a custom store implementation for testing
+//   - Use a pre-configured store instance
+//   - Integrate with non-standard storage backends
+//
+// Parameters are the same as Init, except governanceConfig is replaced by governanceStore.
+// The governanceStore must not be nil, or an error is returned.
+//
+// See Init documentation for details on other parameters and behavior.
 func InitFromStore(
 	ctx context.Context,
 	config *Config,
