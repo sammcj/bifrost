@@ -216,27 +216,35 @@ docker compose -f "$CONFIGS_DIR/docker-compose.yml" up -d
 
 # Wait for services to be healthy with polling
 echo "⏳ Waiting for Docker services to be ready..."
-MAX_WAIT=60
+MAX_WAIT=90
 ELAPSED=0
 SERVICES_READY=false
 
+# Get expected number of services
+EXPECTED_SERVICES=$(docker compose -f "$CONFIGS_DIR/docker-compose.yml" config --services 2>/dev/null | wc -l | tr -d ' ')
+
 while [ $ELAPSED -lt $MAX_WAIT ]; do
-  # Check if all services are healthy by looking for "healthy" in docker compose ps output
-  HEALTH_STATUS=$(docker compose -f "$CONFIGS_DIR/docker-compose.yml" ps --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | grep -v '"Health":"healthy"' || true)
+  # Get running container count
+  RUNNING_COUNT=$(docker compose -f "$CONFIGS_DIR/docker-compose.yml" ps --status running -q 2>/dev/null | wc -l | tr -d ' ')
   
-  if [ -z "$HEALTH_STATUS" ]; then
-    # All services are healthy (no non-healthy status found)
-    RUNNING_COUNT=$(docker compose -f "$CONFIGS_DIR/docker-compose.yml" ps --status running -q 2>/dev/null | wc -l | tr -d ' ')
-    if [ "$RUNNING_COUNT" -gt 0 ]; then
-      SERVICES_READY=true
-      echo "✅ All Docker services are healthy and ready (${ELAPSED}s)"
-      break
-    fi
+  # Check health status: count healthy and unhealthy (starting/unhealthy) services
+  # Services without healthchecks will show empty health status
+  HEALTH_OUTPUT=$(docker compose -f "$CONFIGS_DIR/docker-compose.yml" ps --format "{{.Name}}:{{.Health}}" 2>/dev/null)
+  HEALTHY_COUNT=$(echo "$HEALTH_OUTPUT" | grep -c ":healthy" || echo "0")
+  UNHEALTHY_COUNT=$(echo "$HEALTH_OUTPUT" | grep -E ":(starting|unhealthy)" | wc -l | tr -d ' ')
+  
+  # All services are ready when:
+  # 1. All expected services are running
+  # 2. No services are in "starting" or "unhealthy" state
+  if [ "$RUNNING_COUNT" -eq "$EXPECTED_SERVICES" ] && [ "$UNHEALTHY_COUNT" -eq "0" ]; then
+    SERVICES_READY=true
+    echo "✅ All Docker services are ready ($HEALTHY_COUNT with healthchecks, ${ELAPSED}s)"
+    break
   fi
   
   sleep 2
   ELAPSED=$((ELAPSED + 2))
-  echo "   ⏳ Waiting for services to be healthy... (${ELAPSED}s/${MAX_WAIT}s)"
+  echo "   ⏳ Waiting for services... ($RUNNING_COUNT/$EXPECTED_SERVICES running, $HEALTHY_COUNT healthy, $UNHEALTHY_COUNT starting, ${ELAPSED}s/${MAX_WAIT}s)"
 done
 
 if [ "$SERVICES_READY" = false ]; then
