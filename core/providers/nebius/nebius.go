@@ -3,6 +3,7 @@ package nebius
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -100,7 +101,7 @@ func (provider *NebiusProvider) TextCompletionStream(ctx context.Context, postHo
 	return openai.HandleOpenAITextCompletionStreaming(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+"/v1/completions",
+		provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/v1/completions"),
 		request,
 		authHeader,
 		provider.networkConfig.ExtraHeaders,
@@ -114,10 +115,21 @@ func (provider *NebiusProvider) TextCompletionStream(ctx context.Context, postHo
 
 // ChatCompletion performs a chat completion request to the Nebius API.
 func (provider *NebiusProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+	path := providerUtils.GetPathFromContext(ctx, "/v1/chat/completions")
+
+	// Append query parameter if present
+	if rawID, ok := request.Params.ExtraParams["ai_project_id"]; ok && rawID != nil {
+		if strings.Contains(path, "?") {
+			path = path + "&ai_project_id=" + fmt.Sprint(rawID)
+		} else {
+			path = path + "?ai_project_id=" + fmt.Sprint(rawID)
+		}
+	}
+
 	return openai.HandleOpenAIChatCompletionRequest(
 		ctx,
 		provider.client,
-		provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/v1/chat/completions"),
+		provider.networkConfig.BaseURL+path,
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,

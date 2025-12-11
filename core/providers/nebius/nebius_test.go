@@ -40,9 +40,9 @@ func TestNebius(t *testing.T) {
 			MultipleToolCalls:     true,
 			End2EndToolCalling:    true,
 			AutomaticFunctionCall: true,
-			ImageURL:              false, // Update based on Nebius support
-			ImageBase64:           false, // Update based on Nebius support
-			MultipleImages:        false, // Update based on Nebius support
+			ImageURL:              true,
+			ImageBase64:           true,
+			MultipleImages:        true,
 			CompleteEnd2End:       true,
 			Embedding:             true, // Nebius supports embeddings
 			ListModels:            true,
