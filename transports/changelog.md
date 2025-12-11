@@ -1,3 +1,0 @@
-- feat: complete config.json to config-store sync using hash
-- fix: structured output in bedrock, cohere and anthropic
-- fix: tool calls in bedrock chat completion
