@@ -216,7 +216,7 @@ docker compose -f "$CONFIGS_DIR/docker-compose.yml" up -d
 
 # Wait for services to be healthy with polling
 echo "⏳ Waiting for Docker services to be ready..."
-MAX_WAIT=90
+MAX_WAIT=300
 ELAPSED=0
 SERVICES_READY=false
 
