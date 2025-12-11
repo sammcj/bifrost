@@ -141,6 +141,7 @@ import (
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/framework/migrator"
 	"github.com/maximhq/bifrost/framework/vectorstore"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -1366,6 +1367,102 @@ func TestGenerateProviderConfigHash(t *testing.T) {
 	if hash1 == hash4 {
 		t.Error("Expected different hash for different provider names")
 	}
+
+	// Different SendBackRawResponse should produce different hash
+	config5 := configstore.ProviderConfig{
+		Keys: []schemas.Key{
+			{ID: "key-1", Name: "test-key", Value: "sk-123", Weight: 1},
+		},
+		NetworkConfig: &schemas.NetworkConfig{
+			BaseURL: "https://api.example.com",
+		},
+		SendBackRawResponse: false, // Different SendBackRawResponse
+	}
+
+	hash5, err := config5.GenerateConfigHash("openai")
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash1 == hash5 {
+		t.Error("Expected different hash for configs with different SendBackRawResponse")
+	}
+
+	// Different ConcurrencyAndBufferSize should produce different hash
+	config6 := configstore.ProviderConfig{
+		Keys: []schemas.Key{
+			{ID: "key-1", Name: "test-key", Value: "sk-123", Weight: 1},
+		},
+		NetworkConfig: &schemas.NetworkConfig{
+			BaseURL: "https://api.example.com",
+		},
+		SendBackRawResponse: true,
+		ConcurrencyAndBufferSize: &schemas.ConcurrencyAndBufferSize{
+			Concurrency: 10,
+			BufferSize:  100,
+		},
+	}
+
+	hash6, err := config6.GenerateConfigHash("openai")
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash1 == hash6 {
+		t.Error("Expected different hash for configs with ConcurrencyAndBufferSize")
+	}
+
+	// Different ProxyConfig should produce different hash
+	config7 := configstore.ProviderConfig{
+		Keys: []schemas.Key{
+			{ID: "key-1", Name: "test-key", Value: "sk-123", Weight: 1},
+		},
+		NetworkConfig: &schemas.NetworkConfig{
+			BaseURL: "https://api.example.com",
+		},
+		SendBackRawResponse: true,
+		ProxyConfig: &schemas.ProxyConfig{
+			Type: schemas.HTTPProxy,
+			URL:  "http://proxy.example.com:8080",
+		},
+	}
+
+	hash7, err := config7.GenerateConfigHash("openai")
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash1 == hash7 {
+		t.Error("Expected different hash for configs with ProxyConfig")
+	}
+
+	// Different CustomProviderConfig should produce different hash
+	config8 := configstore.ProviderConfig{
+		Keys: []schemas.Key{
+			{ID: "key-1", Name: "test-key", Value: "sk-123", Weight: 1},
+		},
+		NetworkConfig: &schemas.NetworkConfig{
+			BaseURL: "https://api.example.com",
+		},
+		SendBackRawResponse: true,
+		CustomProviderConfig: &schemas.CustomProviderConfig{
+			IsKeyLess:        false,
+			BaseProviderType: schemas.OpenAI,
+		},
+	}
+
+	hash8, err := config8.GenerateConfigHash("custom-provider")
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	// config1 with custom-provider name for comparison
+	hash1Custom, _ := config1.GenerateConfigHash("custom-provider")
+	if hash1Custom == hash8 {
+		t.Error("Expected different hash for configs with CustomProviderConfig")
+	}
+
+	t.Log("✓ ProviderConfig hash generation works correctly for all fields")
 }
 
 // TestGenerateKeyHash tests that key hash is generated correctly
@@ -1405,6 +1502,24 @@ func TestGenerateKeyHash(t *testing.T) {
 
 	if hash1 != hash2 {
 		t.Error("Expected same hash for keys with same content (ID should be skipped)")
+	}
+
+	// Different Name should produce different hash
+	key2b := schemas.Key{
+		ID:     "key-1",
+		Name:   "different-key-name", // Different name
+		Value:  "sk-123",
+		Models: []string{"gpt-4", "gpt-3.5-turbo"},
+		Weight: 1.5,
+	}
+
+	hash2b, err := configstore.GenerateKeyHash(key2b)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash1 == hash2b {
+		t.Error("Expected different hash for keys with different Name")
 	}
 
 	// Different value should produce different hash
@@ -1460,6 +1575,151 @@ func TestGenerateKeyHash(t *testing.T) {
 	if hash1 == hash5 {
 		t.Error("Expected different hash for keys with different Weight")
 	}
+
+	// AzureKeyConfig should produce different hash
+	apiVersion := "2024-10-21"
+	key6 := schemas.Key{
+		ID:     "key-1",
+		Name:   "test-key",
+		Value:  "sk-123",
+		Models: []string{"gpt-4", "gpt-3.5-turbo"},
+		Weight: 1.5,
+		AzureKeyConfig: &schemas.AzureKeyConfig{
+			Endpoint:    "https://my-azure.openai.azure.com",
+			Deployments: map[string]string{"gpt-4": "gpt-4-deployment"},
+			APIVersion:  &apiVersion,
+		},
+	}
+
+	hash6, err := configstore.GenerateKeyHash(key6)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash1 == hash6 {
+		t.Error("Expected different hash for keys with AzureKeyConfig")
+	}
+
+	// Different AzureKeyConfig should produce different hash
+	key6b := schemas.Key{
+		ID:     "key-1",
+		Name:   "test-key",
+		Value:  "sk-123",
+		Models: []string{"gpt-4", "gpt-3.5-turbo"},
+		Weight: 1.5,
+		AzureKeyConfig: &schemas.AzureKeyConfig{
+			Endpoint:    "https://different-azure.openai.azure.com", // Different endpoint
+			Deployments: map[string]string{"gpt-4": "gpt-4-deployment"},
+			APIVersion:  &apiVersion,
+		},
+	}
+
+	hash6b, err := configstore.GenerateKeyHash(key6b)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash6 == hash6b {
+		t.Error("Expected different hash for keys with different AzureKeyConfig endpoint")
+	}
+
+	// VertexKeyConfig should produce different hash
+	key7 := schemas.Key{
+		ID:     "key-1",
+		Name:   "test-key",
+		Value:  "sk-123",
+		Models: []string{"gpt-4", "gpt-3.5-turbo"},
+		Weight: 1.5,
+		VertexKeyConfig: &schemas.VertexKeyConfig{
+			ProjectID:       "my-project",
+			ProjectNumber:   "123456789",
+			Region:          "us-central1",
+			AuthCredentials: "service-account-json",
+		},
+	}
+
+	hash7, err := configstore.GenerateKeyHash(key7)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash1 == hash7 {
+		t.Error("Expected different hash for keys with VertexKeyConfig")
+	}
+
+	// Different VertexKeyConfig should produce different hash
+	key7b := schemas.Key{
+		ID:     "key-1",
+		Name:   "test-key",
+		Value:  "sk-123",
+		Models: []string{"gpt-4", "gpt-3.5-turbo"},
+		Weight: 1.5,
+		VertexKeyConfig: &schemas.VertexKeyConfig{
+			ProjectID:       "different-project", // Different project
+			ProjectNumber:   "123456789",
+			Region:          "us-central1",
+			AuthCredentials: "service-account-json",
+		},
+	}
+
+	hash7b, err := configstore.GenerateKeyHash(key7b)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash7 == hash7b {
+		t.Error("Expected different hash for keys with different VertexKeyConfig project")
+	}
+
+	// BedrockKeyConfig should produce different hash
+	region := "us-east-1"
+	key8 := schemas.Key{
+		ID:     "key-1",
+		Name:   "test-key",
+		Value:  "sk-123",
+		Models: []string{"gpt-4", "gpt-3.5-turbo"},
+		Weight: 1.5,
+		BedrockKeyConfig: &schemas.BedrockKeyConfig{
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+			Region:    &region,
+		},
+	}
+
+	hash8, err := configstore.GenerateKeyHash(key8)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash1 == hash8 {
+		t.Error("Expected different hash for keys with BedrockKeyConfig")
+	}
+
+	// Different BedrockKeyConfig should produce different hash
+	differentRegion := "us-west-2"
+	key8b := schemas.Key{
+		ID:     "key-1",
+		Name:   "test-key",
+		Value:  "sk-123",
+		Models: []string{"gpt-4", "gpt-3.5-turbo"},
+		Weight: 1.5,
+		BedrockKeyConfig: &schemas.BedrockKeyConfig{
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+			Region:    &differentRegion, // Different region
+		},
+	}
+
+	hash8b, err := configstore.GenerateKeyHash(key8b)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash8 == hash8b {
+		t.Error("Expected different hash for keys with different BedrockKeyConfig region")
+	}
+
+	t.Log("✓ Key hash generation works correctly for all fields including Azure, Vertex, and Bedrock configs")
 }
 
 // TestProviderHashComparison_MatchingHash tests that DB config is kept when hashes match
@@ -5620,6 +5880,137 @@ func TestGenerateVirtualKeyHash(t *testing.T) {
 	if hash1 == hash6 {
 		t.Error("Expected different hash for virtual keys with different TeamID")
 	}
+
+	// Different Description should produce different hash
+	vk7 := tables.TableVirtualKey{
+		ID:          "vk-1",
+		Name:        "test-vk",
+		Description: "Different description", // Different description
+		Value:       "vk_abc123",
+		IsActive:    true,
+		TeamID:      &teamID,
+		BudgetID:    &budgetID,
+	}
+
+	hash7, err := configstore.GenerateVirtualKeyHash(vk7)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash1 == hash7 {
+		t.Error("Expected different hash for virtual keys with different Description")
+	}
+
+	// Different CustomerID should produce different hash
+	customerID := "customer-1"
+	vk8 := tables.TableVirtualKey{
+		ID:          "vk-1",
+		Name:        "test-vk",
+		Description: "Test virtual key",
+		Value:       "vk_abc123",
+		IsActive:    true,
+		TeamID:      &teamID,
+		BudgetID:    &budgetID,
+		CustomerID:  &customerID, // CustomerID set
+	}
+
+	hash8, err := configstore.GenerateVirtualKeyHash(vk8)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash1 == hash8 {
+		t.Error("Expected different hash for virtual keys with CustomerID set")
+	}
+
+	// Different CustomerID value should produce different hash
+	differentCustomerID := "customer-2"
+	vk8b := tables.TableVirtualKey{
+		ID:          "vk-1",
+		Name:        "test-vk",
+		Description: "Test virtual key",
+		Value:       "vk_abc123",
+		IsActive:    true,
+		TeamID:      &teamID,
+		BudgetID:    &budgetID,
+		CustomerID:  &differentCustomerID, // Different CustomerID
+	}
+
+	hash8b, err := configstore.GenerateVirtualKeyHash(vk8b)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash8 == hash8b {
+		t.Error("Expected different hash for virtual keys with different CustomerID values")
+	}
+
+	// Different BudgetID should produce different hash
+	differentBudgetID := "budget-2"
+	vk9 := tables.TableVirtualKey{
+		ID:          "vk-1",
+		Name:        "test-vk",
+		Description: "Test virtual key",
+		Value:       "vk_abc123",
+		IsActive:    true,
+		TeamID:      &teamID,
+		BudgetID:    &differentBudgetID, // Different BudgetID
+	}
+
+	hash9, err := configstore.GenerateVirtualKeyHash(vk9)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash1 == hash9 {
+		t.Error("Expected different hash for virtual keys with different BudgetID")
+	}
+
+	// RateLimitID should produce different hash
+	rateLimitID := "ratelimit-1"
+	vk10 := tables.TableVirtualKey{
+		ID:          "vk-1",
+		Name:        "test-vk",
+		Description: "Test virtual key",
+		Value:       "vk_abc123",
+		IsActive:    true,
+		TeamID:      &teamID,
+		BudgetID:    &budgetID,
+		RateLimitID: &rateLimitID, // RateLimitID set
+	}
+
+	hash10, err := configstore.GenerateVirtualKeyHash(vk10)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash1 == hash10 {
+		t.Error("Expected different hash for virtual keys with RateLimitID set")
+	}
+
+	// Different RateLimitID value should produce different hash
+	differentRateLimitID := "ratelimit-2"
+	vk10b := tables.TableVirtualKey{
+		ID:          "vk-1",
+		Name:        "test-vk",
+		Description: "Test virtual key",
+		Value:       "vk_abc123",
+		IsActive:    true,
+		TeamID:      &teamID,
+		BudgetID:    &budgetID,
+		RateLimitID: &differentRateLimitID, // Different RateLimitID
+	}
+
+	hash10b, err := configstore.GenerateVirtualKeyHash(vk10b)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+
+	if hash10 == hash10b {
+		t.Error("Expected different hash for virtual keys with different RateLimitID values")
+	}
+
+	t.Log("✓ VirtualKey hash generation works correctly for all fields")
 }
 
 // TestGenerateVirtualKeyHash_WithProviderConfigs tests hash generation with provider configs
@@ -9789,4 +10180,2082 @@ func TestGenerateVirtualKeyHash_StableCombinedOrdering(t *testing.T) {
 	}
 
 	t.Logf("✓ VirtualKey hash is stable with all nested orderings shuffled: %s", hashA[:16])
+}
+
+// ===================================================================================
+// BUDGET HASH TESTS
+// ===================================================================================
+
+// TestGenerateBudgetHash tests hash generation for budgets
+func TestGenerateBudgetHash(t *testing.T) {
+	initTestLogger()
+
+	// Test basic hash generation
+	budget1 := tables.TableBudget{
+		ID:            "budget-1",
+		MaxLimit:      100.0,
+		ResetDuration: "1d",
+	}
+
+	hash1, err := configstore.GenerateBudgetHash(budget1)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+	if hash1 == "" {
+		t.Error("Expected non-empty hash")
+	}
+
+	// Same budget should produce same hash
+	hash1Again, _ := configstore.GenerateBudgetHash(budget1)
+	if hash1 != hash1Again {
+		t.Error("Same budget should produce same hash")
+	}
+
+	// Different ID should produce different hash
+	budget2 := budget1
+	budget2.ID = "budget-2"
+	hash2, _ := configstore.GenerateBudgetHash(budget2)
+	if hash1 == hash2 {
+		t.Error("Different ID should produce different hash")
+	}
+
+	// Different MaxLimit should produce different hash
+	budget3 := budget1
+	budget3.MaxLimit = 200.0
+	hash3, _ := configstore.GenerateBudgetHash(budget3)
+	if hash1 == hash3 {
+		t.Error("Different MaxLimit should produce different hash")
+	}
+
+	// Different ResetDuration should produce different hash
+	budget4 := budget1
+	budget4.ResetDuration = "1h"
+	hash4, _ := configstore.GenerateBudgetHash(budget4)
+	if hash1 == hash4 {
+		t.Error("Different ResetDuration should produce different hash")
+	}
+
+	t.Log("✓ Budget hash generation works correctly for all fields")
+}
+
+// TestSQLite_Budget_NewFromFile tests new budget from config file
+func TestSQLite_Budget_NewFromFile(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	// Create config with governance containing a budget
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{
+		Budgets: []tables.TableBudget{
+			{ID: "budget-1", MaxLimit: 100.0, ResetDuration: "1d"},
+		},
+	}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	defer config.ConfigStore.Close(ctx)
+
+	// Verify budget in memory
+	if config.GovernanceConfig == nil || len(config.GovernanceConfig.Budgets) != 1 {
+		t.Fatal("Expected 1 budget in governance config")
+	}
+	if config.GovernanceConfig.Budgets[0].ID != "budget-1" {
+		t.Error("Budget ID mismatch")
+	}
+
+	// Verify budget in DB
+	govConfig, err := config.ConfigStore.GetGovernanceConfig(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get governance config: %v", err)
+	}
+	if len(govConfig.Budgets) != 1 {
+		t.Fatalf("Expected 1 budget in DB, got %d", len(govConfig.Budgets))
+	}
+	if govConfig.Budgets[0].ConfigHash == "" {
+		t.Error("Expected budget config hash to be set")
+	}
+
+	t.Log("✓ New budget from file added to DB with hash")
+}
+
+// TestSQLite_Budget_HashMatch_DBPreserved tests DB budget preserved when hash matches
+func TestSQLite_Budget_HashMatch_DBPreserved(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{
+		Budgets: []tables.TableBudget{
+			{ID: "budget-1", MaxLimit: 100.0, ResetDuration: "1d"},
+		},
+	}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config1, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("First LoadConfig failed: %v", err)
+	}
+
+	// Get hash from first load
+	gov1, _ := config1.ConfigStore.GetGovernanceConfig(ctx)
+	firstHash := gov1.Budgets[0].ConfigHash
+	config1.ConfigStore.Close(ctx)
+
+	// Second load - same config
+	config2, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("Second LoadConfig failed: %v", err)
+	}
+	defer config2.ConfigStore.Close(ctx)
+
+	gov2, _ := config2.ConfigStore.GetGovernanceConfig(ctx)
+	if gov2.Budgets[0].ConfigHash != firstHash {
+		t.Error("Hash should remain unchanged on reload")
+	}
+
+	t.Log("✓ Budget hash match - DB preserved")
+}
+
+// TestSQLite_Budget_HashMismatch_FileSync tests file sync when hash differs
+func TestSQLite_Budget_HashMismatch_FileSync(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{
+		Budgets: []tables.TableBudget{
+			{ID: "budget-1", MaxLimit: 100.0, ResetDuration: "1d"},
+		},
+	}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config1, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("First LoadConfig failed: %v", err)
+	}
+	config1.ConfigStore.Close(ctx)
+
+	// Update config file with different MaxLimit
+	configData.Governance.Budgets[0].MaxLimit = 200.0
+	createConfigFile(t, tempDir, configData)
+
+	// Second load - should sync from file
+	config2, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("Second LoadConfig failed: %v", err)
+	}
+	defer config2.ConfigStore.Close(ctx)
+
+	gov2, _ := config2.ConfigStore.GetGovernanceConfig(ctx)
+	if gov2.Budgets[0].MaxLimit != 200.0 {
+		t.Errorf("Expected MaxLimit 200.0, got %f", gov2.Budgets[0].MaxLimit)
+	}
+
+	t.Log("✓ Budget hash mismatch - synced from file")
+}
+
+// TestSQLite_Budget_DBOnly_Preserved tests dashboard-added budget is preserved
+func TestSQLite_Budget_DBOnly_Preserved(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{
+		Budgets: []tables.TableBudget{
+			{ID: "budget-1", MaxLimit: 100.0, ResetDuration: "1d"},
+		},
+	}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config1, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("First LoadConfig failed: %v", err)
+	}
+
+	// Add budget via "dashboard" (directly to DB)
+	dashboardBudget := &tables.TableBudget{
+		ID:            "budget-dashboard",
+		MaxLimit:      500.0,
+		ResetDuration: "1w",
+	}
+	if err := config1.ConfigStore.CreateBudget(ctx, dashboardBudget); err != nil {
+		t.Fatalf("Failed to create dashboard budget: %v", err)
+	}
+	config1.ConfigStore.Close(ctx)
+
+	// Reload - dashboard budget should be preserved
+	config2, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("Second LoadConfig failed: %v", err)
+	}
+	defer config2.ConfigStore.Close(ctx)
+
+	gov2, _ := config2.ConfigStore.GetGovernanceConfig(ctx)
+	if len(gov2.Budgets) != 2 {
+		t.Fatalf("Expected 2 budgets, got %d", len(gov2.Budgets))
+	}
+
+	// Find dashboard budget
+	found := false
+	for _, b := range gov2.Budgets {
+		if b.ID == "budget-dashboard" {
+			found = true
+			if b.MaxLimit != 500.0 {
+				t.Error("Dashboard budget MaxLimit changed")
+			}
+		}
+	}
+	if !found {
+		t.Error("Dashboard-added budget was not preserved")
+	}
+
+	t.Log("✓ Dashboard-added budget preserved")
+}
+
+// ===================================================================================
+// RATE LIMIT HASH TESTS
+// ===================================================================================
+
+// TestGenerateRateLimitHash tests hash generation for rate limits
+func TestGenerateRateLimitHash(t *testing.T) {
+	initTestLogger()
+
+	tokenMax := int64(1000)
+	tokenDur := "1h"
+	reqMax := int64(100)
+	reqDur := "1m"
+
+	rl1 := tables.TableRateLimit{
+		ID:                   "rl-1",
+		TokenMaxLimit:        &tokenMax,
+		TokenResetDuration:   &tokenDur,
+		RequestMaxLimit:      &reqMax,
+		RequestResetDuration: &reqDur,
+	}
+
+	hash1, err := configstore.GenerateRateLimitHash(rl1)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+	if hash1 == "" {
+		t.Error("Expected non-empty hash")
+	}
+
+	// Same rate limit should produce same hash
+	hash1Again, _ := configstore.GenerateRateLimitHash(rl1)
+	if hash1 != hash1Again {
+		t.Error("Same rate limit should produce same hash")
+	}
+
+	// Different ID should produce different hash
+	rl2 := rl1
+	rl2.ID = "rl-2"
+	hash2, _ := configstore.GenerateRateLimitHash(rl2)
+	if hash1 == hash2 {
+		t.Error("Different ID should produce different hash")
+	}
+
+	// Different TokenMaxLimit should produce different hash
+	newTokenMax := int64(2000)
+	rl3 := rl1
+	rl3.TokenMaxLimit = &newTokenMax
+	hash3, _ := configstore.GenerateRateLimitHash(rl3)
+	if hash1 == hash3 {
+		t.Error("Different TokenMaxLimit should produce different hash")
+	}
+
+	// Different TokenResetDuration should produce different hash
+	newTokenDur := "2h"
+	rl4 := rl1
+	rl4.TokenResetDuration = &newTokenDur
+	hash4, _ := configstore.GenerateRateLimitHash(rl4)
+	if hash1 == hash4 {
+		t.Error("Different TokenResetDuration should produce different hash")
+	}
+
+	// Different RequestMaxLimit should produce different hash
+	newReqMax := int64(200)
+	rl5 := rl1
+	rl5.RequestMaxLimit = &newReqMax
+	hash5, _ := configstore.GenerateRateLimitHash(rl5)
+	if hash1 == hash5 {
+		t.Error("Different RequestMaxLimit should produce different hash")
+	}
+
+	// Different RequestResetDuration should produce different hash
+	newReqDur := "2m"
+	rl6 := rl1
+	rl6.RequestResetDuration = &newReqDur
+	hash6, _ := configstore.GenerateRateLimitHash(rl6)
+	if hash1 == hash6 {
+		t.Error("Different RequestResetDuration should produce different hash")
+	}
+
+	// Nil vs set fields should produce different hash
+	rl7 := tables.TableRateLimit{ID: "rl-1"}
+	hash7, _ := configstore.GenerateRateLimitHash(rl7)
+	if hash1 == hash7 {
+		t.Error("Nil fields should produce different hash than set fields")
+	}
+
+	t.Log("✓ RateLimit hash generation works correctly for all fields")
+}
+
+// TestSQLite_RateLimit_NewFromFile tests new rate limit from config file
+func TestSQLite_RateLimit_NewFromFile(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	tokenMax := int64(1000)
+	tokenDur := "1h"
+
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{
+		RateLimits: []tables.TableRateLimit{
+			{ID: "rl-1", TokenMaxLimit: &tokenMax, TokenResetDuration: &tokenDur},
+		},
+	}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	defer config.ConfigStore.Close(ctx)
+
+	// Verify in DB
+	govConfig, err := config.ConfigStore.GetGovernanceConfig(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get governance config: %v", err)
+	}
+	if len(govConfig.RateLimits) != 1 {
+		t.Fatalf("Expected 1 rate limit in DB, got %d", len(govConfig.RateLimits))
+	}
+	if govConfig.RateLimits[0].ConfigHash == "" {
+		t.Error("Expected rate limit config hash to be set")
+	}
+
+	t.Log("✓ New rate limit from file added to DB with hash")
+}
+
+// TestSQLite_RateLimit_HashMismatch_FileSync tests file sync when hash differs
+func TestSQLite_RateLimit_HashMismatch_FileSync(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	tokenMax := int64(1000)
+	tokenDur := "1h"
+
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{
+		RateLimits: []tables.TableRateLimit{
+			{ID: "rl-1", TokenMaxLimit: &tokenMax, TokenResetDuration: &tokenDur},
+		},
+	}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config1, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("First LoadConfig failed: %v", err)
+	}
+	config1.ConfigStore.Close(ctx)
+
+	// Update config file
+	newTokenMax := int64(2000)
+	configData.Governance.RateLimits[0].TokenMaxLimit = &newTokenMax
+	createConfigFile(t, tempDir, configData)
+
+	// Second load
+	config2, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("Second LoadConfig failed: %v", err)
+	}
+	defer config2.ConfigStore.Close(ctx)
+
+	gov2, _ := config2.ConfigStore.GetGovernanceConfig(ctx)
+	if *gov2.RateLimits[0].TokenMaxLimit != 2000 {
+		t.Errorf("Expected TokenMaxLimit 2000, got %d", *gov2.RateLimits[0].TokenMaxLimit)
+	}
+
+	t.Log("✓ RateLimit hash mismatch - synced from file")
+}
+
+// ===================================================================================
+// CUSTOMER HASH TESTS
+// ===================================================================================
+
+// TestGenerateCustomerHash tests hash generation for customers
+func TestGenerateCustomerHash(t *testing.T) {
+	initTestLogger()
+
+	budgetID := "budget-1"
+	customer1 := tables.TableCustomer{
+		ID:       "customer-1",
+		Name:     "Test Customer",
+		BudgetID: &budgetID,
+	}
+
+	hash1, err := configstore.GenerateCustomerHash(customer1)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+	if hash1 == "" {
+		t.Error("Expected non-empty hash")
+	}
+
+	// Same customer should produce same hash
+	hash1Again, _ := configstore.GenerateCustomerHash(customer1)
+	if hash1 != hash1Again {
+		t.Error("Same customer should produce same hash")
+	}
+
+	// Different ID should produce different hash
+	customer2 := customer1
+	customer2.ID = "customer-2"
+	hash2, _ := configstore.GenerateCustomerHash(customer2)
+	if hash1 == hash2 {
+		t.Error("Different ID should produce different hash")
+	}
+
+	// Different Name should produce different hash
+	customer3 := customer1
+	customer3.Name = "Different Customer"
+	hash3, _ := configstore.GenerateCustomerHash(customer3)
+	if hash1 == hash3 {
+		t.Error("Different Name should produce different hash")
+	}
+
+	// Different BudgetID should produce different hash
+	newBudgetID := "budget-2"
+	customer4 := customer1
+	customer4.BudgetID = &newBudgetID
+	hash4, _ := configstore.GenerateCustomerHash(customer4)
+	if hash1 == hash4 {
+		t.Error("Different BudgetID should produce different hash")
+	}
+
+	// Nil BudgetID should produce different hash
+	customer5 := customer1
+	customer5.BudgetID = nil
+	hash5, _ := configstore.GenerateCustomerHash(customer5)
+	if hash1 == hash5 {
+		t.Error("Nil BudgetID should produce different hash")
+	}
+
+	t.Log("✓ Customer hash generation works correctly for all fields")
+}
+
+// TestSQLite_Customer_NewFromFile tests new customer from config file
+func TestSQLite_Customer_NewFromFile(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{
+		Customers: []tables.TableCustomer{
+			{ID: "customer-1", Name: "Test Customer"},
+		},
+	}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	defer config.ConfigStore.Close(ctx)
+
+	govConfig, err := config.ConfigStore.GetGovernanceConfig(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get governance config: %v", err)
+	}
+	if len(govConfig.Customers) != 1 {
+		t.Fatalf("Expected 1 customer in DB, got %d", len(govConfig.Customers))
+	}
+	if govConfig.Customers[0].ConfigHash == "" {
+		t.Error("Expected customer config hash to be set")
+	}
+
+	t.Log("✓ New customer from file added to DB with hash")
+}
+
+// TestSQLite_Customer_HashMismatch_FileSync tests file sync when hash differs
+func TestSQLite_Customer_HashMismatch_FileSync(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{
+		Customers: []tables.TableCustomer{
+			{ID: "customer-1", Name: "Test Customer"},
+		},
+	}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config1, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("First LoadConfig failed: %v", err)
+	}
+	config1.ConfigStore.Close(ctx)
+
+	// Update config file
+	configData.Governance.Customers[0].Name = "Updated Customer"
+	createConfigFile(t, tempDir, configData)
+
+	config2, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("Second LoadConfig failed: %v", err)
+	}
+	defer config2.ConfigStore.Close(ctx)
+
+	gov2, _ := config2.ConfigStore.GetGovernanceConfig(ctx)
+	if gov2.Customers[0].Name != "Updated Customer" {
+		t.Errorf("Expected Name 'Updated Customer', got '%s'", gov2.Customers[0].Name)
+	}
+
+	t.Log("✓ Customer hash mismatch - synced from file")
+}
+
+// ===================================================================================
+// TEAM HASH TESTS
+// ===================================================================================
+
+// TestGenerateTeamHash tests hash generation for teams
+func TestGenerateTeamHash(t *testing.T) {
+	initTestLogger()
+
+	customerID := "customer-1"
+	budgetID := "budget-1"
+
+	team1 := tables.TableTeam{
+		ID:            "team-1",
+		Name:          "Test Team",
+		CustomerID:    &customerID,
+		BudgetID:      &budgetID,
+		ParsedProfile: map[string]interface{}{"key": "value"},
+		ParsedConfig:  map[string]interface{}{"setting": true},
+		ParsedClaims:  map[string]interface{}{"role": "admin"},
+	}
+
+	hash1, err := configstore.GenerateTeamHash(team1)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+	if hash1 == "" {
+		t.Error("Expected non-empty hash")
+	}
+
+	// Same team should produce same hash
+	hash1Again, _ := configstore.GenerateTeamHash(team1)
+	if hash1 != hash1Again {
+		t.Error("Same team should produce same hash")
+	}
+
+	// Different ID should produce different hash
+	team2 := team1
+	team2.ID = "team-2"
+	hash2, _ := configstore.GenerateTeamHash(team2)
+	if hash1 == hash2 {
+		t.Error("Different ID should produce different hash")
+	}
+
+	// Different Name should produce different hash
+	team3 := team1
+	team3.Name = "Different Team"
+	hash3, _ := configstore.GenerateTeamHash(team3)
+	if hash1 == hash3 {
+		t.Error("Different Name should produce different hash")
+	}
+
+	// Different CustomerID should produce different hash
+	newCustomerID := "customer-2"
+	team4 := team1
+	team4.CustomerID = &newCustomerID
+	hash4, _ := configstore.GenerateTeamHash(team4)
+	if hash1 == hash4 {
+		t.Error("Different CustomerID should produce different hash")
+	}
+
+	// Different BudgetID should produce different hash
+	newBudgetID := "budget-2"
+	team5 := team1
+	team5.BudgetID = &newBudgetID
+	hash5, _ := configstore.GenerateTeamHash(team5)
+	if hash1 == hash5 {
+		t.Error("Different BudgetID should produce different hash")
+	}
+
+	// Different ParsedProfile should produce different hash
+	team6 := team1
+	team6.ParsedProfile = map[string]interface{}{"key": "different"}
+	hash6, _ := configstore.GenerateTeamHash(team6)
+	if hash1 == hash6 {
+		t.Error("Different ParsedProfile should produce different hash")
+	}
+
+	// Different ParsedConfig should produce different hash
+	team7 := team1
+	team7.ParsedConfig = map[string]interface{}{"setting": false}
+	hash7, _ := configstore.GenerateTeamHash(team7)
+	if hash1 == hash7 {
+		t.Error("Different ParsedConfig should produce different hash")
+	}
+
+	// Different ParsedClaims should produce different hash
+	team8 := team1
+	team8.ParsedClaims = map[string]interface{}{"role": "user"}
+	hash8, _ := configstore.GenerateTeamHash(team8)
+	if hash1 == hash8 {
+		t.Error("Different ParsedClaims should produce different hash")
+	}
+
+	// Nil optional fields should produce different hash
+	team9 := tables.TableTeam{ID: "team-1", Name: "Test Team"}
+	hash9, _ := configstore.GenerateTeamHash(team9)
+	if hash1 == hash9 {
+		t.Error("Nil optional fields should produce different hash")
+	}
+
+	t.Log("✓ Team hash generation works correctly for all fields")
+}
+
+// TestSQLite_Team_NewFromFile tests new team from config file
+func TestSQLite_Team_NewFromFile(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{
+		Teams: []tables.TableTeam{
+			{ID: "team-1", Name: "Test Team"},
+		},
+	}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	defer config.ConfigStore.Close(ctx)
+
+	govConfig, err := config.ConfigStore.GetGovernanceConfig(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get governance config: %v", err)
+	}
+	if len(govConfig.Teams) != 1 {
+		t.Fatalf("Expected 1 team in DB, got %d", len(govConfig.Teams))
+	}
+	if govConfig.Teams[0].ConfigHash == "" {
+		t.Error("Expected team config hash to be set")
+	}
+
+	t.Log("✓ New team from file added to DB with hash")
+}
+
+// TestSQLite_Team_HashMismatch_FileSync tests file sync when hash differs
+func TestSQLite_Team_HashMismatch_FileSync(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	// Note: Profile field has json:"-", so we use ParsedProfile for JSON config
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{
+		Teams: []tables.TableTeam{
+			{ID: "team-1", Name: "Test Team", ParsedProfile: map[string]interface{}{"key": "value"}},
+		},
+	}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config1, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("First LoadConfig failed: %v", err)
+	}
+	config1.ConfigStore.Close(ctx)
+
+	// Update config file with different Name (which affects hash)
+	configData.Governance.Teams[0].Name = "Updated Team"
+	createConfigFile(t, tempDir, configData)
+
+	config2, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("Second LoadConfig failed: %v", err)
+	}
+	defer config2.ConfigStore.Close(ctx)
+
+	gov2, _ := config2.ConfigStore.GetGovernanceConfig(ctx)
+	if gov2.Teams[0].Name != "Updated Team" {
+		t.Errorf("Expected Name 'Updated Team', got '%s'", gov2.Teams[0].Name)
+	}
+
+	t.Log("✓ Team hash mismatch - synced from file")
+}
+
+// ===================================================================================
+// MCP CLIENT HASH TESTS
+// ===================================================================================
+
+// TestGenerateMCPClientHash tests hash generation for MCP clients
+func TestGenerateMCPClientHash(t *testing.T) {
+	initTestLogger()
+
+	connStr := "http://localhost:8080"
+	mcp1 := tables.TableMCPClient{
+		ClientID:         "mcp-1",
+		Name:             "Test MCP",
+		ConnectionType:   "sse",
+		ConnectionString: &connStr,
+		ToolsToExecute:   []string{"tool1", "tool2"},
+		Headers:          map[string]string{"Authorization": "Bearer token"},
+	}
+
+	hash1, err := configstore.GenerateMCPClientHash(mcp1)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+	if hash1 == "" {
+		t.Error("Expected non-empty hash")
+	}
+
+	// Same MCP should produce same hash
+	hash1Again, _ := configstore.GenerateMCPClientHash(mcp1)
+	if hash1 != hash1Again {
+		t.Error("Same MCP should produce same hash")
+	}
+
+	// Different ClientID should produce different hash
+	mcp2 := mcp1
+	mcp2.ClientID = "mcp-2"
+	hash2, _ := configstore.GenerateMCPClientHash(mcp2)
+	if hash1 == hash2 {
+		t.Error("Different ClientID should produce different hash")
+	}
+
+	// Different Name should produce different hash
+	mcp3 := mcp1
+	mcp3.Name = "Different MCP"
+	hash3, _ := configstore.GenerateMCPClientHash(mcp3)
+	if hash1 == hash3 {
+		t.Error("Different Name should produce different hash")
+	}
+
+	// Different ConnectionType should produce different hash
+	mcp4 := mcp1
+	mcp4.ConnectionType = "stdio"
+	hash4, _ := configstore.GenerateMCPClientHash(mcp4)
+	if hash1 == hash4 {
+		t.Error("Different ConnectionType should produce different hash")
+	}
+
+	// Different ConnectionString should produce different hash
+	newConnStr := "http://localhost:9090"
+	mcp5 := mcp1
+	mcp5.ConnectionString = &newConnStr
+	hash5, _ := configstore.GenerateMCPClientHash(mcp5)
+	if hash1 == hash5 {
+		t.Error("Different ConnectionString should produce different hash")
+	}
+
+	// Different ToolsToExecute should produce different hash
+	mcp6 := mcp1
+	mcp6.ToolsToExecute = []string{"tool3", "tool4"}
+	hash6, _ := configstore.GenerateMCPClientHash(mcp6)
+	if hash1 == hash6 {
+		t.Error("Different ToolsToExecute should produce different hash")
+	}
+
+	// Different Headers should produce different hash
+	mcp7 := mcp1
+	mcp7.Headers = map[string]string{"X-Custom": "value"}
+	hash7, _ := configstore.GenerateMCPClientHash(mcp7)
+	if hash1 == hash7 {
+		t.Error("Different Headers should produce different hash")
+	}
+
+	// ToolsToExecute order should not matter (sorted)
+	mcp8 := mcp1
+	mcp8.ToolsToExecute = []string{"tool2", "tool1"} // Reversed order
+	hash8, _ := configstore.GenerateMCPClientHash(mcp8)
+	if hash1 != hash8 {
+		t.Error("ToolsToExecute order should not affect hash")
+	}
+
+	// Headers order should not matter (sorted by key)
+	mcp9 := mcp1
+	mcp9.Headers = map[string]string{"Authorization": "Bearer token"} // Same content
+	hash9, _ := configstore.GenerateMCPClientHash(mcp9)
+	if hash1 != hash9 {
+		t.Error("Same headers should produce same hash")
+	}
+
+	t.Log("✓ MCPClient hash generation works correctly for all fields")
+}
+
+// ===================================================================================
+// PLUGIN HASH TESTS
+// ===================================================================================
+
+// TestGeneratePluginHash tests hash generation for plugins
+func TestGeneratePluginHash(t *testing.T) {
+	initTestLogger()
+
+	path := "/path/to/plugin"
+	plugin1 := tables.TablePlugin{
+		Name:       "test-plugin",
+		Enabled:    true,
+		Path:       &path,
+		ConfigJSON: `{"setting": "value"}`,
+		Version:    1,
+	}
+
+	hash1, err := configstore.GeneratePluginHash(plugin1)
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+	if hash1 == "" {
+		t.Error("Expected non-empty hash")
+	}
+
+	// Same plugin should produce same hash
+	hash1Again, _ := configstore.GeneratePluginHash(plugin1)
+	if hash1 != hash1Again {
+		t.Error("Same plugin should produce same hash")
+	}
+
+	// Different Name should produce different hash
+	plugin2 := plugin1
+	plugin2.Name = "different-plugin"
+	hash2, _ := configstore.GeneratePluginHash(plugin2)
+	if hash1 == hash2 {
+		t.Error("Different Name should produce different hash")
+	}
+
+	// Different Enabled should produce different hash
+	plugin3 := plugin1
+	plugin3.Enabled = false
+	hash3, _ := configstore.GeneratePluginHash(plugin3)
+	if hash1 == hash3 {
+		t.Error("Different Enabled should produce different hash")
+	}
+
+	// Different Path should produce different hash
+	newPath := "/different/path"
+	plugin4 := plugin1
+	plugin4.Path = &newPath
+	hash4, _ := configstore.GeneratePluginHash(plugin4)
+	if hash1 == hash4 {
+		t.Error("Different Path should produce different hash")
+	}
+
+	// Different ConfigJSON should produce different hash
+	plugin5 := plugin1
+	plugin5.ConfigJSON = `{"setting": "different"}`
+	hash5, _ := configstore.GeneratePluginHash(plugin5)
+	if hash1 == hash5 {
+		t.Error("Different ConfigJSON should produce different hash")
+	}
+
+	// Different Version should produce different hash
+	plugin6 := plugin1
+	plugin6.Version = 2
+	hash6, _ := configstore.GeneratePluginHash(plugin6)
+	if hash1 == hash6 {
+		t.Error("Different Version should produce different hash")
+	}
+
+	// Nil Path should produce different hash
+	plugin7 := plugin1
+	plugin7.Path = nil
+	hash7, _ := configstore.GeneratePluginHash(plugin7)
+	if hash1 == hash7 {
+		t.Error("Nil Path should produce different hash")
+	}
+
+	t.Log("✓ Plugin hash generation works correctly for all fields")
+}
+
+// ===================================================================================
+// CLIENT CONFIG HASH TESTS
+// ===================================================================================
+
+// TestGenerateClientConfigHash tests hash generation for client config
+func TestGenerateClientConfigHash(t *testing.T) {
+	initTestLogger()
+
+	cc1 := configstore.ClientConfig{
+		DropExcessRequests:      true,
+		InitialPoolSize:         300,
+		PrometheusLabels:        []string{"label1", "label2"},
+		EnableLogging:           true,
+		DisableContentLogging:   false,
+		LogRetentionDays:        30,
+		EnableGovernance:        true,
+		EnforceGovernanceHeader: false,
+		AllowDirectKeys:         true,
+		AllowedOrigins:          []string{"http://localhost:3000"},
+		MaxRequestBodySizeMB:    100,
+		EnableLiteLLMFallbacks:  false,
+	}
+
+	hash1, err := cc1.GenerateClientConfigHash()
+	if err != nil {
+		t.Fatalf("Failed to generate hash: %v", err)
+	}
+	if hash1 == "" {
+		t.Error("Expected non-empty hash")
+	}
+
+	// Same config should produce same hash
+	hash1Again, _ := cc1.GenerateClientConfigHash()
+	if hash1 != hash1Again {
+		t.Error("Same config should produce same hash")
+	}
+
+	// Different DropExcessRequests should produce different hash
+	cc2 := cc1
+	cc2.DropExcessRequests = false
+	hash2, _ := cc2.GenerateClientConfigHash()
+	if hash1 == hash2 {
+		t.Error("Different DropExcessRequests should produce different hash")
+	}
+
+	// Different InitialPoolSize should produce different hash
+	cc3 := cc1
+	cc3.InitialPoolSize = 500
+	hash3, _ := cc3.GenerateClientConfigHash()
+	if hash1 == hash3 {
+		t.Error("Different InitialPoolSize should produce different hash")
+	}
+
+	// Different PrometheusLabels should produce different hash
+	cc4 := cc1
+	cc4.PrometheusLabels = []string{"label3"}
+	hash4, _ := cc4.GenerateClientConfigHash()
+	if hash1 == hash4 {
+		t.Error("Different PrometheusLabels should produce different hash")
+	}
+
+	// Different EnableLogging should produce different hash
+	cc5 := cc1
+	cc5.EnableLogging = false
+	hash5, _ := cc5.GenerateClientConfigHash()
+	if hash1 == hash5 {
+		t.Error("Different EnableLogging should produce different hash")
+	}
+
+	// Different DisableContentLogging should produce different hash
+	cc6 := cc1
+	cc6.DisableContentLogging = true
+	hash6, _ := cc6.GenerateClientConfigHash()
+	if hash1 == hash6 {
+		t.Error("Different DisableContentLogging should produce different hash")
+	}
+
+	// Different LogRetentionDays should produce different hash
+	cc7 := cc1
+	cc7.LogRetentionDays = 60
+	hash7, _ := cc7.GenerateClientConfigHash()
+	if hash1 == hash7 {
+		t.Error("Different LogRetentionDays should produce different hash")
+	}
+
+	// Different EnableGovernance should produce different hash
+	cc8 := cc1
+	cc8.EnableGovernance = false
+	hash8, _ := cc8.GenerateClientConfigHash()
+	if hash1 == hash8 {
+		t.Error("Different EnableGovernance should produce different hash")
+	}
+
+	// Different EnforceGovernanceHeader should produce different hash
+	cc9 := cc1
+	cc9.EnforceGovernanceHeader = true
+	hash9, _ := cc9.GenerateClientConfigHash()
+	if hash1 == hash9 {
+		t.Error("Different EnforceGovernanceHeader should produce different hash")
+	}
+
+	// Different AllowDirectKeys should produce different hash
+	cc10 := cc1
+	cc10.AllowDirectKeys = false
+	hash10, _ := cc10.GenerateClientConfigHash()
+	if hash1 == hash10 {
+		t.Error("Different AllowDirectKeys should produce different hash")
+	}
+
+	// Different AllowedOrigins should produce different hash
+	cc11 := cc1
+	cc11.AllowedOrigins = []string{"http://example.com"}
+	hash11, _ := cc11.GenerateClientConfigHash()
+	if hash1 == hash11 {
+		t.Error("Different AllowedOrigins should produce different hash")
+	}
+
+	// Different MaxRequestBodySizeMB should produce different hash
+	cc12 := cc1
+	cc12.MaxRequestBodySizeMB = 200
+	hash12, _ := cc12.GenerateClientConfigHash()
+	if hash1 == hash12 {
+		t.Error("Different MaxRequestBodySizeMB should produce different hash")
+	}
+
+	// Different EnableLiteLLMFallbacks should produce different hash
+	cc13 := cc1
+	cc13.EnableLiteLLMFallbacks = true
+	hash13, _ := cc13.GenerateClientConfigHash()
+	if hash1 == hash13 {
+		t.Error("Different EnableLiteLLMFallbacks should produce different hash")
+	}
+
+	// PrometheusLabels order should not matter (sorted)
+	cc14 := cc1
+	cc14.PrometheusLabels = []string{"label2", "label1"} // Reversed
+	hash14, _ := cc14.GenerateClientConfigHash()
+	if hash1 != hash14 {
+		t.Error("PrometheusLabels order should not affect hash")
+	}
+
+	// AllowedOrigins order should not matter (sorted)
+	cc15 := cc1
+	cc15.AllowedOrigins = []string{"http://localhost:3000"} // Same
+	hash15, _ := cc15.GenerateClientConfigHash()
+	if hash1 != hash15 {
+		t.Error("Same AllowedOrigins should produce same hash")
+	}
+
+	t.Log("✓ ClientConfig hash generation works correctly for all fields")
+}
+
+// ===================================================================================
+// COMBINED GOVERNANCE RECONCILIATION TEST
+// ===================================================================================
+
+// TestSQLite_Governance_FullReconciliation tests full governance reconciliation
+func TestSQLite_Governance_FullReconciliation(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	tokenMax := int64(1000)
+	tokenDur := "1h"
+
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{
+		Budgets: []tables.TableBudget{
+			{ID: "budget-1", MaxLimit: 100.0, ResetDuration: "1d"},
+		},
+		RateLimits: []tables.TableRateLimit{
+			{ID: "rl-1", TokenMaxLimit: &tokenMax, TokenResetDuration: &tokenDur},
+		},
+		Customers: []tables.TableCustomer{
+			{ID: "customer-1", Name: "Test Customer"},
+		},
+		Teams: []tables.TableTeam{
+			{ID: "team-1", Name: "Test Team"},
+		},
+	}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config1, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("First LoadConfig failed: %v", err)
+	}
+
+	// Verify all entities have hashes
+	gov1, _ := config1.ConfigStore.GetGovernanceConfig(ctx)
+	if gov1.Budgets[0].ConfigHash == "" {
+		t.Error("Budget hash not set")
+	}
+	if gov1.RateLimits[0].ConfigHash == "" {
+		t.Error("RateLimit hash not set")
+	}
+	if gov1.Customers[0].ConfigHash == "" {
+		t.Error("Customer hash not set")
+	}
+	if gov1.Teams[0].ConfigHash == "" {
+		t.Error("Team hash not set")
+	}
+	config1.ConfigStore.Close(ctx)
+
+	// Update all entities in config file
+	configData.Governance.Budgets[0].MaxLimit = 200.0
+	newTokenMax := int64(2000)
+	configData.Governance.RateLimits[0].TokenMaxLimit = &newTokenMax
+	configData.Governance.Customers[0].Name = "Updated Customer"
+	configData.Governance.Teams[0].Name = "Updated Team"
+	createConfigFile(t, tempDir, configData)
+
+	// Reload and verify all entities are updated
+	config2, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("Second LoadConfig failed: %v", err)
+	}
+	defer config2.ConfigStore.Close(ctx)
+
+	gov2, _ := config2.ConfigStore.GetGovernanceConfig(ctx)
+
+	if gov2.Budgets[0].MaxLimit != 200.0 {
+		t.Errorf("Budget MaxLimit not updated: got %f", gov2.Budgets[0].MaxLimit)
+	}
+	if *gov2.RateLimits[0].TokenMaxLimit != 2000 {
+		t.Errorf("RateLimit TokenMaxLimit not updated: got %d", *gov2.RateLimits[0].TokenMaxLimit)
+	}
+	if gov2.Customers[0].Name != "Updated Customer" {
+		t.Errorf("Customer Name not updated: got %s", gov2.Customers[0].Name)
+	}
+	if gov2.Teams[0].Name != "Updated Team" {
+		t.Errorf("Team Name not updated: got %s", gov2.Teams[0].Name)
+	}
+
+	t.Log("✓ Full governance reconciliation works correctly for all entities")
+}
+
+// TestSQLite_Governance_DBOnly_AllPreserved tests all dashboard-added entities preserved
+func TestSQLite_Governance_DBOnly_AllPreserved(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+
+	// Start with minimal config
+	configData := makeConfigDataWithProvidersAndDir(nil, tempDir)
+	configData.Governance = &configstore.GovernanceConfig{}
+	createConfigFile(t, tempDir, configData)
+
+	ctx := context.Background()
+	config1, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("First LoadConfig failed: %v", err)
+	}
+
+	// Add entities via dashboard
+	tokenMax := int64(1000)
+	tokenDur := "1h"
+
+	if err := config1.ConfigStore.CreateBudget(ctx, &tables.TableBudget{
+		ID: "dashboard-budget", MaxLimit: 500.0, ResetDuration: "1w",
+	}); err != nil {
+		t.Fatalf("Failed to create dashboard budget: %v", err)
+	}
+
+	if err := config1.ConfigStore.CreateRateLimit(ctx, &tables.TableRateLimit{
+		ID: "dashboard-rl", TokenMaxLimit: &tokenMax, TokenResetDuration: &tokenDur,
+	}); err != nil {
+		t.Fatalf("Failed to create dashboard rate limit: %v", err)
+	}
+
+	if err := config1.ConfigStore.CreateCustomer(ctx, &tables.TableCustomer{
+		ID: "dashboard-customer", Name: "Dashboard Customer",
+	}); err != nil {
+		t.Fatalf("Failed to create dashboard customer: %v", err)
+	}
+
+	if err := config1.ConfigStore.CreateTeam(ctx, &tables.TableTeam{
+		ID: "dashboard-team", Name: "Dashboard Team",
+	}); err != nil {
+		t.Fatalf("Failed to create dashboard team: %v", err)
+	}
+
+	config1.ConfigStore.Close(ctx)
+
+	// Reload - all dashboard entities should be preserved
+	config2, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("Second LoadConfig failed: %v", err)
+	}
+	defer config2.ConfigStore.Close(ctx)
+
+	gov2, _ := config2.ConfigStore.GetGovernanceConfig(ctx)
+
+	if len(gov2.Budgets) != 1 || gov2.Budgets[0].ID != "dashboard-budget" {
+		t.Error("Dashboard budget not preserved")
+	}
+	if len(gov2.RateLimits) != 1 || gov2.RateLimits[0].ID != "dashboard-rl" {
+		t.Error("Dashboard rate limit not preserved")
+	}
+	if len(gov2.Customers) != 1 || gov2.Customers[0].ID != "dashboard-customer" {
+		t.Error("Dashboard customer not preserved")
+	}
+	if len(gov2.Teams) != 1 || gov2.Teams[0].ID != "dashboard-team" {
+		t.Error("Dashboard team not preserved")
+	}
+
+	t.Log("✓ All dashboard-added entities preserved on reload")
+}
+
+// ===================================================================================
+// RUNTIME VS MIGRATION HASH PARITY TESTS (SQLite Integration)
+// ===================================================================================
+// These tests verify that hash generation produces identical results when:
+// 1. Virtual fields are populated (runtime after AfterFind hook)
+// 2. Data is loaded from SQLite via GORM Find() (simulating migration context)
+//
+// This tests whether GORM's AfterFind hooks properly populate virtual fields
+// during database reads, ensuring hash consistency between file configs and DB configs.
+// ===================================================================================
+
+// setupTestDB creates an in-memory SQLite database for testing
+func setupTestDB(t *testing.T) *gorm.DB {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	return db
+}
+
+// TestGenerateMCPClientHash_RuntimeVsMigrationParity tests that MCP client hash
+// is identical whether generated from config file (virtual fields) or DB (via GORM Find)
+func TestGenerateMCPClientHash_RuntimeVsMigrationParity(t *testing.T) {
+	initTestLogger()
+
+	db := setupTestDB(t)
+	if err := db.AutoMigrate(&tables.TableMCPClient{}); err != nil {
+		t.Fatalf("Failed to migrate: %v", err)
+	}
+
+	connStr := "http://localhost:8080"
+
+	// Test case 1: StdioConfig field - verify AfterFind populates virtual field
+	t.Run("StdioConfig_GORMRoundTrip", func(t *testing.T) {
+		stdioConfig := &schemas.MCPStdioConfig{
+			Command: "npx",
+			Args:    []string{"-y", "@modelcontextprotocol/server-filesystem"},
+			Envs:    []string{"NODE_ENV=production"},
+		}
+
+		// Create MCP client with virtual field populated (simulates config file load)
+		mcpToSave := tables.TableMCPClient{
+			ClientID:       uuid.New().String(),
+			Name:           "Test MCP StdioConfig " + uuid.New().String(),
+			ConnectionType: "stdio",
+			StdioConfig:    stdioConfig,
+			ToolsToExecute: []string{},
+			Headers:        map[string]string{},
+		}
+
+		// Generate hash BEFORE saving (this is what config file processing does)
+		hashBeforeSave, err := configstore.GenerateMCPClientHash(mcpToSave)
+		if err != nil {
+			t.Fatalf("Failed to generate hash before save: %v", err)
+		}
+
+		// Save to DB (BeforeSave hook serializes virtual fields to JSON columns)
+		if err := db.Create(&mcpToSave).Error; err != nil {
+			t.Fatalf("Failed to save MCP client: %v", err)
+		}
+
+		// Read back from DB (AfterFind hook should deserialize JSON to virtual fields)
+		var mcpFromDB tables.TableMCPClient
+		if err := db.Where("id = ?", mcpToSave.ID).First(&mcpFromDB).Error; err != nil {
+			t.Fatalf("Failed to read MCP client: %v", err)
+		}
+
+		// Generate hash AFTER reading from DB (simulates migration context)
+		hashAfterLoad, err := configstore.GenerateMCPClientHash(mcpFromDB)
+		if err != nil {
+			t.Fatalf("Failed to generate hash after load: %v", err)
+		}
+
+		// Verify AfterFind populated the virtual field
+		if mcpFromDB.StdioConfig == nil {
+			t.Error("AfterFind did not populate StdioConfig virtual field")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch after GORM round-trip for StdioConfig\nBefore save: %s\nAfter load:  %s\nStdioConfig populated: %v", 
+				hashBeforeSave, hashAfterLoad, mcpFromDB.StdioConfig != nil)
+		}
+	})
+
+	// Test case 2: ToolsToExecute field
+	t.Run("ToolsToExecute_GORMRoundTrip", func(t *testing.T) {
+		tools := []string{"tool1", "tool2", "tool3"}
+
+		mcpToSave := tables.TableMCPClient{
+			ClientID:         uuid.New().String(),
+			Name:             "Test MCP Tools " + uuid.New().String(),
+			ConnectionType:   "sse",
+			ConnectionString: &connStr,
+			ToolsToExecute:   tools,
+			Headers:          map[string]string{},
+		}
+
+		hashBeforeSave, _ := configstore.GenerateMCPClientHash(mcpToSave)
+		db.Create(&mcpToSave)
+
+		var mcpFromDB tables.TableMCPClient
+		db.Where("id = ?", mcpToSave.ID).First(&mcpFromDB)
+
+		hashAfterLoad, _ := configstore.GenerateMCPClientHash(mcpFromDB)
+
+		if len(mcpFromDB.ToolsToExecute) == 0 {
+			t.Error("AfterFind did not populate ToolsToExecute virtual field")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch after GORM round-trip for ToolsToExecute\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 3: Headers field
+	t.Run("Headers_GORMRoundTrip", func(t *testing.T) {
+		headers := map[string]string{
+			"Authorization": "Bearer token123",
+			"X-Custom":      "value",
+		}
+
+		mcpToSave := tables.TableMCPClient{
+			ClientID:         uuid.New().String(),
+			Name:             "Test MCP Headers " + uuid.New().String(),
+			ConnectionType:   "sse",
+			ConnectionString: &connStr,
+			ToolsToExecute:   []string{},
+			Headers:          headers,
+		}
+
+		hashBeforeSave, _ := configstore.GenerateMCPClientHash(mcpToSave)
+		db.Create(&mcpToSave)
+
+		var mcpFromDB tables.TableMCPClient
+		db.Where("id = ?", mcpToSave.ID).First(&mcpFromDB)
+
+		hashAfterLoad, _ := configstore.GenerateMCPClientHash(mcpFromDB)
+
+		if len(mcpFromDB.Headers) == 0 {
+			t.Error("AfterFind did not populate Headers virtual field")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch after GORM round-trip for Headers\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 4: All fields combined
+	t.Run("AllFields_GORMRoundTrip", func(t *testing.T) {
+		stdioConfig := &schemas.MCPStdioConfig{
+			Command: "npx",
+			Args:    []string{"-y", "server"},
+		}
+		tools := []string{"tool1", "tool2"}
+		headers := map[string]string{"Auth": "token"}
+
+		mcpToSave := tables.TableMCPClient{
+			ClientID:       uuid.New().String(),
+			Name:           "Test MCP AllFields " + uuid.New().String(),
+			ConnectionType: "stdio",
+			StdioConfig:    stdioConfig,
+			ToolsToExecute: tools,
+			Headers:        headers,
+		}
+
+		hashBeforeSave, _ := configstore.GenerateMCPClientHash(mcpToSave)
+		db.Create(&mcpToSave)
+
+		var mcpFromDB tables.TableMCPClient
+		db.Where("id = ?", mcpToSave.ID).First(&mcpFromDB)
+
+		hashAfterLoad, _ := configstore.GenerateMCPClientHash(mcpFromDB)
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch after GORM round-trip for all fields\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 5: Verify tx.Find() also triggers AfterFind (migration scenario)
+	t.Run("TxFind_TriggersAfterFind", func(t *testing.T) {
+		tools := []string{"zebra", "apple", "mango"}
+
+		mcpToSave := tables.TableMCPClient{
+			ClientID:         uuid.New().String(),
+			Name:             "Test MCP TxFind " + uuid.New().String(),
+			ConnectionType:   "sse",
+			ConnectionString: &connStr,
+			ToolsToExecute:   tools,
+			Headers:          map[string]string{},
+		}
+
+		hashBeforeSave, _ := configstore.GenerateMCPClientHash(mcpToSave)
+		db.Create(&mcpToSave)
+
+		// Use Find() like migrations do (not First())
+		var mcpClients []tables.TableMCPClient
+		if err := db.Where("id = ?", mcpToSave.ID).Find(&mcpClients).Error; err != nil {
+			t.Fatalf("Failed to find MCP clients: %v", err)
+		}
+
+		if len(mcpClients) == 0 {
+			t.Fatal("No MCP clients found")
+		}
+
+		mcpFromDB := mcpClients[0]
+		hashAfterLoad, _ := configstore.GenerateMCPClientHash(mcpFromDB)
+
+		if len(mcpFromDB.ToolsToExecute) == 0 {
+			t.Error("AfterFind did not run during Find() - ToolsToExecute is empty")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch when using Find() (migration pattern)\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+}
+
+// TestGeneratePluginHash_RuntimeVsMigrationParity tests plugin hash with real DB
+func TestGeneratePluginHash_RuntimeVsMigrationParity(t *testing.T) {
+	initTestLogger()
+
+	db := setupTestDB(t)
+	if err := db.AutoMigrate(&tables.TablePlugin{}); err != nil {
+		t.Fatalf("Failed to migrate: %v", err)
+	}
+
+	path := "/path/to/plugin"
+
+	// Test case 1: Simple config object
+	t.Run("SimpleConfig_GORMRoundTrip", func(t *testing.T) {
+		config := map[string]interface{}{
+			"setting":  "value",
+			"enabled":  true,
+			"maxItems": float64(100),
+		}
+
+		pluginToSave := tables.TablePlugin{
+			Name:    "test-plugin-" + uuid.New().String(),
+			Enabled: true,
+			Path:    &path,
+			Version: 1,
+			Config:  config,
+		}
+
+		hashBeforeSave, _ := configstore.GeneratePluginHash(pluginToSave)
+		db.Create(&pluginToSave)
+
+		var pluginFromDB tables.TablePlugin
+		db.Where("id = ?", pluginToSave.ID).First(&pluginFromDB)
+
+		hashAfterLoad, _ := configstore.GeneratePluginHash(pluginFromDB)
+
+		if pluginFromDB.Config == nil {
+			t.Error("AfterFind did not populate Config virtual field")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch after GORM round-trip for plugin Config\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 2: Nested config object
+	t.Run("NestedConfig_GORMRoundTrip", func(t *testing.T) {
+		config := map[string]interface{}{
+			"database": map[string]interface{}{
+				"host": "localhost",
+				"port": float64(5432),
+			},
+		}
+
+		pluginToSave := tables.TablePlugin{
+			Name:    "test-plugin-nested-" + uuid.New().String(),
+			Enabled: true,
+			Version: 1,
+			Config:  config,
+		}
+
+		hashBeforeSave, _ := configstore.GeneratePluginHash(pluginToSave)
+		db.Create(&pluginToSave)
+
+		var pluginFromDB tables.TablePlugin
+		db.Where("id = ?", pluginToSave.ID).First(&pluginFromDB)
+
+		hashAfterLoad, _ := configstore.GeneratePluginHash(pluginFromDB)
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for nested config\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 3: Empty config
+	t.Run("EmptyConfig_GORMRoundTrip", func(t *testing.T) {
+		pluginToSave := tables.TablePlugin{
+			Name:    "test-plugin-empty-" + uuid.New().String(),
+			Enabled: true,
+			Version: 1,
+			Config:  nil,
+		}
+
+		hashBeforeSave, _ := configstore.GeneratePluginHash(pluginToSave)
+		db.Create(&pluginToSave)
+
+		var pluginFromDB tables.TablePlugin
+		db.Where("id = ?", pluginToSave.ID).First(&pluginFromDB)
+
+		hashAfterLoad, _ := configstore.GeneratePluginHash(pluginFromDB)
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for empty config\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+}
+
+// TestGenerateTeamHash_RuntimeVsMigrationParity tests team hash with real DB
+func TestGenerateTeamHash_RuntimeVsMigrationParity(t *testing.T) {
+	initTestLogger()
+
+	db := setupTestDB(t)
+	if err := db.AutoMigrate(&tables.TableTeam{}); err != nil {
+		t.Fatalf("Failed to migrate: %v", err)
+	}
+
+	// Test case 1: ParsedProfile
+	t.Run("Profile_GORMRoundTrip", func(t *testing.T) {
+		profile := map[string]interface{}{
+			"department": "engineering",
+			"level":      float64(3),
+		}
+
+		teamToSave := tables.TableTeam{
+			ID:            uuid.New().String(),
+			Name:          "Test Team Profile",
+			ParsedProfile: profile,
+		}
+
+		hashBeforeSave, _ := configstore.GenerateTeamHash(teamToSave)
+		db.Create(&teamToSave)
+
+		var teamFromDB tables.TableTeam
+		db.Where("id = ?", teamToSave.ID).First(&teamFromDB)
+
+		hashAfterLoad, _ := configstore.GenerateTeamHash(teamFromDB)
+
+		if teamFromDB.ParsedProfile == nil {
+			t.Error("AfterFind did not populate ParsedProfile virtual field")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for Profile\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 2: ParsedConfig
+	t.Run("Config_GORMRoundTrip", func(t *testing.T) {
+		config := map[string]interface{}{
+			"maxTokens":   float64(4096),
+			"temperature": 0.7,
+		}
+
+		teamToSave := tables.TableTeam{
+			ID:           uuid.New().String(),
+			Name:         "Test Team Config",
+			ParsedConfig: config,
+		}
+
+		hashBeforeSave, _ := configstore.GenerateTeamHash(teamToSave)
+		db.Create(&teamToSave)
+
+		var teamFromDB tables.TableTeam
+		db.Where("id = ?", teamToSave.ID).First(&teamFromDB)
+
+		hashAfterLoad, _ := configstore.GenerateTeamHash(teamFromDB)
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for Config\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 3: ParsedClaims with array
+	t.Run("Claims_GORMRoundTrip", func(t *testing.T) {
+		claims := map[string]interface{}{
+			"role":        "admin",
+			"permissions": []interface{}{"read", "write", "delete"},
+		}
+
+		teamToSave := tables.TableTeam{
+			ID:           uuid.New().String(),
+			Name:         "Test Team Claims",
+			ParsedClaims: claims,
+		}
+
+		hashBeforeSave, _ := configstore.GenerateTeamHash(teamToSave)
+		db.Create(&teamToSave)
+
+		var teamFromDB tables.TableTeam
+		db.Where("id = ?", teamToSave.ID).First(&teamFromDB)
+
+		hashAfterLoad, _ := configstore.GenerateTeamHash(teamFromDB)
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for Claims\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 4: All fields
+	t.Run("AllFields_GORMRoundTrip", func(t *testing.T) {
+		customerID := "customer-1"
+		budgetID := "budget-1"
+
+		teamToSave := tables.TableTeam{
+			ID:            uuid.New().String(),
+			Name:          "Test Team All",
+			CustomerID:    &customerID,
+			BudgetID:      &budgetID,
+			ParsedProfile: map[string]interface{}{"key": "value"},
+			ParsedConfig:  map[string]interface{}{"setting": true},
+			ParsedClaims:  map[string]interface{}{"role": "user"},
+		}
+
+		hashBeforeSave, _ := configstore.GenerateTeamHash(teamToSave)
+		db.Create(&teamToSave)
+
+		var teamFromDB tables.TableTeam
+		db.Where("id = ?", teamToSave.ID).First(&teamFromDB)
+
+		hashAfterLoad, _ := configstore.GenerateTeamHash(teamFromDB)
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for all fields\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+}
+
+// TestGenerateProviderHash_RuntimeVsMigrationParity tests provider hash with real DB
+func TestGenerateProviderHash_RuntimeVsMigrationParity(t *testing.T) {
+	initTestLogger()
+
+	db := setupTestDB(t)
+	if err := db.AutoMigrate(&tables.TableProvider{}); err != nil {
+		t.Fatalf("Failed to migrate: %v", err)
+	}
+
+	// Test case 1: NetworkConfig
+	t.Run("NetworkConfig_GORMRoundTrip", func(t *testing.T) {
+		networkConfig := &schemas.NetworkConfig{
+			BaseURL:                        "https://api.custom.com",
+			DefaultRequestTimeoutInSeconds: 30,
+		}
+
+		providerToSave := tables.TableProvider{
+			Name:                networkConfig.BaseURL, // Use unique name
+			NetworkConfig:       networkConfig,
+			SendBackRawResponse: true,
+		}
+
+		// Generate hash from the virtual field (before save)
+		providerConfig := configstore.ProviderConfig{
+			NetworkConfig:       providerToSave.NetworkConfig,
+			SendBackRawResponse: providerToSave.SendBackRawResponse,
+		}
+		hashBeforeSave, _ := providerConfig.GenerateConfigHash("openai")
+
+		db.Create(&providerToSave)
+
+		var providerFromDB tables.TableProvider
+		db.Where("id = ?", providerToSave.ID).First(&providerFromDB)
+
+		// Generate hash from loaded data
+		providerConfigFromDB := configstore.ProviderConfig{
+			NetworkConfig:       providerFromDB.NetworkConfig,
+			SendBackRawResponse: providerFromDB.SendBackRawResponse,
+		}
+		hashAfterLoad, _ := providerConfigFromDB.GenerateConfigHash("openai")
+
+		if providerFromDB.NetworkConfig == nil {
+			t.Error("AfterFind did not populate NetworkConfig virtual field")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for NetworkConfig\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 2: ConcurrencyAndBufferSize
+	t.Run("ConcurrencyAndBufferSize_GORMRoundTrip", func(t *testing.T) {
+		concurrencyConfig := &schemas.ConcurrencyAndBufferSize{
+			Concurrency: 10,
+			BufferSize:  100,
+		}
+
+		providerToSave := tables.TableProvider{
+			Name:                     "test-provider-concurrency-" + uuid.New().String(),
+			ConcurrencyAndBufferSize: concurrencyConfig,
+			SendBackRawResponse:      true,
+		}
+
+		providerConfig := configstore.ProviderConfig{
+			ConcurrencyAndBufferSize: providerToSave.ConcurrencyAndBufferSize,
+			SendBackRawResponse:      providerToSave.SendBackRawResponse,
+		}
+		hashBeforeSave, _ := providerConfig.GenerateConfigHash("openai")
+
+		db.Create(&providerToSave)
+
+		var providerFromDB tables.TableProvider
+		db.Where("id = ?", providerToSave.ID).First(&providerFromDB)
+
+		providerConfigFromDB := configstore.ProviderConfig{
+			ConcurrencyAndBufferSize: providerFromDB.ConcurrencyAndBufferSize,
+			SendBackRawResponse:      providerFromDB.SendBackRawResponse,
+		}
+		hashAfterLoad, _ := providerConfigFromDB.GenerateConfigHash("openai")
+
+		if providerFromDB.ConcurrencyAndBufferSize == nil {
+			t.Error("AfterFind did not populate ConcurrencyAndBufferSize virtual field")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for ConcurrencyAndBufferSize\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 3: ProxyConfig
+	t.Run("ProxyConfig_GORMRoundTrip", func(t *testing.T) {
+		proxyConfig := &schemas.ProxyConfig{
+			Type: schemas.HTTPProxy,
+			URL:  "http://proxy.example.com:8080",
+		}
+
+		providerToSave := tables.TableProvider{
+			Name:                "test-provider-proxy-" + uuid.New().String(),
+			ProxyConfig:         proxyConfig,
+			SendBackRawResponse: false,
+		}
+
+		providerConfig := configstore.ProviderConfig{
+			ProxyConfig:         providerToSave.ProxyConfig,
+			SendBackRawResponse: providerToSave.SendBackRawResponse,
+		}
+		hashBeforeSave, _ := providerConfig.GenerateConfigHash("openai")
+
+		db.Create(&providerToSave)
+
+		var providerFromDB tables.TableProvider
+		db.Where("id = ?", providerToSave.ID).First(&providerFromDB)
+
+		providerConfigFromDB := configstore.ProviderConfig{
+			ProxyConfig:         providerFromDB.ProxyConfig,
+			SendBackRawResponse: providerFromDB.SendBackRawResponse,
+		}
+		hashAfterLoad, _ := providerConfigFromDB.GenerateConfigHash("openai")
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for ProxyConfig\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 4: CustomProviderConfig
+	t.Run("CustomProviderConfig_GORMRoundTrip", func(t *testing.T) {
+		customConfig := &schemas.CustomProviderConfig{
+			IsKeyLess:        true,
+			BaseProviderType: schemas.OpenAI,
+		}
+
+		providerToSave := tables.TableProvider{
+			Name:                 "test-provider-custom-" + uuid.New().String(),
+			CustomProviderConfig: customConfig,
+			SendBackRawResponse:  true,
+		}
+
+		providerConfig := configstore.ProviderConfig{
+			CustomProviderConfig: providerToSave.CustomProviderConfig,
+			SendBackRawResponse:  providerToSave.SendBackRawResponse,
+		}
+		hashBeforeSave, _ := providerConfig.GenerateConfigHash("custom")
+
+		db.Create(&providerToSave)
+
+		var providerFromDB tables.TableProvider
+		db.Where("id = ?", providerToSave.ID).First(&providerFromDB)
+
+		providerConfigFromDB := configstore.ProviderConfig{
+			CustomProviderConfig: providerFromDB.CustomProviderConfig,
+			SendBackRawResponse:  providerFromDB.SendBackRawResponse,
+		}
+		hashAfterLoad, _ := providerConfigFromDB.GenerateConfigHash("custom")
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for CustomProviderConfig\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+}
+
+// TestGenerateKeyHash_RuntimeVsMigrationParity tests key hash with real DB
+func TestGenerateKeyHash_RuntimeVsMigrationParity(t *testing.T) {
+	initTestLogger()
+
+	db := setupTestDB(t)
+	// Need to migrate provider first due to foreign key
+	if err := db.AutoMigrate(&tables.TableProvider{}, &tables.TableKey{}); err != nil {
+		t.Fatalf("Failed to migrate: %v", err)
+	}
+
+	// Create a provider for foreign key
+	provider := tables.TableProvider{Name: "test-provider-for-keys"}
+	db.Create(&provider)
+
+	// Test case 1: Models field
+	t.Run("Models_GORMRoundTrip", func(t *testing.T) {
+		models := []string{"gpt-4", "gpt-3.5-turbo", "gpt-4-turbo"}
+
+		keyToSave := tables.TableKey{
+			Name:       "test-key-models-" + uuid.New().String(),
+			KeyID:      uuid.New().String(),
+			ProviderID: provider.ID,
+			Provider:   "openai",
+			Value:      "sk-123",
+			Models:     models,
+			Weight:     1.5,
+		}
+
+		// Generate hash using schemas.Key (what the hash function expects)
+		schemaKey := schemas.Key{
+			Name:   keyToSave.Name,
+			Value:  keyToSave.Value,
+			Models: keyToSave.Models,
+			Weight: keyToSave.Weight,
+		}
+		hashBeforeSave, _ := configstore.GenerateKeyHash(schemaKey)
+
+		db.Create(&keyToSave)
+
+		var keyFromDB tables.TableKey
+		db.Where("id = ?", keyToSave.ID).First(&keyFromDB)
+
+		schemaKeyFromDB := schemas.Key{
+			Name:   keyFromDB.Name,
+			Value:  keyFromDB.Value,
+			Models: keyFromDB.Models,
+			Weight: keyFromDB.Weight,
+		}
+		hashAfterLoad, _ := configstore.GenerateKeyHash(schemaKeyFromDB)
+
+		if len(keyFromDB.Models) == 0 {
+			t.Error("AfterFind did not populate Models virtual field")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for Models\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 2: AzureKeyConfig
+	t.Run("AzureKeyConfig_GORMRoundTrip", func(t *testing.T) {
+		apiVersion := "2024-02-01"
+		azureConfig := &schemas.AzureKeyConfig{
+			Endpoint:    "https://myresource.openai.azure.com",
+			APIVersion:  &apiVersion,
+			Deployments: map[string]string{"gpt-4": "gpt-4-deployment"},
+		}
+
+		keyToSave := tables.TableKey{
+			Name:           "test-key-azure-" + uuid.New().String(),
+			KeyID:          uuid.New().String(),
+			ProviderID:     provider.ID,
+			Provider:       "azure",
+			Value:          "azure-key-value",
+			Weight:         1.0,
+			AzureKeyConfig: azureConfig,
+		}
+
+		schemaKey := schemas.Key{
+			Name:           keyToSave.Name,
+			Value:          keyToSave.Value,
+			Weight:         keyToSave.Weight,
+			AzureKeyConfig: keyToSave.AzureKeyConfig,
+		}
+		hashBeforeSave, _ := configstore.GenerateKeyHash(schemaKey)
+
+		db.Create(&keyToSave)
+
+		var keyFromDB tables.TableKey
+		db.Where("id = ?", keyToSave.ID).First(&keyFromDB)
+
+		schemaKeyFromDB := schemas.Key{
+			Name:           keyFromDB.Name,
+			Value:          keyFromDB.Value,
+			Weight:         keyFromDB.Weight,
+			AzureKeyConfig: keyFromDB.AzureKeyConfig,
+		}
+		hashAfterLoad, _ := configstore.GenerateKeyHash(schemaKeyFromDB)
+
+		if keyFromDB.AzureKeyConfig == nil {
+			t.Error("AfterFind did not populate AzureKeyConfig virtual field")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for AzureKeyConfig\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 3: Models ordering should not affect hash
+	t.Run("Models_OrderingParity", func(t *testing.T) {
+		models1 := []string{"gpt-4", "gpt-3.5-turbo", "claude-3"}
+		models2 := []string{"claude-3", "gpt-4", "gpt-3.5-turbo"} // Different order
+
+		key1 := schemas.Key{
+			Name:   "test-key",
+			Value:  "sk-123",
+			Models: models1,
+			Weight: 1.0,
+		}
+
+		key2 := schemas.Key{
+			Name:   "test-key",
+			Value:  "sk-123",
+			Models: models2,
+			Weight: 1.0,
+		}
+
+		hash1, _ := configstore.GenerateKeyHash(key1)
+		hash2, _ := configstore.GenerateKeyHash(key2)
+
+		if hash1 != hash2 {
+			t.Errorf("Hash should be same regardless of Models order\nHash1: %s\nHash2: %s", hash1, hash2)
+		}
+	})
+}
+
+// TestGenerateClientConfigHash_RuntimeVsMigrationParity tests client config hash with real DB
+func TestGenerateClientConfigHash_RuntimeVsMigrationParity(t *testing.T) {
+	initTestLogger()
+
+	db := setupTestDB(t)
+	if err := db.AutoMigrate(&tables.TableClientConfig{}); err != nil {
+		t.Fatalf("Failed to migrate: %v", err)
+	}
+
+	// Test case 1: PrometheusLabels
+	t.Run("PrometheusLabels_GORMRoundTrip", func(t *testing.T) {
+		labels := []string{"provider", "model", "status"}
+
+		ccToSave := tables.TableClientConfig{
+			DropExcessRequests:      true,
+			InitialPoolSize:         300,
+			PrometheusLabels:        labels,
+			EnableLogging:           true,
+			DisableContentLogging:   false,
+			LogRetentionDays:        30,
+			EnableGovernance:        true,
+			EnforceGovernanceHeader: false,
+			AllowDirectKeys:         true,
+			MaxRequestBodySizeMB:    100,
+			EnableLiteLLMFallbacks:  false,
+		}
+
+		// Generate hash from config
+		clientConfig := configstore.ClientConfig{
+			DropExcessRequests:      ccToSave.DropExcessRequests,
+			InitialPoolSize:         ccToSave.InitialPoolSize,
+			PrometheusLabels:        ccToSave.PrometheusLabels,
+			EnableLogging:           ccToSave.EnableLogging,
+			DisableContentLogging:   ccToSave.DisableContentLogging,
+			LogRetentionDays:        ccToSave.LogRetentionDays,
+			EnableGovernance:        ccToSave.EnableGovernance,
+			EnforceGovernanceHeader: ccToSave.EnforceGovernanceHeader,
+			AllowDirectKeys:         ccToSave.AllowDirectKeys,
+			MaxRequestBodySizeMB:    ccToSave.MaxRequestBodySizeMB,
+			EnableLiteLLMFallbacks:  ccToSave.EnableLiteLLMFallbacks,
+		}
+		hashBeforeSave, _ := clientConfig.GenerateClientConfigHash()
+
+		db.Create(&ccToSave)
+
+		var ccFromDB tables.TableClientConfig
+		db.Where("id = ?", ccToSave.ID).First(&ccFromDB)
+
+		clientConfigFromDB := configstore.ClientConfig{
+			DropExcessRequests:      ccFromDB.DropExcessRequests,
+			InitialPoolSize:         ccFromDB.InitialPoolSize,
+			PrometheusLabels:        ccFromDB.PrometheusLabels,
+			EnableLogging:           ccFromDB.EnableLogging,
+			DisableContentLogging:   ccFromDB.DisableContentLogging,
+			LogRetentionDays:        ccFromDB.LogRetentionDays,
+			EnableGovernance:        ccFromDB.EnableGovernance,
+			EnforceGovernanceHeader: ccFromDB.EnforceGovernanceHeader,
+			AllowDirectKeys:         ccFromDB.AllowDirectKeys,
+			MaxRequestBodySizeMB:    ccFromDB.MaxRequestBodySizeMB,
+			EnableLiteLLMFallbacks:  ccFromDB.EnableLiteLLMFallbacks,
+		}
+		hashAfterLoad, _ := clientConfigFromDB.GenerateClientConfigHash()
+
+		if len(ccFromDB.PrometheusLabels) == 0 {
+			t.Error("AfterFind did not populate PrometheusLabels virtual field")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for PrometheusLabels\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
+
+	// Test case 2: AllowedOrigins
+	t.Run("AllowedOrigins_GORMRoundTrip", func(t *testing.T) {
+		origins := []string{"https://example.com", "https://app.example.com"}
+
+		ccToSave := tables.TableClientConfig{
+			DropExcessRequests:   true,
+			InitialPoolSize:      300,
+			AllowedOrigins:       origins,
+			EnableLogging:        true,
+			LogRetentionDays:     30,
+			MaxRequestBodySizeMB: 100,
+		}
+
+		clientConfig := configstore.ClientConfig{
+			DropExcessRequests:   ccToSave.DropExcessRequests,
+			InitialPoolSize:      ccToSave.InitialPoolSize,
+			AllowedOrigins:       ccToSave.AllowedOrigins,
+			EnableLogging:        ccToSave.EnableLogging,
+			LogRetentionDays:     ccToSave.LogRetentionDays,
+			MaxRequestBodySizeMB: ccToSave.MaxRequestBodySizeMB,
+		}
+		hashBeforeSave, _ := clientConfig.GenerateClientConfigHash()
+
+		db.Create(&ccToSave)
+
+		var ccFromDB tables.TableClientConfig
+		db.Where("id = ?", ccToSave.ID).First(&ccFromDB)
+
+		clientConfigFromDB := configstore.ClientConfig{
+			DropExcessRequests:   ccFromDB.DropExcessRequests,
+			InitialPoolSize:      ccFromDB.InitialPoolSize,
+			AllowedOrigins:       ccFromDB.AllowedOrigins,
+			EnableLogging:        ccFromDB.EnableLogging,
+			LogRetentionDays:     ccFromDB.LogRetentionDays,
+			MaxRequestBodySizeMB: ccFromDB.MaxRequestBodySizeMB,
+		}
+		hashAfterLoad, _ := clientConfigFromDB.GenerateClientConfigHash()
+
+		if len(ccFromDB.AllowedOrigins) == 0 {
+			t.Error("AfterFind did not populate AllowedOrigins virtual field")
+		}
+
+		if hashBeforeSave != hashAfterLoad {
+			t.Errorf("Hash mismatch for AllowedOrigins\nBefore save: %s\nAfter load:  %s", 
+				hashBeforeSave, hashAfterLoad)
+		}
+	})
 }
