@@ -676,7 +676,7 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, key schemas
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockChatCompletionRequest(request) },
+		func() (any, error) { return ToBedrockChatCompletionRequest(&ctx, request) },
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -701,7 +701,7 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, key schemas
 	}
 
 	// Convert using the new response converter
-	bifrostResponse, err := bedrockResponse.ToBifrostChatResponse(request.Model)
+	bifrostResponse, err := bedrockResponse.ToBifrostChatResponse(ctx, request.Model)
 	if err != nil {
 		return nil, providerUtils.NewBifrostOperationError("failed to convert bedrock response", err, providerName)
 	}
@@ -737,7 +737,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockChatCompletionRequest(request) },
+		func() (any, error) { return ToBedrockChatCompletionRequest(&ctx, request) },
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr

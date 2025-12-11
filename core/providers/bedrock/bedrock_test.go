@@ -1,6 +1,7 @@
 package bedrock_test
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -432,7 +433,8 @@ func TestBifrostToBedrockRequestConversion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual, err := bedrock.ToBedrockChatCompletionRequest(tt.input)
+			ctx := context.Background()
+			actual, err := bedrock.ToBedrockChatCompletionRequest(&ctx, tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, actual)

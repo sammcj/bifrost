@@ -1,6 +1,7 @@
 package bedrock
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 )
 
 // ToBedrockChatCompletionRequest converts a Bifrost request to Bedrock Converse API format
-func ToBedrockChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) (*BedrockConverseRequest, error) {
+func ToBedrockChatCompletionRequest(ctx *context.Context, bifrostReq *schemas.BifrostChatRequest) (*BedrockConverseRequest, error) {
 	if bifrostReq == nil {
 		return nil, fmt.Errorf("bifrost request is nil")
 	}
@@ -35,7 +36,7 @@ func ToBedrockChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) (*Be
 	}
 
 	// Convert parameters and configurations
-	convertChatParameters(bifrostReq, bedrockReq)
+	convertChatParameters(ctx, bifrostReq, bedrockReq)
 
 	// Ensure tool config is present when needed
 	ensureChatToolConfigForConversation(bifrostReq, bedrockReq)
@@ -44,7 +45,7 @@ func ToBedrockChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) (*Be
 }
 
 // ToBifrostChatResponse converts a Bedrock Converse API response to Bifrost format
-func (response *BedrockConverseResponse) ToBifrostChatResponse(model string) (*schemas.BifrostChatResponse, error) {
+func (response *BedrockConverseResponse) ToBifrostChatResponse(ctx context.Context, model string) (*schemas.BifrostChatResponse, error) {
 	if response == nil {
 		return nil, fmt.Errorf("bedrock response is nil")
 	}
@@ -60,16 +61,18 @@ func (response *BedrockConverseResponse) ToBifrostChatResponse(model string) (*s
 		} else {
 			// Check if this is a single tool use for structured output (response_format)
 			// If there's only one tool use and no other content, treat it as structured output
-			if len(response.Output.Message.Content) == 1 && response.Output.Message.Content[0].ToolUse != nil {
-				toolUse := response.Output.Message.Content[0].ToolUse
-				// Marshal the tool input to JSON string and use as content
-				if toolUse.Input != nil {
-					if argBytes, err := sonic.Marshal(toolUse.Input); err == nil {
-						jsonStr := string(argBytes)
-						contentStr = &jsonStr
-					} else {
-						jsonStr := fmt.Sprintf("%v", toolUse.Input)
-						contentStr = &jsonStr
+			if structuredOutputToolName, ok := ctx.Value(schemas.BifrostContextKeyStructuredOutputToolName).(string); ok {
+				if len(response.Output.Message.Content) > 0 && response.Output.Message.Content[0].ToolUse != nil && structuredOutputToolName == response.Output.Message.Content[0].ToolUse.Name {
+					toolUse := response.Output.Message.Content[0].ToolUse
+					// Marshal the tool input to JSON string and use as content
+					if toolUse.Input != nil {
+						if argBytes, err := sonic.Marshal(toolUse.Input); err == nil {
+							jsonStr := string(argBytes)
+							contentStr = &jsonStr
+						} else {
+							jsonStr := fmt.Sprintf("%v", toolUse.Input)
+							contentStr = &jsonStr
+						}
 					}
 				}
 			} else {
