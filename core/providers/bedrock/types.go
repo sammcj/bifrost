@@ -40,6 +40,10 @@ func (r *BedrockTextCompletionRequest) IsStreamingRequested() bool {
 	return r.Stream
 }
 
+type BedrockServiceTier struct {
+	Type string `json:"type"` // Service tier type: "reserved" | "priority" | "default" | "flex"
+}
+
 // BedrockConverseRequest represents a Bedrock Converse API request
 type BedrockConverseRequest struct {
 	ModelID                           string                           `json:"-"`                                           // Model ID (sent in URL path, not body)
@@ -53,6 +57,7 @@ type BedrockConverseRequest struct {
 	PerformanceConfig                 *BedrockPerformanceConfig        `json:"performanceConfig,omitempty"`                 // Performance configuration
 	PromptVariables                   map[string]BedrockPromptVariable `json:"promptVariables,omitempty"`                   // Prompt variables for prompt management
 	RequestMetadata                   map[string]string                `json:"requestMetadata,omitempty"`                   // Request metadata
+	ServiceTier                       *BedrockServiceTier              `json:"serviceTier,omitempty"`                       // Service tier configuration (note: camelCase in both request and response)
 	Stream                            bool                             `json:"-"`                                           // Whether streaming is requested (internal, not in JSON)
 }
 
@@ -255,6 +260,7 @@ type BedrockConverseResponse struct {
 	Metrics                       *BedrockConverseMetrics   `json:"metrics"`                                 // Required: Response metrics
 	AdditionalModelResponseFields map[string]interface{}    `json:"additionalModelResponseFields,omitempty"` // Optional: Additional model-specific response fields
 	PerformanceConfig             *BedrockPerformanceConfig `json:"performanceConfig,omitempty"`             // Optional: Performance configuration used
+	ServiceTier                   *BedrockServiceTier       `json:"serviceTier,omitempty"`                   // Optional: Service tier that was used
 	Trace                         *BedrockConverseTrace     `json:"trace,omitempty"`                         // Optional: Guardrail trace information
 }
 

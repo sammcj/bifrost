@@ -178,6 +178,10 @@ func (response *BedrockConverseResponse) ToBifrostChatResponse(model string) (*s
 		},
 	}
 
+	if response.ServiceTier != nil && response.ServiceTier.Type != "" {
+		bifrostResponse.ServiceTier = &response.ServiceTier.Type
+	}
+
 	return bifrostResponse, nil
 }
 

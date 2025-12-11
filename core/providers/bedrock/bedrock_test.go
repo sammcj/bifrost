@@ -85,6 +85,7 @@ func TestBifrostToBedrockRequestConversion(t *testing.T) {
 	stop := testStop
 	trace := testTrace
 	latency := testLatency
+	serviceTier := "priority"
 	props := testProps
 
 	tests := []struct {
@@ -203,6 +204,73 @@ func TestBifrostToBedrockRequestConversion(t *testing.T) {
 					Temperature:   &temp,
 					TopP:          &topP,
 					StopSequences: stop,
+				},
+			},
+		},
+		{
+			name: "ServiceTierProvided",
+			input: &schemas.BifrostChatRequest{
+				Model: "claude-3-sonnet",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Hello!"),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					ServiceTier: &serviceTier,
+				},
+			},
+			expected: &bedrock.BedrockConverseRequest{
+				ModelID: "claude-3-sonnet",
+				Messages: []bedrock.BedrockMessage{
+					{
+						Role: bedrock.BedrockMessageRoleUser,
+						Content: []bedrock.BedrockContentBlock{
+							{
+								Text: schemas.Ptr("Hello!"),
+							},
+						},
+					},
+				},
+				InferenceConfig: &bedrock.BedrockInferenceConfig{},
+				ServiceTier: &bedrock.BedrockServiceTier{
+					Type: serviceTier,
+				},
+			},
+		},
+		{
+			name: "ServiceTierNotProvided",
+			input: &schemas.BifrostChatRequest{
+				Model: "claude-3-sonnet",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Hello!"),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					Temperature: &temp,
+				},
+			},
+			expected: &bedrock.BedrockConverseRequest{
+				ModelID: "claude-3-sonnet",
+				Messages: []bedrock.BedrockMessage{
+					{
+						Role: bedrock.BedrockMessageRoleUser,
+						Content: []bedrock.BedrockContentBlock{
+							{
+								Text: schemas.Ptr("Hello!"),
+							},
+						},
+					},
+				},
+				InferenceConfig: &bedrock.BedrockInferenceConfig{
+					Temperature: &temp,
 				},
 			},
 		},

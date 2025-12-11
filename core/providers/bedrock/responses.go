@@ -475,6 +475,12 @@ func ToBedrockResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) (*Be
 		}
 
 		bedrockReq.InferenceConfig = inferenceConfig
+
+		if bifrostReq.Params.ServiceTier != nil {
+			bedrockReq.ServiceTier = &BedrockServiceTier{
+				Type: *bifrostReq.Params.ServiceTier,
+			}
+		}
 	}
 
 	// Convert tools
@@ -653,6 +659,10 @@ func (response *BedrockConverseResponse) ToBifrostResponsesResponse() (*schemas.
 	if response.Output != nil && response.Output.Message != nil {
 		outputMessages := convertBedrockMessageToResponsesMessages(*response.Output.Message)
 		bifrostResp.Output = outputMessages
+	}
+
+	if response.ServiceTier != nil && response.ServiceTier.Type != "" {
+		bifrostResp.ServiceTier = &response.ServiceTier.Type
 	}
 
 	return bifrostResp, nil

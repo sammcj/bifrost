@@ -479,7 +479,9 @@ func completeResourceSpan(
 			params = append(params, kvStr("gen_ai.chat.object", resp.ChatResponse.Object))
 			params = append(params, kvStr("gen_ai.chat.system_fingerprint", resp.ChatResponse.SystemFingerprint))
 			params = append(params, kvStr("gen_ai.chat.created", fmt.Sprintf("%d", resp.ChatResponse.Created)))
-			params = append(params, kvStr("gen_ai.chat.service_tier", resp.ChatResponse.ServiceTier))
+			if resp.ChatResponse.ServiceTier != nil {
+				params = append(params, kvStr("gen_ai.chat.service_tier", *resp.ChatResponse.ServiceTier))
+			}
 			outputMessages := []*AnyValue{}
 			for _, choice := range resp.ChatResponse.Choices {
 				var role string
