@@ -30,7 +30,7 @@ helm repo update
 ### Install Bifrost
 
 ```bash
-helm install bifrost bifrost/bifrost --set image.tag=v1.5.0
+helm install bifrost bifrost/bifrost --set image.tag=1.3.45
 ```
 
 <Note>
@@ -60,7 +60,7 @@ Simple setup for local testing and development.
 
 ```bash
 helm install bifrost bifrost/bifrost \
-  --set image.tag=v1.5.0 \
+  --set image.tag=1.3.45 \
   --set bifrost.providers.openai.keys[0].value="sk-your-key" \
   --set bifrost.providers.openai.keys[0].weight=1
 ```
@@ -87,7 +87,7 @@ High-availability setup with PostgreSQL and auto-scaling.
 ```yaml
 # production.yaml
 image:
-  tag: "v1.5.0"  # Required: specify the Bifrost version
+  tag: "1.3.45"  # Required: specify the Bifrost version
 
 replicaCount: 3
 
@@ -185,7 +185,7 @@ Optimized for high-volume AI inference with caching.
 ```yaml
 # ai-workload.yaml
 image:
-  tag: "v1.5.0"  # Required: specify the Bifrost version
+  tag: "1.3.45"  # Required: specify the Bifrost version
 
 storage:
   mode: postgres
@@ -257,7 +257,7 @@ Support multiple LLM providers with load balancing.
 ```yaml
 # multi-provider.yaml
 image:
-  tag: "v1.5.0"  # Required: specify the Bifrost version
+  tag: "1.3.45"  # Required: specify the Bifrost version
 
 bifrost:
   encryptionKey: "your-encryption-key"
@@ -313,7 +313,7 @@ Use existing PostgreSQL instance.
 ```yaml
 # external-db.yaml
 image:
-  tag: "v1.5.0"  # Required: specify the Bifrost version
+  tag: "1.3.45"  # Required: specify the Bifrost version
 
 storage:
   mode: postgres
@@ -381,7 +381,7 @@ kubectl create secret generic qdrant-credentials \
 ```yaml
 # secrets-config.yaml
 image:
-  tag: "v1.5.0"
+  tag: "1.3.45"
 
 storage:
   mode: postgres
@@ -459,7 +459,7 @@ helm install bifrost bifrost/bifrost -f secrets-config.yaml
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.tag` | **Required.** Bifrost image version (e.g., v1.5.0) | `""` |
+| `image.tag` | **Required.** Bifrost image version (e.g., 1.3.45) | `""` |
 | `replicaCount` | Number of replicas | `1` |
 | `storage.mode` | Storage backend (sqlite/postgres) | `sqlite` |
 | `storage.persistence.size` | PVC size for SQLite | `10Gi` |
@@ -513,7 +513,7 @@ Or via command line:
 
 ```bash
 helm install bifrost bifrost/bifrost \
-  --set image.tag=v1.5.0 \
+  --set image.tag=1.3.45 \
   --set bifrost.providers.openai.keys[0].value="sk-..." \
   --set bifrost.providers.openai.keys[0].weight=1
 ```
@@ -731,7 +731,7 @@ Create `my-values.yaml`:
 
 ```yaml
 image:
-  tag: "v1.5.0"  # Required: specify the Bifrost version
+  tag: "1.3.45"  # Required: specify the Bifrost version
 
 replicaCount: 3
 
@@ -830,7 +830,7 @@ Enterprise customers receive access to Bifrost images in a private container reg
 # enterprise-gcp.yaml
 image:
   repository: us-west1-docker.pkg.dev/bifrost-enterprise/your-org/bifrost
-  tag: "v1.5.0"
+  tag: "latest"
 
 imagePullSecrets:
   - name: gcr-secret
@@ -853,7 +853,7 @@ kubectl create secret docker-registry gcr-secret \
 # enterprise-aws.yaml
 image:
   repository: 123456789.dkr.ecr.us-east-1.amazonaws.com/bifrost
-  tag: "v1.5.0"
+  tag: "latest"
 
 imagePullSecrets:
   - name: ecr-secret
@@ -879,7 +879,7 @@ ECR tokens expire after 12 hours. Consider using [ECR Credential Helper](https:/
 # enterprise-azure.yaml
 image:
   repository: yourregistry.azurecr.io/bifrost
-  tag: "v1.5.0"
+  tag: "latest"
 
 imagePullSecrets:
   - name: acr-secret
@@ -901,7 +901,7 @@ kubectl create secret docker-registry acr-secret \
 # enterprise-self-hosted.yaml
 image:
   repository: registry.yourcompany.com/ai/bifrost
-  tag: "v1.5.0"
+  tag: "latest"
 
 imagePullSecrets:
   - name: private-registry-secret
@@ -928,7 +928,7 @@ Complete example for enterprise deployments with all recommended settings:
 image:
   # Your enterprise registry URL (provided by Maxim)
   repository: us-west1-docker.pkg.dev/bifrost-enterprise/your-org/bifrost
-  tag: "v1.5.0"
+  tag: "latest"
 
 imagePullSecrets:
   - name: enterprise-registry-secret
