@@ -99,6 +99,11 @@ func ToCohereChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) *Cohe
 		cohereReq.FrequencyPenalty = bifrostReq.Params.FrequencyPenalty
 		cohereReq.PresencePenalty = bifrostReq.Params.PresencePenalty
 
+		// Convert response format
+		if bifrostReq.Params.ResponseFormat != nil {
+			cohereReq.ResponseFormat = convertResponseFormatToCohere(bifrostReq.Params.ResponseFormat)
+		}
+
 		// Convert extra params
 		if bifrostReq.Params.ExtraParams != nil {
 			// Handle thinking parameter
@@ -210,6 +215,9 @@ func (req *CohereChatRequest) ToBifrostChatRequest() *schemas.BifrostChatRequest
 	}
 	if req.PresencePenalty != nil {
 		bifrostReq.Params.PresencePenalty = req.PresencePenalty
+	}
+	if req.ResponseFormat != nil {
+		bifrostReq.Params.ResponseFormat = convertCohereResponseFormatToBifrost(req.ResponseFormat)
 	}
 
 	// Convert tools

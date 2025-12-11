@@ -146,6 +146,12 @@ func ToCohereResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *Cohe
 		if bifrostReq.Params.TopP != nil {
 			cohereReq.P = bifrostReq.Params.TopP
 		}
+
+		// Convert response_format from Text.Format to Cohere format
+		if bifrostReq.Params.Text != nil && bifrostReq.Params.Text.Format != nil {
+			cohereReq.ResponseFormat = convertResponsesTextFormatToCohere(bifrostReq.Params.Text.Format)
+		}
+
 		if bifrostReq.Params.ExtraParams != nil {
 			if topK, ok := schemas.SafeExtractIntPointer(bifrostReq.Params.ExtraParams["top_k"]); ok {
 				cohereReq.K = topK
@@ -1158,4 +1164,50 @@ func (chunk *CohereStreamEvent) ToBifrostResponsesStream(sequenceNumber int, sta
 		return nil, nil, false
 	}
 	return nil, nil, false
+}
+
+// ConvertResponsesTextFormatToCohere converts Bifrost Responses Text.Format to Cohere's typed format
+// Responses format: Text.Format with type "json_schema", "json_object", or "text"
+// Cohere format: { type: "json_object", json_schema: {...} }
+func convertResponsesTextFormatToCohere(textFormat *schemas.ResponsesTextConfigFormat) *CohereResponseFormat {
+	if textFormat == nil {
+		return nil
+	}
+
+	cohereFormat := &CohereResponseFormat{}
+
+	// Convert type
+	switch textFormat.Type {
+	case "text":
+		cohereFormat.Type = ResponseFormatTypeText
+	case "json_object":
+		cohereFormat.Type = ResponseFormatTypeJSONObject
+	case "json_schema":
+		cohereFormat.Type = ResponseFormatTypeJSONObject
+
+		// If schema is provided, extract it
+		if textFormat.JSONSchema != nil {
+			// Build schema map
+			schema := make(map[string]interface{})
+			if textFormat.JSONSchema.Type != nil {
+				schema["type"] = *textFormat.JSONSchema.Type
+			}
+			if textFormat.JSONSchema.Properties != nil {
+				schema["properties"] = *textFormat.JSONSchema.Properties
+			}
+			if len(textFormat.JSONSchema.Required) > 0 {
+				schema["required"] = textFormat.JSONSchema.Required
+			}
+			if textFormat.JSONSchema.AdditionalProperties != nil {
+				schema["additionalProperties"] = *textFormat.JSONSchema.AdditionalProperties
+			}
+
+			var schemaInterface interface{} = schema
+			cohereFormat.JSONSchema = &schemaInterface
+		}
+	default:
+		cohereFormat.Type = ResponseFormatTypeJSONObject
+	}
+
+	return cohereFormat
 }
