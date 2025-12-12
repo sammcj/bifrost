@@ -24,7 +24,7 @@ func TestParasail(t *testing.T) {
 
 	testConfig := testutil.ComprehensiveTestConfig{
 		Provider:       schemas.Parasail,
-		ChatModel:      "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
+		ChatModel:      "parasail-llama-33-70b-fp8",
 		TextModel:      "", // Parasail doesn't support text completion
 		EmbeddingModel: "", // Parasail doesn't support embedding
 		Scenarios: testutil.TestScenarios{
@@ -34,7 +34,7 @@ func TestParasail(t *testing.T) {
 			MultiTurnConversation: true,
 			ToolCalls:             true,
 			ToolCallsStreaming:    true,
-			MultipleToolCalls:     true,
+			MultipleToolCalls:     false, // Not supported yet
 			End2EndToolCalling:    true,
 			AutomaticFunctionCall: true,
 			ImageURL:              false, // Not supported yet
