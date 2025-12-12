@@ -1427,6 +1427,10 @@ func (c *Config) GetProviderConfigRedacted(provider schemas.ModelProvider) (*con
 			Models: key.Models, // Copy slice reference - read-only so safe
 			Weight: key.Weight,
 		}
+		if key.Enabled != nil {
+			enabled := *key.Enabled
+			redactedConfig.Keys[i].Enabled = &enabled
+		}
 
 		// Redact API key value
 		path := fmt.Sprintf("providers.%s.keys[%s]", provider, key.ID)

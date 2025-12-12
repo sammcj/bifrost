@@ -243,6 +243,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 				Value:            key.Value,
 				Models:           key.Models,
 				Weight:           key.Weight,
+				Enabled:          key.Enabled,
 				AzureKeyConfig:   key.AzureKeyConfig,
 				VertexKeyConfig:  key.VertexKeyConfig,
 				BedrockKeyConfig: key.BedrockKeyConfig,
@@ -285,6 +286,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 				// Update existing key with new data
 				dbKey.ID = existingKey.ID                 // Keep the same database ID
 				dbKey.ProviderID = existingKey.ProviderID // Preserve the existing ProviderID
+				dbKey.Enabled = existingKey.Enabled       // Preserve the existing Enabled status
 				if err := txDB.WithContext(ctx).Save(&dbKey).Error; err != nil {
 					return s.parseGormError(err)
 				}
@@ -367,6 +369,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 			Value:            key.Value,
 			Models:           key.Models,
 			Weight:           key.Weight,
+			Enabled:          key.Enabled,
 			AzureKeyConfig:   key.AzureKeyConfig,
 			VertexKeyConfig:  key.VertexKeyConfig,
 			BedrockKeyConfig: key.BedrockKeyConfig,
@@ -400,6 +403,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 		if existingKey, exists := existingKeysMap[key.ID]; exists {
 			// Update existing key - preserve the database ID
 			dbKey.ID = existingKey.ID
+			dbKey.Enabled = existingKey.Enabled
 			if err := txDB.WithContext(ctx).Save(&dbKey).Error; err != nil {
 				return s.parseGormError(err)
 			}
