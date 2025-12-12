@@ -1,1 +1,0 @@
-- chore: security patches 2 to next + react
