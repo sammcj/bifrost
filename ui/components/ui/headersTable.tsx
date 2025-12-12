@@ -11,6 +11,7 @@ interface HeadersTableProps {
 	keyPlaceholder?: string;
 	valuePlaceholder?: string;
 	label?: string;
+	disabled?: boolean;
 }
 
 export function HeadersTable({
@@ -19,6 +20,7 @@ export function HeadersTable({
 	keyPlaceholder = "Header name",
 	valuePlaceholder = "Header value",
 	label = "Headers",
+	disabled = false,
 }: HeadersTableProps) {
 	// Convert headers object to array format for table display
 	// Filter out any empty string keys from stored headers
@@ -107,6 +109,7 @@ export function HeadersTable({
 											onChange={(e) => handleKeyChange(key, e.target.value, value as string, index)}
 											onKeyDown={(e) => handleKeyDown(e, index, "key")}
 											className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+											disabled={disabled}
 										/>
 									</TableCell>
 									<TableCell className="p-2">
@@ -118,10 +121,11 @@ export function HeadersTable({
 											onChange={(e) => handleValueChange(key, e.target.value, index)}
 											onKeyDown={(e) => handleKeyDown(e, index, "value")}
 											className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+											disabled={disabled}
 										/>
 									</TableCell>
 									<TableCell className="p-2">
-										{(key !== "" || value !== "") && (
+										{(key !== "" || value !== "") && !disabled && (
 											<Button type="button" variant="ghost" size="icon" onClick={() => handleDelete(key)} className="h-8 w-8">
 												<Trash className="h-4 w-4" />
 											</Button>

@@ -192,7 +192,12 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 									</SheetTitle>
 									<SheetDescription>MCP server configuration and available tools</SheetDescription>
 								</div>
-								<Button type="submit" disabled={isUpdating || !form.formState.isDirty || !hasUpdateMCPClientAccess} isLoading={isUpdating}>
+								<Button
+									className="ml-auto"
+									type="submit"
+									disabled={isUpdating || !form.formState.isDirty || !hasUpdateMCPClientAccess}
+									isLoading={isUpdating}
+								>
 									Save Changes
 								</Button>
 							</div>

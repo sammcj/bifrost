@@ -23,6 +23,7 @@ type AzureProvider struct {
 	logger              schemas.Logger        // Logger for provider operations
 	client              *fasthttp.Client      // HTTP client for API requests
 	networkConfig       schemas.NetworkConfig // Network configuration including extra headers
+	sendBackRawRequest  bool                  // Whether to include raw request in BifrostResponse
 	sendBackRawResponse bool                  // Whether to include raw response in BifrostResponse
 }
 
@@ -47,6 +48,7 @@ func NewAzureProvider(config *schemas.ProviderConfig, logger schemas.Logger) (*A
 		logger:              logger,
 		client:              client,
 		networkConfig:       config.NetworkConfig,
+		sendBackRawRequest:  config.SendBackRawRequest,
 		sendBackRawResponse: config.SendBackRawResponse,
 	}, nil
 }
@@ -192,7 +194,7 @@ func (provider *AzureProvider) listModelsByKey(ctx context.Context, key schemas.
 
 	// Parse Azure-specific response
 	azureResponse := &AzureListModelsResponse{}
-	rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, azureResponse, provider.sendBackRawResponse)
+	rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, azureResponse, nil, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -205,6 +207,12 @@ func (provider *AzureProvider) listModelsByKey(ctx context.Context, key schemas.
 
 	response.ExtraFields.Latency = latency.Milliseconds()
 
+	// Set raw request if enabled
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		response.ExtraFields.RawRequest = rawRequest
+	}
+
+	// Set raw response if enabled
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
 		response.ExtraFields.RawResponse = rawResponse
 	}
@@ -263,7 +271,7 @@ func (provider *AzureProvider) TextCompletion(ctx context.Context, key schemas.K
 
 	response := &schemas.BifrostTextCompletionResponse{}
 
-	rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, response, provider.sendBackRawResponse)
+	rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, response, jsonData, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -273,6 +281,11 @@ func (provider *AzureProvider) TextCompletion(ctx context.Context, key schemas.K
 	response.ExtraFields.ModelDeployment = deployment
 	response.ExtraFields.RequestType = schemas.TextCompletionRequest
 	response.ExtraFields.Latency = latency.Milliseconds()
+
+	// Set raw request if enabled
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		response.ExtraFields.RawRequest = rawRequest
+	}
 
 	// Set raw response if enabled
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
@@ -324,6 +337,7 @@ func (provider *AzureProvider) TextCompletionStream(ctx context.Context, postHoo
 		request,
 		authHeader,
 		provider.networkConfig.ExtraHeaders,
+		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.GetProviderKey(),
 		postHookRunner,
@@ -350,7 +364,10 @@ func (provider *AzureProvider) ChatCompletion(ctx context.Context, key schemas.K
 		request,
 		func() (any, error) {
 			if schemas.IsAnthropicModel(deployment) {
-				reqBody := anthropic.ToAnthropicChatRequest(request)
+				reqBody, err := anthropic.ToAnthropicChatRequest(request)
+				if err != nil {
+					return nil, err
+				}
 				if reqBody != nil {
 					reqBody.Model = deployment
 				}
@@ -385,18 +402,19 @@ func (provider *AzureProvider) ChatCompletion(ctx context.Context, key schemas.K
 	}
 
 	response := &schemas.BifrostChatResponse{}
+	var rawRequest interface{}
 	var rawResponse interface{}
 
 	if schemas.IsAnthropicModel(deployment) {
 		anthropicResponse := anthropic.AcquireAnthropicMessageResponse()
 		defer anthropic.ReleaseAnthropicMessageResponse(anthropicResponse)
-		rawResponse, bifrostErr = providerUtils.HandleProviderResponse(responseBody, anthropicResponse, provider.sendBackRawResponse)
+		rawRequest, rawResponse, bifrostErr = providerUtils.HandleProviderResponse(responseBody, anthropicResponse, jsonData, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 		if bifrostErr != nil {
 			return nil, bifrostErr
 		}
 		response = anthropicResponse.ToBifrostChatResponse()
 	} else {
-		rawResponse, bifrostErr = providerUtils.HandleProviderResponse(responseBody, response, provider.sendBackRawResponse)
+		rawRequest, rawResponse, bifrostErr = providerUtils.HandleProviderResponse(responseBody, response, jsonData, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 		if bifrostErr != nil {
 			return nil, bifrostErr
 		}
@@ -407,6 +425,11 @@ func (provider *AzureProvider) ChatCompletion(ctx context.Context, key schemas.K
 	response.ExtraFields.ModelDeployment = deployment
 	response.ExtraFields.Latency = latency.Milliseconds()
 	response.ExtraFields.RequestType = schemas.ChatCompletionRequest
+
+	// Set raw request if enabled
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		response.ExtraFields.RawRequest = rawRequest
+	}
 
 	// Set raw response if enabled
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
@@ -446,7 +469,10 @@ func (provider *AzureProvider) ChatCompletionStream(ctx context.Context, postHoo
 			ctx,
 			request,
 			func() (any, error) {
-				reqBody := anthropic.ToAnthropicChatRequest(request)
+				reqBody, err := anthropic.ToAnthropicChatRequest(request)
+				if err != nil {
+					return nil, err
+				}
 				if reqBody != nil {
 					reqBody.Model = deployment
 					reqBody.Stream = schemas.Ptr(true)
@@ -466,6 +492,7 @@ func (provider *AzureProvider) ChatCompletionStream(ctx context.Context, postHoo
 			jsonData,
 			authHeader,
 			provider.networkConfig.ExtraHeaders,
+			providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 			providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 			provider.GetProviderKey(),
 			postHookRunner,
@@ -493,6 +520,7 @@ func (provider *AzureProvider) ChatCompletionStream(ctx context.Context, postHoo
 			request,
 			authHeader,
 			provider.networkConfig.ExtraHeaders,
+			providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 			providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 			provider.GetProviderKey(),
 			postHookRunner,
@@ -517,25 +545,23 @@ func (provider *AzureProvider) Responses(ctx context.Context, key schemas.Key, r
 		return nil, err
 	}
 
-	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
-		ctx,
-		request,
-		func() (any, error) {
-			if schemas.IsAnthropicModel(deployment) {
-				reqBody := anthropic.ToAnthropicResponsesRequest(request)
-				if reqBody != nil {
-					reqBody.Model = deployment
-				}
-				return reqBody, nil
-			} else {
+	var jsonData []byte
+	var bifrostErr *schemas.BifrostError
+	if schemas.IsAnthropicModel(deployment) {
+		jsonData, bifrostErr = getRequestBodyForAnthropicResponses(ctx, request, deployment, provider.GetProviderKey(), false)
+	} else {
+		jsonData, bifrostErr = providerUtils.CheckContextAndGetRequestBody(
+			ctx,
+			request,
+			func() (any, error) {
 				reqBody := openai.ToOpenAIResponsesRequest(request)
 				if reqBody != nil {
 					reqBody.Model = deployment
 				}
 				return reqBody, nil
-			}
-		},
-		provider.GetProviderKey())
+			},
+			provider.GetProviderKey())
+	}
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -561,18 +587,19 @@ func (provider *AzureProvider) Responses(ctx context.Context, key schemas.Key, r
 	}
 
 	response := &schemas.BifrostResponsesResponse{}
+	var rawRequest interface{}
 	var rawResponse interface{}
 
 	if schemas.IsAnthropicModel(deployment) {
 		anthropicResponse := anthropic.AcquireAnthropicMessageResponse()
 		defer anthropic.ReleaseAnthropicMessageResponse(anthropicResponse)
-		rawResponse, bifrostErr = providerUtils.HandleProviderResponse(responseBody, anthropicResponse, provider.sendBackRawResponse)
+		rawRequest, rawResponse, bifrostErr = providerUtils.HandleProviderResponse(responseBody, anthropicResponse, jsonData, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 		if bifrostErr != nil {
 			return nil, bifrostErr
 		}
 		response = anthropicResponse.ToBifrostResponsesResponse()
 	} else {
-		rawResponse, bifrostErr = providerUtils.HandleProviderResponse(responseBody, response, provider.sendBackRawResponse)
+		rawRequest, rawResponse, bifrostErr = providerUtils.HandleProviderResponse(responseBody, response, jsonData, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 		if bifrostErr != nil {
 			return nil, bifrostErr
 		}
@@ -583,6 +610,11 @@ func (provider *AzureProvider) Responses(ctx context.Context, key schemas.Key, r
 	response.ExtraFields.ModelDeployment = deployment
 	response.ExtraFields.Latency = latency.Milliseconds()
 	response.ExtraFields.RequestType = schemas.ResponsesRequest
+
+	// Set raw request if enabled
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		response.ExtraFields.RawRequest = rawRequest
+	}
 
 	// Set raw response if enabled
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
@@ -615,20 +647,9 @@ func (provider *AzureProvider) ResponsesStream(ctx context.Context, postHookRunn
 		authHeader["anthropic-version"] = AzureAnthropicAPIVersionDefault
 		url = fmt.Sprintf("%s/anthropic/v1/messages", key.AzureKeyConfig.Endpoint)
 
-		jsonData, err := providerUtils.CheckContextAndGetRequestBody(
-			ctx,
-			request,
-			func() (any, error) {
-				reqBody := anthropic.ToAnthropicResponsesRequest(request)
-				if reqBody != nil {
-					reqBody.Model = deployment
-					reqBody.Stream = schemas.Ptr(true)
-				}
-				return reqBody, nil
-			},
-			provider.GetProviderKey())
-		if err != nil {
-			return nil, err
+		jsonData, bifrostErr := getRequestBodyForAnthropicResponses(ctx, request, deployment, provider.GetProviderKey(), true)
+		if bifrostErr != nil {
+			return nil, bifrostErr
 		}
 
 		// Use shared streaming logic from Anthropic
@@ -639,6 +660,7 @@ func (provider *AzureProvider) ResponsesStream(ctx context.Context, postHookRunn
 			jsonData,
 			authHeader,
 			provider.networkConfig.ExtraHeaders,
+			providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 			providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 			provider.GetProviderKey(),
 			postHookRunner,
@@ -667,6 +689,7 @@ func (provider *AzureProvider) ResponsesStream(ctx context.Context, postHookRunn
 			request,
 			authHeader,
 			provider.networkConfig.ExtraHeaders,
+			providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 			providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 			provider.GetProviderKey(),
 			postHookRunner,
@@ -716,7 +739,7 @@ func (provider *AzureProvider) Embedding(ctx context.Context, key schemas.Key, r
 	response := &schemas.BifrostEmbeddingResponse{}
 
 	// Use enhanced response handler with pre-allocated response
-	rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, response, provider.sendBackRawResponse)
+	rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, response, jsonData, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -727,6 +750,12 @@ func (provider *AzureProvider) Embedding(ctx context.Context, key schemas.Key, r
 	response.ExtraFields.ModelDeployment = deployment
 	response.ExtraFields.RequestType = schemas.EmbeddingRequest
 
+	// Set raw request if enabled
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		response.ExtraFields.RawRequest = rawRequest
+	}
+
+	// Set raw response if enabled
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
 		response.ExtraFields.RawResponse = rawResponse
 	}

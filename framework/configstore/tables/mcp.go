@@ -10,18 +10,23 @@ import (
 
 // TableMCPClient represents an MCP client configuration in the database
 type TableMCPClient struct {
-	ID                     uint      `gorm:"primaryKey;autoIncrement" json:"id"` // ID is used as the internal primary key and is also accessed by public methods, so it must be present.
-	ClientID               string    `gorm:"type:varchar(255);uniqueIndex;not null" json:"client_id"`
-	Name                   string    `gorm:"type:varchar(255);uniqueIndex;not null" json:"name"`
-	IsCodeModeClient       bool      `gorm:"default:false" json:"is_code_mode_client"` // Whether the client is a code mode client
-	ConnectionType         string    `gorm:"type:varchar(20);not null" json:"connection_type"` // schemas.MCPConnectionType
-	ConnectionString       *string   `gorm:"type:text" json:"connection_string,omitempty"`
-	StdioConfigJSON        *string   `gorm:"type:text" json:"-"` // JSON serialized schemas.MCPStdioConfig
-	ToolsToExecuteJSON     string    `gorm:"type:text" json:"-"` // JSON serialized []string
-	ToolsToAutoExecuteJSON string    `gorm:"type:text" json:"-"` // JSON serialized []string
-	HeadersJSON            string    `gorm:"type:text" json:"-"` // JSON serialized map[string]string
-	CreatedAt              time.Time `gorm:"index;not null" json:"created_at"`
-	UpdatedAt              time.Time `gorm:"index;not null" json:"updated_at"`
+	ID                     uint    `gorm:"primaryKey;autoIncrement" json:"id"` // ID is used as the internal primary key and is also accessed by public methods, so it must be present.
+	ClientID               string  `gorm:"type:varchar(255);uniqueIndex;not null" json:"client_id"`
+	Name                   string  `gorm:"type:varchar(255);uniqueIndex;not null" json:"name"`
+	IsCodeModeClient       bool    `gorm:"default:false" json:"is_code_mode_client"`         // Whether the client is a code mode client
+	ConnectionType         string  `gorm:"type:varchar(20);not null" json:"connection_type"` // schemas.MCPConnectionType
+	ConnectionString       *string `gorm:"type:text" json:"connection_string,omitempty"`
+	StdioConfigJSON        *string `gorm:"type:text" json:"-"` // JSON serialized schemas.MCPStdioConfig
+	ToolsToExecuteJSON     string  `gorm:"type:text" json:"-"` // JSON serialized []string
+	ToolsToAutoExecuteJSON string  `gorm:"type:text" json:"-"` // JSON serialized []string
+	HeadersJSON            string  `gorm:"type:text" json:"-"` // JSON serialized map[string]string
+
+	// Config hash is used to detect the changes synced from config.json file
+	// Every time we sync the config.json file, we will update the config hash
+	ConfigHash string `gorm:"type:varchar(255);null" json:"config_hash"`
+
+	CreatedAt time.Time `gorm:"index;not null" json:"created_at"`
+	UpdatedAt time.Time `gorm:"index;not null" json:"updated_at"`
 
 	// Virtual fields for runtime use (not stored in DB)
 	StdioConfig        *schemas.MCPStdioConfig `gorm:"-" json:"stdio_config,omitempty"`
@@ -73,6 +78,12 @@ func (c *TableMCPClient) BeforeSave(tx *gorm.DB) error {
 		c.HeadersJSON = string(data)
 	} else {
 		c.HeadersJSON = "{}"
+	}
+
+	if c.IsCodeModeClient {
+		hash.Write([]byte("isCodeModeClient:true"))
+	} else {
+		hash.Write([]byte("isCodeModeClient:false"))
 	}
 
 	return nil

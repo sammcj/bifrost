@@ -236,6 +236,9 @@ func (bifrost *Bifrost) ListModelsRequest(ctx context.Context, req *schemas.Bifr
 			Error: &schemas.ErrorField{
 				Message: "list models request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.ListModelsRequest,
+			},
 		}
 	}
 	if req.Provider == "" {
@@ -243,6 +246,9 @@ func (bifrost *Bifrost) ListModelsRequest(ctx context.Context, req *schemas.Bifr
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "provider is required for list models request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.ListModelsRequest,
 			},
 		}
 	}
@@ -264,6 +270,10 @@ func (bifrost *Bifrost) ListModelsRequest(ctx context.Context, req *schemas.Bifr
 			Error: &schemas.ErrorField{
 				Message: "provider not found for list models request",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.ListModelsRequest,
+				Provider:    req.Provider,
+			},
 		}
 	}
 
@@ -271,10 +281,20 @@ func (bifrost *Bifrost) ListModelsRequest(ctx context.Context, req *schemas.Bifr
 	baseProvider := req.Provider
 	config, err := bifrost.account.GetConfigForProvider(req.Provider)
 	if err != nil {
-		return nil, newBifrostErrorFromMsg(fmt.Sprintf("failed to get config for provider %s: %v", req.Provider, err.Error()))
+		bifrostErr := newBifrostErrorFromMsg(fmt.Sprintf("failed to get config for provider %s: %v", req.Provider, err.Error()))
+		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+			RequestType: schemas.ListModelsRequest,
+			Provider:    req.Provider,
+		}
+		return nil, bifrostErr
 	}
 	if config == nil {
-		return nil, newBifrostErrorFromMsg(fmt.Sprintf("config is nil for provider %s", req.Provider))
+		bifrostErr := newBifrostErrorFromMsg(fmt.Sprintf("config is nil for provider %s", req.Provider))
+		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+			RequestType: schemas.ListModelsRequest,
+			Provider:    req.Provider,
+		}
+		return nil, bifrostErr
 	}
 	if config.CustomProviderConfig != nil && config.CustomProviderConfig.BaseProviderType != "" {
 		baseProvider = config.CustomProviderConfig.BaseProviderType
@@ -284,7 +304,12 @@ func (bifrost *Bifrost) ListModelsRequest(ctx context.Context, req *schemas.Bifr
 	if providerRequiresKey(baseProvider, config.CustomProviderConfig) {
 		keys, err = bifrost.getAllSupportedKeys(&ctx, req.Provider, baseProvider)
 		if err != nil {
-			return nil, newBifrostError(err)
+			bifrostErr := newBifrostError(err)
+			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+				RequestType: schemas.ListModelsRequest,
+				Provider:    req.Provider,
+			}
+			return nil, bifrostErr
 		}
 	}
 
@@ -315,6 +340,9 @@ func (bifrost *Bifrost) ListAllModels(ctx context.Context, request *schemas.Bifr
 			Error: &schemas.ErrorField{
 				Message: err.Error(),
 				Error:   err,
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.ListModelsRequest,
 			},
 		}
 	}
@@ -444,6 +472,9 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 			Error: &schemas.ErrorField{
 				Message: "text completion request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.TextCompletionRequest,
+			},
 		}
 	}
 	if req.Input == nil || (req.Input.PromptStr == nil && req.Input.PromptArray == nil) {
@@ -451,6 +482,11 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx context.Context, req *schemas.
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "prompt not provided for text completion request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    schemas.TextCompletionRequest,
+				Provider:       req.Provider,
+				ModelRequested: req.Model,
 			},
 		}
 	}
@@ -475,6 +511,9 @@ func (bifrost *Bifrost) TextCompletionStreamRequest(ctx context.Context, req *sc
 			Error: &schemas.ErrorField{
 				Message: "text completion stream request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.TextCompletionStreamRequest,
+			},
 		}
 	}
 	if req.Input == nil || (req.Input.PromptStr == nil && req.Input.PromptArray == nil) {
@@ -482,6 +521,11 @@ func (bifrost *Bifrost) TextCompletionStreamRequest(ctx context.Context, req *sc
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "text not provided for text completion stream request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    schemas.TextCompletionStreamRequest,
+				Provider:       req.Provider,
+				ModelRequested: req.Model,
 			},
 		}
 	}
@@ -498,6 +542,9 @@ func (bifrost *Bifrost) makeChatCompletionRequest(ctx context.Context, req *sche
 			Error: &schemas.ErrorField{
 				Message: "chat completion request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.ChatCompletionRequest,
+			},
 		}
 	}
 	if req.Input == nil {
@@ -505,6 +552,11 @@ func (bifrost *Bifrost) makeChatCompletionRequest(ctx context.Context, req *sche
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "chats not provided for chat completion request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    schemas.ChatCompletionRequest,
+				Provider:       req.Provider,
+				ModelRequested: req.Model,
 			},
 		}
 	}
@@ -554,6 +606,9 @@ func (bifrost *Bifrost) ChatCompletionStreamRequest(ctx context.Context, req *sc
 			Error: &schemas.ErrorField{
 				Message: "chat completion stream request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.ChatCompletionStreamRequest,
+			},
 		}
 	}
 	if req.Input == nil {
@@ -561,6 +616,11 @@ func (bifrost *Bifrost) ChatCompletionStreamRequest(ctx context.Context, req *sc
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "chats not provided for chat completion request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    schemas.ChatCompletionStreamRequest,
+				Provider:       req.Provider,
+				ModelRequested: req.Model,
 			},
 		}
 	}
@@ -579,6 +639,9 @@ func (bifrost *Bifrost) makeResponsesRequest(ctx context.Context, req *schemas.B
 			Error: &schemas.ErrorField{
 				Message: "responses request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.ResponsesRequest,
+			},
 		}
 	}
 	if req.Input == nil {
@@ -586,6 +649,11 @@ func (bifrost *Bifrost) makeResponsesRequest(ctx context.Context, req *schemas.B
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "responses not provided for responses request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    schemas.ResponsesRequest,
+				Provider:       req.Provider,
+				ModelRequested: req.Model,
 			},
 		}
 	}
@@ -634,6 +702,9 @@ func (bifrost *Bifrost) ResponsesStreamRequest(ctx context.Context, req *schemas
 			Error: &schemas.ErrorField{
 				Message: "responses stream request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.ResponsesStreamRequest,
+			},
 		}
 	}
 	if req.Input == nil {
@@ -641,6 +712,11 @@ func (bifrost *Bifrost) ResponsesStreamRequest(ctx context.Context, req *schemas
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "responses not provided for responses stream request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    schemas.ResponsesStreamRequest,
+				Provider:       req.Provider,
+				ModelRequested: req.Model,
 			},
 		}
 	}
@@ -660,6 +736,9 @@ func (bifrost *Bifrost) EmbeddingRequest(ctx context.Context, req *schemas.Bifro
 			Error: &schemas.ErrorField{
 				Message: "embedding request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.EmbeddingRequest,
+			},
 		}
 	}
 	if req.Input == nil || (req.Input.Text == nil && req.Input.Texts == nil && req.Input.Embedding == nil && req.Input.Embeddings == nil) {
@@ -667,6 +746,11 @@ func (bifrost *Bifrost) EmbeddingRequest(ctx context.Context, req *schemas.Bifro
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "embedding input not provided for embedding request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    schemas.EmbeddingRequest,
+				Provider:       req.Provider,
+				ModelRequested: req.Model,
 			},
 		}
 	}
@@ -691,6 +775,9 @@ func (bifrost *Bifrost) SpeechRequest(ctx context.Context, req *schemas.BifrostS
 			Error: &schemas.ErrorField{
 				Message: "speech request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.SpeechRequest,
+			},
 		}
 	}
 	if req.Input == nil || req.Input.Input == "" {
@@ -698,6 +785,11 @@ func (bifrost *Bifrost) SpeechRequest(ctx context.Context, req *schemas.BifrostS
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "speech input not provided for speech request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    schemas.SpeechRequest,
+				Provider:       req.Provider,
+				ModelRequested: req.Model,
 			},
 		}
 	}
@@ -722,6 +814,9 @@ func (bifrost *Bifrost) SpeechStreamRequest(ctx context.Context, req *schemas.Bi
 			Error: &schemas.ErrorField{
 				Message: "speech stream request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.SpeechStreamRequest,
+			},
 		}
 	}
 	if req.Input == nil || req.Input.Input == "" {
@@ -729,6 +824,11 @@ func (bifrost *Bifrost) SpeechStreamRequest(ctx context.Context, req *schemas.Bi
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "speech input not provided for speech stream request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    schemas.SpeechStreamRequest,
+				Provider:       req.Provider,
+				ModelRequested: req.Model,
 			},
 		}
 	}
@@ -748,6 +848,9 @@ func (bifrost *Bifrost) TranscriptionRequest(ctx context.Context, req *schemas.B
 			Error: &schemas.ErrorField{
 				Message: "transcription request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.TranscriptionRequest,
+			},
 		}
 	}
 	if req.Input == nil || req.Input.File == nil {
@@ -755,6 +858,11 @@ func (bifrost *Bifrost) TranscriptionRequest(ctx context.Context, req *schemas.B
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "transcription input not provided for transcription request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    schemas.TranscriptionRequest,
+				Provider:       req.Provider,
+				ModelRequested: req.Model,
 			},
 		}
 	}
@@ -779,6 +887,9 @@ func (bifrost *Bifrost) TranscriptionStreamRequest(ctx context.Context, req *sch
 			Error: &schemas.ErrorField{
 				Message: "transcription stream request is nil",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.TranscriptionStreamRequest,
+			},
 		}
 	}
 	if req.Input == nil || req.Input.File == nil {
@@ -786,6 +897,11 @@ func (bifrost *Bifrost) TranscriptionStreamRequest(ctx context.Context, req *sch
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: "transcription input not provided for transcription stream request",
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    schemas.TranscriptionStreamRequest,
+				Provider:       req.Provider,
+				ModelRequested: req.Model,
 			},
 		}
 	}
@@ -973,11 +1089,17 @@ func (bifrost *Bifrost) UpdateProvider(providerKey schemas.ModelProvider) error 
 					case <-time.After(5 * time.Second):
 						bifrost.logger.Warn("Failed to transfer buffered request to new queue within timeout")
 						// Send error response to avoid hanging the client
+						provider, model, _ := m.BifrostRequest.GetRequestFields()
 						select {
 						case m.Err <- schemas.BifrostError{
 							IsBifrostError: false,
 							Error: &schemas.ErrorField{
 								Message: "request failed during provider concurrency update",
+							},
+							ExtraFields: schemas.BifrostErrorExtraFields{
+								RequestType:    m.RequestType,
+								Provider:       provider,
+								ModelRequested: model,
 							},
 						}:
 						case <-time.After(1 * time.Second):
@@ -1155,6 +1277,9 @@ func (bifrost *Bifrost) ExecuteMCPTool(ctx context.Context, toolCall schemas.Cha
 			Error: &schemas.ErrorField{
 				Message: "MCP is not configured in this Bifrost instance",
 			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.ChatCompletionRequest, // MCP tools are used with chat completions
+			},
 		}
 	}
 
@@ -1164,6 +1289,9 @@ func (bifrost *Bifrost) ExecuteMCPTool(ctx context.Context, toolCall schemas.Cha
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: err.Error(),
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType: schemas.ChatCompletionRequest, // MCP tools are used with chat completions
 			},
 		}
 	}
@@ -1828,10 +1956,16 @@ func (bifrost *Bifrost) handleStreamRequest(ctx context.Context, req *schemas.Bi
 // tryRequest is a generic function that handles common request processing logic
 // It consolidates queue setup, plugin pipeline execution, enqueue logic, and response handling
 func (bifrost *Bifrost) tryRequest(ctx context.Context, req *schemas.BifrostRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
-	provider, _, _ := req.GetRequestFields()
+	provider, model, _ := req.GetRequestFields()
 	queue, err := bifrost.getProviderQueue(provider)
 	if err != nil {
-		return nil, newBifrostError(err)
+		bifrostErr := newBifrostError(err)
+		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+			RequestType:    req.RequestType,
+			Provider:       provider,
+			ModelRequested: model,
+		}
+		return nil, bifrostErr
 	}
 
 	// Add MCP tools to request if MCP is configured and requested
@@ -1862,7 +1996,13 @@ func (bifrost *Bifrost) tryRequest(ctx context.Context, req *schemas.BifrostRequ
 		}
 	}
 	if preReq == nil {
-		return nil, newBifrostErrorFromMsg("bifrost request after plugin hooks cannot be nil")
+		bifrostErr := newBifrostErrorFromMsg("bifrost request after plugin hooks cannot be nil")
+		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+			RequestType:    req.RequestType,
+			Provider:       provider,
+			ModelRequested: model,
+		}
+		return nil, bifrostErr
 	}
 
 	msg := bifrost.getChannelMessage(*preReq)
@@ -1872,19 +2012,37 @@ func (bifrost *Bifrost) tryRequest(ctx context.Context, req *schemas.BifrostRequ
 		// Message was sent successfully
 	case <-ctx.Done():
 		bifrost.releaseChannelMessage(msg)
-		return nil, newBifrostErrorFromMsg("request cancelled while waiting for queue space")
+		bifrostErr := newBifrostErrorFromMsg("request cancelled while waiting for queue space")
+		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+			RequestType:    req.RequestType,
+			Provider:       provider,
+			ModelRequested: model,
+		}
+		return nil, bifrostErr
 	default:
 		if bifrost.dropExcessRequests.Load() {
 			bifrost.releaseChannelMessage(msg)
 			bifrost.logger.Warn("Request dropped: queue is full, please increase the queue size or set dropExcessRequests to false")
-			return nil, newBifrostErrorFromMsg("request dropped: queue is full")
+			bifrostErr := newBifrostErrorFromMsg("request dropped: queue is full")
+			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+				RequestType:    req.RequestType,
+				Provider:       provider,
+				ModelRequested: model,
+			}
+			return nil, bifrostErr
 		}
 		select {
 		case queue <- msg:
 			// Message was sent successfully
 		case <-ctx.Done():
 			bifrost.releaseChannelMessage(msg)
-			return nil, newBifrostErrorFromMsg("request cancelled while waiting for queue space")
+			bifrostErr := newBifrostErrorFromMsg("request cancelled while waiting for queue space")
+			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+				RequestType:    req.RequestType,
+				Provider:       provider,
+				ModelRequested: model,
+			}
+			return nil, bifrostErr
 		}
 	}
 
@@ -1914,10 +2072,16 @@ func (bifrost *Bifrost) tryRequest(ctx context.Context, req *schemas.BifrostRequ
 // tryStreamRequest is a generic function that handles common request processing logic
 // It consolidates queue setup, plugin pipeline execution, enqueue logic, and response handling
 func (bifrost *Bifrost) tryStreamRequest(ctx context.Context, req *schemas.BifrostRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	provider, _, _ := req.GetRequestFields()
+	provider, model, _ := req.GetRequestFields()
 	queue, err := bifrost.getProviderQueue(provider)
 	if err != nil {
-		return nil, newBifrostError(err)
+		bifrostErr := newBifrostError(err)
+		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+			RequestType:    req.RequestType,
+			Provider:       provider,
+			ModelRequested: model,
+		}
+		return nil, bifrostErr
 	}
 
 	// Add MCP tools to request if MCP is configured and requested
@@ -2006,7 +2170,13 @@ func (bifrost *Bifrost) tryStreamRequest(ctx context.Context, req *schemas.Bifro
 		}
 	}
 	if preReq == nil {
-		return nil, newBifrostErrorFromMsg("bifrost request after plugin hooks cannot be nil")
+		bifrostErr := newBifrostErrorFromMsg("bifrost request after plugin hooks cannot be nil")
+		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+			RequestType:    req.RequestType,
+			Provider:       provider,
+			ModelRequested: model,
+		}
+		return nil, bifrostErr
 	}
 
 	msg := bifrost.getChannelMessage(*preReq)
@@ -2017,19 +2187,37 @@ func (bifrost *Bifrost) tryStreamRequest(ctx context.Context, req *schemas.Bifro
 		// Message was sent successfully
 	case <-ctx.Done():
 		bifrost.releaseChannelMessage(msg)
-		return nil, newBifrostErrorFromMsg("request cancelled while waiting for queue space")
+		bifrostErr := newBifrostErrorFromMsg("request cancelled while waiting for queue space")
+		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+			RequestType:    req.RequestType,
+			Provider:       provider,
+			ModelRequested: model,
+		}
+		return nil, bifrostErr
 	default:
 		if bifrost.dropExcessRequests.Load() {
 			bifrost.releaseChannelMessage(msg)
 			bifrost.logger.Warn("Request dropped: queue is full, please increase the queue size or set dropExcessRequests to false")
-			return nil, newBifrostErrorFromMsg("request dropped: queue is full")
+			bifrostErr := newBifrostErrorFromMsg("request dropped: queue is full")
+			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+				RequestType:    req.RequestType,
+				Provider:       provider,
+				ModelRequested: model,
+			}
+			return nil, bifrostErr
 		}
 		select {
 		case queue <- msg:
 			// Message was sent successfully
 		case <-ctx.Done():
 			bifrost.releaseChannelMessage(msg)
-			return nil, newBifrostErrorFromMsg("request cancelled while waiting for queue space")
+			bifrostErr := newBifrostErrorFromMsg("request cancelled while waiting for queue space")
+			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+				RequestType:    req.RequestType,
+				Provider:       provider,
+				ModelRequested: model,
+			}
+			return nil, bifrostErr
 		}
 	}
 
@@ -2174,6 +2362,11 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 						Message: err.Error(),
 						Error:   err,
 					},
+					ExtraFields: schemas.BifrostErrorExtraFields{
+						Provider:       provider.GetProviderKey(),
+						ModelRequested: model,
+						RequestType:    req.RequestType,
+					},
 				}
 				continue
 			}
@@ -2300,10 +2493,16 @@ func (bifrost *Bifrost) handleProviderRequest(provider schemas.Provider, req *Ch
 		}
 		response.TranscriptionResponse = transcriptionResponse
 	default:
+		_, model, _ := req.BifrostRequest.GetRequestFields()
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: fmt.Sprintf("unsupported request type: %s", req.RequestType),
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    req.RequestType,
+				Provider:       provider.GetProviderKey(),
+				ModelRequested: model,
 			},
 		}
 	}
@@ -2324,10 +2523,16 @@ func (bifrost *Bifrost) handleProviderStreamRequest(provider schemas.Provider, r
 	case schemas.TranscriptionStreamRequest:
 		return provider.TranscriptionStream(req.Context, postHookRunner, key, req.BifrostRequest.TranscriptionRequest)
 	default:
+		_, model, _ := req.BifrostRequest.GetRequestFields()
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
 			Error: &schemas.ErrorField{
 				Message: fmt.Sprintf("unsupported request type: %s", req.RequestType),
+			},
+			ExtraFields: schemas.BifrostErrorExtraFields{
+				RequestType:    req.RequestType,
+				Provider:       provider.GetProviderKey(),
+				ModelRequested: model,
 			},
 		}
 	}

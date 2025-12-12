@@ -49,11 +49,15 @@ function getMessage(log?: LogEntry) {
 			}
 		}
 		return lastTextContentBlock ?? "";
+	} else if (log?.speech_input) {
+		return log.speech_input.input;
+	} else if (log?.transcription_input) {
+		return "Audio file";
 	}
 	return "";
 }
 
-export const createColumns = (onDelete: (log: LogEntry) => void): ColumnDef<LogEntry>[] => [
+export const createColumns = (onDelete: (log: LogEntry) => void, hasDeleteAccess = true): ColumnDef<LogEntry>[] => [
 	{
 		accessorKey: "status",
 		header: "Status",
@@ -184,7 +188,7 @@ export const createColumns = (onDelete: (log: LogEntry) => void): ColumnDef<LogE
 		cell: ({ row }) => {
 			const log = row.original;
 			return (
-				<Button variant="outline" size="icon" onClick={() => onDelete(log)}>
+				<Button variant="outline" size="icon" onClick={() => onDelete(log)} disabled={!hasDeleteAccess}>
 					<Trash2 />
 				</Button>
 			);

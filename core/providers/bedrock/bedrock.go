@@ -18,6 +18,7 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/bytedance/sonic"
+	"github.com/google/uuid"
 	"github.com/maximhq/bifrost/core/providers/anthropic"
 	"github.com/maximhq/bifrost/core/providers/cohere"
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
@@ -30,6 +31,7 @@ type BedrockProvider struct {
 	client               *http.Client                  // HTTP client for API requests
 	networkConfig        schemas.NetworkConfig         // Network configuration including extra headers
 	customProviderConfig *schemas.CustomProviderConfig // Custom provider config
+	sendBackRawRequest   bool                          // Whether to include raw request in BifrostResponse
 	sendBackRawResponse  bool                          // Whether to include raw response in BifrostResponse
 }
 
@@ -72,6 +74,7 @@ func NewBedrockProvider(config *schemas.ProviderConfig, logger schemas.Logger) (
 		client:               client,
 		networkConfig:        config.NetworkConfig,
 		customProviderConfig: config.CustomProviderConfig,
+		sendBackRawRequest:   config.SendBackRawRequest,
 		sendBackRawResponse:  config.SendBackRawResponse,
 	}, nil
 }
@@ -446,7 +449,7 @@ func (provider *BedrockProvider) listModelsByKey(ctx context.Context, key schema
 
 	// Parse Bedrock-specific response
 	bedrockResponse := &BedrockListModelsResponse{}
-	rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, bedrockResponse, providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
+	rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, bedrockResponse, nil, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
@@ -459,6 +462,12 @@ func (provider *BedrockProvider) listModelsByKey(ctx context.Context, key schema
 
 	response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
 
+	// Set raw request if enabled
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		response.ExtraFields.RawRequest = rawRequest
+	}
+
+	// Set raw response if enabled
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
 		response.ExtraFields.RawResponse = rawResponse
 	}
@@ -538,6 +547,11 @@ func (provider *BedrockProvider) TextCompletion(ctx context.Context, key schemas
 	bifrostResponse.ExtraFields.ModelDeployment = deployment
 	bifrostResponse.ExtraFields.RequestType = schemas.TextCompletionRequest
 	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
+
+	// Set raw request if enabled
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		providerUtils.ParseAndSetRawRequest(&bifrostResponse.ExtraFields, jsonData)
+	}
 
 	// Parse raw response if enabled
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
@@ -676,7 +690,7 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, key schemas
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockChatCompletionRequest(request) },
+		func() (any, error) { return ToBedrockChatCompletionRequest(&ctx, request) },
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -701,7 +715,7 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, key schemas
 	}
 
 	// Convert using the new response converter
-	bifrostResponse, err := bedrockResponse.ToBifrostChatResponse(request.Model)
+	bifrostResponse, err := bedrockResponse.ToBifrostChatResponse(ctx, request.Model)
 	if err != nil {
 		return nil, providerUtils.NewBifrostOperationError("failed to convert bedrock response", err, providerName)
 	}
@@ -712,6 +726,11 @@ func (provider *BedrockProvider) ChatCompletion(ctx context.Context, key schemas
 	bifrostResponse.ExtraFields.ModelDeployment = deployment
 	bifrostResponse.ExtraFields.RequestType = schemas.ChatCompletionRequest
 	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
+
+	// Set raw request if enabled
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		providerUtils.ParseAndSetRawRequest(&bifrostResponse.ExtraFields, jsonData)
+	}
 
 	// Set raw response if enabled
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
@@ -737,7 +756,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockChatCompletionRequest(request) },
+		func() (any, error) { return ToBedrockChatCompletionRequest(&ctx, request) },
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -757,7 +776,6 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 		defer resp.Body.Close()
 
 		// Process AWS Event Stream format
-		var messageID string
 		usage := &schemas.BifrostLLMUsage{}
 		var finishReason *string
 		chunkIndex := 0
@@ -767,6 +785,9 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 		lastChunkTime := startTime
 		decoder := eventstream.NewDecoder()
 		payloadBuf := make([]byte, 0, 1024*1024) // 1MB payload buffer
+
+		// Bedrock does not provide a unique identifier for the stream, so we generate one ourselves
+		id := uuid.New().String()
 
 		for {
 			// Decode a single EventStream message
@@ -853,7 +874,7 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 					return
 				}
 				if response != nil {
-					response.ID = messageID
+					response.ID = id
 					response.Model = request.Model
 					response.ExtraFields = schemas.BifrostResponseExtraFields{
 						RequestType:     schemas.ChatCompletionStreamRequest,
@@ -876,8 +897,12 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx context.Context, postH
 		}
 
 		// Send final response
-		response := providerUtils.CreateBifrostChatCompletionChunkResponse(messageID, usage, finishReason, chunkIndex, schemas.ChatCompletionStreamRequest, providerName, request.Model)
+		response := providerUtils.CreateBifrostChatCompletionChunkResponse(id, usage, finishReason, chunkIndex, schemas.ChatCompletionStreamRequest, providerName, request.Model)
 		response.ExtraFields.ModelDeployment = deployment
+		// Set raw request if enabled
+		if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+			providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonData)
+		}
 		response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
 		ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
 		providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, response, nil, nil, nil), responseChan)
@@ -943,6 +968,11 @@ func (provider *BedrockProvider) Responses(ctx context.Context, key schemas.Key,
 	bifrostResponse.ExtraFields.RequestType = schemas.ResponsesRequest
 	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
 
+	// Set raw request if enabled
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		providerUtils.ParseAndSetRawRequest(&bifrostResponse.ExtraFields, jsonData)
+	}
+
 	// Set raw response if enabled
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
 		var rawResponse interface{}
@@ -1005,7 +1035,6 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 			// Decode a single EventStream message
 			message, err := decoder.Decode(resp.Body, payloadBuf)
 			if err != nil {
-				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
 				if err == io.EOF {
 					// End of stream - finalize any open items
 					finalResponses := FinalizeBedrockStream(streamState, chunkIndex, usage)
@@ -1026,6 +1055,11 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 						}
 
 						if i == len(finalResponses)-1 {
+							// Set raw request if enabled
+							ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+							if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+								providerUtils.ParseAndSetRawRequest(&finalResponse.ExtraFields, jsonData)
+							}
 							finalResponse.ExtraFields.Latency = time.Since(startTime).Milliseconds()
 						}
 
@@ -1033,6 +1067,7 @@ func (provider *BedrockProvider) ResponsesStream(ctx context.Context, postHookRu
 					}
 					break
 				}
+				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
 				provider.logger.Warn(fmt.Sprintf("Error decoding %s EventStream message: %v", providerName, err))
 				providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.ResponsesStreamRequest, providerName, request.Model, provider.logger)
 				return

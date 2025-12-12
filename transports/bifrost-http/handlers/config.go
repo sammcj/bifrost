@@ -11,6 +11,7 @@ import (
 
 	"github.com/fasthttp/router"
 	bifrost "github.com/maximhq/bifrost/core"
+	"github.com/maximhq/bifrost/core/network"
 	"github.com/maximhq/bifrost/framework"
 	"github.com/maximhq/bifrost/framework/configstore"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
@@ -433,7 +434,7 @@ func (h *ConfigHandler) getProxyConfig(ctx *fasthttp.RequestCtx) {
 		// Return default empty config
 		SendJSON(ctx, configstoreTables.GlobalProxyConfig{
 			Enabled: false,
-			Type:    configstoreTables.GlobalProxyTypeHTTP,
+			Type:    network.GlobalProxyTypeHTTP,
 		})
 		return
 	}
@@ -461,7 +462,7 @@ func (h *ConfigHandler) updateProxyConfig(ctx *fasthttp.RequestCtx) {
 	if payload.Enabled {
 		// Validate proxy type
 		switch payload.Type {
-		case configstoreTables.GlobalProxyTypeHTTP:
+		case network.GlobalProxyTypeHTTP:
 			// HTTP proxy is supported
 			// Make sure the URL is provided
 			if payload.URL == "" {
@@ -473,7 +474,7 @@ func (h *ConfigHandler) updateProxyConfig(ctx *fasthttp.RequestCtx) {
 				SendError(ctx, fasthttp.StatusBadRequest, "proxy timeout must be non-negative")
 				return
 			}
-		case configstoreTables.GlobalProxyTypeSOCKS5, configstoreTables.GlobalProxyTypeTCP:
+		case network.GlobalProxyTypeSOCKS5, network.GlobalProxyTypeTCP:
 			SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("proxy type %s is not yet supported", payload.Type))
 			return
 		default:
@@ -525,7 +526,7 @@ func (h *ConfigHandler) updateProxyConfig(ctx *fasthttp.RequestCtx) {
 	if newProxyConfig == nil {
 		newProxyConfig = &configstoreTables.GlobalProxyConfig{
 			Enabled:       false,
-			Type:          configstoreTables.GlobalProxyTypeHTTP,
+			Type:          network.GlobalProxyTypeHTTP,
 			URL:           "",
 			Username:      "",
 			Password:      "",

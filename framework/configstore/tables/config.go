@@ -1,5 +1,7 @@
 package tables
 
+import "github.com/maximhq/bifrost/core/network"
+
 const (
 	ConfigAdminUsernameKey          = "admin_username"
 	ConfigAdminPasswordKey          = "admin_password"
@@ -8,19 +10,12 @@ const (
 	ConfigProxyKey                  = "proxy_config"
 )
 
-// GlobalProxyType represents the type of global proxy
-type GlobalProxyType string
 
-const (
-	GlobalProxyTypeHTTP   GlobalProxyType = "http"
-	GlobalProxyTypeSOCKS5 GlobalProxyType = "socks5"
-	GlobalProxyTypeTCP    GlobalProxyType = "tcp"
-)
 
 // GlobalProxyConfig represents the global proxy configuration
 type GlobalProxyConfig struct {
 	Enabled       bool            `json:"enabled"`
-	Type          GlobalProxyType `json:"type"`                     // "http", "socks5", "tcp"
+	Type          network.GlobalProxyType `json:"type"`                     // "http", "socks5", "tcp"
 	URL           string    `json:"url"`                      // Proxy URL (e.g., http://proxy.example.com:8080)
 	Username      string    `json:"username,omitempty"`       // Optional authentication username
 	Password      string    `json:"password,omitempty"`       // Optional authentication password
