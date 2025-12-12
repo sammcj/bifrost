@@ -1,1 +1,0 @@
-- hotfix: security patches for [react](https://react.dev/blog/2025/12/11/denial-of-service-and-source-code-exposure-in-react-server-components) and [nextjs](https://nextjs.org/blog/security-update-2025-12-11)
