@@ -502,14 +502,10 @@ func (p *LoggerPlugin) calculateCostForLog(logEntry *logstore.Log) (float64, err
 		return 0, fmt.Errorf("log entry cannot be nil")
 	}
 
-	if logEntry.TokenUsageParsed == nil && logEntry.TokenUsage != "" {
+	if (logEntry.TokenUsageParsed == nil && logEntry.TokenUsage != "") ||
+		(logEntry.CacheDebugParsed == nil && logEntry.CacheDebug != "") {
 		if err := logEntry.DeserializeFields(); err != nil {
-			return 0, fmt.Errorf("failed to deserialize token usage for log %s: %w", logEntry.ID, err)
-		}
-	}
-	if logEntry.CacheDebugParsed == nil && logEntry.CacheDebug != "" {
-		if err := logEntry.DeserializeFields(); err != nil {
-			return 0, fmt.Errorf("failed to deserialize cache debug for log %s: %w", logEntry.ID, err)
+			return 0, fmt.Errorf("failed to deserialize fields for log %s: %w", logEntry.ID, err)
 		}
 	}
 
@@ -527,7 +523,8 @@ func (p *LoggerPlugin) calculateCostForLog(logEntry *logstore.Log) (float64, err
 
 	requestType := schemas.RequestType(logEntry.Object)
 	if requestType == "" {
-		requestType = schemas.ChatCompletionRequest
+		p.logger.Warn("skipping cost calculation for log %s: object type is empty (timestamp: %s)", logEntry.ID, logEntry.Timestamp)
+		return 0, fmt.Errorf("object type is empty for log %s", logEntry.ID)
 	}
 
 	baseCost := p.pricingManager.CalculateCostFromUsage(

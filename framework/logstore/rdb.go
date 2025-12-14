@@ -64,9 +64,6 @@ func (s *RDBLogStore) applyFilters(baseQuery *gorm.DB, filters SearchFilters) *g
 	}
 	if filters.MissingCostOnly {
 		baseQuery = baseQuery.Where("(cost IS NULL OR cost <= 0)")
-		if len(filters.Status) == 0 {
-			baseQuery = baseQuery.Where("status != ?", "error")
-		}
 	}
 	if filters.ContentSearch != "" {
 		baseQuery = baseQuery.Where("content_summary LIKE ?", "%"+filters.ContentSearch+"%")

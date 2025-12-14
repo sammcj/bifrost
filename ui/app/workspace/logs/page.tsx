@@ -456,9 +456,6 @@ export default function LogsPage() {
 		if (filters.missing_cost_only && typeof log.cost === "number" && log.cost > 0) {
 			return false;
 		}
-		if (filters.missing_cost_only && (!filters.status || filters.status.length === 0) && log.status === "error") {
-			return false;
-		}
 		if (filters.providers?.length && !filters.providers.includes(log.provider)) {
 			return false;
 		}
