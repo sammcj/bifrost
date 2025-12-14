@@ -454,7 +454,7 @@ export default function LogsPage() {
 
 	// Helper function to check if a log matches the current filters
 	const matchesFilters = (log: LogEntry, filters: LogFilters, applyTimeFilters = true): boolean => {
-		if (filters.missing_cost_only && typeof log.cost === "number" && log.cost > 0) {
+		if (filters.missing_cost_only && typeof log.cost === "number" && Number.isFinite(log.cost)) {
 			return false;
 		}
 		if (filters.providers?.length && !filters.providers.includes(log.provider)) {
@@ -563,8 +563,8 @@ export default function LogsPage() {
 									<p className="text-muted-foreground text-xs">Run cost calculation again for logs that have missing costs.</p>
 									{recalcResult && (
 										<p className="text-muted-foreground text-xs">
-											Updated {recalcResult.updated.toLocaleString()} logs (skipped {recalcResult.skipped.toLocaleString()}, failed{" "}
-											{recalcResult.failed.toLocaleString()}). Remaining {recalcResult.remaining.toLocaleString()} entries.
+											Updated {recalcResult.updated.toLocaleString()} logs (skipped {recalcResult.skipped.toLocaleString()}). Remaining{" "}
+											{recalcResult.remaining.toLocaleString()} entries.
 										</p>
 									)}
 									{recalcError && <p className="text-destructive text-xs">{recalcError}</p>}
