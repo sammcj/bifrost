@@ -46,6 +46,15 @@ type UpdateLogData struct {
 	RawResponse         interface{}
 }
 
+// RecalculateCostResult represents summary stats from a cost backfill operation
+type RecalculateCostResult struct {
+	TotalMatched int64 `json:"total_matched"`
+	Updated      int   `json:"updated"`
+	Skipped      int   `json:"skipped"`
+	Failed       int   `json:"failed"`
+	Remaining    int64 `json:"remaining"`
+}
+
 // LogMessage represents a message in the logging queue
 type LogMessage struct {
 	Operation          LogOperation
