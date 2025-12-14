@@ -398,6 +398,7 @@ export default function LogsPage() {
 
 	const handleRecalculateCosts = useCallback(async () => {
 		setRecalcError(null);
+		setRecalcResult(null);
 		try {
 			const response = await recalculateCosts({ filters }).unwrap();
 			setRecalcResult(response);

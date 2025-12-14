@@ -325,7 +325,6 @@ export interface RecalculateCostResponse {
 	total_matched: number;
 	updated: number;
 	skipped: number;
-	failed: number;
 	remaining: number;
 }
 

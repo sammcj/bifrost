@@ -51,7 +51,6 @@ type RecalculateCostResult struct {
 	TotalMatched int64 `json:"total_matched"`
 	Updated      int   `json:"updated"`
 	Skipped      int   `json:"skipped"`
-	Failed       int   `json:"failed"`
 	Remaining    int64 `json:"remaining"`
 }
 

@@ -476,12 +476,7 @@ func (p *LoggerPlugin) RecalculateCosts(ctx context.Context, filters logstore.Se
 		result.Updated = len(costUpdates)
 	}
 
-	result.Remaining = result.TotalMatched - int64(result.Updated) - int64(result.Skipped)
-	if result.Remaining < 0 {
-		result.Remaining = 0
-	}
-
-	// Re-count how many logs still match the missing-cost filter after updates (authoritative)
+	// Re-count how many logs still match the missing-cost filter after updates
 	remainingResult, err := p.store.SearchLogs(ctx, filters, logstore.PaginationOptions{
 		Limit:  1, // we only need stats.TotalRequests for the count
 		Offset: 0,

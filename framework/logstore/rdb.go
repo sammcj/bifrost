@@ -107,15 +107,27 @@ func (s *RDBLogStore) BulkUpdateCost(ctx context.Context, updates map[string]flo
 		return nil
 	}
 
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for id, cost := range updates {
-			result := tx.Model(&Log{}).Where("id = ?", id).Update("cost", cost)
-			if result.Error != nil {
-				return result.Error
-			}
-		}
-		return nil
-	})
+	ids := make([]string, 0, len(updates))
+	costs := make([]float64, 0, len(updates))
+
+	for id, cost := range updates {
+		ids = append(ids, id)
+		costs = append(costs, cost)
+	}
+
+	return s.db.WithContext(ctx).Exec(`
+		UPDATE logs
+		SET cost = CASE id `+s.buildCaseStatement(ids, costs)+` END
+		WHERE id IN ?
+	`, ids).Error
+}
+
+func (s *RDBLogStore) buildCaseStatement(ids []string, costs []float64) string {
+	var caseStmt string
+	for i := range ids {
+		caseStmt += fmt.Sprintf("WHEN '%s' THEN %f ", ids[i], costs[i])
+	}
+	return caseStmt
 }
 
 // SearchLogs searches for logs in the database without calculating statistics.
