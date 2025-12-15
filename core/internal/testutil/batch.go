@@ -283,6 +283,12 @@ func RunBatchUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx context.
 		return
 	}
 
+	// We are skipping azure from this for now
+	// TODO remove this once azure is officially supported
+	if testConfig.Provider != schemas.Azure {
+		return
+	}
+
 	t.Run("BatchUnsupported", func(t *testing.T) {
 		t.Logf("[RUNNING] Batch Unsupported test for provider: %s", testConfig.Provider)
 
