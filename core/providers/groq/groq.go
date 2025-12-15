@@ -255,7 +255,7 @@ func (provider *GroqProvider) BatchCreate(_ context.Context, _ schemas.Key, _ *s
 }
 
 // BatchList is not supported by Groq provider.
-func (provider *GroqProvider) BatchList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *GroqProvider) BatchList(_ context.Context, _ schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchListRequest, provider.GetProviderKey())
 }
 
@@ -280,7 +280,7 @@ func (provider *GroqProvider) FileUpload(_ context.Context, _ schemas.Key, _ *sc
 }
 
 // FileList is not supported by Groq provider.
-func (provider *GroqProvider) FileList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *GroqProvider) FileList(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileListRequest, provider.GetProviderKey())
 }
 

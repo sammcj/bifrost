@@ -79,14 +79,12 @@ func TransportInterceptorMiddleware(config *lib.Config) lib.BifrostHTTPMiddlewar
 
 				return true
 			})
-
-			// Unmarshal request body
 			requestBody := make(map[string]any)
 			bodyBytes := ctx.Request.Body()
-			if len(bodyBytes) > 0 {
+			if len(bodyBytes) > 0 && strings.HasPrefix(string(ctx.Request.Header.Peek("Content-Type")), "application/json") {
 				if err := json.Unmarshal(bodyBytes, &requestBody); err != nil {
 					// If body is not valid JSON, log warning and continue without interception
-					logger.Warn(fmt.Sprintf("TransportInterceptor: Failed to unmarshal request body: %v, skipping interceptor", err))
+					logger.Warn(fmt.Sprintf("[transportInterceptor]: Failed to unmarshal request body: %v, skipping interceptor", err))
 					next(ctx)
 					return
 				}

@@ -18,6 +18,7 @@ type NebiusProvider struct {
 	logger              schemas.Logger        // Logger for provider operations
 	client              *fasthttp.Client      // HTTP client for API requests
 	networkConfig       schemas.NetworkConfig // Network configuration including extra headers
+	sendBackRawRequest  bool                  // Whether to include raw request in BifrostResponse
 	sendBackRawResponse bool                  // Whether to include raw response in BifrostResponse
 }
 
@@ -67,6 +68,7 @@ func (provider *NebiusProvider) ListModels(ctx context.Context, keys []schemas.K
 		keys,
 		provider.networkConfig.ExtraHeaders,
 		provider.GetProviderKey(),
+		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.logger,
 	)
@@ -84,6 +86,7 @@ func (provider *NebiusProvider) TextCompletion(ctx context.Context, key schemas.
 		key,
 		provider.networkConfig.ExtraHeaders,
 		provider.GetProviderKey(),
+		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.logger,
 	)
@@ -105,6 +108,7 @@ func (provider *NebiusProvider) TextCompletionStream(ctx context.Context, postHo
 		request,
 		authHeader,
 		provider.networkConfig.ExtraHeaders,
+		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.GetProviderKey(),
 		postHookRunner,
@@ -133,6 +137,7 @@ func (provider *NebiusProvider) ChatCompletion(ctx context.Context, key schemas.
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
+		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.GetProviderKey(),
 		provider.logger,
@@ -157,6 +162,7 @@ func (provider *NebiusProvider) ChatCompletionStream(ctx context.Context, postHo
 		request,
 		authHeader,
 		provider.networkConfig.ExtraHeaders,
+		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.GetProviderKey(),
 		postHookRunner,
@@ -204,6 +210,7 @@ func (provider *NebiusProvider) Embedding(ctx context.Context, key schemas.Key, 
 		key,
 		provider.networkConfig.ExtraHeaders,
 		provider.GetProviderKey(),
+		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.logger)
 }
@@ -226,4 +233,54 @@ func (provider *NebiusProvider) Transcription(ctx context.Context, key schemas.K
 // TranscriptionStream is not supported by the Nebius provider.
 func (provider *NebiusProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.TranscriptionStreamRequest, provider.GetProviderKey())
+}
+
+// BatchCreate is not supported by Nebius provider.
+func (provider *NebiusProvider) BatchCreate(_ context.Context, _ schemas.Key, _ *schemas.BifrostBatchCreateRequest) (*schemas.BifrostBatchCreateResponse, *schemas.BifrostError) {
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchCreateRequest, provider.GetProviderKey())
+}
+
+// BatchList is not supported by Nebius provider.
+func (provider *NebiusProvider) BatchList(_ context.Context, _ schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchListRequest, provider.GetProviderKey())
+}
+
+// BatchRetrieve is not supported by Nebius provider.
+func (provider *NebiusProvider) BatchRetrieve(_ context.Context, _ schemas.Key, _ *schemas.BifrostBatchRetrieveRequest) (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError) {
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchRetrieveRequest, provider.GetProviderKey())
+}
+
+// BatchCancel is not supported by Nebius provider.
+func (provider *NebiusProvider) BatchCancel(_ context.Context, _ schemas.Key, _ *schemas.BifrostBatchCancelRequest) (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError) {
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchCancelRequest, provider.GetProviderKey())
+}
+
+// BatchResults is not supported by Nebius provider.
+func (provider *NebiusProvider) BatchResults(_ context.Context, _ schemas.Key, _ *schemas.BifrostBatchResultsRequest) (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchResultsRequest, provider.GetProviderKey())
+}
+
+// FileUpload is not supported by Nebius provider.
+func (provider *NebiusProvider) FileUpload(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileUploadRequest) (*schemas.BifrostFileUploadResponse, *schemas.BifrostError) {
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileUploadRequest, provider.GetProviderKey())
+}
+
+// FileList is not supported by Nebius provider.
+func (provider *NebiusProvider) FileList(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileListRequest, provider.GetProviderKey())
+}
+
+// FileRetrieve is not supported by Nebius provider.
+func (provider *NebiusProvider) FileRetrieve(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileRetrieveRequest) (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError) {
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileRetrieveRequest, provider.GetProviderKey())
+}
+
+// FileDelete is not supported by Nebius provider.
+func (provider *NebiusProvider) FileDelete(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileDeleteRequest) (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError) {
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileDeleteRequest, provider.GetProviderKey())
+}
+
+// FileContent is not supported by Nebius provider.
+func (provider *NebiusProvider) FileContent(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileContentRequest) (*schemas.BifrostFileContentResponse, *schemas.BifrostError) {
+	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileContentRequest, provider.GetProviderKey())
 }

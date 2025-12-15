@@ -718,7 +718,7 @@ func (provider *ElevenlabsProvider) BatchCreate(_ context.Context, _ schemas.Key
 }
 
 // BatchList is not supported by Elevenlabs provider.
-func (provider *ElevenlabsProvider) BatchList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *ElevenlabsProvider) BatchList(_ context.Context, _ schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchListRequest, provider.GetProviderKey())
 }
 
@@ -743,7 +743,7 @@ func (provider *ElevenlabsProvider) FileUpload(_ context.Context, _ schemas.Key,
 }
 
 // FileList is not supported by Elevenlabs provider.
-func (provider *ElevenlabsProvider) FileList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *ElevenlabsProvider) FileList(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileListRequest, provider.GetProviderKey())
 }
 

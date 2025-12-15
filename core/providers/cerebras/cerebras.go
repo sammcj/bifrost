@@ -217,7 +217,7 @@ func (provider *CerebrasProvider) FileUpload(_ context.Context, _ schemas.Key, _
 }
 
 // FileList is not supported by Cerebras provider.
-func (provider *CerebrasProvider) FileList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *CerebrasProvider) FileList(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileListRequest, provider.GetProviderKey())
 }
 
@@ -242,7 +242,7 @@ func (provider *CerebrasProvider) BatchCreate(_ context.Context, _ schemas.Key, 
 }
 
 // BatchList is not supported by Cerebras provider.
-func (provider *CerebrasProvider) BatchList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *CerebrasProvider) BatchList(_ context.Context, _ schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchListRequest, provider.GetProviderKey())
 }
 

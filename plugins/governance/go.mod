@@ -84,7 +84,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.67.0 // indirect
-	github.com/weaviate/weaviate v1.33.1 // indirect
+	github.com/weaviate/weaviate v1.33.4 // indirect
 	github.com/weaviate/weaviate-go-client/v5 v5.5.0 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect

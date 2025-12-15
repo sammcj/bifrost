@@ -1110,7 +1110,7 @@ func (provider *AnthropicProvider) BatchCreate(ctx context.Context, key schemas.
 }
 
 // BatchList lists batch jobs.
-func (provider *AnthropicProvider) BatchList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *AnthropicProvider) BatchList(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Anthropic, provider.customProviderConfig, schemas.BatchListRequest); err != nil {
 		return nil, err
 	}
@@ -1147,8 +1147,8 @@ func (provider *AnthropicProvider) BatchList(ctx context.Context, keys []schemas
 	req.Header.SetContentType("application/json")
 
 	// Use first key if available
-	if len(keys) > 0 && keys[0].Value != "" {
-		req.Header.Set("x-api-key", keys[0].Value)
+	if key.Value != "" {
+		req.Header.Set("x-api-key", key.Value)
 	}
 	req.Header.Set("anthropic-version", provider.apiVersion)
 
@@ -1579,19 +1579,13 @@ func (provider *AnthropicProvider) FileUpload(ctx context.Context, key schemas.K
 }
 
 // FileList lists files from Anthropic's Files API.
-func (provider *AnthropicProvider) FileList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *AnthropicProvider) FileList(ctx context.Context, key schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Anthropic, provider.customProviderConfig, schemas.FileListRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
-
-	if len(keys) == 0 {
-		return nil, providerUtils.NewConfigurationError("no keys provided", providerName)
-	}
-
-	key := keys[0]
-
+	
 	// Create request
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
@@ -1599,15 +1593,14 @@ func (provider *AnthropicProvider) FileList(ctx context.Context, keys []schemas.
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Build URL with query params
-	baseURL := provider.buildRequestURL(ctx, "/v1/files", schemas.FileListRequest)
+	requestURL := provider.buildRequestURL(ctx, "/v1/files", schemas.FileListRequest)
 	values := url.Values{}
 	if request.Limit > 0 {
 		values.Set("limit", fmt.Sprintf("%d", request.Limit))
 	}
 	if request.After != nil && *request.After != "" {
 		values.Set("after_id", *request.After)
-	}
-	requestURL := baseURL
+	}	
 	if encodedValues := values.Encode(); encodedValues != "" {
 		requestURL += "?" + encodedValues
 	}

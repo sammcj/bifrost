@@ -258,7 +258,7 @@ func (provider *PerplexityProvider) BatchCreate(_ context.Context, _ schemas.Key
 }
 
 // BatchList is not supported by Perplexity provider.
-func (provider *PerplexityProvider) BatchList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *PerplexityProvider) BatchList(_ context.Context, _ schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchListRequest, provider.GetProviderKey())
 }
 
@@ -283,7 +283,7 @@ func (provider *PerplexityProvider) FileUpload(_ context.Context, _ schemas.Key,
 }
 
 // FileList is not supported by Perplexity provider.
-func (provider *PerplexityProvider) FileList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *PerplexityProvider) FileList(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileListRequest, provider.GetProviderKey())
 }
 

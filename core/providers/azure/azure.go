@@ -941,12 +941,8 @@ func (provider *AzureProvider) FileUpload(ctx context.Context, key schemas.Key, 
 }
 
 // FileList lists files from Azure OpenAI.
-func (provider *AzureProvider) FileList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
-	if len(keys) == 0 {
-		return nil, providerUtils.NewConfigurationError("no keys provided", provider.GetProviderKey())
-	}
-
-	key := keys[0]
+func (provider *AzureProvider) FileList(ctx context.Context, key schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+	
 	if err := provider.validateKeyConfigForFiles(key); err != nil {
 		return nil, err
 	}
@@ -966,13 +962,15 @@ func (provider *AzureProvider) FileList(ctx context.Context, keys []schemas.Key,
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Build URL with query params
-	baseURL := fmt.Sprintf("%s/openai/files", key.AzureKeyConfig.Endpoint)
+	requestURL := fmt.Sprintf("%s/openai/files", key.AzureKeyConfig.Endpoint)
 	values := url.Values{}
 	values.Set("api-version", *apiVersion)
 	if request.Purpose != "" {
 		values.Set("purpose", string(request.Purpose))
 	}
-	requestURL := baseURL + "?" + values.Encode()
+	if encodedValues := values.Encode(); encodedValues != "" {
+		requestURL += "?" + encodedValues
+	}
 
 	// Set headers
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
@@ -1396,12 +1394,8 @@ func (provider *AzureProvider) BatchCreate(ctx context.Context, key schemas.Key,
 }
 
 // BatchList lists batch jobs from Azure OpenAI.
-func (provider *AzureProvider) BatchList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
-	if len(keys) == 0 {
-		return nil, providerUtils.NewConfigurationError("no keys provided", provider.GetProviderKey())
-	}
-
-	key := keys[0]
+func (provider *AzureProvider) BatchList(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+	
 	if err := provider.validateKeyConfigForFiles(key); err != nil {
 		return nil, err
 	}

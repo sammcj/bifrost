@@ -201,7 +201,7 @@ func createBedrockBatchRouteConfigs(pathPrefix string, handlerStore lib.HandlerS
 		GetRequestTypeInstance: func() interface{} {
 			return &bedrock.BedrockBatchJobRequest{}
 		},
-		BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+		BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 			if bedrockReq, ok := req.(*bedrock.BedrockBatchJobRequest); ok {
 				provider := (*ctx).Value(bifrostContextKeyProvider).(schemas.ModelProvider)
 
@@ -300,7 +300,7 @@ func createBedrockBatchRouteConfigs(pathPrefix string, handlerStore lib.HandlerS
 		GetRequestTypeInstance: func() interface{} {
 			return &bedrock.BedrockBatchListRequest{}
 		},
-		BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+		BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 			if bedrockReq, ok := req.(*bedrock.BedrockBatchListRequest); ok {
 				provider := (*ctx).Value(bifrostContextKeyProvider).(schemas.ModelProvider)
 				bifrostReq := bedrock.ToBifrostBatchListRequest(bedrockReq, provider)
@@ -342,7 +342,7 @@ func createBedrockBatchRouteConfigs(pathPrefix string, handlerStore lib.HandlerS
 		GetRequestTypeInstance: func() interface{} {
 			return &bedrock.BedrockBatchRetrieveRequest{}
 		},
-		BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+		BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 			if bedrockReq, ok := req.(*bedrock.BedrockBatchRetrieveRequest); ok {
 				provider := (*ctx).Value(bifrostContextKeyProvider).(schemas.ModelProvider)
 				bifrostReq := bedrock.ToBifrostBatchRetrieveRequest(bedrockReq, provider)
@@ -384,7 +384,7 @@ func createBedrockBatchRouteConfigs(pathPrefix string, handlerStore lib.HandlerS
 		GetRequestTypeInstance: func() interface{} {
 			return &bedrock.BedrockBatchCancelRequest{}
 		},
-		BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+		BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 			if bedrockReq, ok := req.(*bedrock.BedrockBatchCancelRequest); ok {
 				provider := (*ctx).Value(bifrostContextKeyProvider).(schemas.ModelProvider)
 				bifrostReq := bedrock.ToBifrostBatchCancelRequest(bedrockReq, provider)

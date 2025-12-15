@@ -339,7 +339,7 @@ type Provider interface {
 	// BatchCreate creates a new batch job for asynchronous processing
 	BatchCreate(ctx context.Context, key Key, request *BifrostBatchCreateRequest) (*BifrostBatchCreateResponse, *BifrostError)
 	// BatchList lists batch jobs
-	BatchList(ctx context.Context, keys []Key, request *BifrostBatchListRequest) (*BifrostBatchListResponse, *BifrostError)
+	BatchList(ctx context.Context, key Key, request *BifrostBatchListRequest) (*BifrostBatchListResponse, *BifrostError)
 	// BatchRetrieve retrieves a specific batch job
 	BatchRetrieve(ctx context.Context, key Key, request *BifrostBatchRetrieveRequest) (*BifrostBatchRetrieveResponse, *BifrostError)
 	// BatchCancel cancels a batch job
@@ -349,7 +349,7 @@ type Provider interface {
 	// FileUpload uploads a file to the provider
 	FileUpload(ctx context.Context, key Key, request *BifrostFileUploadRequest) (*BifrostFileUploadResponse, *BifrostError)
 	// FileList lists files from the provider
-	FileList(ctx context.Context, keys []Key, request *BifrostFileListRequest) (*BifrostFileListResponse, *BifrostError)
+	FileList(ctx context.Context, key Key, request *BifrostFileListRequest) (*BifrostFileListResponse, *BifrostError)
 	// FileRetrieve retrieves file metadata from the provider
 	FileRetrieve(ctx context.Context, key Key, request *BifrostFileRetrieveRequest) (*BifrostFileRetrieveResponse, *BifrostError)
 	// FileDelete deletes a file from the provider
