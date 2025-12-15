@@ -64,34 +64,55 @@ func buildBatchRequestItems(requests []schemas.BatchRequestItem) []GeminiBatchRe
 			requestData = req.Params
 		}
 
-		// Extract messages from the request data
+		// Extract messages from the request data - handle multiple possible types
+		// Go type assertions don't work across slice types, so we handle each case
 		if requestData != nil {
-			if msgs, ok := requestData["messages"].([]interface{}); ok {
-				for _, msg := range msgs {
-					if msgMap, ok := msg.(map[string]interface{}); ok {
-						role := "user"
-						if r, ok := msgMap["role"].(string); ok {
-							if r == "assistant" {
-								role = "model"
-							} else if r == "system" {
-								// System messages are handled separately in Gemini
-								continue
-							} else {
-								role = r
-							}
-						}
+			var messages []map[string]interface{}
 
-						parts := []*Part{}
-						if c, ok := msgMap["content"].(string); ok {
-							parts = append(parts, &Part{Text: c})
-						}
-
-						contents = append(contents, Content{
-							Role:  role,
-							Parts: parts,
-						})
+			// Try []interface{} first (generic JSON unmarshaling)
+			if msgsInterface, ok := requestData["messages"].([]interface{}); ok {
+				for _, m := range msgsInterface {
+					if msgMap, ok := m.(map[string]interface{}); ok {
+						messages = append(messages, msgMap)
 					}
 				}
+			} else if msgsTyped, ok := requestData["messages"].([]map[string]interface{}); ok {
+				// Try []map[string]interface{} (typed maps)
+				messages = msgsTyped
+			} else if msgsString, ok := requestData["messages"].([]map[string]string); ok {
+				// Try []map[string]string (test case format)
+				for _, m := range msgsString {
+					msgMap := make(map[string]interface{})
+					for k, v := range m {
+						msgMap[k] = v
+					}
+					messages = append(messages, msgMap)
+				}
+			}
+
+			// Process extracted messages
+			for _, msgMap := range messages {
+				role := "user"
+				if r, ok := msgMap["role"].(string); ok {
+					if r == "assistant" {
+						role = "model"
+					} else if r == "system" {
+						// System messages are handled separately in Gemini
+						continue
+					} else {
+						role = r
+					}
+				}
+
+				parts := []*Part{}
+				if c, ok := msgMap["content"].(string); ok {
+					parts = append(parts, &Part{Text: c})
+				}
+
+				contents = append(contents, Content{
+					Role:  role,
+					Parts: parts,
+				})
 			}
 		}
 

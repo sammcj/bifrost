@@ -115,7 +115,7 @@ func printTestSummary(t *testing.T, testConfig ComprehensiveTestConfig) {
 		{"FileDelete", testConfig.Scenarios.FileDelete},
 		{"FileContent", testConfig.Scenarios.FileContent},
 		{"FileUnsupported", !testConfig.Scenarios.FileUpload && !testConfig.Scenarios.FileList && !testConfig.Scenarios.FileRetrieve && !testConfig.Scenarios.FileDelete && !testConfig.Scenarios.FileContent},
-		{"FileAndBatchIntegration", testConfig.Scenarios.FileUpload && testConfig.Scenarios.BatchCreate},
+		{"FileAndBatchIntegration", testConfig.Scenarios.FileBatchInput},
 	}
 
 	supported := 0

@@ -79,6 +79,7 @@ func TestBedrock(t *testing.T) {
 			FileRetrieve:          true,
 			FileDelete:            true,
 			FileContent:           true,
+			FileBatchInput:        true,
 		},
 	}
 
