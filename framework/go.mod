@@ -8,7 +8,7 @@ require (
 	github.com/qdrant/go-client v1.16.1
 	github.com/redis/go-redis/v9 v9.14.0
 	github.com/stretchr/testify v1.11.1
-	github.com/weaviate/weaviate v1.33.1
+	github.com/weaviate/weaviate v1.33.4
 	github.com/weaviate/weaviate-go-client/v5 v5.5.0
 	golang.org/x/crypto v0.45.0
 	gorm.io/driver/sqlite v1.6.0
