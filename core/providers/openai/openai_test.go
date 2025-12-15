@@ -60,6 +60,16 @@ func TestOpenAI(t *testing.T) {
 			Embedding:             true,
 			Reasoning:             true,
 			ListModels:            true,
+			BatchCreate:           true,
+			BatchList:             true,
+			BatchRetrieve:         true,
+			BatchCancel:           true,
+			BatchResults:          true,
+			FileUpload:            true,
+			FileList:              true,
+			FileRetrieve:          true,
+			FileDelete:            true,
+			FileContent:           true,
 		},
 	}
 

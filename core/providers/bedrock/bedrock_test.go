@@ -69,6 +69,16 @@ func TestBedrock(t *testing.T) {
 			Embedding:             true,
 			ListModels:            true,
 			Reasoning:             true,
+			BatchCreate:           true,
+			BatchList:             true,
+			BatchRetrieve:         true,
+			BatchCancel:           true,
+			BatchResults:          true,
+			FileUpload:            true,
+			FileList:              true,
+			FileRetrieve:          true,
+			FileDelete:            true,
+			FileContent:           true,
 		},
 	}
 
