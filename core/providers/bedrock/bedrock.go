@@ -1291,8 +1291,11 @@ func (provider *BedrockProvider) TranscriptionStream(ctx context.Context, postHo
 
 // FileUpload uploads a file to S3 for Bedrock batch processing.
 func (provider *BedrockProvider) FileUpload(ctx context.Context, key schemas.Key, request *schemas.BifrostFileUploadRequest) (*schemas.BifrostFileUploadResponse, *schemas.BifrostError) {
+
 	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.FileUploadRequest); err != nil {
-		provider.logger.Error("file upload operation not allowed: %s", err.Error.Message)
+		if err.Error != nil {
+			provider.logger.Error("file upload operation not allowed: %s", err.Error.Message)
+		}
 		return nil, err
 	}
 
@@ -1417,21 +1420,12 @@ func (provider *BedrockProvider) FileUpload(ctx context.Context, key schemas.Key
 }
 
 // FileList lists files in the S3 bucket used for Bedrock batch processing.
-func (provider *BedrockProvider) FileList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *BedrockProvider) FileList(ctx context.Context, key schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.FileListRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
-
-	if len(keys) == 0 {
-		return nil, providerUtils.NewConfigurationError("no keys provided", providerName)
-	}
-
-	key := keys[0]
-	if key.BedrockKeyConfig == nil {
-		return nil, providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
-	}
 
 	// Get S3 bucket from storage config or extra params
 	s3Bucket := ""
@@ -1478,9 +1472,9 @@ func (provider *BedrockProvider) FileList(ctx context.Context, keys []schemas.Ke
 		params.Set("continuation-token", *request.After)
 	}
 
-	reqURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/?%s", bucketName, region, params.Encode())
+	requestURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/?%s", bucketName, region, params.Encode())
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, providerUtils.NewBifrostOperationError("error creating request", err, providerName)
 	}
@@ -2052,18 +2046,13 @@ func (provider *BedrockProvider) BatchCreate(ctx context.Context, key schemas.Ke
 }
 
 // BatchList lists batch inference jobs from AWS Bedrock.
-func (provider *BedrockProvider) BatchList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *BedrockProvider) BatchList(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.BatchListRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
 
-	if len(keys) == 0 {
-		return nil, providerUtils.NewConfigurationError("no keys provided", providerName)
-	}
-
-	key := keys[0]
 	if key.BedrockKeyConfig == nil {
 		return nil, providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
 	}
@@ -2508,7 +2497,7 @@ func (provider *BedrockProvider) BatchResults(ctx context.Context, key schemas.K
 		allFiles  []schemas.FileObject
 	)
 	for {
-		listResp, bifrostErr = provider.FileList(ctx, []schemas.Key{key}, &schemas.BifrostFileListRequest{
+		listResp, bifrostErr = provider.FileList(ctx, key, &schemas.BifrostFileListRequest{
 			Provider: request.Provider,
 			StorageConfig: &schemas.FileStorageConfig{
 				S3: &schemas.S3StorageConfig{

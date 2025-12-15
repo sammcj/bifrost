@@ -255,8 +255,14 @@ func ToAnthropicBatchCreateResponse(resp *schemas.BifrostBatchCreateResponse) *A
 		Type:             "message_batch",
 		ProcessingStatus: toAnthropicProcessingStatus(resp.Status),
 		CreatedAt:        formatAnthropicTimestamp(resp.CreatedAt),
-		ExpiresAt:        formatAnthropicTimestamp(*resp.ExpiresAt),
 		ResultsURL:       resp.ResultsURL,
+	}
+	if resp.ExpiresAt != nil {
+		result.ExpiresAt = formatAnthropicTimestamp(*resp.ExpiresAt)
+	} else {
+		// This is a fallback for worst case scenario where expires_at is not available
+		// Which is never expected to happen, but just in case.
+		result.ExpiresAt = formatAnthropicTimestamp(time.Now().Add(24 * time.Hour).Unix())
 	}
 	if resp.RequestCounts.Total > 0 {
 		result.RequestCounts = &AnthropicBatchRequestCounts{

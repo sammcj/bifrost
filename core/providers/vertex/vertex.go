@@ -1465,7 +1465,7 @@ func (provider *VertexProvider) BatchCreate(ctx context.Context, key schemas.Key
 }
 
 // BatchList is not supported by Vertex AI provider.
-func (provider *VertexProvider) BatchList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *VertexProvider) BatchList(ctx context.Context, keys schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchListRequest, provider.GetProviderKey())
 }
 
@@ -1491,7 +1491,7 @@ func (provider *VertexProvider) FileUpload(_ context.Context, _ schemas.Key, _ *
 }
 
 // FileList is not yet implemented for Vertex AI provider.
-func (provider *VertexProvider) FileList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *VertexProvider) FileList(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileListRequest, provider.GetProviderKey())
 }
 

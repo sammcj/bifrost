@@ -847,7 +847,7 @@ func (provider *CohereProvider) BatchCreate(_ context.Context, _ schemas.Key, _ 
 }
 
 // BatchList is not supported by Cohere provider.
-func (provider *CohereProvider) BatchList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *CohereProvider) BatchList(_ context.Context, _ schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchListRequest, provider.GetProviderKey())
 }
 
@@ -872,7 +872,7 @@ func (provider *CohereProvider) FileUpload(_ context.Context, _ schemas.Key, _ *
 }
 
 // FileList is not supported by Cohere provider.
-func (provider *CohereProvider) FileList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *CohereProvider) FileList(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileListRequest, provider.GetProviderKey())
 }
 

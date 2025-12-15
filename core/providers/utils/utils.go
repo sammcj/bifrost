@@ -457,6 +457,7 @@ func NewUnsupportedOperationError(requestType schemas.RequestType, providerName 
 		IsBifrostError: false,
 		Error: &schemas.ErrorField{
 			Message: fmt.Sprintf("%s is not supported by %s provider", requestType, providerName),
+			Code:    schemas.Ptr("unsupported_operation"),
 		},
 		ExtraFields: schemas.BifrostErrorExtraFields{
 			Provider:    providerName,

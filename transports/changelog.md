@@ -1,1 +1,7 @@
-feat: add support for enabling/disabling provider keys without deletion
+- feat: add support for enabling/disabling provider keys without deletion.
+- feat: add batch api support for OpenAI, Anthropic, Google Gemini and Bedrock <Badge color="blue">Beta</Badge>.
+- feat: new provider support - nebius.
+- feat: force refresh datasheet support.
+- fix: fixed minor issues with structured output support for Gemini and Bedrock.
+- fix: proper cost compute for gemini models (>200k and <200k token costs are now considered).
+- chore: CORS policy now allows `x-stainless-timeout`

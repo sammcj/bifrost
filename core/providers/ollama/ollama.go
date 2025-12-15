@@ -229,7 +229,7 @@ func (provider *OllamaProvider) BatchCreate(_ context.Context, _ schemas.Key, _ 
 }
 
 // BatchList is not supported by Ollama provider.
-func (provider *OllamaProvider) BatchList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *OllamaProvider) BatchList(_ context.Context, _ schemas.Key, _ *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.BatchListRequest, provider.GetProviderKey())
 }
 
@@ -254,7 +254,7 @@ func (provider *OllamaProvider) FileUpload(_ context.Context, _ schemas.Key, _ *
 }
 
 // FileList is not supported by Ollama provider.
-func (provider *OllamaProvider) FileList(_ context.Context, _ []schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *OllamaProvider) FileList(_ context.Context, _ schemas.Key, _ *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.FileListRequest, provider.GetProviderKey())
 }
 

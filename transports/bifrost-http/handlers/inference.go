@@ -156,26 +156,6 @@ var batchCreateParamsKnownFields = map[string]bool{
 	"metadata":          true,
 }
 
-var batchListParamsKnownFields = map[string]bool{
-	"provider": true,
-	"limit":    true,
-	"after":    true,
-	"before":   true,
-}
-
-var fileUploadParamsKnownFields = map[string]bool{
-	"purpose": true,
-	"file":    true,
-}
-
-var fileListParamsKnownFields = map[string]bool{
-	"provider": true,
-	"purpose":  true,
-	"limit":    true,
-	"after":    true,
-	"order":    true,
-}
-
 type BifrostParams struct {
 	Model        string   `json:"model"`                   // Model to use in "provider/model" format
 	Fallbacks    []string `json:"fallbacks"`               // Fallback providers and models in "provider/model" format

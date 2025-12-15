@@ -189,8 +189,7 @@ github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6Kllzaw
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
 github.com/valyala/fasthttp v1.67.0 h1:tqKlJMUP6iuNG8hGjK/s9J4kadH7HLV4ijEcPGsezac=
 github.com/valyala/fasthttp v1.67.0/go.mod h1:qYSIpqt/0XNmShgo/8Aq8E3UYWVVwNS2QYmzd8WIEPM=
-github.com/weaviate/weaviate v1.33.1 h1:fV69ffJSH0aO3LvLiKYlVZ8wFa94oQ1g3uMyZGTb838=
-github.com/weaviate/weaviate v1.33.1/go.mod h1:SnxXSIoiusZttZ/gI9knXhFAu0UYqn9N/ekgsNnXbNw=
+github.com/weaviate/weaviate v1.33.4 h1:eA37l538+3pEBJAZ3/mFBHG0IEWcj5/aAJSzFhrYuUA=
 github.com/weaviate/weaviate-go-client/v5 v5.5.0 h1:+5qkHodrL3/Qc7kXvMXnDaIxSBN5+djivLqzmCx7VS4=
 github.com/weaviate/weaviate-go-client/v5 v5.5.0/go.mod h1:Zdm2MEXG27I0Nf6fM0FZ3P2vLR4JM0iJZrOxwc+Zj34=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=

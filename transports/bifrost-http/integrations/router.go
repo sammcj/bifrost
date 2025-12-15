@@ -97,8 +97,8 @@ type FileRequest struct {
 	ContentRequest  *schemas.BifrostFileContentRequest
 }
 
-// BatchCreateRequestConverter is a function that converts integration-specific batch requests to Bifrost format.
-type BatchCreateRequestConverter func(ctx *context.Context, req interface{}) (*BatchRequest, error)
+// BatchRequestConverter is a function that converts integration-specific batch requests to Bifrost format.
+type BatchRequestConverter func(ctx *context.Context, req interface{}) (*BatchRequest, error)
 
 // FileRequestConverter is a function that converts integration-specific file requests to Bifrost format.
 type FileRequestConverter func(ctx *context.Context, req interface{}) (*FileRequest, error)
@@ -269,7 +269,7 @@ type RouteConfig struct {
 	GetRequestTypeInstance         func() interface{}             // Factory function to create request instance (SHOULD NOT BE NIL)
 	RequestParser                  RequestParser                  // Optional: custom request parsing (e.g., multipart/form-data)
 	RequestConverter               RequestConverter               // Function to convert request to BifrostRequest (for inference requests)
-	BatchCreateRequestConverter    BatchCreateRequestConverter    // Function to convert request to BatchRequest (for batch operations)
+	BatchRequestConverter          BatchRequestConverter          // Function to convert request to BatchRequest (for batch operations)
 	FileRequestConverter           FileRequestConverter           // Function to convert request to FileRequest (for file operations)
 	ListModelsResponseConverter    ListModelsResponseConverter    // Function to convert BifrostListModelsResponse to integration format (SHOULD NOT BE NIL)
 	TextResponseConverter          TextResponseConverter          // Function to convert BifrostTextCompletionResponse to integration format (SHOULD NOT BE NIL)
@@ -334,7 +334,7 @@ func (g *GenericRouter) RegisterRoutes(r *router.Router, middlewares ...lib.Bifr
 		}
 
 		// Determine route type: inference, batch, or file
-		isBatchRoute := route.BatchCreateRequestConverter != nil
+		isBatchRoute := route.BatchRequestConverter != nil
 		isFileRoute := route.FileRequestConverter != nil
 		isInferenceRoute := !isBatchRoute && !isFileRoute
 
@@ -432,9 +432,9 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		}
 
 		// Handle batch requests if BatchRequestConverter is set
-		if config.BatchCreateRequestConverter != nil {
+		if config.BatchRequestConverter != nil {
 			defer cancel()
-			batchReq, err := config.BatchCreateRequestConverter(bifrostCtx, req)
+			batchReq, err := config.BatchRequestConverter(bifrostCtx, req)
 			if err != nil {
 				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to convert batch request"))
 				return

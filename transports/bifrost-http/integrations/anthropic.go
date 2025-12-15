@@ -287,13 +287,13 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetRequestTypeInstance: func() any {
 			return &anthropic.AnthropicBatchCreateRequest{}
 		},
-		BatchCreateRequestConverter: func(ctx *context.Context, req any) (*BatchRequest, error) {
+		BatchRequestConverter: func(ctx *context.Context, req any) (*BatchRequest, error) {
 			if anthropicReq, ok := req.(*anthropic.AnthropicBatchCreateRequest); ok {
 				// Convert Anthropic batch request items to Bifrost format
 				isNonAnthropicProvider := false
 				var provider schemas.ModelProvider
 				var ok bool
-				if provider, ok = (*ctx).Value(schemas.BifrostContextKey("batch_provider")).(schemas.ModelProvider); ok && provider != schemas.Anthropic {
+				if provider, ok = (*ctx).Value(bifrostContextKeyProvider).(schemas.ModelProvider); ok && provider != schemas.Anthropic {
 					isNonAnthropicProvider = true
 				}
 				var model string
@@ -362,7 +362,7 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetRequestTypeInstance: func() interface{} {
 			return &anthropic.AnthropicBatchListRequest{}
 		},
-		BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+		BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 			if listReq, ok := req.(*anthropic.AnthropicBatchListRequest); ok {
 				provider, ok := (*ctx).Value(bifrostContextKeyProvider).(schemas.ModelProvider)
 				if !ok {
@@ -404,7 +404,7 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetRequestTypeInstance: func() interface{} {
 			return &anthropic.AnthropicBatchRetrieveRequest{}
 		},
-		BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+		BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 			if retrieveReq, ok := req.(*anthropic.AnthropicBatchRetrieveRequest); ok {
 				provider := (*ctx).Value(bifrostContextKeyProvider).(schemas.ModelProvider)
 				if provider == schemas.Gemini {
@@ -440,7 +440,7 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetRequestTypeInstance: func() any {
 			return &anthropic.AnthropicBatchCancelRequest{}
 		},
-		BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+		BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 			if cancelReq, ok := req.(*anthropic.AnthropicBatchCancelRequest); ok {
 				provider := (*ctx).Value(bifrostContextKeyProvider).(schemas.ModelProvider)
 				if provider == schemas.Gemini {
@@ -476,7 +476,7 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetRequestTypeInstance: func() interface{} {
 			return &anthropic.AnthropicBatchResultsRequest{}
 		},
-		BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+		BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 			if resultsReq, ok := req.(*anthropic.AnthropicBatchResultsRequest); ok {
 				provider := (*ctx).Value(bifrostContextKeyProvider).(schemas.ModelProvider)
 				if provider == schemas.Gemini {
@@ -515,7 +515,7 @@ func extractAnthropicBatchCreateParams(ctx *fasthttp.RequestCtx, bifrostCtx *con
 		provider = string(schemas.Anthropic)
 	}
 	// Store provider in context for batch create converter to use
-	*bifrostCtx = context.WithValue(*bifrostCtx, schemas.BifrostContextKey("batch_provider"), schemas.ModelProvider(provider))
+	*bifrostCtx = context.WithValue(*bifrostCtx, bifrostContextKeyProvider, schemas.ModelProvider(provider))
 	return nil
 }
 

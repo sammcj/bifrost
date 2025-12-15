@@ -52,6 +52,7 @@ type FileObject struct {
 // BifrostFileUploadRequest represents a request to upload a file.
 type BifrostFileUploadRequest struct {
 	Provider ModelProvider `json:"provider"`
+	Model    string        `json:"model"`
 
 	// File content
 	File     []byte      `json:"-"`        // Raw file content (not serialized)
@@ -107,6 +108,9 @@ type BifrostFileUploadResponse struct {
 // BifrostFileListRequest represents a request to list files.
 type BifrostFileListRequest struct {
 	Provider ModelProvider `json:"provider"`
+	Model    string        `json:"model"`
+
+	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)
 
 	// Filters
 	Purpose FilePurpose `json:"purpose,omitempty"` // Filter by purpose
@@ -123,6 +127,11 @@ type BifrostFileListRequest struct {
 	ExtraParams map[string]interface{} `json:"-"`
 }
 
+// GetRawRequestBody returns the raw request body.
+func (request *BifrostFileListRequest) GetRawRequestBody() []byte {
+	return request.RawRequestBody
+}
+
 // BifrostFileListResponse represents the response from listing files.
 type BifrostFileListResponse struct {
 	Object  string       `json:"object,omitempty"` // "list"
@@ -136,13 +145,22 @@ type BifrostFileListResponse struct {
 // BifrostFileRetrieveRequest represents a request to retrieve file metadata.
 type BifrostFileRetrieveRequest struct {
 	Provider ModelProvider `json:"provider"`
-	FileID   string        `json:"file_id"` // ID of the file to retrieve
+	Model    string        `json:"model"`
+
+	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)
+
+	FileID string `json:"file_id"` // ID of the file to retrieve
 
 	// Storage configuration (for S3/GCS backends)
 	StorageConfig *FileStorageConfig `json:"storage_config,omitempty"`
 
 	// Extra parameters for provider-specific features
 	ExtraParams map[string]interface{} `json:"-"`
+}
+
+// GetRawRequestBody returns the raw request body.
+func (request *BifrostFileRetrieveRequest) GetRawRequestBody() []byte {
+	return request.RawRequestBody
 }
 
 // BifrostFileRetrieveResponse represents the response from retrieving file metadata.
@@ -167,13 +185,21 @@ type BifrostFileRetrieveResponse struct {
 // BifrostFileDeleteRequest represents a request to delete a file.
 type BifrostFileDeleteRequest struct {
 	Provider ModelProvider `json:"provider"`
+	Model    string        `json:"model"`
 	FileID   string        `json:"file_id"` // ID of the file to delete
+
+	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)
 
 	// Storage configuration (for S3/GCS backends)
 	StorageConfig *FileStorageConfig `json:"storage_config,omitempty"`
 
 	// Extra parameters for provider-specific features
 	ExtraParams map[string]interface{} `json:"-"`
+}
+
+// GetRawRequestBody returns the raw request body.
+func (request *BifrostFileDeleteRequest) GetRawRequestBody() []byte {
+	return request.RawRequestBody
 }
 
 // BifrostFileDeleteResponse represents the response from deleting a file.
@@ -188,13 +214,21 @@ type BifrostFileDeleteResponse struct {
 // BifrostFileContentRequest represents a request to download file content.
 type BifrostFileContentRequest struct {
 	Provider ModelProvider `json:"provider"`
+	Model    string        `json:"model"`
 	FileID   string        `json:"file_id"` // ID of the file to download
+
+	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)
 
 	// Storage configuration (for S3/GCS backends)
 	StorageConfig *FileStorageConfig `json:"storage_config,omitempty"`
 
 	// Extra parameters for provider-specific features
 	ExtraParams map[string]interface{} `json:"-"`
+}
+
+// GetRawRequestBody returns the raw request body.
+func (request *BifrostFileContentRequest) GetRawRequestBody() []byte {
+	return request.RawRequestBody
 }
 
 // BifrostFileContentResponse represents the response from downloading file content.

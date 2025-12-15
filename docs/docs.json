@@ -75,10 +75,37 @@
             "icon": "plug",
             "pages": [
               "integrations/what-is-an-integration",
-              "integrations/openai-sdk",
-              "integrations/anthropic-sdk",
-              "integrations/bedrock-sdk",
-              "integrations/genai-sdk",
+              {
+                "group": "OpenAI SDK",
+                "icon": "o",
+                "pages": [
+                  "integrations/openai-sdk/overview",
+                  "integrations/openai-sdk/files-and-batch"
+                ]
+              },
+              {
+                "group": "Anthropic SDK",
+                "icon": "a",
+                "pages": [
+                  "integrations/anthropic-sdk/overview",
+                  "integrations/anthropic-sdk/files-and-batch"
+                ]
+              },
+              {
+                "group": "Bedrock SDK",
+                "icon": "b",
+                "pages": [
+                  "integrations/bedrock-sdk/overview",
+                  "integrations/bedrock-sdk/files-and-batch"
+                ]
+              },
+              {
+                "group": "GenAI SDK",
+                "icon": "g",
+                "pages": [
+                  "integrations/genai-sdk/overview"
+                ]
+              },
               "integrations/litellm-sdk",
               "integrations/langchain-sdk",
               "integrations/pydanticai-sdk"

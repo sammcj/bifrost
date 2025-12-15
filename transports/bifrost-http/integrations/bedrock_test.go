@@ -188,7 +188,7 @@ func Test_createBedrockBatchRouteConfigs(t *testing.T) {
 		assert.Equal(t, expected.method, routes[i].Method, "batch route %d method mismatch", i)
 		assert.Equal(t, RouteConfigTypeBedrock, routes[i].Type, "batch route %d type mismatch", i)
 		assert.NotNil(t, routes[i].GetRequestTypeInstance, "batch route %d GetRequestTypeInstance should not be nil", i)
-		assert.NotNil(t, routes[i].BatchCreateRequestConverter, "batch route %d BatchCreateRequestConverter should not be nil", i)
+		assert.NotNil(t, routes[i].BatchRequestConverter, "batch route %d BatchCreateRequestConverter should not be nil", i)
 		assert.NotNil(t, routes[i].ErrorConverter, "batch route %d ErrorConverter should not be nil", i)
 		assert.NotNil(t, routes[i].PreCallback, "batch route %d PreCallback should not be nil", i)
 	}

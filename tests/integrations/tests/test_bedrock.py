@@ -1493,7 +1493,11 @@ class TestBedrockIntegration:
             assert create_response["jobArn"], "jobArn should not be empty"
             assert create_response["jobArn"].startswith("arn:"), "jobArn should be a valid ARN"
 
+            print(f"create_response: {create_response}")
+
             job_arn = create_response["jobArn"]
+
+            print(f"stopping the job")
 
             # Cancel the job
             bedrock_client.stop_model_invocation_job(jobIdentifier=job_arn)
@@ -1547,6 +1551,9 @@ class TestBedrockIntegration:
 
         # Get provider-specific clients with x-model-provider header
         s3_client = get_provider_s3_client(provider)
+
+        print(f"getting the bedrock client for provider {provider}")
+
         bedrock_client = get_provider_bedrock_batch_client(provider)
 
         # Step 1: Upload input file to S3

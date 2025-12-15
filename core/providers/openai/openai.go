@@ -2242,7 +2242,7 @@ func (provider *OpenAIProvider) FileUpload(ctx context.Context, key schemas.Key,
 }
 
 // FileList lists files from OpenAI.
-func (provider *OpenAIProvider) FileList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *OpenAIProvider) FileList(ctx context.Context, key schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.FileListRequest); err != nil {
 		return nil, err
 	}
@@ -2256,7 +2256,7 @@ func (provider *OpenAIProvider) FileList(ctx context.Context, keys []schemas.Key
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Build URL with query params
-	baseUrl := provider.buildRequestURL(ctx, "/v1/files", schemas.FileListRequest)
+	requestURL := provider.buildRequestURL(ctx, "/v1/files", schemas.FileListRequest)
 	values := url.Values{}
 	if request.Purpose != "" {
 		values.Set("purpose", string(request.Purpose))
@@ -2271,18 +2271,18 @@ func (provider *OpenAIProvider) FileList(ctx context.Context, keys []schemas.Key
 		values.Set("order", *request.Order)
 	}
 	if encoded := values.Encode(); encoded != "" {
-		baseUrl += "?" + encoded
+		requestURL += "?" + encoded
 	}
 
 	// Set headers
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
-	req.SetRequestURI(baseUrl)
+	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodGet)
 	req.Header.SetContentType("application/json")
 
 	// Use first key if available
-	if len(keys) > 0 && keys[0].Value != "" {
-		req.Header.Set("Authorization", "Bearer "+keys[0].Value)
+	if key.Value != "" {
+		req.Header.Set("Authorization", "Bearer "+key.Value)
 	}
 
 	// Make request
@@ -2644,7 +2644,7 @@ func (provider *OpenAIProvider) BatchCreate(ctx context.Context, key schemas.Key
 }
 
 // BatchList lists batch jobs.
-func (provider *OpenAIProvider) BatchList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *OpenAIProvider) BatchList(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.BatchListRequest); err != nil {
 		return nil, err
 	}
@@ -2678,8 +2678,8 @@ func (provider *OpenAIProvider) BatchList(ctx context.Context, keys []schemas.Ke
 	req.Header.SetContentType("application/json")
 
 	// Use first key if available
-	if len(keys) > 0 && keys[0].Value != "" {
-		req.Header.Set("Authorization", "Bearer "+keys[0].Value)
+	if key.Value != "" {
+		req.Header.Set("Authorization", "Bearer "+key.Value)
 	}
 
 	// Make request

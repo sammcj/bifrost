@@ -1139,7 +1139,7 @@ class TestAnthropicIntegration:
         """
         if provider == "_no_providers_" or model == "_no_model_":
             pytest.skip("No providers configured for batch_inline scenario")
-
+        
         # Get provider-specific client
         client = get_provider_anthropic_client(provider)
 

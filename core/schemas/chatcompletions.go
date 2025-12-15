@@ -18,6 +18,7 @@ type BifrostChatRequest struct {
 	RawRequestBody []byte          `json:"-"` // set bifrost-use-raw-request-body to true in ctx to use the raw request body. Bifrost will directly send this to the downstream provider.
 }
 
+// GetRawRequestBody returns the raw request body
 func (r *BifrostChatRequest) GetRawRequestBody() []byte {
 	return r.RawRequestBody
 }

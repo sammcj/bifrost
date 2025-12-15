@@ -459,7 +459,7 @@ func CreateOpenAIBatchRouteConfigs(pathPrefix string, handlerStore lib.HandlerSt
 			GetRequestTypeInstance: func() interface{} {
 				return &schemas.BifrostBatchCreateRequest{}
 			},
-			BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+			BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 				if openaiReq, ok := req.(*schemas.BifrostBatchCreateRequest); ok {
 					switch openaiReq.Provider {
 					case schemas.Gemini:
@@ -568,7 +568,7 @@ func CreateOpenAIBatchRouteConfigs(pathPrefix string, handlerStore lib.HandlerSt
 			GetRequestTypeInstance: func() interface{} {
 				return &schemas.BifrostBatchListRequest{}
 			},
-			BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+			BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 				if listReq, ok := req.(*schemas.BifrostBatchListRequest); ok {
 					if listReq.Provider == "" {
 						listReq.Provider = schemas.OpenAI
@@ -614,7 +614,7 @@ func CreateOpenAIBatchRouteConfigs(pathPrefix string, handlerStore lib.HandlerSt
 			GetRequestTypeInstance: func() interface{} {
 				return &schemas.BifrostBatchRetrieveRequest{}
 			},
-			BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+			BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 				if retrieveReq, ok := req.(*schemas.BifrostBatchRetrieveRequest); ok {
 					if retrieveReq.Provider == "" {
 						retrieveReq.Provider = schemas.OpenAI
@@ -665,7 +665,7 @@ func CreateOpenAIBatchRouteConfigs(pathPrefix string, handlerStore lib.HandlerSt
 			GetRequestTypeInstance: func() interface{} {
 				return &schemas.BifrostBatchCancelRequest{}
 			},
-			BatchCreateRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
+			BatchRequestConverter: func(ctx *context.Context, req interface{}) (*BatchRequest, error) {
 				if cancelReq, ok := req.(*schemas.BifrostBatchCancelRequest); ok {
 					if cancelReq.Provider == "" {
 						cancelReq.Provider = schemas.OpenAI

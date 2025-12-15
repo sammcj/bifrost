@@ -1624,18 +1624,12 @@ func (provider *GeminiProvider) BatchCreate(ctx context.Context, key schemas.Key
 
 // BatchList lists batch jobs for Gemini.
 // Note: The consumer API may have limited list functionality.
-func (provider *GeminiProvider) BatchList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) BatchList(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchListRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
-
-	// Select a key for the request
-	if len(keys) == 0 {
-		return nil, providerUtils.NewBifrostOperationError("at least one API key is required", nil, providerName)
-	}
-	key := keys[0]
 
 	// Create HTTP request
 	req := fasthttp.AcquireRequest()
@@ -2238,18 +2232,12 @@ func (provider *GeminiProvider) FileUpload(ctx context.Context, key schemas.Key,
 }
 
 // FileList lists files from Gemini.
-func (provider *GeminiProvider) FileList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) FileList(ctx context.Context, key schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileListRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
-
-	if len(keys) == 0 {
-		return nil, providerUtils.NewConfigurationError("no keys provided", providerName)
-	}
-
-	key := keys[0]
 
 	// Create request
 	req := fasthttp.AcquireRequest()
@@ -2258,7 +2246,7 @@ func (provider *GeminiProvider) FileList(ctx context.Context, keys []schemas.Key
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Build URL with pagination
-	baseURL := fmt.Sprintf("%s/files", provider.networkConfig.BaseURL)
+	requestURL := fmt.Sprintf("%s/files", provider.networkConfig.BaseURL)
 	values := url.Values{}
 	if request.Limit > 0 {
 		values.Set("pageSize", fmt.Sprintf("%d", request.Limit))
@@ -2266,7 +2254,6 @@ func (provider *GeminiProvider) FileList(ctx context.Context, keys []schemas.Key
 	if request.After != nil && *request.After != "" {
 		values.Set("pageToken", *request.After)
 	}
-	requestURL := baseURL
 	if encodedValues := values.Encode(); encodedValues != "" {
 		requestURL += "?" + encodedValues
 	}
@@ -2313,6 +2300,10 @@ func (provider *GeminiProvider) FileList(ctx context.Context, keys []schemas.Key
 			Provider:    providerName,
 			Latency:     latency.Milliseconds(),
 		},
+	}
+
+	if geminiResp.NextPageToken != "" {
+		bifrostResp.After = &geminiResp.NextPageToken
 	}
 
 	for i, file := range geminiResp.Files {
