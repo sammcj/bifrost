@@ -72,6 +72,8 @@ type ComprehensiveTestConfig struct {
 	SpeechSynthesisFallbacks []schemas.Fallback // for speech synthesis tests
 	EmbeddingFallbacks       []schemas.Fallback // for embedding tests
 	SkipReason               string             // Reason to skip certain tests
+	BatchExtraParams         map[string]interface{} // Extra params for batch operations (e.g., role_arn, output_s3_uri for Bedrock)
+	FileExtraParams          map[string]interface{} // Extra params for file operations (e.g., s3_bucket for Bedrock)
 }
 
 // ComprehensiveTestAccount provides a test implementation of the Account interface for comprehensive testing.

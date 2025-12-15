@@ -2722,20 +2722,36 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 			// Use the custom provider name for actual key selection, but pass base provider type for key validation
 			key, err = bifrost.selectKeyFromProviderForModel(&req.Context, req.RequestType, provider.GetProviderKey(), model, baseProvider)
 			if err != nil {
-				bifrost.logger.Debug("error selecting key for model %s: %v", model, err)
-				req.Err <- schemas.BifrostError{
-					IsBifrostError: false,
-					Error: &schemas.ErrorField{
-						Message: err.Error(),
-						Error:   err,
-					},
-					ExtraFields: schemas.BifrostErrorExtraFields{
-						Provider:       provider.GetProviderKey(),
-						ModelRequested: model,
-						RequestType:    req.RequestType,
-					},
+				// Here if model is not required - for example file operations, or batch list operation - we don't need to throw an error
+				// We can pick first available key of the provider and continue
+				if !isModelRequired(req.RequestType) {
+					// Get first available key of the provider
+					// TODO this is temporary solution, we will fix this
+					// This is only for Bedrock provider, we will be adding special flag in the next release
+					keys, err := bifrost.account.GetKeysForProvider(&req.Context, provider.GetProviderKey())
+					if err != nil {
+						bifrost.logger.Debug("error getting keys for provider %s: %v", provider.GetProviderKey(), err)
+						continue
+					}
+					if len(keys) > 0 {
+						key = keys[0]
+					}
+				} else {
+					bifrost.logger.Debug("error selecting key for model %s: %v", model, err)
+					req.Err <- schemas.BifrostError{
+						IsBifrostError: false,
+						Error: &schemas.ErrorField{
+							Message: err.Error(),
+							Error:   err,
+						},
+						ExtraFields: schemas.BifrostErrorExtraFields{
+							Provider:       provider.GetProviderKey(),
+							ModelRequested: model,
+							RequestType:    req.RequestType,
+						},
+					}
+					continue
 				}
-				continue
 			}
 			req.Context = context.WithValue(req.Context, schemas.BifrostContextKeySelectedKeyID, key.ID)
 			req.Context = context.WithValue(req.Context, schemas.BifrostContextKeySelectedKeyName, key.Name)

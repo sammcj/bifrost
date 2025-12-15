@@ -42,6 +42,26 @@ func TestBedrock(t *testing.T) {
 	}
 	defer cancel()
 
+	// Get Bedrock-specific configuration from environment
+	s3Bucket := os.Getenv("AWS_S3_BUCKET")
+	roleArn := os.Getenv("AWS_BEDROCK_ROLE_ARN")
+
+	// Build extra params for batch and file operations
+	var batchExtraParams map[string]interface{}
+	var fileExtraParams map[string]interface{}
+
+	if s3Bucket != "" {
+		fileExtraParams = map[string]interface{}{
+			"s3_bucket": s3Bucket,
+		}
+		batchExtraParams = map[string]interface{}{
+			"output_s3_uri": "s3://" + s3Bucket + "/batch-output/",
+		}
+		if roleArn != "" {
+			batchExtraParams["role_arn"] = roleArn
+		}
+	}
+
 	testConfig := testutil.ComprehensiveTestConfig{
 		Provider:    schemas.Bedrock,
 		ChatModel:   "claude-4-sonnet",
@@ -50,8 +70,10 @@ func TestBedrock(t *testing.T) {
 			{Provider: schemas.Bedrock, Model: "claude-4-sonnet"},
 			{Provider: schemas.Bedrock, Model: "claude-4.5-sonnet"},
 		},
-		EmbeddingModel: "cohere.embed-v4:0",
-		ReasoningModel: "claude-4.5-sonnet",
+		EmbeddingModel:   "cohere.embed-v4:0",
+		ReasoningModel:   "claude-4.5-sonnet",
+		BatchExtraParams: batchExtraParams,
+		FileExtraParams:  fileExtraParams,
 		Scenarios: testutil.TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,

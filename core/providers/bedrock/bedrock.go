@@ -1457,8 +1457,12 @@ func (provider *BedrockProvider) FileList(ctx context.Context, key schemas.Key, 
 	}
 
 	region := DefaultBedrockRegion
-	if key.BedrockKeyConfig.Region != nil {
-		region = *key.BedrockKeyConfig.Region
+	if key.BedrockKeyConfig != nil {
+		if key.BedrockKeyConfig.Region != nil {
+			region = *key.BedrockKeyConfig.Region
+		}
+	} else {
+		region = DefaultBedrockRegion
 	}
 
 	// Build S3 ListObjectsV2 request

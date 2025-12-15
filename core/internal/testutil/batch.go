@@ -36,6 +36,7 @@ func RunBatchCreateTest(t *testing.T, client *bifrost.Bifrost, ctx context.Conte
 				},
 			},
 			CompletionWindow: "24h",
+			ExtraParams:      testConfig.BatchExtraParams,
 		}
 
 		response, err := client.BatchCreateRequest(ctx, request)
@@ -127,6 +128,7 @@ func RunBatchRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx context.Con
 				},
 			},
 			CompletionWindow: "24h",
+			ExtraParams:      testConfig.BatchExtraParams,
 		}
 
 		createResponse, createErr := client.BatchCreateRequest(ctx, createRequest)
@@ -198,6 +200,7 @@ func RunBatchCancelTest(t *testing.T, client *bifrost.Bifrost, ctx context.Conte
 				},
 			},
 			CompletionWindow: "24h",
+			ExtraParams:      testConfig.BatchExtraParams,
 		}
 
 		createResponse, createErr := client.BatchCreateRequest(ctx, createRequest)
@@ -336,10 +339,11 @@ func RunFileUploadTest(t *testing.T, client *bifrost.Bifrost, ctx context.Contex
 `)
 
 		request := &schemas.BifrostFileUploadRequest{
-			Provider: testConfig.Provider,
-			File:     fileContent,
-			Filename: "test_batch.jsonl",
-			Purpose:  "batch",
+			Provider:    testConfig.Provider,
+			File:        fileContent,
+			Filename:    "test_batch.jsonl",
+			Purpose:     "batch",
+			ExtraParams: testConfig.FileExtraParams,
 		}
 
 		response, err := client.FileUploadRequest(ctx, request)
@@ -378,8 +382,9 @@ func RunFileListTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context,
 		t.Logf("[RUNNING] File List test for provider: %s", testConfig.Provider)
 
 		request := &schemas.BifrostFileListRequest{
-			Provider: testConfig.Provider,
-			Limit:    10,
+			Provider:    testConfig.Provider,
+			Limit:       10,
+			ExtraParams: testConfig.FileExtraParams,
 		}
 
 		response, err := client.FileListRequest(ctx, request)
@@ -417,10 +422,11 @@ func RunFileRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx context.Cont
 `)
 
 		uploadRequest := &schemas.BifrostFileUploadRequest{
-			Provider: testConfig.Provider,
-			File:     fileContent,
-			Filename: "test_retrieve.jsonl",
-			Purpose:  "batch",
+			Provider:    testConfig.Provider,
+			File:        fileContent,
+			Filename:    "test_retrieve.jsonl",
+			Purpose:     "batch",
+			ExtraParams: testConfig.FileExtraParams,
 		}
 
 		uploadResponse, uploadErr := client.FileUploadRequest(ctx, uploadRequest)
@@ -479,10 +485,11 @@ func RunFileDeleteTest(t *testing.T, client *bifrost.Bifrost, ctx context.Contex
 `)
 
 		uploadRequest := &schemas.BifrostFileUploadRequest{
-			Provider: testConfig.Provider,
-			File:     fileContent,
-			Filename: "test_delete.jsonl",
-			Purpose:  "batch",
+			Provider:    testConfig.Provider,
+			File:        fileContent,
+			Filename:    "test_delete.jsonl",
+			Purpose:     "batch",
+			ExtraParams: testConfig.FileExtraParams,
 		}
 
 		uploadResponse, uploadErr := client.FileUploadRequest(ctx, uploadRequest)
@@ -541,10 +548,11 @@ func RunFileContentTest(t *testing.T, client *bifrost.Bifrost, ctx context.Conte
 `)
 
 		uploadRequest := &schemas.BifrostFileUploadRequest{
-			Provider: testConfig.Provider,
-			File:     originalContent,
-			Filename: "test_content.jsonl",
-			Purpose:  "batch",
+			Provider:    testConfig.Provider,
+			File:        originalContent,
+			Filename:    "test_content.jsonl",
+			Purpose:     "batch",
+			ExtraParams: testConfig.FileExtraParams,
 		}
 
 		uploadResponse, uploadErr := client.FileUploadRequest(ctx, uploadRequest)
@@ -643,10 +651,11 @@ func RunFileAndBatchIntegrationTest(t *testing.T, client *bifrost.Bifrost, ctx c
 `)
 
 		uploadRequest := &schemas.BifrostFileUploadRequest{
-			Provider: testConfig.Provider,
-			File:     fileContent,
-			Filename: "integration_test_batch.jsonl",
-			Purpose:  "batch",
+			Provider:    testConfig.Provider,
+			File:        fileContent,
+			Filename:    "integration_test_batch.jsonl",
+			Purpose:     "batch",
+			ExtraParams: testConfig.FileExtraParams,
 		}
 
 		uploadResponse, uploadErr := client.FileUploadRequest(ctx, uploadRequest)
@@ -673,6 +682,7 @@ func RunFileAndBatchIntegrationTest(t *testing.T, client *bifrost.Bifrost, ctx c
 			InputFileID:      uploadResponse.ID,
 			Endpoint:         schemas.BatchEndpointChatCompletions,
 			CompletionWindow: "24h",
+			ExtraParams:      testConfig.BatchExtraParams,
 		}
 
 		batchResponse, batchErr := client.BatchCreateRequest(ctx, batchRequest)
