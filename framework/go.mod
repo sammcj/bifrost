@@ -4,7 +4,7 @@ go 1.24.3
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/maximhq/bifrost/core v1.2.37
+	github.com/maximhq/bifrost/core v1.2.38
 	github.com/qdrant/go-client v1.16.1
 	github.com/redis/go-redis/v9 v9.14.0
 	github.com/stretchr/testify v1.11.1
@@ -17,6 +17,10 @@ require (
 
 require (
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.16 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.16 // indirect
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.93.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.4 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
