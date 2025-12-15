@@ -28,7 +28,7 @@ func CorsMiddleware(config *lib.Config) lib.BifrostHTTPMiddleware {
 			if allowed {
 				ctx.Response.Header.Set("Access-Control-Allow-Origin", origin)
 				ctx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD")
-				ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+				ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Stainless-Timeout")
 				ctx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
 				ctx.Response.Header.Set("Access-Control-Max-Age", "86400")
 			}
