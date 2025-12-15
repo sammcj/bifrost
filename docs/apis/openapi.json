@@ -3703,7 +3703,8 @@
           "parasail",
           "elevenlabs",
           "perplexity",
-          "cerebras"
+          "cerebras",
+          "nebius"
         ],
         "description": "AI model provider",
         "example": "openai"
