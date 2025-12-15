@@ -356,10 +356,7 @@ func HandleProviderAPIError(resp *fasthttp.Response, errorResp any) *schemas.Bif
 // It attempts to parse the response body into the provided response type
 // and returns either the parsed response or a BifrostError if parsing fails.
 // If sendBackRawResponse is true, it returns the raw response interface, otherwise nil.
-func HandleProviderResponse[T any](responseBody []byte, response *T, requestBody []byte, sendBackRawRequest bool, sendBackRawResponse bool) (interface{}, interface{}, *schemas.BifrostError) {
-	var rawRequest interface{}
-	var rawResponse interface{}
-
+func HandleProviderResponse[T any](responseBody []byte, response *T, requestBody []byte, sendBackRawRequest bool, sendBackRawResponse bool) (rawRequest interface{}, rawResponse interface{}, bifrostErr *schemas.BifrostError) {
 	var wg sync.WaitGroup
 	var structuredErr, rawRequestErr, rawResponseErr error
 
@@ -497,6 +494,56 @@ func CheckAndDecodeBody(resp *fasthttp.Response) ([]byte, error) {
 	}
 }
 
+// JSONLParseResult holds parsed items and any line-level errors encountered during parsing.
+type JSONLParseResult struct {
+	Errors []schemas.BatchError
+}
+
+// ParseJSONL parses JSONL data line by line, calling the provided callback for each line.
+// It collects parse errors with line numbers rather than silently skipping failed lines.
+// The callback receives the line bytes and returns an error if parsing fails.
+// This function operates directly on byte slices to avoid unnecessary string conversions.
+func ParseJSONL(data []byte, parseLine func(line []byte) error) JSONLParseResult {
+	result := JSONLParseResult{}
+
+	lineNum := 0
+	start := 0
+
+	for i := 0; i <= len(data); i++ {
+		// Check for newline or end of data
+		if i == len(data) || data[i] == '\n' {
+			lineNum++
+
+			// Extract the line (excluding the newline character)
+			end := i
+			if end > start {
+				line := data[start:end]
+
+				// Trim trailing carriage return for Windows-style line endings
+				if len(line) > 0 && line[len(line)-1] == '\r' {
+					line = line[:len(line)-1]
+				}
+
+				// Skip empty lines
+				if len(line) > 0 {
+					if err := parseLine(line); err != nil {
+						lineNumCopy := lineNum
+						result.Errors = append(result.Errors, schemas.BatchError{
+							Code:    "parse_error",
+							Message: err.Error(),
+							Line:    &lineNumCopy,
+						})
+					}
+				}
+			}
+
+			start = i + 1
+		}
+	}
+
+	return result
+}
+
 // NewConfigurationError creates a standardized error for configuration errors.
 // This helper reduces code duplication across providers that have configuration errors.
 func NewConfigurationError(message string, providerType schemas.ModelProvider) *schemas.BifrostError {
@@ -543,6 +590,14 @@ func NewProviderAPIError(message string, err error, statusCode int, providerType
 			Provider: providerType,
 		},
 	}
+}
+
+// RequestMetadata contains metadata about a request for error reporting.
+// This struct is used to pass request context to parseError functions.
+type RequestMetadata struct {
+	Provider    schemas.ModelProvider
+	Model       string
+	RequestType schemas.RequestType
 }
 
 // ShouldSendBackRawRequest checks if the raw request should be sent back.

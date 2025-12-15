@@ -97,6 +97,16 @@ const (
 	SpeechStreamRequest         RequestType = "speech_stream"
 	TranscriptionRequest        RequestType = "transcription"
 	TranscriptionStreamRequest  RequestType = "transcription_stream"
+	BatchCreateRequest          RequestType = "batch_create"
+	BatchListRequest            RequestType = "batch_list"
+	BatchRetrieveRequest        RequestType = "batch_retrieve"
+	BatchCancelRequest          RequestType = "batch_cancel"
+	BatchResultsRequest         RequestType = "batch_results"
+	FileUploadRequest           RequestType = "file_upload"
+	FileListRequest             RequestType = "file_list"
+	FileRetrieveRequest         RequestType = "file_retrieve"
+	FileDeleteRequest           RequestType = "file_delete"
+	FileContentRequest          RequestType = "file_content"
 )
 
 // BifrostContextKey is a type for context keys used in Bifrost.
@@ -105,6 +115,7 @@ type BifrostContextKey string
 // BifrostContextKeyRequestType is a context key for the request type.
 const (
 	BifrostContextKeyVirtualKey                          BifrostContextKey = "x-bf-vk"                      // string
+	BifrostContextKeyAPIKeyName                          BifrostContextKey = "x-bf-api-key"                 // string (explicit key name selection)
 	BifrostContextKeyRequestID                           BifrostContextKey = "request-id"                   // string
 	BifrostContextKeyFallbackRequestID                   BifrostContextKey = "fallback-request-id"          // string
 	BifrostContextKeyDirectKey                           BifrostContextKey = "bifrost-direct-key"           // Key struct
@@ -297,6 +308,7 @@ type BifrostResponseExtraFields struct {
 	RawRequest      interface{}        `json:"raw_request,omitempty"`
 	RawResponse     interface{}        `json:"raw_response,omitempty"`
 	CacheDebug      *BifrostCacheDebug `json:"cache_debug,omitempty"`
+	ParseErrors     []BatchError       `json:"parse_errors,omitempty"` // errors encountered while parsing JSONL batch results
 }
 
 // BifrostCacheDebug represents debug information about the cache.

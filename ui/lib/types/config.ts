@@ -76,6 +76,7 @@ export interface ModelProviderKey {
 	value?: string;
 	models?: string[];
 	weight: number;
+	enabled?: boolean;
 	azure_key_config?: AzureKeyConfig;
 	vertex_key_config?: VertexKeyConfig;
 	bedrock_key_config?: BedrockKeyConfig;
@@ -88,6 +89,7 @@ export const DefaultModelProviderKey: ModelProviderKey = {
 	value: "",
 	models: [],
 	weight: 1.0,
+	enabled: true,
 };
 
 // NetworkConfig matching Go's schemas.NetworkConfig
@@ -131,7 +133,17 @@ export type RequestType =
 	| "speech"
 	| "speech_stream"
 	| "transcription"
-	| "transcription_stream";
+	| "transcription_stream"
+	| "batch_create"
+	| "batch_list"
+	| "batch_retrieve"
+	| "batch_cancel"
+	| "batch_results"
+	| "file_upload"
+	| "file_list"
+	| "file_retrieve"
+	| "file_delete"
+	| "file_content";
 
 // AllowedRequests matching Go's schemas.AllowedRequests
 export interface AllowedRequests {

@@ -244,6 +244,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 				Value:            key.Value,
 				Models:           key.Models,
 				Weight:           key.Weight,
+				Enabled:          key.Enabled,
 				AzureKeyConfig:   key.AzureKeyConfig,
 				VertexKeyConfig:  key.VertexKeyConfig,
 				BedrockKeyConfig: key.BedrockKeyConfig,
@@ -286,6 +287,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 				// Update existing key with new data
 				dbKey.ID = existingKey.ID                 // Keep the same database ID
 				dbKey.ProviderID = existingKey.ProviderID // Preserve the existing ProviderID
+				dbKey.Enabled = existingKey.Enabled       // Preserve the existing Enabled status
 				if err := txDB.WithContext(ctx).Save(&dbKey).Error; err != nil {
 					return s.parseGormError(err)
 				}
@@ -369,6 +371,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 			Value:            key.Value,
 			Models:           key.Models,
 			Weight:           key.Weight,
+			Enabled:          key.Enabled,
 			AzureKeyConfig:   key.AzureKeyConfig,
 			VertexKeyConfig:  key.VertexKeyConfig,
 			BedrockKeyConfig: key.BedrockKeyConfig,
@@ -402,6 +405,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 		if existingKey, exists := existingKeysMap[key.ID]; exists {
 			// Update existing key - preserve the database ID
 			dbKey.ID = existingKey.ID
+			dbKey.Enabled = existingKey.Enabled
 			if err := txDB.WithContext(ctx).Save(&dbKey).Error; err != nil {
 				return s.parseGormError(err)
 			}
@@ -1242,11 +1246,31 @@ func (s *RDBConfigStore) UpdateVirtualKey(ctx context.Context, virtualKey *table
 		txDB = s.db
 	}
 
-	// Update virtual key
-	// Use Select() to explicitly update all fields, including nil pointer fields
-	// This ensures TeamID gets set to NULL when switching from team to customer association
-	if err := txDB.WithContext(ctx).Select("name", "description", "value", "is_active", "team_id", "customer_id", "budget_id", "rate_limit_id", "config_hash", "updated_at").Updates(virtualKey).Error; err != nil {
+	// Check if record exists by ID or Name
+	var existing tables.TableVirtualKey
+	err := txDB.WithContext(ctx).
+		Where("id = ? OR name = ?", virtualKey.ID, virtualKey.Name).
+		First(&existing).Error
+
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return s.parseGormError(err)
+	}
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// Create new record
+		if err := txDB.WithContext(ctx).Create(virtualKey).Error; err != nil {
+			return s.parseGormError(err)
+		}
+	} else {
+		// Update existing record (use existing.ID to ensure we update the found record)
+		virtualKey.ID = existing.ID
+		// Use Select() to explicitly update all fields, including nil pointer fields
+		// This ensures TeamID gets set to NULL when switching from team to customer association
+		if err := txDB.WithContext(ctx).
+			Select("name", "description", "value", "is_active", "team_id", "customer_id", "budget_id", "rate_limit_id", "config_hash", "updated_at").
+			Updates(virtualKey).Error; err != nil {
+			return s.parseGormError(err)
+		}
 	}
 	return nil
 }

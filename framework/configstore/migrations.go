@@ -80,7 +80,13 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddLogRetentionDaysColumn(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddEnabledColumnToKeyTable(ctx, db); err != nil {
+		return err
+	}
 	if err := migrationAddBatchAndCachePricingColumns(ctx, db); err != nil {
+		return err
+	}
+	if err := migrationAdd200kTokenPricingColumns(ctx, db); err != nil {
 		return err
 	}
 	if err := migrationMoveKeysToProviderConfig(ctx, db); err != nil {
@@ -1092,6 +1098,49 @@ func migrationAddLogRetentionDaysColumn(ctx context.Context, db *gorm.DB) error 
 	return nil
 }
 
+// migrationAddEnabledColumnToKeyTable adds the enabled column to the config_keys table
+func migrationAddEnabledColumnToKeyTable(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_enabled_column_to_key_table",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			mg := tx.Migrator()
+
+			// Check if column already exists
+			if !mg.HasColumn(&tables.TableKey{}, "enabled") {
+				// Add the column
+				if err := mg.AddColumn(&tables.TableKey{}, "enabled"); err != nil {
+					return fmt.Errorf("failed to add enabled column: %w", err)
+				}
+
+			}
+			// Set default = true for existing rows
+			if err := tx.Exec("UPDATE config_keys SET enabled = TRUE WHERE enabled IS NULL").Error; err != nil {
+				return fmt.Errorf("failed to backfill enabled column: %w", err)
+			}
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			mg := tx.Migrator()
+
+			if mg.HasColumn(&tables.TableKey{}, "enabled") {
+				if err := mg.DropColumn(&tables.TableKey{}, "enabled"); err != nil {
+					return fmt.Errorf("failed to drop enabled column: %w", err)
+				}
+			}
+
+			return nil
+		},
+	}})
+
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error running enabled column migration: %s", err.Error())
+	}
+	return nil
+}
+
 // migrationAddBatchAndCachePricingColumns adds the cache_read_input_token_cost, cache_creation_input_token_cost, input_cost_per_token_batches, and output_cost_per_token_batches columns to the model_pricing table
 func migrationAddBatchAndCachePricingColumns(ctx context.Context, db *gorm.DB) error {
 	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
@@ -1135,6 +1184,54 @@ func migrationAddBatchAndCachePricingColumns(ctx context.Context, db *gorm.DB) e
 			}
 			if err := migrator.DropColumn(&tables.TableModelPricing{}, "output_cost_per_token_batches"); err != nil {
 				return err
+			}
+			return nil
+		},
+	}})
+	return m.Migrate()
+}
+
+// migrationAdd200kTokenPricingColumns adds pricing columns for 200k token tier models
+func migrationAdd200kTokenPricingColumns(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_200k_token_pricing_columns",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			columns := []string{
+				"input_cost_per_token_above_200k_tokens",
+				"output_cost_per_token_above_200k_tokens",
+				"cache_creation_input_token_cost_above_200k_tokens",
+				"cache_read_input_token_cost_above_200k_tokens",
+			}
+
+			for _, field := range columns {
+				if !migrator.HasColumn(&tables.TableModelPricing{}, field) {
+					if err := migrator.AddColumn(&tables.TableModelPricing{}, field); err != nil {
+						return fmt.Errorf("failed to add column %s: %w", field, err)
+					}
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			columns := []string{
+				"input_cost_per_token_above_200k_tokens",
+				"output_cost_per_token_above_200k_tokens",
+				"cache_creation_input_token_cost_above_200k_tokens",
+				"cache_read_input_token_cost_above_200k_tokens",
+			}
+
+			for _, field := range columns {
+				if migrator.HasColumn(&tables.TableModelPricing{}, field) {
+					if err := migrator.DropColumn(&tables.TableModelPricing{}, field); err != nil {
+						return fmt.Errorf("failed to drop column %s: %w", field, err)
+					}
+				}
 			}
 			return nil
 		},
