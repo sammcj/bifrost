@@ -59,7 +59,6 @@ func RunBatchCreateTest(t *testing.T, client *bifrost.Bifrost, ctx context.Conte
 			t.Error("BatchCreate returned empty batch ID")
 			return
 		}
-		
 
 		t.Logf("[SUCCESS] Batch Create test passed for provider: %s, batch ID: %s", testConfig.Provider, response.ID)
 	})
@@ -283,14 +282,15 @@ func RunBatchUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx context.
 		return
 	}
 
-	// We are skipping azure from this for now
-	// TODO remove this once azure is officially supported
-	if testConfig.Provider != schemas.Azure {
-		return
-	}
-
 	t.Run("BatchUnsupported", func(t *testing.T) {
 		t.Logf("[RUNNING] Batch Unsupported test for provider: %s", testConfig.Provider)
+
+		// TODO remove this once azure is officially supported
+		// We are skipping azure from this for now
+		if testConfig.Provider == schemas.Azure {
+			t.Skipf("Skipping batch unsupported test for provider: %s", testConfig.Provider)
+			return
+		}
 
 		// Try to create a batch - should fail with unsupported error
 		request := &schemas.BifrostBatchCreateRequest{
@@ -372,7 +372,7 @@ func RunFileUploadTest(t *testing.T, client *bifrost.Bifrost, ctx context.Contex
 			t.Error("FileUpload returned empty file ID")
 			return
 		}
-		
+
 		t.Logf("[SUCCESS] File Upload test passed for provider: %s, file ID: %s", testConfig.Provider, response.ID)
 	})
 }
@@ -615,6 +615,13 @@ func RunFileUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 	t.Run("FileUnsupported", func(t *testing.T) {
 		t.Logf("[RUNNING] File Unsupported test for provider: %s", testConfig.Provider)
 
+		// TODO remove this once azure is officially supported
+		// We are skipping azure from this for now
+		if testConfig.Provider == schemas.Azure {
+			t.Skipf("Skipping batch unsupported test for provider: %s", testConfig.Provider)
+			return
+		}
+
 		// Try to upload a file - should fail with unsupported error
 		request := &schemas.BifrostFileUploadRequest{
 			Provider: testConfig.Provider,
@@ -710,4 +717,3 @@ func RunFileAndBatchIntegrationTest(t *testing.T, client *bifrost.Bifrost, ctx c
 			testConfig.Provider, uploadResponse.ID, batchResponse.ID)
 	})
 }
-
