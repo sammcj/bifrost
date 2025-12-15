@@ -51,6 +51,7 @@ type TestScenarios struct {
 	FileRetrieve          bool // File API retrieve functionality
 	FileDelete            bool // File API delete functionality
 	FileContent           bool // File API content download functionality
+	FileBatchInput        bool // Whether batch create supports file-based input (InputFileID)
 }
 
 // ComprehensiveTestConfig extends TestConfig with additional scenarios

@@ -63,7 +63,8 @@ func TestGemini(t *testing.T) {
 			FileList:              true,
 			FileRetrieve:          true,
 			FileDelete:            true,
-			FileContent:           true,
+			FileContent:           false,
+			FileBatchInput:        true,
 		},
 	}
 

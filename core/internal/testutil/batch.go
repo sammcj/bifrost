@@ -627,10 +627,10 @@ func RunFileUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 
 // RunFileAndBatchIntegrationTest tests the integration between file upload and batch create
 func RunFileAndBatchIntegrationTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
-	// Skip if either file upload or batch create is not supported
-	if !testConfig.Scenarios.FileUpload || !testConfig.Scenarios.BatchCreate {
-		t.Logf("[SKIPPED] File and Batch Integration: FileUpload=%v, BatchCreate=%v for provider %s",
-			testConfig.Scenarios.FileUpload, testConfig.Scenarios.BatchCreate, testConfig.Provider)
+	// Skip if file-based batch input is not supported
+	if !testConfig.Scenarios.FileBatchInput {
+		t.Logf("[SKIPPED] File and Batch Integration: FileBatchInput=%v for provider %s",
+			testConfig.Scenarios.FileBatchInput, testConfig.Provider)
 		return
 	}
 

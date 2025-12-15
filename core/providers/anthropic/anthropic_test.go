@@ -57,7 +57,8 @@ func TestAnthropic(t *testing.T) {
 			FileList:              true,
 			FileRetrieve:          true,
 			FileDelete:            true,
-			FileContent:           true,
+			FileContent:           false,
+			FileBatchInput:        false, // Anthropic batch API only supports inline requests, not file-based input
 		},
 	}
 
