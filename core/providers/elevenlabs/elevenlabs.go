@@ -522,6 +522,17 @@ func (provider *ElevenlabsProvider) Transcription(ctx context.Context, key schem
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
 	}
 
+	// Check for empty response
+	trimmed := strings.TrimSpace(string(responseBody))
+	if len(trimmed) == 0 {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: true,
+			Error: &schemas.ErrorField{
+				Message: schemas.ErrProviderResponseEmpty,
+			},
+		}
+	}
+
 	chunks, err := parseTranscriptionResponse(responseBody)
 	if err != nil {
 		return nil, providerUtils.NewBifrostOperationError(err.Error(), nil, providerName)

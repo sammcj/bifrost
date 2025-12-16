@@ -492,6 +492,7 @@ func HandleProviderResponse[T any](responseBody []byte, response *T, requestBody
 	return nil, nil, nil
 }
 
+// ParseAndSetRawRequest parses the raw request body and sets it in the extra fields.
 func ParseAndSetRawRequest(extraFields *schemas.BifrostResponseExtraFields, jsonBody []byte) {
 	var rawRequest interface{}
 	if err := sonic.Unmarshal(jsonBody, &rawRequest); err != nil {

@@ -299,12 +299,36 @@ func (provider *MistralProvider) Transcription(ctx context.Context, key schemas.
 		return nil, openai.ParseOpenAIError(resp, schemas.TranscriptionRequest, providerName, request.Model)
 	}
 
-	// Copy response body before releasing
-	responseBody := append([]byte(nil), resp.Body()...)
+	responseBody, err := providerUtils.CheckAndDecodeBody(resp)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
+	}
+
+	// Check for empty response
+	trimmed := strings.TrimSpace(string(responseBody))
+	if len(trimmed) == 0 {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: true,
+			Error: &schemas.ErrorField{
+				Message: schemas.ErrProviderResponseEmpty,
+			},
+		}
+	}
+
+	copiedResponseBody := append([]byte(nil), responseBody...)
 
 	// Parse Mistral's transcription response
 	var mistralResponse MistralTranscriptionResponse
-	if err := sonic.Unmarshal(responseBody, &mistralResponse); err != nil {
+	if err := sonic.Unmarshal(copiedResponseBody, &mistralResponse); err != nil {
+		if providerUtils.IsHTMLResponse(resp, copiedResponseBody) {
+			errorMessage := providerUtils.ExtractHTMLErrorMessage(copiedResponseBody)
+			return nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: &schemas.ErrorField{
+					Message: errorMessage,
+				},
+			}
+		}
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
 	}
 
@@ -323,7 +347,7 @@ func (provider *MistralProvider) Transcription(ctx context.Context, key schemas.
 	// Set raw response if enabled
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
 		var rawResponse interface{}
-		if err := sonic.Unmarshal(responseBody, &rawResponse); err == nil {
+		if err := sonic.Unmarshal(copiedResponseBody, &rawResponse); err == nil {
 			response.ExtraFields.RawResponse = rawResponse
 		}
 	}
@@ -441,7 +465,7 @@ func (provider *MistralProvider) TranscriptionStream(ctx context.Context, postHo
 				// Process accumulated event if we have both event and data
 				if currentEvent != "" && currentData != "" {
 					chunkIndex++
-					provider.processStreamEvent(ctx, postHookRunner, currentEvent, currentData, request.Model, providerName, chunkIndex, startTime, &lastChunkTime, responseChan)
+					provider.processTranscriptionStreamEvent(ctx, postHookRunner, currentEvent, currentData, request.Model, providerName, chunkIndex, startTime, &lastChunkTime, responseChan)
 				}
 				// Reset for next event
 				currentEvent = ""
@@ -460,7 +484,7 @@ func (provider *MistralProvider) TranscriptionStream(ctx context.Context, postHo
 		// Process any remaining event
 		if currentEvent != "" && currentData != "" {
 			chunkIndex++
-			provider.processStreamEvent(ctx, postHookRunner, currentEvent, currentData, request.Model, providerName, chunkIndex, startTime, &lastChunkTime, responseChan)
+			provider.processTranscriptionStreamEvent(ctx, postHookRunner, currentEvent, currentData, request.Model, providerName, chunkIndex, startTime, &lastChunkTime, responseChan)
 		}
 
 		// Handle scanner errors
@@ -473,8 +497,8 @@ func (provider *MistralProvider) TranscriptionStream(ctx context.Context, postHo
 	return responseChan, nil
 }
 
-// processStreamEvent processes a single SSE event and sends it to the response channel.
-func (provider *MistralProvider) processStreamEvent(
+// processTranscriptionStreamEvent processes a single SSE event and sends it to the response channel.
+func (provider *MistralProvider) processTranscriptionStreamEvent(
 	ctx context.Context,
 	postHookRunner schemas.PostHookRunner,
 	eventType string,
