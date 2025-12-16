@@ -808,9 +808,98 @@ Enterprise cloud providers require additional configuration beyond API keys. Con
 
 ### Azure
 
-Azure requires endpoint URLs, deployment mappings, and API version configuration:
+Azure supports two authentication methods:
 
-<Tabs group="azure-auth">
+#### Azure Entra ID (Service Principal)
+
+<Tabs group="azure-entra-auth">
+
+<Tab title="Using Web UI">
+
+![Azure Configuration Interface](../../media/ui-azure-config.png)
+
+1. Navigate to **"Providers"** → **"Azure"**
+2. Leave **API Key** empty for Service Principal auth
+3. Set **Client ID**: Your Azure Entra ID client ID
+4. Set **Client Secret**: Your Azure Entra ID client secret
+5. Set **Tenant ID**: Your Azure Entra ID tenant ID
+6. Set **Endpoint**: Your Azure endpoint URL
+7. Configure **Deployments**: Map model names to deployment names
+8. Set **API Version**: e.g., `2024-08-01-preview`
+9. Save configuration
+
+</Tab>
+
+<Tab title="Using API">
+
+```bash
+curl --location 'http://localhost:8080/api/providers' \
+--header 'Content-Type: application/json' \
+--data '{
+    "provider": "azure",
+    "keys": [
+        {
+            "name": "azure-key-1",
+            "value": "",
+            "models": ["gpt-4o", "gpt-4o-mini"],
+            "weight": 1.0,
+            "azure_key_config": {
+                "endpoint": "env.AZURE_ENDPOINT",
+                "client_id": "env.AZURE_CLIENT_ID",
+                "client_secret": "env.AZURE_CLIENT_SECRET",
+                "tenant_id": "env.AZURE_TENANT_ID",
+                "deployments": {
+                    "gpt-4o": "gpt-4o-deployment",
+                    "gpt-4o-mini": "gpt-4o-mini-deployment"
+                },
+                "api_version": "2024-08-01-preview"
+            }
+        }
+    ]
+}'
+```
+
+</Tab>
+
+<Tab title="Using config.json">
+
+```json
+{
+    "providers": {
+        "azure": {
+            "keys": [
+                {
+                    "name": "azure-key-1",
+                    "value": "",
+                    "models": ["gpt-4o", "gpt-4o-mini"],
+                    "weight": 1.0,
+                    "azure_key_config": {
+                        "endpoint": "env.AZURE_ENDPOINT",
+                        "client_id": "env.AZURE_CLIENT_ID",
+                        "client_secret": "env.AZURE_CLIENT_SECRET",
+                        "tenant_id": "env.AZURE_TENANT_ID",
+                        "deployments": {
+                            "gpt-4o": "gpt-4o-deployment",
+                            "gpt-4o-mini": "gpt-4o-mini-deployment"
+                        },
+                        "api_version": "2024-08-01-preview"
+                    }
+                }
+            ]
+        }
+    }
+}
+```
+
+</Tab>
+
+</Tabs>
+
+#### Direct Authentication
+
+For simpler use cases, provide the authentication credential directly in the `value` field:
+
+<Tabs group="azure-direct-auth">
 
 <Tab title="Using Web UI">
 
@@ -883,6 +972,10 @@ curl --location 'http://localhost:8080/api/providers' \
 </Tab>
 
 </Tabs>
+
+<Note>
+If `client_id`, `client_secret`, and `tenant_id` are configured, Service Principal authentication is used. Otherwise, direct authentication with the `value` field is used.
+</Note>
 
 ### AWS Bedrock
 
