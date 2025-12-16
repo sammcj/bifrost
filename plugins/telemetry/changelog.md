@@ -1,2 +1,0 @@
-- feat: adds logging support for batch and file requests
-- chore: upgrades core to 1.2.38 and framework to 1.1.48

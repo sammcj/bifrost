@@ -1,5 +1,0 @@
-- feat: adds batch and files API support for bedrock, openai, anthropic and gemini
-- feat: new provider support - nebius
-- feat: structured output support 
-- fix: vertex and bedrock usage aggregation improvements for streaming
-- fix: choice index fixed to 0 for anthropic and bedrock streaming
