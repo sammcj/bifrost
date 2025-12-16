@@ -38,6 +38,7 @@ func TestOpenAI(t *testing.T) {
 		},
 		SpeechSynthesisModel: "gpt-4o-mini-tts",
 		ReasoningModel:       "o1",
+		ChatAudioModel:       "gpt-4o-mini-audio-preview",
 		Scenarios: testutil.TestScenarios{
 			TextCompletion:        true,
 			TextCompletionStream:  true,
@@ -71,6 +72,7 @@ func TestOpenAI(t *testing.T) {
 			FileDelete:            true,
 			FileContent:           true,
 			FileBatchInput:        true,
+			ChatAudio:             true,
 		},
 	}
 

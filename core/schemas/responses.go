@@ -265,14 +265,17 @@ type ResponsesResponseUsage struct {
 }
 
 type ResponsesResponseInputTokens struct {
-	AudioTokens int `json:"audio_tokens"` // Tokens for audio input
+	TextTokens  int `json:"text_tokens,omitempty"`  // Tokens for text input
+	AudioTokens int `json:"audio_tokens,omitempty"` // Tokens for audio input
+	ImageTokens int `json:"image_tokens,omitempty"` // Tokens for image input
 
 	// For Providers which follow OpenAI's spec, CachedTokens means the number of input tokens read from the cache+input tokens used to create the cache entry. (because they do not differentiate between cache creation and cache read tokens)
 	// For Providers which do not follow OpenAI's spec, CachedTokens means only the number of input tokens read from the cache.
-	CachedTokens int `json:"cached_tokens"`
+	CachedTokens int `json:"cached_tokens,omitempty"`
 }
 
 type ResponsesResponseOutputTokens struct {
+	TextTokens               int  `json:"text_tokens,omitempty"`
 	AcceptedPredictionTokens int  `json:"accepted_prediction_tokens,omitempty"`
 	AudioTokens              int  `json:"audio_tokens,omitempty"`
 	ReasoningTokens          int  `json:"reasoning_tokens"` // Required for few OpenAI models

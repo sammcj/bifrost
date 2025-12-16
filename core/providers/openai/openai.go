@@ -1048,6 +1048,7 @@ func HandleOpenAIChatCompletionStreaming(
 				if choice.ChatStreamResponseChoice != nil &&
 					choice.ChatStreamResponseChoice.Delta != nil &&
 					(choice.ChatStreamResponseChoice.Delta.Content != nil ||
+						choice.ChatStreamResponseChoice.Delta.Audio != nil ||
 						len(choice.ChatStreamResponseChoice.Delta.ToolCalls) > 0) {
 					chunkIndex++
 

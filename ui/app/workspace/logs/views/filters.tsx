@@ -324,10 +324,10 @@ export function LogFilters({ filters, onFiltersChange, liveEnabled, onLiveToggle
 						<MoreVertical className="h-4 w-4" />
 					</Button>
 				</PopoverTrigger>
-				<PopoverContent className="w-[250px] bg-white p-2" align="end">
+				<PopoverContent className="bg-accent w-[250px] p-2" align="end">
 					<Command>
 						<CommandList>
-							<CommandItem className="cursor-pointer" onSelect={handleRecalculateCosts}>
+							<CommandItem className="hover:bg-accent/50 cursor-pointer" onSelect={handleRecalculateCosts}>
 								<Calculator className="text-muted-foreground size-4" />
 								<div className="flex flex-col">
 									<span className="text-sm">Recalculate costs</span>

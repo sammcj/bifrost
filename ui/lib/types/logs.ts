@@ -114,6 +114,14 @@ export interface ChatMessage {
 	tool_calls?: ToolCall[]; // For backward compatibility, tool calls are now in the content
 	reasoning?: string;
 	reasoning_details?: ReasoningDetails[];
+	audio?: ChatAudioMessageAudio;
+}
+
+export interface ChatAudioMessageAudio {
+	id: string;
+	data: string;
+	expires_at: number;
+	transcript: string;
 }
 
 export interface ReasoningDetails {

@@ -53,6 +53,7 @@ type TestScenarios struct {
 	FileDelete            bool // File API delete functionality
 	FileContent           bool // File API content download functionality
 	FileBatchInput        bool // Whether batch create supports file-based input (InputFileID)
+	ChatAudio             bool // Chat completion with audio input/output functionality
 }
 
 // ComprehensiveTestConfig extends TestConfig with additional scenarios
@@ -66,6 +67,7 @@ type ComprehensiveTestConfig struct {
 	EmbeddingModel           string
 	TranscriptionModel       string
 	SpeechSynthesisModel     string
+	ChatAudioModel           string
 	Scenarios                TestScenarios
 	Fallbacks                []schemas.Fallback     // for chat, responses, image and reasoning tests
 	TextCompletionFallbacks  []schemas.Fallback     // for text completion tests
@@ -73,6 +75,8 @@ type ComprehensiveTestConfig struct {
 	SpeechSynthesisFallbacks []schemas.Fallback     // for speech synthesis tests
 	EmbeddingFallbacks       []schemas.Fallback     // for embedding tests
 	SkipReason               string                 // Reason to skip certain tests
+	ExternalTTSProvider      schemas.ModelProvider  // External TTS provider to use for testing
+	ExternalTTSModel         string                 // External TTS model to use for testing
 	BatchExtraParams         map[string]interface{} // Extra params for batch operations (e.g., role_arn, output_s3_uri for Bedrock)
 	FileExtraParams          map[string]interface{} // Extra params for file operations (e.g., s3_bucket for Bedrock)
 }
@@ -161,25 +165,25 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 					},
 				},
 			},
-		{
-			Models: []string{},
-			Weight: 1.0,
-			BedrockKeyConfig: &schemas.BedrockKeyConfig{
-				AccessKey:    os.Getenv("AWS_ACCESS_KEY_ID"),
-				SecretKey:    os.Getenv("AWS_SECRET_ACCESS_KEY"),
-				SessionToken: bifrost.Ptr(os.Getenv("AWS_SESSION_TOKEN")),
-				Region:       bifrost.Ptr(getEnvWithDefault("AWS_REGION", "us-east-1")),
-				ARN:          bifrost.Ptr(os.Getenv("AWS_BEDROCK_ARN")),
-				Deployments: map[string]string{
-					"claude-3.5-sonnet": "anthropic.claude-3-5-sonnet-20240620-v1:0",
-					"claude-3.7-sonnet": "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
-					"claude-4-sonnet":   "global.anthropic.claude-sonnet-4-20250514-v1:0",
-					"claude-4.5-sonnet": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
-					"claude-4.5-haiku":  "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+			{
+				Models: []string{},
+				Weight: 1.0,
+				BedrockKeyConfig: &schemas.BedrockKeyConfig{
+					AccessKey:    os.Getenv("AWS_ACCESS_KEY_ID"),
+					SecretKey:    os.Getenv("AWS_SECRET_ACCESS_KEY"),
+					SessionToken: bifrost.Ptr(os.Getenv("AWS_SESSION_TOKEN")),
+					Region:       bifrost.Ptr(getEnvWithDefault("AWS_REGION", "us-east-1")),
+					ARN:          bifrost.Ptr(os.Getenv("AWS_BEDROCK_ARN")),
+					Deployments: map[string]string{
+						"claude-3.5-sonnet": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+						"claude-3.7-sonnet": "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+						"claude-4-sonnet":   "global.anthropic.claude-sonnet-4-20250514-v1:0",
+						"claude-4.5-sonnet": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+						"claude-4.5-haiku":  "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+					},
 				},
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
-			UseForBatchAPI: bifrost.Ptr(true),
-		},
 			{
 				Models: []string{"cohere.embed-v4:0"},
 				Weight: 1.0,
@@ -217,6 +221,20 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 					},
 				},
 				UseForBatchAPI: bifrost.Ptr(true),
+			},
+			{
+				Value:  os.Getenv("AZURE_API_KEY"),
+				Models: []string{},
+				Weight: 1.0,
+				AzureKeyConfig: &schemas.AzureKeyConfig{
+					Endpoint:   os.Getenv("AZURE_ENDPOINT"),
+					APIVersion: bifrost.Ptr("2025-01-01-preview"),
+					Deployments: map[string]string{
+						"whisper":                   "whisper",
+						"gpt-4o-mini-tts":           "gpt-4o-mini-tts",
+						"gpt-4o-mini-audio-preview": "gpt-4o-mini-audio-preview",
+					},
+				},
 			},
 		}, nil
 	case schemas.Vertex:
@@ -587,6 +605,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		PromptCachingModel:   "gpt-4.1",
 		TranscriptionModel:   "whisper-1",
 		SpeechSynthesisModel: "tts-1",
+		ChatAudioModel:       "gpt-4o-mini-audio-preview",
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not supported
 			TextCompletionStream:  false, // Not supported
@@ -618,6 +637,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 			FileRetrieve:          true, // OpenAI supports file API
 			FileDelete:            true, // OpenAI supports file API
 			FileContent:           true, // OpenAI supports file API
+			ChatAudio:             true, // OpenAI supports chat audio
 		},
 		Fallbacks: []schemas.Fallback{
 			{Provider: schemas.Anthropic, Model: "claude-3-7-sonnet-20250219"},
@@ -725,9 +745,12 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		},
 	},
 	{
-		Provider:  schemas.Azure,
-		ChatModel: "gpt-4o",
-		TextModel: "", // Azure doesn't support text completion in newer models
+		Provider:             schemas.Azure,
+		ChatModel:            "gpt-4o",
+		TextModel:            "", // Azure doesn't support text completion in newer models
+		ChatAudioModel:       "gpt-4o-mini-audio-preview",
+		TranscriptionModel:   "whisper-1",
+		SpeechSynthesisModel: "gpt-4o-mini-tts",
 		Scenarios: TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,
@@ -741,10 +764,10 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 			ImageBase64:           true,
 			MultipleImages:        true,
 			CompleteEnd2End:       true,
-			SpeechSynthesis:       false, // Not supported yet
-			SpeechSynthesisStream: false, // Not supported yet
-			Transcription:         false, // Not supported yet
-			TranscriptionStream:   false, // Not supported yet
+			SpeechSynthesis:       true,  // Supported via gpt-4o-mini-tts
+			SpeechSynthesisStream: true,  // Supported via gpt-4o-mini-tts
+			Transcription:         true,  // Supported via whisper-1
+			TranscriptionStream:   false, // Not properly supported yet by Azure
 			Embedding:             true,
 			ListModels:            true,
 			BatchCreate:           true, // Azure supports batch API
@@ -757,6 +780,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 			FileRetrieve:          true, // Azure supports file API
 			FileDelete:            true, // Azure supports file API
 			FileContent:           true, // Azure supports file API
+			ChatAudio:             true, // Azure supports chat audio
 		},
 		Fallbacks: []schemas.Fallback{
 			{Provider: schemas.OpenAI, Model: "gpt-4o-mini"},

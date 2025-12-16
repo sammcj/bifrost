@@ -467,6 +467,11 @@ func (provider *MistralProvider) TranscriptionStream(ctx context.Context, postHo
 				if currentEvent != "" && currentData != "" {
 					chunkIndex++
 					provider.processTranscriptionStreamEvent(ctx, postHookRunner, currentEvent, currentData, request.Model, providerName, chunkIndex, startTime, &lastChunkTime, responseChan)
+					// Break the loop if this was a done event (check both possible event types)
+					eventType := MistralTranscriptionStreamEventType(currentEvent)
+					if eventType == MistralTranscriptionStreamEventDone || currentEvent == "transcript.text.done" {
+						break
+					}
 				}
 				// Reset for next event
 				currentEvent = ""
@@ -486,6 +491,7 @@ func (provider *MistralProvider) TranscriptionStream(ctx context.Context, postHo
 		if currentEvent != "" && currentData != "" {
 			chunkIndex++
 			provider.processTranscriptionStreamEvent(ctx, postHookRunner, currentEvent, currentData, request.Model, providerName, chunkIndex, startTime, &lastChunkTime, responseChan)
+			// Note: No need to break here as scanner.Scan() has already finished
 		}
 
 		// Handle scanner errors
@@ -564,10 +570,12 @@ func (provider *MistralProvider) processTranscriptionStreamEvent(
 		response.ExtraFields.RawResponse = jsonData
 	}
 
-	// Check for done event
-	if MistralTranscriptionStreamEventType(eventType) == MistralTranscriptionStreamEventDone {
+	// Check for done event (handle both "transcription.done" and "transcript.text.done")
+	if MistralTranscriptionStreamEventType(eventType) == MistralTranscriptionStreamEventDone || eventType == "transcript.text.done" {
 		response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
 		ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+		// Ensure response type is set to Done
+		response.Type = schemas.TranscriptionStreamResponseTypeDone
 	}
 
 	providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, nil, response), responseChan)

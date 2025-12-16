@@ -3,7 +3,6 @@ package testutil
 import (
 	"regexp"
 
-
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
@@ -200,6 +199,21 @@ func ReasoningExpectations() ResponseExpectations {
 	}
 }
 
+// ChatAudioExpectations returns validation expectations for chat audio scenarios
+func ChatAudioExpectations() ResponseExpectations {
+	return ResponseExpectations{
+		ShouldHaveContent:    false, // Chat audio responses may have audio/transcript but not text content
+		ExpectedChoiceCount:  1,     // Should have one choice with audio data
+		ShouldHaveUsageStats: true,
+		ShouldHaveTimestamps: true,
+		ShouldHaveModel:      true,
+		ShouldHaveLatency:    true, // Global expectation: latency should always be present
+		ProviderSpecific: map[string]interface{}{
+			"response_type": "chat_audio",
+		},
+	}
+}
+
 // =============================================================================
 // SCENARIO-SPECIFIC EXPECTATION BUILDERS
 // =============================================================================
@@ -280,6 +294,9 @@ func GetExpectationsForScenario(scenarioName string, testConfig ComprehensiveTes
 	case "Reasoning":
 		expectations := ReasoningExpectations()
 		return expectations
+
+	case "ChatAudio":
+		return ChatAudioExpectations()
 
 	case "ProviderSpecific":
 		expectations := BasicChatExpectations()

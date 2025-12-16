@@ -980,6 +980,7 @@ func TestCreateMistralTranscriptionStreamMultipartBody(t *testing.T) {
 				Model:    "voxtral-mini-latest",
 				File:     []byte{0x01, 0x02, 0x03},
 				Language: schemas.Ptr("en"),
+				Stream:   schemas.Ptr(true),
 			},
 			expectedFields: map[string]string{
 				"stream":   "true",
@@ -996,6 +997,7 @@ func TestCreateMistralTranscriptionStreamMultipartBody(t *testing.T) {
 				Prompt:                 schemas.Ptr("Test prompt"),
 				ResponseFormat:         schemas.Ptr("verbose_json"),
 				Temperature:            schemas.Ptr(0.5),
+				Stream:                 schemas.Ptr(true),
 				TimestampGranularities: []string{"word", "segment"},
 			},
 			expectedFields: map[string]string{

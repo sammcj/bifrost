@@ -651,12 +651,15 @@ func (cu *BifrostLLMUsage) ToResponsesResponseUsage() *ResponsesResponseUsage {
 
 	if cu.PromptTokensDetails != nil {
 		usage.InputTokensDetails = &ResponsesResponseInputTokens{
+			TextTokens:   cu.PromptTokensDetails.TextTokens,
 			AudioTokens:  cu.PromptTokensDetails.AudioTokens,
+			ImageTokens:  cu.PromptTokensDetails.ImageTokens,
 			CachedTokens: cu.PromptTokensDetails.CachedTokens,
 		}
 	}
 	if cu.CompletionTokensDetails != nil {
 		usage.OutputTokensDetails = &ResponsesResponseOutputTokens{
+			TextTokens:               cu.CompletionTokensDetails.TextTokens,
 			AcceptedPredictionTokens: cu.CompletionTokensDetails.AcceptedPredictionTokens,
 			AudioTokens:              cu.CompletionTokensDetails.AudioTokens,
 			ReasoningTokens:          cu.CompletionTokensDetails.ReasoningTokens,
@@ -684,12 +687,15 @@ func (ru *ResponsesResponseUsage) ToBifrostLLMUsage() *BifrostLLMUsage {
 
 	if ru.InputTokensDetails != nil {
 		usage.PromptTokensDetails = &ChatPromptTokensDetails{
+			TextTokens:   ru.InputTokensDetails.TextTokens,
 			AudioTokens:  ru.InputTokensDetails.AudioTokens,
+			ImageTokens:  ru.InputTokensDetails.ImageTokens,
 			CachedTokens: ru.InputTokensDetails.CachedTokens,
 		}
 	}
 	if ru.OutputTokensDetails != nil {
 		usage.CompletionTokensDetails = &ChatCompletionTokensDetails{
+			TextTokens:               ru.OutputTokensDetails.TextTokens,
 			AcceptedPredictionTokens: ru.OutputTokensDetails.AcceptedPredictionTokens,
 			AudioTokens:              ru.OutputTokensDetails.AudioTokens,
 			ReasoningTokens:          ru.OutputTokensDetails.ReasoningTokens,

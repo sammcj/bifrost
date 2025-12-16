@@ -154,30 +154,31 @@ func (cr *BifrostChatResponse) ToTextCompletionResponse() *BifrostTextCompletion
 
 // ChatParameters represents the parameters for a chat completion.
 type ChatParameters struct {
-	FrequencyPenalty    *float64            `json:"frequency_penalty,omitempty"`     // Penalizes frequent tokens
-	LogitBias           *map[string]float64 `json:"logit_bias,omitempty"`            // Bias for logit values
-	LogProbs            *bool               `json:"logprobs,omitempty"`              // Number of logprobs to return
-	MaxCompletionTokens *int                `json:"max_completion_tokens,omitempty"` // Maximum number of tokens to generate
-	Metadata            *map[string]any     `json:"metadata,omitempty"`              // Metadata to be returned with the response
-	Modalities          []string            `json:"modalities,omitempty"`            // Modalities to be returned with the response
-	ParallelToolCalls   *bool               `json:"parallel_tool_calls,omitempty"`
-	PresencePenalty     *float64            `json:"presence_penalty,omitempty"`  // Penalizes repeated tokens
-	PromptCacheKey      *string             `json:"prompt_cache_key,omitempty"`  // Prompt cache key
-	Reasoning           *ChatReasoning      `json:"reasoning,omitempty"`         // Reasoning parameters
-	ResponseFormat      *interface{}        `json:"response_format,omitempty"`   // Format for the response
-	SafetyIdentifier    *string             `json:"safety_identifier,omitempty"` // Safety identifier
-	Seed                *int                `json:"seed,omitempty"`
-	ServiceTier         *string             `json:"service_tier,omitempty"`
-	StreamOptions       *ChatStreamOptions  `json:"stream_options,omitempty"`
-	Stop                []string            `json:"stop,omitempty"`
-	Store               *bool               `json:"store,omitempty"`
-	Temperature         *float64            `json:"temperature,omitempty"`
-	TopLogProbs         *int                `json:"top_logprobs,omitempty"`
-	TopP                *float64            `json:"top_p,omitempty"`       // Controls diversity via nucleus sampling
-	ToolChoice          *ChatToolChoice     `json:"tool_choice,omitempty"` // Whether to call a tool
-	Tools               []ChatTool          `json:"tools,omitempty"`       // Tools to use
-	User                *string             `json:"user,omitempty"`        // User identifier for tracking
-	Verbosity           *string             `json:"verbosity,omitempty"`   // "low" | "medium" | "high"
+	Audio               *ChatAudioParameters `json:"audio,omitempty"`                 // Audio parameters
+	FrequencyPenalty    *float64             `json:"frequency_penalty,omitempty"`     // Penalizes frequent tokens
+	LogitBias           *map[string]float64  `json:"logit_bias,omitempty"`            // Bias for logit values
+	LogProbs            *bool                `json:"logprobs,omitempty"`              // Number of logprobs to return
+	MaxCompletionTokens *int                 `json:"max_completion_tokens,omitempty"` // Maximum number of tokens to generate
+	Metadata            *map[string]any      `json:"metadata,omitempty"`              // Metadata to be returned with the response
+	Modalities          []string             `json:"modalities,omitempty"`            // Modalities to be returned with the response
+	ParallelToolCalls   *bool                `json:"parallel_tool_calls,omitempty"`
+	PresencePenalty     *float64             `json:"presence_penalty,omitempty"`  // Penalizes repeated tokens
+	PromptCacheKey      *string              `json:"prompt_cache_key,omitempty"`  // Prompt cache key
+	Reasoning           *ChatReasoning       `json:"reasoning,omitempty"`         // Reasoning parameters
+	ResponseFormat      *interface{}         `json:"response_format,omitempty"`   // Format for the response
+	SafetyIdentifier    *string              `json:"safety_identifier,omitempty"` // Safety identifier
+	Seed                *int                 `json:"seed,omitempty"`
+	ServiceTier         *string              `json:"service_tier,omitempty"`
+	StreamOptions       *ChatStreamOptions   `json:"stream_options,omitempty"`
+	Stop                []string             `json:"stop,omitempty"`
+	Store               *bool                `json:"store,omitempty"`
+	Temperature         *float64             `json:"temperature,omitempty"`
+	TopLogProbs         *int                 `json:"top_logprobs,omitempty"`
+	TopP                *float64             `json:"top_p,omitempty"`       // Controls diversity via nucleus sampling
+	ToolChoice          *ChatToolChoice      `json:"tool_choice,omitempty"` // Whether to call a tool
+	Tools               []ChatTool           `json:"tools,omitempty"`       // Tools to use
+	User                *string              `json:"user,omitempty"`        // User identifier for tracking
+	Verbosity           *string              `json:"verbosity,omitempty"`   // "low" | "medium" | "high"
 
 	// Dynamic parameters that can be provider-specific, they are directly
 	// added to the request as is.
@@ -218,6 +219,12 @@ func (cp *ChatParameters) UnmarshalJSON(data []byte) error {
 
 	// ExtraParams etc. are already handled by the alias
 	return nil
+}
+
+// ChatAudioParameters represents the parameters for a chat audio completion. (Only supported by OpenAI Models that support audio input)
+type ChatAudioParameters struct {
+	Format string `json:"format,omitempty"` // Format for the audio completion
+	Voice  string `json:"voice,omitempty"`  // Voice to use for the audio completion
 }
 
 // Not in OpenAI's spec, but needed to support extra parameters for reasoning.
@@ -515,7 +522,7 @@ func (cm *ChatMessage) UnmarshalJSON(data []byte) error {
 	// Only set if any field is populated
 	if assistantMsg.Refusal != nil || assistantMsg.Reasoning != nil ||
 		len(assistantMsg.ReasoningDetails) > 0 || len(assistantMsg.Annotations) > 0 ||
-		len(assistantMsg.ToolCalls) > 0 {
+		len(assistantMsg.ToolCalls) > 0 || assistantMsg.Audio != nil {
 		cm.ChatAssistantMessage = &assistantMsg
 	}
 
@@ -641,6 +648,7 @@ type ChatToolMessage struct {
 // ChatAssistantMessage represents a message in a chat conversation.
 type ChatAssistantMessage struct {
 	Refusal          *string                          `json:"refusal,omitempty"`
+	Audio            *ChatAudioMessageAudio           `json:"audio,omitempty"`
 	Reasoning        *string                          `json:"reasoning,omitempty"`
 	ReasoningDetails []ChatReasoningDetails           `json:"reasoning_details,omitempty"`
 	Annotations      []ChatAssistantMessageAnnotation `json:"annotations,omitempty"`
@@ -713,6 +721,14 @@ type ChatAssistantMessageToolCallFunction struct {
 	Arguments string  `json:"arguments"` // stringified json as retured by OpenAI, might not be a valid JSON always
 }
 
+// ChatAudioMessageAudio represents audio data in a message.
+type ChatAudioMessageAudio struct {
+	ID         string `json:"id"`
+	Data       string `json:"data"`
+	ExpiresAt  int    `json:"expires_at"`
+	Transcript string `json:"transcript"`
+}
+
 // BifrostResponseChoice represents a choice in the completion result.
 // This struct can represent either a streaming or non-streaming response choice.
 // IMPORTANT: Only one of TextCompletionResponseChoice, NonStreamResponseChoice or StreamResponseChoice
@@ -773,6 +789,7 @@ type ChatStreamResponseChoiceDelta struct {
 	Role             *string                        `json:"role,omitempty"`      // Only in the first chunk
 	Content          *string                        `json:"content,omitempty"`   // May be empty string or null
 	Refusal          *string                        `json:"refusal,omitempty"`   // Refusal content if any
+	Audio            *ChatAudioMessageAudio         `json:"audio,omitempty"`     // Audio data if any
 	Reasoning        *string                        `json:"reasoning,omitempty"` // May be empty string or null
 	ReasoningDetails []ChatReasoningDetails         `json:"reasoning_details,omitempty"`
 	ToolCalls        []ChatAssistantMessageToolCall `json:"tool_calls,omitempty"` // If tool calls used (supports incremental updates)
@@ -835,7 +852,9 @@ type BifrostLLMUsage struct {
 }
 
 type ChatPromptTokensDetails struct {
+	TextTokens  int `json:"text_tokens,omitempty"`
 	AudioTokens int `json:"audio_tokens,omitempty"`
+	ImageTokens int `json:"image_tokens,omitempty"`
 
 	// For Providers which follow OpenAI's spec, CachedTokens means the number of input tokens read from the cache+input tokens used to create the cache entry. (because they do not differentiate between cache creation and cache read tokens)
 	// For Providers which do not follow OpenAI's spec, CachedTokens means only the number of input tokens read from the cache.
@@ -843,6 +862,7 @@ type ChatPromptTokensDetails struct {
 }
 
 type ChatCompletionTokensDetails struct {
+	TextTokens               int  `json:"text_tokens,omitempty"`
 	AcceptedPredictionTokens int  `json:"accepted_prediction_tokens,omitempty"`
 	AudioTokens              int  `json:"audio_tokens,omitempty"`
 	CitationTokens           *int `json:"citation_tokens,omitempty"`
