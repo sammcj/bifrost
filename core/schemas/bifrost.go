@@ -193,29 +193,58 @@ func (br *BifrostRequest) GetRequestFields() (provider ModelProvider, model stri
 	case br.SpeechRequest != nil:
 		return br.SpeechRequest.Provider, br.SpeechRequest.Model, br.SpeechRequest.Fallbacks
 	case br.TranscriptionRequest != nil:
-		return br.TranscriptionRequest.Provider, br.TranscriptionRequest.Model, br.TranscriptionRequest.Fallbacks		
+		return br.TranscriptionRequest.Provider, br.TranscriptionRequest.Model, br.TranscriptionRequest.Fallbacks
 	case br.FileUploadRequest != nil:
-		return br.FileUploadRequest.Provider, br.FileUploadRequest.Model, nil
+		if br.FileUploadRequest.Model != nil {
+			return br.FileUploadRequest.Provider, *br.FileUploadRequest.Model, nil
+		}
+		return br.FileUploadRequest.Provider, "", nil
 	case br.FileListRequest != nil:
-		return br.FileListRequest.Provider, br.FileListRequest.Model, nil
+		if br.FileListRequest.Model != nil {
+			return br.FileListRequest.Provider, *br.FileListRequest.Model, nil
+		}
+		return br.FileListRequest.Provider, "", nil
 	case br.FileRetrieveRequest != nil:
-		return br.FileRetrieveRequest.Provider, br.FileRetrieveRequest.Model, nil
+		if br.FileRetrieveRequest.Model != nil {
+			return br.FileRetrieveRequest.Provider, *br.FileRetrieveRequest.Model, nil
+		}
+		return br.FileRetrieveRequest.Provider, "", nil
 	case br.FileDeleteRequest != nil:
-		return br.FileDeleteRequest.Provider, br.FileDeleteRequest.Model, nil
+		if br.FileDeleteRequest.Model != nil {
+			return br.FileDeleteRequest.Provider, *br.FileDeleteRequest.Model, nil
+		}
+		return br.FileDeleteRequest.Provider, "", nil
 	case br.FileContentRequest != nil:
-		return br.FileContentRequest.Provider, br.FileContentRequest.Model, nil
+		if br.FileContentRequest.Model != nil {
+			return br.FileContentRequest.Provider, *br.FileContentRequest.Model, nil
+		}
+		return br.FileContentRequest.Provider, "", nil
 	case br.BatchCreateRequest != nil:
-		return br.BatchCreateRequest.Provider, br.BatchCreateRequest.Model, nil
+		if br.BatchCreateRequest.Model != nil {
+			return br.BatchCreateRequest.Provider, *br.BatchCreateRequest.Model, nil
+		}
+		return br.BatchCreateRequest.Provider, "", nil
 	case br.BatchListRequest != nil:
-		return br.BatchListRequest.Provider, br.BatchListRequest.Model, nil
+		if br.BatchListRequest.Model != nil {
+			return br.BatchListRequest.Provider, *br.BatchListRequest.Model, nil
+		}
+		return br.BatchListRequest.Provider, "", nil
 	case br.BatchRetrieveRequest != nil:
-		return br.BatchRetrieveRequest.Provider, br.BatchRetrieveRequest.Model, nil
+		if br.BatchRetrieveRequest.Model != nil {
+			return br.BatchRetrieveRequest.Provider, *br.BatchRetrieveRequest.Model, nil
+		}
+		return br.BatchRetrieveRequest.Provider, "", nil
 	case br.BatchCancelRequest != nil:
-		return br.BatchCancelRequest.Provider, br.BatchCancelRequest.Model, nil
+		if br.BatchCancelRequest.Model != nil {
+			return br.BatchCancelRequest.Provider, *br.BatchCancelRequest.Model, nil
+		}
+		return br.BatchCancelRequest.Provider, "", nil
 	case br.BatchResultsRequest != nil:
-		return br.BatchResultsRequest.Provider, br.BatchResultsRequest.Model, nil
+		if br.BatchResultsRequest.Model != nil {
+			return br.BatchResultsRequest.Provider, *br.BatchResultsRequest.Model, nil
+		}
+		return br.BatchResultsRequest.Provider, "", nil
 	}
-
 	return "", "", nil
 }
 

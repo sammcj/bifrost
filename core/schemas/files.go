@@ -52,7 +52,7 @@ type FileObject struct {
 // BifrostFileUploadRequest represents a request to upload a file.
 type BifrostFileUploadRequest struct {
 	Provider ModelProvider `json:"provider"`
-	Model    string        `json:"model"`
+	Model    *string       `json:"model"`
 
 	// File content
 	File     []byte      `json:"-"`        // Raw file content (not serialized)
@@ -108,7 +108,7 @@ type BifrostFileUploadResponse struct {
 // BifrostFileListRequest represents a request to list files.
 type BifrostFileListRequest struct {
 	Provider ModelProvider `json:"provider"`
-	Model    string        `json:"model"`
+	Model    *string       `json:"model"`
 
 	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)
 
@@ -145,7 +145,7 @@ type BifrostFileListResponse struct {
 // BifrostFileRetrieveRequest represents a request to retrieve file metadata.
 type BifrostFileRetrieveRequest struct {
 	Provider ModelProvider `json:"provider"`
-	Model    string        `json:"model"`
+	Model    *string       `json:"model"`
 
 	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)
 
@@ -185,7 +185,7 @@ type BifrostFileRetrieveResponse struct {
 // BifrostFileDeleteRequest represents a request to delete a file.
 type BifrostFileDeleteRequest struct {
 	Provider ModelProvider `json:"provider"`
-	Model    string        `json:"model"`
+	Model    *string       `json:"model"`
 	FileID   string        `json:"file_id"` // ID of the file to delete
 
 	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)
@@ -214,7 +214,7 @@ type BifrostFileDeleteResponse struct {
 // BifrostFileContentRequest represents a request to download file content.
 type BifrostFileContentRequest struct {
 	Provider ModelProvider `json:"provider"`
-	Model    string        `json:"model"`
+	Model    *string       `json:"model"`
 	FileID   string        `json:"file_id"` // ID of the file to download
 
 	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)

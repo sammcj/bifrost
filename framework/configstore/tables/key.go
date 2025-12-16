@@ -39,12 +39,16 @@ type TableKey struct {
 	VertexDeploymentsJSON *string `gorm:"type:text" json:"-"` // JSON serialized map[string]string
 
 	// Bedrock config fields (embedded)
-	BedrockAccessKey       *string `gorm:"type:varchar(255)" json:"bedrock_access_key,omitempty"`
-	BedrockSecretKey       *string `gorm:"type:text" json:"bedrock_secret_key,omitempty"`
-	BedrockSessionToken    *string `gorm:"type:text" json:"bedrock_session_token,omitempty"`
-	BedrockRegion          *string `gorm:"type:varchar(100)" json:"bedrock_region,omitempty"`
-	BedrockARN             *string `gorm:"type:text" json:"bedrock_arn,omitempty"`
-	BedrockDeploymentsJSON *string `gorm:"type:text" json:"-"` // JSON serialized map[string]string
+	BedrockAccessKey        *string `gorm:"type:varchar(255)" json:"bedrock_access_key,omitempty"`
+	BedrockSecretKey        *string `gorm:"type:text" json:"bedrock_secret_key,omitempty"`
+	BedrockSessionToken     *string `gorm:"type:text" json:"bedrock_session_token,omitempty"`
+	BedrockRegion           *string `gorm:"type:varchar(100)" json:"bedrock_region,omitempty"`
+	BedrockARN              *string `gorm:"type:text" json:"bedrock_arn,omitempty"`
+	BedrockDeploymentsJSON  *string `gorm:"type:text" json:"-"`                                   // JSON serialized map[string]string
+	BedrockBatchS3ConfigJSON *string `gorm:"type:text" json:"-"`                                  // JSON serialized schemas.BatchS3Config
+
+	// Batch API configuration
+	UseForBatchAPI *bool `gorm:"default:false" json:"use_for_batch_api,omitempty"` // Whether this key can be used for batch API operations
 
 	// Virtual fields for runtime use (not stored in DB)
 	Models           []string                  `gorm:"-" json:"models"`
@@ -159,6 +163,16 @@ func (k *TableKey) BeforeSave(tx *gorm.DB) error {
 		} else {
 			k.BedrockDeploymentsJSON = nil
 		}
+		if k.BedrockKeyConfig.BatchS3Config != nil {
+			data, err := sonic.Marshal(k.BedrockKeyConfig.BatchS3Config)
+			if err != nil {
+				return err
+			}
+			s := string(data)
+			k.BedrockBatchS3ConfigJSON = &s
+		} else {
+			k.BedrockBatchS3ConfigJSON = nil
+		}
 	} else {
 		k.BedrockAccessKey = nil
 		k.BedrockSecretKey = nil
@@ -166,6 +180,7 @@ func (k *TableKey) BeforeSave(tx *gorm.DB) error {
 		k.BedrockRegion = nil
 		k.BedrockARN = nil
 		k.BedrockDeploymentsJSON = nil
+		k.BedrockBatchS3ConfigJSON = nil
 	}
 	return nil
 }
@@ -240,7 +255,7 @@ func (k *TableKey) AfterFind(tx *gorm.DB) error {
 	}
 
 	// Reconstruct Bedrock config if fields are present
-	if k.BedrockAccessKey != nil || k.BedrockSecretKey != nil || k.BedrockSessionToken != nil || k.BedrockRegion != nil || k.BedrockARN != nil || (k.BedrockDeploymentsJSON != nil && *k.BedrockDeploymentsJSON != "") {
+	if k.BedrockAccessKey != nil || k.BedrockSecretKey != nil || k.BedrockSessionToken != nil || k.BedrockRegion != nil || k.BedrockARN != nil || (k.BedrockDeploymentsJSON != nil && *k.BedrockDeploymentsJSON != "") || (k.BedrockBatchS3ConfigJSON != nil && *k.BedrockBatchS3ConfigJSON != "") {
 		bedrockConfig := &schemas.BedrockKeyConfig{}
 
 		if k.BedrockAccessKey != nil {
@@ -263,6 +278,14 @@ func (k *TableKey) AfterFind(tx *gorm.DB) error {
 			bedrockConfig.Deployments = deployments
 		} else {
 			bedrockConfig.Deployments = nil
+		}
+
+		if k.BedrockBatchS3ConfigJSON != nil && *k.BedrockBatchS3ConfigJSON != "" {
+			var batchS3Config schemas.BatchS3Config
+			if err := json.Unmarshal([]byte(*k.BedrockBatchS3ConfigJSON), &batchS3Config); err != nil {
+				return err
+			}
+			bedrockConfig.BatchS3Config = &batchS3Config
 		}
 
 		k.BedrockKeyConfig = bedrockConfig

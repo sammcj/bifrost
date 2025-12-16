@@ -1,6 +1,6 @@
 module github.com/maximhq/bifrost/plugins/otel
 
-go 1.24.3
+go 1.25.5
 
 require (
 	github.com/maximhq/bifrost/core v1.2.38

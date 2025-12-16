@@ -107,6 +107,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAdd200kTokenPricingColumns(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddUseForBatchAPIColumnAndS3BucketsConfig(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1773,4 +1776,54 @@ func migrationAdd200kTokenPricingColumns(ctx context.Context, db *gorm.DB) error
 		},
 	}})
 	return m.Migrate()
+}
+
+// migrationAddUseForBatchAPIColumnAndS3BucketsConfig adds the use_for_batch_api and bedrock_batch_s3_config_json columns to the config_keys table
+// Existing keys are backfilled with use_for_batch_api = TRUE to preserve current behavior
+func migrationAddUseForBatchAPIColumnAndS3BucketsConfig(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_use_for_batch_api_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			mg := tx.Migrator()
+
+			// Add use_for_batch_api column
+			if !mg.HasColumn(&tables.TableKey{}, "use_for_batch_api") {
+				if err := mg.AddColumn(&tables.TableKey{}, "use_for_batch_api"); err != nil {
+					return fmt.Errorf("failed to add use_for_batch_api column: %w", err)
+				}
+			}
+
+			// Add bedrock_batch_s3_config_json column
+			if !mg.HasColumn(&tables.TableKey{}, "bedrock_batch_s3_config_json") {
+				if err := mg.AddColumn(&tables.TableKey{}, "bedrock_batch_s3_config_json"); err != nil {
+					return fmt.Errorf("failed to add bedrock_batch_s3_config_json column: %w", err)
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			mg := tx.Migrator()
+
+			if mg.HasColumn(&tables.TableKey{}, "use_for_batch_api") {
+				if err := mg.DropColumn(&tables.TableKey{}, "use_for_batch_api"); err != nil {
+					return fmt.Errorf("failed to drop use_for_batch_api column: %w", err)
+				}
+			}
+
+			if mg.HasColumn(&tables.TableKey{}, "bedrock_batch_s3_config_json") {
+				if err := mg.DropColumn(&tables.TableKey{}, "bedrock_batch_s3_config_json"); err != nil {
+					return fmt.Errorf("failed to drop bedrock_batch_s3_config_json column: %w", err)
+				}
+			}
+
+			return nil
+		},
+	}})
+
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error running use_for_batch_api migration: %s", err.Error())
+	}
+	return nil
 }

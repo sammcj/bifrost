@@ -1419,8 +1419,10 @@ func (provider *BedrockProvider) FileUpload(ctx context.Context, key schemas.Key
 	}, nil
 }
 
-// FileList lists files in the S3 bucket used for Bedrock batch processing.
-func (provider *BedrockProvider) FileList(ctx context.Context, key schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+// FileList lists files in the S3 bucket used for Bedrock batch processing from all provided keys.
+// FileList lists S3 files using serial pagination across keys.
+// Exhausts all pages from one key before moving to the next.
+func (provider *BedrockProvider) FileList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.FileListRequest); err != nil {
 		return nil, err
 	}
@@ -1456,13 +1458,32 @@ func (provider *BedrockProvider) FileList(ctx context.Context, key schemas.Key, 
 		s3Prefix = bucketPrefix + s3Prefix
 	}
 
+	// Initialize serial pagination helper
+	helper, err := providerUtils.NewSerialListHelper(keys, request.After, provider.logger)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid pagination cursor", err, providerName)
+	}
+
+	// Get current key to query
+	key, nativeCursor, ok := helper.GetCurrentKey()
+	if !ok {
+		// All keys exhausted
+		return &schemas.BifrostFileListResponse{
+			Object:  "list",
+			Data:    []schemas.FileObject{},
+			HasMore: false,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType: schemas.FileListRequest,
+				Provider:    providerName,
+			},
+		}, nil
+	}
+
 	region := DefaultBedrockRegion
 	if key.BedrockKeyConfig != nil {
 		if key.BedrockKeyConfig.Region != nil {
 			region = *key.BedrockKeyConfig.Region
 		}
-	} else {
-		region = DefaultBedrockRegion
 	}
 
 	// Build S3 ListObjectsV2 request
@@ -1472,8 +1493,9 @@ func (provider *BedrockProvider) FileList(ctx context.Context, key schemas.Key, 
 	if request.Limit > 0 {
 		params.Set("max-keys", fmt.Sprintf("%d", request.Limit))
 	}
-	if request.After != nil {
-		params.Set("continuation-token", *request.After)
+	// Use native cursor from serial helper
+	if nativeCursor != "" {
+		params.Set("continuation-token", nativeCursor)
 	}
 
 	requestURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/?%s", bucketName, region, params.Encode())
@@ -1484,8 +1506,11 @@ func (provider *BedrockProvider) FileList(ctx context.Context, key schemas.Key, 
 	}
 
 	// Sign request for S3
-	if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "s3", providerName); err != nil {
-		return nil, err
+	if key.BedrockKeyConfig == nil {
+		return nil, providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
+	}
+	if bifrostErr := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "s3", providerName); bifrostErr != nil {
+		return nil, bifrostErr
 	}
 
 	// Execute request
@@ -1505,9 +1530,9 @@ func (provider *BedrockProvider) FileList(ctx context.Context, key schemas.Key, 
 		}
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
 	}
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
 	if err != nil {
 		return nil, providerUtils.NewBifrostOperationError("error reading response", err, providerName)
 	}
@@ -1522,31 +1547,15 @@ func (provider *BedrockProvider) FileList(ctx context.Context, key schemas.Key, 
 		return nil, providerUtils.NewBifrostOperationError("error parsing S3 response", err, providerName)
 	}
 
-	// Convert to Bifrost response
-	bifrostResp := &schemas.BifrostFileListResponse{
-		Object:  "list",
-		Data:    make([]schemas.FileObject, len(listResp.Contents)),
-		HasMore: listResp.IsTruncated,
-		ExtraFields: schemas.BifrostResponseExtraFields{
-			RequestType: schemas.FileListRequest,
-			Provider:    providerName,
-			Latency:     latency.Milliseconds(),
-			RawResponse: body, // Store raw S3 XML for direct passthrough in S3-compatible transports
-		},
-	}
-
-	// Set continuation token if present
-	if listResp.NextContinuationToken != "" {
-		bifrostResp.After = &listResp.NextContinuationToken
-	}
-
-	for i, obj := range listResp.Contents {
+	// Convert files to Bifrost format
+	files := make([]schemas.FileObject, 0, len(listResp.Contents))
+	for _, obj := range listResp.Contents {
 		s3URI := fmt.Sprintf("s3://%s/%s", bucketName, obj.Key)
 		filename := obj.Key
 		if idx := strings.LastIndex(obj.Key, "/"); idx >= 0 {
 			filename = obj.Key[idx+1:]
 		}
-		bifrostResp.Data[i] = schemas.FileObject{
+		files = append(files, schemas.FileObject{
 			ID:        s3URI,
 			Object:    "file",
 			Bytes:     obj.Size,
@@ -1554,24 +1563,39 @@ func (provider *BedrockProvider) FileList(ctx context.Context, key schemas.Key, 
 			Filename:  filename,
 			Purpose:   schemas.FilePurposeBatch,
 			Status:    schemas.FileStatusProcessed,
-		}
+		})
+	}
+
+	// Build cursor for next request
+	// S3 uses NextContinuationToken for pagination
+	nextCursor, hasMore := helper.BuildNextCursor(listResp.IsTruncated, listResp.NextContinuationToken)
+
+	// Convert to Bifrost response
+	bifrostResp := &schemas.BifrostFileListResponse{
+		Object:  "list",
+		Data:    files,
+		HasMore: hasMore,
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			RequestType: schemas.FileListRequest,
+			Provider:    providerName,
+			Latency:     latency.Milliseconds(),
+		},
+	}
+	if nextCursor != "" {
+		bifrostResp.After = &nextCursor
 	}
 
 	return bifrostResp, nil
 }
 
-// FileRetrieve retrieves S3 object metadata for Bedrock batch processing.
-func (provider *BedrockProvider) FileRetrieve(ctx context.Context, key schemas.Key, request *schemas.BifrostFileRetrieveRequest) (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError) {
+// FileRetrieve retrieves S3 object metadata for Bedrock batch processing by trying each key until found.
+func (provider *BedrockProvider) FileRetrieve(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileRetrieveRequest) (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.FileRetrieveRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
 
-	if key.BedrockKeyConfig == nil {
-		return nil, providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
-	}
-
 	if request.FileID == "" {
 		return nil, providerUtils.NewBifrostOperationError("file_id (S3 URI) is required", nil, providerName)
 	}
@@ -1582,91 +1606,103 @@ func (provider *BedrockProvider) FileRetrieve(ctx context.Context, key schemas.K
 		return nil, providerUtils.NewBifrostOperationError("invalid S3 URI format, expected s3://bucket/key", nil, providerName)
 	}
 
-	region := DefaultBedrockRegion
-	if key.BedrockKeyConfig.Region != nil {
-		region = *key.BedrockKeyConfig.Region
-	}
+	var lastErr *schemas.BifrostError
+	for _, key := range keys {
+		if key.BedrockKeyConfig == nil {
+			lastErr = providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
+			continue
+		}
 
-	// Build S3 HEAD request
-	// Escape each path segment individually to handle special characters while preserving "/"
-	reqURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, escapeS3KeyForURL(s3Key))
+		region := DefaultBedrockRegion
+		if key.BedrockKeyConfig.Region != nil {
+			region = *key.BedrockKeyConfig.Region
+		}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodHead, reqURL, nil)
-	if err != nil {
-		return nil, providerUtils.NewBifrostOperationError("error creating request", err, providerName)
-	}
+		// Build S3 HEAD request
+		// Escape each path segment individually to handle special characters while preserving "/"
+		reqURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, escapeS3KeyForURL(s3Key))
 
-	// Sign request for S3
-	if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "s3", providerName); err != nil {
-		return nil, err
-	}
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodHead, reqURL, nil)
+		if err != nil {
+			lastErr = providerUtils.NewBifrostOperationError("error creating request", err, providerName)
+			continue
+		}
 
-	// Execute request
-	startTime := time.Now()
-	resp, err := provider.client.Do(httpReq)
-	latency := time.Since(startTime)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: &schemas.ErrorField{
-					Type:    schemas.Ptr(schemas.RequestCancelled),
-					Message: schemas.ErrRequestCancelled,
-					Error:   err,
-				},
+		// Sign request for S3
+		if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "s3", providerName); err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Execute request
+		startTime := time.Now()
+		resp, err := provider.client.Do(httpReq)
+		latency := time.Since(startTime)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil, &schemas.BifrostError{
+					IsBifrostError: false,
+					Error: &schemas.ErrorField{
+						Type:    schemas.Ptr(schemas.RequestCancelled),
+						Message: schemas.ErrRequestCancelled,
+						Error:   err,
+					},
+				}
+			}
+			lastErr = providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			lastErr = providerUtils.NewProviderAPIError(fmt.Sprintf("S3 HEAD failed with status %d", resp.StatusCode), nil, resp.StatusCode, providerName, nil, nil)
+			continue
+		}
+
+		resp.Body.Close()
+
+		// Extract metadata from headers
+		filename := s3Key
+		if idx := strings.LastIndex(s3Key, "/"); idx >= 0 {
+			filename = s3Key[idx+1:]
+		}
+
+		var createdAt int64
+		if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
+			if t, err := time.Parse(time.RFC1123, lastMod); err == nil {
+				createdAt = t.Unix()
 			}
 		}
-		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
-	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, providerUtils.NewProviderAPIError(fmt.Sprintf("S3 HEAD failed with status %d", resp.StatusCode), nil, resp.StatusCode, providerName, nil, nil)
-	}
-
-	// Extract metadata from headers
-	filename := s3Key
-	if idx := strings.LastIndex(s3Key, "/"); idx >= 0 {
-		filename = s3Key[idx+1:]
-	}
-
-	var createdAt int64
-	if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
-		if t, err := time.Parse(time.RFC1123, lastMod); err == nil {
-			createdAt = t.Unix()
-		}
+		return &schemas.BifrostFileRetrieveResponse{
+			ID:             request.FileID,
+			Object:         "file",
+			Bytes:          resp.ContentLength,
+			CreatedAt:      createdAt,
+			Filename:       filename,
+			Purpose:        schemas.FilePurposeBatch,
+			Status:         schemas.FileStatusProcessed,
+			StorageBackend: schemas.FileStorageS3,
+			StorageURI:     request.FileID,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType: schemas.FileRetrieveRequest,
+				Provider:    providerName,
+				Latency:     latency.Milliseconds(),
+			},
+		}, nil
 	}
 
-	return &schemas.BifrostFileRetrieveResponse{
-		ID:             request.FileID,
-		Object:         "file",
-		Bytes:          resp.ContentLength,
-		CreatedAt:      createdAt,
-		Filename:       filename,
-		Purpose:        schemas.FilePurposeBatch,
-		Status:         schemas.FileStatusProcessed,
-		StorageBackend: schemas.FileStorageS3,
-		StorageURI:     request.FileID,
-		ExtraFields: schemas.BifrostResponseExtraFields{
-			RequestType: schemas.FileRetrieveRequest,
-			Provider:    providerName,
-			Latency:     latency.Milliseconds(),
-		},
-	}, nil
+	return nil, lastErr
 }
 
-// FileDelete deletes an S3 object used for Bedrock batch processing.
-func (provider *BedrockProvider) FileDelete(ctx context.Context, key schemas.Key, request *schemas.BifrostFileDeleteRequest) (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError) {
+// FileDelete deletes an S3 object used for Bedrock batch processing by trying each key until successful.
+func (provider *BedrockProvider) FileDelete(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileDeleteRequest) (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.FileDeleteRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
 
-	if key.BedrockKeyConfig == nil {
-		return nil, providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
-	}
-
 	if request.FileID == "" {
 		return nil, providerUtils.NewBifrostOperationError("file_id (S3 URI) is required", nil, providerName)
 	}
@@ -1677,74 +1713,86 @@ func (provider *BedrockProvider) FileDelete(ctx context.Context, key schemas.Key
 		return nil, providerUtils.NewBifrostOperationError("invalid S3 URI format, expected s3://bucket/key", nil, providerName)
 	}
 
-	region := DefaultBedrockRegion
-	if key.BedrockKeyConfig.Region != nil {
-		region = *key.BedrockKeyConfig.Region
-	}
-
-	// Build S3 DELETE request
-	// Escape each path segment individually to handle special characters while preserving "/"
-	reqURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, escapeS3KeyForURL(s3Key))
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
-	if err != nil {
-		return nil, providerUtils.NewBifrostOperationError("error creating request", err, providerName)
-	}
-
-	// Sign request for S3
-	if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "s3", providerName); err != nil {
-		return nil, err
-	}
-
-	// Execute request
-	startTime := time.Now()
-	resp, err := provider.client.Do(httpReq)
-	latency := time.Since(startTime)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: &schemas.ErrorField{
-					Type:    schemas.Ptr(schemas.RequestCancelled),
-					Message: schemas.ErrRequestCancelled,
-					Error:   err,
-				},
-			}
+	var lastErr *schemas.BifrostError
+	for _, key := range keys {
+		if key.BedrockKeyConfig == nil {
+			lastErr = providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
+			continue
 		}
-		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
-	}
-	defer resp.Body.Close()
 
-	// S3 DELETE returns 204 No Content on success
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, providerUtils.NewProviderAPIError(fmt.Sprintf("S3 DELETE failed: %s", string(body)), nil, resp.StatusCode, providerName, nil, nil)
+		region := DefaultBedrockRegion
+		if key.BedrockKeyConfig.Region != nil {
+			region = *key.BedrockKeyConfig.Region
+		}
+
+		// Build S3 DELETE request
+		// Escape each path segment individually to handle special characters while preserving "/"
+		reqURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, escapeS3KeyForURL(s3Key))
+
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
+		if err != nil {
+			lastErr = providerUtils.NewBifrostOperationError("error creating request", err, providerName)
+			continue
+		}
+
+		// Sign request for S3
+		if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "s3", providerName); err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Execute request
+		startTime := time.Now()
+		resp, err := provider.client.Do(httpReq)
+		latency := time.Since(startTime)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil, &schemas.BifrostError{
+					IsBifrostError: false,
+					Error: &schemas.ErrorField{
+						Type:    schemas.Ptr(schemas.RequestCancelled),
+						Message: schemas.ErrRequestCancelled,
+						Error:   err,
+					},
+				}
+			}
+			lastErr = providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
+			continue
+		}
+
+		// S3 DELETE returns 204 No Content on success
+		if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			lastErr = providerUtils.NewProviderAPIError(fmt.Sprintf("S3 DELETE failed: %s", string(body)), nil, resp.StatusCode, providerName, nil, nil)
+			continue
+		}
+
+		resp.Body.Close()
+
+		return &schemas.BifrostFileDeleteResponse{
+			ID:      request.FileID,
+			Object:  "file",
+			Deleted: true,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType: schemas.FileDeleteRequest,
+				Provider:    providerName,
+				Latency:     latency.Milliseconds(),
+			},
+		}, nil
 	}
 
-	return &schemas.BifrostFileDeleteResponse{
-		ID:      request.FileID,
-		Object:  "file",
-		Deleted: true,
-		ExtraFields: schemas.BifrostResponseExtraFields{
-			RequestType: schemas.FileDeleteRequest,
-			Provider:    providerName,
-			Latency:     latency.Milliseconds(),
-		},
-	}, nil
+	return nil, lastErr
 }
 
-// FileContent downloads S3 object content for Bedrock batch processing.
-func (provider *BedrockProvider) FileContent(ctx context.Context, key schemas.Key, request *schemas.BifrostFileContentRequest) (*schemas.BifrostFileContentResponse, *schemas.BifrostError) {
+// FileContent downloads S3 object content for Bedrock batch processing by trying each key until found.
+func (provider *BedrockProvider) FileContent(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileContentRequest) (*schemas.BifrostFileContentResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.FileContentRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
 
-	if key.BedrockKeyConfig == nil {
-		return nil, providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
-	}
-
 	if request.FileID == "" {
 		return nil, providerUtils.NewBifrostOperationError("file_id (S3 URI) is required", nil, providerName)
 	}
@@ -1755,69 +1803,85 @@ func (provider *BedrockProvider) FileContent(ctx context.Context, key schemas.Ke
 		return nil, providerUtils.NewBifrostOperationError("invalid S3 URI format, expected s3://bucket/key", nil, providerName)
 	}
 
-	region := DefaultBedrockRegion
-	if key.BedrockKeyConfig.Region != nil {
-		region = *key.BedrockKeyConfig.Region
-	}
-
-	// Build S3 GET request
-	// Escape each path segment individually to handle special characters while preserving "/"
-	reqURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, escapeS3KeyForURL(s3Key))
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-	if err != nil {
-		return nil, providerUtils.NewBifrostOperationError("error creating request", err, providerName)
-	}
-
-	// Sign request for S3
-	if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "s3", providerName); err != nil {
-		return nil, err
-	}
-
-	// Execute request
-	startTime := time.Now()
-	resp, err := provider.client.Do(httpReq)
-	latency := time.Since(startTime)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: &schemas.ErrorField{
-					Type:    schemas.Ptr(schemas.RequestCancelled),
-					Message: schemas.ErrRequestCancelled,
-					Error:   err,
-				},
-			}
+	var lastErr *schemas.BifrostError
+	for _, key := range keys {
+		if key.BedrockKeyConfig == nil {
+			lastErr = providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
+			continue
 		}
-		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
-	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, providerUtils.NewProviderAPIError(fmt.Sprintf("S3 GET failed: %s", string(body)), nil, resp.StatusCode, providerName, nil, nil)
+		region := DefaultBedrockRegion
+		if key.BedrockKeyConfig.Region != nil {
+			region = *key.BedrockKeyConfig.Region
+		}
+
+		// Build S3 GET request
+		// Escape each path segment individually to handle special characters while preserving "/"
+		reqURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, escapeS3KeyForURL(s3Key))
+
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+		if err != nil {
+			lastErr = providerUtils.NewBifrostOperationError("error creating request", err, providerName)
+			continue
+		}
+
+		// Sign request for S3
+		if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "s3", providerName); err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Execute request
+		startTime := time.Now()
+		resp, err := provider.client.Do(httpReq)
+		latency := time.Since(startTime)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil, &schemas.BifrostError{
+					IsBifrostError: false,
+					Error: &schemas.ErrorField{
+						Type:    schemas.Ptr(schemas.RequestCancelled),
+						Message: schemas.ErrRequestCancelled,
+						Error:   err,
+					},
+				}
+			}
+			lastErr = providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			lastErr = providerUtils.NewProviderAPIError(fmt.Sprintf("S3 GET failed: %s", string(body)), nil, resp.StatusCode, providerName, nil, nil)
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = providerUtils.NewBifrostOperationError("error reading S3 object content", err, providerName)
+			continue
+		}
+
+		contentType := resp.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+
+		return &schemas.BifrostFileContentResponse{
+			FileID:      request.FileID,
+			Content:     body,
+			ContentType: contentType,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType: schemas.FileContentRequest,
+				Provider:    providerName,
+				Latency:     latency.Milliseconds(),
+			},
+		}, nil
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, providerUtils.NewBifrostOperationError("error reading S3 object content", err, providerName)
-	}
-
-	contentType := resp.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-
-	return &schemas.BifrostFileContentResponse{
-		FileID:      request.FileID,
-		Content:     body,
-		ContentType: contentType,
-		ExtraFields: schemas.BifrostResponseExtraFields{
-			RequestType: schemas.FileContentRequest,
-			Provider:    providerName,
-			Latency:     latency.Milliseconds(),
-		},
-	}, nil
+	return nil, lastErr
 }
 
 // BatchCreate creates a new batch inference job on AWS Bedrock.
@@ -1836,16 +1900,23 @@ func (provider *BedrockProvider) BatchCreate(ctx context.Context, key schemas.Ke
 
 	// Require RoleArn in extra params
 	roleArn := ""
+	// First we will honor the role_arn coming from the client side if present
 	if request.ExtraParams != nil {
 		if r, ok := request.ExtraParams["role_arn"].(string); ok {
 			roleArn = r
 		}
 	}
+	// If its empty then we will honor the role_arn from the key config
+	if roleArn == "" {
+		if key.BedrockKeyConfig.ARN != nil {
+			roleArn = *key.BedrockKeyConfig.ARN
+		}
+	}
+	// And if still we don't get role ARN
 	if roleArn == "" {
 		provider.logger.Error("role_arn is required for Bedrock batch API (provide in extra_params)")
 		return nil, providerUtils.NewBifrostOperationError("role_arn is required for Bedrock batch API (provide in extra_params)", nil, providerName)
 	}
-
 	// Get output S3 URI from extra params
 	outputS3Uri := ""
 	if request.ExtraParams != nil {
@@ -1858,12 +1929,21 @@ func (provider *BedrockProvider) BatchCreate(ctx context.Context, key schemas.Ke
 		return nil, providerUtils.NewBifrostOperationError("output_s3_uri is required for Bedrock batch API (provide in extra_params)", nil, providerName)
 	}
 
+	if request.Model == nil {
+		provider.logger.Error("model is required for Bedrock batch API")
+		return nil, providerUtils.NewBifrostOperationError("model is required for Bedrock batch API", nil, providerName)
+	}
+
 	// Get model ID
-	modelID := request.Model
-	if key.BedrockKeyConfig.Deployments != nil {
-		if deployment, ok := key.BedrockKeyConfig.Deployments[request.Model]; ok {
-			modelID = deployment
+
+	var modelID *string
+	if key.BedrockKeyConfig.Deployments != nil && request.Model != nil {
+		if deployment, ok := key.BedrockKeyConfig.Deployments[*request.Model]; ok {
+			modelID = schemas.Ptr(deployment)
 		}
+	}
+	if modelID == nil {
+		modelID = request.Model
 	}
 
 	// Generate job name
@@ -2009,7 +2089,7 @@ func (provider *BedrockProvider) BatchCreate(ctx context.Context, key schemas.Ke
 
 	// AWS CreateModelInvocationJob only returns jobArn, not status or other details.
 	// Retrieve the job to get full status details.
-	retrieveResp, bifrostErr := provider.BatchRetrieve(ctx, key, &schemas.BifrostBatchRetrieveRequest{
+	retrieveResp, bifrostErr := provider.BatchRetrieve(ctx, []schemas.Key{key}, &schemas.BifrostBatchRetrieveRequest{
 		Provider: request.Provider,
 		BatchID:  bedrockResp.JobArn,
 	})
@@ -2049,13 +2129,35 @@ func (provider *BedrockProvider) BatchCreate(ctx context.Context, key schemas.Ke
 	return result, nil
 }
 
-// BatchList lists batch inference jobs from AWS Bedrock.
-func (provider *BedrockProvider) BatchList(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+// BatchList lists batch inference jobs using serial pagination across keys.
+// Exhausts all pages from one key before moving to the next.
+func (provider *BedrockProvider) BatchList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.BatchListRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
+
+	// Initialize serial pagination helper (Bedrock uses PageToken for pagination)
+	helper, err := providerUtils.NewSerialListHelper(keys, request.PageToken, provider.logger)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid pagination cursor", err, providerName)
+	}
+
+	// Get current key to query
+	key, nativeCursor, ok := helper.GetCurrentKey()
+	if !ok {
+		// All keys exhausted
+		return &schemas.BifrostBatchListResponse{
+			Object:  "list",
+			Data:    []schemas.BifrostBatchRetrieveResponse{},
+			HasMore: false,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType: schemas.BatchListRequest,
+				Provider:    providerName,
+			},
+		}, nil
+	}
 
 	if key.BedrockKeyConfig == nil {
 		return nil, providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
@@ -2071,8 +2173,9 @@ func (provider *BedrockProvider) BatchList(ctx context.Context, key schemas.Key,
 	if request.Limit > 0 {
 		params.Set("maxResults", fmt.Sprintf("%d", request.Limit))
 	}
-	if request.PageToken != nil {
-		params.Set("nextToken", *request.PageToken)
+	// Use native cursor from serial helper
+	if nativeCursor != "" {
+		params.Set("nextToken", nativeCursor)
 	}
 
 	reqURL := fmt.Sprintf("https://bedrock.%s.amazonaws.com/model-invocation-jobs", region)
@@ -2086,8 +2189,8 @@ func (provider *BedrockProvider) BatchList(ctx context.Context, key schemas.Key,
 	}
 
 	// Sign request
-	if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock", providerName); err != nil {
-		return nil, err
+	if bifrostErr := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock", providerName); bifrostErr != nil {
+		return nil, bifrostErr
 	}
 
 	// Execute request
@@ -2107,9 +2210,9 @@ func (provider *BedrockProvider) BatchList(ctx context.Context, key schemas.Key,
 		}
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
 	}
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
 	if err != nil {
 		return nil, providerUtils.NewBifrostOperationError("error reading response", err, providerName)
 	}
@@ -2127,23 +2230,9 @@ func (provider *BedrockProvider) BatchList(ctx context.Context, key schemas.Key,
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
 	}
 
-	// Convert to Bifrost response
-	bifrostResp := &schemas.BifrostBatchListResponse{
-		Object:  "list",
-		Data:    make([]schemas.BifrostBatchRetrieveResponse, len(bedrockResp.InvocationJobSummaries)),
-		HasMore: bedrockResp.NextToken != nil,
-		ExtraFields: schemas.BifrostResponseExtraFields{
-			RequestType: schemas.BatchListRequest,
-			Provider:    providerName,
-			Latency:     latency.Milliseconds(),
-		},
-	}
-
-	if bedrockResp.NextToken != nil {
-		bifrostResp.LastID = bedrockResp.NextToken
-	}
-
-	for i, job := range bedrockResp.InvocationJobSummaries {
+	// Convert batches to Bifrost format
+	batches := make([]schemas.BifrostBatchRetrieveResponse, 0, len(bedrockResp.InvocationJobSummaries))
+	for _, job := range bedrockResp.InvocationJobSummaries {
 		var createdAt int64
 		if job.SubmitTime != nil {
 			createdAt = job.SubmitTime.Unix()
@@ -2158,13 +2247,38 @@ func (provider *BedrockProvider) BatchList(ctx context.Context, key schemas.Key,
 			metadata["model_id"] = job.ModelID
 		}
 
-		bifrostResp.Data[i] = schemas.BifrostBatchRetrieveResponse{
+		batches = append(batches, schemas.BifrostBatchRetrieveResponse{
 			ID:        job.JobArn,
 			Object:    "batch",
 			Status:    ToBifrostBatchStatus(job.Status),
 			CreatedAt: createdAt,
 			Metadata:  metadata,
-		}
+		})
+	}
+
+	// Build cursor for next request
+	// Bedrock uses NextToken for pagination
+	nativeNextToken := ""
+	apiHasMore := false
+	if bedrockResp.NextToken != nil && *bedrockResp.NextToken != "" {
+		nativeNextToken = *bedrockResp.NextToken
+		apiHasMore = true
+	}
+	nextCursor, hasMore := helper.BuildNextCursor(apiHasMore, nativeNextToken)
+
+	// Convert to Bifrost response
+	bifrostResp := &schemas.BifrostBatchListResponse{
+		Object:  "list",
+		Data:    batches,
+		HasMore: hasMore,
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			RequestType: schemas.BatchListRequest,
+			Provider:    providerName,
+			Latency:     latency.Milliseconds(),
+		},
+	}
+	if nextCursor != "" {
+		bifrostResp.NextCursor = &nextCursor
 	}
 
 	return bifrostResp, nil
@@ -2232,254 +2346,279 @@ func (provider *BedrockProvider) fetchBatchManifest(ctx context.Context, key sch
 	return &manifest
 }
 
-// BatchRetrieve retrieves a specific batch inference job from AWS Bedrock.
-func (provider *BedrockProvider) BatchRetrieve(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchRetrieveRequest) (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError) {
+// BatchRetrieve retrieves a specific batch inference job from AWS Bedrock by trying each key until found.
+func (provider *BedrockProvider) BatchRetrieve(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchRetrieveRequest) (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.BatchRetrieveRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
 
-	if key.BedrockKeyConfig == nil {
-		return nil, providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
-	}
-
 	if request.BatchID == "" {
 		return nil, providerUtils.NewBifrostOperationError("batch_id (job ARN) is required", nil, providerName)
 	}
 
-	region := DefaultBedrockRegion
-	if key.BedrockKeyConfig.Region != nil {
-		region = *key.BedrockKeyConfig.Region
-	}
+	var lastErr *schemas.BifrostError
+	for _, key := range keys {
+		if key.BedrockKeyConfig == nil {
+			lastErr = providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
+			continue
+		}
 
-	// URL encode the job ARN
-	encodedJobArn := url.PathEscape(request.BatchID)
-	reqURL := fmt.Sprintf("https://bedrock.%s.amazonaws.com/model-invocation-job/%s", region, encodedJobArn)
+		region := DefaultBedrockRegion
+		if key.BedrockKeyConfig.Region != nil {
+			region = *key.BedrockKeyConfig.Region
+		}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-	if err != nil {
-		return nil, providerUtils.NewBifrostOperationError("error creating request", err, providerName)
-	}
+		// URL encode the job ARN
+		encodedJobArn := url.PathEscape(request.BatchID)
+		reqURL := fmt.Sprintf("https://bedrock.%s.amazonaws.com/model-invocation-job/%s", region, encodedJobArn)
 
-	// Sign request
-	if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock", providerName); err != nil {
-		return nil, err
-	}
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+		if err != nil {
+			lastErr = providerUtils.NewBifrostOperationError("error creating request", err, providerName)
+			continue
+		}
 
-	// Execute request
-	startTime := time.Now()
-	resp, err := provider.client.Do(httpReq)
-	latency := time.Since(startTime)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: &schemas.ErrorField{
-					Type:    schemas.Ptr(schemas.RequestCancelled),
-					Message: schemas.ErrRequestCancelled,
-					Error:   err,
-				},
+		// Sign request
+		if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock", providerName); err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Execute request
+		startTime := time.Now()
+		resp, err := provider.client.Do(httpReq)
+		latency := time.Since(startTime)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil, &schemas.BifrostError{
+					IsBifrostError: false,
+					Error: &schemas.ErrorField{
+						Type:    schemas.Ptr(schemas.RequestCancelled),
+						Message: schemas.ErrRequestCancelled,
+						Error:   err,
+					},
+				}
+			}
+			lastErr = providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = providerUtils.NewBifrostOperationError("error reading response", err, providerName)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			var errorResp BedrockError
+			if err := sonic.Unmarshal(body, &errorResp); err == nil && errorResp.Message != "" {
+				lastErr = providerUtils.NewProviderAPIError(errorResp.Message, nil, resp.StatusCode, providerName, nil, nil)
+			} else {
+				lastErr = providerUtils.NewProviderAPIError(string(body), nil, resp.StatusCode, providerName, nil, nil)
+			}
+			continue
+		}
+
+		var bedrockResp BedrockBatchJobResponse
+		if err := sonic.Unmarshal(body, &bedrockResp); err != nil {
+			lastErr = providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
+			continue
+		}
+
+		// Store Bedrock-specific fields in Metadata for later conversion back to Bedrock format
+		metadata := make(map[string]string)
+		if bedrockResp.JobName != "" {
+			metadata["job_name"] = bedrockResp.JobName
+		}
+		if bedrockResp.ModelID != "" {
+			metadata["model_id"] = bedrockResp.ModelID
+		}
+
+		result := &schemas.BifrostBatchRetrieveResponse{
+			ID:       bedrockResp.JobArn,
+			Object:   "batch",
+			Status:   ToBifrostBatchStatus(bedrockResp.Status),
+			Metadata: metadata,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType: schemas.BatchRetrieveRequest,
+				Provider:    providerName,
+				Latency:     latency.Milliseconds(),
+			},
+		}
+
+		if bedrockResp.InputDataConfig != nil {
+			result.InputFileID = bedrockResp.InputDataConfig.S3InputDataConfig.S3Uri
+		}
+
+		if bedrockResp.OutputDataConfig != nil {
+			outputURI := bedrockResp.OutputDataConfig.S3OutputDataConfig.S3Uri
+			result.OutputFileID = &outputURI
+			// Fetch manifest to get record counts (only available after job starts processing)
+			manifest := provider.fetchBatchManifest(ctx, key, region, outputURI)
+			if manifest != nil {
+				result.RequestCounts = schemas.BatchRequestCounts{
+					Total:     manifest.TotalRecordCount,
+					Completed: manifest.ProcessedRecordCount - manifest.ErrorRecordCount,
+					Failed:    manifest.ErrorRecordCount,
+				}
 			}
 		}
-		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
-	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, providerUtils.NewBifrostOperationError("error reading response", err, providerName)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errorResp BedrockError
-		if err := sonic.Unmarshal(body, &errorResp); err == nil && errorResp.Message != "" {
-			return nil, providerUtils.NewProviderAPIError(errorResp.Message, nil, resp.StatusCode, providerName, nil, nil)
-		}
-		return nil, providerUtils.NewProviderAPIError(string(body), nil, resp.StatusCode, providerName, nil, nil)
-	}
-
-	var bedrockResp BedrockBatchJobResponse
-	if err := sonic.Unmarshal(body, &bedrockResp); err != nil {
-		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
-	}
-
-	// Store Bedrock-specific fields in Metadata for later conversion back to Bedrock format
-	metadata := make(map[string]string)
-	if bedrockResp.JobName != "" {
-		metadata["job_name"] = bedrockResp.JobName
-	}
-	if bedrockResp.ModelID != "" {
-		metadata["model_id"] = bedrockResp.ModelID
-	}
-
-	result := &schemas.BifrostBatchRetrieveResponse{
-		ID:       bedrockResp.JobArn,
-		Object:   "batch",
-		Status:   ToBifrostBatchStatus(bedrockResp.Status),
-		Metadata: metadata,
-		ExtraFields: schemas.BifrostResponseExtraFields{
-			RequestType: schemas.BatchRetrieveRequest,
-			Provider:    providerName,
-			Latency:     latency.Milliseconds(),
-		},
-	}
-
-	if bedrockResp.InputDataConfig != nil {
-		result.InputFileID = bedrockResp.InputDataConfig.S3InputDataConfig.S3Uri
-	}
-
-	if bedrockResp.OutputDataConfig != nil {
-		outputURI := bedrockResp.OutputDataConfig.S3OutputDataConfig.S3Uri
-		result.OutputFileID = &outputURI
-		// Fetch manifest to get record counts (only available after job starts processing)
-		manifest := provider.fetchBatchManifest(ctx, key, region, outputURI)
-		if manifest != nil {
-			result.RequestCounts = schemas.BatchRequestCounts{
-				Total:     manifest.TotalRecordCount,
-				Completed: manifest.ProcessedRecordCount - manifest.ErrorRecordCount,
-				Failed:    manifest.ErrorRecordCount,
+		// Capture VPC config in metadata if present
+		if bedrockResp.VpcConfig != nil {
+			if len(bedrockResp.VpcConfig.SecurityGroupIds) > 0 {
+				metadata["vpc_security_group_ids"] = strings.Join(bedrockResp.VpcConfig.SecurityGroupIds, ",")
+			}
+			if len(bedrockResp.VpcConfig.SubnetIds) > 0 {
+				metadata["vpc_subnet_ids"] = strings.Join(bedrockResp.VpcConfig.SubnetIds, ",")
 			}
 		}
-	}
 
-	// Capture VPC config in metadata if present
-	if bedrockResp.VpcConfig != nil {
-		if len(bedrockResp.VpcConfig.SecurityGroupIds) > 0 {
-			metadata["vpc_security_group_ids"] = strings.Join(bedrockResp.VpcConfig.SecurityGroupIds, ",")
+		if bedrockResp.SubmitTime != nil {
+			result.CreatedAt = bedrockResp.SubmitTime.Unix()
 		}
-		if len(bedrockResp.VpcConfig.SubnetIds) > 0 {
-			metadata["vpc_subnet_ids"] = strings.Join(bedrockResp.VpcConfig.SubnetIds, ",")
+		if bedrockResp.EndTime != nil {
+			completedAt := bedrockResp.EndTime.Unix()
+			result.CompletedAt = &completedAt
 		}
+		if bedrockResp.JobExpirationTime != nil {
+			expiresAt := bedrockResp.JobExpirationTime.Unix()
+			result.ExpiresAt = &expiresAt
+		}
+
+		return result, nil
 	}
 
-	if bedrockResp.SubmitTime != nil {
-		result.CreatedAt = bedrockResp.SubmitTime.Unix()
-	}
-	if bedrockResp.EndTime != nil {
-		completedAt := bedrockResp.EndTime.Unix()
-		result.CompletedAt = &completedAt
-	}
-	if bedrockResp.JobExpirationTime != nil {
-		expiresAt := bedrockResp.JobExpirationTime.Unix()
-		result.ExpiresAt = &expiresAt
-	}
-
-	return result, nil
+	return nil, lastErr
 }
 
-// BatchCancel stops a batch inference job on AWS Bedrock.
-func (provider *BedrockProvider) BatchCancel(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchCancelRequest) (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError) {
+// BatchCancel stops a batch inference job on AWS Bedrock by trying each key until successful.
+func (provider *BedrockProvider) BatchCancel(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchCancelRequest) (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.BatchCancelRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
 
-	if key.BedrockKeyConfig == nil {
-		return nil, providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
-	}
-
 	if request.BatchID == "" {
 		return nil, providerUtils.NewBifrostOperationError("batch_id (job ARN) is required", nil, providerName)
 	}
 
-	region := DefaultBedrockRegion
-	if key.BedrockKeyConfig.Region != nil {
-		region = *key.BedrockKeyConfig.Region
-	}
+	var lastErr *schemas.BifrostError
+	for _, key := range keys {
+		if key.BedrockKeyConfig == nil {
+			lastErr = providerUtils.NewConfigurationError("bedrock key config is not provided", providerName)
+			continue
+		}
 
-	// URL encode the job ARN
-	encodedJobArn := url.PathEscape(request.BatchID)
-	reqURL := fmt.Sprintf("https://bedrock.%s.amazonaws.com/model-invocation-job/%s/stop", region, encodedJobArn)
+		region := DefaultBedrockRegion
+		if key.BedrockKeyConfig.Region != nil {
+			region = *key.BedrockKeyConfig.Region
+		}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, nil)
-	if err != nil {
-		return nil, providerUtils.NewBifrostOperationError("error creating request", err, providerName)
-	}
+		// URL encode the job ARN
+		encodedJobArn := url.PathEscape(request.BatchID)
+		reqURL := fmt.Sprintf("https://bedrock.%s.amazonaws.com/model-invocation-job/%s/stop", region, encodedJobArn)
 
-	// Sign request
-	if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock", providerName); err != nil {
-		return nil, err
-	}
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, nil)
+		if err != nil {
+			lastErr = providerUtils.NewBifrostOperationError("error creating request", err, providerName)
+			continue
+		}
 
-	// Execute request
-	startTime := time.Now()
-	resp, err := provider.client.Do(httpReq)
-	latency := time.Since(startTime)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil, &schemas.BifrostError{
-				IsBifrostError: false,
-				Error: &schemas.ErrorField{
-					Type:    schemas.Ptr(schemas.RequestCancelled),
-					Message: schemas.ErrRequestCancelled,
-					Error:   err,
-				},
+		// Sign request
+		if err := signAWSRequest(ctx, httpReq, key.BedrockKeyConfig.AccessKey, key.BedrockKeyConfig.SecretKey, key.BedrockKeyConfig.SessionToken, region, "bedrock", providerName); err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Execute request
+		startTime := time.Now()
+		resp, err := provider.client.Do(httpReq)
+		latency := time.Since(startTime)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil, &schemas.BifrostError{
+					IsBifrostError: false,
+					Error: &schemas.ErrorField{
+						Type:    schemas.Ptr(schemas.RequestCancelled),
+						Message: schemas.ErrRequestCancelled,
+						Error:   err,
+					},
+				}
 			}
+			lastErr = providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
+			continue
 		}
-		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
-	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, providerUtils.NewBifrostOperationError("error reading response", err, providerName)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errorResp BedrockError
-		if err := sonic.Unmarshal(body, &errorResp); err == nil && errorResp.Message != "" {
-			return nil, providerUtils.NewProviderAPIError(errorResp.Message, nil, resp.StatusCode, providerName, nil, nil)
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = providerUtils.NewBifrostOperationError("error reading response", err, providerName)
+			continue
 		}
-		return nil, providerUtils.NewProviderAPIError(string(body), nil, resp.StatusCode, providerName, nil, nil)
-	}
 
-	// After stopping, retrieve the job to get updated status
-	retrieveResp, bifrostErr := provider.BatchRetrieve(ctx, key, &schemas.BifrostBatchRetrieveRequest{
-		Provider: request.Provider,
-		BatchID:  request.BatchID,
-	})
-	if bifrostErr != nil {
-		// Return basic response if retrieve fails
-		// Compute total latency including stop + failed retrieve
-		totalLatency := time.Since(startTime)
+		if resp.StatusCode != http.StatusOK {
+			var errorResp BedrockError
+			if err := sonic.Unmarshal(body, &errorResp); err == nil && errorResp.Message != "" {
+				lastErr = providerUtils.NewProviderAPIError(errorResp.Message, nil, resp.StatusCode, providerName, nil, nil)
+			} else {
+				lastErr = providerUtils.NewProviderAPIError(string(body), nil, resp.StatusCode, providerName, nil, nil)
+			}
+			continue
+		}
+
+		// After stopping, retrieve the job to get updated status
+		retrieveResp, bifrostErr := provider.BatchRetrieve(ctx, keys, &schemas.BifrostBatchRetrieveRequest{
+			Provider: request.Provider,
+			BatchID:  request.BatchID,
+		})
+		if bifrostErr != nil {
+			// Return basic response if retrieve fails
+			// Compute total latency including stop + failed retrieve
+			totalLatency := time.Since(startTime)
+			return &schemas.BifrostBatchCancelResponse{
+				ID:     request.BatchID,
+				Object: "batch",
+				Status: schemas.BatchStatusCancelling,
+				ExtraFields: schemas.BifrostResponseExtraFields{
+					RequestType: schemas.BatchCancelRequest,
+					Provider:    providerName,
+					Latency:     totalLatency.Milliseconds(),
+				},
+			}, nil
+		}
+
 		return &schemas.BifrostBatchCancelResponse{
-			ID:     request.BatchID,
+			ID:     retrieveResp.ID,
 			Object: "batch",
-			Status: schemas.BatchStatusCancelling,
+			Status: retrieveResp.Status,
 			ExtraFields: schemas.BifrostResponseExtraFields{
 				RequestType: schemas.BatchCancelRequest,
 				Provider:    providerName,
-				Latency:     totalLatency.Milliseconds(),
+				Latency:     latency.Milliseconds(),
 			},
 		}, nil
 	}
 
-	return &schemas.BifrostBatchCancelResponse{
-		ID:     retrieveResp.ID,
-		Object: "batch",
-		Status: retrieveResp.Status,
-		ExtraFields: schemas.BifrostResponseExtraFields{
-			RequestType: schemas.BatchCancelRequest,
-			Provider:    providerName,
-			Latency:     latency.Milliseconds(),
-		},
-	}, nil
+	return nil, lastErr
 }
 
-// BatchResults retrieves batch results from AWS Bedrock.
+// BatchResults retrieves batch results from AWS Bedrock by trying each key until successful.
 // For Bedrock, results are stored in S3 at the output S3 URI prefix.
 // The output includes JSONL files with results (*.jsonl.out) and a manifest file.
-func (provider *BedrockProvider) BatchResults(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchResultsRequest) (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
+func (provider *BedrockProvider) BatchResults(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchResultsRequest) (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Bedrock, provider.customProviderConfig, schemas.BatchResultsRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
 
-	// First, retrieve the batch to get the output S3 URI prefix
-	batchResp, bifrostErr := provider.BatchRetrieve(ctx, key, &schemas.BifrostBatchRetrieveRequest{
+	// First, retrieve the batch to get the output S3 URI prefix (using all keys)
+	batchResp, bifrostErr := provider.BatchRetrieve(ctx, keys, &schemas.BifrostBatchRetrieveRequest{
 		Provider: request.Provider,
 		BatchID:  request.BatchID,
 	})
@@ -2501,7 +2640,7 @@ func (provider *BedrockProvider) BatchResults(ctx context.Context, key schemas.K
 		allFiles  []schemas.FileObject
 	)
 	for {
-		listResp, bifrostErr = provider.FileList(ctx, key, &schemas.BifrostFileListRequest{
+		listResp, bifrostErr = provider.FileList(ctx, keys, &schemas.BifrostFileListRequest{
 			Provider: request.Provider,
 			StorageConfig: &schemas.FileStorageConfig{
 				S3: &schemas.S3StorageConfig{
@@ -2523,7 +2662,7 @@ func (provider *BedrockProvider) BatchResults(ctx context.Context, key schemas.K
 	}
 	if bifrostErr != nil {
 		// If listing fails, try direct download (in case outputS3URI is already a file path)
-		fileContentResp, directErr := provider.FileContent(ctx, key, &schemas.BifrostFileContentRequest{
+		fileContentResp, directErr := provider.FileContent(ctx, keys, &schemas.BifrostFileContentRequest{
 			Provider: request.Provider,
 			FileID:   outputS3URI,
 		})
@@ -2554,7 +2693,7 @@ func (provider *BedrockProvider) BatchResults(ctx context.Context, key schemas.K
 	for _, file := range allFiles {
 		// Skip manifest files, only process JSONL output files
 		if strings.HasSuffix(file.ID, ".jsonl.out") || strings.HasSuffix(file.ID, ".jsonl") {
-			fileContentResp, fileErr := provider.FileContent(ctx, key, &schemas.BifrostFileContentRequest{
+			fileContentResp, fileErr := provider.FileContent(ctx, keys, &schemas.BifrostFileContentRequest{
 				Provider: request.Provider,
 				FileID:   file.ID,
 			})

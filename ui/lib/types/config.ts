@@ -49,6 +49,16 @@ export const DefaultVertexKeyConfig: VertexKeyConfig = {
 	deployments: {},
 } as const satisfies Required<VertexKeyConfig>;
 
+export interface S3BucketConfig {
+	bucket_name: string;
+	prefix?: string;
+	is_default?: boolean;
+}
+
+export interface BatchS3Config {
+	buckets?: S3BucketConfig[];
+}
+
 // BedrockKeyConfig matching Go's schemas.BedrockKeyConfig
 export interface BedrockKeyConfig {
 	access_key?: string;
@@ -57,6 +67,7 @@ export interface BedrockKeyConfig {
 	region: string;
 	arn?: string;
 	deployments?: Record<string, string> | string; // Allow string during editing
+	batch_s3_config?: BatchS3Config;
 }
 
 // Default BedrockKeyConfig
@@ -67,6 +78,7 @@ export const DefaultBedrockKeyConfig: BedrockKeyConfig = {
 	region: "us-east-1",
 	arn: undefined as unknown as string,
 	deployments: {},
+	batch_s3_config: undefined as unknown as BatchS3Config,
 } as const satisfies Required<BedrockKeyConfig>;
 
 // Key structure matching Go's schemas.Key
@@ -77,6 +89,7 @@ export interface ModelProviderKey {
 	models?: string[];
 	weight: number;
 	enabled?: boolean;
+	use_for_batch_api?: boolean;
 	azure_key_config?: AzureKeyConfig;
 	vertex_key_config?: VertexKeyConfig;
 	bedrock_key_config?: BedrockKeyConfig;
@@ -250,7 +263,7 @@ export interface AuthConfig {
 }
 
 // Global proxy type (for global proxy configuration, not per-provider)
-export type GlobalProxyType = 'http' | 'socks5' | 'tcp'
+export type GlobalProxyType = "http" | "socks5" | "tcp";
 
 // Global proxy configuration matching Go's tables.GlobalProxyConfig
 export interface GlobalProxyConfig {
@@ -270,17 +283,17 @@ export interface GlobalProxyConfig {
 // Default GlobalProxyConfig
 export const DefaultGlobalProxyConfig: GlobalProxyConfig = {
 	enabled: false,
-	type: 'http',
-	url: '',
-	username: '',
-	password: '',
-	no_proxy: '',
+	type: "http",
+	url: "",
+	username: "",
+	password: "",
+	no_proxy: "",
 	timeout: 30,
 	skip_tls_verify: false,
 	enable_for_scim: false,
 	enable_for_inference: false,
 	enable_for_api: false,
-}
+};
 
 // Bifrost Config
 export interface BifrostConfig {

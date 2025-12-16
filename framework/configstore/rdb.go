@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
@@ -245,6 +246,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 				Models:           key.Models,
 				Weight:           key.Weight,
 				Enabled:          key.Enabled,
+				UseForBatchAPI:   key.UseForBatchAPI,
 				AzureKeyConfig:   key.AzureKeyConfig,
 				VertexKeyConfig:  key.VertexKeyConfig,
 				BedrockKeyConfig: key.BedrockKeyConfig,
@@ -272,6 +274,16 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 				dbKey.BedrockSessionToken = key.BedrockKeyConfig.SessionToken
 				dbKey.BedrockRegion = key.BedrockKeyConfig.Region
 				dbKey.BedrockARN = key.BedrockKeyConfig.ARN
+				if key.BedrockKeyConfig.BatchS3Config != nil {
+					data, err := sonic.Marshal(key.BedrockKeyConfig.BatchS3Config)
+					if err != nil {
+						return err
+					}
+					s := string(data)
+					dbKey.BedrockBatchS3ConfigJSON = &s
+				}
+			} else {
+				dbKey.BedrockBatchS3ConfigJSON = nil
 			}
 
 			dbKeys = append(dbKeys, dbKey)
@@ -372,6 +384,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 			Models:           key.Models,
 			Weight:           key.Weight,
 			Enabled:          key.Enabled,
+			UseForBatchAPI:   key.UseForBatchAPI,
 			AzureKeyConfig:   key.AzureKeyConfig,
 			VertexKeyConfig:  key.VertexKeyConfig,
 			BedrockKeyConfig: key.BedrockKeyConfig,
@@ -399,6 +412,16 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 			dbKey.BedrockSessionToken = key.BedrockKeyConfig.SessionToken
 			dbKey.BedrockRegion = key.BedrockKeyConfig.Region
 			dbKey.BedrockARN = key.BedrockKeyConfig.ARN
+			if key.BedrockKeyConfig.BatchS3Config != nil {
+				data, err := sonic.Marshal(key.BedrockKeyConfig.BatchS3Config)
+				if err != nil {
+					return err
+				}
+				s := string(data)
+				dbKey.BedrockBatchS3ConfigJSON = &s
+			} else {
+				dbKey.BedrockBatchS3ConfigJSON = nil
+			}
 		}
 
 		// Check if this key already exists
@@ -480,6 +503,8 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 			Value:            key.Value,
 			Models:           key.Models,
 			Weight:           key.Weight,
+			Enabled:          key.Enabled,
+			UseForBatchAPI:   key.UseForBatchAPI,
 			AzureKeyConfig:   key.AzureKeyConfig,
 			VertexKeyConfig:  key.VertexKeyConfig,
 			BedrockKeyConfig: key.BedrockKeyConfig,
@@ -507,6 +532,16 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 			dbKey.BedrockSessionToken = key.BedrockKeyConfig.SessionToken
 			dbKey.BedrockRegion = key.BedrockKeyConfig.Region
 			dbKey.BedrockARN = key.BedrockKeyConfig.ARN
+			if key.BedrockKeyConfig.BatchS3Config != nil {
+				data, err := sonic.Marshal(key.BedrockKeyConfig.BatchS3Config)
+				if err != nil {
+					return err
+				}
+				s := string(data)
+				dbKey.BedrockBatchS3ConfigJSON = &s
+			} else {
+				dbKey.BedrockBatchS3ConfigJSON = nil
+			}
 		}
 
 		// Create the key
@@ -630,7 +665,7 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 					if processedARN, err := envutils.ProcessEnvValue(*bedrockConfig.ARN); err == nil {
 						bedrockConfigCopy.ARN = &processedARN
 					}
-				}
+				}				
 				bedrockConfig = &bedrockConfigCopy
 			}
 
@@ -640,6 +675,8 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 				Value:            processedValue,
 				Models:           dbKey.Models,
 				Weight:           dbKey.Weight,
+				Enabled:          dbKey.Enabled,
+				UseForBatchAPI:   dbKey.UseForBatchAPI,
 				AzureKeyConfig:   azureConfig,
 				VertexKeyConfig:  vertexConfig,
 				BedrockKeyConfig: bedrockConfig,

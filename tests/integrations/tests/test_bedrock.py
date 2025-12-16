@@ -1245,22 +1245,14 @@ class TestBedrockIntegration:
 
         if provider == "anthropic":
             pytest.skip("Batch API with files is not supported for Anthropic provider")
-
-        config = get_config()
-        integration_settings = config.get_integration_settings("bedrock")
-        s3_bucket = integration_settings.get("s3_bucket")
-        role_arn = integration_settings.get("batch_role_arn")
-
-        if not s3_bucket or not role_arn:
-            pytest.skip("S3 bucket or role ARN not configured for batch tests")
-
+                        
         # Get provider-specific clients with x-model-provider header
         s3_client = get_provider_s3_client(provider)
         bedrock_client = get_provider_bedrock_batch_client(provider)
 
         # Upload input file in provider-specific format
         jsonl_content = create_batch_jsonl_for_provider(provider, model, num_requests=2)
-
+        s3_bucket = "bifrost-batch-api-file-upload-testing"
         s3_key = f"bifrost-batch-input/batch_input_{int(time.time())}.jsonl"
         upload_response = s3_client.put_object(
             Bucket=s3_bucket,
@@ -1279,7 +1271,7 @@ class TestBedrockIntegration:
             response = bedrock_client.create_model_invocation_job(
                 jobName=f"bifrost-test-batch-{int(time.time())}",
                 modelId=model,
-                roleArn=role_arn,
+                roleArn="",
                 inputDataConfig={
                     "s3InputDataConfig": {"s3Uri": input_uri, "s3InputFormat": "JSONL"}
                 },

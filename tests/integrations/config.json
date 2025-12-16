@@ -5,7 +5,8 @@
             "keys": [
                 {
                     "value": "env.OPENAI_API_KEY",
-                    "weight": 1
+                    "weight": 1,
+                    "use_for_batch_api": true
                 }
             ],
             "network_config": {
@@ -16,7 +17,8 @@
             "keys": [
                 {
                     "value": "env.ANTHROPIC_API_KEY",
-                    "weight": 1
+                    "weight": 1,
+                    "use_for_batch_api": true
                 }
             ],
             "network_config": {
@@ -27,7 +29,8 @@
             "keys": [
                 {
                     "value": "env.GEMINI_API_KEY",
-                    "weight": 1
+                    "weight": 1,
+                    "use_for_batch_api": true
                 }
             ],
             "network_config": {
@@ -37,7 +40,7 @@
         "vertex": {
             "keys": [
                 {
-                    "vertex_key_config": {                        
+                    "vertex_key_config": {
                         "project_id": "env.GOOGLE_PROJECT_ID",
                         "region": "env.GOOGLE_LOCATION"
                     },
@@ -138,7 +141,8 @@
                         "region": "env.AWS_REGION",
                         "arn": "env.AWS_BEDROCK_ROLE_ARN"
                     },
-                    "weight": 1
+                    "weight": 1,
+                    "use_for_batch_api": true
                 }
             ],
             "network_config": {

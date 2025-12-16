@@ -66,12 +66,12 @@ type ComprehensiveTestConfig struct {
 	TranscriptionModel       string
 	SpeechSynthesisModel     string
 	Scenarios                TestScenarios
-	Fallbacks                []schemas.Fallback // for chat, responses, image and reasoning tests
-	TextCompletionFallbacks  []schemas.Fallback // for text completion tests
-	TranscriptionFallbacks   []schemas.Fallback // for transcription tests
-	SpeechSynthesisFallbacks []schemas.Fallback // for speech synthesis tests
-	EmbeddingFallbacks       []schemas.Fallback // for embedding tests
-	SkipReason               string             // Reason to skip certain tests
+	Fallbacks                []schemas.Fallback     // for chat, responses, image and reasoning tests
+	TextCompletionFallbacks  []schemas.Fallback     // for text completion tests
+	TranscriptionFallbacks   []schemas.Fallback     // for transcription tests
+	SpeechSynthesisFallbacks []schemas.Fallback     // for speech synthesis tests
+	EmbeddingFallbacks       []schemas.Fallback     // for embedding tests
+	SkipReason               string                 // Reason to skip certain tests
 	BatchExtraParams         map[string]interface{} // Extra params for batch operations (e.g., role_arn, output_s3_uri for Bedrock)
 	FileExtraParams          map[string]interface{} // Extra params for file operations (e.g., s3_bucket for Bedrock)
 }
@@ -117,25 +117,28 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 	case schemas.OpenAI:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("OPENAI_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("OPENAI_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case ProviderOpenAICustom:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("OPENAI_API_KEY"), // Use GROQ API key for OpenAI-compatible endpoint
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("OPENAI_API_KEY"), // Use GROQ API key for OpenAI-compatible endpoint
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Anthropic:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("ANTHROPIC_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("ANTHROPIC_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Bedrock:
@@ -157,6 +160,25 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 					},
 				},
 			},
+		{
+			Models: []string{},
+			Weight: 1.0,
+			BedrockKeyConfig: &schemas.BedrockKeyConfig{
+				AccessKey:    os.Getenv("AWS_ACCESS_KEY_ID"),
+				SecretKey:    os.Getenv("AWS_SECRET_ACCESS_KEY"),
+				SessionToken: bifrost.Ptr(os.Getenv("AWS_SESSION_TOKEN")),
+				Region:       bifrost.Ptr(getEnvWithDefault("AWS_REGION", "us-east-1")),
+				ARN:          bifrost.Ptr(os.Getenv("AWS_BEDROCK_ARN")),
+				Deployments: map[string]string{
+					"claude-3.5-sonnet": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+					"claude-3.7-sonnet": "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+					"claude-4-sonnet":   "global.anthropic.claude-sonnet-4-20250514-v1:0",
+					"claude-4.5-sonnet": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+					"claude-4.5-haiku":  "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+				},
+			},
+			UseForBatchAPI: bifrost.Ptr(true),
+		},
 			{
 				Models: []string{"cohere.embed-v4:0"},
 				Weight: 1.0,
@@ -171,9 +193,10 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 	case schemas.Cohere:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("COHERE_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("COHERE_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Azure:
@@ -192,6 +215,7 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 						"text-embedding-ada-002": "text-embedding-ada-002",
 					},
 				},
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Vertex:
@@ -205,78 +229,88 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context
 					Region:          getEnvWithDefault("VERTEX_REGION", "us-central1"),
 					AuthCredentials: os.Getenv("VERTEX_CREDENTIALS"),
 				},
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Mistral:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("MISTRAL_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("MISTRAL_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Groq:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("GROQ_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("GROQ_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Parasail:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("PARASAIL_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("PARASAIL_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Elevenlabs:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("ELEVENLABS_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("ELEVENLABS_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Perplexity:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("PERPLEXITY_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("PERPLEXITY_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Cerebras:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("CEREBRAS_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("CEREBRAS_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Gemini:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("GEMINI_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("GEMINI_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.OpenRouter:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("OPENROUTER_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("OPENROUTER_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	case schemas.Nebius:
 		return []schemas.Key{
 			{
-				Value:  os.Getenv("NEBIUS_API_KEY"),
-				Models: []string{},
-				Weight: 1.0,
+				Value:          os.Getenv("NEBIUS_API_KEY"),
+				Models:         []string{},
+				Weight:         1.0,
+				UseForBatchAPI: bifrost.Ptr(true),
 			},
 		}, nil
 	default:

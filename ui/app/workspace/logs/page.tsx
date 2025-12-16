@@ -13,8 +13,7 @@ import {
 	getErrorMessage,
 	useDeleteLogsMutation,
 	useLazyGetLogsQuery,
-	useLazyGetLogsStatsQuery,
-	useRecalculateLogCostsMutation,
+	useLazyGetLogsStatsQuery
 } from "@/lib/store";
 import type {
 	ChatMessage,
@@ -23,15 +22,13 @@ import type {
 	LogEntry,
 	LogFilters,
 	LogStats,
-	Pagination,
-	RecalculateCostResponse,
+	Pagination
 } from "@/lib/types/logs";
 import { dateUtils } from "@/lib/types/logs";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
-import { AlertCircle, BarChart, CheckCircle, Clock, DollarSign, Hash, Loader2 } from "lucide-react";
+import { AlertCircle, BarChart, CheckCircle, Clock, DollarSign, Hash } from "lucide-react";
 import { parseAsArrayOf, parseAsBoolean, parseAsInteger, parseAsString, useQueryStates } from "nuqs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 
 // Calculate default timestamps once at module level to prevent constant recalculation
 const DEFAULT_END_TIME = Math.floor(Date.now() / 1000);
@@ -57,12 +54,9 @@ export default function LogsPage() {
 	const [triggerGetLogs] = useLazyGetLogsQuery();
 	const [triggerGetStats] = useLazyGetLogsStatsQuery();
 	const [deleteLogs] = useDeleteLogsMutation();
-	const [recalculateCosts, { isLoading: recalculating }] = useRecalculateLogCostsMutation();
 
 	const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
-	const [recalcResult, setRecalcResult] = useState<RecalculateCostResponse | null>(null);
-	const [recalcError, setRecalcError] = useState<string | null>(null);
-
+	
 	// Debouncing for streaming updates (client-side)
 	const streamingUpdateTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -396,19 +390,6 @@ export default function LogsPage() {
 		[setUrlState, fetchLogs],
 	);
 
-	const handleRecalculateCosts = useCallback(async () => {
-		setRecalcError(null);
-		setRecalcResult(null);
-		try {
-			const response = await recalculateCosts({ filters }).unwrap();
-			setRecalcResult(response);
-			await fetchLogs();
-			await fetchStats();
-		} catch (err) {
-			setRecalcError(getErrorMessage(err));
-		}
-	}, [filters, recalculateCosts, fetchLogs, fetchStats]);
-
 	// Fetch logs when filters or pagination change
 	useEffect(() => {
 		if (!initialLoading) {
@@ -556,26 +537,6 @@ export default function LogsPage() {
 							))}
 						</div>
 
-						<div className="rounded-sm border px-4 py-3">
-							<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-								<div>
-									<p className="text-sm font-medium">Recalculate missing costs</p>
-									<p className="text-muted-foreground text-xs">Run cost calculation again for logs that have missing costs.</p>
-									{recalcResult && (
-										<p className="text-muted-foreground text-xs">
-											Updated {recalcResult.updated.toLocaleString()} logs (skipped {recalcResult.skipped.toLocaleString()}). Remaining{" "}
-											{recalcResult.remaining.toLocaleString()} entries.
-										</p>
-									)}
-									{recalcError && <p className="text-destructive text-xs">{recalcError}</p>}
-								</div>
-								<Button variant="outline" size="sm" onClick={handleRecalculateCosts} disabled={recalculating}>
-									{recalculating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-									Recalculate costs
-								</Button>
-							</div>
-						</div>
-
 						{/* Error Alert */}
 						{error && (
 							<Alert variant="destructive">
@@ -600,6 +561,8 @@ export default function LogsPage() {
 							isSocketConnected={isSocketConnected}
 							liveEnabled={liveEnabled}
 							onLiveToggle={handleLiveToggle}
+							fetchLogs={fetchLogs}
+							fetchStats={fetchStats}
 						/>
 					</div>
 
