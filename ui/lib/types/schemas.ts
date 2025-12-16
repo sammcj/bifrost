@@ -207,7 +207,7 @@ export const networkFormConfigSchema = z
 		default_request_timeout_in_seconds: z.coerce
 			.number("Timeout must be a number")
 			.min(1, "Timeout must be greater than 0 seconds")
-			.max(3600, "Timeout must be less than 3600 seconds"),
+			.max(172800, "Timeout must be less than 172800 seconds i.e. 48 hours"),
 		max_retries: z.coerce
 			.number("Max retries must be a number")
 			.min(0, "Max retries must be greater than 0")
