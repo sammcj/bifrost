@@ -8,14 +8,14 @@ require (
 	github.com/fasthttp/router v1.5.4
 	github.com/fasthttp/websocket v1.5.12
 	github.com/google/uuid v1.6.0
-	github.com/maximhq/bifrost/core v1.2.37
-	github.com/maximhq/bifrost/framework v1.1.47
-	github.com/maximhq/bifrost/plugins/governance v1.3.48
-	github.com/maximhq/bifrost/plugins/logging v1.3.48
-	github.com/maximhq/bifrost/plugins/maxim v1.4.48
-	github.com/maximhq/bifrost/plugins/otel v1.0.47
-	github.com/maximhq/bifrost/plugins/semanticcache v1.3.47
-	github.com/maximhq/bifrost/plugins/telemetry v1.3.47
+	github.com/maximhq/bifrost/core v1.2.38
+	github.com/maximhq/bifrost/framework v1.1.48
+	github.com/maximhq/bifrost/plugins/governance v1.3.49
+	github.com/maximhq/bifrost/plugins/logging v1.3.49
+	github.com/maximhq/bifrost/plugins/maxim v1.4.49
+	github.com/maximhq/bifrost/plugins/otel v1.0.48
+	github.com/maximhq/bifrost/plugins/semanticcache v1.3.48
+	github.com/maximhq/bifrost/plugins/telemetry v1.3.48
 	github.com/prometheus/client_golang v1.23.0
 	github.com/stretchr/testify v1.11.1
 	github.com/valyala/fasthttp v1.67.0
@@ -34,8 +34,12 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.16 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.16 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.16 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.16 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.16 // indirect
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.93.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.12 // indirect
@@ -90,7 +94,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-sqlite3 v1.14.32 // indirect
-	github.com/maximhq/bifrost/plugins/mocker v1.3.47 // indirect
+	github.com/maximhq/bifrost/plugins/mocker v1.3.48 // indirect
 	github.com/maximhq/maxim-go v0.1.14 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
