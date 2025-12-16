@@ -454,7 +454,7 @@ export default function LogsPage() {
 
 	// Helper function to check if a log matches the current filters
 	const matchesFilters = (log: LogEntry, filters: LogFilters, applyTimeFilters = true): boolean => {
-		if (filters.missing_cost_only && typeof log.cost === "number" && Number.isFinite(log.cost)) {
+		if (filters.missing_cost_only && typeof log.cost === "number" && log.cost > 0) {
 			return false;
 		}
 		if (filters.providers?.length && !filters.providers.includes(log.provider)) {

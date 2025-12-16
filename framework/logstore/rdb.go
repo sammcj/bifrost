@@ -63,7 +63,7 @@ func (s *RDBLogStore) applyFilters(baseQuery *gorm.DB, filters SearchFilters) *g
 		baseQuery = baseQuery.Where("cost <= ?", *filters.MaxCost)
 	}
 	if filters.MissingCostOnly {
-		baseQuery = baseQuery.Where("(cost IS NULL OR cost <= 0)")
+		baseQuery = baseQuery.Where("cost IS NULL OR cost <= 0")
 	}
 	if filters.ContentSearch != "" {
 		baseQuery = baseQuery.Where("content_summary LIKE ?", "%"+filters.ContentSearch+"%")
@@ -107,16 +107,14 @@ func (s *RDBLogStore) BulkUpdateCost(ctx context.Context, updates map[string]flo
 		return nil
 	}
 
-	logsToUpdate := make([]Log, 0, len(updates))
-	for id, cost := range updates {
-		logsToUpdate = append(logsToUpdate, Log{ID: id, Cost: &cost})
-	}
-
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"cost"}),
-		}).Create(&logsToUpdate).Error
+		for id, cost := range updates {
+			costValue := cost
+			if err := tx.Model(&Log{}).Where("id = ?", id).Update("cost", costValue).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
