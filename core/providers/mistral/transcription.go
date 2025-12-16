@@ -87,81 +87,20 @@ func (r *MistralTranscriptionResponse) ToBifrostTranscriptionResponse() *schemas
 	return response
 }
 
-// parseMistralTranscriptionFormData writes the transcription request to a multipart form.
-func parseMistralTranscriptionFormData(writer *multipart.Writer, req *MistralTranscriptionRequest, providerName schemas.ModelProvider) *schemas.BifrostError {
-	// Add file field - Mistral uses "file" as the form field name
-	fileWriter, err := writer.CreateFormFile("file", "audio.mp3")
-	if err != nil {
-		return providerUtils.NewBifrostOperationError("failed to create form file", err, providerName)
-	}
-	if _, err := fileWriter.Write(req.File); err != nil {
-		return providerUtils.NewBifrostOperationError("failed to write file data", err, providerName)
-	}
-
-	// Add model field (required)
-	if err := writer.WriteField("model", req.Model); err != nil {
-		return providerUtils.NewBifrostOperationError("failed to write model field", err, providerName)
-	}
-
-	// Add optional fields
-	if req.Language != nil {
-		if err := writer.WriteField("language", *req.Language); err != nil {
-			return providerUtils.NewBifrostOperationError("failed to write language field", err, providerName)
-		}
-	}
-
-	if req.Prompt != nil {
-		if err := writer.WriteField("prompt", *req.Prompt); err != nil {
-			return providerUtils.NewBifrostOperationError("failed to write prompt field", err, providerName)
-		}
-	}
-
-	if req.ResponseFormat != nil {
-		if err := writer.WriteField("response_format", *req.ResponseFormat); err != nil {
-			return providerUtils.NewBifrostOperationError("failed to write response_format field", err, providerName)
-		}
-	}
-
-	if req.Temperature != nil {
-		if err := writer.WriteField("temperature", formatFloat64(*req.Temperature)); err != nil {
-			return providerUtils.NewBifrostOperationError("failed to write temperature field", err, providerName)
-		}
-	}
-
-	// Close the multipart writer to finalize the form
-	if err := writer.Close(); err != nil {
-		return providerUtils.NewBifrostOperationError("failed to close multipart writer", err, providerName)
-	}
-
-	return nil
-}
-
 // createMistralTranscriptionMultipartBody creates the multipart form body for a transcription request.
 func createMistralTranscriptionMultipartBody(req *MistralTranscriptionRequest, providerName schemas.ModelProvider) (*bytes.Buffer, string, *schemas.BifrostError) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 
-	if err := parseMistralTranscriptionFormData(writer, req, providerName); err != nil {
+	if err := parseTranscriptionFormDataBodyFromRequest(writer, req, providerName); err != nil {
 		return nil, "", err
 	}
 
 	return &body, writer.FormDataContentType(), nil
 }
 
-// createMistralTranscriptionStreamMultipartBody creates the multipart form body for a streaming transcription request.
-func createMistralTranscriptionStreamMultipartBody(req *MistralTranscriptionRequest, providerName schemas.ModelProvider) (*bytes.Buffer, string, *schemas.BifrostError) {
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-
-	if err := parseMistralTranscriptionStreamFormData(writer, req, providerName); err != nil {
-		return nil, "", err
-	}
-
-	return &body, writer.FormDataContentType(), nil
-}
-
-// parseMistralTranscriptionStreamFormData writes the streaming transcription request to a multipart form.
-func parseMistralTranscriptionStreamFormData(writer *multipart.Writer, req *MistralTranscriptionRequest, providerName schemas.ModelProvider) *schemas.BifrostError {
+// parseTranscriptionFormDataBodyFromRequest writes the transcription request to a multipart form.
+func parseTranscriptionFormDataBodyFromRequest(writer *multipart.Writer, req *MistralTranscriptionRequest, providerName schemas.ModelProvider) *schemas.BifrostError {
 	// Add file field - Mistral uses "file" as the form field name
 	fileWriter, err := writer.CreateFormFile("file", "audio.mp3")
 	if err != nil {
@@ -176,9 +115,11 @@ func parseMistralTranscriptionStreamFormData(writer *multipart.Writer, req *Mist
 		return providerUtils.NewBifrostOperationError("failed to write model field", err, providerName)
 	}
 
-	// Add stream field (required for streaming) - must be "true" as string
-	if err := writer.WriteField("stream", "true"); err != nil {
-		return providerUtils.NewBifrostOperationError("failed to write stream field", err, providerName)
+	// Add stream field if streaming
+	if req.Stream != nil && *req.Stream {
+		if err := writer.WriteField("stream", "true"); err != nil {
+			return providerUtils.NewBifrostOperationError("failed to write stream field", err, providerName)
+		}
 	}
 
 	// Add optional fields
@@ -206,7 +147,6 @@ func parseMistralTranscriptionStreamFormData(writer *multipart.Writer, req *Mist
 		}
 	}
 
-	// Add timestamp_granularities if specified
 	for _, granularity := range req.TimestampGranularities {
 		if err := writer.WriteField("timestamp_granularities[]", granularity); err != nil {
 			return providerUtils.NewBifrostOperationError("failed to write timestamp_granularities field", err, providerName)
@@ -272,4 +212,3 @@ func (e *MistralTranscriptionStreamEvent) ToBifrostTranscriptionStreamResponse()
 
 	return response
 }
-
