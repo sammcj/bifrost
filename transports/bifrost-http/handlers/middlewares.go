@@ -21,7 +21,7 @@ import (
 func CorsMiddleware(config *lib.Config) lib.BifrostHTTPMiddleware {
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
-			logger.Debug("CorsMiddleware: %s", ctx.Request.URI().Path())
+			logger.Debug("CorsMiddleware: %s", string(ctx.Path()))
 			origin := string(ctx.Request.Header.Peek("Origin"))
 			allowed := IsOriginAllowed(origin, config.ClientConfig.AllowedOrigins)
 			// Check if origin is allowed (localhost always allowed + configured origins)
