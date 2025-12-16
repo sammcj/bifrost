@@ -1075,12 +1075,13 @@
         "tags": [
           "Providers"
         ],
+        "description": "Note: Removing a provider is only supported for custom providers. If you are trying to delete a provider that is not a custom provider, you can use Update Provider instead.",
         "parameters": [
           {
             "name": "provider",
             "in": "path",
             "required": true,
-            "description": "The name of the provider to delete",
+            "description": "The name of the custom provider to delete",
             "schema": {
               "type": "string"
             }
