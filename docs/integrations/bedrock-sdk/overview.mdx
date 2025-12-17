@@ -172,7 +172,7 @@ for event in response.get("body"):
 
 Pass AWS credentials or Bedrock API keys directly in requests to bypass Bifrost's load balancing. This requires the **Allow Direct API keys** option to be enabled in Bifrost configuration.
 
-> **Learn more:** See [Quickstart Configuration](../../../quickstart) for enabling direct API key usage.
+> **Learn more:** See [Key Management](../../../features/keys-management#direct-key-bypass) for enabling direct API key usage.
 
 When direct keys are enabled, you can pass your AWS credentials directly to the boto3 client instead of using dummy credentials.
 
