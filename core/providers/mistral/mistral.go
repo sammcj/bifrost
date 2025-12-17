@@ -366,9 +366,10 @@ func (provider *MistralProvider) TranscriptionStream(ctx context.Context, postHo
 	if mistralReq == nil {
 		return nil, providerUtils.NewBifrostOperationError("transcription input is not provided", nil, providerName)
 	}
+	mistralReq.Stream = schemas.Ptr(true)
 
 	// Create multipart form body with stream=true
-	body, contentType, bifrostErr := createMistralTranscriptionStreamMultipartBody(mistralReq, providerName)
+	body, contentType, bifrostErr := createMistralTranscriptionMultipartBody(mistralReq, providerName)
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}

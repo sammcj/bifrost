@@ -40,12 +40,13 @@ type MistralListModelsResponse struct {
 // MistralTranscriptionRequest represents a Mistral audio transcription request.
 // Based on: https://docs.mistral.ai/capabilities/audio_transcription
 type MistralTranscriptionRequest struct {
-	Model          string   `json:"model"`                      // Required: e.g., "mistral-audio-transcribe"
-	File           []byte   `json:"file"`                       // Required: Binary audio data
-	Language       *string  `json:"language,omitempty"`         // Optional: ISO 639-1 language code
-	Prompt         *string  `json:"prompt,omitempty"`           // Optional: Context hint for transcription
-	ResponseFormat *string  `json:"response_format,omitempty"`  // Optional: "json", "text", "srt", "verbose_json", "vtt"
-	Temperature    *float64 `json:"temperature,omitempty"`      // Optional: Sampling temperature (0 to 1)
+	Model                  string   `json:"model"`                             // Required: e.g., "mistral-audio-transcribe"
+	File                   []byte   `json:"file"`                              // Required: Binary audio data
+	Language               *string  `json:"language,omitempty"`                // Optional: ISO 639-1 language code
+	Prompt                 *string  `json:"prompt,omitempty"`                  // Optional: Context hint for transcription
+	ResponseFormat         *string  `json:"response_format,omitempty"`         // Optional: "json", "text", "srt", "verbose_json", "vtt"
+	Temperature            *float64 `json:"temperature,omitempty"`             // Optional: Sampling temperature (0 to 1)
+	Stream                 *bool    `json:"stream,omitempty"`                  // Optional: Enable streaming mode
 	TimestampGranularities []string `json:"timestamp_granularities,omitempty"` // Optional: "word" or "segment"
 }
 
@@ -99,8 +100,8 @@ const (
 
 // MistralTranscriptionStreamEvent represents a streaming transcription event from Mistral.
 type MistralTranscriptionStreamEvent struct {
-	Event string                           `json:"event"`
-	Data  *MistralTranscriptionStreamData  `json:"data,omitempty"`
+	Event string                          `json:"event"`
+	Data  *MistralTranscriptionStreamData `json:"data,omitempty"`
 }
 
 // MistralTranscriptionStreamData represents the data payload for streaming events.
@@ -115,8 +116,8 @@ type MistralTranscriptionStreamData struct {
 	Segment *MistralTranscriptionStreamSegment `json:"segment,omitempty"`
 
 	// For transcription.done events
-	Model string                        `json:"model,omitempty"`
-	Usage *MistralTranscriptionUsage    `json:"usage,omitempty"`
+	Model string                     `json:"model,omitempty"`
+	Usage *MistralTranscriptionUsage `json:"usage,omitempty"`
 }
 
 // MistralTranscriptionStreamSegment represents a segment in streaming response.

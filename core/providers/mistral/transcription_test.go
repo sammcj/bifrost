@@ -969,9 +969,9 @@ func TestCreateMistralTranscriptionStreamMultipartBody(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		request        *MistralTranscriptionRequest
-		expectedFields map[string]string
+		name                string
+		request             *MistralTranscriptionRequest
+		expectedFields      map[string]string
 		expectedArrayFields map[string][]string
 	}{
 		{
@@ -1016,7 +1016,7 @@ func TestCreateMistralTranscriptionStreamMultipartBody(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			body, contentType, err := createMistralTranscriptionStreamMultipartBody(tt.request, schemas.Mistral)
+			body, contentType, err := createMistralTranscriptionMultipartBody(tt.request, schemas.Mistral)
 
 			require.Nil(t, err)
 			require.NotNil(t, body)
