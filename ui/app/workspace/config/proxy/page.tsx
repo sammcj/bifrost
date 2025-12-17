@@ -1,18 +1,26 @@
-"use client"
+"use client";
 
-import { IS_ENTERPRISE } from "@/lib/constants/config"
-import { redirect } from "next/navigation"
-import ProxyView from "../views/proxyView"
+import { IS_ENTERPRISE } from "@/lib/constants/config";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import ProxyView from "../views/proxyView";
 
 export default function ProxyPage() {
-  if (!IS_ENTERPRISE) {
-    redirect("/workspace/config/client-settings")
-  }
+	const router = useRouter();
 
-  return (
-    <div className="mx-auto flex w-full max-w-7xl">
-      <ProxyView />
-    </div>
-  )
+	useEffect(() => {
+		if (!IS_ENTERPRISE) {
+			router.replace("/workspace/config/client-settings");
+		}
+	}, [router]);
+
+	if (!IS_ENTERPRISE) {
+		return null;
+	}
+
+	return (
+		<div className="mx-auto flex w-full max-w-7xl">
+			<ProxyView />
+		</div>
+	);
 }
-
