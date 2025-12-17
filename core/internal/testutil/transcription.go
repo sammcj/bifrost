@@ -59,11 +59,21 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Con
 					t.Parallel()
 				}
 
+				speechSynthesisProvider := testConfig.Provider
+				if testConfig.ExternalTTSProvider != "" {
+					speechSynthesisProvider = testConfig.ExternalTTSProvider
+				}
+
+				speechSynthesisModel := testConfig.SpeechSynthesisModel
+				if testConfig.ExternalTTSModel != "" {
+					speechSynthesisModel = testConfig.ExternalTTSModel
+				}
+
 				// Step 1: Generate TTS audio
-				voice := GetProviderVoice(testConfig.Provider, tc.voiceType)
+				voice := GetProviderVoice(speechSynthesisProvider, tc.voiceType)
 				ttsRequest := &schemas.BifrostSpeechRequest{
-					Provider: testConfig.Provider,
-					Model:    testConfig.SpeechSynthesisModel,
+					Provider: speechSynthesisProvider,
+					Model:    speechSynthesisModel,
 					Input: &schemas.SpeechInput{
 						Input: tc.text,
 					},
@@ -84,8 +94,8 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Con
 						"should_generate_audio": true,
 					},
 					TestMetadata: map[string]interface{}{
-						"provider": testConfig.Provider,
-						"model":    testConfig.SpeechSynthesisModel,
+						"provider": speechSynthesisProvider,
+						"model":    speechSynthesisModel,
 						"format":   tc.format,
 					},
 				}
@@ -209,8 +219,18 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Con
 						t.Parallel()
 					}
 
+					speechSynthesisProvider := testConfig.Provider
+					if testConfig.ExternalTTSProvider != "" {
+						speechSynthesisProvider = testConfig.ExternalTTSProvider
+					}
+
+					speechSynthesisModel := testConfig.SpeechSynthesisModel
+					if testConfig.ExternalTTSModel != "" {
+						speechSynthesisModel = testConfig.ExternalTTSModel
+					}
+
 					// Use the utility function to generate audio
-					audioData, _ := GenerateTTSAudioForTest(ctx, t, client, testConfig.Provider, testConfig.SpeechSynthesisModel, tc.text, "primary", "mp3")
+					audioData, _ := GenerateTTSAudioForTest(ctx, t, client, speechSynthesisProvider, speechSynthesisModel, tc.text, "primary", "mp3")
 
 					// Test transcription
 					request := &schemas.BifrostTranscriptionRequest{
@@ -292,8 +312,18 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx con
 						t.Parallel()
 					}
 
+					speechSynthesisProvider := testConfig.Provider
+					if testConfig.ExternalTTSProvider != "" {
+						speechSynthesisProvider = testConfig.ExternalTTSProvider
+					}
+
+					speechSynthesisModel := testConfig.SpeechSynthesisModel
+					if testConfig.ExternalTTSModel != "" {
+						speechSynthesisModel = testConfig.ExternalTTSModel
+					}
+
 					// Generate fresh audio for each test to avoid race conditions and ensure validity
-					audioData, _ := GenerateTTSAudioForTest(ctx, t, client, testConfig.Provider, testConfig.SpeechSynthesisModel, TTSTestTextBasic, "primary", "mp3")
+					audioData, _ := GenerateTTSAudioForTest(ctx, t, client, speechSynthesisProvider, speechSynthesisModel, TTSTestTextBasic, "primary", "mp3")
 
 					formatCopy := format
 					request := &schemas.BifrostTranscriptionRequest{
@@ -360,8 +390,18 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx con
 				t.Parallel()
 			}
 
+			speechSynthesisProvider := testConfig.Provider
+			if testConfig.ExternalTTSProvider != "" {
+				speechSynthesisProvider = testConfig.ExternalTTSProvider
+			}
+
+			speechSynthesisModel := testConfig.SpeechSynthesisModel
+			if testConfig.ExternalTTSModel != "" {
+				speechSynthesisModel = testConfig.ExternalTTSModel
+			}
+
 			// Generate audio for custom parameters test
-			audioData, _ := GenerateTTSAudioForTest(ctx, t, client, testConfig.Provider, testConfig.SpeechSynthesisModel, TTSTestTextMedium, "secondary", "mp3")
+			audioData, _ := GenerateTTSAudioForTest(ctx, t, client, speechSynthesisProvider, speechSynthesisModel, TTSTestTextMedium, "secondary", "mp3")
 
 			// Test with custom parameters and temperature
 			request := &schemas.BifrostTranscriptionRequest{
@@ -432,8 +472,18 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx con
 						t.Parallel()
 					}
 
+					speechSynthesisProvider := testConfig.Provider
+					if testConfig.ExternalTTSProvider != "" {
+						speechSynthesisProvider = testConfig.ExternalTTSProvider
+					}
+
+					speechSynthesisModel := testConfig.SpeechSynthesisModel
+					if testConfig.ExternalTTSModel != "" {
+						speechSynthesisModel = testConfig.ExternalTTSModel
+					}
+
 					// Generate fresh audio for each test to avoid race conditions and ensure validity
-					audioData, _ := GenerateTTSAudioForTest(ctx, t, client, testConfig.Provider, testConfig.SpeechSynthesisModel, TTSTestTextBasic, "primary", "mp3")
+					audioData, _ := GenerateTTSAudioForTest(ctx, t, client, speechSynthesisProvider, speechSynthesisModel, TTSTestTextBasic, "primary", "mp3")
 
 					langCopy := lang
 					request := &schemas.BifrostTranscriptionRequest{

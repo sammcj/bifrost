@@ -1,0 +1,1 @@
+- chore: update core version to 1.2.39 and framework version to 1.1.49

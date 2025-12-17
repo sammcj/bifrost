@@ -40,7 +40,15 @@ func (mc *ModelCatalog) CalculateCost(result *schemas.BifrostResponse) float64 {
 	case result.EmbeddingResponse != nil && result.EmbeddingResponse.Usage != nil:
 		usage = result.EmbeddingResponse.Usage
 	case result.SpeechResponse != nil:
-		return 0
+		if result.SpeechResponse.Usage != nil {
+			usage = &schemas.BifrostLLMUsage{
+				PromptTokens:     result.SpeechResponse.Usage.InputTokens,
+				CompletionTokens: result.SpeechResponse.Usage.OutputTokens,
+				TotalTokens:      result.SpeechResponse.Usage.TotalTokens,
+			}
+		} else {
+			return 0
+		}
 	case result.SpeechStreamResponse != nil && result.SpeechStreamResponse.Usage != nil:
 		usage = &schemas.BifrostLLMUsage{
 			PromptTokens:     result.SpeechStreamResponse.Usage.InputTokens,
@@ -65,6 +73,9 @@ func (mc *ModelCatalog) CalculateCost(result *schemas.BifrostResponse) float64 {
 			audioTokenDetails.AudioTokens = result.TranscriptionResponse.Usage.InputTokenDetails.AudioTokens
 			audioTokenDetails.TextTokens = result.TranscriptionResponse.Usage.InputTokenDetails.TextTokens
 		}
+		if result.TranscriptionResponse.Usage.Seconds != nil {
+			audioSeconds = result.TranscriptionResponse.Usage.Seconds
+		}
 	case result.TranscriptionStreamResponse != nil && result.TranscriptionStreamResponse.Usage != nil:
 		usage = &schemas.BifrostLLMUsage{}
 		if result.TranscriptionStreamResponse.Usage.InputTokens != nil {
@@ -82,6 +93,9 @@ func (mc *ModelCatalog) CalculateCost(result *schemas.BifrostResponse) float64 {
 			audioTokenDetails = &schemas.TranscriptionUsageInputTokenDetails{}
 			audioTokenDetails.AudioTokens = result.TranscriptionStreamResponse.Usage.InputTokenDetails.AudioTokens
 			audioTokenDetails.TextTokens = result.TranscriptionStreamResponse.Usage.InputTokenDetails.TextTokens
+		}
+		if result.TranscriptionStreamResponse.Usage.Seconds != nil {
+			audioSeconds = result.TranscriptionStreamResponse.Usage.Seconds
 		}
 	default:
 		return 0

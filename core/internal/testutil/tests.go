@@ -64,6 +64,8 @@ func RunAllComprehensiveTests(t *testing.T, client *bifrost.Bifrost, ctx context
 		RunFileContentTest,
 		RunFileUnsupportedTest,
 		RunFileAndBatchIntegrationTest,
+		RunChatAudioTest,
+		RunChatAudioStreamTest,
 	}
 
 	// Execute all test scenarios
@@ -116,6 +118,8 @@ func printTestSummary(t *testing.T, testConfig ComprehensiveTestConfig) {
 		{"FileContent", testConfig.Scenarios.FileContent},
 		{"FileUnsupported", !testConfig.Scenarios.FileUpload && !testConfig.Scenarios.FileList && !testConfig.Scenarios.FileRetrieve && !testConfig.Scenarios.FileDelete && !testConfig.Scenarios.FileContent},
 		{"FileAndBatchIntegration", testConfig.Scenarios.FileBatchInput},
+		{"ChatAudio", testConfig.Scenarios.ChatAudio && testConfig.ChatAudioModel != ""},
+		{"ChatAudioStream", testConfig.Scenarios.ChatAudio && testConfig.ChatAudioModel != ""},
 	}
 
 	supported := 0
