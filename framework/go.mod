@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/maximhq/bifrost/core v1.2.38
+	github.com/maximhq/bifrost/core v1.2.39
 	github.com/qdrant/go-client v1.16.1
 	github.com/redis/go-redis/v9 v9.14.0
 	github.com/stretchr/testify v1.11.1
