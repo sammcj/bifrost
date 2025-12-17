@@ -12,7 +12,7 @@ import { BifrostConfig } from "@/lib/types/config";
 import { RbacProvider } from "@enterprise/lib/contexts/rbacContext";
 import { usePathname } from "next/navigation";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { toast, Toaster } from "sonner";
 
 function AppContent({ children }: { children: React.ReactNode }) {

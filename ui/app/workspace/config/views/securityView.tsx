@@ -185,7 +185,7 @@ export default function SecurityView() {
 						<Info className="h-4 w-4 text-blue-600" />
 						<AlertDescription>
 							You will need to use Basic Auth for all your inference calls (including MCP tool execution). You can disable it below. Check{" "}
-							<Link href="/workspace/config?tab=api-keys" className="text-md text-primary underline">
+							<Link href="/workspace/config/api-keys" className="text-md text-primary underline">
 								API Keys
 							</Link>
 						</AlertDescription>
