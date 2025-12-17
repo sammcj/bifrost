@@ -1966,9 +1966,7 @@ func (bifrost *Bifrost) getProviderQueue(providerKey schemas.ModelProvider) (cha
 		queue := queueValue.(chan *ChannelMessage)
 		return queue, nil
 	}
-
 	bifrost.logger.Debug(fmt.Sprintf("Creating new request queue for provider %s at runtime", providerKey))
-
 	config, err := bifrost.account.GetConfigForProvider(providerKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config for provider: %v", err)
@@ -1976,14 +1974,14 @@ func (bifrost *Bifrost) getProviderQueue(providerKey schemas.ModelProvider) (cha
 	if config == nil {
 		return nil, fmt.Errorf("config is nil for provider %s", providerKey)
 	}
-
 	if err := bifrost.prepareProvider(providerKey, config); err != nil {
 		return nil, err
 	}
-
-	queueValue, _ := bifrost.requestQueues.Load(providerKey)
+	queueValue, ok := bifrost.requestQueues.Load(providerKey)
+	if !ok {
+		return nil, fmt.Errorf("request queue not found for provider %s", providerKey)
+	}
 	queue := queueValue.(chan *ChannelMessage)
-
 	return queue, nil
 }
 
@@ -2040,27 +2038,27 @@ func (bifrost *Bifrost) getProviderByKey(providerKey schemas.ModelProvider) sche
 func (bifrost *Bifrost) shouldTryFallbacks(req *schemas.BifrostRequest, primaryErr *schemas.BifrostError) bool {
 	// If no primary error, we succeeded
 	if primaryErr == nil {
-		bifrost.logger.Debug("No primary error, we should not try fallbacks")
+		bifrost.logger.Debug("no primary error, we should not try fallbacks")
 		return false
 	}
 
 	// Handle request cancellation
 	if primaryErr.Error != nil && primaryErr.Error.Type != nil && *primaryErr.Error.Type == schemas.RequestCancelled {
-		bifrost.logger.Debug("Request cancelled, we should not try fallbacks")
+		bifrost.logger.Debug("request cancelled, we should not try fallbacks")
 		return false
 	}
 
 	// Check if this is a short-circuit error that doesn't allow fallbacks
 	// Note: AllowFallbacks = nil is treated as true (allow fallbacks by default)
 	if primaryErr.AllowFallbacks != nil && !*primaryErr.AllowFallbacks {
-		bifrost.logger.Debug("AllowFallbacks is false, we should not try fallbacks")
+		bifrost.logger.Debug("allowFallbacks is false, we should not try fallbacks")
 		return false
 	}
 
 	// If no fallbacks configured, return primary error
 	_, _, fallbacks := req.GetRequestFields()
 	if len(fallbacks) == 0 {
-		bifrost.logger.Debug("No fallbacks configured, we should not try fallbacks")
+		bifrost.logger.Debug("no fallbacks configured, we should not try fallbacks")
 		return false
 	}
 
@@ -2074,7 +2072,7 @@ func (bifrost *Bifrost) prepareFallbackRequest(req *schemas.BifrostRequest, fall
 	// Check if we have config for this fallback provider
 	_, err := bifrost.account.GetConfigForProvider(fallback.Provider)
 	if err != nil {
-		bifrost.logger.Warn(fmt.Sprintf("Config not found for provider %s, skipping fallback: %v", fallback.Provider, err))
+		bifrost.logger.Warn(fmt.Sprintf("config not found for provider %s, skipping fallback: %v", fallback.Provider, err))
 		return nil
 	}
 
@@ -2148,9 +2146,7 @@ func (bifrost *Bifrost) shouldContinueWithFallbacks(fallback schemas.Fallback, f
 // It is the wrapper for all non-streaming public API methods.
 func (bifrost *Bifrost) handleRequest(ctx context.Context, req *schemas.BifrostRequest) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	defer bifrost.releaseBifrostRequest(req)
-
 	provider, model, fallbacks := req.GetRequestFields()
-
 	if err := validateRequest(req); err != nil {
 		err.ExtraFields = schemas.BifrostErrorExtraFields{
 			RequestType:    req.RequestType,
@@ -2165,19 +2161,19 @@ func (bifrost *Bifrost) handleRequest(ctx context.Context, req *schemas.BifrostR
 		ctx = bifrost.ctx
 	}
 
-	bifrost.logger.Debug(fmt.Sprintf("Primary provider %s with model %s and %d fallbacks", provider, model, len(fallbacks)))
+	bifrost.logger.Debug(fmt.Sprintf("primary provider %s with model %s and %d fallbacks", provider, model, len(fallbacks)))
 
 	// Try the primary provider first
 	ctx = context.WithValue(ctx, schemas.BifrostContextKeyFallbackIndex, 0)
 	primaryResult, primaryErr := bifrost.tryRequest(ctx, req)
 	if primaryErr != nil {
 		if primaryErr.Error != nil {
-			bifrost.logger.Debug(fmt.Sprintf("Primary provider %s with model %s returned error: %s", provider, model, primaryErr.Error.Message))
+			bifrost.logger.Debug(fmt.Sprintf("primary provider %s with model %s returned error: %s", provider, model, primaryErr.Error.Message))
 		} else {
-			bifrost.logger.Debug(fmt.Sprintf("Primary provider %s with model %s returned error: %v", provider, model, primaryErr))
+			bifrost.logger.Debug(fmt.Sprintf("primary provider %s with model %s returned error: %v", provider, model, primaryErr))
 		}
 		if len(fallbacks) > 0 {
-			bifrost.logger.Debug(fmt.Sprintf("Check if we should try %d fallbacks", len(fallbacks)))
+			bifrost.logger.Debug(fmt.Sprintf("check if we should try %d fallbacks", len(fallbacks)))
 		}
 	}
 
@@ -2197,19 +2193,19 @@ func (bifrost *Bifrost) handleRequest(ctx context.Context, req *schemas.BifrostR
 	// Try fallbacks in order
 	for i, fallback := range fallbacks {
 		ctx = context.WithValue(ctx, schemas.BifrostContextKeyFallbackIndex, i+1)
-		bifrost.logger.Debug(fmt.Sprintf("Trying fallback provider %s with model %s", fallback.Provider, fallback.Model))
+		bifrost.logger.Debug(fmt.Sprintf("trying fallback provider %s with model %s", fallback.Provider, fallback.Model))
 		ctx = context.WithValue(ctx, schemas.BifrostContextKeyFallbackRequestID, uuid.New().String())
 
 		fallbackReq := bifrost.prepareFallbackRequest(req, fallback)
 		if fallbackReq == nil {
-			bifrost.logger.Debug(fmt.Sprintf("Fallback provider %s with model %s is nil", fallback.Provider, fallback.Model))
+			bifrost.logger.Debug(fmt.Sprintf("fallback provider %s with model %s is nil", fallback.Provider, fallback.Model))
 			continue
 		}
 
 		// Try the fallback provider
 		result, fallbackErr := bifrost.tryRequest(ctx, fallbackReq)
 		if fallbackErr == nil {
-			bifrost.logger.Debug(fmt.Sprintf("Successfully used fallback provider %s with model %s", fallback.Provider, fallback.Model))
+			bifrost.logger.Debug(fmt.Sprintf("successfully used fallback provider %s with model %s", fallback.Provider, fallback.Model))
 			return result, nil
 		}
 
@@ -2290,7 +2286,7 @@ func (bifrost *Bifrost) handleStreamRequest(ctx context.Context, req *schemas.Bi
 		// Try the fallback provider
 		result, fallbackErr := bifrost.tryStreamRequest(ctx, fallbackReq)
 		if fallbackErr == nil {
-			bifrost.logger.Debug(fmt.Sprintf("Successfully used fallback provider %s with model %s", fallback.Provider, fallback.Model))
+			bifrost.logger.Debug(fmt.Sprintf("successfully used fallback provider %s with model %s", fallback.Provider, fallback.Model))
 			return result, nil
 		}
 
@@ -2389,7 +2385,7 @@ func (bifrost *Bifrost) tryRequest(ctx context.Context, req *schemas.BifrostRequ
 	default:
 		if bifrost.dropExcessRequests.Load() {
 			bifrost.releaseChannelMessage(msg)
-			bifrost.logger.Warn("Request dropped: queue is full, please increase the queue size or set dropExcessRequests to false")
+			bifrost.logger.Warn("request dropped: queue is full, please increase the queue size or set dropExcessRequests to false")
 			bifrostErr := newBifrostErrorFromMsg("request dropped: queue is full")
 			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
 				RequestType:    req.RequestType,
@@ -2564,7 +2560,7 @@ func (bifrost *Bifrost) tryStreamRequest(ctx context.Context, req *schemas.Bifro
 	default:
 		if bifrost.dropExcessRequests.Load() {
 			bifrost.releaseChannelMessage(msg)
-			bifrost.logger.Warn("Request dropped: queue is full, please increase the queue size or set dropExcessRequests to false")
+			bifrost.logger.Warn("request dropped: queue is full, please increase the queue size or set dropExcessRequests to false")
 			bifrostErr := newBifrostErrorFromMsg("request dropped: queue is full")
 			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
 				RequestType:    req.RequestType,
@@ -2718,25 +2714,39 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 		}
 
 		key := schemas.Key{}
+		var keys []schemas.Key
 		if providerRequiresKey(baseProvider, config.CustomProviderConfig) {
-			// Use the custom provider name for actual key selection, but pass base provider type for key validation
-			key, err = bifrost.selectKeyFromProviderForModel(&req.Context, req.RequestType, provider.GetProviderKey(), model, baseProvider)
-			if err != nil {
-				// Here if model is not required - for example file operations, or batch list operation - we don't need to throw an error
-				// We can pick first available key of the provider and continue
-				if !isModelRequired(req.RequestType) {
-					// Get first available key of the provider
-					// TODO this is temporary solution, we will fix this
-					// This is only for Bedrock provider, we will be adding special flag in the next release
-					keys, err := bifrost.account.GetKeysForProvider(&req.Context, provider.GetProviderKey())
-					if err != nil {
-						bifrost.logger.Debug("error getting keys for provider %s: %v", provider.GetProviderKey(), err)
-						continue
+			// Determine if this is a multi-key batch/file operation
+			// BatchCreate, FileUpload use single key; other batch/file ops use multiple keys
+			isMultiKeyBatchOp := isBatchRequestType(req.RequestType) && req.RequestType != schemas.BatchCreateRequest
+			isMultiKeyFileOp := isFileRequestType(req.RequestType) && req.RequestType != schemas.FileUploadRequest
+
+			if isMultiKeyBatchOp || isMultiKeyFileOp {
+				var modelPtr *string
+				if model != "" {
+					modelPtr = &model
+				}
+				keys, err = bifrost.getKeysForBatchAndFileOps(&req.Context, provider.GetProviderKey(), baseProvider, modelPtr, isMultiKeyBatchOp)
+				if err != nil {
+					bifrost.logger.Debug("error getting keys for batch/file operation: %v", err)
+					req.Err <- schemas.BifrostError{
+						IsBifrostError: false,
+						Error: &schemas.ErrorField{
+							Message: err.Error(),
+							Error:   err,
+						},
+						ExtraFields: schemas.BifrostErrorExtraFields{
+							Provider:       provider.GetProviderKey(),
+							ModelRequested: model,
+							RequestType:    req.RequestType,
+						},
 					}
-					if len(keys) > 0 {
-						key = keys[0]
-					}
-				} else {
+					continue
+				}
+			} else {
+				// Use the custom provider name for actual key selection, but pass base provider type for key validation
+				key, err = bifrost.selectKeyFromProviderForModel(&req.Context, req.RequestType, provider.GetProviderKey(), model, baseProvider)
+				if err != nil {
 					bifrost.logger.Debug("error selecting key for model %s: %v", model, err)
 					req.Err <- schemas.BifrostError{
 						IsBifrostError: false,
@@ -2752,9 +2762,9 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 					}
 					continue
 				}
+				req.Context = context.WithValue(req.Context, schemas.BifrostContextKeySelectedKeyID, key.ID)
+				req.Context = context.WithValue(req.Context, schemas.BifrostContextKeySelectedKeyName, key.Name)
 			}
-			req.Context = context.WithValue(req.Context, schemas.BifrostContextKeySelectedKeyID, key.ID)
-			req.Context = context.WithValue(req.Context, schemas.BifrostContextKeySelectedKeyName, key.Name)
 		}
 		// Create plugin pipeline for streaming requests outside retry loop to prevent leaks
 		var postHookRunner schemas.PostHookRunner
@@ -2777,7 +2787,7 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 			}, req.RequestType, provider.GetProviderKey(), model)
 		} else {
 			result, bifrostError = executeRequestWithRetries(&req.Context, config, func() (*schemas.BifrostResponse, *schemas.BifrostError) {
-				return bifrost.handleProviderRequest(provider, req, key)
+				return bifrost.handleProviderRequest(provider, req, key, keys)
 			}, req.RequestType, provider.GetProviderKey(), model)
 		}
 
@@ -2836,7 +2846,8 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 }
 
 // handleProviderRequest handles the request to the provider based on the request type
-func (bifrost *Bifrost) handleProviderRequest(provider schemas.Provider, req *ChannelMessage, key schemas.Key) (*schemas.BifrostResponse, *schemas.BifrostError) {
+// key is used for single-key operations, keys is used for batch/file operations that need multiple keys
+func (bifrost *Bifrost) handleProviderRequest(provider schemas.Provider, req *ChannelMessage, key schemas.Key, keys []schemas.Key) (*schemas.BifrostResponse, *schemas.BifrostError) {
 	response := &schemas.BifrostResponse{}
 	switch req.RequestType {
 	case schemas.TextCompletionRequest:
@@ -2882,25 +2893,25 @@ func (bifrost *Bifrost) handleProviderRequest(provider schemas.Provider, req *Ch
 		}
 		response.FileUploadResponse = fileUploadResponse
 	case schemas.FileListRequest:
-		fileListResponse, bifrostError := provider.FileList(req.Context, key, req.BifrostRequest.FileListRequest)
+		fileListResponse, bifrostError := provider.FileList(req.Context, keys, req.BifrostRequest.FileListRequest)
 		if bifrostError != nil {
 			return nil, bifrostError
 		}
 		response.FileListResponse = fileListResponse
 	case schemas.FileRetrieveRequest:
-		fileRetrieveResponse, bifrostError := provider.FileRetrieve(req.Context, key, req.BifrostRequest.FileRetrieveRequest)
+		fileRetrieveResponse, bifrostError := provider.FileRetrieve(req.Context, keys, req.BifrostRequest.FileRetrieveRequest)
 		if bifrostError != nil {
 			return nil, bifrostError
 		}
 		response.FileRetrieveResponse = fileRetrieveResponse
 	case schemas.FileDeleteRequest:
-		fileDeleteResponse, bifrostError := provider.FileDelete(req.Context, key, req.BifrostRequest.FileDeleteRequest)
+		fileDeleteResponse, bifrostError := provider.FileDelete(req.Context, keys, req.BifrostRequest.FileDeleteRequest)
 		if bifrostError != nil {
 			return nil, bifrostError
 		}
 		response.FileDeleteResponse = fileDeleteResponse
 	case schemas.FileContentRequest:
-		fileContentResponse, bifrostError := provider.FileContent(req.Context, key, req.BifrostRequest.FileContentRequest)
+		fileContentResponse, bifrostError := provider.FileContent(req.Context, keys, req.BifrostRequest.FileContentRequest)
 		if bifrostError != nil {
 			return nil, bifrostError
 		}
@@ -2912,25 +2923,25 @@ func (bifrost *Bifrost) handleProviderRequest(provider schemas.Provider, req *Ch
 		}
 		response.BatchCreateResponse = batchCreateResponse
 	case schemas.BatchListRequest:
-		batchListResponse, bifrostError := provider.BatchList(req.Context, key, req.BifrostRequest.BatchListRequest)
+		batchListResponse, bifrostError := provider.BatchList(req.Context, keys, req.BifrostRequest.BatchListRequest)
 		if bifrostError != nil {
 			return nil, bifrostError
 		}
 		response.BatchListResponse = batchListResponse
 	case schemas.BatchRetrieveRequest:
-		batchRetrieveResponse, bifrostError := provider.BatchRetrieve(req.Context, key, req.BifrostRequest.BatchRetrieveRequest)
+		batchRetrieveResponse, bifrostError := provider.BatchRetrieve(req.Context, keys, req.BifrostRequest.BatchRetrieveRequest)
 		if bifrostError != nil {
 			return nil, bifrostError
 		}
 		response.BatchRetrieveResponse = batchRetrieveResponse
 	case schemas.BatchCancelRequest:
-		batchCancelResponse, bifrostError := provider.BatchCancel(req.Context, key, req.BifrostRequest.BatchCancelRequest)
+		batchCancelResponse, bifrostError := provider.BatchCancel(req.Context, keys, req.BifrostRequest.BatchCancelRequest)
 		if bifrostError != nil {
 			return nil, bifrostError
 		}
 		response.BatchCancelResponse = batchCancelResponse
 	case schemas.BatchResultsRequest:
-		batchResultsResponse, bifrostError := provider.BatchResults(req.Context, key, req.BifrostRequest.BatchResultsRequest)
+		batchResultsResponse, bifrostError := provider.BatchResults(req.Context, keys, req.BifrostRequest.BatchResultsRequest)
 		if bifrostError != nil {
 			return nil, bifrostError
 		}
@@ -3206,6 +3217,76 @@ func (bifrost *Bifrost) getAllSupportedKeys(ctx *context.Context, providerKey sc
 	return supportedKeys, nil
 }
 
+// getKeysForBatchAndFileOps retrieves keys for batch and file operations with model filtering.
+// For batch operations, only keys with UseForBatchAPI enabled are included.
+// Model filtering: if model is specified and key has model restrictions, only include if model is in list.
+func (bifrost *Bifrost) getKeysForBatchAndFileOps(ctx *context.Context, providerKey schemas.ModelProvider, baseProviderType schemas.ModelProvider, model *string, isBatchOp bool) ([]schemas.Key, error) {
+	// Check if key has been set in the context explicitly
+	if ctx != nil {
+		key, ok := (*ctx).Value(schemas.BifrostContextKeyDirectKey).(schemas.Key)
+		if ok {
+			// If a direct key is specified, return it as a single-element slice
+			return []schemas.Key{key}, nil
+		}
+	}
+
+	keys, err := bifrost.account.GetKeysForProvider(ctx, providerKey)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("no keys found for provider: %v", providerKey)
+	}
+
+	var filteredKeys []schemas.Key
+	for _, k := range keys {
+		// Skip disabled keys
+		if k.Enabled != nil && !*k.Enabled {
+			continue
+		}
+
+		// For batch operations, only include keys with UseForBatchAPI enabled
+		if isBatchOp && (k.UseForBatchAPI == nil || !*k.UseForBatchAPI) {
+			continue
+		}
+
+		// Model filtering logic:
+		// - If model is nil or empty → include all keys (no model filter)
+		// - If model is specified:
+		//   - If key.Models is empty → include key (supports all models)
+		//   - If key.Models is non-empty → only include if model is in list
+		if model != nil && *model != "" && len(k.Models) > 0 {
+			if !slices.Contains(k.Models, *model) {
+				continue
+			}
+		}
+
+		// Check key value (or if provider allows empty keys)
+		if strings.TrimSpace(k.Value) != "" || canProviderKeyValueBeEmpty(baseProviderType) {
+			filteredKeys = append(filteredKeys, k)
+		}
+	}
+
+	if len(filteredKeys) == 0 {
+		modelStr := ""
+		if model != nil {
+			modelStr = *model
+		}
+		if isBatchOp {
+			return nil, fmt.Errorf("no batch-enabled keys found for provider: %v and model: %s", providerKey, modelStr)
+		}
+		return nil, fmt.Errorf("no keys found for provider: %v and model: %s", providerKey, modelStr)
+	}
+
+	// Sort keys by ID for deterministic pagination order across requests
+	sort.Slice(filteredKeys, func(i, j int) bool {
+		return filteredKeys[i].ID < filteredKeys[j].ID
+	})
+
+	return filteredKeys, nil
+}
+
 // selectKeyFromProviderForModel selects an appropriate API key for a given provider and model.
 // It uses weighted random selection if multiple keys are available.
 func (bifrost *Bifrost) selectKeyFromProviderForModel(ctx *context.Context, requestType schemas.RequestType, providerKey schemas.ModelProvider, model string, baseProviderType schemas.ModelProvider) (schemas.Key, error) {
@@ -3216,43 +3297,59 @@ func (bifrost *Bifrost) selectKeyFromProviderForModel(ctx *context.Context, requ
 			return key, nil
 		}
 	}
-
+	// Check if key skipping is allowed
 	if skipKeySelection, ok := (*ctx).Value(schemas.BifrostContextKeySkipKeySelection).(bool); ok && skipKeySelection && isKeySkippingAllowed(providerKey) {
 		return schemas.Key{}, nil
 	}
-
+	// Get keys for provider
 	keys, err := bifrost.account.GetKeysForProvider(ctx, providerKey)
 	if err != nil {
 		return schemas.Key{}, err
 	}
-
+	// Check if no keys found
 	if len(keys) == 0 {
 		return schemas.Key{}, fmt.Errorf("no keys found for provider: %v and model: %s", providerKey, model)
 	}
 
-	// filter out keys which dont support the model, if the key has no models, it is supported for all models
+	// For batch API operations, filter keys to only include those with UseForBatchAPI enabled
+	if isBatchRequestType(requestType) || isFileRequestType(requestType) {
+		var batchEnabledKeys []schemas.Key
+		for _, k := range keys {
+			if k.UseForBatchAPI != nil && *k.UseForBatchAPI {
+				batchEnabledKeys = append(batchEnabledKeys, k)
+			}
+		}
+		if len(batchEnabledKeys) == 0 {
+			return schemas.Key{}, fmt.Errorf("no config found for batch APIs. Please enable 'Use for Batch APIs' on at least one key for provider: %v", providerKey)
+		}
+		keys = batchEnabledKeys
+	}
+
+	// filter out keys which don't support the model, if the key has no models, it is supported for all models
 	var supportedKeys []schemas.Key
-	if requestType == schemas.ListModelsRequest {
-		// Skip deployment check but still check if the key has a value
+
+	// Skip model check conditions
+	// We can improve these conditions in the future
+	skipModelCheck := (model == "" && (isFileRequestType(requestType) || isBatchRequestType(requestType))) || requestType == schemas.ListModelsRequest
+	if skipModelCheck {
+		// When skipping model check: just verify keys are enabled and have values
 		for _, k := range keys {
 			// Skip disabled keys
 			if k.Enabled != nil && !*k.Enabled {
 				continue
 			}
-
 			if strings.TrimSpace(k.Value) != "" || canProviderKeyValueBeEmpty(baseProviderType) {
 				supportedKeys = append(supportedKeys, k)
 			}
 		}
 	} else {
+		// When NOT skipping model check: do full model/deployment filtering
 		for _, key := range keys {
 			// Skip disabled keys
 			if key.Enabled != nil && !*key.Enabled {
 				continue
 			}
-
 			modelSupported := (slices.Contains(key.Models, model) && (strings.TrimSpace(key.Value) != "" || canProviderKeyValueBeEmpty(baseProviderType))) || len(key.Models) == 0
-
 			// Additional deployment checks for Azure, Bedrock and Vertex
 			deploymentSupported := true
 			if baseProviderType == schemas.Azure && key.AzureKeyConfig != nil {

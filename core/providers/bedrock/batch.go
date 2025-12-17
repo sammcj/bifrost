@@ -12,7 +12,7 @@ import (
 // BedrockBatchJobRequest represents a request to create a batch inference job.
 type BedrockBatchJobRequest struct {
 	JobName                string                  `json:"jobName"`
-	ModelID                string                  `json:"modelId"`
+	ModelID                *string                 `json:"modelId"`
 	RoleArn                string                  `json:"roleArn"`
 	InputDataConfig        BedrockInputDataConfig  `json:"inputDataConfig"`
 	OutputDataConfig       BedrockOutputDataConfig `json:"outputDataConfig"`
@@ -332,10 +332,7 @@ func toBedrockBatchStatus(status schemas.BatchStatus) string {
 func ToBifrostBatchListRequest(req *BedrockBatchListRequest, provider schemas.ModelProvider) *schemas.BifrostBatchListRequest {
 	result := &schemas.BifrostBatchListRequest{
 		Provider: provider,
-		// We add a dummy model to avoid validation errors
-		// This model is never used in any of the provider flows
-		Model: "dummy-model",
-		Limit: req.MaxResults,
+		Limit:    req.MaxResults,
 	}
 
 	if req.NextToken != nil {

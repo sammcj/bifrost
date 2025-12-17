@@ -1,6 +1,6 @@
 module github.com/maximhq/bifrost/plugins/semanticcache
 
-go 1.24.3
+go 1.25.5
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0

@@ -526,7 +526,6 @@ bedrock_client.meta.events.register("before-send", add_bedrock_header)
 
 # Configuration
 s3_bucket = "your-s3-bucket"
-role_arn = "arn:aws:iam::123456789:role/BedrockBatchRole"
 model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
 
 # Input/output URIs (file should already be uploaded)
@@ -537,7 +536,6 @@ output_uri = f"s3://{s3_bucket}/bifrost-batch-output/"
 response = bedrock_client.create_model_invocation_job(
     jobName=f"bifrost-batch-{int(time.time())}",
     modelId=model_id,
-    roleArn=role_arn,
     inputDataConfig={
         "s3InputDataConfig": {
             "s3Uri": input_uri,
@@ -760,7 +758,6 @@ import time
 # Configuration
 region = "us-west-2"
 s3_bucket = "your-s3-bucket"
-role_arn = "arn:aws:iam::123456789:role/BedrockBatchRole"
 model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
 provider = "bedrock"
 
@@ -828,7 +825,6 @@ output_uri = f"s3://{s3_bucket}/bifrost-batch-output/"
 job_response = bedrock_client.create_model_invocation_job(
     jobName=f"bifrost-e2e-{timestamp}",
     modelId=model_id,
-    roleArn=role_arn,
     inputDataConfig={
         "s3InputDataConfig": {"s3Uri": input_uri, "s3InputFormat": "JSONL"}
     },
@@ -1099,59 +1095,20 @@ print(f"\nSuccess! Gemini batch workflow completed.")
 
 ## Provider-Specific Notes
 
-| Provider | Header Value | File Storage | S3 Config Required | IAM Role Required |
-|----------|--------------|--------------|-------------------|-------------------|
-| **Bedrock** | `bedrock` | AWS S3 | ✅ Yes | ✅ Yes |
-| **OpenAI** | `openai` | OpenAI storage | ❌ No | ❌ No |
-| **Gemini** | `gemini` | Google Cloud Storage | ❌ No | ❌ No |
-| **Anthropic** | `anthropic` | N/A | N/A | N/A |
+| Provider | Header Value | File Storage | S3 Config Required |
+|----------|--------------|--------------|-------------------|
+| **Bedrock** | `bedrock` | AWS S3 | ✅ Yes |
+| **OpenAI** | `openai` | OpenAI storage | ❌ No |
+| **Gemini** | `gemini` | Google Cloud Storage | ❌ No |
+| **Anthropic** | `anthropic` | N/A | N/A |
 
 <Note>
-**Bedrock Provider:** Requires S3 bucket and IAM role configuration. You can use Anthropic models deployed on Bedrock for batch and files APIs.
+**Bedrock Provider:** Requires S3 bucket configuration. The IAM role for batch operations is configured server-side in Bifrost. You can use Anthropic models deployed on Bedrock for batch and files APIs.
 
 **OpenAI & Gemini Providers:** No AWS infrastructure needed. Files are stored in the provider's native storage. The S3 bucket/key values in the examples are routing identifiers used by Bifrost.
 
 **Anthropic Provider:** Does not support S3-based file uploads. Use the [Anthropic SDK](../anthropic-sdk/files-and-batch) with inline batch requests instead.
 </Note>
-
----
-
-## IAM Role Requirements (Bedrock Only)
-
-For **Bedrock provider** batch jobs, you need an IAM role with these permissions:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
-      "Resource": ["arn:aws:s3:::your-bucket", "arn:aws:s3:::your-bucket/*"]
-    },
-    {
-      "Effect": "Allow",
-      "Action": ["bedrock:InvokeModel"],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-Trust relationship:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {"Service": "bedrock.amazonaws.com"},
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-```
 
 ---
 

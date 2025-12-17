@@ -2015,13 +2015,9 @@ class TestOpenAIIntegration:
         s3_bucket = integration_settings.get("s3_bucket")
         s3_region = integration_settings.get("region", "us-west-2")
         s3_prefix = integration_settings.get("output_s3_prefix", "bifrost-batch-output")
-        role_arn = integration_settings.get("batch_role_arn")
-
+        
         if not s3_bucket:
             pytest.skip("S3 bucket not configured for file tests")
-
-        if not role_arn:
-            pytest.skip("Batch role ARN not configured for Bedrock batch tests")
 
         # Build output S3 URI for Bedrock batch
         output_s3_uri = f"s3://{s3_bucket}/{s3_prefix}"
@@ -2059,7 +2055,6 @@ class TestOpenAIIntegration:
                 extra_body={
                     "provider": provider,
                     "model": model,
-                    "role_arn": role_arn,
                     "output_s3_uri": output_s3_uri,
                 },
             )
@@ -2082,7 +2077,6 @@ class TestOpenAIIntegration:
                         extra_body={
                             "provider": provider,
                             "model": model,
-                            "role_arn": role_arn,
                             "output_s3_uri": output_s3_uri,
                         },
                     )
@@ -2103,19 +2097,12 @@ class TestOpenAIIntegration:
         if provider == "_no_providers_" or model == "_no_model_":
             pytest.skip("No providers configured for batch_list scenario")
 
-        config = get_config()
-        integration_settings = config.get_integration_settings("bedrock")
-        role_arn = integration_settings.get("batch_role_arn")
-
-        if not role_arn:
-            pytest.skip("Batch role ARN not configured for Bedrock batch tests")
-
         # Get provider-specific client
         client = get_provider_openai_client(provider)
 
         # Use OpenAI SDK for batch list (provider passed via extra_query)
         response = client.batches.list(
-            limit=10, extra_query={"provider": provider, "model": model, "role_arn": role_arn}
+            limit=10, extra_query={"provider": provider, "model": model}
         )
         assert_valid_batch_list_response(response, min_count=0)
         batch_count = len(response.data)
@@ -2181,13 +2168,9 @@ class TestOpenAIIntegration:
         s3_bucket = integration_settings.get("s3_bucket")
         s3_region = integration_settings.get("region", "us-west-2")
         s3_prefix = integration_settings.get("output_s3_prefix", "bifrost-batch-output")
-        role_arn = integration_settings.get("batch_role_arn")
-
+      
         if not s3_bucket:
             pytest.skip("S3 bucket not configured for file tests")
-
-        if provider == "bedrock" and not role_arn:
-            pytest.skip("Batch role ARN not configured for Bedrock batch tests")
 
         # Build output S3 URI for Bedrock batch
         output_s3_uri = f"s3://{s3_bucket}/{s3_prefix}"
@@ -2221,7 +2204,6 @@ class TestOpenAIIntegration:
             extra_body = {"provider": provider}
             if provider == "bedrock":
                 extra_body["model"] = model
-                extra_body["role_arn"] = role_arn
                 extra_body["output_s3_uri"] = output_s3_uri
 
             batch = client.batches.create(
@@ -2307,14 +2289,11 @@ class TestOpenAIIntegration:
         s3_bucket = integration_settings.get("s3_bucket")
         s3_region = integration_settings.get("region", "us-west-2")
         s3_prefix = integration_settings.get("output_s3_prefix", "bifrost-batch-output")
-        role_arn = integration_settings.get("batch_role_arn")
-
+        
         if not s3_bucket:
             pytest.skip("S3 bucket not configured for file tests")
 
-        if provider == "bedrock" and not role_arn:
-            pytest.skip("Batch role ARN not configured for Bedrock batch tests")
-
+        
         # Build output S3 URI for Bedrock batch
         output_s3_uri = f"s3://{s3_bucket}/{s3_prefix}"
 
@@ -2346,7 +2325,6 @@ class TestOpenAIIntegration:
             extra_body = {"provider": provider}
             if provider == "bedrock":
                 extra_body["model"] = model
-                extra_body["role_arn"] = role_arn
                 extra_body["output_s3_uri"] = output_s3_uri
 
             batch = client.batches.create(
@@ -2396,13 +2374,9 @@ class TestOpenAIIntegration:
         s3_bucket = integration_settings.get("s3_bucket")
         s3_region = integration_settings.get("region", "us-west-2")
         s3_prefix = integration_settings.get("output_s3_prefix", "bifrost-batch-output")
-        role_arn = integration_settings.get("batch_role_arn")
-
+        
         if not s3_bucket:
             pytest.skip("S3 bucket not configured for file tests")
-
-        if not role_arn:
-            pytest.skip("Batch role ARN not configured for Bedrock batch tests")
 
         # Get provider-specific client
         client = get_provider_openai_client(provider)
@@ -2524,7 +2498,6 @@ class TestOpenAIIntegration:
                 extra_body={
                     "provider": provider,
                     "model": model,
-                    "role_arn": role_arn,
                     "output_s3_uri": output_s3_uri,
                 },
             )

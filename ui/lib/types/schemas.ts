@@ -86,6 +86,17 @@ export const vertexKeyConfigSchema = z
 		},
 	);
 
+// S3 bucket configuration for Bedrock batch operations
+export const s3BucketConfigSchema = z.object({
+	bucket_name: z.string().min(1, "Bucket name is required"),
+	prefix: z.string().optional(),
+	is_default: z.boolean().optional(),
+})
+
+export const batchS3ConfigSchema = z.object({
+	buckets: z.array(s3BucketConfigSchema).optional(),
+})
+
 // Bedrock key config schema
 export const bedrockKeyConfigSchema = z
 	.object({
@@ -95,6 +106,7 @@ export const bedrockKeyConfigSchema = z
 		region: z.string().min(1, "Region is required"),
 		arn: z.string().optional(),
 		deployments: z.union([z.record(z.string(), z.string()), z.string()]).optional(),
+		batch_s3_config: batchS3ConfigSchema.optional(),
 	})
 	.refine(
 		(data) => {
@@ -155,6 +167,7 @@ export const modelProviderKeySchema = z
 		azure_key_config: azureKeyConfigSchema.optional(),
 		vertex_key_config: vertexKeyConfigSchema.optional(),
 		bedrock_key_config: bedrockKeyConfigSchema.optional(),
+		use_for_batch_api: z.boolean().optional(),
 	})
 	.refine(
 		(data) => {

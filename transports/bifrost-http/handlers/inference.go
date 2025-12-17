@@ -1248,10 +1248,15 @@ func (h *CompletionHandler) batchCreate(ctx *fasthttp.RequestCtx) {
 		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
 	}
 
+	var model *string
+	if modelName != "" {
+		model = schemas.Ptr(modelName)
+	}
+
 	// Build Bifrost batch create request
 	bifrostBatchReq := &schemas.BifrostBatchCreateRequest{
 		Provider:         schemas.ModelProvider(provider),
-		Model:            modelName,
+		Model:            model,
 		InputFileID:      req.InputFileID,
 		Requests:         req.Requests,
 		Endpoint:         schemas.BatchEndpoint(req.Endpoint),

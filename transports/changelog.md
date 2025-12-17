@@ -1,0 +1,5 @@
+- feat: adds new parameter for each provider key config `use_for_batch_apis`. This helps users to select which APIs or accounts to be used for Batch APIs.
+- feat: adds recalculate missing costs for logs - [@hpbyte](https://github.com/hpbyte)
+- chore: increased provider-level timeout limit to 48 hours
+- chore: bumped up Go version to 1.25.5
+- docs: updates key management links for integration docs - [@Georgehe4](https://github.com/Georgehe4)

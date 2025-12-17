@@ -15,6 +15,7 @@ type Key struct {
 	VertexKeyConfig  *VertexKeyConfig  `json:"vertex_key_config,omitempty"`  // Vertex-specific key configuration
 	BedrockKeyConfig *BedrockKeyConfig `json:"bedrock_key_config,omitempty"` // AWS Bedrock-specific key configuration
 	Enabled          *bool             `json:"enabled,omitempty"`            // Whether the key is active (default:true)
+	UseForBatchAPI   *bool             `json:"use_for_batch_api,omitempty"`  // Whether this key can be used for batch API operations (default:false for new keys, migrated keys default to true)
 }
 
 // AzureKeyConfig represents the Azure-specific configuration.
@@ -37,15 +38,29 @@ type VertexKeyConfig struct {
 
 // NOTE: To use Vertex IAM role authentication, set AuthCredentials to empty string.
 
+// S3BucketConfig represents a single S3 bucket configuration for batch operations.
+type S3BucketConfig struct {
+	BucketName string `json:"bucket_name"`          // S3 bucket name
+	Prefix     string `json:"prefix,omitempty"`     // S3 key prefix for batch files
+	IsDefault  bool   `json:"is_default,omitempty"` // Whether this is the default bucket for batch operations
+}
+
+// BatchS3Config holds S3 bucket configurations for Bedrock batch operations.
+// Supports multiple buckets to allow flexible batch job routing.
+type BatchS3Config struct {
+	Buckets []S3BucketConfig `json:"buckets,omitempty"` // List of S3 bucket configurations
+}
+
 // BedrockKeyConfig represents the AWS Bedrock-specific configuration.
 // It contains AWS-specific settings required for authentication and service access.
 type BedrockKeyConfig struct {
-	AccessKey    string            `json:"access_key,omitempty"`    // AWS access key for authentication
-	SecretKey    string            `json:"secret_key,omitempty"`    // AWS secret access key for authentication
-	SessionToken *string           `json:"session_token,omitempty"` // AWS session token for temporary credentials
-	Region       *string           `json:"region,omitempty"`        // AWS region for service access
-	ARN          *string           `json:"arn,omitempty"`           // Amazon Resource Name for resource identification
-	Deployments  map[string]string `json:"deployments,omitempty"`   // Mapping of model identifiers to inference profiles
+	AccessKey     string            `json:"access_key,omitempty"`      // AWS access key for authentication
+	SecretKey     string            `json:"secret_key,omitempty"`      // AWS secret access key for authentication
+	SessionToken  *string           `json:"session_token,omitempty"`   // AWS session token for temporary credentials
+	Region        *string           `json:"region,omitempty"`          // AWS region for service access
+	ARN           *string           `json:"arn,omitempty"`             // Amazon Resource Name for resource identification
+	Deployments   map[string]string `json:"deployments,omitempty"`     // Mapping of model identifiers to inference profiles
+	BatchS3Config *BatchS3Config    `json:"batch_s3_config,omitempty"` // S3 bucket configuration for batch operations
 }
 
 // NOTE: To use Bedrock IAM role authentication, set both AccessKey and SecretKey to empty strings.

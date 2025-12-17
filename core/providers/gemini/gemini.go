@@ -1513,7 +1513,11 @@ func (provider *GeminiProvider) BatchCreate(ctx context.Context, key schemas.Key
 	defer fasthttp.ReleaseResponse(resp)
 
 	// Build URL - use batchGenerateContent endpoint
-	_, model := schemas.ParseModelString(request.Model, schemas.Gemini)
+	var model string
+	if request.Model != nil {
+		_, model = schemas.ParseModelString(*request.Model, schemas.Gemini)
+	}
+	// We default gemini 2.5 flash
 	if model == "" {
 		model = "gemini-2.5-flash"
 	}
@@ -1538,7 +1542,7 @@ func (provider *GeminiProvider) BatchCreate(ctx context.Context, key schemas.Key
 	if resp.StatusCode() != fasthttp.StatusOK {
 		return nil, parseGeminiError(resp, &providerUtils.RequestMetadata{
 			Provider:    providerName,
-			Model:       request.Model,
+			Model:       model,
 			RequestType: schemas.BatchCreateRequest,
 		})
 	}
@@ -1622,13 +1626,8 @@ func (provider *GeminiProvider) BatchCreate(ctx context.Context, key schemas.Key
 	return result, nil
 }
 
-// BatchList lists batch jobs for Gemini.
-// Note: The consumer API may have limited list functionality.
-func (provider *GeminiProvider) BatchList(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
-	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchListRequest); err != nil {
-		return nil, err
-	}
-
+// batchListByKey lists batch jobs for Gemini for a single key.
+func (provider *GeminiProvider) batchListByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, time.Duration, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Create HTTP request
@@ -1664,7 +1663,7 @@ func (provider *GeminiProvider) BatchList(ctx context.Context, key schemas.Key, 
 	// Make request
 	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
-		return nil, bifrostErr
+		return nil, latency, bifrostErr
 	}
 
 	// Handle error response - if listing is not supported, return empty list
@@ -1681,9 +1680,9 @@ func (provider *GeminiProvider) BatchList(ctx context.Context, key schemas.Key, 
 					Provider:    providerName,
 					Latency:     latency.Milliseconds(),
 				},
-			}, nil
+			}, latency, nil
 		}
-		return nil, parseGeminiError(resp, &providerUtils.RequestMetadata{
+		return nil, latency, parseGeminiError(resp, &providerUtils.RequestMetadata{
 			Provider:    providerName,
 			RequestType: schemas.BatchListRequest,
 		})
@@ -1691,12 +1690,12 @@ func (provider *GeminiProvider) BatchList(ctx context.Context, key schemas.Key, 
 
 	body, err := providerUtils.CheckAndDecodeBody(resp)
 	if err != nil {
-		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
+		return nil, latency, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
 	}
 
 	var geminiResp GeminiBatchListResponse
 	if err := sonic.Unmarshal(body, &geminiResp); err != nil {
-		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
+		return nil, latency, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
 	}
 
 	// Convert to Bifrost format
@@ -1731,20 +1730,88 @@ func (provider *GeminiProvider) BatchList(ctx context.Context, key schemas.Key, 
 			Provider:    providerName,
 			Latency:     latency.Milliseconds(),
 		},
-	}, nil
+	}, latency, nil
 }
 
-// BatchRetrieve retrieves a specific batch job for Gemini.
-func (provider *GeminiProvider) BatchRetrieve(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchRetrieveRequest) (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError) {
-	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchRetrieveRequest); err != nil {
+// BatchList lists batch jobs for Gemini across all provided keys.
+// Note: The consumer API may have limited list functionality.
+// BatchList lists batch jobs using serial pagination across keys.
+// Exhausts all pages from one key before moving to the next.
+func (provider *GeminiProvider) BatchList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchListRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
 
-	if request.BatchID == "" {
-		return nil, providerUtils.NewBifrostOperationError("batch_id is required", nil, providerName)
+	if len(keys) == 0 {
+		return nil, providerUtils.NewBifrostOperationError("no keys provided for batch list", nil, providerName)
 	}
+
+	// Initialize serial pagination helper (Gemini uses PageToken for pagination)
+	helper, err := providerUtils.NewSerialListHelper(keys, request.PageToken, provider.logger)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid pagination cursor", err, providerName)
+	}
+
+	// Get current key to query
+	key, nativeCursor, ok := helper.GetCurrentKey()
+	if !ok {
+		// All keys exhausted
+		return &schemas.BifrostBatchListResponse{
+			Object:  "list",
+			Data:    []schemas.BifrostBatchRetrieveResponse{},
+			HasMore: false,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType: schemas.BatchListRequest,
+				Provider:    providerName,
+			},
+		}, nil
+	}
+
+	// Create a modified request with the native cursor
+	modifiedRequest := *request
+	if nativeCursor != "" {
+		modifiedRequest.PageToken = &nativeCursor
+	} else {
+		modifiedRequest.PageToken = nil
+	}
+
+	// Call the single-key helper
+	resp, latency, bifrostErr := provider.batchListByKey(ctx, key, &modifiedRequest)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	// Determine native cursor for next page
+	nativeNextCursor := ""
+	if resp.NextCursor != nil {
+		nativeNextCursor = *resp.NextCursor
+	}
+
+	// Build cursor for next request
+	nextCursor, hasMore := helper.BuildNextCursor(resp.HasMore, nativeNextCursor)
+
+	result := &schemas.BifrostBatchListResponse{
+		Object:  "list",
+		Data:    resp.Data,
+		HasMore: hasMore,
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			RequestType: schemas.BatchListRequest,
+			Provider:    providerName,
+			Latency:     latency.Milliseconds(),
+		},
+	}
+	if nextCursor != "" {
+		result.NextCursor = &nextCursor
+	}
+
+	return result, nil
+}
+
+// batchRetrieveByKey retrieves a specific batch job for Gemini for a single key.
+func (provider *GeminiProvider) batchRetrieveByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchRetrieveRequest) (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
 
 	// Create HTTP request
 	req := fasthttp.AcquireRequest()
@@ -1754,15 +1821,15 @@ func (provider *GeminiProvider) BatchRetrieve(ctx context.Context, key schemas.K
 
 	// Build URL - batch ID might be full resource name or just the ID
 	batchID := request.BatchID
-	var url string
+	var requestURL string
 	if strings.HasPrefix(batchID, "batches/") {
-		url = fmt.Sprintf("%s/%s", provider.networkConfig.BaseURL, batchID)
+		requestURL = fmt.Sprintf("%s/%s", provider.networkConfig.BaseURL, batchID)
 	} else {
-		url = fmt.Sprintf("%s/batches/%s", provider.networkConfig.BaseURL, batchID)
+		requestURL = fmt.Sprintf("%s/batches/%s", provider.networkConfig.BaseURL, batchID)
 	}
 
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
-	req.SetRequestURI(url)
+	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodGet)
 	if key.Value != "" {
 		req.Header.Set("x-goog-api-key", key.Value)
@@ -1826,10 +1893,9 @@ func (provider *GeminiProvider) BatchRetrieve(ctx context.Context, key schemas.K
 	}, nil
 }
 
-// BatchCancel cancels a batch job for Gemini.
-// Note: Cancellation support depends on the API version and batch state.
-func (provider *GeminiProvider) BatchCancel(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchCancelRequest) (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError) {
-	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchCancelRequest); err != nil {
+// BatchRetrieve retrieves a specific batch job for Gemini, trying each key until successful.
+func (provider *GeminiProvider) BatchRetrieve(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchRetrieveRequest) (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError) {
+	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchRetrieveRequest); err != nil {
 		return nil, err
 	}
 
@@ -1839,6 +1905,29 @@ func (provider *GeminiProvider) BatchCancel(ctx context.Context, key schemas.Key
 		return nil, providerUtils.NewBifrostOperationError("batch_id is required", nil, providerName)
 	}
 
+	if len(keys) == 0 {
+		return nil, providerUtils.NewBifrostOperationError("no keys provided for batch retrieve", nil, providerName)
+	}
+
+	// Try each key until we find the batch
+	var lastError *schemas.BifrostError
+	for _, key := range keys {
+		resp, err := provider.batchRetrieveByKey(ctx, key, request)
+		if err == nil {
+			return resp, nil
+		}
+		lastError = err
+		provider.logger.Debug(fmt.Sprintf("BatchRetrieve failed for key %s: %v", key.Name, err.Error.Message))
+	}
+
+	// All keys failed, return the last error
+	return nil, lastError
+}
+
+// batchCancelByKey cancels a batch job for Gemini for a single key.
+func (provider *GeminiProvider) batchCancelByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchCancelRequest) (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
+
 	// Create HTTP request
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
@@ -1847,16 +1936,16 @@ func (provider *GeminiProvider) BatchCancel(ctx context.Context, key schemas.Key
 
 	// Build URL for cancel operation
 	batchID := request.BatchID
-	var url string
+	var requestURL string
 	if strings.HasPrefix(batchID, "batches/") {
-		url = fmt.Sprintf("%s/%s:cancel", provider.networkConfig.BaseURL, batchID)
+		requestURL = fmt.Sprintf("%s/%s:cancel", provider.networkConfig.BaseURL, batchID)
 	} else {
-		url = fmt.Sprintf("%s/batches/%s:cancel", provider.networkConfig.BaseURL, batchID)
+		requestURL = fmt.Sprintf("%s/batches/%s:cancel", provider.networkConfig.BaseURL, batchID)
 	}
 
-	provider.logger.Debug("gemini batch cancel url: " + url)
+	provider.logger.Debug("gemini batch cancel url: " + requestURL)
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
-	req.SetRequestURI(url)
+	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodPost)
 	if key.Value != "" {
 		req.Header.Set("x-goog-api-key", key.Value)
@@ -1900,6 +1989,38 @@ func (provider *GeminiProvider) BatchCancel(ctx context.Context, key schemas.Key
 	}, nil
 }
 
+// BatchCancel cancels a batch job for Gemini, trying each key until successful.
+// Note: Cancellation support depends on the API version and batch state.
+func (provider *GeminiProvider) BatchCancel(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchCancelRequest) (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError) {
+	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchCancelRequest); err != nil {
+		return nil, err
+	}
+
+	providerName := provider.GetProviderKey()
+
+	if request.BatchID == "" {
+		return nil, providerUtils.NewBifrostOperationError("batch_id is required", nil, providerName)
+	}
+
+	if len(keys) == 0 {
+		return nil, providerUtils.NewBifrostOperationError("no keys provided for batch cancel", nil, providerName)
+	}
+
+	// Try each key until cancellation succeeds
+	var lastError *schemas.BifrostError
+	for _, key := range keys {
+		resp, err := provider.batchCancelByKey(ctx, key, request)
+		if err == nil {
+			return resp, nil
+		}
+		lastError = err
+		provider.logger.Debug(fmt.Sprintf("BatchCancel failed for key %s: %v", key.Name, err.Error.Message))
+	}
+
+	// All keys failed, return the last error
+	return nil, lastError
+}
+
 // processGeminiStreamChunk processes a single chunk from Gemini streaming response
 func processGeminiStreamChunk(jsonData string) (*GenerateContentResponse, error) {
 	// First, check if this is an error response
@@ -1922,24 +2043,9 @@ func processGeminiStreamChunk(jsonData string) (*GenerateContentResponse, error)
 	return &geminiResponse, nil
 }
 
-// BatchResults retrieves batch results for Gemini.
-// Results are extracted from dest.inlinedResponses for inline batches,
-// or downloaded from dest.fileName for file-based batches.
-func (provider *GeminiProvider) BatchResults(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchResultsRequest) (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
-	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchResultsRequest); err != nil {
-		return nil, err
-	}
-
+// batchResultsByKey retrieves batch results for Gemini for a single key.
+func (provider *GeminiProvider) batchResultsByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchResultsRequest) (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
-
-	if request.BatchID == "" {
-		return nil, providerUtils.NewBifrostOperationError("batch_id is required", nil, providerName)
-	}
-
-	// First, retrieve the batch to get its results
-	retrieveReq := &schemas.BifrostBatchRetrieveRequest{
-		BatchID: request.BatchID,
-	}
 
 	// We need to get the full batch response with results, so make the API call directly
 	req := fasthttp.AcquireRequest()
@@ -1949,16 +2055,16 @@ func (provider *GeminiProvider) BatchResults(ctx context.Context, key schemas.Ke
 
 	// Build URL
 	batchID := request.BatchID
-	var url string
+	var requestURL string
 	if strings.HasPrefix(batchID, "batches/") {
-		url = fmt.Sprintf("%s/%s", provider.networkConfig.BaseURL, batchID)
+		requestURL = fmt.Sprintf("%s/%s", provider.networkConfig.BaseURL, batchID)
 	} else {
-		url = fmt.Sprintf("%s/batches/%s", provider.networkConfig.BaseURL, batchID)
+		requestURL = fmt.Sprintf("%s/batches/%s", provider.networkConfig.BaseURL, batchID)
 	}
 
-	provider.logger.Debug("gemini batch results url: " + url)
+	provider.logger.Debug("gemini batch results url: " + requestURL)
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
-	req.SetRequestURI(url)
+	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodGet)
 	if key.Value != "" {
 		req.Header.Set("x-goog-api-key", key.Value)
@@ -1992,7 +2098,7 @@ func (provider *GeminiProvider) BatchResults(ctx context.Context, key schemas.Ke
 	// Check if batch is still processing
 	if geminiResp.Metadata.State == GeminiBatchStatePending || geminiResp.Metadata.State == GeminiBatchStateRunning {
 		return nil, providerUtils.NewBifrostOperationError(
-			fmt.Sprintf("batch %s is still processing (state: %s), results not yet available", retrieveReq.BatchID, geminiResp.Metadata.State),
+			fmt.Sprintf("batch %s is still processing (state: %s), results not yet available", request.BatchID, geminiResp.Metadata.State),
 			nil,
 			providerName,
 		)
@@ -2093,6 +2199,39 @@ func (provider *GeminiProvider) BatchResults(ctx context.Context, key schemas.Ke
 	}
 
 	return batchResultsResp, nil
+}
+
+// BatchResults retrieves batch results for Gemini, trying each key until successful.
+// Results are extracted from dest.inlinedResponses for inline batches,
+// or downloaded from dest.fileName for file-based batches.
+func (provider *GeminiProvider) BatchResults(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchResultsRequest) (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
+	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchResultsRequest); err != nil {
+		return nil, err
+	}
+
+	providerName := provider.GetProviderKey()
+
+	if request.BatchID == "" {
+		return nil, providerUtils.NewBifrostOperationError("batch_id is required", nil, providerName)
+	}
+
+	if len(keys) == 0 {
+		return nil, providerUtils.NewBifrostOperationError("no keys provided for batch results", nil, providerName)
+	}
+
+	// Try each key until we get results
+	var lastError *schemas.BifrostError
+	for _, key := range keys {
+		resp, err := provider.batchResultsByKey(ctx, key, request)
+		if err == nil {
+			return resp, nil
+		}
+		lastError = err
+		provider.logger.Debug(fmt.Sprintf("BatchResults failed for key %s: %v", key.Name, err.Error.Message))
+	}
+
+	// All keys failed, return the last error
+	return nil, lastError
 }
 
 // FileUpload uploads a file to Gemini.
@@ -2231,12 +2370,8 @@ func (provider *GeminiProvider) FileUpload(ctx context.Context, key schemas.Key,
 	}, nil
 }
 
-// FileList lists files from Gemini.
-func (provider *GeminiProvider) FileList(ctx context.Context, key schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
-	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileListRequest); err != nil {
-		return nil, err
-	}
-
+// fileListByKey lists files from Gemini for a single key.
+func (provider *GeminiProvider) fileListByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, time.Duration, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Create request
@@ -2269,12 +2404,12 @@ func (provider *GeminiProvider) FileList(ctx context.Context, key schemas.Key, r
 	// Make request
 	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
 	if bifrostErr != nil {
-		return nil, bifrostErr
+		return nil, latency, bifrostErr
 	}
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
-		return nil, parseGeminiError(resp, &providerUtils.RequestMetadata{
+		return nil, latency, parseGeminiError(resp, &providerUtils.RequestMetadata{
 			Provider:    providerName,
 			RequestType: schemas.FileListRequest,
 		})
@@ -2282,12 +2417,12 @@ func (provider *GeminiProvider) FileList(ctx context.Context, key schemas.Key, r
 
 	body, err := providerUtils.CheckAndDecodeBody(resp)
 	if err != nil {
-		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
+		return nil, latency, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
 	}
 
 	var geminiResp GeminiFileListResponse
 	if err := sonic.Unmarshal(body, &geminiResp); err != nil {
-		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
+		return nil, latency, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
 	}
 
 	// Convert to Bifrost response
@@ -2335,20 +2470,87 @@ func (provider *GeminiProvider) FileList(ctx context.Context, key schemas.Key, r
 		}
 	}
 
-	return bifrostResp, nil
+	return bifrostResp, latency, nil
 }
 
-// FileRetrieve retrieves file metadata from Gemini.
-func (provider *GeminiProvider) FileRetrieve(ctx context.Context, key schemas.Key, request *schemas.BifrostFileRetrieveRequest) (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError) {
-	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileRetrieveRequest); err != nil {
+// FileList lists files from Gemini across all provided keys.
+// FileList lists files using serial pagination across keys.
+// Exhausts all pages from one key before moving to the next.
+func (provider *GeminiProvider) FileList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileListRequest); err != nil {
 		return nil, err
 	}
 
 	providerName := provider.GetProviderKey()
 
-	if request.FileID == "" {
-		return nil, providerUtils.NewBifrostOperationError("file_id is required", nil, providerName)
+	if len(keys) == 0 {
+		return nil, providerUtils.NewBifrostOperationError("no keys provided for file list", nil, providerName)
 	}
+
+	// Initialize serial pagination helper
+	helper, err := providerUtils.NewSerialListHelper(keys, request.After, provider.logger)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid pagination cursor", err, providerName)
+	}
+
+	// Get current key to query
+	key, nativeCursor, ok := helper.GetCurrentKey()
+	if !ok {
+		// All keys exhausted
+		return &schemas.BifrostFileListResponse{
+			Object:  "list",
+			Data:    []schemas.FileObject{},
+			HasMore: false,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType: schemas.FileListRequest,
+				Provider:    providerName,
+			},
+		}, nil
+	}
+
+	// Create a modified request with the native cursor
+	modifiedRequest := *request
+	if nativeCursor != "" {
+		modifiedRequest.After = &nativeCursor
+	} else {
+		modifiedRequest.After = nil
+	}
+
+	// Call the single-key helper
+	resp, latency, bifrostErr := provider.fileListByKey(ctx, key, &modifiedRequest)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	// Determine native cursor for next page
+	nativeNextCursor := ""
+	if resp.After != nil {
+		nativeNextCursor = *resp.After
+	}
+
+	// Build cursor for next request
+	nextCursor, hasMore := helper.BuildNextCursor(resp.HasMore, nativeNextCursor)
+
+	result := &schemas.BifrostFileListResponse{
+		Object:  "list",
+		Data:    resp.Data,
+		HasMore: hasMore,
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			RequestType: schemas.FileListRequest,
+			Provider:    providerName,
+			Latency:     latency.Milliseconds(),
+		},
+	}
+	if nextCursor != "" {
+		result.After = &nextCursor
+	}
+
+	return result, nil
+}
+
+// fileRetrieveByKey retrieves file metadata from Gemini for a single key.
+func (provider *GeminiProvider) fileRetrieveByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostFileRetrieveRequest) (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
 
 	// Create request
 	req := fasthttp.AcquireRequest()
@@ -2430,9 +2632,9 @@ func (provider *GeminiProvider) FileRetrieve(ctx context.Context, key schemas.Ke
 	}, nil
 }
 
-// FileDelete deletes a file from Gemini.
-func (provider *GeminiProvider) FileDelete(ctx context.Context, key schemas.Key, request *schemas.BifrostFileDeleteRequest) (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError) {
-	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileDeleteRequest); err != nil {
+// FileRetrieve retrieves file metadata from Gemini, trying each key until successful.
+func (provider *GeminiProvider) FileRetrieve(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileRetrieveRequest) (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError) {
+	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileRetrieveRequest); err != nil {
 		return nil, err
 	}
 
@@ -2441,6 +2643,29 @@ func (provider *GeminiProvider) FileDelete(ctx context.Context, key schemas.Key,
 	if request.FileID == "" {
 		return nil, providerUtils.NewBifrostOperationError("file_id is required", nil, providerName)
 	}
+
+	if len(keys) == 0 {
+		return nil, providerUtils.NewBifrostOperationError("no keys provided for file retrieve", nil, providerName)
+	}
+
+	// Try each key until we find the file
+	var lastError *schemas.BifrostError
+	for _, key := range keys {
+		resp, err := provider.fileRetrieveByKey(ctx, key, request)
+		if err == nil {
+			return resp, nil
+		}
+		lastError = err
+		provider.logger.Debug(fmt.Sprintf("FileRetrieve failed for key %s: %v", key.Name, err.Error.Message))
+	}
+
+	// All keys failed, return the last error
+	return nil, lastError
+}
+
+// fileDeleteByKey deletes a file from Gemini for a single key.
+func (provider *GeminiProvider) fileDeleteByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostFileDeleteRequest) (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
 
 	// Create request
 	req := fasthttp.AcquireRequest()
@@ -2489,10 +2714,41 @@ func (provider *GeminiProvider) FileDelete(ctx context.Context, key schemas.Key,
 	}, nil
 }
 
+// FileDelete deletes a file from Gemini, trying each key until successful.
+func (provider *GeminiProvider) FileDelete(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileDeleteRequest) (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError) {
+	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileDeleteRequest); err != nil {
+		return nil, err
+	}
+
+	providerName := provider.GetProviderKey()
+
+	if request.FileID == "" {
+		return nil, providerUtils.NewBifrostOperationError("file_id is required", nil, providerName)
+	}
+
+	if len(keys) == 0 {
+		return nil, providerUtils.NewBifrostOperationError("no keys provided for file delete", nil, providerName)
+	}
+
+	// Try each key until deletion succeeds
+	var lastError *schemas.BifrostError
+	for _, key := range keys {
+		resp, err := provider.fileDeleteByKey(ctx, key, request)
+		if err == nil {
+			return resp, nil
+		}
+		lastError = err
+		provider.logger.Debug(fmt.Sprintf("FileDelete failed for key %s: %v", key.Name, err.Error.Message))
+	}
+
+	// All keys failed, return the last error
+	return nil, lastError
+}
+
 // FileContent downloads file content from Gemini.
 // Note: Gemini Files API doesn't support direct content download.
 // Files are accessed via their URI in API requests.
-func (provider *GeminiProvider) FileContent(ctx context.Context, key schemas.Key, request *schemas.BifrostFileContentRequest) (*schemas.BifrostFileContentResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) FileContent(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileContentRequest) (*schemas.BifrostFileContentResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileContentRequest); err != nil {
 		return nil, err
 	}

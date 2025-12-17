@@ -296,7 +296,7 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 				if provider, ok = (*ctx).Value(bifrostContextKeyProvider).(schemas.ModelProvider); ok && provider != schemas.Anthropic {
 					isNonAnthropicProvider = true
 				}
-				var model string
+				var model *string
 				requests := make([]schemas.BatchRequestItem, len(anthropicReq.Requests))
 				for i, r := range anthropicReq.Requests {
 					if isNonAnthropicProvider {
@@ -304,9 +304,9 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 						if !ok {
 							return nil, errors.New("model is required")
 						}
-						if model == "" {
-							model = requestModel
-						} else if model != requestModel {
+						if model == nil {
+							model = schemas.Ptr(requestModel)
+						} else if *model != requestModel {
 							return nil, errors.New("for non-Anthropic providers, model must be the same for all requests")
 						}
 					}

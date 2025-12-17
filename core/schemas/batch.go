@@ -63,9 +63,9 @@ type BatchError struct {
 
 // BifrostBatchCreateRequest represents a request to create a batch job.
 type BifrostBatchCreateRequest struct {
-	Provider ModelProvider `json:"provider"`
-	Model    string        `json:"model,omitempty"` // Model hint for routing (optional for file-based)
-	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)
+	Provider       ModelProvider `json:"provider"`
+	Model          *string       `json:"model,omitempty"` // Model hint for routing (optional for file-based) it may or may not present depending on the provider and usage of integration vs direct API
+	RawRequestBody []byte        `json:"-"`               // Raw request body (not serialized)
 
 	// OpenAI-style: file-based batching
 	InputFileID string `json:"input_file_id,omitempty"` // ID of uploaded JSONL file
@@ -117,7 +117,7 @@ type BifrostBatchCreateResponse struct {
 // BifrostBatchListRequest represents a request to list batch jobs.
 type BifrostBatchListRequest struct {
 	Provider ModelProvider `json:"provider"`
-	Model    string        `json:"model"`
+	Model    *string       `json:"model"`
 
 	// Pagination
 	Limit      int     `json:"limit,omitempty"`       // Max results to return
@@ -149,7 +149,7 @@ type BifrostBatchListResponse struct {
 // BifrostBatchRetrieveRequest represents a request to retrieve a batch job.
 type BifrostBatchRetrieveRequest struct {
 	Provider ModelProvider `json:"provider"`
-	Model    string        `json:"model"`
+	Model    *string       `json:"model"`
 	BatchID  string        `json:"batch_id"` // ID of the batch to retrieve
 
 	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)
@@ -204,7 +204,7 @@ type BifrostBatchRetrieveResponse struct {
 // BifrostBatchCancelRequest represents a request to cancel a batch job.
 type BifrostBatchCancelRequest struct {
 	Provider ModelProvider `json:"provider"`
-	Model    string        `json:"model"`
+	Model    *string       `json:"model"`
 	BatchID  string        `json:"batch_id"` // ID of the batch to cancel
 
 	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)
@@ -233,7 +233,7 @@ type BifrostBatchCancelResponse struct {
 // BifrostBatchResultsRequest represents a request to retrieve batch results.
 type BifrostBatchResultsRequest struct {
 	Provider ModelProvider `json:"provider"`
-	Model    string        `json:"model"`
+	Model    *string       `json:"model"`
 	BatchID  string        `json:"batch_id"` // ID of the batch to get results for
 
 	RawRequestBody []byte `json:"-"` // Raw request body (not serialized)
