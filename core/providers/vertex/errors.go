@@ -1,6 +1,8 @@
 package vertex
 
 import (
+	"strings"
+
 	"github.com/bytedance/sonic"
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	"github.com/maximhq/bifrost/core/schemas"
@@ -19,6 +21,46 @@ func parseVertexError(resp *fasthttp.Response, meta *providerUtils.RequestMetada
 	decodedBody, err := providerUtils.CheckAndDecodeBody(resp)
 	if err != nil {
 		bifrostErr := providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
+		if meta != nil {
+			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+				Provider:       meta.Provider,
+				ModelRequested: meta.Model,
+				RequestType:    meta.RequestType,
+			}
+		}
+		return bifrostErr
+	}
+
+	// Check for empty response
+	trimmed := strings.TrimSpace(string(decodedBody))
+	if len(trimmed) == 0 {
+		bifrostErr := &schemas.BifrostError{
+			IsBifrostError: false,
+			StatusCode:     schemas.Ptr(resp.StatusCode()),
+			Error: &schemas.ErrorField{
+				Message: schemas.ErrProviderResponseEmpty,
+			},
+		}
+		if meta != nil {
+			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+				Provider:       meta.Provider,
+				ModelRequested: meta.Model,
+				RequestType:    meta.RequestType,
+			}
+		}
+		return bifrostErr
+	}
+
+	// Check for HTML error response before attempting JSON parsing
+	if providerUtils.IsHTMLResponse(resp, decodedBody) {
+		errorMsg := providerUtils.ExtractHTMLErrorMessage(decodedBody)
+		bifrostErr := &schemas.BifrostError{
+			IsBifrostError: false,
+			StatusCode:     schemas.Ptr(resp.StatusCode()),
+			Error: &schemas.ErrorField{
+				Message: errorMsg,
+			},
+		}
 		if meta != nil {
 			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
 				Provider:       meta.Provider,

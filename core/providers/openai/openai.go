@@ -1890,17 +1890,40 @@ func (provider *OpenAIProvider) Transcription(ctx context.Context, key schemas.K
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
 	}
 
+	// Check for empty response
+	trimmed := strings.TrimSpace(string(responseBody))
+	if len(trimmed) == 0 {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: true,
+			Error: &schemas.ErrorField{
+				Message: schemas.ErrProviderResponseEmpty,
+			},
+		}
+	}
+
+	copiedResponseBody := append([]byte(nil), responseBody...)
+
 	// Parse OpenAI's transcription response directly into BifrostTranscribe
 	response := &schemas.BifrostTranscriptionResponse{}
 
-	if err := sonic.Unmarshal(responseBody, response); err != nil {
+	if err := sonic.Unmarshal(copiedResponseBody, response); err != nil {
+		// Check if it's an HTML response
+		if providerUtils.IsHTMLResponse(resp, copiedResponseBody) {
+			errorMessage := providerUtils.ExtractHTMLErrorMessage(copiedResponseBody)
+			return nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: &schemas.ErrorField{
+					Message: errorMessage,
+				},
+			}
+		}
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseUnmarshal, err, providerName)
 	}
 
 	// Parse raw response for RawResponse field
 	var rawResponse interface{}
 	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
-		if err := sonic.Unmarshal(responseBody, &rawResponse); err != nil {
+		if err := sonic.Unmarshal(copiedResponseBody, &rawResponse); err != nil {
 			return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRawResponseUnmarshal, err, providerName)
 		}
 	}

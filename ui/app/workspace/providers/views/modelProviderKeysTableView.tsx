@@ -134,13 +134,12 @@ export default function ModelProviderKeysTableView({ provider, className }: Prop
 									<TableCell>
 										<Switch
 											checked={isKeyEnabled}
+											size="md"
 											disabled={!hasUpdateProviderAccess}
 											onCheckedChange={(checked) => {
 												updateProvider({
 													...provider,
-													keys: provider.keys.map((k, i) =>
-														i === index ? { ...k, enabled: checked } : k
-													),
+													keys: provider.keys.map((k, i) => (i === index ? { ...k, enabled: checked } : k)),
 												})
 													.unwrap()
 													.then(() => {

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -314,12 +315,13 @@ func SetExtraHeadersHTTP(ctx context.Context, req *http.Request, extraHeaders ma
 // HandleProviderAPIError processes error responses from provider APIs.
 // It attempts to unmarshal the error response and returns a BifrostError
 // with the appropriate status code and error information.
-// errorResp must be a pointer to the target struct for unmarshaling.
+// HTML detection only runs if JSON parsing fails to avoid expensive regex operations
+// on responses that are almost certainly valid JSON. errorResp must be a pointer to
+// the target struct for unmarshaling.
 func HandleProviderAPIError(resp *fasthttp.Response, errorResp any) *schemas.BifrostError {
 	statusCode := resp.StatusCode()
-	body := append([]byte(nil), resp.Body()...)
 
-	// decode body
+	// Decode body
 	decodedBody, err := CheckAndDecodeBody(resp)
 	if err != nil {
 		return &schemas.BifrostError{
@@ -331,24 +333,48 @@ func HandleProviderAPIError(resp *fasthttp.Response, errorResp any) *schemas.Bif
 		}
 	}
 
-	body = decodedBody
-
-	if err := sonic.Unmarshal(body, errorResp); err != nil {
-		rawResponse := body
-		message := fmt.Sprintf("provider API error: %s", string(rawResponse))
+	// Check for empty response
+	trimmed := strings.TrimSpace(string(decodedBody))
+	if len(trimmed) == 0 {
 		return &schemas.BifrostError{
 			IsBifrostError: false,
 			StatusCode:     &statusCode,
 			Error: &schemas.ErrorField{
-				Message: message,
+				Message: schemas.ErrProviderResponseEmpty,
 			},
 		}
 	}
 
+	// Try JSON parsing first
+	if err := sonic.Unmarshal(decodedBody, errorResp); err == nil {
+		// JSON parsing succeeded, return success
+		return &schemas.BifrostError{
+			IsBifrostError: false,
+			StatusCode:     &statusCode,
+			Error:          &schemas.ErrorField{},
+		}
+	}
+
+	// JSON parsing failed - now check if it's an HTML response (expensive operation)
+	if IsHTMLResponse(resp, decodedBody) {
+		errorMessage := ExtractHTMLErrorMessage(decodedBody)
+		return &schemas.BifrostError{
+			IsBifrostError: false,
+			StatusCode:     &statusCode,
+			Error: &schemas.ErrorField{
+				Message: errorMessage,
+			},
+		}
+	}
+
+	// Not HTML either - return raw response as error message
+	message := fmt.Sprintf("provider API error: %s", string(decodedBody))
 	return &schemas.BifrostError{
 		IsBifrostError: false,
 		StatusCode:     &statusCode,
-		Error:          &schemas.ErrorField{},
+		Error: &schemas.ErrorField{
+			Message: message,
+		},
 	}
 }
 
@@ -356,7 +382,20 @@ func HandleProviderAPIError(resp *fasthttp.Response, errorResp any) *schemas.Bif
 // It attempts to parse the response body into the provided response type
 // and returns either the parsed response or a BifrostError if parsing fails.
 // If sendBackRawResponse is true, it returns the raw response interface, otherwise nil.
+// HTML detection only runs if JSON parsing fails to avoid expensive regex operations
+// on responses that are almost certainly valid JSON.
 func HandleProviderResponse[T any](responseBody []byte, response *T, requestBody []byte, sendBackRawRequest bool, sendBackRawResponse bool) (rawRequest interface{}, rawResponse interface{}, bifrostErr *schemas.BifrostError) {
+	// Check for empty response
+	trimmed := strings.TrimSpace(string(responseBody))
+	if len(trimmed) == 0 {
+		return nil, nil, &schemas.BifrostError{
+			IsBifrostError: true,
+			Error: &schemas.ErrorField{
+				Message: schemas.ErrProviderResponseEmpty,
+			},
+		}
+	}
+
 	var wg sync.WaitGroup
 	var structuredErr, rawRequestErr, rawResponseErr error
 
@@ -394,6 +433,18 @@ func HandleProviderResponse[T any](responseBody []byte, response *T, requestBody
 	wg.Wait()
 
 	if structuredErr != nil {
+		// JSON parsing failed - check if it's an HTML response (expensive operation)
+		if IsHTMLResponse(nil, responseBody) {
+			errorMessage := ExtractHTMLErrorMessage(responseBody)
+			return nil, nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: &schemas.ErrorField{
+					Message: schemas.ErrProviderResponseHTML,
+					Error:   errors.New(errorMessage),
+				},
+			}
+		}
+
 		return nil, nil, &schemas.BifrostError{
 			IsBifrostError: true,
 			Error: &schemas.ErrorField{
@@ -441,6 +492,7 @@ func HandleProviderResponse[T any](responseBody []byte, response *T, requestBody
 	return nil, nil, nil
 }
 
+// ParseAndSetRawRequest parses the raw request body and sets it in the extra fields.
 func ParseAndSetRawRequest(extraFields *schemas.BifrostResponseExtraFields, jsonBody []byte) {
 	var rawRequest interface{}
 	if err := sonic.Unmarshal(jsonBody, &rawRequest); err != nil {
@@ -493,6 +545,123 @@ func CheckAndDecodeBody(resp *fasthttp.Response) ([]byte, error) {
 	default:
 		return resp.Body(), nil
 	}
+}
+
+// IsHTMLResponse checks if the response is HTML by examining the Content-Type header
+// and/or the response body for HTML indicators.
+func IsHTMLResponse(resp *fasthttp.Response, body []byte) bool {
+	// Check Content-Type header first (most reliable indicator)
+	if resp != nil {
+		contentType := strings.ToLower(string(resp.Header.Peek("Content-Type")))
+		if strings.Contains(contentType, "text/html") {
+			return true
+		}
+	}
+
+	// If body is small, it's unlikely to be HTML
+	if len(body) < 20 {
+		return false
+	}
+
+	// Check for HTML indicators in body
+	bodyLower := strings.ToLower(string(body))
+
+	// Look for common HTML tags or DOCTYPE
+	htmlIndicators := []string{
+		"<!doctype html",
+		"<html",
+		"<head",
+		"<body",
+		"<title>",
+		"<h1>",
+		"<h2>",
+		"<h3>",
+		"<p>",
+		"<div",
+	}
+
+	for _, indicator := range htmlIndicators {
+		if strings.Contains(bodyLower, indicator) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Limit body size to prevent ReDoS on very large malicious responses
+const maxBodySize = 32 * 1024 // 32KB
+
+// ExtractHTMLErrorMessage extracts meaningful error information from an HTML response.
+// It attempts to find error messages from title tags, headers, and visible text.
+func ExtractHTMLErrorMessage(body []byte) string {
+	if len(body) > maxBodySize {
+		body = body[:maxBodySize]
+	}
+
+	bodyStr := string(body)
+	bodyLower := strings.ToLower(bodyStr)
+
+	// Try to extract title first
+	if idx := strings.Index(bodyLower, "<title>"); idx != -1 {
+		endIdx := strings.Index(bodyLower[idx:], "</title>")
+		if endIdx != -1 {
+			title := strings.TrimSpace(bodyStr[idx+7 : idx+endIdx])
+			if title != "" && title != "Error" {
+				return title
+			}
+		}
+	}
+
+	// Try to extract from h1, h2, h3 tags (common for error pages)
+	for _, tag := range []string{"h1", "h2", "h3"} {
+		pattern := fmt.Sprintf("<%s[^>]*>([^<]+)</%s>", tag, tag)
+		re := regexp.MustCompile("(?i)" + pattern)
+		if matches := re.FindStringSubmatch(bodyStr); len(matches) > 1 {
+			msg := strings.TrimSpace(matches[1])
+			if msg != "" {
+				return msg
+			}
+		}
+	}
+
+	// Try to extract from meta description
+	pattern := `<meta\s+name="description"\s+content="([^"]+)"`
+	re := regexp.MustCompile("(?i)" + pattern)
+	if matches := re.FindStringSubmatch(bodyStr); len(matches) > 1 {
+		msg := strings.TrimSpace(matches[1])
+		if msg != "" {
+			return msg
+		}
+	}
+
+	// Extract visible text: remove script and style tags, then extract text
+	// Remove script and style tags and their content
+	re = regexp.MustCompile(`(?i)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>`)
+	cleaned := re.ReplaceAllString(bodyStr, "")
+
+	// Remove HTML tags
+	re = regexp.MustCompile(`<[^>]+>`)
+	cleaned = re.ReplaceAllString(cleaned, " ")
+
+	// Clean up whitespace and get first meaningful sentence
+	sentences := strings.FieldsFunc(cleaned, func(r rune) bool {
+		return r == '\n' || r == '\r'
+	})
+
+	for _, sentence := range sentences {
+		trimmed := strings.TrimSpace(sentence)
+		if len(trimmed) > 10 && len(trimmed) < 500 {
+			// Limit to first 200 chars to avoid very long messages
+			if len(trimmed) > 200 {
+				trimmed = trimmed[:200] + "..."
+			}
+			return trimmed
+		}
+	}
+
+	// If all else fails, return a generic message with status code context
+	return "HTML error response received from provider"
 }
 
 // JSONLParseResult holds parsed items and any line-level errors encountered during parsing.

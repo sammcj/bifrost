@@ -28,6 +28,8 @@ const (
 	ErrProviderDoRequest            = "failed to execute HTTP request to provider API"
 	ErrProviderResponseDecode       = "failed to decode response body from provider API"
 	ErrProviderResponseUnmarshal    = "failed to unmarshal response from provider API"
+	ErrProviderResponseEmpty        = "empty response received from provider"
+	ErrProviderResponseHTML         = "HTML response received from provider"
 	ErrProviderRawRequestUnmarshal  = "failed to unmarshal raw request from provider API"
 	ErrProviderRawResponseUnmarshal = "failed to unmarshal raw response from provider API"
 	ErrProviderResponseDecompress   = "failed to decompress provider's response"

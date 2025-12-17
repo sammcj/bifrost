@@ -1,3 +1,6 @@
+- feat: add handling for HTML and empty responses from providers
+- feat: added transcription support for mistral
+
 - feat: adds new parameter for each provider key config `use_for_batch_apis`. This helps users to select which APIs or accounts to be used for Batch APIs.
 - feat: adds recalculate missing costs for logs - [@hpbyte](https://github.com/hpbyte)
 - chore: increased provider-level timeout limit to 48 hours
