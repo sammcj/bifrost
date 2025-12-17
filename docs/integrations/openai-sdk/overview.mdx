@@ -209,7 +209,7 @@ const response = await openai.chat.completions.create({
 
 Pass API keys directly in requests to bypass Bifrost's load balancing. You can pass any provider's API key (OpenAI, Anthropic, Mistral, etc.) since Bifrost only looks for `Authorization` or `x-api-key` headers. This requires the **Allow Direct API keys** option to be enabled in Bifrost configuration.
 
-> **Learn more:** See [Quickstart Configuration](../../quickstart/README) for enabling direct API key usage.
+> **Learn more:** See [Key Management](../../features/keys-management#direct-key-bypass) for enabling direct API key usage.
 
 <Tabs group="openai-sdk">
 <Tab title="Python">
