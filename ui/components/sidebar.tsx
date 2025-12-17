@@ -7,10 +7,13 @@ import {
 	BoxIcon,
 	BugIcon,
 	ChevronsLeftRightEllipsis,
+	CircleDollarSign,
 	Cog,
 	Construction,
 	FlaskConical,
 	FolderGit,
+	Gauge,
+	Globe,
 	KeyRound,
 	Landmark,
 	Layers,
@@ -18,12 +21,15 @@ import {
 	Logs,
 	Puzzle,
 	ScrollText,
+	Settings,
 	Settings2Icon,
+	Shield,
 	Shuffle,
 	Telescope,
 	User,
 	UserRoundCheck,
 	Users,
+	Zap,
 } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -54,7 +60,7 @@ import moment from "moment";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ThemeToggle } from "./themeToggle";
 import { Badge } from "./ui/badge";
@@ -141,6 +147,7 @@ interface SidebarItem {
 	hasAccess: boolean;
 	subItems?: SidebarItem[];
 	tag?: string;
+	queryParam?: string; // Optional: for tab-based subitems (e.g., "client-settings")
 }
 
 const SidebarItemView = ({
@@ -153,6 +160,7 @@ const SidebarItemView = ({
 	onToggle,
 	pathname,
 	router,
+	searchParams,
 }: {
 	item: SidebarItem;
 	isActive: boolean;
@@ -163,9 +171,20 @@ const SidebarItemView = ({
 	onToggle?: () => void;
 	pathname: string;
 	router: ReturnType<typeof useRouter>;
+	searchParams: ReturnType<typeof useSearchParams>;
 }) => {
 	const hasSubItems = "subItems" in item && item.subItems && item.subItems.length > 0;
-	const isAnySubItemActive = hasSubItems && item.subItems?.some((subItem) => pathname.startsWith(subItem.url));
+	const currentTab = searchParams.get("tab");
+	const isAnySubItemActive =
+		hasSubItems &&
+		item.subItems?.some((subItem) => {
+			// For query param based subitems, check if tab matches
+			if (subItem.queryParam) {
+				return pathname === subItem.url && currentTab === subItem.queryParam;
+			}
+			// For path based subitems, check if pathname starts with url
+			return pathname.startsWith(subItem.url);
+		});
 
 	const handleClick = (e: React.MouseEvent) => {
 		if (hasSubItems && onToggle && item.hasAccess) {
@@ -183,8 +202,12 @@ const SidebarItemView = ({
 		router.push(url);
 	};
 
-	const handleSubItemClick = (url: string) => {
-		router.push(url);
+	const handleSubItemClick = (subItem: SidebarItem) => {
+		if (subItem.queryParam) {
+			router.push(`${subItem.url}?tab=${subItem.queryParam}`);
+		} else {
+			router.push(subItem.url);
+		}
 	};
 
 	return (
@@ -219,7 +242,10 @@ const SidebarItemView = ({
 			{hasSubItems && isExpanded && (
 				<SidebarMenuSub className="border-sidebar-border mt-1 ml-4 space-y-0.5 border-l pl-2">
 					{item.subItems?.map((subItem: SidebarItem) => {
-						const isSubItemActive = pathname.startsWith(subItem.url);
+						// For query param based subitems, check if tab matches
+						const isSubItemActive = subItem.queryParam
+							? pathname === subItem.url && currentTab === subItem.queryParam
+							: pathname.startsWith(subItem.url);
 						const SubItemIcon = subItem.icon;
 						return (
 							<SidebarMenuSubItem key={subItem.title}>
@@ -231,7 +257,7 @@ const SidebarItemView = ({
 												? "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
 												: "hover:bg-sidebar-accent hover:text-accent-foreground text-slate-500 dark:text-zinc-400"
 									}`}
-									onClick={() => (subItem.hasAccess === false ? undefined : handleSubItemClick(subItem.url))}
+									onClick={() => (subItem.hasAccess === false ? undefined : handleSubItemClick(subItem))}
 								>
 									<div className="flex items-center gap-2">
 										{SubItemIcon && <SubItemIcon className={`h-3.5 w-3.5 ${isSubItemActive ? "text-primary" : "text-muted-foreground"}`} />}
@@ -290,6 +316,7 @@ const compareVersions = (v1: string, v2: string): number => {
 export default function AppSidebar() {
 	const pathname = usePathname();
 	const router = useRouter();
+	const searchParams = useSearchParams();
 	const [mounted, setMounted] = useState(false);
 	const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 	const [areCardsEmpty, setAreCardsEmpty] = useState(false);
@@ -462,6 +489,92 @@ export default function AppSidebar() {
 			icon: Settings2Icon,
 			description: "Bifrost settings",
 			hasAccess: hasSettingsAccess,
+			subItems: [
+				{
+					title: "Client Settings",
+					url: "/workspace/config",
+					icon: Settings,
+					description: "Client configuration settings",
+					hasAccess: hasSettingsAccess,
+					queryParam: "client-settings",
+				},
+				{
+					title: "Pricing Config",
+					url: "/workspace/config",
+					icon: CircleDollarSign,
+					description: "Pricing configuration",
+					hasAccess: hasSettingsAccess,
+					queryParam: "pricing-config",
+				},
+				{
+					title: "Logging",
+					url: "/workspace/config",
+					icon: Logs,
+					description: "Logging configuration",
+					hasAccess: hasSettingsAccess,
+					queryParam: "logging",
+				},
+				{
+					title: "Governance",
+					url: "/workspace/config",
+					icon: Landmark,
+					description: "Governance settings",
+					hasAccess: hasSettingsAccess,
+					queryParam: "governance",
+				},
+				{
+					title: "Caching",
+					url: "/workspace/config",
+					icon: Zap,
+					description: "Caching configuration",
+					hasAccess: hasSettingsAccess,
+					queryParam: "caching",
+				},
+				{
+					title: "Observability",
+					url: "/workspace/config",
+					icon: Gauge,
+					description: "Observability settings",
+					hasAccess: hasSettingsAccess,
+					queryParam: "observability",
+				},
+				{
+					title: "Security",
+					url: "/workspace/config",
+					icon: Shield,
+					description: "Security settings",
+					hasAccess: hasSettingsAccess,
+					queryParam: "security",
+				},
+				...(IS_ENTERPRISE
+					? [
+							{
+								title: "Proxy",
+								url: "/workspace/config",
+								icon: Globe,
+								description: "Proxy configuration",
+								hasAccess: hasSettingsAccess,
+								queryParam: "proxy",
+							},
+						]
+					: []),
+				{
+					title: "API Keys",
+					url: "/workspace/config",
+					icon: KeyRound,
+					description: "API keys management",
+					hasAccess: hasSettingsAccess,
+					queryParam: "api-keys",
+				},
+				{
+					title: "Performance Tuning",
+					url: "/workspace/config",
+					icon: Zap,
+					description: "Performance tuning settings",
+					hasAccess: hasSettingsAccess,
+					queryParam: "performance-tuning",
+				},
+			],
 		},
 	];
 	const { data: version } = useGetVersionQuery();
@@ -624,6 +737,7 @@ export default function AppSidebar() {
 										onToggle={() => toggleItem(item.title)}
 										pathname={pathname}
 										router={router}
+										searchParams={searchParams}
 									/>
 								);
 							})}

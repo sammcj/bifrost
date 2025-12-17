@@ -1504,7 +1504,7 @@ func (provider *AzureProvider) BatchList(ctx context.Context, keys []schemas.Key
 	sendBackRawResponse := providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse)
 
 	if len(keys) == 0 {
-		return nil, providerUtils.NewConfigurationError("no Azure keys available for file content operation", providerName)
+		return nil, providerUtils.NewConfigurationError("no Azure keys available for batch list operation", providerName)
 	}
 
 	// Initialize serial pagination helper
@@ -1724,7 +1724,6 @@ func (provider *AzureProvider) BatchCancel(ctx context.Context, keys []schemas.K
 		return nil, providerUtils.NewConfigurationError("no Azure keys available for batch cancel operation", providerName)
 	}
 
-
 	sendBackRawRequest := providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest)
 	sendBackRawResponse := providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse)
 
@@ -1839,7 +1838,7 @@ func (provider *AzureProvider) BatchResults(ctx context.Context, keys []schemas.
 	providerName := provider.GetProviderKey()
 
 	// First, retrieve the batch to get the output_file_id (using all keys)
-	batchResp, bifrostErr := provider.BatchRetr	ieve(ctx, keys, &schemas.BifrostBatchRetrieveRequest{
+	batchResp, bifrostErr := provider.BatchRetrieve(ctx, keys, &schemas.BifrostBatchRetrieveRequest{
 		Provider: request.Provider,
 		BatchID:  request.BatchID,
 	})

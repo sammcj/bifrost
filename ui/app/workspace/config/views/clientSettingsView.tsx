@@ -66,7 +66,7 @@ export default function ClientSettingsView() {
 	}, [bifrostConfig, localConfig, updateCoreConfig]);
 
 	return (
-		<div className="space-y-4">
+		<div className="space-y-4 w-full max-w-4xl mx-auto">
 			<div className="flex items-center justify-between">
 				<div>
 					<h2 className="text-2xl font-semibold tracking-tight">Client Settings</h2>

@@ -264,10 +264,7 @@ export function LogFilters({ filters, onFiltersChange, liveEnabled, onLiveToggle
 						<CommandList>
 							<CommandEmpty>No filters found.</CommandEmpty>
 							<CommandGroup>
-								<CommandItem
-									className="cursor-pointer"
-									onSelect={() => onFiltersChange({ ...filters, missing_cost_only: !filters.missing_cost_only })}
-								>
+								<CommandItem className="cursor-pointer">
 									<Checkbox
 										className={cn(
 											"border-primary opacity-50",
@@ -327,12 +324,15 @@ export function LogFilters({ filters, onFiltersChange, liveEnabled, onLiveToggle
 						<MoreVertical className="h-4 w-4" />
 					</Button>
 				</PopoverTrigger>
-				<PopoverContent className="w-[200px] bg-white p-2" align="end">
+				<PopoverContent className="w-[250px] bg-white p-2" align="end">
 					<Command>
 						<CommandList>
 							<CommandItem className="cursor-pointer" onSelect={handleRecalculateCosts}>
 								<Calculator className="text-muted-foreground size-4" />
-								<span className="text-sm">Recalculate costs</span>
+								<div className="flex flex-col">
+									<span className="text-sm">Recalculate costs</span>
+									<span className="text-muted-foreground text-xs">For all logs that don't have a cost</span>
+								</div>
 							</CommandItem>
 						</CommandList>
 					</Command>

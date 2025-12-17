@@ -167,7 +167,7 @@ export default function SecurityView() {
 	}, [bifrostConfig, localConfig, authConfig, updateCoreConfig]);
 
 	return (
-		<div className="space-y-4">
+		<div className="mx-auto w-full max-w-4xl space-y-4">
 			<div className="flex items-center justify-between">
 				<div>
 					<h2 className="text-2xl font-semibold tracking-tight">Security Settings</h2>

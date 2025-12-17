@@ -85,8 +85,14 @@ func deriveInputS3URIFromOutput(outputS3URI, inputKey string) string {
 // ConvertBedrockRequestsToJSONL converts batch request items to JSONL format for Bedrock.
 // Bedrock uses a specific format for batch inference requests.
 func ConvertBedrockRequestsToJSONL(requests []schemas.BatchRequestItem, modelID *string) ([]byte, error) {
+	// Model ID is required for Bedrock batch JSONL conversion
+	if modelID == nil || *modelID == "" {
+		return nil, fmt.Errorf("modelID is required for Bedrock batch JSONL conversion")
+	}
+	// Initialize the buffer
 	var buf bytes.Buffer
 
+	// Iterate over the requests
 	for _, req := range requests {
 		// Build the Bedrock batch request format
 		bedrockReq := map[string]interface{}{

@@ -67,7 +67,7 @@ curl --location 'http://localhost:8080/v1/chat/completions'
 	const isInferenceAuthDisabled = bifrostConfig?.auth_config?.disable_auth_on_inference ?? false;
 
 	return (
-		<div className="space-y-4">
+		<div className="space-y-4 mx-auto w-full max-w-4xl">
 			<Alert variant="default">
 				<InfoIcon className="text-muted h-4 w-4" />
 				<AlertDescription>
