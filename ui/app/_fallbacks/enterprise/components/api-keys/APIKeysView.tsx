@@ -52,7 +52,7 @@ curl --location 'http://localhost:8080/v1/chat/completions'
 				<AlertDescription>
 					<p className="text-md text-gray-600">
 						To generate API keys, you need to set up admin username and password first.{" "}
-						<Link href="/workspace/config?tab=security" className="text-md text-primary underline">
+						<Link href="/workspace/config/security" className="text-md text-primary underline">
 							Configure Security Settings
 						</Link>
 						.<br />

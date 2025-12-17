@@ -61,7 +61,6 @@ import { useTheme } from "next-themes";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useQueryState } from "nuqs";
 import { useEffect, useMemo, useState } from "react";
 import { ThemeToggle } from "./themeToggle";
 import { Badge } from "./ui/badge";
@@ -173,15 +172,9 @@ const SidebarItemView = ({
 	router: ReturnType<typeof useRouter>;
 }) => {
 	const hasSubItems = "subItems" in item && item.subItems && item.subItems.length > 0;
-	const [currentConfigTab] = useQueryState("tab");
 	const isAnySubItemActive =
 		hasSubItems &&
 		item.subItems?.some((subItem) => {
-			// For query param based subitems, check if tab matches
-			if (subItem.queryParam) {
-				return pathname === subItem.url && currentConfigTab === subItem.queryParam;
-			}
-			// For path based subitems, check if pathname starts with url
 			return pathname.startsWith(subItem.url);
 		});
 
@@ -242,9 +235,7 @@ const SidebarItemView = ({
 				<SidebarMenuSub className="border-sidebar-border mt-1 ml-4 space-y-0.5 border-l pl-2">
 					{item.subItems?.map((subItem: SidebarItem) => {
 						// For query param based subitems, check if tab matches
-						const isSubItemActive = subItem.queryParam
-							? pathname === subItem.url && currentConfigTab === subItem.queryParam
-							: pathname.startsWith(subItem.url);
+						const isSubItemActive = subItem.queryParam ? pathname === subItem.url : pathname.startsWith(subItem.url);
 						const SubItemIcon = subItem.icon;
 						return (
 							<SidebarMenuSubItem key={subItem.title}>
@@ -490,87 +481,77 @@ export default function AppSidebar() {
 			subItems: [
 				{
 					title: "Client Settings",
-					url: "/workspace/config",
+					url: "/workspace/config/client-settings",
 					icon: Settings,
 					description: "Client configuration settings",
 					hasAccess: hasSettingsAccess,
-					queryParam: "client-settings",
 				},
 				{
 					title: "Pricing Config",
-					url: "/workspace/config",
+					url: "/workspace/config/pricing-config",
 					icon: CircleDollarSign,
 					description: "Pricing configuration",
 					hasAccess: hasSettingsAccess,
-					queryParam: "pricing-config",
 				},
 				{
 					title: "Logging",
-					url: "/workspace/config",
+					url: "/workspace/config/logging",
 					icon: Logs,
 					description: "Logging configuration",
 					hasAccess: hasSettingsAccess,
-					queryParam: "logging",
 				},
 				{
 					title: "Governance",
-					url: "/workspace/config",
+					url: "/workspace/config/governance",
 					icon: Landmark,
 					description: "Governance settings",
 					hasAccess: hasSettingsAccess,
-					queryParam: "governance",
 				},
 				{
 					title: "Caching",
-					url: "/workspace/config",
+					url: "/workspace/config/caching",
 					icon: Zap,
 					description: "Caching configuration",
 					hasAccess: hasSettingsAccess,
-					queryParam: "caching",
 				},
 				{
 					title: "Observability",
-					url: "/workspace/config",
+					url: "/workspace/config/observability",
 					icon: Gauge,
 					description: "Observability settings",
 					hasAccess: hasSettingsAccess,
-					queryParam: "observability",
 				},
 				{
 					title: "Security",
-					url: "/workspace/config",
+					url: "/workspace/config/security",
 					icon: Shield,
 					description: "Security settings",
 					hasAccess: hasSettingsAccess,
-					queryParam: "security",
 				},
 				...(IS_ENTERPRISE
 					? [
 							{
 								title: "Proxy",
-								url: "/workspace/config",
+								url: "/workspace/config/proxy",
 								icon: Globe,
 								description: "Proxy configuration",
 								hasAccess: hasSettingsAccess,
-								queryParam: "proxy",
 							},
 						]
 					: []),
 				{
 					title: "API Keys",
-					url: "/workspace/config",
+					url: "/workspace/config/api-keys",
 					icon: KeyRound,
 					description: "API keys management",
 					hasAccess: hasSettingsAccess,
-					queryParam: "api-keys",
 				},
 				{
 					title: "Performance Tuning",
-					url: "/workspace/config",
+					url: "/workspace/config/performance-tuning",
 					icon: Zap,
 					description: "Performance tuning settings",
 					hasAccess: hasSettingsAccess,
-					queryParam: "performance-tuning",
 				},
 			],
 		},
@@ -734,7 +715,7 @@ export default function AppSidebar() {
 										isExpanded={expandedItems.has(item.title)}
 										onToggle={() => toggleItem(item.title)}
 										pathname={pathname}
-										router={router}
+										router={router}										
 									/>
 								);
 							})}
