@@ -1,8 +1,0 @@
-- feat: added handling for HTML and empty responses from providers
-- feat: added transcription support for mistral
-- feat: added transcription and speech support for azure
-- feat: add audio token pricing support for models
-- feat: adds new parameter for each provider key config `use_for_batch_apis`. This helps users to select which APIs or accounts to be used for Batch APIs.
-- feat: adds s3 bucket config support for Bedrock provider. 
-- feat: prompt caching support for anthropic and bedrock(claude and nova models)
-- feat: reasoning support for bedrock nova 2 models
