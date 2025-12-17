@@ -4,7 +4,10 @@ package azure
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"maps"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -779,17 +782,334 @@ func (provider *AzureProvider) Embedding(ctx context.Context, key schemas.Key, r
 
 // Speech is not supported by the Azure provider.
 func (provider *AzureProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
-	return nil, providerUtils.NewUnsupportedOperationError(schemas.SpeechRequest, provider.GetProviderKey())
+	if err := provider.validateKeyConfig(key); err != nil {
+		return nil, err
+	}
+
+	deployment, err := provider.getModelDeployment(key, request.Model)
+	if err != nil {
+		return nil, err
+	}
+
+	apiVersion := key.AzureKeyConfig.APIVersion
+	if apiVersion == nil {
+		apiVersion = schemas.Ptr(AzureAPIVersionDefault)
+	}
+
+	url := fmt.Sprintf("%s/openai/deployments/%s/audio/speech?api-version=%s", key.AzureKeyConfig.Endpoint, deployment, *apiVersion)
+
+	response, err := openai.HandleOpenAISpeechRequest(
+		ctx,
+		provider.client,
+		url,
+		request,
+		key,
+		provider.networkConfig.ExtraHeaders,
+		provider.GetProviderKey(),
+		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
+		provider.logger,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	response.ExtraFields.ModelRequested = request.Model
+	response.ExtraFields.ModelDeployment = deployment
+
+	return response, err
 }
 
-// SpeechStream is not supported by the Azure provider.
+// SpeechStream handles streaming for speech synthesis with Azure.
+// Azure sends raw binary audio bytes in SSE format, unlike OpenAI which sends JSON.
 func (provider *AzureProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
-	return nil, providerUtils.NewUnsupportedOperationError(schemas.SpeechStreamRequest, provider.GetProviderKey())
+	if err := provider.validateKeyConfig(key); err != nil {
+		return nil, err
+	}
+
+	deployment, err := provider.getModelDeployment(key, request.Model)
+	if err != nil {
+		return nil, err
+	}
+
+	authHeader := make(map[string]string)
+	var url string
+	// Set Azure authentication - either Bearer token or api-key
+	if authToken, ok := ctx.Value(AzureAuthorizationTokenKey).(string); ok {
+		authHeader["Authorization"] = fmt.Sprintf("Bearer %s", authToken)
+	} else {
+		authHeader["api-key"] = key.Value
+	}
+	apiVersion := key.AzureKeyConfig.APIVersion
+	if apiVersion == nil {
+		apiVersion = schemas.Ptr(AzureAPIVersionDefault)
+	}
+	url = fmt.Sprintf("%s/openai/deployments/%s/audio/speech?api-version=%s", key.AzureKeyConfig.Endpoint, deployment, *apiVersion)
+
+	// Create HTTP request for streaming
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	resp.StreamBody = true
+	defer fasthttp.ReleaseRequest(req)
+
+	// Prepare headers
+	headers := map[string]string{
+		"Content-Type":    "application/json",
+		"Accept":          "text/event-stream",
+		"Cache-Control":   "no-cache",
+		"Accept-Encoding": "identity",
+	}
+
+	maps.Copy(headers, authHeader)
+
+	req.Header.SetMethod(http.MethodPost)
+	req.SetRequestURI(url)
+	req.Header.SetContentType("application/json")
+
+	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+	// Set headers
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	sendBackRawRequest := providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest)
+	sendBackRawResponse := providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse)
+
+	// Build request body
+	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
+		ctx,
+		request,
+		func() (any, error) {
+			reqBody := openai.ToOpenAISpeechRequest(request)
+			if reqBody != nil {
+				reqBody.StreamFormat = schemas.Ptr("sse")
+				reqBody.Model = deployment // Replace model with deployment
+			}
+			return reqBody, nil
+		},
+		provider.GetProviderKey())
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	req.SetBody(jsonBody)
+
+	// Make the request
+	requestErr := provider.client.Do(req, resp)
+	if requestErr != nil {
+		defer providerUtils.ReleaseStreamingResponse(resp)
+		if errors.Is(requestErr, context.Canceled) {
+			return nil, &schemas.BifrostError{
+				IsBifrostError: false,
+				Error: &schemas.ErrorField{
+					Type:    schemas.Ptr(schemas.RequestCancelled),
+					Message: schemas.ErrRequestCancelled,
+					Error:   requestErr,
+				},
+			}
+		}
+		if errors.Is(requestErr, fasthttp.ErrTimeout) || errors.Is(requestErr, context.DeadlineExceeded) {
+			return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRequestTimedOut, requestErr, provider.GetProviderKey())
+		}
+		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, requestErr, provider.GetProviderKey())
+	}
+
+	// Check for HTTP errors
+	if resp.StatusCode() != fasthttp.StatusOK {
+		defer providerUtils.ReleaseStreamingResponse(resp)
+		return nil, openai.ParseOpenAIError(resp, schemas.SpeechStreamRequest, provider.GetProviderKey(), request.Model)
+	}
+
+	// Create response channel
+	responseChan := make(chan *schemas.BifrostStream, schemas.DefaultStreamBufferSize)
+
+	// Start streaming in a goroutine
+	go func() {
+		defer close(responseChan)
+
+		// Check if response is compressed
+		bodyStream := resp.BodyStream()
+		chunkIndex := -1
+		startTime := time.Now()
+		lastChunkTime := startTime
+
+		// Read SSE events manually to handle binary data with embedded newlines
+		// SSE format: "data: <content>\n\n" - events are separated by double newlines
+		// We can't use bufio.Scanner because MP3 data contains 0x0a bytes which get interpreted as newlines
+		readBuffer := make([]byte, 64*1024) // 64KB read chunks
+		var accumulated []byte
+
+		for {
+			// Check if context is done
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			// Read from stream
+			n, readErr := bodyStream.Read(readBuffer)
+			if n > 0 {
+				accumulated = append(accumulated, readBuffer[:n]...)
+
+				// Process complete SSE events (separated by \n\n)
+				for {
+					// Find the next double-newline separator
+					idx := bytes.Index(accumulated, []byte("\n\n"))
+					if idx == -1 {
+						// No complete event yet, need more data
+						break
+					}
+
+					// Extract the event (everything up to \n\n)
+					event := accumulated[:idx]
+					accumulated = accumulated[idx+2:] // Skip the \n\n
+
+					// Skip empty events and comments
+					if len(event) == 0 || bytes.HasPrefix(event, []byte(":")) {
+						continue
+					}
+
+					// Parse the SSE event
+					var audioData []byte
+
+					// Check if this has "data: " prefix (standard SSE format)
+					if bytes.HasPrefix(event, []byte("data: ")) {
+						audioData = event[6:] // Skip "data: " prefix
+
+						// Check for [DONE] marker
+						if bytes.Equal(audioData, []byte("[DONE]")) {
+							return
+						}
+					} else {
+						// Raw data without prefix (shouldn't happen with Azure, but handle it)
+						audioData = event
+					}
+
+					// First, try to parse as JSON error response (these would be valid JSON text)
+					var bifrostErr schemas.BifrostError
+					if err := sonic.Unmarshal(audioData, &bifrostErr); err == nil {
+						if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
+							bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+								Provider:       provider.GetProviderKey(),
+								ModelRequested: request.Model,
+								RequestType:    schemas.SpeechStreamRequest,
+							}
+							ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+							providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, &bifrostErr, responseChan, provider.logger)
+							return
+						}
+					}
+
+					// Skip empty audio data
+					if len(audioData) == 0 {
+						continue
+					}
+
+					chunkIndex++
+
+					// Create response with raw audio data
+					// Azure sends raw binary MP3 frames (starting with 0xff 0xf3 or 0xff 0xfb)
+					response := schemas.BifrostSpeechStreamResponse{
+						Type:  schemas.SpeechStreamResponseTypeDelta,
+						Audio: audioData,
+						ExtraFields: schemas.BifrostResponseExtraFields{
+							RequestType:     schemas.SpeechStreamRequest,
+							Provider:        provider.GetProviderKey(),
+							ModelRequested:  request.Model,
+							ModelDeployment: deployment,
+							ChunkIndex:      chunkIndex,
+							Latency:         time.Since(lastChunkTime).Milliseconds(),
+						},
+					}
+					lastChunkTime = time.Now()
+
+					if sendBackRawResponse {
+						response.ExtraFields.RawResponse = audioData
+					}
+
+					providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, &response, nil), responseChan)
+				}
+			}
+
+			// Handle read errors
+			if readErr != nil {
+				if readErr != io.EOF {
+					provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", readErr))
+				}
+				break
+			}
+		}
+
+		// Send final "done" response if we received audio chunks
+		if chunkIndex >= 0 {
+			finalResponse := schemas.BifrostSpeechStreamResponse{
+				Type: schemas.SpeechStreamResponseTypeDone,
+				ExtraFields: schemas.BifrostResponseExtraFields{
+					RequestType:     schemas.SpeechStreamRequest,
+					Provider:        provider.GetProviderKey(),
+					ModelRequested:  request.Model,
+					ModelDeployment: deployment,
+					ChunkIndex:      chunkIndex + 1,
+					Latency:         time.Since(startTime).Milliseconds(),
+				},
+			}
+
+			if sendBackRawRequest {
+				providerUtils.ParseAndSetRawRequest(&finalResponse.ExtraFields, jsonBody)
+			}
+
+			ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, &finalResponse, nil), responseChan)
+		}
+
+		// Note: We don't call ReleaseStreamingResponse here because the scanner has already
+		// consumed the body stream. Calling it would block indefinitely waiting for more data.
+		// The response will be released when the request context is cleaned up.
+	}()
+
+	return responseChan, nil
 }
 
 // Transcription is not supported by the Azure provider.
 func (provider *AzureProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
-	return nil, providerUtils.NewUnsupportedOperationError(schemas.TranscriptionRequest, provider.GetProviderKey())
+	if err := provider.validateKeyConfig(key); err != nil {
+		return nil, err
+	}
+
+	deployment, err := provider.getModelDeployment(key, request.Model)
+	if err != nil {
+		return nil, err
+	}
+
+	apiVersion := key.AzureKeyConfig.APIVersion
+	if apiVersion == nil {
+		apiVersion = schemas.Ptr(AzureAPIVersionDefault)
+	}
+
+	url := fmt.Sprintf("%s/openai/deployments/%s/audio/transcriptions?api-version=%s", key.AzureKeyConfig.Endpoint, deployment, *apiVersion)
+
+	response, err := openai.HandleOpenAITranscriptionRequest(
+		ctx,
+		provider.client,
+		url,
+		request,
+		key,
+		provider.networkConfig.ExtraHeaders,
+		provider.GetProviderKey(),
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+		provider.logger,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	response.ExtraFields.ModelRequested = request.Model
+	response.ExtraFields.ModelDeployment = deployment
+
+	return response, err
 }
 
 // TranscriptionStream is not supported by the Azure provider.
