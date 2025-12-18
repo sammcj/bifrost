@@ -808,18 +808,30 @@ func (m *MCPManager) shouldSkipToolForRequest(clientID, toolName string, ctx con
 // convertMCPToolToBifrostSchema converts an MCP tool definition to Bifrost format.
 func (m *MCPManager) convertMCPToolToBifrostSchema(mcpTool *mcp.Tool) schemas.ChatTool {
 	var properties *schemas.OrderedMap
+	schemaType := mcpTool.InputSchema.Type
+
 	if len(mcpTool.InputSchema.Properties) > 0 {
 		orderedProps := make(schemas.OrderedMap, len(mcpTool.InputSchema.Properties))
 		maps.Copy(orderedProps, mcpTool.InputSchema.Properties)
 		properties = &orderedProps
+	} else {
+		// Ensure properties is set when there are no properties (required by OpenAI API validation)
+		// OpenAI function calling API always expects object schemas with properties field present
+		emptyProps := make(schemas.OrderedMap)
+		properties = &emptyProps
+		// Default to "object" type if empty (OpenAI function calling always uses object schemas)
+		if schemaType == "" {
+			schemaType = "object"
+		}
 	}
+
 	return schemas.ChatTool{
 		Type: schemas.ChatToolTypeFunction,
 		Function: &schemas.ChatToolFunction{
 			Name:        mcpTool.Name,
 			Description: Ptr(mcpTool.Description),
 			Parameters: &schemas.ToolFunctionParameters{
-				Type:       mcpTool.InputSchema.Type,
+				Type:       schemaType,
 				Properties: properties,
 				Required:   mcpTool.InputSchema.Required,
 			},
