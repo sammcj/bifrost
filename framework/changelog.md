@@ -1,1 +1,0 @@
-- chore: bump core to 1.2.40

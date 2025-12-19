@@ -1,8 +1,0 @@
-- fix: ensure properties field is always set for mcp tools - [@CryptoFewka](https://github.com/CryptoFewka)
-- fix: correct search_domain_filter json tag in perplexity provider - [@hnoguchigr](https://github.com/hnoguchigr)
-- feat: added HuggingFace provider
-- fix: bedrock empty ARN issue causing request to fail
-- fix: anthropic single context block in response converted to string instead for chat completions
-- fix: added auth support in HTTP proxies
-- feat: added custom CA certificate support in proxies
-- chore: bump core to 1.2.40 and framework to 1.1.50
