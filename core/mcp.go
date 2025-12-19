@@ -810,19 +810,20 @@ func (m *MCPManager) convertMCPToolToBifrostSchema(mcpTool *mcp.Tool) schemas.Ch
 	var properties *schemas.OrderedMap
 	schemaType := mcpTool.InputSchema.Type
 
+	// Ensure properties is always set (required by OpenAI API validation)
 	if len(mcpTool.InputSchema.Properties) > 0 {
 		orderedProps := make(schemas.OrderedMap, len(mcpTool.InputSchema.Properties))
 		maps.Copy(orderedProps, mcpTool.InputSchema.Properties)
 		properties = &orderedProps
 	} else {
-		// Ensure properties is set when there are no properties (required by OpenAI API validation)
 		// OpenAI function calling API always expects object schemas with properties field present
 		emptyProps := make(schemas.OrderedMap)
 		properties = &emptyProps
-		// Default to "object" type if empty (OpenAI function calling always uses object schemas)
-		if schemaType == "" {
-			schemaType = "object"
-		}
+	}
+
+	// Default to "object" type if empty (OpenAI function calling always uses object schemas)
+	if schemaType == "" {
+		schemaType = "object"
 	}
 
 	return schemas.ChatTool{
