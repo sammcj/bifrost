@@ -1,0 +1,1 @@
+- fix(mcp): ensure properties field is always set for tools
