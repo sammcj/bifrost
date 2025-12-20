@@ -1,0 +1,1 @@
+- fix: gemini thought signature handling in multi-turn conversations

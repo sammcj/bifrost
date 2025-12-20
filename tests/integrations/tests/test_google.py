@@ -35,20 +35,18 @@ Tests all core scenarios using Google GenAI SDK directly:
 25. Speech generation - language support
 26. Extended thinking/reasoning (non-streaming)
 27. Extended thinking/reasoning (streaming)
-28. Structured outputs with thinking_budget enabled
-26. Speech generation - streaming (if supported)
-27. Extended thinking/reasoning (non-streaming)
-28. Extended thinking/reasoning (streaming)
-26. Files API - file upload
-27. Files API - file list
-28. Files API - file retrieve
-29. Files API - file delete
-30. Batch API - batch create with file
-31. Batch API - batch create inline
-32. Batch API - batch list
-33. Batch API - batch retrieve
-34. Batch API - batch cancel
-35. Batch API - end-to-end with Files API
+28. Gemini 3 Pro Preview - Thought signature handling with tool calling (multi-turn)
+29. Structured outputs with thinking_budget enabled
+30. Files API - file upload
+31. Files API - file list
+32. Files API - file retrieve
+33. Files API - file delete
+34. Batch API - batch create with file
+35. Batch API - batch create inline
+36. Batch API - batch list
+37. Batch API - batch retrieve
+38. Batch API - batch cancel
+39. Batch API - end-to-end with Files API
 """
 
 import pytest
@@ -132,7 +130,7 @@ def get_provider_google_client(provider: str = "gemini"):
     if base_url:
         http_options_kwargs["base_url"] = base_url
     if api_config.get("timeout"):
-        http_options_kwargs["timeout"] = api_config.get("timeout", 300)
+        http_options_kwargs["timeout"] = 30000
 
     client_kwargs["http_options"] = HttpOptions(**http_options_kwargs)
 
@@ -1236,12 +1234,241 @@ Joe: Pretty good, thanks for asking."""
         
         print(f"✓ Streamed response ({len(text_parts)} chunks): {complete_text[:150]}...")
 
+    @skip_if_no_api_key("gemini")
+    def test_28_gemini_3_pro_thought_signatures_multi_turn(self, test_config):
+        """Test Case 28: Gemini 3 Pro Preview - Thought Signature Handling with Tool Calling (Multi-turn)"""
+        from google.genai import types
+        
+        client = get_provider_google_client(provider="gemini")
+        model = "gemini-3-pro-preview"
+        
+        calculator_tool = types.Tool(
+            function_declarations=[
+                {
+                    "name": "calculate",
+                    "description": "Perform a mathematical calculation",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "expression": {
+                                "type": "string",
+                                "description": "The mathematical expression to evaluate"
+                            },
+                            "operation": {
+                                "type": "string",
+                                "description": "Type of operation: add, subtract, multiply, divide"
+                            }
+                        },
+                        "required": ["expression", "operation"]
+                    }
+                }
+            ]
+        )
+        
+        weather_tool = types.Tool(
+            function_declarations=[
+                {
+                    "name": "get_weather",
+                    "description": "Get current weather for a location",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {
+                                "type": "string",
+                                "description": "City name or location"
+                            },
+                            "unit": {
+                                "type": "string",
+                                "description": "Temperature unit: celsius or fahrenheit"
+                            }
+                        },
+                        "required": ["location"]
+                    }
+                }
+            ]
+        )
+        
+        print("\n=== TURN 1: Initial message with thinking ===")
+        # Turn 1: Initial message with thinking enabled
+        response_1 = client.models.generate_content(
+            model=model,
+            contents="If I have 15 apples and give away 7, then buy 10 more, how many do I have? Think through this step by step.",
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(
+                    thinking_level="high"
+                )
+            )
+        )
+        
+        # Validate Turn 1: Should have thinking content
+        assert response_1.candidates, "Response should have candidates"
+        assert response_1.candidates[0].content, "Candidate should have content"
+        
+        # Check for thought parts in the response
+        has_thought = False
+        has_text = False
+        thought_signature_count = 0
+        
+        for part in response_1.candidates[0].content.parts:
+            if hasattr(part, 'thought') and part.thought:
+                has_thought = True
+                part_text = getattr(part, 'text', None)
+                print(f"  [THOUGHT] {part_text[:100] if part_text else '(no text)'}...")
+            elif hasattr(part, 'text') and part.text:
+                has_text = True
+                print(f"  [TEXT] {part.text[:100]}...")
+            if hasattr(part, 'thought_signature') and part.thought_signature:
+                thought_signature_count += 1
+                print(f"  [SIGNATURE] Found thought signature ({len(part.thought_signature)} bytes)")
+        
+        print(f"  Turn 1 Summary: thought={has_thought}, text={has_text}, signatures={thought_signature_count}")
+        
+        # Assert that thought signatures are present when using Gemini with thinking enabled
+        assert has_thought or has_text, "Response should have either thought or text content"
+        assert thought_signature_count > 0, "Response should have at least one thought signature with thinking enabled"
+        
+        print("\n=== TURN 2: Tool call with thinking ===")
+        # Turn 2: Ask a question that requires tool use
+        response_2 = client.models.generate_content(
+            model=model,
+            contents="What's 25 multiplied by 4? Use the calculator tool to compute this.",
+            config=types.GenerateContentConfig(
+                tools=[calculator_tool],
+                thinking_config=types.ThinkingConfig(
+                    thinking_level="high"
+                )
+            )
+        )
+        
+        # Validate Turn 2: Should have function call with thought signature
+        assert response_2.candidates, "Response should have candidates"
+        function_calls = []
+        tool_thought_signatures = []
+        
+        for part in response_2.candidates[0].content.parts:
+            if hasattr(part, 'function_call') and part.function_call:
+                function_calls.append(part.function_call)
+                print(f"  [FUNCTION_CALL] {part.function_call.name}({part.function_call.args})")
+                
+                # Check for thought signature on the function call
+                if hasattr(part, 'thought_signature') and part.thought_signature:
+                    tool_thought_signatures.append(part.thought_signature)
+                    print(f"    [SIGNATURE] Tool call has thought signature ({len(part.thought_signature)} bytes)")
+        
+        assert len(function_calls) > 0, "Should have at least one function call"
+        assert len(tool_thought_signatures) > 0, "Function calls should have thought signatures when thinking is enabled"
+        print(f"  Turn 2 Summary: function_calls={len(function_calls)}, tool_signatures={len(tool_thought_signatures)}")
+        
+        print("\n=== TURN 3: Multi-turn with tool result ===")
+        # Turn 3: Continue conversation with tool result
+        conversation = [
+            types.Content(
+                role="user",
+                parts=[types.Part(text="What's 25 multiplied by 4? Use the calculator tool.")]
+            ),
+            types.Content(
+                role="model",
+                parts=[
+                    types.Part(
+                        function_call=types.FunctionCall(
+                            name="calculate",
+                            args={"expression": "25 * 4", "operation": "multiply"}
+                        ),
+                        thought_signature=tool_thought_signatures[0] if tool_thought_signatures else None
+                    )
+                ]
+            ),
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            name="calculate",
+                            response={"result": "100"}
+                        )
+                    )
+                ]
+            )
+        ]
+        
+        response_3 = client.models.generate_content(
+            model=model,
+            contents=conversation,
+            config=types.GenerateContentConfig(
+                tools=[calculator_tool],
+                thinking_config=types.ThinkingConfig(
+                    thinking_level="high"
+                )
+            )
+        )
+        
+        # Validate Turn 3: Should have text response after tool result
+        assert response_3.candidates, "Response should have candidates"
+        turn3_text = ""
+        turn3_thoughts = 0
+        
+        for part in response_3.candidates[0].content.parts:
+            if hasattr(part, 'text') and part.text:
+                turn3_text += part.text
+                if hasattr(part, 'thought') and part.thought:
+                    turn3_thoughts += 1
+                    part_text = getattr(part, 'text', None)
+                    print(f"  [THOUGHT] {part_text[:100] if part_text else '(no text)'}...")
+                else:
+                    print(f"  [TEXT] {part.text[:100]}...")
+        
+        assert len(turn3_text) > 0, "Should have text response after tool result"
+        print(f"  Turn 3 Summary: text_length={len(turn3_text)}, thoughts={turn3_thoughts}")
+        
+        print("\n=== TURN 4: Multiple tool calls in parallel ===")
+        # Turn 4: Request multiple tool calls
+        response_4 = client.models.generate_content(
+            model=model,
+            contents="Calculate 50 + 30 and also get the weather in Tokyo. Use the appropriate tools.",
+            config=types.GenerateContentConfig(
+                tools=[calculator_tool, weather_tool],
+                thinking_config=types.ThinkingConfig(
+                    thinking_level="low"
+                )
+            )
+        )
+        
+        # Validate Turn 4: Should have multiple function calls
+        assert response_4.candidates, "Response should have candidates"
+        multi_function_calls = []
+        multi_signatures = []
+        
+        for part in response_4.candidates[0].content.parts:
+            if hasattr(part, 'function_call') and part.function_call:
+                multi_function_calls.append(part.function_call)
+                print(f"  [FUNCTION_CALL] {part.function_call.name}")
+                
+                if hasattr(part, 'thought_signature') and part.thought_signature:
+                    multi_signatures.append(part.thought_signature)
+                    print(f"    [SIGNATURE] Present ({len(part.thought_signature)} bytes)")
+        
+        print(f"  Turn 4 Summary: function_calls={len(multi_function_calls)}, signatures={len(multi_signatures)}")
+        
+        # Assert that multiple tool calls also get thought signatures
+        # Note: Using thinking_level="low" here, so signatures may be optional depending on model behavior
+        # but if any function calls are made with thinking enabled, they should have signatures
+        if len(multi_function_calls) > 0:
+            assert len(multi_signatures) > 0, "Function calls should have thought signatures when thinking is enabled (even at low level)"
+        
+        if hasattr(response_1, 'usage_metadata') and response_1.usage_metadata:
+            if hasattr(response_1.usage_metadata, 'thoughts_token_count'):
+                print(f"\n=== Token Usage ===")
+                print(f"  Thinking tokens: {response_1.usage_metadata.thoughts_token_count}")
+                assert response_1.usage_metadata.thoughts_token_count > 0, "Should have thinking token usage"
+        
+        print("\n✓ Gemini 3 Pro Preview thought signature handling test completed successfully!")
+
     @skip_if_no_api_key("google")
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("thinking"))
-    def test_28_structured_output_with_thinking(self, google_client, test_config, provider, model):
+    def test_29_structured_output_with_thinking(self, google_client, test_config, provider, model):
         if provider == "_no_providers_" or model == "_no_model_":
             pytest.skip("No providers configured for this scenario")
-        """Test Case 28: Structured outputs with thinking_budget enabled
+        """Test Case 29: Structured outputs with thinking_budget enabled
         """
         from google.genai import types
         from pydantic import BaseModel
@@ -1320,8 +1547,8 @@ Joe: Pretty good, thanks for asking."""
     # =========================================================================
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("batch_file_upload"))
-    def test_26_file_upload(self, test_config, provider, model):
-        """Test Case 26: Upload a file for batch processing"""
+    def test_30_file_upload(self, test_config, provider, model):
+        """Test Case 30: Upload a file for batch processing"""
         if provider == "_no_providers_" or model == "_no_model_":
             pytest.skip("No providers configured for batch_file_upload scenario")
         
@@ -1374,8 +1601,8 @@ Joe: Pretty good, thanks for asking."""
                     print(f"Warning: Failed to clean up file: {e}")
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("file_list"))
-    def test_27_file_list(self, test_config, provider, model):
-        """Test Case 27: List uploaded files"""
+    def test_31_file_list(self, test_config, provider, model):
+        """Test Case 31: List uploaded files"""
         if provider == "_no_providers_" or model == "_no_model_":
             pytest.skip("No providers configured for file_list scenario")
         
@@ -1421,8 +1648,8 @@ Joe: Pretty good, thanks for asking."""
                     print(f"Warning: Failed to clean up file: {e}")
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("file_retrieve"))
-    def test_28_file_retrieve(self, test_config, provider, model):
-        """Test Case 28: Retrieve file metadata by name"""
+    def test_32_file_retrieve(self, test_config, provider, model):
+        """Test Case 32: Retrieve file metadata by name"""
         if provider == "_no_providers_" or model == "_no_model_":
             pytest.skip("No providers configured for file_retrieve scenario")
         
@@ -1465,8 +1692,8 @@ Joe: Pretty good, thanks for asking."""
                     print(f"Warning: Failed to clean up file: {e}")
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("file_delete"))
-    def test_29_file_delete(self, test_config, provider, model):
-        """Test Case 29: Delete an uploaded file"""
+    def test_33_file_delete(self, test_config, provider, model):
+        """Test Case 33: Delete an uploaded file"""
         if provider == "_no_providers_" or model == "_no_model_":
             pytest.skip("No providers configured for file_delete scenario")
         
@@ -1510,8 +1737,8 @@ Joe: Pretty good, thanks for asking."""
     # =========================================================================
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("batch_file_upload"))
-    def test_30_batch_create_with_file(self, test_config, provider, model):
-        """Test Case 30: Create a batch job using uploaded file
+    def test_34_batch_create_with_file(self, test_config, provider, model):
+        """Test Case 34: Create a batch job using uploaded file
         
         This test uploads a JSON file first, then creates a batch using the file reference.
         """
@@ -1570,8 +1797,8 @@ Joe: Pretty good, thanks for asking."""
                     print(f"Warning: Failed to clean up file: {e}")
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("batch_inline"))
-    def test_31_batch_create_inline(self, test_config, provider, model):
-        """Test Case 31: Create a batch job with inline requests"""
+    def test_35_batch_create_inline(self, test_config, provider, model):
+        """Test Case 35: Create a batch job with inline requests"""
         if provider == "_no_providers_" or model == "_no_model_":
             pytest.skip("No providers configured for batch_inline scenario")
         
@@ -1604,8 +1831,8 @@ Joe: Pretty good, thanks for asking."""
                     print(f"Info: Could not delete batch: {e}")
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("batch_list"))
-    def test_32_batch_list(self, test_config, provider, model):
-        """Test Case 32: List batch jobs"""
+    def test_36_batch_list(self, test_config, provider, model):
+        """Test Case 36: List batch jobs"""
         if provider == "_no_providers_" or model == "_no_model_":
             pytest.skip("No providers configured for batch_list scenario")
         
@@ -1624,8 +1851,8 @@ Joe: Pretty good, thanks for asking."""
         print(f"Success: Listed {batch_count} batches for provider {provider}")
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("batch_retrieve"))
-    def test_33_batch_retrieve(self, test_config, provider, model):
-        """Test Case 33: Retrieve batch status by name"""
+    def test_37_batch_retrieve(self, test_config, provider, model):
+        """Test Case 37: Retrieve batch status by name"""
         if provider == "_no_providers_" or model == "_no_model_":
             pytest.skip("No providers configured for batch_retrieve scenario")
         
@@ -1664,8 +1891,8 @@ Joe: Pretty good, thanks for asking."""
                     print(f"Info: Could not delete batch: {e}")
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("batch_cancel"))
-    def test_34_batch_cancel(self, test_config, provider, model):
-        """Test Case 34: Cancel a batch job"""
+    def test_38_batch_cancel(self, test_config, provider, model):
+        """Test Case 38: Cancel a batch job"""
         if provider == "_no_providers_" or model == "_no_model_":
             pytest.skip("No providers configured for batch_cancel scenario")
         
@@ -1707,8 +1934,8 @@ Joe: Pretty good, thanks for asking."""
                     print(f"Info: Could not delete batch: {e}")
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("batch_file_upload"))
-    def test_35_batch_e2e_file_api(self, test_config, provider, model):
-        """Test Case 35: End-to-end batch workflow using Files API
+    def test_39_batch_e2e_file_api(self, test_config, provider, model):
+        """Test Case 39: End-to-end batch workflow using Files API
         
         Complete workflow: upload file -> create batch -> poll status -> verify in list.
         """

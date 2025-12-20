@@ -1014,6 +1014,57 @@ type Part struct {
 	Text string `json:"text,omitempty"`
 }
 
+// UnmarshalJSON implements custom JSON unmarshaling for Part.
+// This handles the thoughtSignature field which can be sent as a base64-encoded string from the Google GenAI SDK.
+func (p *Part) UnmarshalJSON(data []byte) error {
+	type PartAlias struct {
+		VideoMetadata       *VideoMetadata       `json:"videoMetadata,omitempty"`
+		Thought             bool                 `json:"thought,omitempty"`
+		InlineData          *Blob                `json:"inlineData,omitempty"`
+		FileData            *FileData            `json:"fileData,omitempty"`
+		ThoughtSignature    string               `json:"thoughtSignature,omitempty"`
+		CodeExecutionResult *CodeExecutionResult `json:"codeExecutionResult,omitempty"`
+		ExecutableCode      *ExecutableCode      `json:"executableCode,omitempty"`
+		FunctionCall        *FunctionCall        `json:"functionCall,omitempty"`
+		FunctionResponse    *FunctionResponse    `json:"functionResponse,omitempty"`
+		Text                string               `json:"text,omitempty"`
+	}
+
+	var aux PartAlias
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	p.VideoMetadata = aux.VideoMetadata
+	p.Thought = aux.Thought
+	p.InlineData = aux.InlineData
+	p.FileData = aux.FileData
+	p.CodeExecutionResult = aux.CodeExecutionResult
+	p.ExecutableCode = aux.ExecutableCode
+	p.FunctionCall = aux.FunctionCall
+	p.FunctionResponse = aux.FunctionResponse
+	p.Text = aux.Text
+
+	if aux.ThoughtSignature != "" {
+		// Convert URL-safe base64 to standard base64
+		standardBase64 := strings.ReplaceAll(strings.ReplaceAll(aux.ThoughtSignature, "_", "/"), "-", "+")
+		// Add padding if necessary
+		switch len(standardBase64) % 4 {
+		case 2:
+			standardBase64 += "=="
+		case 3:
+			standardBase64 += "="
+		}
+		decoded, err := base64.StdEncoding.DecodeString(standardBase64)
+		if err != nil {
+			return fmt.Errorf("failed to decode base64 thoughtSignature: %v", err)
+		}
+		p.ThoughtSignature = decoded
+	}
+
+	return nil
+}
+
 // Blob represents content blob.
 type Blob struct {
 	// Optional. Display name of the blob. Used to provide a label or filename to distinguish
