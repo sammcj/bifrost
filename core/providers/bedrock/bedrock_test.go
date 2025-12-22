@@ -42,6 +42,26 @@ func TestBedrock(t *testing.T) {
 	}
 	defer cancel()
 
+	// Get Bedrock-specific configuration from environment
+	s3Bucket := os.Getenv("AWS_S3_BUCKET")
+	roleArn := os.Getenv("AWS_BEDROCK_ROLE_ARN")
+
+	// Build extra params for batch and file operations
+	var batchExtraParams map[string]interface{}
+	var fileExtraParams map[string]interface{}
+
+	if s3Bucket != "" {
+		fileExtraParams = map[string]interface{}{
+			"s3_bucket": s3Bucket,
+		}
+		batchExtraParams = map[string]interface{}{
+			"output_s3_uri": "s3://" + s3Bucket + "/batch-output/",
+		}
+		if roleArn != "" {
+			batchExtraParams["role_arn"] = roleArn
+		}
+	}
+
 	testConfig := testutil.ComprehensiveTestConfig{
 		Provider:    schemas.Bedrock,
 		ChatModel:   "claude-4-sonnet",
@@ -50,8 +70,11 @@ func TestBedrock(t *testing.T) {
 			{Provider: schemas.Bedrock, Model: "claude-4-sonnet"},
 			{Provider: schemas.Bedrock, Model: "claude-4.5-sonnet"},
 		},
-		EmbeddingModel: "cohere.embed-v4:0",
-		ReasoningModel: "claude-4.5-sonnet",
+		EmbeddingModel:     "cohere.embed-v4:0",
+		ReasoningModel:     "claude-4.5-sonnet",
+		PromptCachingModel: "claude-4.5-sonnet",
+		BatchExtraParams:   batchExtraParams,
+		FileExtraParams:    fileExtraParams,
 		Scenarios: testutil.TestScenarios{
 			TextCompletion:        false, // Not supported
 			SimpleChat:            true,
@@ -69,6 +92,18 @@ func TestBedrock(t *testing.T) {
 			Embedding:             true,
 			ListModels:            true,
 			Reasoning:             true,
+			PromptCaching:         true,
+			BatchCreate:           true,
+			BatchList:             true,
+			BatchRetrieve:         true,
+			BatchCancel:           true,
+			BatchResults:          true,
+			FileUpload:            true,
+			FileList:              true,
+			FileRetrieve:          true,
+			FileDelete:            true,
+			FileContent:           true,
+			FileBatchInput:        true,
 		},
 	}
 
@@ -457,6 +492,7 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 	trace := testTrace
 	latency := testLatency
 	props := testProps
+	ctx := context.Background()
 
 	tests := []struct {
 		name     string
@@ -945,9 +981,9 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 			var err error
 			if tt.input == nil {
 				var bedrockReq *bedrock.BedrockConverseRequest
-				actual, err = bedrockReq.ToBifrostResponsesRequest()
+				actual, err = bedrockReq.ToBifrostResponsesRequest(&ctx)
 			} else {
-				actual, err = tt.input.ToBifrostResponsesRequest()
+				actual, err = tt.input.ToBifrostResponsesRequest(&ctx)
 			}
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -1526,6 +1562,7 @@ func TestBedrockToBifrostResponseConversion(t *testing.T) {
 	toolInput := map[string]interface{}{
 		"location": "NYC",
 	}
+	ctx := context.Background()
 
 	tests := []struct {
 		name     string
@@ -1669,9 +1706,9 @@ func TestBedrockToBifrostResponseConversion(t *testing.T) {
 			var err error
 			if tt.input == nil {
 				var bedrockResp *bedrock.BedrockConverseResponse
-				actual, err = bedrockResp.ToBifrostResponsesResponse()
+				actual, err = bedrockResp.ToBifrostResponsesResponse(&ctx)
 			} else {
-				actual, err = tt.input.ToBifrostResponsesResponse()
+				actual, err = tt.input.ToBifrostResponsesResponse(&ctx)
 			}
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -1736,7 +1773,8 @@ func TestToBedrockResponsesRequest_AdditionalFields(t *testing.T) {
 		},
 	}
 
-	bedrockReq, err := bedrock.ToBedrockResponsesRequest(req)
+	ctx := context.Background()
+	bedrockReq, err := bedrock.ToBedrockResponsesRequest(&ctx, req)
 	require.NoError(t, err)
 	require.NotNil(t, bedrockReq)
 
@@ -1762,7 +1800,8 @@ func TestToBedrockResponsesRequest_AdditionalFields_InterfaceSlice(t *testing.T)
 		},
 	}
 
-	bedrockReq, err := bedrock.ToBedrockResponsesRequest(req)
+	ctx := context.Background()
+	bedrockReq, err := bedrock.ToBedrockResponsesRequest(&ctx, req)
 	require.NoError(t, err)
 	require.NotNil(t, bedrockReq)
 

@@ -13,6 +13,8 @@ import (
 const (
 	AnthropicDefaultMaxTokens = 4096
 	MinimumReasoningMaxTokens = 1024
+	// AnthropicFilesAPIBetaHeader is the required beta header for the Files API.
+	AnthropicFilesAPIBetaHeader = "files-api-2025-04-14"
 )
 
 // ==================== REQUEST TYPES ====================
@@ -33,8 +35,8 @@ type AnthropicTextRequest struct {
 }
 
 // IsStreamingRequested implements the StreamingRequest interface
-func (r *AnthropicTextRequest) IsStreamingRequested() bool {
-	return r.Stream != nil && *r.Stream
+func (req *AnthropicTextRequest) IsStreamingRequested() bool {
+	return req.Stream != nil && *req.Stream
 }
 
 // AnthropicMessageRequest represents an Anthropic messages API request
@@ -213,18 +215,19 @@ const (
 
 // AnthropicContentBlock represents content in Anthropic message format
 type AnthropicContentBlock struct {
-	Type       AnthropicContentBlockType `json:"type"`                  // "text", "image", "tool_use", "tool_result", "thinking"
-	Text       *string                   `json:"text,omitempty"`        // For text content
-	Thinking   *string                   `json:"thinking,omitempty"`    // For thinking content
-	Signature  *string                   `json:"signature,omitempty"`   // For signature content
-	Data       *string                   `json:"data,omitempty"`        // For data content (encrypted data for redacted thinking, signature does not come with this)
-	ToolUseID  *string                   `json:"tool_use_id,omitempty"` // For tool_result content
-	ID         *string                   `json:"id,omitempty"`          // For tool_use content
-	Name       *string                   `json:"name,omitempty"`        // For tool_use content
-	Input      any                       `json:"input,omitempty"`       // For tool_use content
-	ServerName *string                   `json:"server_name,omitempty"` // For mcp_tool_use content
-	Content    *AnthropicContent         `json:"content,omitempty"`     // For tool_result content
-	Source     *AnthropicImageSource     `json:"source,omitempty"`      // For image content
+	Type         AnthropicContentBlockType `json:"type"`                    // "text", "image", "tool_use", "tool_result", "thinking"
+	Text         *string                   `json:"text,omitempty"`          // For text content
+	Thinking     *string                   `json:"thinking,omitempty"`      // For thinking content
+	Signature    *string                   `json:"signature,omitempty"`     // For signature content
+	Data         *string                   `json:"data,omitempty"`          // For data content (encrypted data for redacted thinking, signature does not come with this)
+	ToolUseID    *string                   `json:"tool_use_id,omitempty"`   // For tool_result content
+	ID           *string                   `json:"id,omitempty"`            // For tool_use content
+	Name         *string                   `json:"name,omitempty"`          // For tool_use content
+	Input        any                       `json:"input,omitempty"`         // For tool_use content
+	ServerName   *string                   `json:"server_name,omitempty"`   // For mcp_tool_use content
+	Content      *AnthropicContent         `json:"content,omitempty"`       // For tool_result content
+	Source       *AnthropicImageSource     `json:"source,omitempty"`        // For image content
+	CacheControl *schemas.CacheControl     `json:"cache_control,omitempty"` // For cache control content
 }
 
 // AnthropicImageSource represents image source in Anthropic format
@@ -286,10 +289,11 @@ type AnthropicToolWebSearch struct {
 
 // AnthropicTool represents a tool in Anthropic format
 type AnthropicTool struct {
-	Name        string                          `json:"name"`
-	Type        *AnthropicToolType              `json:"type,omitempty"`
-	Description *string                         `json:"description,omitempty"`
-	InputSchema *schemas.ToolFunctionParameters `json:"input_schema,omitempty"`
+	Name         string                          `json:"name"`
+	Type         *AnthropicToolType              `json:"type,omitempty"`
+	Description  *string                         `json:"description,omitempty"`
+	InputSchema  *schemas.ToolFunctionParameters `json:"input_schema,omitempty"`
+	CacheControl *schemas.CacheControl           `json:"cache_control,omitempty"`
 
 	*AnthropicToolComputerUse
 	*AnthropicToolWebSearch
@@ -466,4 +470,130 @@ type AnthropicError struct {
 type AnthropicStreamError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
+}
+
+// ==================== FILE TYPES ====================
+
+// AnthropicFileUploadRequest represents a request to upload a file.
+type AnthropicFileUploadRequest struct {
+	File     []byte `json:"-"`        // Raw file content (not serialized)
+	Filename string `json:"filename"` // Original filename
+	Purpose  string `json:"purpose"`  // Purpose of the file (e.g., "batch")
+}
+
+// AnthropicFileRetrieveRequest represents a request to retrieve a file.
+type AnthropicFileRetrieveRequest struct {
+	FileID string `json:"file_id"`
+}
+
+// AnthropicFileListRequest represents a request to list files.
+type AnthropicFileListRequest struct {
+	Limit int     `json:"limit"`
+	After *string `json:"after"`
+	Order *string `json:"order"`
+}
+
+// AnthropicFileDeleteRequest represents a request to delete a file.
+type AnthropicFileDeleteRequest struct {
+	FileID string `json:"file_id"`
+}
+
+// AnthropicFileContentRequest represents a request to get the content of a file.
+type AnthropicFileContentRequest struct {
+	FileID string `json:"file_id"`
+}
+
+// AnthropicFileResponse represents an Anthropic file response.
+type AnthropicFileResponse struct {
+	ID           string `json:"id"`
+	Type         string `json:"type"`
+	Filename     string `json:"filename"`
+	MimeType     string `json:"mime_type"`
+	SizeBytes    int64  `json:"size_bytes"`
+	CreatedAt    string `json:"created_at"`
+	Downloadable bool   `json:"downloadable"`
+}
+
+// AnthropicFileListResponse represents the response from listing files.
+type AnthropicFileListResponse struct {
+	Data    []AnthropicFileResponse `json:"data"`
+	HasMore bool                    `json:"has_more"`
+	FirstID *string                 `json:"first_id,omitempty"`
+	LastID  *string                 `json:"last_id,omitempty"`
+}
+
+// AnthropicFileDeleteResponse represents the response from deleting a file.
+type AnthropicFileDeleteResponse struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+}
+
+// ToBifrostFileUploadResponse converts an Anthropic file response to Bifrost file upload response.
+func (r *AnthropicFileResponse) ToBifrostFileUploadResponse(providerName schemas.ModelProvider, latency time.Duration, sendBackRawRequest bool, sendBackRawResponse bool, rawRequest interface{}, rawResponse interface{}) *schemas.BifrostFileUploadResponse {
+	resp := &schemas.BifrostFileUploadResponse{
+		ID:             r.ID,
+		Object:         r.Type,
+		Bytes:          r.SizeBytes,
+		CreatedAt:      parseAnthropicFileTimestamp(r.CreatedAt),
+		Filename:       r.Filename,
+		Purpose:        schemas.FilePurposeBatch, // We hardcode as purpose is not supported by Anthropic
+		Status:         schemas.FileStatusProcessed,
+		StorageBackend: schemas.FileStorageAPI,
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			RequestType: schemas.FileUploadRequest,
+			Provider:    providerName,
+			Latency:     latency.Milliseconds(),
+		},
+	}
+
+	if sendBackRawRequest {
+		resp.ExtraFields.RawRequest = rawRequest
+	}
+
+	if sendBackRawResponse {
+		resp.ExtraFields.RawResponse = rawResponse
+	}
+
+	return resp
+}
+
+// ToBifrostFileRetrieveResponse converts an Anthropic file response to Bifrost file retrieve response.
+func (r *AnthropicFileResponse) ToBifrostFileRetrieveResponse(providerName schemas.ModelProvider, latency time.Duration, sendBackRawRequest bool, sendBackRawResponse bool, rawRequest interface{}, rawResponse interface{}) *schemas.BifrostFileRetrieveResponse {
+	resp := &schemas.BifrostFileRetrieveResponse{
+		ID:             r.ID,
+		Object:         r.Type,
+		Bytes:          r.SizeBytes,
+		CreatedAt:      parseAnthropicFileTimestamp(r.CreatedAt),
+		Filename:       r.Filename,
+		Purpose:        schemas.FilePurposeBatch,
+		Status:         schemas.FileStatusProcessed,
+		StorageBackend: schemas.FileStorageAPI,
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			RequestType: schemas.FileRetrieveRequest,
+			Provider:    providerName,
+			Latency:     latency.Milliseconds(),
+		},
+	}
+
+	if sendBackRawRequest {
+		resp.ExtraFields.RawRequest = rawRequest
+	}
+
+	if sendBackRawResponse {
+		resp.ExtraFields.RawResponse = rawResponse
+	}
+
+	return resp
+}
+
+// parseAnthropicFileTimestamp converts Anthropic ISO timestamp to Unix timestamp.
+func parseAnthropicFileTimestamp(timestamp string) int64 {
+	if timestamp == "" {
+		return 0
+	}
+	t, err := time.Parse(time.RFC3339, timestamp)
+	if err != nil {
+		return 0
+	}
+	return t.Unix()
 }

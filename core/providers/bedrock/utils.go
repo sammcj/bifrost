@@ -27,7 +27,7 @@ func convertChatParameters(ctx *context.Context, bifrostReq *schemas.BifrostChat
 	responseFormatTool := convertResponseFormatToTool(ctx, bifrostReq.Params)
 
 	// Convert tool config
-	if toolConfig := convertToolConfig(bifrostReq.Params); toolConfig != nil {
+	if toolConfig := convertToolConfig(bifrostReq.Model, bifrostReq.Params); toolConfig != nil {
 		bedrockReq.ToolConfig = toolConfig
 	}
 
@@ -37,12 +37,55 @@ func convertChatParameters(ctx *context.Context, bifrostReq *schemas.BifrostChat
 			bedrockReq.AdditionalModelRequestFields = make(schemas.OrderedMap)
 		}
 		if bifrostReq.Params.Reasoning.MaxTokens != nil {
-			if schemas.IsAnthropicModel(bifrostReq.Model) && *bifrostReq.Params.Reasoning.MaxTokens < anthropic.MinimumReasoningMaxTokens {
-				return fmt.Errorf("reasoning.max_tokens must be >= %d for anthropic", anthropic.MinimumReasoningMaxTokens)
-			}
-			bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]any{
-				"type":          "enabled",
-				"budget_tokens": *bifrostReq.Params.Reasoning.MaxTokens,
+			if schemas.IsAnthropicModel(bifrostReq.Model) {
+				if *bifrostReq.Params.Reasoning.MaxTokens < anthropic.MinimumReasoningMaxTokens {
+					return fmt.Errorf("reasoning.max_tokens must be >= %d for anthropic", anthropic.MinimumReasoningMaxTokens)
+				}
+				bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]any{
+					"type":          "enabled",
+					"budget_tokens": *bifrostReq.Params.Reasoning.MaxTokens,
+				}
+			} else if schemas.IsNovaModel(bifrostReq.Model) {
+				minBudgetTokens := MinimumReasoningMaxTokens
+				defaultMaxTokens := DefaultCompletionMaxTokens
+				if bedrockReq.InferenceConfig != nil && bedrockReq.InferenceConfig.MaxTokens != nil {
+					defaultMaxTokens = *bedrockReq.InferenceConfig.MaxTokens
+				} else if bedrockReq.InferenceConfig != nil {
+					bedrockReq.InferenceConfig.MaxTokens = schemas.Ptr(DefaultCompletionMaxTokens)
+				} else {
+					bedrockReq.InferenceConfig = &BedrockInferenceConfig{
+						MaxTokens: schemas.Ptr(DefaultCompletionMaxTokens),
+					}
+				}
+
+				maxReasoningEffort := providerUtils.GetReasoningEffortFromBudgetTokens(*bifrostReq.Params.Reasoning.MaxTokens, minBudgetTokens, defaultMaxTokens)
+				typeStr := "enabled"
+				switch maxReasoningEffort {
+				case "high":
+					if bedrockReq.InferenceConfig != nil {
+						bedrockReq.InferenceConfig.MaxTokens = nil
+						bedrockReq.InferenceConfig.Temperature = nil
+						bedrockReq.InferenceConfig.TopP = nil
+					}
+				case "minimal":
+					maxReasoningEffort = "low"
+				case "none":
+					typeStr = "disabled"
+				}
+
+				config := map[string]any{
+					"type": typeStr,
+				}
+				if typeStr != "disabled" {
+					config["maxReasoningEffort"] = maxReasoningEffort
+				}
+
+				bedrockReq.AdditionalModelRequestFields["reasoningConfig"] = config
+			} else {
+				bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]any{
+					"type":          "enabled",
+					"budget_tokens": *bifrostReq.Params.Reasoning.MaxTokens,
+				}
 			}
 		} else if bifrostReq.Params.Reasoning.Effort != nil && *bifrostReq.Params.Reasoning.Effort != "none" {
 			maxTokens := DefaultCompletionMaxTokens
@@ -57,17 +100,39 @@ func convertChatParameters(ctx *context.Context, bifrostReq *schemas.BifrostChat
 					}
 				}
 			}
-			minBudgetTokens := MinimumReasoningMaxTokens
-			if schemas.IsAnthropicModel(bifrostReq.Model) {
-				minBudgetTokens = anthropic.MinimumReasoningMaxTokens
-			}
-			budgetTokens, err := providerUtils.GetBudgetTokensFromReasoningEffort(*bifrostReq.Params.Reasoning.Effort, minBudgetTokens, maxTokens)
-			if err != nil {
-				return err
-			}
-			bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]any{
-				"type":          "enabled",
-				"budget_tokens": budgetTokens,
+			if schemas.IsNovaModel(bifrostReq.Model) {
+				effort := *bifrostReq.Params.Reasoning.Effort
+				typeStr := "enabled"
+				switch effort {
+				case "high":
+					if bedrockReq.InferenceConfig != nil {
+						bedrockReq.InferenceConfig.MaxTokens = nil
+						bedrockReq.InferenceConfig.Temperature = nil
+						bedrockReq.InferenceConfig.TopP = nil
+					}
+				case "minimal":
+					effort = "low"
+				case "none":
+					typeStr = "disabled"
+				}
+
+				config := map[string]any{
+					"type": typeStr,
+				}
+				if typeStr != "disabled" {
+					config["maxReasoningEffort"] = effort
+				}
+
+				bedrockReq.AdditionalModelRequestFields["reasoningConfig"] = config
+			} else if schemas.IsAnthropicModel(bifrostReq.Model) {
+				budgetTokens, err := providerUtils.GetBudgetTokensFromReasoningEffort(*bifrostReq.Params.Reasoning.Effort, anthropic.MinimumReasoningMaxTokens, maxTokens)
+				if err != nil {
+					return err
+				}
+				bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]any{
+					"type":          "enabled",
+					"budget_tokens": budgetTokens,
+				}
 			}
 		} else {
 			bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]string{
@@ -204,11 +269,11 @@ func convertMessages(bifrostMessages []schemas.ChatMessage) ([]BedrockMessage, [
 		switch msg.Role {
 		case schemas.ChatMessageRoleSystem:
 			// Convert system message
-			systemMsg, err := convertSystemMessage(msg)
+			systemMsgs, err := convertSystemMessages(msg)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to convert system message: %w", err)
 			}
-			systemMessages = append(systemMessages, systemMsg)
+			systemMessages = append(systemMessages, systemMsgs...)
 
 		case schemas.ChatMessageRoleUser, schemas.ChatMessageRoleAssistant:
 			// Convert regular message
@@ -234,29 +299,33 @@ func convertMessages(bifrostMessages []schemas.ChatMessage) ([]BedrockMessage, [
 	return messages, systemMessages, nil
 }
 
-// convertSystemMessage converts a Bifrost system message to Bedrock format
-func convertSystemMessage(msg schemas.ChatMessage) (BedrockSystemMessage, error) {
-	systemMsg := BedrockSystemMessage{}
+// convertSystemMessages converts a Bifrost system message to Bedrock format
+func convertSystemMessages(msg schemas.ChatMessage) ([]BedrockSystemMessage, error) {
+	systemMsgs := []BedrockSystemMessage{}
 
 	// Convert content
 	if msg.Content.ContentStr != nil {
-		systemMsg.Text = msg.Content.ContentStr
+		systemMsgs = append(systemMsgs, BedrockSystemMessage{
+			Text: msg.Content.ContentStr,
+		})
 	} else if msg.Content.ContentBlocks != nil {
-		// For system messages, we only support text content
-		// Combine all text blocks into a single string
-		var textParts []string
 		for _, block := range msg.Content.ContentBlocks {
 			if block.Type == schemas.ChatContentBlockTypeText && block.Text != nil {
-				textParts = append(textParts, *block.Text)
+				systemMsgs = append(systemMsgs, BedrockSystemMessage{
+					Text: block.Text,
+				})
+				if block.CacheControl != nil {
+					systemMsgs = append(systemMsgs, BedrockSystemMessage{
+						CachePoint: &BedrockCachePoint{
+							Type: BedrockCachePointTypeDefault,
+						},
+					})
+				}
 			}
-		}
-		if len(textParts) > 0 {
-			combined := strings.Join(textParts, "\n")
-			systemMsg.Text = &combined
 		}
 	}
 
-	return systemMsg, nil
+	return systemMsgs, nil
 }
 
 // convertMessage converts a Bifrost message to Bedrock format
@@ -323,6 +392,14 @@ func convertToolMessage(msg schemas.ChatMessage) (BedrockMessage, error) {
 					toolResultContent = append(toolResultContent, BedrockContentBlock{
 						Text: block.Text,
 					})
+					// Cache point must be in a separate block
+					if block.CacheControl != nil {
+						toolResultContent = append(toolResultContent, BedrockContentBlock{
+							CachePoint: &BedrockCachePoint{
+								Type: BedrockCachePointTypeDefault,
+							},
+						})
+					}
 				}
 			case schemas.ChatContentBlockTypeImage:
 				if block.ImageURLStruct != nil {
@@ -333,6 +410,14 @@ func convertToolMessage(msg schemas.ChatMessage) (BedrockMessage, error) {
 					toolResultContent = append(toolResultContent, BedrockContentBlock{
 						Image: imageSource,
 					})
+					// Cache point must be in a separate block
+					if block.CacheControl != nil {
+						toolResultContent = append(toolResultContent, BedrockContentBlock{
+							CachePoint: &BedrockCachePoint{
+								Type: BedrockCachePointTypeDefault,
+							},
+						})
+					}
 				}
 			}
 		}
@@ -363,11 +448,11 @@ func convertContent(content schemas.ChatMessageContent) ([]BedrockContentBlock, 
 	} else if content.ContentBlocks != nil {
 		// Multi-modal content
 		for _, block := range content.ContentBlocks {
-			bedrockBlock, err := convertContentBlock(block)
+			bedrockBlocks, err := convertContentBlock(block)
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert content block: %w", err)
 			}
-			contentBlocks = append(contentBlocks, bedrockBlock)
+			contentBlocks = append(contentBlocks, bedrockBlocks...)
 		}
 	}
 
@@ -375,32 +460,54 @@ func convertContent(content schemas.ChatMessageContent) ([]BedrockContentBlock, 
 }
 
 // convertContentBlock converts a Bifrost content block to Bedrock format
-func convertContentBlock(block schemas.ChatContentBlock) (BedrockContentBlock, error) {
+func convertContentBlock(block schemas.ChatContentBlock) ([]BedrockContentBlock, error) {
 	switch block.Type {
 	case schemas.ChatContentBlockTypeText:
-		return BedrockContentBlock{
-			Text: block.Text,
-		}, nil
+		blocks := []BedrockContentBlock{
+			{
+				Text: block.Text,
+			},
+		}
+		// Cache point must be in a separate block
+		if block.CacheControl != nil {
+			blocks = append(blocks, BedrockContentBlock{
+				CachePoint: &BedrockCachePoint{
+					Type: BedrockCachePointTypeDefault,
+				},
+			})
+		}
+		return blocks, nil
 
 	case schemas.ChatContentBlockTypeImage:
 		if block.ImageURLStruct == nil {
-			return BedrockContentBlock{}, fmt.Errorf("image_url block missing image_url field")
+			return nil, fmt.Errorf("image_url block missing image_url field")
 		}
 
 		imageSource, err := convertImageToBedrockSource(block.ImageURLStruct.URL)
 		if err != nil {
-			return BedrockContentBlock{}, fmt.Errorf("failed to convert image: %w", err)
+			return nil, fmt.Errorf("failed to convert image: %w", err)
 		}
-		return BedrockContentBlock{
-			Image: imageSource,
-		}, nil
+		blocks := []BedrockContentBlock{
+			{
+				Image: imageSource,
+			},
+		}
+		// Cache point must be in a separate block
+		if block.CacheControl != nil {
+			blocks = append(blocks, BedrockContentBlock{
+				CachePoint: &BedrockCachePoint{
+					Type: BedrockCachePointTypeDefault,
+				},
+			})
+		}
+		return blocks, nil
 
 	case schemas.ChatContentBlockTypeInputAudio:
 		// Bedrock doesn't support audio input in Converse API
-		return BedrockContentBlock{}, fmt.Errorf("audio input not supported in Bedrock Converse API")
+		return nil, fmt.Errorf("audio input not supported in Bedrock Converse API")
 
 	default:
-		return BedrockContentBlock{}, fmt.Errorf("unsupported content block type: %s", block.Type)
+		return nil, fmt.Errorf("unsupported content block type: %s", block.Type)
 	}
 }
 
@@ -503,6 +610,48 @@ func convertResponseFormatToTool(ctx *context.Context, params *schemas.ChatParam
 	}
 }
 
+// convertTextFormatToTool converts a text config to a Bedrock tool for structured outpute
+func convertTextFormatToTool(ctx *context.Context, textConfig *schemas.ResponsesTextConfig) *BedrockTool {
+	if textConfig == nil || textConfig.Format == nil {
+		return nil
+	}
+
+	format := textConfig.Format
+	if format.Type != "json_schema" {
+		return nil
+	}
+
+	toolName := "json_response"
+	if format.Name != nil && strings.TrimSpace(*format.Name) != "" {
+		toolName = strings.TrimSpace(*format.Name)
+	}
+
+	description := "Returns structured JSON output"
+	if format.JSONSchema.Description != nil {
+		description = *format.JSONSchema.Description
+	}
+
+	toolName = fmt.Sprintf("bf_so_%s", toolName)
+	(*ctx) = context.WithValue(*ctx, schemas.BifrostContextKeyStructuredOutputToolName, toolName)
+
+	var schemaObj any
+	if format.JSONSchema != nil {
+		schemaObj = *format.JSONSchema
+	} else {
+		return nil // Schema is required for Bedrock tooling
+	}
+
+	return &BedrockTool{
+		ToolSpec: &BedrockToolSpec{
+			Name:        toolName,
+			Description: schemas.Ptr(description),
+			InputSchema: BedrockToolInputSchema{
+				JSON: schemaObj,
+			},
+		},
+	}
+}
+
 // convertInferenceConfig converts Bifrost parameters to Bedrock inference config
 func convertInferenceConfig(params *schemas.ChatParameters) *BedrockInferenceConfig {
 	var config BedrockInferenceConfig
@@ -526,7 +675,7 @@ func convertInferenceConfig(params *schemas.ChatParameters) *BedrockInferenceCon
 }
 
 // convertToolConfig converts Bifrost tools to Bedrock tool config
-func convertToolConfig(params *schemas.ChatParameters) *BedrockToolConfig {
+func convertToolConfig(model string, params *schemas.ChatParameters) *BedrockToolConfig {
 	if len(params.Tools) == 0 {
 		return nil
 	}
@@ -570,6 +719,14 @@ func convertToolConfig(params *schemas.ChatParameters) *BedrockToolConfig {
 				},
 			}
 			bedrockTools = append(bedrockTools, bedrockTool)
+
+			if tool.CacheControl != nil && !schemas.IsNovaModel(model) {
+				bedrockTools = append(bedrockTools, BedrockTool{
+					CachePoint: &BedrockCachePoint{
+						Type: BedrockCachePointTypeDefault,
+					},
+				})
+			}
 		}
 	}
 
@@ -735,7 +892,7 @@ func ToBedrockError(bifrostErr *schemas.BifrostError) *BedrockError {
 	}
 
 	// Map error type/code
-	if bifrostErr.Error.Code != nil {
+	if bifrostErr.Error != nil && bifrostErr.Error.Code != nil {
 		bedrockErr.Type = *bifrostErr.Error.Code
 		bedrockErr.Code = bifrostErr.Error.Code
 	} else if bifrostErr.Type != nil {

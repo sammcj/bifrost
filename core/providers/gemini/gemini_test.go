@@ -54,6 +54,17 @@ func TestGemini(t *testing.T) {
 			SpeechSynthesisStream: true,
 			Reasoning:             true,
 			ListModels:            true,
+			BatchCreate:           true,
+			BatchList:             true,
+			BatchRetrieve:         true,
+			BatchCancel:           true,
+			BatchResults:          true,
+			FileUpload:            true,
+			FileList:              true,
+			FileRetrieve:          true,
+			FileDelete:            true,
+			FileContent:           false,
+			FileBatchInput:        true,
 		},
 	}
 

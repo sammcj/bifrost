@@ -111,6 +111,8 @@ func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 							Value:            tableKey.Value,
 							Models:           tableKey.Models,
 							Weight:           tableKey.Weight,
+							Enabled:          tableKey.Enabled,
+							UseForBatchAPI:   tableKey.UseForBatchAPI,
 							AzureKeyConfig:   tableKey.AzureKeyConfig,
 							VertexKeyConfig:  tableKey.VertexKeyConfig,
 							BedrockKeyConfig: tableKey.BedrockKeyConfig,
@@ -1723,6 +1725,8 @@ func loadDefaultProviders(ctx context.Context, config *Config) error {
 					Value:            dbKey.Value,
 					Models:           dbKey.Models,
 					Weight:           dbKey.Weight,
+					Enabled:          dbKey.Enabled,
+					UseForBatchAPI:   dbKey.UseForBatchAPI,
 					AzureKeyConfig:   dbKey.AzureKeyConfig,
 					VertexKeyConfig:  dbKey.VertexKeyConfig,
 					BedrockKeyConfig: dbKey.BedrockKeyConfig,
@@ -2160,6 +2164,10 @@ func (c *Config) GetProviderConfigRedacted(provider schemas.ModelProvider) (*con
 			Models: models,
 			Weight: key.Weight,
 		}
+		if key.Enabled != nil {
+			enabled := *key.Enabled
+			redactedConfig.Keys[i].Enabled = &enabled
+		}
 
 		// Redact API key value
 		path := fmt.Sprintf("providers.%s.keys[%s]", provider, key.ID)
@@ -2167,6 +2175,13 @@ func (c *Config) GetProviderConfigRedacted(provider schemas.ModelProvider) (*con
 			redactedConfig.Keys[i].Value = "env." + envVar
 		} else if !strings.HasPrefix(key.Value, "env.") {
 			redactedConfig.Keys[i].Value = RedactKey(key.Value)
+		}
+
+		// Add back use for batch api
+		if key.UseForBatchAPI != nil {
+			redactedConfig.Keys[i].UseForBatchAPI = key.UseForBatchAPI
+		} else {
+			redactedConfig.Keys[i].UseForBatchAPI = bifrost.Ptr(false)
 		}
 
 		// Redact Azure key config if present
@@ -2282,6 +2297,11 @@ func (c *Config) GetProviderConfigRedacted(provider schemas.ModelProvider) (*con
 				bedrockConfig.ARN = bifrost.Ptr("env." + envVar)
 			} else {
 				bedrockConfig.ARN = key.BedrockKeyConfig.ARN
+			}
+
+			// Add back s3 config
+			if key.BedrockKeyConfig.BatchS3Config != nil {
+				bedrockConfig.BatchS3Config = key.BedrockKeyConfig.BatchS3Config
 			}
 
 			redactedConfig.Keys[i].BedrockKeyConfig = bedrockConfig

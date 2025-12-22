@@ -144,6 +144,9 @@
         },
         "cerebras": {
           "$ref": "#/$defs/provider"
+        },
+        "huggingface": {
+          "$ref": "#/$defs/provider"
         }
       },
       "additionalProperties": true
@@ -828,7 +831,8 @@
                         "cerebras",
                         "parasail",
                         "perplexity",
-                        "sgl"
+                        "sgl",
+                        "huggingface"
                       ]
                     },
                     "keys": {
@@ -1387,6 +1391,11 @@
           "type": "number",
           "minimum": 0,
           "description": "Weight for load balancing"
+        },
+        "use_for_batch_api": {
+          "type": "boolean",
+          "description": "Whether this key can be used for batch API operations (default: false)",
+          "default": false
         }
       },
       "required": [
@@ -1853,6 +1862,10 @@
         "password": {
           "type": "string",
           "description": "Password for proxy authentication"
+        },
+        "ca_cert_pem": {
+          "type": "string",
+          "description": "PEM-encoded CA certificate to trust for TLS connections through the proxy (for SSL-intercepting proxies)"
         }
       },
       "required": [

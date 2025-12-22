@@ -171,7 +171,10 @@ func ToGeminiResponsesResponse(bifrostResp *schemas.BifrostResponsesResponse) *G
 		var currentParts []*Part
 		var currentRole string
 
-		for _, msg := range bifrostResp.Output {
+		// Track which message indices have been consumed as thought signatures
+		consumedIndices := make(map[int]bool)
+
+		for i, msg := range bifrostResp.Output {
 			// Determine the role
 			role := "model" // default
 			if msg.Role != nil {
@@ -232,11 +235,18 @@ func ToGeminiResponsesResponse(bifrostResp *schemas.BifrostResponsesResponse) *G
 							FunctionCall: functionCall,
 						}
 
-						// Check for thought signature in reasoning message
-						if msg.ResponsesReasoning != nil && msg.ResponsesReasoning.EncryptedContent != nil {
-							decodedSig, err := base64.StdEncoding.DecodeString(*msg.ResponsesReasoning.EncryptedContent)
-							if err == nil {
-								part.ThoughtSignature = decodedSig
+						// Look ahead to see if the next message is a reasoning message with encrypted content
+						// (thought signature for this function call)
+						if i+1 < len(bifrostResp.Output) {
+							nextMsg := bifrostResp.Output[i+1]
+							if nextMsg.Type != nil && *nextMsg.Type == schemas.ResponsesMessageTypeReasoning &&
+								nextMsg.ResponsesReasoning != nil && nextMsg.ResponsesReasoning.EncryptedContent != nil {
+								decodedSig, err := base64.StdEncoding.DecodeString(*nextMsg.ResponsesReasoning.EncryptedContent)
+								if err == nil {
+									part.ThoughtSignature = decodedSig
+									// Mark this reasoning message as consumed
+									consumedIndices[i+1] = true
+								}
 							}
 						}
 
@@ -274,6 +284,11 @@ func ToGeminiResponsesResponse(bifrostResp *schemas.BifrostResponsesResponse) *G
 
 			// Handle reasoning messages
 			if msg.Type != nil && *msg.Type == schemas.ResponsesMessageTypeReasoning && msg.ResponsesReasoning != nil {
+				// Skip this reasoning message if it was already consumed as a thought signature
+				if consumedIndices[i] {
+					continue
+				}
+
 				// Reasoning content is in the Summary array
 				if len(msg.ResponsesReasoning.Summary) > 0 {
 					for _, summaryBlock := range msg.ResponsesReasoning.Summary {
@@ -811,14 +826,20 @@ func processGeminiTextPart(part *Part, state *GeminiResponsesStreamState, sequen
 		// Accumulate text for output_text.done
 		state.TextBuffer.WriteString(text)
 
-		responses = append(responses, &schemas.BifrostResponsesStreamResponse{
+		streamResponse := &schemas.BifrostResponsesStreamResponse{
 			Type:           schemas.ResponsesStreamResponseTypeOutputTextDelta,
 			SequenceNumber: sequenceNumber + len(responses),
 			OutputIndex:    &outputIndex,
 			ContentIndex:   &contentIndex,
 			ItemID:         &itemID,
 			Delta:          &text,
-		})
+		}
+		if len(part.ThoughtSignature) > 0 {
+			thoughtSig := base64.StdEncoding.EncodeToString(part.ThoughtSignature)
+			streamResponse.Signature = &thoughtSig
+		}
+
+		responses = append(responses, streamResponse)
 	}
 
 	return responses
@@ -1346,135 +1367,174 @@ func convertGeminiContentsToResponsesMessages(contents []Content) []schemas.Resp
 	functionCallIDs := make(map[string]string)
 
 	for _, content := range contents {
-		msg := schemas.ResponsesMessage{}
-
+		// Determine the role for all messages from this Content
+		var role *schemas.ResponsesMessageRoleType
 		switch content.Role {
 		case "model":
-			msg.Role = schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant)
+			role = schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant)
 		case "user":
-			msg.Role = schemas.Ptr(schemas.ResponsesInputMessageRoleUser)
+			role = schemas.Ptr(schemas.ResponsesInputMessageRoleUser)
 		default:
 			// Default to user for unknown roles
-			msg.Role = schemas.Ptr(schemas.ResponsesInputMessageRoleUser)
+			role = schemas.Ptr(schemas.ResponsesInputMessageRoleUser)
 		}
 
-		// Convert parts to content blocks
-		if len(content.Parts) > 0 {
-			msg.Content = &schemas.ResponsesMessageContent{}
-
-			for _, part := range content.Parts {
-				// Handle text content
-				if part.Text != "" && !part.Thought {
-					block := schemas.ResponsesMessageContentBlock{
-						Text: &part.Text,
-					}
-					if content.Role == "model" {
-						block.Type = schemas.ResponsesOutputMessageContentTypeText
-					} else {
-						block.Type = schemas.ResponsesInputMessageContentBlockTypeText
-					}
-					msg.Content.ContentBlocks = append(msg.Content.ContentBlocks, block)
-				}
-
-				// Handle thought/reasoning content
-				if part.Thought && part.Text != "" {
-					msgType := schemas.ResponsesMessageTypeReasoning
-					msg.Type = &msgType
-					msg.Role = nil
-					// Add reasoning content as text block
-					block := schemas.ResponsesMessageContentBlock{
-						Type: schemas.ResponsesOutputMessageContentTypeReasoning,
-						Text: &part.Text,
-					}
-					msg.Content.ContentBlocks = append(msg.Content.ContentBlocks, block)
-				}
-
-				// Handle inline data (images, audio, files)
-				if part.InlineData != nil {
-					block := convertGeminiInlineDataToContentBlock(part.InlineData)
-					if block != nil {
-						msg.Content.ContentBlocks = append(msg.Content.ContentBlocks, *block)
+		// Process each part - each part can become a separate message
+		for _, part := range content.Parts {
+			switch {
+			case part.FunctionCall != nil:
+				// Function call message
+				argsJSON := "{}"
+				if part.FunctionCall.Args != nil {
+					if argsBytes, err := sonic.Marshal(part.FunctionCall.Args); err == nil {
+						argsJSON = string(argsBytes)
 					}
 				}
 
-				// Handle file data (URI-based)
-				if part.FileData != nil {
-					block := convertGeminiFileDataToContentBlock(part.FileData)
-					if block != nil {
-						msg.Content.ContentBlocks = append(msg.Content.ContentBlocks, *block)
-					}
+				callID := part.FunctionCall.ID
+				if callID == "" {
+					callID = part.FunctionCall.Name
 				}
 
-				// Handle function calls
-				if part.FunctionCall != nil {
-					msgType := schemas.ResponsesMessageTypeFunctionCall
-					msg.Type = &msgType
-					msg.Role = nil
-					msg.Content = nil // Clear content for function calls
+				// Track this function call ID by name for later matching with responses
+				functionCallIDs[part.FunctionCall.Name] = callID
 
-					argsJSON := "{}"
-					if part.FunctionCall.Args != nil {
-						if argsBytes, err := sonic.Marshal(part.FunctionCall.Args); err == nil {
-							argsJSON = string(argsBytes)
-						}
-					}
-
-					callID := part.FunctionCall.ID
-					if callID == "" {
-						callID = part.FunctionCall.Name
-					}
-
-					// Track this function call ID by name for later matching with responses
-					functionCallIDs[part.FunctionCall.Name] = callID
-
-					msg.ResponsesToolMessage = &schemas.ResponsesToolMessage{
+				msg := schemas.ResponsesMessage{
+					Type: schemas.Ptr(schemas.ResponsesMessageTypeFunctionCall),
+					ResponsesToolMessage: &schemas.ResponsesToolMessage{
 						CallID:    &callID,
 						Name:      &part.FunctionCall.Name,
 						Arguments: &argsJSON,
+					},
+				}
+				messages = append(messages, msg)
+
+				// If this part also has a thought signature, create a separate reasoning message
+				if len(part.ThoughtSignature) > 0 {
+					thoughtSig := base64.StdEncoding.EncodeToString(part.ThoughtSignature)
+					reasoningMsg := schemas.ResponsesMessage{
+						Role: role,
+						Type: schemas.Ptr(schemas.ResponsesMessageTypeReasoning),
+						ResponsesReasoning: &schemas.ResponsesReasoning{
+							Summary:          []schemas.ResponsesReasoningSummary{},
+							EncryptedContent: &thoughtSig,
+						},
+					}
+					messages = append(messages, reasoningMsg)
+				}
+
+			case part.FunctionResponse != nil:
+				// Function response message
+				responseID := part.FunctionResponse.ID
+				if responseID == "" {
+					// Try to find the matching function call ID by name
+					if callID, ok := functionCallIDs[part.FunctionResponse.Name]; ok {
+						responseID = callID
+					} else {
+						// Fallback to function name if no matching call found
+						responseID = part.FunctionResponse.Name
 					}
 				}
 
-				// Handle function responses
-				if part.FunctionResponse != nil {
-					msgType := schemas.ResponsesMessageTypeFunctionCallOutput
-					msg.Type = &msgType
-					msg.Role = nil
-					msg.Content = nil // Clear content for function call outputs
-
-					responseID := part.FunctionResponse.ID
-					if responseID == "" {
-						// Try to find the matching function call ID by name
-						if callID, ok := functionCallIDs[part.FunctionResponse.Name]; ok {
-							responseID = callID
-						} else {
-							// Fallback to function name if no matching call found
-							responseID = part.FunctionResponse.Name
-						}
+				// Convert response map to string
+				responseStr := ""
+				if part.FunctionResponse.Response != nil {
+					if output, ok := part.FunctionResponse.Response["output"].(string); ok {
+						responseStr = output
+					} else if responseBytes, err := sonic.Marshal(part.FunctionResponse.Response); err == nil {
+						responseStr = string(responseBytes)
 					}
+				}
 
-					// Convert response map to string
-					responseStr := ""
-					if part.FunctionResponse.Response != nil {
-						if output, ok := part.FunctionResponse.Response["output"].(string); ok {
-							responseStr = output
-						} else if responseBytes, err := sonic.Marshal(part.FunctionResponse.Response); err == nil {
-							responseStr = string(responseBytes)
-						}
-					}
-
-					msg.ResponsesToolMessage = &schemas.ResponsesToolMessage{
+				msg := schemas.ResponsesMessage{
+					Type: schemas.Ptr(schemas.ResponsesMessageTypeFunctionCallOutput),
+					ResponsesToolMessage: &schemas.ResponsesToolMessage{
 						CallID: &responseID,
 						Output: &schemas.ResponsesToolMessageOutputStruct{
 							ResponsesToolCallOutputStr: &responseStr,
 						},
+					},
+				}
+
+				// Also set the tool name if present (Gemini associates on name)
+				if name := strings.TrimSpace(part.FunctionResponse.Name); name != "" {
+					msg.ResponsesToolMessage.Name = schemas.Ptr(name)
+				}
+
+				messages = append(messages, msg)
+
+			case part.Thought && part.Text != "":
+				// Thought/reasoning text content
+				msg := schemas.ResponsesMessage{
+					Role: role,
+					Type: schemas.Ptr(schemas.ResponsesMessageTypeReasoning),
+					Content: &schemas.ResponsesMessageContent{
+						ContentBlocks: []schemas.ResponsesMessageContentBlock{
+							{
+								Type: schemas.ResponsesOutputMessageContentTypeReasoning,
+								Text: &part.Text,
+							},
+						},
+					},
+				}
+				messages = append(messages, msg)
+
+			case part.Text != "":
+				// Regular text message
+				msg := schemas.ResponsesMessage{
+					Role: role,
+					Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
+					Content: &schemas.ResponsesMessageContent{
+						ContentBlocks: []schemas.ResponsesMessageContentBlock{
+							{
+								Type: func() schemas.ResponsesMessageContentBlockType {
+									if content.Role == "model" {
+										return schemas.ResponsesOutputMessageContentTypeText
+									}
+									return schemas.ResponsesInputMessageContentBlockTypeText
+								}(),
+								Text: &part.Text,
+							},
+						},
+					},
+				}
+
+				// add signature to above text content block if present
+				if len(part.ThoughtSignature) > 0 {
+					thoughtSig := base64.StdEncoding.EncodeToString(part.ThoughtSignature)
+					msg.Content.ContentBlocks[len(msg.Content.ContentBlocks)-1].Signature = &thoughtSig
+				}
+
+				messages = append(messages, msg)
+
+			case part.InlineData != nil:
+				// Handle inline data (images, audio, files)
+				block := convertGeminiInlineDataToContentBlock(part.InlineData)
+				if block != nil {
+					msg := schemas.ResponsesMessage{
+						Role: role,
+						Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
+						Content: &schemas.ResponsesMessageContent{
+							ContentBlocks: []schemas.ResponsesMessageContentBlock{*block},
+						},
 					}
+					messages = append(messages, msg)
+				}
+
+			case part.FileData != nil:
+				// Handle file data (URI-based)
+				block := convertGeminiFileDataToContentBlock(part.FileData)
+				if block != nil {
+					msg := schemas.ResponsesMessage{
+						Role: role,
+						Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
+						Content: &schemas.ResponsesMessageContent{
+							ContentBlocks: []schemas.ResponsesMessageContentBlock{*block},
+						},
+					}
+					messages = append(messages, msg)
 				}
 			}
-		}
-
-		// Only append message if it has content or is a tool message
-		if msg.Content != nil || msg.ResponsesToolMessage != nil {
-			messages = append(messages, msg)
 		}
 	}
 
@@ -1664,6 +1724,11 @@ func convertGeminiCandidatesToResponsesOutput(candidates []*Candidate) []schemas
 						},
 					},
 					Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
+				}
+				// add signature to above text content block if present
+				if len(part.ThoughtSignature) > 0 {
+					thoughtSig := base64.StdEncoding.EncodeToString(part.ThoughtSignature)
+					msg.Content.ContentBlocks[len(msg.Content.ContentBlocks)-1].Signature = &thoughtSig
 				}
 				messages = append(messages, msg)
 
@@ -1857,6 +1922,75 @@ func convertGeminiCandidatesToResponsesOutput(candidates []*Candidate) []schemas
 	return messages
 }
 
+// convertTextConfigToGenerationConfig converts ResponsesTextConfig to Gemini's GenerationConfig fields
+func convertTextConfigToGenerationConfig(textConfig *schemas.ResponsesTextConfig, config *GenerationConfig) {
+	if textConfig == nil || config == nil {
+		return
+	}
+
+	if textConfig.Format == nil {
+		return
+	}
+
+	switch textConfig.Format.Type {
+	case "json_schema":
+		config.ResponseMIMEType = "application/json"
+		if textConfig.Format.JSONSchema != nil {
+			if schema := reconstructSchemaFromJSONSchema(textConfig.Format.JSONSchema); schema != nil {
+				config.ResponseJSONSchema = schema
+			}
+			// no schema, mime type remains as is
+		}
+
+	case "json_object":
+		config.ResponseMIMEType = "application/json"
+
+	case "text":
+		config.ResponseMIMEType = "text/plain"
+	}
+}
+
+// reconstructSchemaFromJSONSchema rebuilds a schema map from ResponsesTextConfigFormatJSONSchema
+func reconstructSchemaFromJSONSchema(jsonSchema *schemas.ResponsesTextConfigFormatJSONSchema) interface{} {
+	if jsonSchema.Schema != nil {
+		return *jsonSchema.Schema
+	}
+
+	// New format: Schema is spread across individual fields
+	schema := make(map[string]interface{})
+
+	if jsonSchema.Type != nil {
+		schema["type"] = *jsonSchema.Type
+	}
+
+	if jsonSchema.Properties != nil {
+		schema["properties"] = *jsonSchema.Properties
+	}
+
+	if len(jsonSchema.Required) > 0 {
+		schema["required"] = jsonSchema.Required
+	}
+
+	if jsonSchema.Description != nil {
+		schema["description"] = *jsonSchema.Description
+	}
+
+	if jsonSchema.AdditionalProperties != nil {
+		schema["additionalProperties"] = *jsonSchema.AdditionalProperties
+	}
+
+	if jsonSchema.Name != nil {
+		schema["title"] = *jsonSchema.Name
+	}
+
+	// Return nil if no fields were populated
+	if len(schema) == 0 {
+		return nil
+	}
+
+	return schema
+}
+
 // convertParamsToGenerationConfigResponses converts ChatParameters to GenerationConfig for Responses
 func (r *GeminiGenerationRequest) convertParamsToGenerationConfigResponses(params *schemas.ResponsesParameters) GenerationConfig {
 	config := GenerationConfig{}
@@ -1877,6 +2011,10 @@ func (r *GeminiGenerationRequest) convertParamsToGenerationConfigResponses(param
 		// only set thinking level if max tokens is not set
 		if params.Reasoning.Effort != nil && params.Reasoning.MaxTokens == nil {
 			switch *params.Reasoning.Effort {
+			case "none":
+				// turn off thinking
+				config.ThinkingConfig.IncludeThoughts = false
+				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(0))
 			case "minimal", "low":
 				config.ThinkingConfig.ThinkingLevel = ThinkingLevelLow
 			case "medium", "high":
@@ -1884,8 +2022,19 @@ func (r *GeminiGenerationRequest) convertParamsToGenerationConfigResponses(param
 			}
 		}
 		if params.Reasoning.MaxTokens != nil {
-			config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(*params.Reasoning.MaxTokens))
+			switch *params.Reasoning.MaxTokens {
+			case 0: // turn off thinking
+				config.ThinkingConfig.IncludeThoughts = false
+				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(0))
+			case -1: // dynamic thinking budget
+				config.ThinkingConfig.ThinkingBudget = nil
+			default: // constrained thinking budget
+				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(*params.Reasoning.MaxTokens))
+			}
 		}
+	}
+	if params.Text != nil {
+		convertTextConfigToGenerationConfig(params.Text, &config)
 	}
 
 	if params.ExtraParams != nil {
@@ -1909,6 +2058,7 @@ func (r *GeminiGenerationRequest) convertParamsToGenerationConfigResponses(param
 				config.StopSequences = val
 			}
 		}
+
 	}
 
 	return config
@@ -2190,7 +2340,12 @@ func convertResponsesMessagesToGeminiContents(messages []schemas.ResponsesMessag
 				// Convert function response to Gemini FunctionResponse
 				if msg.ResponsesToolMessage.CallID != nil {
 					responseMap := make(map[string]any)
-					if msg.Content != nil && msg.Content.ContentStr != nil {
+
+					// Extract output from ResponsesToolMessage.Output
+					if msg.ResponsesToolMessage.Output != nil && msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil {
+						responseMap["output"] = *msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr
+					} else if msg.Content != nil && msg.Content.ContentStr != nil {
+						// Fallback to Content.ContentStr for backward compatibility
 						responseMap["output"] = *msg.Content.ContentStr
 					}
 
@@ -2229,9 +2384,16 @@ func convertContentBlockToGeminiPart(block schemas.ResponsesMessageContentBlock)
 	case schemas.ResponsesInputMessageContentBlockTypeText,
 		schemas.ResponsesOutputMessageContentTypeText:
 		if block.Text != nil && *block.Text != "" {
-			return &Part{
+			part := &Part{
 				Text: *block.Text,
-			}, nil
+			}
+			if block.Signature != nil {
+				decodedSig, err := base64.StdEncoding.DecodeString(*block.Signature)
+				if err == nil {
+					part.ThoughtSignature = decodedSig
+				}
+			}
+			return part, nil
 		}
 
 	case schemas.ResponsesOutputMessageContentTypeReasoning:

@@ -41,14 +41,6 @@ type ChatSession struct {
 // ComprehensiveTestAccount provides a test implementation of the Account interface for comprehensive testing.
 type ComprehensiveTestAccount struct{}
 
-// getEnvWithDefault returns the value of the environment variable if set, otherwise returns the default value
-func getEnvWithDefault(envVar, defaultValue string) string {
-	if value := os.Getenv(envVar); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
 // GetConfiguredProviders returns the list of initially supported providers.
 func (account *ComprehensiveTestAccount) GetConfiguredProviders() ([]schemas.ModelProvider, error) {
 	return []schemas.ModelProvider{

@@ -95,8 +95,9 @@ func ConvertBifrostFinishReasonToAnthropic(bifrostReason string) AnthropicStopRe
 // Uses the same pattern as the original buildAnthropicImageSourceMap function
 func ConvertToAnthropicImageBlock(block schemas.ChatContentBlock) AnthropicContentBlock {
 	imageBlock := AnthropicContentBlock{
-		Type:   "image",
-		Source: &AnthropicImageSource{},
+		Type:         AnthropicContentBlockTypeImage,
+		CacheControl: block.CacheControl,
+		Source:       &AnthropicImageSource{},
 	}
 
 	if block.ImageURLStruct == nil {
@@ -300,7 +301,9 @@ func convertResponsesTextConfigToAnthropicOutputFormat(textConfig *schemas.Respo
 			schema["required"] = format.JSONSchema.Required
 		}
 
-		if format.JSONSchema.AdditionalProperties != nil {
+		if format.JSONSchema.Type != nil && *format.JSONSchema.Type == "object" {
+			schema["additionalProperties"] = false
+		} else if format.JSONSchema.AdditionalProperties != nil {
 			schema["additionalProperties"] = *format.JSONSchema.AdditionalProperties
 		}
 

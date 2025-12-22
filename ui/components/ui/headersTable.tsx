@@ -97,7 +97,6 @@ export function HeadersTable({
 					</TableHeader>
 					<TableBody>
 						{rows.map(([key, value], index) => {
-							// Use index as key to maintain stable identity during edits
 							return (
 								<TableRow key={index} className="border-b last:border-0">
 									<TableCell className="p-2">

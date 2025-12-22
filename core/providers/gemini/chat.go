@@ -79,6 +79,7 @@ func (response *GenerateContentResponse) ToBifrostChatResponse() *schemas.Bifros
 	var toolCalls []schemas.ChatAssistantMessageToolCall
 	var contentBlocks []schemas.ChatContentBlock
 	var reasoningDetails []schemas.ChatReasoningDetails
+	var contentStr *string
 
 	// Process candidates to extract text content
 	if len(response.Candidates) > 0 {
@@ -110,12 +111,23 @@ func (response *GenerateContentResponse) ToBifrostChatResponse() *schemas.Bifros
 						callID = part.FunctionCall.ID
 					}
 
-					toolCalls = append(toolCalls, schemas.ChatAssistantMessageToolCall{
+					toolCall := schemas.ChatAssistantMessageToolCall{
 						Index:    uint16(len(toolCalls)),
 						Type:     schemas.Ptr(string(schemas.ChatToolChoiceTypeFunction)),
 						ID:       &callID,
 						Function: function,
-					})
+					}
+
+					if part.ThoughtSignature != nil {
+						thoughtSig := base64.StdEncoding.EncodeToString(part.ThoughtSignature)
+						toolCall.ExtraContent = map[string]interface{}{
+							"google": map[string]interface{}{
+								"thought_signature": thoughtSig,
+							},
+						}
+					}
+
+					toolCalls = append(toolCalls, toolCall)
 				}
 
 				if part.FunctionResponse != nil {
@@ -145,10 +157,14 @@ func (response *GenerateContentResponse) ToBifrostChatResponse() *schemas.Bifros
 				Role: schemas.ChatMessageRoleAssistant,
 			}
 
-			if len(contentBlocks) > 0 {
-				message.Content = &schemas.ChatMessageContent{
-					ContentBlocks: contentBlocks,
-				}
+			if len(contentBlocks) == 1 && contentBlocks[0].Type == schemas.ChatContentBlockTypeText {
+				contentStr = contentBlocks[0].Text
+				contentBlocks = nil
+			}
+
+			message.Content = &schemas.ChatMessageContent{
+				ContentStr:    contentStr,
+				ContentBlocks: contentBlocks,
 			}
 
 			if len(toolCalls) > 0 || len(reasoningDetails) > 0 {
