@@ -621,10 +621,6 @@ func convertTextFormatToTool(ctx *context.Context, textConfig *schemas.Responses
 		return nil
 	}
 
-	if format.JSONSchema == nil {
-		return nil
-	}
-
 	toolName := "json_response"
 	if format.Name != nil && strings.TrimSpace(*format.Name) != "" {
 		toolName = strings.TrimSpace(*format.Name)
@@ -639,8 +635,8 @@ func convertTextFormatToTool(ctx *context.Context, textConfig *schemas.Responses
 	(*ctx) = context.WithValue(*ctx, schemas.BifrostContextKeyStructuredOutputToolName, toolName)
 
 	var schemaObj any
-	if format.JSONSchema.Schema != nil {
-		schemaObj = *format.JSONSchema.Schema
+	if format.JSONSchema != nil {
+		schemaObj = *format.JSONSchema
 	} else {
 		return nil // Schema is required for Bedrock tooling
 	}

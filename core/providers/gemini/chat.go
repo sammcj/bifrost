@@ -111,12 +111,23 @@ func (response *GenerateContentResponse) ToBifrostChatResponse() *schemas.Bifros
 						callID = part.FunctionCall.ID
 					}
 
-					toolCalls = append(toolCalls, schemas.ChatAssistantMessageToolCall{
+					toolCall := schemas.ChatAssistantMessageToolCall{
 						Index:    uint16(len(toolCalls)),
 						Type:     schemas.Ptr(string(schemas.ChatToolChoiceTypeFunction)),
 						ID:       &callID,
 						Function: function,
-					})
+					}
+
+					if part.ThoughtSignature != nil {
+						thoughtSig := base64.StdEncoding.EncodeToString(part.ThoughtSignature)
+						toolCall.ExtraContent = map[string]interface{}{
+							"google": map[string]interface{}{
+								"thought_signature": thoughtSig,
+							},
+						}
+					}
+
+					toolCalls = append(toolCalls, toolCall)
 				}
 
 				if part.FunctionResponse != nil {

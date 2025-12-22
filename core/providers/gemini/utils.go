@@ -1,6 +1,7 @@
 package gemini
 
 import (
+	"encoding/base64"
 	"strings"
 
 	"github.com/bytedance/sonic"
@@ -609,7 +610,11 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []Content {
 					if toolCall.ExtraContent != nil {
 						if googleData, ok := toolCall.ExtraContent["google"].(map[string]interface{}); ok {
 							if thoughtSig, ok := googleData["thought_signature"].(string); ok {
-								part.ThoughtSignature = []byte(thoughtSig)
+								// Decode the base64 string to raw bytes
+								decoded, err := base64.StdEncoding.DecodeString(thoughtSig)
+								if err == nil {
+									part.ThoughtSignature = decoded
+								}
 							}
 						}
 					}
