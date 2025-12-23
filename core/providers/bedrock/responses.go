@@ -1321,10 +1321,14 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest(ctx *context.Co
 						}
 						if maxTokens, ok := schemas.SafeExtractInt(reasoningConfigMap["budget_tokens"]); ok {
 							minBudgetTokens := 0
+							defaultMaxTokens := DefaultCompletionMaxTokens
+							if request.InferenceConfig != nil && request.InferenceConfig.MaxTokens != nil {
+								defaultMaxTokens = *request.InferenceConfig.MaxTokens
+							}
 							if schemas.IsAnthropicModel(bifrostReq.Model) {
 								minBudgetTokens = anthropic.MinimumReasoningMaxTokens
 							}
-							effort := providerUtils.GetReasoningEffortFromBudgetTokens(maxTokens, minBudgetTokens, *request.InferenceConfig.MaxTokens)
+							effort := providerUtils.GetReasoningEffortFromBudgetTokens(maxTokens, minBudgetTokens, defaultMaxTokens)
 							bifrostReq.Params.Reasoning = &schemas.ResponsesParametersReasoning{
 								Effort:    schemas.Ptr(effort),
 								MaxTokens: schemas.Ptr(maxTokens),
