@@ -449,6 +449,156 @@ func TestBifrostToBedrockRequestConversion(t *testing.T) {
 			},
 		},
 		{
+			name: "ParallelToolCalls",
+			input: &schemas.BifrostChatRequest{
+				Model: "claude-3-sonnet",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Invoke all tools in parallel that are available to you"),
+						},
+					},
+					{
+						Role: schemas.ChatMessageRoleAssistant,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("I'll invoke both available tools in parallel for you."),
+						},
+						ChatAssistantMessage: &schemas.ChatAssistantMessage{
+							ToolCalls: []schemas.ChatAssistantMessageToolCall{
+								{
+									Index: 0,
+									Type:  schemas.Ptr("function"),
+									ID:    schemas.Ptr("tooluse_Yl388l8ES0G_3TQtDcKq_g"),
+									Function: schemas.ChatAssistantMessageToolCallFunction{
+										Name:      schemas.Ptr("hello"),
+										Arguments: "{}",
+									},
+								},
+								{
+									Index: 1,
+									Type:  schemas.Ptr("function"),
+									ID:    schemas.Ptr("tooluse_eARDw2iqRXak8uyRC2KxXw"),
+									Function: schemas.ChatAssistantMessageToolCallFunction{
+										Name:      schemas.Ptr("world"),
+										Arguments: "{}",
+									},
+								},
+							},
+						},
+					},
+					{
+						Role: schemas.ChatMessageRoleTool,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Hello"),
+						},
+						ChatToolMessage: &schemas.ChatToolMessage{
+							ToolCallID: schemas.Ptr("tooluse_Yl388l8ES0G_3TQtDcKq_g"),
+						},
+					},
+					{
+						Role: schemas.ChatMessageRoleTool,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("World"),
+						},
+						ChatToolMessage: &schemas.ChatToolMessage{
+							ToolCallID: schemas.Ptr("tooluse_eARDw2iqRXak8uyRC2KxXw"),
+						},
+					},
+				},
+			},
+			expected: &bedrock.BedrockConverseRequest{
+				ModelID: "claude-3-sonnet",
+				Messages: []bedrock.BedrockMessage{
+					{
+						Role: bedrock.BedrockMessageRoleUser,
+						Content: []bedrock.BedrockContentBlock{
+							{
+								Text: schemas.Ptr("Invoke all tools in parallel that are available to you"),
+							},
+						},
+					},
+					{
+						Role: bedrock.BedrockMessageRoleAssistant,
+						Content: []bedrock.BedrockContentBlock{
+							{
+								Text: schemas.Ptr("I'll invoke both available tools in parallel for you."),
+							},
+							{
+								ToolUse: &bedrock.BedrockToolUse{
+									ToolUseID: "tooluse_Yl388l8ES0G_3TQtDcKq_g",
+									Name:      "hello",
+									Input:     map[string]interface{}{},
+								},
+							},
+							{
+								ToolUse: &bedrock.BedrockToolUse{
+									ToolUseID: "tooluse_eARDw2iqRXak8uyRC2KxXw",
+									Name:      "world",
+									Input:     map[string]interface{}{},
+								},
+							},
+						},
+					},
+					{
+						Role: bedrock.BedrockMessageRoleUser,
+						Content: []bedrock.BedrockContentBlock{
+							{
+								ToolResult: &bedrock.BedrockToolResult{
+									ToolUseID: "tooluse_Yl388l8ES0G_3TQtDcKq_g",
+									Content: []bedrock.BedrockContentBlock{
+										{
+											Text: schemas.Ptr("Hello"),
+										},
+									},
+									Status: schemas.Ptr("success"),
+								},
+							},
+							{
+								ToolResult: &bedrock.BedrockToolResult{
+									ToolUseID: "tooluse_eARDw2iqRXak8uyRC2KxXw",
+									Content: []bedrock.BedrockContentBlock{
+										{
+											Text: schemas.Ptr("World"),
+										},
+									},
+									Status: schemas.Ptr("success"),
+								},
+							},
+						},
+					},
+				},
+				ToolConfig: &bedrock.BedrockToolConfig{
+					Tools: []bedrock.BedrockTool{
+						{
+							ToolSpec: &bedrock.BedrockToolSpec{
+								Name:        "hello",
+								Description: schemas.Ptr("Tool extracted from conversation history"),
+								InputSchema: bedrock.BedrockToolInputSchema{
+									JSON: map[string]interface{}{
+										"type":       "object",
+										"properties": map[string]interface{}{},
+									},
+								},
+							},
+						},
+						{
+							ToolSpec: &bedrock.BedrockToolSpec{
+								Name:        "world",
+								Description: schemas.Ptr("Tool extracted from conversation history"),
+								InputSchema: bedrock.BedrockToolInputSchema{
+									JSON: map[string]interface{}{
+										"type":       "object",
+										"properties": map[string]interface{}{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name:    "NilRequest",
 			input:   nil,
 			wantErr: true,
