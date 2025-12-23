@@ -1,1 +1,0 @@
-- chore: bumped core to 1.2.42
