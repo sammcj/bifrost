@@ -1,0 +1,4 @@
+- fix: thought signature handling in anthropic converters
+- fix: added support for the reasoning_max_tokens parameter in chat completions
+- fix: reasoning effort calculation in Bedrock provider by using default max tokens when inference config max tokens is not provided.
+- chore: bumped core to 1.2.42 and framework to 1.1.52
