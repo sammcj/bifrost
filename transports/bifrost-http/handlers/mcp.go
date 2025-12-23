@@ -168,7 +168,7 @@ func (h *MCPHandler) getMCPClients(ctx *fasthttp.RequestCtx) {
 			clients = append(clients, schemas.MCPClient{
 				Config: h.store.RedactMCPClientConfig(connectedClient.Config),
 				Tools:  sortedTools,
-				State:  connectedClient.State,
+				State:  connectedClient.State, // Use the state from MCPClientState
 			})
 		} else {
 			// Client is in config but not connected, mark as errored

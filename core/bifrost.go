@@ -1800,15 +1800,10 @@ func (bifrost *Bifrost) GetMCPClients() ([]schemas.MCPClient, error) {
 			return tools[i].Name < tools[j].Name
 		})
 
-		state := schemas.MCPConnectionStateConnected
-		if client.Conn == nil {
-			state = schemas.MCPConnectionStateDisconnected
-		}
-
 		clientsInConfig = append(clientsInConfig, schemas.MCPClient{
 			Config: client.ExecutionConfig,
 			Tools:  tools,
-			State:  state,
+			State:  client.State,
 		})
 	}
 
@@ -1936,6 +1931,7 @@ func (bifrost *Bifrost) UpdateToolManagerConfig(maxAgentDepth int, toolExecution
 	})
 	return nil
 }
+
 
 // PROVIDER MANAGEMENT
 

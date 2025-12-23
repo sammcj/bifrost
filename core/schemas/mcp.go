@@ -100,6 +100,7 @@ type MCPClientState struct {
 	ToolMap         map[string]ChatTool     // Available tools mapped by name
 	ConnectionInfo  MCPClientConnectionInfo `json:"connection_info"` // Connection metadata for management
 	CancelFunc      context.CancelFunc      `json:"-"`               // Cancel function for SSE connections (not serialized)
+	State           MCPConnectionState      // Connection state (connected, disconnected, error)
 }
 
 // MCPClientConnectionInfo stores metadata about how a client is connected.
