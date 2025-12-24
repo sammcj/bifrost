@@ -14,6 +14,9 @@
     "primary": "#0C3B43",
     "light": "#07C983"
   },
+  "styles": {
+    "latex": true
+  },
   "favicon": "favicon.ico",
   "topbarLinks": [
     {
@@ -69,19 +72,46 @@
                 "pages": [
                   "quickstart/go-sdk/setting-up",
                   "quickstart/go-sdk/provider-configuration",
+                  "quickstart/go-sdk/context-keys",
                   "quickstart/go-sdk/streaming",
                   "quickstart/go-sdk/tool-calling",
-                  "quickstart/go-sdk/multimodal"
+                  "quickstart/go-sdk/multimodal",
+                  "quickstart/go-sdk/logger"
                 ]
               }
             ]
           },
           {
-            "group": "Providers",
+            "group": "Providers & Guides",
             "icon": "solar-system",
             "pages": [
-              "providers/supported-providers",
-              "providers/huggingface",
+              {
+                "group": "Supported Providers",
+                "icon": "bars-progress",
+                "pages": [
+                  "providers/supported-providers/overview",
+                  "providers/supported-providers/anthropic",
+                  "providers/supported-providers/azure",
+                  "providers/supported-providers/bedrock",
+                  "providers/supported-providers/cerebras",
+                  "providers/supported-providers/cohere",
+                  "providers/supported-providers/elevenlabs",
+                  "providers/supported-providers/gemini",
+                  "providers/supported-providers/groq",
+                  "providers/supported-providers/huggingface",
+                  "providers/supported-providers/mistral",
+                  "providers/supported-providers/nebius",
+                  "providers/supported-providers/ollama",
+                  "providers/supported-providers/openai",
+                  "providers/supported-providers/openrouter",
+                  "providers/supported-providers/parasail",
+                  "providers/supported-providers/perplexity",
+                  "providers/supported-providers/sgl",
+                  "providers/supported-providers/vertex"
+                ]
+              },
+              "providers/reasoning",
+              "providers/performance",
               "providers/custom-providers"
             ]
           },
@@ -92,7 +122,7 @@
               "integrations/what-is-an-integration",
               {
                 "group": "OpenAI SDK",
-                "icon": "o",
+                "icon": "openai",
                 "pages": [
                   "integrations/openai-sdk/overview",
                   "integrations/openai-sdk/files-and-batch"
@@ -100,7 +130,7 @@
               },
               {
                 "group": "Anthropic SDK",
-                "icon": "a",
+                "icon": "asterisk",
                 "pages": [
                   "integrations/anthropic-sdk/overview",
                   "integrations/anthropic-sdk/files-and-batch"
@@ -108,7 +138,7 @@
               },
               {
                 "group": "Bedrock SDK",
-                "icon": "b",
+                "icon": "aws",
                 "pages": [
                   "integrations/bedrock-sdk/overview",
                   "integrations/bedrock-sdk/files-and-batch"
@@ -116,7 +146,7 @@
               },
               {
                 "group": "GenAI SDK",
-                "icon": "g",
+                "icon": "diamond",
                 "pages": [
                   "integrations/genai-sdk/overview"
                 ]
@@ -124,6 +154,20 @@
               "integrations/litellm-sdk",
               "integrations/langchain-sdk",
               "integrations/pydanticai-sdk"
+            ]
+          },
+          {
+            "group": "MCP Gateway",
+            "icon": "toolbox",
+            "pages": [
+              "features/mcp/overview",
+              "features/mcp/connecting-to-servers",
+              "features/mcp/tool-execution",
+              "features/mcp/agent-mode",
+              "features/mcp/code-mode",
+              "features/mcp/gateway-url",
+              "features/mcp/tool-hosting",
+              "features/mcp/filtering"
             ]
           },
           {
@@ -143,7 +187,6 @@
               "features/drop-in-replacement",
               "features/fallbacks",
               "features/keys-management",
-              "features/mcp",
               {
                 "group": "Governance",
                 "icon": "user-lock",
@@ -187,6 +230,7 @@
             "pages": [
               "enterprise/guardrails",
               "enterprise/clustering",
+              "enterprise/adaptive-load-balancing",
               {
                 "group": "Advanced Governance",
                 "icon": "shield-check",
@@ -206,7 +250,6 @@
               "enterprise/mcp-with-fa",
               "enterprise/vault-support",
               "enterprise/invpc-deployments",
-              "enterprise/intelligent-load-balancing",
               "enterprise/custom-plugins",
               "enterprise/audit-logs",
               "enterprise/log-exports"
@@ -261,7 +304,7 @@
         "groups": [
           {
             "group": "API Reference",
-            "openapi": "apis/openapi.json"
+            "openapi": "openapi/openapi.json"
           }
         ]
       },
@@ -394,6 +437,16 @@
       }
     ]
   },
+  "redirects": [
+  {
+    "source": "/features/unified-interface",
+    "destination": "/providers/supported-providers/overview"
+  },
+  {
+    "source": "/providers/huggingface",
+    "destination": "/providers/supported-providers/huggingface"
+  }
+  ],
   "footer": {
     "socials": {
       "x": "https://x.com/getmaximai",
