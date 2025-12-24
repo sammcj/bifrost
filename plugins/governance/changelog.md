@@ -1,1 +1,3 @@
-- chore: upgraded versions of core to 1.2.41 and framework to 1.1.51
+- refactor: extracted governance store into an interface for extensibility
+- refactor: extended the way governance store handles rate limits
+- chore: added e2e tests for governance plugin
