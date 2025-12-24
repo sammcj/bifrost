@@ -39,12 +39,13 @@ const (
 // It provides a bridge between Bifrost and various MCP servers, supporting
 // both local tool hosting and external MCP server connections.
 type MCPManager struct {
-	ctx           context.Context
-	toolsHandler  *ToolsManager                      // Handler for MCP tools
-	server        *server.MCPServer                  // Local MCP server instance for hosting tools (STDIO-based)
-	clientMap     map[string]*schemas.MCPClientState // Map of MCP client names to their configurations
-	mu            sync.RWMutex                       // Read-write mutex for thread-safe operations
-	serverRunning bool                               // Track whether local MCP server is running
+	ctx                  context.Context
+	toolsManager         *ToolsManager                      // Handler for MCP tools
+	server               *server.MCPServer                  // Local MCP server instance for hosting tools (STDIO-based)
+	clientMap            map[string]*schemas.MCPClientState // Map of MCP client names to their configurations
+	mu                   sync.RWMutex                       // Read-write mutex for thread-safe operations
+	serverRunning        bool                               // Track whether local MCP server is running
+	healthMonitorManager *HealthMonitorManager              // Manager for client health monitors
 }
 
 // MCPToolFunction is a generic function type for handling tool calls with typed arguments.
@@ -75,10 +76,11 @@ func NewMCPManager(ctx context.Context, config schemas.MCPConfig, logger schemas
 	}
 	// Creating new instance
 	manager := &MCPManager{
-		ctx:       ctx,
-		clientMap: make(map[string]*schemas.MCPClientState),
+		ctx:                  ctx,
+		clientMap:            make(map[string]*schemas.MCPClientState),
+		healthMonitorManager: NewHealthMonitorManager(),
 	}
-	manager.toolsHandler = NewToolsManager(config.ToolManagerConfig, manager, config.FetchNewRequestIDFunc)
+	manager.toolsManager = NewToolsManager(config.ToolManagerConfig, manager, config.FetchNewRequestIDFunc)
 	// Process client configs: create client map entries and establish connections
 	if len(config.ClientConfigs) > 0 {
 		for _, clientConfig := range config.ClientConfigs {
@@ -102,11 +104,11 @@ func NewMCPManager(ctx context.Context, config schemas.MCPConfig, logger schemas
 // Returns:
 //   - *schemas.BifrostRequest: The request with tools added
 func (m *MCPManager) AddToolsToRequest(ctx context.Context, req *schemas.BifrostRequest) *schemas.BifrostRequest {
-	return m.toolsHandler.ParseAndAddToolsToRequest(ctx, req)
+	return m.toolsManager.ParseAndAddToolsToRequest(ctx, req)
 }
 
 func (m *MCPManager) GetAvailableTools(ctx context.Context) []schemas.ChatTool {
-	return m.toolsHandler.GetAvailableTools(ctx)
+	return m.toolsManager.GetAvailableTools(ctx)
 }
 
 // ExecuteChatTool executes a single tool call and returns the result as a chat message.
@@ -129,7 +131,7 @@ func (m *MCPManager) GetAvailableTools(ctx context.Context) []schemas.ChatTool {
 //   - *schemas.ChatMessage: The result message containing tool execution output
 //   - error: Any error that occurred during tool execution
 func (m *MCPManager) ExecuteChatTool(ctx context.Context, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, error) {
-	return m.toolsHandler.ExecuteChatTool(ctx, toolCall)
+	return m.toolsManager.ExecuteChatTool(ctx, toolCall)
 }
 
 // ExecuteResponsesTool executes a single tool call and returns the result as a responses message.
@@ -141,7 +143,7 @@ func (m *MCPManager) ExecuteChatTool(ctx context.Context, toolCall schemas.ChatA
 //   - *schemas.ResponsesMessage: The result message containing tool execution output
 //   - error: Any error that occurred during tool execution
 func (m *MCPManager) ExecuteResponsesTool(ctx context.Context, toolCall *schemas.ResponsesToolMessage) (*schemas.ResponsesMessage, error) {
-	return m.toolsHandler.ExecuteResponsesTool(ctx, toolCall)
+	return m.toolsManager.ExecuteResponsesTool(ctx, toolCall)
 }
 
 // UpdateToolManagerConfig updates the configuration for the tool manager.
@@ -150,7 +152,7 @@ func (m *MCPManager) ExecuteResponsesTool(ctx context.Context, toolCall *schemas
 // Parameters:
 //   - config: The new tool manager configuration to apply
 func (m *MCPManager) UpdateToolManagerConfig(config *schemas.MCPToolManagerConfig) {
-	m.toolsHandler.UpdateConfig(config)
+	m.toolsManager.UpdateConfig(config)
 }
 
 // CheckAndExecuteAgentForChatRequest checks if the chat response contains tool calls,
@@ -195,7 +197,7 @@ func (m *MCPManager) CheckAndExecuteAgentForChatRequest(
 		return response, nil
 	}
 	// Execute agent mode
-	return m.toolsHandler.ExecuteAgentForChatRequest(ctx, req, response, makeReq)
+	return m.toolsManager.ExecuteAgentForChatRequest(ctx, req, response, makeReq)
 }
 
 // CheckAndExecuteAgentForResponsesRequest checks if the responses response contains tool calls,
@@ -246,7 +248,7 @@ func (m *MCPManager) CheckAndExecuteAgentForResponsesRequest(
 		return response, nil
 	}
 	// Execute agent mode
-	return m.toolsHandler.ExecuteAgentForResponsesRequest(ctx, req, response, makeReq)
+	return m.toolsManager.ExecuteAgentForResponsesRequest(ctx, req, response, makeReq)
 }
 
 // Cleanup performs cleanup of all MCP resources including clients and local server.
@@ -257,6 +259,9 @@ func (m *MCPManager) CheckAndExecuteAgentForResponsesRequest(
 // Returns:
 //   - error: Always returns nil, but maintains error interface for consistency
 func (m *MCPManager) Cleanup() error {
+	// Stop all health monitors first
+	m.healthMonitorManager.StopAll()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

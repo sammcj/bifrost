@@ -137,7 +137,10 @@ func (m *MCPManager) removeClientUnsafe(id string) error {
 		return fmt.Errorf("client %s not found", id)
 	}
 
-	logger.Info(fmt.Sprintf("%s Disconnecting MCP client: %s", MCPLogPrefix, client.ExecutionConfig.Name))
+	logger.Info(fmt.Sprintf("%s Disconnecting MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name))
+
+	// Stop health monitoring for this client
+	m.healthMonitorManager.StopMonitoring(id)
 
 	// Cancel SSE context if present (required for proper SSE cleanup)
 	if client.CancelFunc != nil {
@@ -149,7 +152,7 @@ func (m *MCPManager) removeClientUnsafe(id string) error {
 	// This handles cleanup for all transport types (HTTP, STDIO, SSE)
 	if client.Conn != nil {
 		if err := client.Conn.Close(); err != nil {
-			logger.Error("%s Failed to close MCP client %s: %v", MCPLogPrefix, client.ExecutionConfig.Name, err)
+			logger.Error("%s Failed to close MCP server '%s': %v", MCPLogPrefix, client.ExecutionConfig.Name, err)
 		}
 		client.Conn = nil
 	}
@@ -400,6 +403,7 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 		// Store the external client connection and details
 		client.Conn = externalClient
 		client.ConnectionInfo = connectionInfo
+		client.State = schemas.MCPConnectionStateConnected
 
 		// Store cancel function for SSE connections to enable proper cleanup
 		if config.ConnectionType == schemas.MCPConnectionTypeSSE {
@@ -411,7 +415,7 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 			client.ToolMap[toolName] = tool
 		}
 
-		logger.Info(fmt.Sprintf("%s Connected to MCP client: %s", MCPLogPrefix, config.Name))
+		logger.Info(fmt.Sprintf("%s Connected to MCP server '%s'", MCPLogPrefix, config.Name))
 	} else {
 		// Clean up resources before returning error: client was removed during connection setup
 		// Cancel SSE context if it was created
@@ -426,6 +430,23 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 		}
 		return fmt.Errorf("client %s was removed during connection setup", config.Name)
 	}
+
+	// Register OnConnectionLost hook for SSE connections to detect idle timeouts
+	if config.ConnectionType == schemas.MCPConnectionTypeSSE && externalClient != nil {
+		externalClient.OnConnectionLost(func(err error) {
+			logger.Warn(fmt.Sprintf("%s SSE connection lost for MCP server '%s': %v", MCPLogPrefix, config.Name, err))
+			// Update state to disconnected
+			m.mu.Lock()
+			if client, exists := m.clientMap[config.ID]; exists {
+				client.State = schemas.MCPConnectionStateDisconnected
+			}
+			m.mu.Unlock()
+		})
+	}
+
+	// Start health monitoring for the client
+	monitor := NewClientHealthMonitor(m, config.ID, DefaultHealthCheckInterval)
+	m.healthMonitorManager.StartMonitoring(monitor)
 
 	return nil
 }
