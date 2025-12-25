@@ -8628,7 +8628,7 @@
             "description": "Unix timestamp of expiration"
           },
           "extra_fields": {
-            "$ref": "#/components/schemas/BifrostExtraFields"
+            "$ref": "#/components/schemas/BifrostResponseExtraFields"
           }
         }
       },
@@ -8654,7 +8654,7 @@
             "type": "string"
           },
           "extra_fields": {
-            "$ref": "#/components/schemas/BifrostExtraFields"
+            "$ref": "#/components/schemas/BifrostResponseExtraFields"
           }
         }
       },
@@ -8705,7 +8705,7 @@
             "type": "string"
           },
           "extra_fields": {
-            "$ref": "#/components/schemas/BifrostExtraFields"
+            "$ref": "#/components/schemas/BifrostResponseExtraFields"
           }
         }
       },
@@ -8728,7 +8728,7 @@
             "type": "integer"
           },
           "extra_fields": {
-            "$ref": "#/components/schemas/BifrostExtraFields"
+            "$ref": "#/components/schemas/BifrostResponseExtraFields"
           }
         }
       },
@@ -8748,7 +8748,7 @@
             "type": "boolean"
           },
           "extra_fields": {
-            "$ref": "#/components/schemas/BifrostExtraFields"
+            "$ref": "#/components/schemas/BifrostResponseExtraFields"
           }
         }
       },
@@ -8837,7 +8837,7 @@
             "description": "Storage backend type"
           },
           "extra_fields": {
-            "$ref": "#/components/schemas/BifrostExtraFields"
+            "$ref": "#/components/schemas/BifrostResponseExtraFields"
           }
         }
       },
@@ -8857,7 +8857,7 @@
             "type": "boolean"
           },
           "extra_fields": {
-            "$ref": "#/components/schemas/BifrostExtraFields"
+            "$ref": "#/components/schemas/BifrostResponseExtraFields"
           }
         }
       },
@@ -8892,7 +8892,7 @@
             "type": "string"
           },
           "extra_fields": {
-            "$ref": "#/components/schemas/BifrostExtraFields"
+            "$ref": "#/components/schemas/BifrostResponseExtraFields"
           }
         }
       },
@@ -8909,7 +8909,7 @@
             "type": "boolean"
           },
           "extra_fields": {
-            "$ref": "#/components/schemas/BifrostExtraFields"
+            "$ref": "#/components/schemas/BifrostResponseExtraFields"
           }
         }
       },
