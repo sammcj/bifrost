@@ -22,6 +22,22 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+// securityHeaders is the list of headers that cannot be configured in allowlist/denylist
+// These headers are always blocked for security reasons regardless of user configuration
+var securityHeaders = []string{
+	"authorization",
+	"proxy-authorization",
+	"cookie",
+	"host",
+	"content-length",
+	"connection",
+	"transfer-encoding",
+	"x-api-key",
+	"x-goog-api-key",
+	"x-bf-api-key",
+	"x-bf-vk",
+}
+
 // ConfigManager is the interface for the config manager
 type ConfigManager interface {
 	UpdateAuthConfig(ctx context.Context, authConfig *configstore.AuthConfig) error
@@ -31,6 +47,7 @@ type ConfigManager interface {
 	UpdateDropExcessRequests(ctx context.Context, value bool)
 	ReloadPlugin(ctx context.Context, name string, path *string, pluginConfig any) error
 	ReloadProxyConfig(ctx context.Context, config *configstoreTables.GlobalProxyConfig) error
+	ReloadHeaderFilterConfig(ctx context.Context, config *configstoreTables.GlobalHeaderFilterConfig) error
 }
 
 // ConfigHandler manages runtime configuration updates for Bifrost.
@@ -264,6 +281,22 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	updatedConfig.MaxRequestBodySizeMB = payload.ClientConfig.MaxRequestBodySizeMB
 
 	updatedConfig.EnableLiteLLMFallbacks = payload.ClientConfig.EnableLiteLLMFallbacks
+
+	// Handle HeaderFilterConfig changes
+	if !headerFilterConfigEqual(payload.ClientConfig.HeaderFilterConfig, currentConfig.HeaderFilterConfig) {
+		// Validate that no security headers are in the allowlist or denylist
+		if err := validateHeaderFilterConfig(payload.ClientConfig.HeaderFilterConfig); err != nil {
+			logger.Warn(fmt.Sprintf("invalid header filter config: %v", err))
+			SendError(ctx, fasthttp.StatusBadRequest, err.Error())
+			return
+		}
+		updatedConfig.HeaderFilterConfig = payload.ClientConfig.HeaderFilterConfig
+		if err := h.configManager.ReloadHeaderFilterConfig(ctx, payload.ClientConfig.HeaderFilterConfig); err != nil {
+			logger.Warn(fmt.Sprintf("failed to reload header filter config: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to reload header filter config: %v", err))
+			return
+		}
+	}
 
 	// Validate LogRetentionDays
 	if payload.ClientConfig.LogRetentionDays < 1 {
@@ -610,4 +643,47 @@ func (h *ConfigHandler) updateProxyConfig(ctx *fasthttp.RequestCtx) {
 		"status":  "success",
 		"message": "proxy configuration updated successfully",
 	})
+}
+
+// headerFilterConfigEqual compares two GlobalHeaderFilterConfig for equality
+func headerFilterConfigEqual(a, b *configstoreTables.GlobalHeaderFilterConfig) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return slices.Equal(a.Allowlist, b.Allowlist) && slices.Equal(a.Denylist, b.Denylist)
+}
+
+// validateHeaderFilterConfig validates that no security headers are in the allowlist or denylist
+// Returns an error if any security headers are found
+func validateHeaderFilterConfig(config *configstoreTables.GlobalHeaderFilterConfig) error {
+	if config == nil {
+		return nil
+	}
+
+	var foundSecurityHeaders []string
+
+	// Check allowlist for security headers
+	for _, header := range config.Allowlist {
+		headerLower := strings.ToLower(strings.TrimSpace(header))
+		if slices.Contains(securityHeaders, headerLower) {
+			foundSecurityHeaders = append(foundSecurityHeaders, headerLower)
+		}
+	}
+
+	// Check denylist for security headers
+	for _, header := range config.Denylist {
+		headerLower := strings.ToLower(strings.TrimSpace(header))
+		if slices.Contains(securityHeaders, headerLower) && !slices.Contains(foundSecurityHeaders, headerLower) {
+			foundSecurityHeaders = append(foundSecurityHeaders, headerLower)
+		}
+	}
+
+	if len(foundSecurityHeaders) > 0 {
+		return fmt.Errorf("the following headers are not allowed to be configured: %s. These headers are security headers and are always blocked", strings.Join(foundSecurityHeaders, ", "))
+	}
+
+	return nil
 }
