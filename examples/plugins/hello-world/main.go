@@ -20,7 +20,7 @@ func HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			fmt.Println("HTTPTransportMiddleware called")
-			ctx.SetUserValue("hello-world-plugin-transport-interceptor", "transport-interceptor-value")
+			ctx.SetUserValue(schemas.BifrostContextKey("hello-world-plugin-transport-interceptor"), "transport-interceptor-value")
 			next(ctx)
 		}
 	}

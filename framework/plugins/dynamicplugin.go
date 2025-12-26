@@ -143,7 +143,7 @@ func loadDynamicPlugin(path string, config any) (schemas.Plugin, error) {
 		return nil, err
 	}
 	if dp.httpTransportMiddleware, ok = httpTransportMiddlewareSym.(func() schemas.BifrostHTTPMiddleware); !ok {
-		return nil, fmt.Errorf("failed to cast HTTPTransportMiddleware to func(next fasthttp.RequestHandler) fasthttp.RequestHandler")
+		return nil, fmt.Errorf("failed to cast HTTPTransportMiddleware to func() fasthttp.RequestHandler")
 	}
 	// Looking up for PreHook method
 	preHookSym, err := plugin.Lookup("PreHook")

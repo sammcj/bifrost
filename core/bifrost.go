@@ -3336,7 +3336,7 @@ func (p *PluginPipeline) RunPreHooks(ctx *context.Context, req *schemas.BifrostR
 		p.logger.Debug("running pre-hook for plugin %s", pluginName)
 
 		// Start span for this plugin's PreHook
-		spanCtx, handle := p.tracer.StartSpan(pluginCtx, fmt.Sprintf("plugin.%s.prehook", pluginName), schemas.SpanKindPlugin)
+		spanCtx, handle := p.tracer.StartSpan(pluginCtx, fmt.Sprintf("plugin.%s.prehook", sanitizeSpanName(pluginName)), schemas.SpanKindPlugin)
 		// Update pluginCtx with span context for nested operations
 		if spanCtx != nil {
 			if spanID, ok := spanCtx.Value(schemas.BifrostContextKeySpanID).(string); ok {
@@ -3405,7 +3405,7 @@ func (p *PluginPipeline) RunPostHooks(ctx *context.Context, resp *schemas.Bifros
 			}
 		} else {
 			// For non-streaming: create span per plugin (existing behavior)
-			spanCtx, handle := p.tracer.StartSpan(pluginCtx, fmt.Sprintf("plugin.%s.posthook", pluginName), schemas.SpanKindPlugin)
+			spanCtx, handle := p.tracer.StartSpan(pluginCtx, fmt.Sprintf("plugin.%s.posthook", sanitizeSpanName(pluginName)), schemas.SpanKindPlugin)
 			// Update pluginCtx with span context for nested operations
 			if spanCtx != nil {
 				if spanID, ok := spanCtx.Value(schemas.BifrostContextKeySpanID).(string); ok {
@@ -3504,7 +3504,7 @@ func (p *PluginPipeline) FinalizeStreamingPostHookSpans(ctx context.Context) {
 		}
 
 		// Create span as child of the previous span (nested hierarchy)
-		newCtx, handle := p.tracer.StartSpan(currentCtx, fmt.Sprintf("plugin.%s.posthook", pluginName), schemas.SpanKindPlugin)
+		newCtx, handle := p.tracer.StartSpan(currentCtx, fmt.Sprintf("plugin.%s.posthook", sanitizeSpanName(pluginName)), schemas.SpanKindPlugin)
 		if handle == nil {
 			continue
 		}

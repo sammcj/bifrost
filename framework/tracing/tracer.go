@@ -51,7 +51,7 @@ func (t *Tracer) ReleaseTrace(trace *schemas.Trace) {
 	t.store.ReleaseTrace(trace)
 }
 
-// spanHandle is the concrete implementation of schemas.SpanHandle for StoreTracer.
+// spanHandle is the concrete implementation of schemas.SpanHandle for Tracer.
 // It contains the trace and span IDs needed to reference the span in the store.
 type spanHandle struct {
 	traceID string
