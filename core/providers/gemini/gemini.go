@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/maximhq/bifrost/core/providers/openai"
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/valyala/fasthttp"
@@ -879,19 +878,91 @@ func (provider *GeminiProvider) Embedding(ctx context.Context, key schemas.Key, 
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.EmbeddingRequest); err != nil {
 		return nil, err
 	}
-	// Use the shared embedding request handler
-	return openai.HandleOpenAIEmbeddingRequest(
+
+	providerName := provider.GetProviderKey()
+
+	// Convert Bifrost request to Gemini batch embedding request format
+	jsonData, err := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
-		provider.client,
-		provider.networkConfig.BaseURL+providerUtils.GetPathFromContext(ctx, "/openai/embeddings"),
 		request,
-		key,
-		provider.networkConfig.ExtraHeaders,
-		provider.GetProviderKey(),
+		func() (any, error) { return ToGeminiEmbeddingRequest(request), nil },
+		providerName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create request
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	// Set any extra headers from network config
+	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+	// Use Gemini's batchEmbedContents endpoint
+	req.SetRequestURI(provider.networkConfig.BaseURL + providerUtils.GetPathFromContext(ctx, "/models/"+request.Model+":batchEmbedContents"))
+	req.Header.SetMethod(http.MethodPost)
+	req.Header.SetContentType("application/json")
+	if key.Value != "" {
+		req.Header.Set("x-goog-api-key", key.Value)
+	}
+
+	req.SetBody(jsonData)
+
+	// Make request
+	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	// Handle error response
+	if resp.StatusCode() != fasthttp.StatusOK {
+		provider.logger.Debug(fmt.Sprintf("error from %s provider: %s", providerName, string(resp.Body())))
+		return nil, parseGeminiError(resp, &providerUtils.RequestMetadata{
+			Provider:    providerName,
+			Model:       request.Model,
+			RequestType: schemas.EmbeddingRequest,
+		})
+	}
+
+	body, decodeErr := providerUtils.CheckAndDecodeBody(resp)
+	if decodeErr != nil {
+		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, decodeErr, providerName)
+	}
+
+	// Parse Gemini's batch embedding response
+	var geminiResponse GeminiEmbeddingResponse
+	rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(body, &geminiResponse, jsonData,
 		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
-		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
-		provider.logger,
-	)
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	// Convert to Bifrost format
+	bifrostResponse := ToBifrostEmbeddingResponse(&geminiResponse, request.Model)
+	if bifrostResponse == nil {
+		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseUnmarshal,
+			fmt.Errorf("failed to convert Gemini embedding response to Bifrost format"), providerName)
+	}
+
+	bifrostResponse.ExtraFields.Provider = providerName
+	bifrostResponse.ExtraFields.ModelRequested = request.Model
+	bifrostResponse.ExtraFields.RequestType = schemas.EmbeddingRequest
+	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
+
+	// Set raw request if enabled
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		bifrostResponse.ExtraFields.RawRequest = rawRequest
+	}
+
+	// Set raw response if enabled
+	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
+		bifrostResponse.ExtraFields.RawResponse = rawResponse
+	}
+
+	return bifrostResponse, nil
 }
 
 // Speech performs a speech synthesis request to the Gemini API.
@@ -2762,4 +2833,106 @@ func (provider *GeminiProvider) FileContent(ctx context.Context, keys []schemas.
 		nil,
 		providerName,
 	)
+}
+
+// CountTokens performs a token counting request to Gemini's countTokens endpoint.
+func (provider *GeminiProvider) CountTokens(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostCountTokensResponse, *schemas.BifrostError) {
+	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.CountTokensRequest); err != nil {
+		return nil, err
+	}
+
+	// Build JSON body from Bifrost request
+	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
+		ctx,
+		request,
+		func() (any, error) { return ToGeminiResponsesRequest(request), nil },
+		provider.GetProviderKey(),
+	)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	var payload map[string]any
+	if err := sonic.Unmarshal(jsonData, &payload); err == nil {
+		delete(payload, "toolConfig")
+		delete(payload, "generationConfig")
+		delete(payload, "systemInstruction")
+		newData, err := sonic.Marshal(payload)
+		if err != nil {
+			return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRequestMarshal, err, provider.GetProviderKey())
+		}
+		jsonData = newData
+	}
+
+	providerName := provider.GetProviderKey()
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	if strings.TrimSpace(request.Model) == "" {
+		return nil, providerUtils.NewBifrostOperationError("model is required for Gemini count tokens request", fmt.Errorf("missing model"), providerName)
+	}
+
+	// Determine native model name (e.g., parse any provider prefix)
+	_, model := schemas.ParseModelString(request.Model, schemas.Gemini)
+
+	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+	path := fmt.Sprintf("/models/%s:countTokens", model)
+	req.SetRequestURI(provider.networkConfig.BaseURL + providerUtils.GetPathFromContext(ctx, path))
+	req.Header.SetMethod(http.MethodPost)
+	req.Header.SetContentType("application/json")
+	if key.Value != "" {
+		req.Header.Set("x-goog-api-key", key.Value)
+	}
+	req.SetBody(jsonData)
+
+	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	if resp.StatusCode() != fasthttp.StatusOK {
+		return nil, parseGeminiError(resp, &providerUtils.RequestMetadata{
+			Provider:    providerName,
+			RequestType: schemas.CountTokensRequest,
+		})
+	}
+
+	body, err := providerUtils.CheckAndDecodeBody(resp)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
+	}
+
+	responseBody := append([]byte(nil), body...)
+
+	geminiResponse := &GeminiCountTokensResponse{}
+	rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(
+		responseBody,
+		geminiResponse,
+		jsonData,
+		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
+		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
+	)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	response := geminiResponse.ToBifrostCountTokensResponse(request.Model)
+
+	// Set ExtraFields
+	response.ExtraFields.Provider = provider.GetProviderKey()
+	response.ExtraFields.ModelRequested = request.Model
+	response.ExtraFields.RequestType = schemas.CountTokensRequest
+	response.ExtraFields.Latency = latency.Milliseconds()
+
+	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
+		response.ExtraFields.RawResponse = rawResponse
+	}
+
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		response.ExtraFields.RawRequest = rawRequest
+	}
+
+	return response, nil
 }

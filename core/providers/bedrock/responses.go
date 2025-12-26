@@ -1321,10 +1321,14 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest(ctx *context.Co
 						}
 						if maxTokens, ok := schemas.SafeExtractInt(reasoningConfigMap["budget_tokens"]); ok {
 							minBudgetTokens := 0
+							defaultMaxTokens := DefaultCompletionMaxTokens
+							if request.InferenceConfig != nil && request.InferenceConfig.MaxTokens != nil {
+								defaultMaxTokens = *request.InferenceConfig.MaxTokens
+							}
 							if schemas.IsAnthropicModel(bifrostReq.Model) {
 								minBudgetTokens = anthropic.MinimumReasoningMaxTokens
 							}
-							effort := providerUtils.GetReasoningEffortFromBudgetTokens(maxTokens, minBudgetTokens, *request.InferenceConfig.MaxTokens)
+							effort := providerUtils.GetReasoningEffortFromBudgetTokens(maxTokens, minBudgetTokens, defaultMaxTokens)
 							bifrostReq.Params.Reasoning = &schemas.ResponsesParametersReasoning{
 								Effort:    schemas.Ptr(effort),
 								MaxTokens: schemas.Ptr(maxTokens),
@@ -1468,13 +1472,19 @@ func ToBedrockResponsesRequest(ctx *context.Context, bifrostReq *schemas.Bifrost
 				bedrockReq.AdditionalModelRequestFields = make(schemas.OrderedMap)
 			}
 			if bifrostReq.Params.Reasoning.MaxTokens != nil {
-				if schemas.IsAnthropicModel(bifrostReq.Model) && *bifrostReq.Params.Reasoning.MaxTokens < anthropic.MinimumReasoningMaxTokens {
+				tokenBudget := *bifrostReq.Params.Reasoning.MaxTokens
+				if *bifrostReq.Params.Reasoning.MaxTokens == -1 {
+					// bedrock does not support dynamic reasoning budget like gemini
+					// setting it to default max tokens
+					tokenBudget = anthropic.MinimumReasoningMaxTokens
+				}
+				if schemas.IsAnthropicModel(bifrostReq.Model) && tokenBudget < anthropic.MinimumReasoningMaxTokens {
 					return nil, fmt.Errorf("reasoning.max_tokens must be >= %d for anthropic", anthropic.MinimumReasoningMaxTokens)
 				}
 				if schemas.IsAnthropicModel(bifrostReq.Model) {
 					bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]any{
 						"type":          "enabled",
-						"budget_tokens": *bifrostReq.Params.Reasoning.MaxTokens,
+						"budget_tokens": tokenBudget,
 					}
 				} else if schemas.IsNovaModel(bifrostReq.Model) {
 					minBudgetTokens := MinimumReasoningMaxTokens
@@ -1484,7 +1494,7 @@ func ToBedrockResponsesRequest(ctx *context.Context, bifrostReq *schemas.Bifrost
 					} else {
 						inferenceConfig.MaxTokens = schemas.Ptr(DefaultCompletionMaxTokens)
 					}
-					maxReasoningEffort := providerUtils.GetReasoningEffortFromBudgetTokens(*bifrostReq.Params.Reasoning.MaxTokens, minBudgetTokens, defaultMaxTokens)
+					maxReasoningEffort := providerUtils.GetReasoningEffortFromBudgetTokens(tokenBudget, minBudgetTokens, defaultMaxTokens)
 					typeStr := "enabled"
 					switch maxReasoningEffort {
 					case "high":

@@ -32,22 +32,23 @@ Tests LangChain standard interface compliance and Bifrost integration:
 16. Structured outputs with Pydantic models (OpenAI-compatible)
 """
 
-import logging
-from google.cloud.aiplatform_v1beta1.types import endpoint, endpoint_service
-import pytest
 import asyncio
-import boto3
+import logging
 import os
-from typing import List, Dict, Any, Type, Optional
+from typing import Any, Dict, List, Type
 from unittest.mock import patch
-from pydantic import BaseModel
+
+import boto3
+import pytest
+from langchain_anthropic import ChatAnthropic
 
 # LangChain core imports
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from langchain_core.tools import BaseTool
-from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.prompts import ChatPromptTemplate
+
+# Google Gemini specific imports
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 # LangChain provider imports
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -55,7 +56,8 @@ from langchain_anthropic import ChatAnthropic
 from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
 
 # Google Gemini specific imports
-from langchain_google_genai import ChatGoogleGenerativeAI, Modality
+from langchain_google_genai import ChatGoogleGenerativeAI, Modality, GoogleGenerativeAIEmbeddings
+from pydantic import BaseModel
 
 try:
     from langchain_aws import ChatBedrockConverse
@@ -76,14 +78,14 @@ except ImportError:
 
 # Optional imports for legacy LangChain (chains, memory, agents)
 try:
-    from langchain_classic.chains import LLMChain, ConversationChain, SequentialChain
-    from langchain_classic.memory import ConversationBufferMemory, ConversationSummaryMemory
     from langchain_classic.agents import (
         AgentExecutor,
         create_openai_functions_agent,
         create_react_agent,
     )
     from langchain_classic.agents.tools import Tool
+    from langchain_classic.chains import ConversationChain, LLMChain, SequentialChain
+    from langchain_classic.memory import ConversationBufferMemory, ConversationSummaryMemory
 
     LEGACY_LANGCHAIN_AVAILABLE = True
 except ImportError:
@@ -94,8 +96,7 @@ except ImportError:
 
 # LangChain standard tests (if available)
 try:
-    from langchain_tests.integration_tests import ChatModelIntegrationTests
-    from langchain_tests.integration_tests import EmbeddingsIntegrationTests
+    from langchain_tests.integration_tests import ChatModelIntegrationTests, EmbeddingsIntegrationTests
 
     LANGCHAIN_TESTS_AVAILABLE = True
 except ImportError:
@@ -110,27 +111,24 @@ except ImportError:
 
 
 from .utils.common import (
-    Config,
-    SIMPLE_CHAT_MESSAGES,
-    MULTI_TURN_MESSAGES,
-    WEATHER_TOOL,
     CALCULATOR_TOOL,
-    EMBEDDINGS_SINGLE_TEXT,
     EMBEDDINGS_MULTIPLE_TEXTS,
     EMBEDDINGS_SIMILAR_TEXTS,
-    mock_tool_response,
-    assert_valid_chat_response,
-    assert_valid_embedding_response,
-    assert_valid_embeddings_batch_response,
+    EMBEDDINGS_SINGLE_TEXT,
+    INPUT_TOKENS_SIMPLE_TEXT,
+    INPUT_TOKENS_WITH_SYSTEM,
+    INPUT_TOKENS_WITH_TOOLS,
+    INPUT_TOKENS_LONG_TEXT,
+    LOCATION_KEYWORDS,
+    WEATHER_KEYWORDS,
+    WEATHER_TOOL,
+    Config,
     calculate_cosine_similarity,
-    get_api_key,
     get_content_string,
     get_content_string_with_summary,
-    skip_if_no_api_key,
-    WEATHER_KEYWORDS,
-    LOCATION_KEYWORDS,
+    mock_tool_response,
 )
-from .utils.config_loader import get_model, get_integration_url, get_config
+from .utils.config_loader import get_config, get_integration_url, get_model
 from .utils.parametrize import format_provider_model, get_cross_provider_params_for_scenario
 
 
@@ -370,11 +368,42 @@ class TestLangChainIntegration:
         except Exception as e:
             pytest.skip(f"OpenAI embeddings through LangChain not available: {e}")
 
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("embeddings"))
+    def test_04_gemini_embeddings_basic(self, provider, model):
+        """Test Case 4: Basic Gemini embeddings functionality"""
+        try:
+            embeddings = GoogleGenerativeAIEmbeddings(
+                model=format_provider_model(provider, model),
+                api_key="dummy-api-key",
+                base_url=(
+                    get_integration_url("langchain") if get_integration_url("langchain") else None
+                ),
+            )
+
+            # Test single embedding
+            result = embeddings.embed_query(EMBEDDINGS_SINGLE_TEXT)
+
+            assert isinstance(result, list)
+            assert len(result) > 0
+            assert all(isinstance(x, float) for x in result)
+
+            # Test batch embeddings
+            batch_result = embeddings.embed_documents(EMBEDDINGS_MULTIPLE_TEXTS)        
+
+            assert isinstance(batch_result, list)
+            assert len(batch_result) == len(EMBEDDINGS_MULTIPLE_TEXTS)
+            assert all(isinstance(embedding, list) for embedding in batch_result)
+
+        except Exception as e:
+            pytest.skip(f"Embeddings test failed for {provider} {model}: {e}")
+
+
     @pytest.mark.skipif(
         not LEGACY_LANGCHAIN_AVAILABLE, reason="Legacy LangChain package not available"
     )
-    def test_04_function_calling_tools(self, test_config):
-        """Test Case 4: Function calling with tools"""
+    def test_05_function_calling_tools(self, test_config):
+        """Test Case 5: Function calling with tools"""
         try:
             chat = ChatOpenAI(
                 model=get_model("langchain", "tools"),
@@ -411,8 +440,8 @@ class TestLangChainIntegration:
         except Exception as e:
             pytest.skip(f"Function calling through LangChain not available: {e}")
 
-    def test_05_llm_chain_basic(self, test_config):
-        """Test Case 5: Basic LLM Chain functionality"""
+    def test_06_llm_chain_basic(self, test_config):
+        """Test Case 6: Basic LLM Chain functionality"""
         try:
             llm = ChatOpenAI(
                 model=get_model("langchain", "chat"),
@@ -447,8 +476,8 @@ class TestLangChainIntegration:
     @pytest.mark.skipif(
         not LEGACY_LANGCHAIN_AVAILABLE, reason="Legacy LangChain package not available"
     )
-    def test_06_conversation_memory(self, test_config):
-        """Test Case 6: Conversation memory functionality"""
+    def test_07_conversation_memory(self, test_config):
+        """Test Case 7: Conversation memory functionality"""
         try:
             llm = ChatOpenAI(
                 model=get_model("langchain", "chat"),
@@ -476,8 +505,8 @@ class TestLangChainIntegration:
             pytest.skip(f"Conversation memory through LangChain not available: {e}")
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("streaming"))
-    def test_07_streaming_responses(self, test_config, provider, model):
-        """Test Case 7: Streaming response functionality"""
+    def test_08_streaming_responses(self, test_config, provider, model):
+        """Test Case 8: Streaming response functionality"""
         try:
             chat = ChatOpenAI(
                 model=format_provider_model(provider, model),
@@ -506,8 +535,8 @@ class TestLangChainIntegration:
         except Exception as e:
             pytest.skip(f"Streaming through LangChain not available: {e}")
 
-    def test_08_multi_provider_chain(self, test_config):
-        """Test Case 8: Chain with multiple provider models"""
+    def test_09_multi_provider_chain(self, test_config):
+        """Test Case 9: Chain with multiple provider models"""
         try:
             # Create different provider models
             openai_chat = ChatOpenAI(
@@ -543,8 +572,8 @@ class TestLangChainIntegration:
         except Exception as e:
             pytest.skip(f"Multi-provider chains through LangChain not available: {e}")
 
-    def test_09_embeddings_similarity(self, test_config):
-        """Test Case 9: Embeddings similarity analysis"""
+    def test_10_embeddings_similarity(self, test_config):
+        """Test Case 10: Embeddings similarity analysis"""
         try:
             embeddings = OpenAIEmbeddings(
                 model=get_model("langchain", "embeddings"),
@@ -575,8 +604,8 @@ class TestLangChainIntegration:
         except Exception as e:
             pytest.skip(f"Embeddings similarity through LangChain not available: {e}")
 
-    def test_10_async_operations(self, test_config):
-        """Test Case 10: Async operation support"""
+    def test_11_async_operations(self, test_config):
+        """Test Case 11: Async operation support"""
 
         async def async_test():
             try:
@@ -609,8 +638,8 @@ class TestLangChainIntegration:
         if result is not False:  # Skip if not explicitly skipped
             assert result is True
 
-    def test_11_error_handling(self, test_config):
-        """Test Case 11: Error handling and fallbacks"""
+    def test_12_error_handling(self, test_config):
+        """Test Case 12: Error handling and fallbacks"""
         try:
             # Test with invalid model name
             chat = ChatOpenAI(
@@ -634,8 +663,8 @@ class TestLangChainIntegration:
         except Exception as e:
             pytest.skip(f"Error handling test through LangChain not available: {e}")
 
-    def test_12_langchain_expression_language(self, test_config):
-        """Test Case 12: LangChain Expression Language (LCEL)"""
+    def test_13_langchain_expression_language(self, test_config):
+        """Test Case 13: LangChain Expression Language (LCEL)"""
         try:
             llm = ChatOpenAI(
                 model=get_model("langchain", "chat"),
@@ -657,8 +686,8 @@ class TestLangChainIntegration:
         except Exception as e:
             pytest.skip(f"LCEL through LangChain not available: {e}")
 
-    def test_13_gemini_chat_integration(self, test_config):
-        """Test Case 13: Google Gemini chat via LangChain"""
+    def test_14_gemini_chat_integration(self, test_config):
+        """Test Case 14: Google Gemini chat via LangChain"""
         try:
             # Use ChatGoogleGenerativeAI with Bifrost routing
             llm = ChatGoogleGenerativeAI(
@@ -716,8 +745,8 @@ class TestLangChainIntegration:
         except Exception as e:
             pytest.skip(f"Gemini chat integration test failed: {e}")
 
-    def test_14_mistral_chat_integration(self, test_config):
-        """Test Case 14: Mistral AI chat via LangChain"""
+    def test_15_mistral_chat_integration(self, test_config):
+        """Test Case 15: Mistral AI chat via LangChain"""
         try:
             # Mistral is OpenAI-compatible, so it can route through Bifrost easily
             base_url = get_integration_url("langchain")
@@ -779,8 +808,8 @@ class TestLangChainIntegration:
         except Exception as e:
             pytest.skip(f"Mistral through LangChain not available: {e}")
 
-    def test_15_gemini_streaming(self, test_config):
-        """Test Case 15: Gemini streaming responses via LangChain"""
+    def test_16_gemini_streaming(self, test_config):
+        """Test Case 16: Gemini streaming responses via LangChain"""
         try:
             chat = ChatGoogleGenerativeAI(
                 model="gemini-2.5-flash",
@@ -814,8 +843,8 @@ class TestLangChainIntegration:
     @pytest.mark.skipif(
         not MISTRAL_AI_AVAILABLE, reason="langchain-mistralai package not available"
     )
-    def test_16_mistral_streaming(self, test_config):
-        """Test Case 16: Mistral streaming responses via LangChain"""
+    def test_17_mistral_streaming(self, test_config):
+        """Test Case 17: Mistral streaming responses via LangChain"""
         try:
             base_url = get_integration_url("langchain")
             if base_url:
@@ -849,8 +878,8 @@ class TestLangChainIntegration:
         except Exception as e:
             pytest.skip(f"Mistral streaming through LangChain not available: {e}")
 
-    def test_17_multi_provider_langchain_comparison(self, test_config):
-        """Test Case 17: Compare responses across multiple LangChain providers"""
+    def test_18_multi_provider_langchain_comparison(self, test_config):
+        """Test Case 18: Compare responses across multiple LangChain providers"""
         providers_tested = []
         responses = {}
 
@@ -944,8 +973,8 @@ class TestLangChainIntegration:
         assert len(unique_responses) > 1, "Different providers should give different responses"
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("langchain_structured_output"))
-    def test_18_structured_outputs(self, test_config, provider, model):
-        """Test Case 18: Structured outputs with Pydantic models"""
+    def test_19_structured_outputs(self, test_config, provider, model):
+        """Test Case 19: Structured outputs with Pydantic models"""
 
         try:
             # Create LangChain ChatOpenAI instance with Bifrost routing
@@ -979,8 +1008,8 @@ class TestLangChainIntegration:
             logging.warning(f"Structured output test failed for {provider} ({model}): {e}")
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("langchain_structured_output"))
-    def test_19_structured_outputs_anthropic(self, test_config, provider, model):
-        """Test Case 19: Structured outputs with Anthropic ChatAnthropic for Bedrock"""
+    def test_20_structured_outputs_anthropic(self, test_config, provider, model):
+        """Test Case 20: Structured outputs with Anthropic ChatAnthropic for Bedrock"""
         
         try:
             llm = ChatAnthropic(
@@ -1008,11 +1037,11 @@ class TestLangChainIntegration:
         "provider,model",
         get_cross_provider_params_for_scenario("tool_calls"),
     )
-    def test_20_streaming_tool_calls_with_parameters(self, test_config, provider, model):
-        """Test Case 20: Agent-based tool calling with streaming using new create_agent API."""
+    def test_21_streaming_tool_calls_with_parameters(self, test_config, provider, model):
+        """Test Case 21: Agent-based tool calling with streaming using new create_agent API."""
         try:
-            from langchain_core.tools import tool
             from langchain.agents import create_agent
+            from langchain_core.tools import tool
 
             @tool
             def get_current_date(timezone: str):
@@ -1126,8 +1155,8 @@ class TestLangChainIntegration:
         logging.info(f"✓ {provider} thinking test passed")
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("thinking"))
-    def test_21_thinking_openai(self, test_config, provider, model):
-        """Test Case 21: Thinking/reasoning with OpenAI models via LangChain (non-streaming)"""
+    def test_22_thinking_openai(self, test_config, provider, model):
+        """Test Case 22: Thinking/reasoning with OpenAI models via LangChain (non-streaming)"""
         
         try:
             # Use ChatOpenAI with reasoning parameters
@@ -1163,8 +1192,8 @@ class TestLangChainIntegration:
                 raise
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("thinking"))
-    def test_22_thinking_anthropic(self, test_config, provider, model):
-        """Test Case 22: Thinking/reasoning with Anthropic models via LangChain (non-streaming)"""
+    def test_23_thinking_anthropic(self, test_config, provider, model):
+        """Test Case 23: Thinking/reasoning with Anthropic models via LangChain (non-streaming)"""
         try:
             # Use ChatAnthropic with thinking parameters
             llm = ChatAnthropic(
@@ -1203,8 +1232,8 @@ class TestLangChainIntegration:
             else:
                 raise
 
-    def test_23_thinking_azure(self, test_config):
-        """Test Case 23: Thinking/reasoning with Azure models via LangChain (non-streaming)"""
+    def test_24_thinking_azure(self, test_config):
+        """Test Case 24: Thinking/reasoning with Azure models via LangChain (non-streaming)"""
         
         try:
             default_headers = {}
@@ -1250,8 +1279,8 @@ class TestLangChainIntegration:
                 raise
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("thinking"))
-    def test_24_thinking_gemini(self, test_config, provider, model):
-        """Test Case 24: Thinking/reasoning with Gemini models via LangChain (non-streaming)"""
+    def test_25_thinking_gemini(self, test_config, provider, model):
+        """Test Case 25: Thinking/reasoning with Gemini models via LangChain (non-streaming)"""
         
         try:
             # Use ChatGoogleGenerativeAI with thinking_budget parameter
@@ -1293,8 +1322,8 @@ class TestLangChainIntegration:
                 raise
 
     @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("thinking"))
-    def test_25_thinking_bedrock(self, test_config, provider, model):
-        """Test Case 25: Thinking/reasoning with Bedrock models via LangChain (non-streaming)"""
+    def test_26_thinking_bedrock(self, test_config, provider, model):
+        """Test Case 26: Thinking/reasoning with Bedrock models via LangChain (non-streaming)"""
         try:
 
             base_url = get_integration_url("bedrock")
@@ -1352,6 +1381,104 @@ class TestLangChainIntegration:
                 pytest.skip(f"Thinking not supported for {provider}/{model}: {e}")
             else:
                 raise
+
+    # =========================================================================
+    # TOKEN COUNTING TEST CASES - get_num_tokens_from_messages
+    # =========================================================================
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("count_tokens"))
+    def test_27_get_num_tokens_simple_text(self, test_config, provider, model):
+        """Test Case 27: Get number of tokens from messages with simple text"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
+                    
+        try:
+            llm = ChatAnthropic(
+                model=format_provider_model(provider, model),
+                base_url=get_integration_url("langchain") if get_integration_url("langchain") else None,
+                api_key="dummy-key",
+            )
+            
+            # Create simple message
+            messages = [HumanMessage(content=INPUT_TOKENS_SIMPLE_TEXT)]
+            
+            # Get token count
+            token_count = llm.get_num_tokens_from_messages(messages)
+            
+            # Validate token count
+            assert isinstance(token_count, int), "Token count should be an integer"
+            assert token_count > 0, "Token count should be positive"
+            # Simple text should have a reasonable token count (between 3-20 tokens)
+            assert 3 <= token_count <= 20, (
+                f"Simple text should have 3-20 tokens, got {token_count}"
+            )
+            
+        except Exception as e:
+            pytest.skip(f"Token counting not available for {provider}/{model}: {e}")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("count_tokens"))
+    def test_28_get_num_tokens_with_system_message(self, test_config, provider, model):
+        """Test Case 28: Get number of tokens from messages with system message"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
+
+        try:
+            # Create ChatAnthropic instance
+            llm = ChatAnthropic(
+                model=format_provider_model(provider, model),
+                base_url=get_integration_url("langchain") if get_integration_url("langchain") else None,
+                api_key="dummy-key",
+            )
+            
+            # Create messages with system message
+            messages = [
+                SystemMessage(content=INPUT_TOKENS_WITH_SYSTEM[0]["content"]),
+                HumanMessage(content=INPUT_TOKENS_WITH_SYSTEM[1]["content"])
+            ]
+            
+            # Get token count
+            token_count = llm.get_num_tokens_from_messages(messages)
+            
+            # Validate token count
+            assert isinstance(token_count, int), "Token count should be an integer"
+            assert token_count > 0, "Token count should be positive"
+            # With system message should have more tokens than simple text
+            assert token_count > 2, (
+                f"With system message should have >2 tokens, got {token_count}"
+            )
+            
+
+        except Exception as e:
+            pytest.skip(f"Token counting not available for {provider}/{model}: {e}")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("count_tokens"))
+    def test_29_input_tokens_long_text(self, test_config, provider, model):
+        """Test Case 29: Input tokens count with long text via LangChain"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for this scenario")
+
+        try:
+            # Create ChatAnthropic instance
+            llm = ChatAnthropic(
+                model=format_provider_model(provider, model),
+                base_url=get_integration_url("langchain") if get_integration_url("langchain") else None,
+                api_key="dummy-key",
+            )
+
+            # Create message with long text input
+            messages = [HumanMessage(content=INPUT_TOKENS_LONG_TEXT)]
+
+            # Get token count for long text
+            token_count = llm.get_num_tokens_from_messages(messages)
+
+            # Validate token count
+            assert isinstance(token_count, int), "Token count should be an integer"
+            assert token_count > 100, (
+                f"Long text should have >100 tokens, got {token_count}"
+            )
+
+        except Exception as e:
+            pytest.skip(f"Token counting not available for {provider}/{model}: {e}")
 
 
 # Skip standard tests if langchain-tests is not available

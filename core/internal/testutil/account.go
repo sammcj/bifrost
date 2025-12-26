@@ -53,6 +53,7 @@ type TestScenarios struct {
 	FileDelete            bool // File API delete functionality
 	FileContent           bool // File API content download functionality
 	FileBatchInput        bool // Whether batch create supports file-based input (InputFileID)
+	CountTokens           bool // Count tokens functionality
 	ChatAudio             bool // Chat completion with audio input/output functionality
 }
 
@@ -1021,7 +1022,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 	{
 		Provider:             schemas.HuggingFace,
 		ChatModel:            "groq/openai/gpt-oss-120b",
-		VisionModel:          "fireworks-ai/Qwen/Qwen2.5-VL-32B-Instruct",
+		VisionModel:          "novita/zai-org/GLM-4.6V-Flash",
 		EmbeddingModel:       "sambanova/intfloat/e5-mistral-7b-instruct",
 		TranscriptionModel:   "fal-ai/openai/whisper-large-v3",
 		SpeechSynthesisModel: "fal-ai/hexgrad/Kokoro-82M",

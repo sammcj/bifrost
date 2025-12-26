@@ -414,22 +414,16 @@ Both Anthropic Claude and Amazon Nova models support reasoning/thinking capabili
 #### Anthropic Claude Models
 
 ```python
-import boto3
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage
-
-# Configure Bedrock client to use Bifrost
-client_kwargs = {
-    "service_name": "bedrock-runtime",
-    "region_name": "us-west-2",
-    "endpoint_url": "http://localhost:8080/langchain",
-}
-bedrock_client = boto3.client(**client_kwargs)
 
 # Bedrock Claude with reasoning control
 llm = ChatBedrockConverse(
     model="us.anthropic.claude-opus-4-5-20251101-v1:0",
-    client=bedrock_client,
+    region_name="dummy-region",
+    endpoint_url="http://localhost:8080/langchain",
+    aws_access_key_id="dummy-access-key",
+    aws_secret_access_key="dummy-secret-key",
     max_tokens=2000,
     additional_model_request_fields={  # Anthropic format
         "reasoning_config": {
@@ -445,22 +439,16 @@ response = llm.invoke([HumanMessage(content="Reason through this problem...")])
 #### Amazon Nova Models
 
 ```python
-import boto3
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage
-
-# Configure Bedrock client to use Bifrost
-client_kwargs = {
-    "service_name": "bedrock-runtime",
-    "region_name": "us-west-2",
-    "endpoint_url": "http://localhost:8080/langchain",
-}
-bedrock_client = boto3.client(**client_kwargs)
 
 # Bedrock Nova with reasoning control
 llm = ChatBedrockConverse(
     model="global.amazon.nova-2-lite-v1:0",
-    client=bedrock_client,
+    region_name="dummy-region",
+    endpoint_url="http://localhost:8080/langchain",
+    aws_access_key_id="dummy-access-key",
+    aws_secret_access_key="dummy-secret-key",
     max_tokens=2000,
     additional_model_request_fields={  # Nova format
         "reasoningConfig": {
@@ -495,7 +483,7 @@ from langchain_core.messages import HumanMessage
 
 # Gemini with thinking budget control
 llm = ChatGoogleGenerativeAI(
-    model="gemini/gemini-2.5-flash",
+    model="gemini/gemini-2.5-flash",  # or "vertex/gemini-2.5-flash"
     base_url="http://localhost:8080/langchain",
     api_key="dummy-key",
     max_tokens=4000,
@@ -544,6 +532,27 @@ doc_embeddings = embeddings.embed_documents([
 
 **This means `OpenAIEmbeddings` only works reliably with OpenAI embedding models.** Using it with other providers (e.g., `model="cohere/embed-v4.0"`) will fail because those providers cannot process int array inputs.
 </Warning>
+
+### Cross-Provider Embeddings
+
+For embedding models from other providers (Cohere, Bedrock, Gemini, etc.), you can use `GoogleGenerativeAIEmbeddings` from the `langchain_google_genai` package. This module sends text strings directly and works across multiple providers:
+
+```python
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+# Works with any provider's embedding models
+embeddings = GoogleGenerativeAIEmbeddings(
+    model="cohere/cohere-embed-v4.0",  # or bedrock/..., gemini/..., etc.
+    base_url="http://localhost:8080/langchain",
+    api_key="dummy-key"
+)
+
+query_embedding = embeddings.embed_query("What is machine learning?")
+doc_embeddings = embeddings.embed_documents([
+    "Machine learning is a subset of AI",
+    "Deep learning uses neural networks"
+])
+```
 
 ---
 

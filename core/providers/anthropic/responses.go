@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maximhq/bifrost/core/providers/utils"
 	"github.com/maximhq/bifrost/core/schemas"
 
+	"github.com/maximhq/bifrost/core/providers/utils"
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 )
 
@@ -1328,7 +1328,7 @@ func (request *AnthropicMessageRequest) ToBifrostResponsesRequest(ctx context.Co
 	// Add trucation parameter if computer tool is being used
 	if provider == schemas.OpenAI && request.Tools != nil {
 		for _, tool := range request.Tools {
-			if tool.Type != nil && *tool.Type == AnthropicToolTypeComputer20250124 {
+			if tool.Type != nil && (*tool.Type == AnthropicToolTypeComputer20250124 || *tool.Type == AnthropicToolTypeComputer20251124) {
 				params.Truncation = schemas.Ptr("auto")
 				break
 			}
@@ -1419,12 +1419,18 @@ func ToAnthropicResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) (*
 		}
 		if bifrostReq.Params.Reasoning != nil {
 			if bifrostReq.Params.Reasoning.MaxTokens != nil {
-				if *bifrostReq.Params.Reasoning.MaxTokens < MinimumReasoningMaxTokens {
+				budgetTokens := *bifrostReq.Params.Reasoning.MaxTokens
+				if *bifrostReq.Params.Reasoning.MaxTokens == -1 {
+					// anthropic does not support dynamic reasoning budget like gemini
+					// setting it to default max tokens
+					budgetTokens = MinimumReasoningMaxTokens
+				}
+				if budgetTokens < MinimumReasoningMaxTokens {
 					return nil, fmt.Errorf("reasoning.max_tokens must be >= %d for anthropic", MinimumReasoningMaxTokens)
 				}
 				anthropicReq.Thinking = &AnthropicThinking{
 					Type:         "enabled",
-					BudgetTokens: bifrostReq.Params.Reasoning.MaxTokens,
+					BudgetTokens: schemas.Ptr(budgetTokens),
 				}
 			} else {
 				if bifrostReq.Params.Reasoning.Effort != nil {
@@ -1468,7 +1474,7 @@ func ToAnthropicResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) (*
 					}
 					continue // Skip converting MCP tools to anthropicTools since they're handled separately
 				}
-				anthropicTool := convertBifrostToolToAnthropic(&tool)
+				anthropicTool := convertBifrostToolToAnthropic(bifrostReq.Model, &tool)
 				if anthropicTool != nil {
 					anthropicTools = append(anthropicTools, *anthropicTool)
 				}
@@ -2150,7 +2156,6 @@ func convertSingleAnthropicMessageToBifrostMessagesGrouped(msg *AnthropicMessage
 // Helper function to convert Anthropic content blocks to Bifrost ResponsesMessages, grouping text and tool_use blocks
 func convertAnthropicContentBlocksToResponsesMessagesGrouped(contentBlocks []AnthropicContentBlock, role *schemas.ResponsesMessageRoleType, isOutputMessage bool) []schemas.ResponsesMessage {
 	var bifrostMessages []schemas.ResponsesMessage
-	var reasoningContentBlocks []schemas.ResponsesMessageContentBlock
 	var accumulatedTextContent []schemas.ResponsesMessageContentBlock
 	var pendingToolUseBlocks []*AnthropicContentBlock // Accumulate tool_use blocks
 
@@ -2195,26 +2200,35 @@ func convertAnthropicContentBlocksToResponsesMessagesGrouped(contentBlocks []Ant
 					},
 				}
 				if isOutputMessage {
-					bifrostMsg.ID = schemas.Ptr("msg_" + utils.GetRandomString(50))
+					bifrostMsg.ID = schemas.Ptr("msg_" + providerUtils.GetRandomString(50))
 				}
 				bifrostMessages = append(bifrostMessages, bifrostMsg)
 			}
 
 		case AnthropicContentBlockTypeThinking:
 			if block.Thinking != nil {
-				// Collect reasoning blocks without flushing accumulated text/tool blocks
-				reasoningContentBlocks = append(reasoningContentBlocks, schemas.ResponsesMessageContentBlock{
-					Type:      schemas.ResponsesOutputMessageContentTypeReasoning,
-					Text:      block.Thinking,
-					Signature: block.Signature,
-				})
+				bifrostMsg := schemas.ResponsesMessage{
+					ID:   schemas.Ptr("rs_" + utils.GetRandomString(50)),
+					Type: schemas.Ptr(schemas.ResponsesMessageTypeReasoning),
+					Role: role,
+					Content: &schemas.ResponsesMessageContent{
+						ContentBlocks: []schemas.ResponsesMessageContentBlock{
+							{
+								Type:      schemas.ResponsesOutputMessageContentTypeReasoning,
+								Text:      block.Thinking,
+								Signature: block.Signature,
+							},
+						},
+					},
+				}
+				bifrostMessages = append(bifrostMessages, bifrostMsg)
 			}
 
 		case AnthropicContentBlockTypeRedactedThinking:
 			// Handle redacted thinking (encrypted content)
 			if block.Data != nil {
 				bifrostMsg := schemas.ResponsesMessage{
-					ID:   schemas.Ptr("rs_" + utils.GetRandomString(50)),
+					ID:   schemas.Ptr("rs_" + providerUtils.GetRandomString(50)),
 					Type: schemas.Ptr(schemas.ResponsesMessageTypeReasoning),
 					ResponsesReasoning: &schemas.ResponsesReasoning{
 						Summary:          []schemas.ResponsesReasoningSummary{},
@@ -2290,20 +2304,6 @@ func convertAnthropicContentBlocksToResponsesMessagesGrouped(contentBlocks []Ant
 		}
 	}
 
-	// For Bedrock compatibility: reasoning blocks must come before text/tool blocks
-	// If we have reasoning + text/tools, emit reasoning first, then text/tools
-	// Otherwise emit them separately as before
-	if len(reasoningContentBlocks) > 0 {
-		bifrostMsg := schemas.ResponsesMessage{
-			ID:   schemas.Ptr("rs_" + utils.GetRandomString(50)),
-			Type: schemas.Ptr(schemas.ResponsesMessageTypeReasoning),
-			Content: &schemas.ResponsesMessageContent{
-				ContentBlocks: reasoningContentBlocks,
-			},
-		}
-		bifrostMessages = append(bifrostMessages, bifrostMsg)
-	}
-
 	// Flush any remaining pending blocks
 	if len(accumulatedTextContent) > 0 {
 		bifrostMsg := schemas.ResponsesMessage{
@@ -2311,7 +2311,7 @@ func convertAnthropicContentBlocksToResponsesMessagesGrouped(contentBlocks []Ant
 			Role: role,
 		}
 		if isOutputMessage {
-			bifrostMsg.ID = schemas.Ptr("msg_" + utils.GetRandomString(50))
+			bifrostMsg.ID = schemas.Ptr("msg_" + providerUtils.GetRandomString(50))
 			bifrostMsg.Content = &schemas.ResponsesMessageContent{
 				ContentBlocks: accumulatedTextContent,
 			}
@@ -2331,7 +2331,7 @@ func convertAnthropicContentBlocksToResponsesMessagesGrouped(contentBlocks []Ant
 				},
 			}
 			if isOutputMessage {
-				bifrostMsg.ID = schemas.Ptr("msg_" + utils.GetRandomString(50))
+				bifrostMsg.ID = schemas.Ptr("msg_" + providerUtils.GetRandomString(50))
 			}
 
 			// Check for computer tool use
@@ -2368,7 +2368,7 @@ func convertAnthropicContentBlocksToResponsesMessages(contentBlocks []AnthropicC
 				if isOutputMessage {
 					// For output messages, use ContentBlocks with ResponsesOutputMessageContentTypeText
 					bifrostMsg = schemas.ResponsesMessage{
-						ID:   schemas.Ptr("msg_" + utils.GetRandomString(50)),
+						ID:   schemas.Ptr("msg_" + providerUtils.GetRandomString(50)),
 						Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
 						Role: role,
 						Content: &schemas.ResponsesMessageContent{
@@ -2409,7 +2409,7 @@ func convertAnthropicContentBlocksToResponsesMessages(contentBlocks []AnthropicC
 					},
 				}
 				if isOutputMessage {
-					bifrostMsg.ID = schemas.Ptr("msg_" + utils.GetRandomString(50))
+					bifrostMsg.ID = schemas.Ptr("msg_" + providerUtils.GetRandomString(50))
 				}
 				bifrostMessages = append(bifrostMessages, bifrostMsg)
 			}
@@ -2425,7 +2425,7 @@ func convertAnthropicContentBlocksToResponsesMessages(contentBlocks []AnthropicC
 		case AnthropicContentBlockTypeRedactedThinking:
 			if block.Data != nil {
 				bifrostMsg := schemas.ResponsesMessage{
-					ID:   schemas.Ptr("rs_" + utils.GetRandomString(50)),
+					ID:   schemas.Ptr("rs_" + providerUtils.GetRandomString(50)),
 					Type: schemas.Ptr(schemas.ResponsesMessageTypeReasoning),
 					ResponsesReasoning: &schemas.ResponsesReasoning{
 						Summary:          []schemas.ResponsesReasoningSummary{},
@@ -2446,7 +2446,7 @@ func convertAnthropicContentBlocksToResponsesMessages(contentBlocks []AnthropicC
 					},
 				}
 				if isOutputMessage {
-					bifrostMsg.ID = schemas.Ptr("msg_" + utils.GetRandomString(50))
+					bifrostMsg.ID = schemas.Ptr("msg_" + providerUtils.GetRandomString(50))
 				}
 
 				// here need to check for computer tool use
@@ -2537,7 +2537,7 @@ func convertAnthropicContentBlocksToResponsesMessages(contentBlocks []AnthropicC
 					},
 				}
 				if isOutputMessage {
-					bifrostMsg.ID = schemas.Ptr("msg_" + utils.GetRandomString(50))
+					bifrostMsg.ID = schemas.Ptr("msg_" + providerUtils.GetRandomString(50))
 				}
 				// Initialize the nested struct before any writes
 				bifrostMsg.ResponsesToolMessage.Output = &schemas.ResponsesToolMessageOutputStruct{}
@@ -2578,7 +2578,7 @@ func convertAnthropicContentBlocksToResponsesMessages(contentBlocks []AnthropicC
 	// This ensures reasoning comes before any text/tool blocks (Bedrock compatibility)
 	if len(reasoningContentBlocks) > 0 {
 		reasoningMessage := schemas.ResponsesMessage{
-			ID:   schemas.Ptr("rs_" + utils.GetRandomString(50)),
+			ID:   schemas.Ptr("rs_" + providerUtils.GetRandomString(50)),
 			Type: schemas.Ptr(schemas.ResponsesMessageTypeReasoning),
 			ResponsesReasoning: &schemas.ResponsesReasoning{
 				Summary: []schemas.ResponsesReasoningSummary{},
@@ -3004,7 +3004,7 @@ func convertAnthropicToolToBifrost(tool *AnthropicTool) *schemas.ResponsesTool {
 	// Handle special tool types first
 	if tool.Type != nil {
 		switch *tool.Type {
-		case AnthropicToolTypeComputer20250124:
+		case AnthropicToolTypeComputer20250124, AnthropicToolTypeComputer20251124:
 			bifrostTool := &schemas.ResponsesTool{
 				Type: schemas.ResponsesToolTypeComputerUsePreview,
 			}
@@ -3017,6 +3017,9 @@ func convertAnthropicToolToBifrost(tool *AnthropicTool) *schemas.ResponsesTool {
 				}
 				if tool.AnthropicToolComputerUse.DisplayHeightPx != nil {
 					bifrostTool.ResponsesToolComputerUsePreview.DisplayHeight = *tool.AnthropicToolComputerUse.DisplayHeightPx
+				}
+				if tool.AnthropicToolComputerUse.EnableZoom != nil {
+					bifrostTool.ResponsesToolComputerUsePreview.EnableZoom = tool.AnthropicToolComputerUse.EnableZoom
 				}
 			}
 			return bifrostTool
@@ -3181,7 +3184,7 @@ func convertToolOutputToAnthropicContent(output *schemas.ResponsesToolMessageOut
 }
 
 // Helper function to convert Tool back to AnthropicTool
-func convertBifrostToolToAnthropic(tool *schemas.ResponsesTool) *AnthropicTool {
+func convertBifrostToolToAnthropic(model string, tool *schemas.ResponsesTool) *AnthropicTool {
 	if tool == nil {
 		return nil
 	}
@@ -3189,13 +3192,18 @@ func convertBifrostToolToAnthropic(tool *schemas.ResponsesTool) *AnthropicTool {
 	switch tool.Type {
 	case schemas.ResponsesToolTypeComputerUsePreview:
 		if tool.ResponsesToolComputerUsePreview != nil {
+			computerToolType := AnthropicToolTypeComputer20250124
+			if strings.Contains(model, "claude") && strings.Contains(model, "opus") && (strings.Contains(model, "4.5") || strings.Contains(model, "4-5")) {
+				computerToolType = AnthropicToolTypeComputer20251124
+			}
 			return &AnthropicTool{
-				Type: schemas.Ptr(AnthropicToolTypeComputer20250124),
+				Type: schemas.Ptr(computerToolType),
 				Name: string(AnthropicToolNameComputer),
 				AnthropicToolComputerUse: &AnthropicToolComputerUse{
 					DisplayWidthPx:  schemas.Ptr(tool.ResponsesToolComputerUsePreview.DisplayWidth),
 					DisplayHeightPx: schemas.Ptr(tool.ResponsesToolComputerUsePreview.DisplayHeight),
 					DisplayNumber:   schemas.Ptr(1),
+					EnableZoom:      tool.ResponsesToolComputerUsePreview.EnableZoom,
 				},
 			}
 		}
@@ -3348,8 +3356,9 @@ func convertContentBlockToAnthropic(block schemas.ResponsesMessageContentBlock) 
 	case schemas.ResponsesOutputMessageContentTypeReasoning:
 		if block.Text != nil {
 			return &AnthropicContentBlock{
-				Type:     AnthropicContentBlockTypeThinking,
-				Thinking: block.Text,
+				Type:      AnthropicContentBlockTypeThinking,
+				Thinking:  block.Text,
+				Signature: block.Signature,
 			}
 		}
 	}
@@ -3559,6 +3568,13 @@ func convertResponsesToAnthropicComputerAction(action *schemas.ResponsesComputer
 		actionStr = "wait"
 		input["duration"] = 2
 
+	case "zoom":
+		actionStr = "zoom"
+		// Anthropic zoom action expects region as [x1, y1, x2, y2]
+		if len(action.Region) == 4 {
+			input["region"] = action.Region
+		}
+
 	default:
 		// Pass through any unknown action types
 		actionStr = action.Type
@@ -3661,6 +3677,20 @@ func convertAnthropicToResponsesComputerAction(inputMap map[string]interface{}) 
 
 	case "wait":
 		action.Type = "wait"
+
+	case "zoom":
+		action.Type = "zoom"
+		// Extract region [x1, y1, x2, y2] for zoom action
+		if region, ok := inputMap["region"].([]interface{}); ok && len(region) == 4 {
+			// JSON unmarshaling produces float64 for numbers, so convert them
+			x1, x1Ok := region[0].(float64)
+			y1, y1Ok := region[1].(float64)
+			x2, x2Ok := region[2].(float64)
+			y2, y2Ok := region[3].(float64)
+			if x1Ok && y1Ok && x2Ok && y2Ok {
+				action.Region = []int{int(x1), int(y1), int(x2), int(y2)}
+			}
+		}
 
 	default:
 		// Pass through any unknown action types
