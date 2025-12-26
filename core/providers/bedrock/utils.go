@@ -441,6 +441,14 @@ func convertToolMessages(msgs []schemas.ChatMessage) (BedrockMessage, error) {
 			}
 		}
 
+		if msg.ChatToolMessage == nil {
+			return BedrockMessage{}, fmt.Errorf("tool message missing required ChatToolMessage")
+		}
+
+		if msg.ChatToolMessage.ToolCallID == nil {
+			return BedrockMessage{}, fmt.Errorf("tool message missing required ToolCallID")
+		}
+
 		// Create tool result content block for this tool message
 		toolResultBlock := BedrockContentBlock{
 			ToolResult: &BedrockToolResult{
