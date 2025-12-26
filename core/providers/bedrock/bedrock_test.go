@@ -29,6 +29,62 @@ var (
 	}
 )
 
+// assertBedrockRequestEqual compares two BedrockConverseRequest objects
+// but ignores the order of tools in ToolConfig
+func assertBedrockRequestEqual(t *testing.T, expected, actual *bedrock.BedrockConverseRequest) {
+	t.Helper()
+
+	assert.Equal(t, expected.ModelID, actual.ModelID)
+	assert.Equal(t, expected.Messages, actual.Messages)
+	assert.Equal(t, expected.System, actual.System)
+	assert.Equal(t, expected.InferenceConfig, actual.InferenceConfig)
+	assert.Equal(t, expected.GuardrailConfig, actual.GuardrailConfig)
+	assert.Equal(t, expected.AdditionalModelRequestFields, actual.AdditionalModelRequestFields)
+	assert.Equal(t, expected.AdditionalModelResponseFieldPaths, actual.AdditionalModelResponseFieldPaths)
+	assert.Equal(t, expected.PerformanceConfig, actual.PerformanceConfig)
+	assert.Equal(t, expected.PromptVariables, actual.PromptVariables)
+	assert.Equal(t, expected.RequestMetadata, actual.RequestMetadata)
+	assert.Equal(t, expected.ServiceTier, actual.ServiceTier)
+	assert.Equal(t, expected.Stream, actual.Stream)
+	assert.Equal(t, expected.ExtraParams, actual.ExtraParams)
+	assert.Equal(t, expected.Fallbacks, actual.Fallbacks)
+
+	if expected.ToolConfig == nil {
+		assert.Nil(t, actual.ToolConfig)
+		return
+	}
+
+	require.NotNil(t, actual.ToolConfig)
+	assert.Equal(t, expected.ToolConfig.ToolChoice, actual.ToolConfig.ToolChoice)
+
+	expectedTools := expected.ToolConfig.Tools
+	actualTools := actual.ToolConfig.Tools
+
+	assert.Equal(t, len(expectedTools), len(actualTools), "Tool count mismatch")
+
+	expectedToolMap := make(map[string]bedrock.BedrockTool)
+	for _, tool := range expectedTools {
+		if tool.ToolSpec != nil {
+			expectedToolMap[tool.ToolSpec.Name] = tool
+		}
+	}
+
+	actualToolMap := make(map[string]bedrock.BedrockTool)
+	for _, tool := range actualTools {
+		if tool.ToolSpec != nil {
+			actualToolMap[tool.ToolSpec.Name] = tool
+		}
+	}
+
+	for name, expectedTool := range expectedToolMap {
+		actualTool, exists := actualToolMap[name]
+		assert.True(t, exists, "Tool %s not found in actual tools", name)
+		if exists {
+			assert.Equal(t, expectedTool, actualTool, "Tool %s differs", name)
+		}
+	}
+}
+
 func TestBedrock(t *testing.T) {
 	t.Parallel()
 
@@ -628,7 +684,11 @@ func TestBifrostToBedrockRequestConversion(t *testing.T) {
 				}
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.expected, actual)
+				if tt.name == "ParallelToolCalls" {
+					assertBedrockRequestEqual(t, tt.expected, actual)
+				} else {
+					assert.Equal(t, tt.expected, actual)
+				}
 			}
 		})
 	}
