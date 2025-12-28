@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 
 	"github.com/bytedance/sonic"
@@ -607,15 +608,19 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []Content {
 						},
 					}
 
-					// Preserve thought signature from extra_content (required for Gemini 3 Pro)
-					if toolCall.ExtraContent != nil {
-						if googleData, ok := toolCall.ExtraContent["google"].(map[string]interface{}); ok {
-							if thoughtSig, ok := googleData["thought_signature"].(string); ok {
+					// check in reasoning details array for thought signature with id tool_call_<callID>
+					if len(message.ChatAssistantMessage.ReasoningDetails) > 0 {
+						lookupID := fmt.Sprintf("tool_call_%s", callID)
+						for _, reasoningDetail := range message.ChatAssistantMessage.ReasoningDetails {
+							if reasoningDetail.ID != nil && *reasoningDetail.ID == lookupID &&
+								reasoningDetail.Type == schemas.BifrostReasoningDetailsTypeEncrypted &&
+								reasoningDetail.Signature != nil {
 								// Decode the base64 string to raw bytes
-								decoded, err := base64.StdEncoding.DecodeString(thoughtSig)
+								decoded, err := base64.StdEncoding.DecodeString(*reasoningDetail.Signature)
 								if err == nil {
 									part.ThoughtSignature = decoded
 								}
+								break
 							}
 						}
 					}
