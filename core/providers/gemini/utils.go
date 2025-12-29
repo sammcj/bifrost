@@ -497,21 +497,79 @@ func convertFunctionParametersToSchema(params schemas.ToolFunctionParameters) *S
 		schema.Required = params.Required
 	}
 
+	if len(params.Enum) > 0 {
+		schema.Enum = params.Enum
+	}
+
 	if params.Properties != nil && len(*params.Properties) > 0 {
 		schema.Properties = make(map[string]*Schema)
-		// Note: This is a simplified conversion. In practice, you'd need to
-		// recursively convert nested schemas
 		for k, v := range *params.Properties {
-			// Convert interface{} to Schema - this would need more sophisticated logic
-			if propMap, ok := v.(map[string]interface{}); ok {
-				propSchema := &Schema{}
-				if propType, ok := propMap["type"].(string); ok {
-					propSchema.Type = Type(propType)
+			schema.Properties[k] = convertPropertyToSchema(v)
+		}
+	}
+
+	return schema
+}
+
+// convertPropertyToSchema recursively converts a property to Gemini Schema
+func convertPropertyToSchema(prop interface{}) *Schema {
+	schema := &Schema{}
+
+	// Handle property as map[string]interface{}
+	if propMap, ok := prop.(map[string]interface{}); ok {
+		if propType, exists := propMap["type"]; exists {
+			if typeStr, ok := propType.(string); ok {
+				schema.Type = Type(typeStr)
+			}
+		}
+
+		if desc, exists := propMap["description"]; exists {
+			if descStr, ok := desc.(string); ok {
+				schema.Description = descStr
+			}
+		}
+
+		if enum, exists := propMap["enum"]; exists {
+			if enumSlice, ok := enum.([]interface{}); ok {
+				var enumStrs []string
+				for _, item := range enumSlice {
+					if str, ok := item.(string); ok {
+						enumStrs = append(enumStrs, str)
+					}
 				}
-				if propDesc, ok := propMap["description"].(string); ok {
-					propSchema.Description = propDesc
+				schema.Enum = enumStrs
+			} else if enumStrs, ok := enum.([]string); ok {
+				schema.Enum = enumStrs
+			}
+		}
+
+		// Handle nested properties for object types
+		if props, exists := propMap["properties"]; exists {
+			if propsMap, ok := props.(map[string]interface{}); ok {
+				schema.Properties = make(map[string]*Schema)
+				for key, nestedProp := range propsMap {
+					schema.Properties[key] = convertPropertyToSchema(nestedProp)
 				}
-				schema.Properties[k] = propSchema
+			}
+		}
+
+		// Handle array items
+		if items, exists := propMap["items"]; exists {
+			schema.Items = convertPropertyToSchema(items)
+		}
+
+		// Handle required fields
+		if required, exists := propMap["required"]; exists {
+			if reqSlice, ok := required.([]interface{}); ok {
+				var reqStrs []string
+				for _, item := range reqSlice {
+					if str, ok := item.(string); ok {
+						reqStrs = append(reqStrs, str)
+					}
+				}
+				schema.Required = reqStrs
+			} else if reqStrs, ok := required.([]string); ok {
+				schema.Required = reqStrs
 			}
 		}
 	}
