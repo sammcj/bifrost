@@ -41,6 +41,7 @@ func (s *RDBConfigStore) UpdateClientConfig(ctx context.Context, config *ClientC
 		AllowedOrigins:          config.AllowedOrigins,
 		MaxRequestBodySizeMB:    config.MaxRequestBodySizeMB,
 		EnableLiteLLMFallbacks:  config.EnableLiteLLMFallbacks,
+		HeaderFilterConfig:      config.HeaderFilterConfig,
 	}
 	// Delete existing client config and create new one in a transaction
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -195,6 +196,7 @@ func (s *RDBConfigStore) GetClientConfig(ctx context.Context) (*ClientConfig, er
 		AllowedOrigins:          dbConfig.AllowedOrigins,
 		MaxRequestBodySizeMB:    dbConfig.MaxRequestBodySizeMB,
 		EnableLiteLLMFallbacks:  dbConfig.EnableLiteLLMFallbacks,
+		HeaderFilterConfig:      dbConfig.HeaderFilterConfig,
 	}, nil
 }
 

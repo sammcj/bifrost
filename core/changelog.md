@@ -1,1 +1,2 @@
 - feat: add document/file support for Anthropic, Bedrock, and Gemini
+- feat: adds support for allow-list and deny-list for custom and built-in headers

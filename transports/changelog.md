@@ -1,1 +1,2 @@
 - feat: add document/file support for Anthropic, Bedrock, and Gemini
+- feat: adds support for allowlist and denylist in config for forward or block headers from forwarding it to providers
