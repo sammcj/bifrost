@@ -120,10 +120,12 @@ func (response *BedrockConverseResponse) ToBifrostChatResponse(ctx context.Conte
 				reasoningDetails = append(reasoningDetails, schemas.ChatReasoningDetails{
 					Index:     len(reasoningDetails),
 					Type:      schemas.BifrostReasoningDetailsTypeText,
-					Text:      schemas.Ptr(contentBlock.ReasoningContent.ReasoningText.Text),
+					Text:      contentBlock.ReasoningContent.ReasoningText.Text,
 					Signature: contentBlock.ReasoningContent.ReasoningText.Signature,
 				})
-				reasoningText += contentBlock.ReasoningContent.ReasoningText.Text + "\n"
+				if contentBlock.ReasoningContent.ReasoningText.Text != nil {
+					reasoningText += *contentBlock.ReasoningContent.ReasoningText.Text + "\n"
+				}
 			}
 
 			// Handle document content
@@ -367,12 +369,12 @@ func (chunk *BedrockStreamEvent) ToBifrostChatCompletionStream() (*schemas.Bifro
 			reasoningContentDelta := chunk.Delta.ReasoningContent
 
 			// Only construct and return a response when either Text or Signature is set
-			if reasoningContentDelta.Text == "" && reasoningContentDelta.Signature == nil {
+			if (reasoningContentDelta.Text == nil || *reasoningContentDelta.Text == "") && reasoningContentDelta.Signature == nil {
 				return nil, nil, false
 			}
 
 			var streamResponse *schemas.BifrostChatResponse
-			if reasoningContentDelta.Text != "" {
+			if reasoningContentDelta.Text != nil && *reasoningContentDelta.Text != "" {
 				streamResponse = &schemas.BifrostChatResponse{
 					Object: "chat.completion.chunk",
 					Choices: []schemas.BifrostResponseChoice{
@@ -380,12 +382,12 @@ func (chunk *BedrockStreamEvent) ToBifrostChatCompletionStream() (*schemas.Bifro
 							Index: 0,
 							ChatStreamResponseChoice: &schemas.ChatStreamResponseChoice{
 								Delta: &schemas.ChatStreamResponseChoiceDelta{
-									Reasoning: schemas.Ptr(reasoningContentDelta.Text),
+									Reasoning: reasoningContentDelta.Text,
 									ReasoningDetails: []schemas.ChatReasoningDetails{
 										{
 											Index: 0,
 											Type:  schemas.BifrostReasoningDetailsTypeText,
-											Text:  schemas.Ptr(reasoningContentDelta.Text),
+											Text:  reasoningContentDelta.Text,
 										},
 									},
 								},
