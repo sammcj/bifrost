@@ -30,7 +30,7 @@ func RunCountTokenTest(t *testing.T, client *bifrost.Bifrost, ctx context.Contex
 			Provider:  testConfig.Provider,
 			Model:     testConfig.ChatModel,
 			Input:     messages,
-			Params:    &schemas.ResponsesParameters{Temperature: bifrost.Ptr(0.2)},
+			Params:    &schemas.ResponsesParameters{},
 			Fallbacks: testConfig.Fallbacks,
 		}
 

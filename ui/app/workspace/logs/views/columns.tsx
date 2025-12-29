@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
-import { ProviderName, RequestTypeColors, RequestTypeLabels, Status, StatusColors } from "@/lib/constants/logs";
+import { ProviderName, RequestTypeColors, RequestTypeLabels, Status, StatusBarColors } from "@/lib/constants/logs";
 import { LogEntry, ResponsesMessageContentBlock } from "@/lib/types/logs";
 import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown, Trash2 } from "lucide-react";
@@ -60,14 +60,12 @@ function getMessage(log?: LogEntry) {
 export const createColumns = (onDelete: (log: LogEntry) => void, hasDeleteAccess = true): ColumnDef<LogEntry>[] => [
 	{
 		accessorKey: "status",
-		header: "Status",
+		header: "",
+		size: 8,
+		maxSize: 8,
 		cell: ({ row }) => {
 			const status = row.original.status as Status;
-			return (
-				<Badge variant="secondary" className={`${StatusColors[status] ?? ""} font-mono text-xs uppercase`}>
-					{status}
-				</Badge>
-			);
+			return <div className={`h-full min-h-[24px] w-1 rounded-sm ${StatusBarColors[status]}`} />;
 		},
 	},
 	{
@@ -80,7 +78,7 @@ export const createColumns = (onDelete: (log: LogEntry) => void, hasDeleteAccess
 		),
 		cell: ({ row }) => {
 			const timestamp = row.original.timestamp;
-			return <div className="font-mono text-xs">{moment(timestamp).format("YYYY-MM-DD hh:mm:ss A (Z)")}</div>;
+			return <div className="text-xs">{moment(timestamp).format("YYYY-MM-DD hh:mm:ss A (Z)")}</div>;
 		},
 	},
 	{

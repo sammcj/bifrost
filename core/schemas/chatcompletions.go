@@ -600,7 +600,7 @@ const (
 	ChatContentBlockTypeText       ChatContentBlockType = "text"
 	ChatContentBlockTypeImage      ChatContentBlockType = "image_url"
 	ChatContentBlockTypeInputAudio ChatContentBlockType = "input_audio"
-	ChatContentBlockTypeFile       ChatContentBlockType = "input_file"
+	ChatContentBlockTypeFile       ChatContentBlockType = "file"
 	ChatContentBlockTypeRefusal    ChatContentBlockType = "refusal"
 )
 
@@ -647,6 +647,7 @@ type ChatInputFile struct {
 	FileData *string `json:"file_data,omitempty"` // Base64 encoded file data
 	FileID   *string `json:"file_id,omitempty"`   // Reference to uploaded file
 	Filename *string `json:"filename,omitempty"`  // Name of the file
+	FileType *string `json:"file_type,omitempty"` // Type of the file
 }
 
 // ChatToolMessage represents a tool message in a chat conversation.
@@ -717,11 +718,10 @@ type ChatAssistantMessageAnnotationCitation struct {
 
 // ChatAssistantMessageToolCall represents a tool call in a message
 type ChatAssistantMessageToolCall struct {
-	Index        uint16                               `json:"index"`
-	Type         *string                              `json:"type,omitempty"`
-	ID           *string                              `json:"id,omitempty"`
-	Function     ChatAssistantMessageToolCallFunction `json:"function"`
-	ExtraContent map[string]interface{}               `json:"extra_content,omitempty"` // Provider-specific fields (e.g., thought_signature for Gemini)
+	Index    uint16                               `json:"index"`
+	Type     *string                              `json:"type,omitempty"`
+	ID       *string                              `json:"id,omitempty"`
+	Function ChatAssistantMessageToolCallFunction `json:"function"`
 }
 
 // ChatAssistantMessageToolCallFunction represents a call to a function.
@@ -762,6 +762,7 @@ const (
 
 // Not in OpenAI's spec, but needed to support inter provider reasoning capabilities.
 type ChatReasoningDetails struct {
+	ID        *string                     `json:"id,omitempty"`
 	Index     int                         `json:"index"`
 	Type      BifrostReasoningDetailsType `json:"type"`
 	Summary   *string                     `json:"summary,omitempty"`

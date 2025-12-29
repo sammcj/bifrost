@@ -100,7 +100,7 @@ function SheetHeader({
 	const sheetContext = useSheetContext();
 
 	return (
-		<div data-slot="sheet-header" className={cn("mb-6 flex items-center gap-3", sheetContext?.expandable ? "p-4" : "mb-6")} {...props}>
+		<div data-slot="sheet-header" className={cn("flex items-center", sheetContext?.expandable ? "p-0" : "mb-6")} {...props}>
 			{sheetContext?.expandable && sheetContext?.side === "right" && (
 				<button
 					type="button"
@@ -111,9 +111,12 @@ function SheetHeader({
 					<span className="sr-only">{sheetContext?.expanded ? "Collapse" : "Expand"}</span>
 				</button>
 			)}
-			<div className={cn("flex h-full min-w-0 flex-1 flex-row items-center", className)}>{children}</div>
+
+			<div className={cn("flex h-full min-w-0 flex-1 flex-row items-center", sheetContext?.expandable ? "ml-1" : "", className)}>
+				{children}
+			</div>
 			{showCloseButton && (
-				<SheetPrimitive.Close className="shrink-0 cursor-pointer opacity-70 transition-opacity hover:scale-105 hover:opacity-100">
+				<SheetPrimitive.Close className="hover:bg-accent shrink-0 cursor-pointer rounded-md p-2 opacity-70 transition-opacity hover:scale-105 hover:opacity-100">
 					<XIcon className="size-4" />
 					<span className="sr-only">Close</span>
 				</SheetPrimitive.Close>

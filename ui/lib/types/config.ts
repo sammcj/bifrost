@@ -299,12 +299,32 @@ export const DefaultGlobalProxyConfig: GlobalProxyConfig = {
 	enable_for_api: false,
 };
 
+// Global header filter configuration matching Go's tables.GlobalHeaderFilterConfig
+// Controls which headers with the x-bf-eh-* prefix are forwarded to LLM providers
+export interface GlobalHeaderFilterConfig {
+	allowlist?: string[]; // If non-empty, only these headers are allowed
+	denylist?: string[]; // Headers to always block
+}
+
+// Default GlobalHeaderFilterConfig
+export const DefaultGlobalHeaderFilterConfig: GlobalHeaderFilterConfig = {
+	allowlist: [],
+	denylist: [],
+};
+
+// Restart required configuration
+export interface RestartRequiredConfig {
+	required: boolean;
+	reason?: string;
+}
+
 // Bifrost Config
 export interface BifrostConfig {
 	client_config: CoreConfig;
 	framework_config: FrameworkConfig;
 	auth_config?: AuthConfig;
-	proxy_config?: GlobalProxyConfig;
+	proxy_config?: GlobalProxyConfig;	
+	restart_required?: RestartRequiredConfig;
 	is_db_connected: boolean;
 	is_cache_connected: boolean;
 	is_logs_connected: boolean;
@@ -328,6 +348,7 @@ export interface CoreConfig {
 	mcp_agent_depth: number;
 	mcp_tool_execution_timeout: number;
 	mcp_code_mode_binding_level?: string;
+	header_filter_config?: GlobalHeaderFilterConfig;
 }
 
 // Semantic cache configuration types

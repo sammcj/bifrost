@@ -458,9 +458,9 @@ func (p *GovernancePlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.Bif
 			return req, &schemas.PluginShortCircuit{
 				Error: &schemas.BifrostError{
 					Type:       bifrost.Ptr("virtual_key_required"),
-					StatusCode: bifrost.Ptr(400),
+					StatusCode: bifrost.Ptr(401),
 					Error: &schemas.ErrorField{
-						Message: "virtual key is missing in headers",
+						Message: "virtual key is missing in headers and is mandatory.",
 					},
 				},
 			}, nil

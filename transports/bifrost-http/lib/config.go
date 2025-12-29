@@ -36,6 +36,8 @@ import (
 type HandlerStore interface {
 	// ShouldAllowDirectKeys returns whether direct API keys in headers are allowed
 	ShouldAllowDirectKeys() bool
+	// GetHeaderFilterConfig returns the global header filter configuration
+	GetHeaderFilterConfig() *configstoreTables.GlobalHeaderFilterConfig
 }
 
 // Retry backoff constants for validation
@@ -419,6 +421,10 @@ func initStoresFromFile(ctx context.Context, config *Config, configData *ConfigD
 			return err
 		}
 		logger.Info("config store initialized")
+		// Clear restart required flag on server startup
+		if err = config.ConfigStore.ClearRestartRequiredConfig(ctx); err != nil {
+			logger.Warn("failed to clear restart required config: %v", err)
+		}
 	}
 
 	// Initialize log store
@@ -578,6 +584,18 @@ func mergeClientConfig(dbConfig *configstore.ClientConfig, fileConfig *configsto
 	}
 	if !dbConfig.EnableLiteLLMFallbacks && fileConfig.EnableLiteLLMFallbacks {
 		dbConfig.EnableLiteLLMFallbacks = fileConfig.EnableLiteLLMFallbacks
+	}
+	// Merge HeaderFilterConfig: DB takes priority, but fill in empty values from config file
+	if dbConfig.HeaderFilterConfig == nil && fileConfig.HeaderFilterConfig != nil {
+		dbConfig.HeaderFilterConfig = fileConfig.HeaderFilterConfig
+	} else if dbConfig.HeaderFilterConfig != nil && fileConfig.HeaderFilterConfig != nil {
+		// Merge individual lists: DB values take priority, but if empty, use file values
+		if len(dbConfig.HeaderFilterConfig.Allowlist) == 0 && len(fileConfig.HeaderFilterConfig.Allowlist) > 0 {
+			dbConfig.HeaderFilterConfig.Allowlist = fileConfig.HeaderFilterConfig.Allowlist
+		}
+		if len(dbConfig.HeaderFilterConfig.Denylist) == 0 && len(fileConfig.HeaderFilterConfig.Denylist) > 0 {
+			dbConfig.HeaderFilterConfig.Denylist = fileConfig.HeaderFilterConfig.Denylist
+		}
 	}
 }
 
@@ -1585,6 +1603,11 @@ func loadConfigFromDefaults(ctx context.Context, config *Config, configDBPath, l
 		return nil, err
 	}
 
+	// Clear restart required flag on server startup
+	if err = config.ConfigStore.ClearRestartRequiredConfig(ctx); err != nil {
+		logger.Warn("failed to clear restart required config: %v", err)
+	}
+
 	// Load or create default client config
 	if err = loadDefaultClientConfig(ctx, config); err != nil {
 		return nil, err
@@ -2084,6 +2107,14 @@ func (c *Config) GetProviderConfigRaw(provider schemas.ModelProvider) (*configst
 // reads are atomic and won't cause panics.
 func (c *Config) ShouldAllowDirectKeys() bool {
 	return c.ClientConfig.AllowDirectKeys
+}
+
+// GetHeaderFilterConfig returns the global header filter configuration
+// Note: This method doesn't use locking for performance. In rare cases during
+// config updates, it may return stale data, but this is acceptable since pointer
+// reads are atomic and won't cause panics.
+func (c *Config) GetHeaderFilterConfig() *configstoreTables.GlobalHeaderFilterConfig {
+	return c.ClientConfig.HeaderFilterConfig
 }
 
 // GetLoadedPlugins returns the current snapshot of loaded plugins.

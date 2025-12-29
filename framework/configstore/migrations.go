@@ -128,6 +128,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddUseForBatchAPIColumnAndS3BucketsConfig(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddHeaderFilterConfigJSONColumn(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -2111,6 +2114,40 @@ func migrationAddUseForBatchAPIColumnAndS3BucketsConfig(ctx context.Context, db 
 
 	if err := m.Migrate(); err != nil {
 		return fmt.Errorf("error running use_for_batch_api migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddHeaderFilterConfigJSONColumn adds the header_filter_config_json column to the config_client table
+func migrationAddHeaderFilterConfigJSONColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_header_filter_config_json_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			mg := tx.Migrator()
+
+			if !mg.HasColumn(&tables.TableClientConfig{}, "header_filter_config_json") {
+				if err := mg.AddColumn(&tables.TableClientConfig{}, "header_filter_config_json"); err != nil {
+					return fmt.Errorf("failed to add header_filter_config_json column: %w", err)
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			mg := tx.Migrator()
+
+			if mg.HasColumn(&tables.TableClientConfig{}, "header_filter_config_json") {
+				if err := mg.DropColumn(&tables.TableClientConfig{}, "header_filter_config_json"); err != nil {
+					return fmt.Errorf("failed to drop header_filter_config_json column: %w", err)
+				}
+			}
+			return nil
+		},
+	}})
+
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error running header_filter_config_json migration: %s", err.Error())
 	}
 	return nil
 }

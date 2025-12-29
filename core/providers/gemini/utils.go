@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 
 	"github.com/bytedance/sonic"
@@ -214,6 +215,40 @@ func isImageMimeType(mimeType string) bool {
 	}
 
 	return false
+}
+
+// convertFileDataToBytes converts file data (data URL or base64) to raw bytes for Gemini API.
+// Returns the bytes and an extracted mime type (if found in data URL).
+func convertFileDataToBytes(fileData string) ([]byte, string) {
+	var dataBytes []byte
+	var mimeType string
+
+	// Check if it's a data URL (e.g., "data:application/pdf;base64,...")
+	if strings.HasPrefix(fileData, "data:") {
+		urlInfo := schemas.ExtractURLTypeInfo(fileData)
+
+		if urlInfo.DataURLWithoutPrefix != nil {
+			// Decode the base64 content
+			decoded, err := base64.StdEncoding.DecodeString(*urlInfo.DataURLWithoutPrefix)
+			if err == nil {
+				dataBytes = decoded
+				if urlInfo.MediaType != nil {
+					mimeType = *urlInfo.MediaType
+				}
+			}
+		}
+	} else {
+		// Try to decode as plain base64
+		decoded, err := base64.StdEncoding.DecodeString(fileData)
+		if err == nil {
+			dataBytes = decoded
+		} else {
+			// Not base64 - treat as plain text
+			dataBytes = []byte(fileData)
+		}
+	}
+
+	return dataBytes, mimeType
 }
 
 var (
@@ -577,6 +612,42 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []Content {
 						parts = append(parts, &Part{
 							Text: *block.Text,
 						})
+					} else if block.File != nil {
+						// Handle file blocks - use FileID if available (uploaded file)
+						if block.File.FileID != nil && *block.File.FileID != "" {
+							mimeType := "application/pdf"
+							if block.File.FileType != nil {
+								mimeType = *block.File.FileType
+							}
+							parts = append(parts, &Part{
+								FileData: &FileData{
+									FileURI:  *block.File.FileID,
+									MIMEType: mimeType,
+								},
+							})
+						} else if block.File.FileData != nil {
+							// Inline file data - convert to InlineData (Blob)
+							fileData := *block.File.FileData
+							mimeType := "application/pdf"
+							if block.File.FileType != nil {
+								mimeType = *block.File.FileType
+							}
+
+							// Convert file data to bytes for Gemini Blob
+							dataBytes, extractedMimeType := convertFileDataToBytes(fileData)
+							if extractedMimeType != "" {
+								mimeType = extractedMimeType
+							}
+
+							if len(dataBytes) > 0 {
+								parts = append(parts, &Part{
+									InlineData: &Blob{
+										MIMEType: mimeType,
+										Data:     dataBytes,
+									},
+								})
+							}
+						}
 					}
 					// Handle other content block types as needed
 				}
@@ -607,15 +678,19 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []Content {
 						},
 					}
 
-					// Preserve thought signature from extra_content (required for Gemini 3 Pro)
-					if toolCall.ExtraContent != nil {
-						if googleData, ok := toolCall.ExtraContent["google"].(map[string]interface{}); ok {
-							if thoughtSig, ok := googleData["thought_signature"].(string); ok {
+					// check in reasoning details array for thought signature with id tool_call_<callID>
+					if len(message.ChatAssistantMessage.ReasoningDetails) > 0 {
+						lookupID := fmt.Sprintf("tool_call_%s", callID)
+						for _, reasoningDetail := range message.ChatAssistantMessage.ReasoningDetails {
+							if reasoningDetail.ID != nil && *reasoningDetail.ID == lookupID &&
+								reasoningDetail.Type == schemas.BifrostReasoningDetailsTypeEncrypted &&
+								reasoningDetail.Signature != nil {
 								// Decode the base64 string to raw bytes
-								decoded, err := base64.StdEncoding.DecodeString(thoughtSig)
+								decoded, err := base64.StdEncoding.DecodeString(*reasoningDetail.Signature)
 								if err == nil {
 									part.ThoughtSignature = decoded
 								}
+								break
 							}
 						}
 					}

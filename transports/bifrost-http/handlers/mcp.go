@@ -80,7 +80,7 @@ func (h *MCPHandler) executeChatMCPTool(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Convert context
-	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, false)
+	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, false, h.store.GetHeaderFilterConfig())
 	defer cancel() // Ensure cleanup on function exit
 	if bifrostCtx == nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")

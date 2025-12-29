@@ -118,15 +118,6 @@ func (response *GenerateContentResponse) ToBifrostChatResponse() *schemas.Bifros
 						Function: function,
 					}
 
-					if part.ThoughtSignature != nil {
-						thoughtSig := base64.StdEncoding.EncodeToString(part.ThoughtSignature)
-						toolCall.ExtraContent = map[string]interface{}{
-							"google": map[string]interface{}{
-								"thought_signature": thoughtSig,
-							},
-						}
-					}
-
 					toolCalls = append(toolCalls, toolCall)
 				}
 
@@ -144,11 +135,22 @@ func (response *GenerateContentResponse) ToBifrostChatResponse() *schemas.Bifros
 				}
 				if part.ThoughtSignature != nil {
 					thoughtSig := base64.StdEncoding.EncodeToString(part.ThoughtSignature)
-					reasoningDetails = append(reasoningDetails, schemas.ChatReasoningDetails{
+					reasoningDetail := schemas.ChatReasoningDetails{
 						Index:     len(reasoningDetails),
 						Type:      schemas.BifrostReasoningDetailsTypeEncrypted,
 						Signature: &thoughtSig,
-					})
+					}
+
+					// check if part is tool call
+					if part.FunctionCall != nil {
+						callID := part.FunctionCall.Name
+						if part.FunctionCall.ID != "" {
+							callID = part.FunctionCall.ID
+						}
+						reasoningDetail.ID = schemas.Ptr(fmt.Sprintf("tool_call_%s", callID))
+					}
+
+					reasoningDetails = append(reasoningDetails, reasoningDetail)
 				}
 			}
 
