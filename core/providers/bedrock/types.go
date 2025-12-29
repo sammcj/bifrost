@@ -248,7 +248,7 @@ type BedrockReasoningContent struct {
 }
 
 type BedrockReasoningContentText struct {
-	Text      string  `json:"text"`
+	Text      *string `json:"text,omitempty"`
 	Signature *string `json:"signature,omitempty"`
 }
 
