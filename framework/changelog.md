@@ -1,1 +1,0 @@
-- feat: adds support for HeaderFilterConfig in configstore

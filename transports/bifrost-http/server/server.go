@@ -776,12 +776,13 @@ func (s *BifrostHTTPServer) GetPluginStatus(ctx context.Context) []schemas.Plugi
 }
 
 // SyncLoadedPlugin syncs the loaded plugin to the Bifrost core.
-func (s *BifrostHTTPServer) SyncLoadedPlugin(ctx context.Context, plugin schemas.Plugin) error {
+// configName is the name from the configuration/database, used for status tracking.
+func (s *BifrostHTTPServer) SyncLoadedPlugin(ctx context.Context, configName string, plugin schemas.Plugin) error {
 	if err := s.Client.ReloadPlugin(plugin); err != nil {
-		s.UpdatePluginStatus(plugin.GetName(), schemas.PluginStatusError, []string{fmt.Sprintf("error reloading plugin %s: %v", plugin.GetName(), err)})
+		s.UpdatePluginStatus(configName, schemas.PluginStatusError, []string{fmt.Sprintf("error reloading plugin %s: %v", configName, err)})
 		return err
 	}
-	s.UpdatePluginStatus(plugin.GetName(), schemas.PluginStatusActive, []string{fmt.Sprintf("plugin %s reloaded successfully", plugin.GetName())})
+	s.UpdatePluginStatus(configName, schemas.PluginStatusActive, []string{fmt.Sprintf("plugin %s reloaded successfully", configName)})
 	// CAS retry loop (matching bifrost.go pattern)
 	for {
 		oldPlugins := s.Config.Plugins.Load()
@@ -826,7 +827,7 @@ func (s *BifrostHTTPServer) ReloadPlugin(ctx context.Context, name string, path 
 		s.UpdatePluginStatus(name, schemas.PluginStatusError, []string{fmt.Sprintf("error loading plugin %s: %v", name, err)})
 		return err
 	}
-	return s.SyncLoadedPlugin(ctx, newPlugin)
+	return s.SyncLoadedPlugin(ctx, name, newPlugin)
 }
 
 // ReloadPricingManager reloads the pricing manager

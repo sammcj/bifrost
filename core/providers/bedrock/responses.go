@@ -671,13 +671,13 @@ func (chunk *BedrockStreamEvent) ToBifrostResponsesStream(sequenceNumber int, st
 				})
 
 				// If there's text content, also emit the delta
-				if reasoningDelta.Text != "" {
+				if reasoningDelta.Text != nil && *reasoningDelta.Text != "" {
 					deltaResponse := &schemas.BifrostResponsesStreamResponse{
 						Type:           schemas.ResponsesStreamResponseTypeReasoningSummaryTextDelta,
 						SequenceNumber: sequenceNumber + len(responses),
 						OutputIndex:    schemas.Ptr(outputIndex),
 						ContentIndex:   &contentBlockIndex,
-						Delta:          &reasoningDelta.Text,
+						Delta:          reasoningDelta.Text,
 						ItemID:         &itemID,
 					}
 					responses = append(responses, deltaResponse)
@@ -686,14 +686,14 @@ func (chunk *BedrockStreamEvent) ToBifrostResponsesStream(sequenceNumber int, st
 				return responses, nil, false
 			} else {
 				// Subsequent reasoning deltas - just emit the delta
-				if reasoningDelta.Text != "" {
+				if reasoningDelta.Text != nil && *reasoningDelta.Text != "" {
 					itemID := state.ItemIDs[outputIndex]
 					response := &schemas.BifrostResponsesStreamResponse{
 						Type:           schemas.ResponsesStreamResponseTypeReasoningSummaryTextDelta,
 						SequenceNumber: sequenceNumber,
 						OutputIndex:    schemas.Ptr(outputIndex),
 						ContentIndex:   &contentBlockIndex,
-						Delta:          &reasoningDelta.Text,
+						Delta:          reasoningDelta.Text,
 					}
 					if itemID != "" {
 						response.ItemID = &itemID
@@ -1074,7 +1074,7 @@ func ToBedrockConverseStreamResponse(bifrostResp *schemas.BifrostResponsesStream
 			// This is reasoning text delta
 			event.Delta = &BedrockContentBlockDelta{
 				ReasoningContent: &BedrockReasoningContentText{
-					Text: *bifrostResp.Delta,
+					Text: bifrostResp.Delta,
 				},
 			}
 		} else {
@@ -2665,7 +2665,7 @@ func convertSingleBedrockMessageToBifrostMessages(ctx *context.Context, msg *Bed
 			if block.ReasoningContent.ReasoningText != nil {
 				reasoningContentBlocks = append(reasoningContentBlocks, schemas.ResponsesMessageContentBlock{
 					Type:      schemas.ResponsesOutputMessageContentTypeReasoning,
-					Text:      &block.ReasoningContent.ReasoningText.Text,
+					Text:      block.ReasoningContent.ReasoningText.Text,
 					Signature: block.ReasoningContent.ReasoningText.Signature,
 				})
 			}
@@ -2856,7 +2856,7 @@ func convertBifrostReasoningToBedrockReasoning(msg *schemas.ResponsesMessage) []
 				reasoningBlock := BedrockContentBlock{
 					ReasoningContent: &BedrockReasoningContent{
 						ReasoningText: &BedrockReasoningContentText{
-							Text:      *block.Text,
+							Text:      block.Text,
 							Signature: block.Signature,
 						},
 					},
@@ -2870,7 +2870,7 @@ func convertBifrostReasoningToBedrockReasoning(msg *schemas.ResponsesMessage) []
 				reasoningBlock := BedrockContentBlock{
 					ReasoningContent: &BedrockReasoningContent{
 						ReasoningText: &BedrockReasoningContentText{
-							Text: reasoningContent.Text,
+							Text: &reasoningContent.Text,
 						},
 					},
 				}
@@ -2883,7 +2883,7 @@ func convertBifrostReasoningToBedrockReasoning(msg *schemas.ResponsesMessage) []
 			reasoningBlock := BedrockContentBlock{
 				ReasoningContent: &BedrockReasoningContent{
 					ReasoningText: &BedrockReasoningContentText{
-						Text: encryptedText,
+						Text: &encryptedText,
 					},
 				},
 			}
@@ -2921,7 +2921,7 @@ func convertBifrostResponsesMessageContentBlocksToBedrockContentBlocks(content s
 				if block.Text != nil {
 					bedrockBlock.ReasoningContent = &BedrockReasoningContent{
 						ReasoningText: &BedrockReasoningContentText{
-							Text:      *block.Text,
+							Text:      block.Text,
 							Signature: block.Signature,
 						},
 					}
