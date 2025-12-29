@@ -18,7 +18,7 @@ type TableKey struct {
 	KeyID      string    `gorm:"type:varchar(255);uniqueIndex:idx_key_id;not null" json:"key_id"` // UUID from schemas.Key
 	Value      string    `gorm:"type:text;not null" json:"value"`
 	ModelsJSON string    `gorm:"type:text" json:"-"` // JSON serialized []string
-	Weight     float64   `gorm:"default:1.0" json:"weight"`
+	Weight     *float64  `json:"weight"`
 	Enabled    *bool     `gorm:"default:true" json:"enabled,omitempty"`
 	CreatedAt  time.Time `gorm:"index;not null" json:"created_at"`
 	UpdatedAt  time.Time `gorm:"index;not null" json:"updated_at"`

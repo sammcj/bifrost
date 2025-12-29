@@ -430,7 +430,7 @@ func GenerateVirtualKeyHash(vk tables.TableVirtualKey) (string, error) {
 			if ri != rj {
 				return ri < rj
 			}
-			return sortedProviderConfigs[i].Weight < sortedProviderConfigs[j].Weight
+			return getWeight(sortedProviderConfigs[i].Weight) < getWeight(sortedProviderConfigs[j].Weight)
 		})
 
 		providerConfigsForHash := make([]VirtualKeyProviderConfigHashInput, len(sortedProviderConfigs))
@@ -449,7 +449,7 @@ func GenerateVirtualKeyHash(vk tables.TableVirtualKey) (string, error) {
 
 			providerConfigsForHash[i] = VirtualKeyProviderConfigHashInput{
 				Provider:      pc.Provider,
-				Weight:        pc.Weight,
+				Weight:        getWeight(pc.Weight),
 				AllowedModels: sortedAllowedModels,
 				BudgetID:      pc.BudgetID,
 				RateLimitID:   pc.RateLimitID,

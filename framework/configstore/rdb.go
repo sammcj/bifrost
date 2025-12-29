@@ -27,6 +27,15 @@ type RDBConfigStore struct {
 	logger schemas.Logger
 }
 
+// getWeight safely dereferences a *float64 weight pointer, returning 1.0 as default if nil.
+// This allows distinguishing between "not set" (nil -> 1.0) and "explicitly set to 0" (0.0).
+func getWeight(w *float64) float64 {
+	if w == nil {
+		return 1.0
+	}
+	return *w
+}
+
 // UpdateClientConfig updates the client configuration in the database.
 func (s *RDBConfigStore) UpdateClientConfig(ctx context.Context, config *ClientConfig) error {
 	dbConfig := tables.TableClientConfig{
@@ -252,7 +261,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 				Name:             key.Name,
 				Value:            key.Value,
 				Models:           key.Models,
-				Weight:           key.Weight,
+				Weight:           &key.Weight,
 				Enabled:          key.Enabled,
 				UseForBatchAPI:   key.UseForBatchAPI,
 				AzureKeyConfig:   key.AzureKeyConfig,
@@ -390,7 +399,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 			Name:             key.Name,
 			Value:            key.Value,
 			Models:           key.Models,
-			Weight:           key.Weight,
+			Weight:           &key.Weight,
 			Enabled:          key.Enabled,
 			UseForBatchAPI:   key.UseForBatchAPI,
 			AzureKeyConfig:   key.AzureKeyConfig,
@@ -510,7 +519,7 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 			Name:             key.Name,
 			Value:            key.Value,
 			Models:           key.Models,
-			Weight:           key.Weight,
+			Weight:           &key.Weight,
 			Enabled:          key.Enabled,
 			UseForBatchAPI:   key.UseForBatchAPI,
 			AzureKeyConfig:   key.AzureKeyConfig,
@@ -679,7 +688,7 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 				Name:             dbKey.Name,
 				Value:            processedValue,
 				Models:           dbKey.Models,
-				Weight:           dbKey.Weight,
+				Weight:           getWeight(dbKey.Weight),
 				Enabled:          dbKey.Enabled,
 				UseForBatchAPI:   dbKey.UseForBatchAPI,
 				AzureKeyConfig:   azureConfig,
@@ -1388,7 +1397,7 @@ func (s *RDBConfigStore) GetAllRedactedKeys(ctx context.Context, ids []string) (
 			ID:     key.KeyID,
 			Name:   key.Name,
 			Models: models,
-			Weight: key.Weight,
+			Weight: getWeight(key.Weight),
 		}
 	}
 	return redactedKeys, nil
@@ -1502,6 +1511,49 @@ func (s *RDBConfigStore) CreateVirtualKeyProviderConfig(ctx context.Context, vir
 	// Store keys before create
 	keysToAssociate := virtualKeyProviderConfig.Keys
 
+	// Resolve keys by name/key_id if they don't have database IDs
+	// This handles config file inputs that only specify name
+	if len(keysToAssociate) > 0 {
+		resolvedKeys := make([]tables.TableKey, 0, len(keysToAssociate))
+		var unresolvedKeys []string
+		for i, k := range keysToAssociate {
+			// If key already has a database ID (from UI), use it directly
+			if k.ID > 0 {
+				resolvedKeys = append(resolvedKeys, k)
+				continue
+			}
+			// Otherwise resolve by KeyID or Name (from config file)
+			var dbKey tables.TableKey
+			var resolved bool
+			if k.KeyID != "" {
+				if err := txDB.WithContext(ctx).Where("key_id = ?", k.KeyID).First(&dbKey).Error; err == nil {
+					resolvedKeys = append(resolvedKeys, dbKey)
+					resolved = true
+				}
+			}
+			if !resolved && k.Name != "" {
+				if err := txDB.WithContext(ctx).Where("name = ? AND provider = ?", k.Name, virtualKeyProviderConfig.Provider).First(&dbKey).Error; err == nil {
+					resolvedKeys = append(resolvedKeys, dbKey)
+					resolved = true
+				}
+			}
+			if !resolved {
+				// Collect identifier for unresolved key
+				if k.KeyID != "" {
+					unresolvedKeys = append(unresolvedKeys, fmt.Sprintf("key_id=%s", k.KeyID))
+				} else if k.Name != "" {
+					unresolvedKeys = append(unresolvedKeys, fmt.Sprintf("name=%s", k.Name))
+				} else {
+					unresolvedKeys = append(unresolvedKeys, fmt.Sprintf("key[%d]", i))
+				}
+			}
+		}
+		if len(unresolvedKeys) > 0 {
+			return &ErrUnresolvedKeys{Identifiers: unresolvedKeys}
+		}
+		keysToAssociate = resolvedKeys
+	}
+
 	if err := txDB.WithContext(ctx).Create(virtualKeyProviderConfig).Error; err != nil {
 		return s.parseGormError(err)
 	}
@@ -1526,6 +1578,49 @@ func (s *RDBConfigStore) UpdateVirtualKeyProviderConfig(ctx context.Context, vir
 
 	// Store keys before save
 	keysToAssociate := virtualKeyProviderConfig.Keys
+
+	// Resolve keys by name/key_id if they don't have database IDs
+	// This handles config file inputs that only specify name
+	if len(keysToAssociate) > 0 {
+		resolvedKeys := make([]tables.TableKey, 0, len(keysToAssociate))
+		var unresolvedKeys []string
+		for i, k := range keysToAssociate {
+			// If key already has a database ID (from UI), use it directly
+			if k.ID > 0 {
+				resolvedKeys = append(resolvedKeys, k)
+				continue
+			}
+			// Otherwise resolve by KeyID or Name (from config file)
+			var dbKey tables.TableKey
+			var resolved bool
+			if k.KeyID != "" {
+				if err := txDB.WithContext(ctx).Where("key_id = ?", k.KeyID).First(&dbKey).Error; err == nil {
+					resolvedKeys = append(resolvedKeys, dbKey)
+					resolved = true
+				}
+			}
+			if !resolved && k.Name != "" {
+				if err := txDB.WithContext(ctx).Where("name = ? AND provider = ?", k.Name, virtualKeyProviderConfig.Provider).First(&dbKey).Error; err == nil {
+					resolvedKeys = append(resolvedKeys, dbKey)
+					resolved = true
+				}
+			}
+			if !resolved {
+				// Collect identifier for unresolved key
+				if k.KeyID != "" {
+					unresolvedKeys = append(unresolvedKeys, fmt.Sprintf("key_id=%s", k.KeyID))
+				} else if k.Name != "" {
+					unresolvedKeys = append(unresolvedKeys, fmt.Sprintf("name=%s", k.Name))
+				} else {
+					unresolvedKeys = append(unresolvedKeys, fmt.Sprintf("key[%d]", i))
+				}
+			}
+		}
+		if len(unresolvedKeys) > 0 {
+			return &ErrUnresolvedKeys{Identifiers: unresolvedKeys}
+		}
+		keysToAssociate = resolvedKeys
+	}
 
 	if err := txDB.WithContext(ctx).Save(virtualKeyProviderConfig).Error; err != nil {
 		return s.parseGormError(err)

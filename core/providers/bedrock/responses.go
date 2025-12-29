@@ -2934,9 +2934,9 @@ func convertBifrostResponsesMessageContentBlocksToBedrockContentBlocks(content s
 						Source: &BedrockDocumentSourceData{},
 					}
 
-					// Set filename
+					// Set filename (normalized for Bedrock)
 					if block.ResponsesInputMessageContentBlockFile.Filename != nil {
-						doc.Name = *block.ResponsesInputMessageContentBlockFile.Filename
+						doc.Name = normalizeBedrockFilename(*block.ResponsesInputMessageContentBlockFile.Filename)
 					}
 
 					// Determine format: text or PDF based on FileType

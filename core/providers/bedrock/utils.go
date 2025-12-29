@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/bytedance/sonic"
@@ -12,6 +13,37 @@ import (
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 )
+
+var (
+	invalidCharRegex = regexp.MustCompile(`[^a-zA-Z0-9\s\-\(\)\[\]]`)
+	multiSpaceRegex  = regexp.MustCompile(`\s{2,}`)
+)
+
+// normalizeBedrockFilename normalizes a filename to meet Bedrock's requirements:
+// - Only alphanumeric characters, whitespace, hyphens, parentheses, and square brackets
+// - No more than one consecutive whitespace character
+// - Trims leading and trailing whitespace
+func normalizeBedrockFilename(filename string) string {
+	if filename == "" {
+		return "document"
+	}
+
+	// Replace invalid characters with underscores
+	normalized := invalidCharRegex.ReplaceAllString(filename, "_")
+
+	// Replace multiple consecutive whitespace with a single space
+	normalized = multiSpaceRegex.ReplaceAllString(normalized, " ")
+
+	// Trim leading and trailing whitespace
+	normalized = strings.TrimSpace(normalized)
+
+	// If the result is empty after normalization, return a default name
+	if normalized == "" {
+		return "document"
+	}
+
+	return normalized
+}
 
 // convertParameters handles parameter conversion
 func convertChatParameters(ctx *context.Context, bifrostReq *schemas.BifrostChatRequest, bedrockReq *BedrockConverseRequest) error {
@@ -520,9 +552,9 @@ func convertContentBlock(block schemas.ChatContentBlock) ([]BedrockContentBlock,
 			Source: &BedrockDocumentSourceData{},
 		}
 
-		// Set filename
+		// Set filename (normalized for Bedrock)
 		if block.File.Filename != nil {
-			documentSource.Name = *block.File.Filename
+			documentSource.Name = normalizeBedrockFilename(*block.File.Filename)
 		}
 
 		// Convert MIME type to Bedrock format (pdf or txt)
