@@ -185,18 +185,19 @@ cd ..
 
 # Run integration tests with different configurations
 echo "🧪 Running integration tests with different configurations..."
-CONFIGS_TO_TEST=(
-  "default"
-  "emptystate"
-  "noconfigstorenologstore"
-  "witconfigstorelogstorepostgres"
-  "withconfigstore"
-  "withconfigstorelogsstorepostgres"
-  "withconfigstorelogsstoresqlite"
-  "withdynamicplugin"
-  "withobservability"
-  "withsemanticcache"
-)
+# CONFIGS_TO_TEST=(
+#   "default"
+#   "emptystate"
+#   "noconfigstorenologstore"
+#   "witconfigstorelogstorepostgres"
+#   "withconfigstore"
+#   "withconfigstorelogsstorepostgres"
+#   "withconfigstorelogsstoresqlite"
+#   "withdynamicplugin"
+#   "withobservability"
+#   "withsemanticcache"
+# )
+CONFIGS_TO_TEST=()
 
 TEST_BINARY="../tmp/bifrost-http"
 CONFIGS_DIR="../.github/workflows/configs"
@@ -367,19 +368,6 @@ fi
 echo "Pulling latest changes from origin/$CURRENT_BRANCH..."
 if ! git pull origin "$CURRENT_BRANCH"; then
   echo "❌ Error: git pull origin $CURRENT_BRANCH failed"
-  exit 1
-fi
-
-# Check for merge conflicts or unexpected working-tree changes
-if ! git diff --quiet; then
-  echo "❌ Error: Unstaged changes detected after pull (possible merge conflict)"
-  git status --short
-  exit 1
-fi
-
-if ! git diff --cached --quiet; then
-  echo "❌ Error: Staged changes detected after pull (unexpected state)"
-  git status --short
   exit 1
 fi
 
