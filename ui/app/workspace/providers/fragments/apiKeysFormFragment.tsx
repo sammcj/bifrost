@@ -111,7 +111,7 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 							<FormControl>
 								<Input
 									placeholder="1.0"
-									className="w-[220px]"
+									className="w-[260px]"
 									value={field.value === undefined || field.value === null ? "" : String(field.value)}
 									onChange={(e) => {
 										// Keep as string during typing to allow partial input

@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
+	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/migrator"
@@ -1249,7 +1250,7 @@ func migrationMoveKeysToProviderConfig(ctx context.Context, db *gorm.DB) error {
 								providerConfig = tables.TableVirtualKeyProviderConfig{
 									VirtualKeyID:  assoc.VirtualKeyID,
 									Provider:      key.Provider,
-									Weight:        1.0,
+									Weight:        bifrost.Ptr(1.0),
 									AllowedModels: []string{},
 								}
 								if err := tx.Create(&providerConfig).Error; err != nil {
@@ -1425,12 +1426,13 @@ func migrationAddConfigHashColumn(ctx context.Context, db *gorm.DB) error {
 				}
 				for _, key := range keys {
 					if key.ConfigHash == "" {
+						
 						// Convert to schemas.Key and generate hash
 						schemaKey := schemas.Key{
 							Name:             key.Name,
 							Value:            key.Value,
 							Models:           key.Models,
-							Weight:           key.Weight,
+							Weight:           getWeight(key.Weight),
 							AzureKeyConfig:   key.AzureKeyConfig,
 							VertexKeyConfig:  key.VertexKeyConfig,
 							BedrockKeyConfig: key.BedrockKeyConfig,

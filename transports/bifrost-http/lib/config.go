@@ -46,6 +46,15 @@ const (
 	MaxRetryBackoff = 1000000 * time.Millisecond // Maximum retry backoff: 1000000ms (1000 seconds)
 )
 
+// getWeight safely dereferences a *float64 weight pointer, returning 1.0 as default if nil.
+// This allows distinguishing between "not set" (nil -> 1.0) and "explicitly set to 0" (0.0).
+func getWeight(w *float64) float64 {
+	if w == nil {
+		return 1.0
+	}
+	return *w
+}
+
 // ConfigData represents the configuration data for the Bifrost HTTP transport.
 // It contains the client configuration, provider configurations, MCP configuration,
 // vector store configuration, config store configuration, and logs store configuration.
@@ -112,7 +121,7 @@ func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 							Name:             tableKey.Name,
 							Value:            tableKey.Value,
 							Models:           tableKey.Models,
-							Weight:           tableKey.Weight,
+							Weight:           getWeight(tableKey.Weight),
 							Enabled:          tableKey.Enabled,
 							UseForBatchAPI:   tableKey.UseForBatchAPI,
 							AzureKeyConfig:   tableKey.AzureKeyConfig,
@@ -2578,12 +2587,16 @@ func (c *Config) GetAllKeys() ([]configstoreTables.TableKey, error) {
 	keys := make([]configstoreTables.TableKey, 0)
 	for providerKey, provider := range c.Providers {
 		for _, key := range provider.Keys {
+			models := key.Models
+			if models == nil {
+				models = []string{}
+			}			
 			keys = append(keys, configstoreTables.TableKey{
 				KeyID:    key.ID,
 				Name:     key.Name,
 				Value:    "",
-				Models:   key.Models,
-				Weight:   key.Weight,
+				Models:   models,
+				Weight:   &key.Weight,
 				Provider: string(providerKey),
 			})
 		}
