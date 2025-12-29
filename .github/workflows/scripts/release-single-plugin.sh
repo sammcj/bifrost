@@ -54,19 +54,6 @@ if ! git pull origin "$CURRENT_BRANCH"; then
   exit 1
 fi
 
-# Check for merge conflicts or unexpected working-tree changes
-if ! git diff --quiet; then
-  echo "❌ Error: Unstaged changes detected after pull (possible merge conflict)"
-  git status --short
-  exit 1
-fi
-
-if ! git diff --cached --quiet; then
-  echo "❌ Error: Staged changes detected after pull (unexpected state)"
-  git status --short
-  exit 1
-fi
-
 echo "🔌 Releasing plugin: $PLUGIN_NAME"
 echo "🔧 Core version: $CORE_VERSION"
 echo "🔧 Framework version: $FRAMEWORK_VERSION"
@@ -102,22 +89,22 @@ if [ -f "go.mod" ]; then
   go build ./...
 
   # Run tests with coverage if any exist
-  # if go list ./... | grep -q .; then
-  #   echo "🧪 Running plugin tests with coverage..."
-  #   go test -coverprofile=coverage.txt -coverpkg=./... ./...
+  if go list ./... | grep -q .; then
+    echo "🧪 Running plugin tests with coverage..."
+    go test -coverprofile=coverage.txt -coverpkg=./... ./...
     
-  #   # Upload coverage to Codecov
-  #   if [ -n "${CODECOV_TOKEN:-}" ]; then
-  #     echo "📊 Uploading coverage to Codecov..."
-  #     curl -Os https://uploader.codecov.io/latest/linux/codecov
-  #     chmod +x codecov
-  #     ./codecov -t "$CODECOV_TOKEN" -f coverage.txt -F "plugin-${PLUGIN_NAME}"
-  #     rm -f codecov coverage.txt
-  #   else
-  #     echo "ℹ️ CODECOV_TOKEN not set, skipping coverage upload"
-  #     rm -f coverage.txt
-  #   fi
-  # fi
+    # Upload coverage to Codecov
+    if [ -n "${CODECOV_TOKEN:-}" ]; then
+      echo "📊 Uploading coverage to Codecov..."
+      curl -Os https://uploader.codecov.io/latest/linux/codecov
+      chmod +x codecov
+      ./codecov -t "$CODECOV_TOKEN" -f coverage.txt -F "plugin-${PLUGIN_NAME}"
+      rm -f codecov coverage.txt
+    else
+      echo "ℹ️ CODECOV_TOKEN not set, skipping coverage upload"
+      rm -f coverage.txt
+    fi
+  fi
 
   echo "✅ Plugin $PLUGIN_NAME build validation successful"
 else

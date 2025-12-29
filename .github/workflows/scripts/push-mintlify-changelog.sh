@@ -248,19 +248,6 @@ if ! git pull origin "$CURRENT_BRANCH"; then
   exit 1
 fi
 
-# Check for merge conflicts or unexpected working-tree changes
-if ! git diff --quiet; then
-  echo "❌ Error: Unstaged changes detected after pull (possible merge conflict)"
-  git status --short
-  exit 1
-fi
-
-if ! git diff --cached --quiet; then
-  echo "❌ Error: Staged changes detected after pull (unexpected state)"
-  git status --short
-  exit 1
-fi
-
 # Commit and push changes
 git add docs/changelogs/$VERSION.mdx
 git add docs/docs.json
