@@ -26,7 +26,31 @@ TAG_NAME="framework/${VERSION}"
 echo "📦 Releasing framework $VERSION..."
 
 # Ensure we have the latest version
-git pull origin
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$CURRENT_BRANCH" = "HEAD" ]; then
+  # In detached HEAD state (common in CI), use GITHUB_REF_NAME or default to main
+  CURRENT_BRANCH="${GITHUB_REF_NAME:-main}"
+fi
+
+echo "Pulling latest changes from origin/$CURRENT_BRANCH..."
+if ! git pull origin "$CURRENT_BRANCH"; then
+  echo "❌ Error: git pull origin $CURRENT_BRANCH failed"
+  exit 1
+fi
+
+# Check for merge conflicts or unexpected working-tree changes
+if ! git diff --quiet; then
+  echo "❌ Error: Unstaged changes detected after pull (possible merge conflict)"
+  git status --short
+  exit 1
+fi
+
+if ! git diff --cached --quiet; then
+  echo "❌ Error: Staged changes detected after pull (unexpected state)"
+  git status --short
+  exit 1
+fi
+
 # Fetching all tags
 git fetch --tags >/dev/null 2>&1 || true
 

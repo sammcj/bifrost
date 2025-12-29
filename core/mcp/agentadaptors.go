@@ -18,10 +18,10 @@ import (
 //   - Results are converted back to the original API format for the response
 //
 // This design ensures that:
-//   1. Tool execution logic is format-agnostic
-//   2. Both APIs have feature parity
-//   3. Conversions are localized to adapters
-//   4. The agent loop remains API-neutral
+//  1. Tool execution logic is format-agnostic
+//  2. Both APIs have feature parity
+//  3. Conversions are localized to adapters
+//  4. The agent loop remains API-neutral
 type agentAPIAdapter interface {
 	// Extract conversation history from the original request
 	getConversationHistory() []interface{}
@@ -140,7 +140,12 @@ func (c *chatAPIAdapter) createNewRequest(conversation []interface{}) interface{
 	// Convert conversation back to ChatMessage slice
 	chatMessages := make([]schemas.ChatMessage, 0, len(conversation))
 	for _, msg := range conversation {
-		chatMessages = append(chatMessages, msg.(schemas.ChatMessage))
+		if msg == nil {
+			continue
+		}
+		if chatMessage, ok := msg.(schemas.ChatMessage); ok {
+			chatMessages = append(chatMessages, chatMessage)
+		}
 	}
 
 	return &schemas.BifrostChatRequest{

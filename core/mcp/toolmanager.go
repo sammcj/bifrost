@@ -29,7 +29,7 @@ type ToolsManager struct {
 	// Function to fetch a new request ID for each tool call result message in agent mode,
 	// this is used to ensure that the tool call result messages are unique and can be tracked in plugins or by the user.
 	// This id is attached to ctx.Value(schemas.BifrostContextKeyRequestID) in the agent mode.
-	// If not provider, same request ID is used for all tool call result messages without any overrides.
+	// If not provided, same request ID is used for all tool call result messages without any overrides.
 	fetchNewRequestIDFunc func(ctx context.Context) string
 }
 
@@ -138,7 +138,6 @@ func (m *ToolsManager) GetAvailableTools(ctx context.Context) []schemas.ChatTool
 // Parameters:
 //   - existingTools: List of existing tools in the request
 //   - integrationUserAgent: Integration user agent string (e.g., "claude-cli")
-//   - availableToolsPerClient: Map of client names to their available tools (for reverse pattern matching)
 //
 // Returns:
 //   - map[string]bool: Map of tool names/patterns to check against

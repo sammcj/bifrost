@@ -243,19 +243,6 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		updatedConfig.DropExcessRequests = payload.ClientConfig.DropExcessRequests
 	}
 
-	// Validate MCP tool manager config values before updating
-	if payload.ClientConfig.MCPAgentDepth <= 0 {
-		logger.Warn("mcp_agent_depth must be greater than 0")
-		SendError(ctx, fasthttp.StatusBadRequest, "mcp_agent_depth must be greater than 0")
-		return
-	}
-
-	if payload.ClientConfig.MCPToolExecutionTimeout <= 0 {
-		logger.Warn("mcp_tool_execution_timeout must be greater than 0")
-		SendError(ctx, fasthttp.StatusBadRequest, "mcp_tool_execution_timeout must be greater than 0")
-		return
-	}
-
 	if payload.ClientConfig.MCPCodeModeBindingLevel != "" {
 		if payload.ClientConfig.MCPCodeModeBindingLevel != string(schemas.CodeModeBindingLevelServer) && payload.ClientConfig.MCPCodeModeBindingLevel != string(schemas.CodeModeBindingLevelTool) {
 			logger.Warn("mcp_code_mode_binding_level must be 'server' or 'tool'")
@@ -267,11 +254,21 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	shouldReloadMCPToolManagerConfig := false
 
 	if payload.ClientConfig.MCPAgentDepth != currentConfig.MCPAgentDepth {
+		if payload.ClientConfig.MCPAgentDepth <= 0 {
+			logger.Warn("mcp_agent_depth must be greater than 0")
+			SendError(ctx, fasthttp.StatusBadRequest, "mcp_agent_depth must be greater than 0")
+			return
+		}
 		updatedConfig.MCPAgentDepth = payload.ClientConfig.MCPAgentDepth
 		shouldReloadMCPToolManagerConfig = true
 	}
 
 	if payload.ClientConfig.MCPToolExecutionTimeout != currentConfig.MCPToolExecutionTimeout {
+		if payload.ClientConfig.MCPToolExecutionTimeout <= 0 {
+			logger.Warn("mcp_tool_execution_timeout must be greater than 0")
+			SendError(ctx, fasthttp.StatusBadRequest, "mcp_tool_execution_timeout must be greater than 0")
+			return
+		}
 		updatedConfig.MCPToolExecutionTimeout = payload.ClientConfig.MCPToolExecutionTimeout
 		shouldReloadMCPToolManagerConfig = true
 	}

@@ -13,7 +13,13 @@ import {
 } from "@/components/ui/alertDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdownMenu";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdownMenu";
 import { DottedSeparator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
@@ -156,8 +162,11 @@ export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDet
 			}
 
 			const requestBodyJson = JSON.stringify(requestBody, null, 2);
-			navigator.clipboard.writeText(requestBodyJson);
-			toast.success("Request body copied to clipboard");
+			navigator.clipboard.writeText(requestBodyJson).then(() => {
+				toast.success("Request body copied to clipboard");
+			}).catch((error) => {
+				toast.error("Failed to copy request body");
+			});
 		} catch (error) {
 			toast.error("Failed to copy request body");
 		}

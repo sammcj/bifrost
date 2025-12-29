@@ -41,7 +41,7 @@ type InMemoryStore interface {
 
 type BaseGovernancePlugin interface {
 	GetName() string
-	TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error)
+	HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware
 	PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error)
 	PostHook(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)
 	Cleanup() error
@@ -291,7 +291,7 @@ func (p *GovernancePlugin) HTTPTransportMiddleware() schemas.BifrostHTTPMiddlewa
 			var payload map[string]any
 			err = sonic.Unmarshal(ctx.Request.Body(), &payload)
 			if err != nil {
-				p.logger.Error("failed to marshal request body to check for virtual key: %v", err)
+				p.logger.Error("failed to unmarshal request body to check for virtual key: %v", err)
 				next(ctx)
 				return
 			}

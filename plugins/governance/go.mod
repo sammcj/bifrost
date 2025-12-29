@@ -5,9 +5,9 @@ go 1.25.5
 require gorm.io/gorm v1.31.1
 
 require (
+	github.com/bytedance/sonic v1.14.2
 	github.com/maximhq/bifrost/core v1.2.42
 	github.com/maximhq/bifrost/framework v1.1.52
-	github.com/bytedance/sonic v1.14.2
 	github.com/stretchr/testify v1.11.1
 	github.com/valyala/fasthttp v1.68.0
 )

@@ -149,9 +149,9 @@ build: build-ui ## Build bifrost-http binary
 		echo "$(GREEN)╚═══════════════════════════════════════╝$(NC)"; \
 	fi
 	@if [ -n "$(DYNAMIC)" ]; then \
-		echo "$(YELLOW)Note: This will create a dynamically linked build.$(NC)"; \		
+		echo "$(YELLOW)Note: This will create a dynamically linked build.$(NC)"; \
 	else \
-		echo "$(YELLOW)Note: This will create a statically linked build.$(NC)"; \		
+		echo "$(YELLOW)Note: This will create a statically linked build.$(NC)"; \
 	fi
 	@mkdir -p ./tmp
 	@TARGET_OS="$(GOOS)"; \

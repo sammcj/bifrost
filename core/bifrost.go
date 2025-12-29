@@ -3351,7 +3351,7 @@ func (p *PluginPipeline) RunPreHooks(ctx *context.Context, req *schemas.BifrostR
 			p.tracer.SetAttribute(handle, "error", err.Error())
 			p.tracer.EndSpan(handle, schemas.SpanStatusError, err.Error())
 			p.preHookErrors = append(p.preHookErrors, err)
-			p.logger.Warn("error in PreHook for plugin %s: %v", pluginName, err)
+			p.logger.Warn("error in PreHook for plugin %s: %s", pluginName, err.Error())
 		} else if shortCircuit != nil {
 			p.tracer.SetAttribute(handle, "short_circuit", true)
 			p.tracer.EndSpan(handle, schemas.SpanStatusOk, "short-circuit")

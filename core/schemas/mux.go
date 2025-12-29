@@ -193,8 +193,39 @@ func (cm *ChatMessage) ToResponsesToolMessage() *ResponsesMessage {
 			respBlocks := make([]ResponsesMessageContentBlock, len(cm.Content.ContentBlocks))
 			for i, block := range cm.Content.ContentBlocks {
 				respBlocks[i] = ResponsesMessageContentBlock{
-					Type: ResponsesMessageContentBlockType(block.Type),
-					Text: block.Text,
+					Type:         ResponsesMessageContentBlockType(block.Type),
+					Text:         block.Text,
+					CacheControl: block.CacheControl,
+				}
+
+				// Map image
+				if block.ImageURLStruct != nil {
+					respBlocks[i].ResponsesInputMessageContentBlockImage = &ResponsesInputMessageContentBlockImage{
+						ImageURL: &block.ImageURLStruct.URL,
+						Detail:   block.ImageURLStruct.Detail,
+					}
+				}
+
+				// Map file
+				if block.File != nil {
+					respBlocks[i].FileID = block.File.FileID
+					respBlocks[i].ResponsesInputMessageContentBlockFile = &ResponsesInputMessageContentBlockFile{
+						FileData: block.File.FileData,
+						Filename: block.File.Filename,
+						FileType: block.File.FileType,
+					}
+				}
+
+				// Map audio
+				if block.InputAudio != nil {
+					format := ""
+					if block.InputAudio.Format != nil {
+						format = *block.InputAudio.Format
+					}
+					respBlocks[i].Audio = &ResponsesInputMessageContentBlockAudio{
+						Data:   block.InputAudio.Data,
+						Format: format,
+					}
 				}
 			}
 			respMsg.ResponsesToolMessage.Output = &ResponsesToolMessageOutputStruct{
@@ -527,17 +558,55 @@ func (cm *ChatMessage) ToResponsesMessages() []ResponsesMessage {
 
 		// If tool output content exists, add it to function_call_output
 		// For function_call_output, get content from cm.Content since rm.Content is not set
-		var outputContent *string
-		if messageType == ResponsesMessageTypeFunctionCallOutput {
-			// Get content directly from ChatMessage for function_call_output
-			if cm.Content != nil && cm.Content.ContentStr != nil && *cm.Content.ContentStr != "" {
-				outputContent = cm.Content.ContentStr
-			}
-		}
+		if messageType == ResponsesMessageTypeFunctionCallOutput && cm.Content != nil {
+			// Prefer ContentStr if present
+			if cm.Content.ContentStr != nil && *cm.Content.ContentStr != "" {
+				rm.ResponsesToolMessage.Output = &ResponsesToolMessageOutputStruct{
+					ResponsesToolCallOutputStr: cm.Content.ContentStr,
+				}
+			} else if len(cm.Content.ContentBlocks) > 0 {
+				// For structured content blocks, convert to ResponsesMessageContentBlock
+				respBlocks := make([]ResponsesMessageContentBlock, len(cm.Content.ContentBlocks))
+				for i, block := range cm.Content.ContentBlocks {
+					respBlocks[i] = ResponsesMessageContentBlock{
+						Type:         ResponsesMessageContentBlockType(block.Type),
+						Text:         block.Text,
+						CacheControl: block.CacheControl,
+					}
 
-		if outputContent != nil {
-			rm.ResponsesToolMessage.Output = &ResponsesToolMessageOutputStruct{
-				ResponsesToolCallOutputStr: outputContent,
+					// Map image
+					if block.ImageURLStruct != nil {
+						respBlocks[i].ResponsesInputMessageContentBlockImage = &ResponsesInputMessageContentBlockImage{
+							ImageURL: &block.ImageURLStruct.URL,
+							Detail:   block.ImageURLStruct.Detail,
+						}
+					}
+
+					// Map file
+					if block.File != nil {
+						respBlocks[i].FileID = block.File.FileID
+						respBlocks[i].ResponsesInputMessageContentBlockFile = &ResponsesInputMessageContentBlockFile{
+							FileData: block.File.FileData,
+							Filename: block.File.Filename,
+							FileType: block.File.FileType,
+						}
+					}
+
+					// Map audio
+					if block.InputAudio != nil {
+						format := ""
+						if block.InputAudio.Format != nil {
+							format = *block.InputAudio.Format
+						}
+						respBlocks[i].Audio = &ResponsesInputMessageContentBlockAudio{
+							Data:   block.InputAudio.Data,
+							Format: format,
+						}
+					}
+				}
+				rm.ResponsesToolMessage.Output = &ResponsesToolMessageOutputStruct{
+					ResponsesFunctionToolCallOutputBlocks: respBlocks,
+				}
 			}
 		}
 	}
