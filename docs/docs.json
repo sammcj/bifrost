@@ -132,7 +132,8 @@
             "pages": [
               "plugins/getting-started",
               "plugins/building-dynamic-binary",
-              "plugins/writing-plugin"
+              "plugins/writing-plugin",
+              "plugins/migration-guide"
             ]
           },
           {
@@ -306,6 +307,7 @@
         "tab": "Changelogs",
         "icon": "bolt",
         "pages": [
+          "changelogs/v1.4.0-prerelease1",
           "changelogs/v1.3.54",
           "changelogs/v1.3.53",
           "changelogs/v1.3.52",
