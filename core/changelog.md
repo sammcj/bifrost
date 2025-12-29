@@ -1,0 +1,3 @@
+- fix: handling of nullable text fields in bedrock reasoning content
+- fix: gemini tool conversion with array parameters
+- fix: file name normalization in bedrock document blocks
