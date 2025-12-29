@@ -199,6 +199,7 @@ func (p *GovernancePlugin) TransportInterceptor(ctx *schemas.BifrostContext, url
 		return headers, body, nil
 	}
 
+
 	body, err = p.loadBalanceProvider(body, virtualKey)
 	if err != nil {
 		return headers, body, err
@@ -383,9 +384,9 @@ func (p *GovernancePlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.Bif
 			return req, &schemas.PluginShortCircuit{
 				Error: &schemas.BifrostError{
 					Type:       bifrost.Ptr("virtual_key_required"),
-					StatusCode: bifrost.Ptr(400),
+					StatusCode: bifrost.Ptr(401),
 					Error: &schemas.ErrorField{
-						Message: "x-bf-vk header is missing",
+						Message: "x-bf-vk header is missing and is mandatory.",
 					},
 				},
 			}, nil
