@@ -7,9 +7,10 @@ require (
 	github.com/bytedance/sonic v1.14.2
 	github.com/fasthttp/router v1.5.4
 	github.com/fasthttp/websocket v1.5.12
+	github.com/google/pprof v0.0.0-20251213031049-b05bdaca462f
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.43.2
-	github.com/maximhq/bifrost/core v1.2.42
+	github.com/maximhq/bifrost/core v1.2.43
 	github.com/maximhq/bifrost/framework v1.1.50
 	github.com/maximhq/bifrost/plugins/governance v1.3.51
 	github.com/maximhq/bifrost/plugins/logging v1.3.51
