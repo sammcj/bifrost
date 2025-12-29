@@ -83,6 +83,8 @@ func (s *Span) AddEvent(event SpanEvent) {
 
 // End marks the span as complete with the given status
 func (s *Span) End(status SpanStatus, statusMsg string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.EndTime = time.Now()
 	s.Status = status
 	s.StatusMsg = statusMsg

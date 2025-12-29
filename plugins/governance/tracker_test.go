@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestUsageTracker_UpdateUsage_Successful tests successful usage tracking
+// TestUsageTracker_UpdateUsage_FailedRequest tests usage tracking for a failed request
 func TestUsageTracker_UpdateUsage_FailedRequest(t *testing.T) {
 	logger := NewMockLogger()
 
@@ -151,7 +151,7 @@ func TestUsageTracker_UpdateUsage_StreamingOptimization(t *testing.T) {
 	assert.Equal(t, int64(1), updatedRateLimit.RequestCurrentUsage, "Request should be incremented on final chunk")
 }
 
-// TestUsageTracker_UpdateBudgetHierarchy tests multi-level budget updates
+// TestUsageTracker_Cleanup tests cleanup of the usage tracker
 func TestUsageTracker_Cleanup(t *testing.T) {
 	logger := NewMockLogger()
 	store, err := NewLocalGovernanceStore(context.Background(), logger, nil, &configstore.GovernanceConfig{})

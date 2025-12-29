@@ -377,7 +377,7 @@ func PopulateEmbeddingRequestAttributes(req *schemas.BifrostEmbeddingRequest, at
 			embedding := make([]string, len(req.Input.Embedding))
 			for i, v := range req.Input.Embedding {
 				// Use a float‑safe representation; adjust precision as needed.
-				embedding[i] = fmt.Sprintf("%g", v)
+				embedding[i] = fmt.Sprintf("%v", v)
 			}
 			attrs[schemas.AttrInputEmbedding] = strings.Join(embedding, ",")
 		}

@@ -810,6 +810,20 @@ func DeepCopyChatTool(original ChatTool) ChatTool {
 		}
 	}
 
+	// Deep copy CacheControl if present
+	if original.CacheControl != nil {
+		copyCacheControl := &CacheControl{
+			Type: original.CacheControl.Type,
+		}
+
+		if original.CacheControl.TTL != nil {
+			copyTTL := *original.CacheControl.TTL
+			copyCacheControl.TTL = &copyTTL
+		}
+
+		copyTool.CacheControl = copyCacheControl
+	}
+
 	return copyTool
 }
 

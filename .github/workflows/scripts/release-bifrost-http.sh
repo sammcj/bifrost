@@ -363,7 +363,25 @@ if [ "$CURRENT_BRANCH" = "HEAD" ]; then
   # In detached HEAD state (common in CI), use GITHUB_REF_NAME or default to main
   CURRENT_BRANCH="${GITHUB_REF_NAME:-main}"
 fi
-git pull origin "$CURRENT_BRANCH"
+
+echo "Pulling latest changes from origin/$CURRENT_BRANCH..."
+if ! git pull origin "$CURRENT_BRANCH"; then
+  echo "❌ Error: git pull origin $CURRENT_BRANCH failed"
+  exit 1
+fi
+
+# Check for merge conflicts or unexpected working-tree changes
+if ! git diff --quiet; then
+  echo "❌ Error: Unstaged changes detected after pull (possible merge conflict)"
+  git status --short
+  exit 1
+fi
+
+if ! git diff --cached --quiet; then
+  echo "❌ Error: Staged changes detected after pull (unexpected state)"
+  git status --short
+  exit 1
+fi
 
 # Stage any changes made to transports/
 git add transports/

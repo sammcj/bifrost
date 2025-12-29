@@ -35,6 +35,9 @@ func (dp *DynamicPlugin) GetName() string {
 
 // HTTPTransportMiddleware returns the HTTP transport middleware function for this plugin
 func (dp *DynamicPlugin) HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
+	if dp.httpTransportMiddleware == nil {
+		return nil
+	}
 	return dp.httpTransportMiddleware()
 }
 
@@ -143,7 +146,7 @@ func loadDynamicPlugin(path string, config any) (schemas.Plugin, error) {
 		return nil, err
 	}
 	if dp.httpTransportMiddleware, ok = httpTransportMiddlewareSym.(func() schemas.BifrostHTTPMiddleware); !ok {
-		return nil, fmt.Errorf("failed to cast HTTPTransportMiddleware to func() fasthttp.RequestHandler")
+		return nil, fmt.Errorf("failed to cast HTTPTransportMiddleware to func() schemas.BifrostHTTPMiddleware")
 	}
 	// Looking up for PreHook method
 	preHookSym, err := plugin.Lookup("PreHook")
