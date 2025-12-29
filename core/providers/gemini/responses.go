@@ -2095,7 +2095,7 @@ func convertResponsesToolsToGemini(tools []schemas.ResponsesTool) []Tool {
 						}(),
 						Parameters: func() *Schema {
 							if tool.ResponsesToolFunction.Parameters != nil {
-								return convertFunctionParametersToGeminiSchema(*tool.ResponsesToolFunction.Parameters)
+								return convertFunctionParametersToSchema(*tool.ResponsesToolFunction.Parameters)
 							}
 							return nil
 						}(),
@@ -2156,80 +2156,6 @@ func convertResponsesToolChoiceToGemini(toolChoice *schemas.ResponsesToolChoice)
 	}
 
 	return config
-}
-
-// convertFunctionParametersToGeminiSchema converts function parameters to Gemini Schema
-func convertFunctionParametersToGeminiSchema(params schemas.ToolFunctionParameters) *Schema {
-	schema := &Schema{
-		Type: Type(params.Type),
-	}
-
-	if params.Description != nil {
-		schema.Description = *params.Description
-	}
-
-	if params.Properties != nil {
-		schema.Properties = make(map[string]*Schema)
-		for key, prop := range *params.Properties {
-			propSchema := convertPropertyToGeminiSchema(prop)
-			schema.Properties[key] = propSchema
-		}
-	}
-
-	if len(params.Required) > 0 {
-		schema.Required = params.Required
-	}
-
-	return schema
-}
-
-// convertPropertyToGeminiSchema converts a property to Gemini Schema
-func convertPropertyToGeminiSchema(prop interface{}) *Schema {
-	schema := &Schema{}
-
-	// Handle property as map[string]interface{}
-	if propMap, ok := prop.(map[string]interface{}); ok {
-		if propType, exists := propMap["type"]; exists {
-			if typeStr, ok := propType.(string); ok {
-				schema.Type = Type(typeStr)
-			}
-		}
-
-		if desc, exists := propMap["description"]; exists {
-			if descStr, ok := desc.(string); ok {
-				schema.Description = descStr
-			}
-		}
-
-		if enum, exists := propMap["enum"]; exists {
-			if enumSlice, ok := enum.([]interface{}); ok {
-				var enumStrs []string
-				for _, item := range enumSlice {
-					if str, ok := item.(string); ok {
-						enumStrs = append(enumStrs, str)
-					}
-				}
-				schema.Enum = enumStrs
-			}
-		}
-
-		// Handle nested properties for object types
-		if props, exists := propMap["properties"]; exists {
-			if propsMap, ok := props.(map[string]interface{}); ok {
-				schema.Properties = make(map[string]*Schema)
-				for key, nestedProp := range propsMap {
-					schema.Properties[key] = convertPropertyToGeminiSchema(nestedProp)
-				}
-			}
-		}
-
-		// Handle array items
-		if items, exists := propMap["items"]; exists {
-			schema.Items = convertPropertyToGeminiSchema(items)
-		}
-	}
-
-	return schema
 }
 
 // convertResponsesMessagesToGeminiContents converts Responses messages to Gemini contents
