@@ -280,7 +280,7 @@ func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *
 	// Weighted random selection from allowed providers for the main model
 	totalWeight := 0.0
 	for _, config := range allowedProviderConfigs {
-		totalWeight += config.Weight
+		totalWeight += getWeight(config.Weight)
 	}
 	// Generate random number between 0 and totalWeight
 	randomValue := rand.Float64() * totalWeight
@@ -288,7 +288,7 @@ func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *
 	var selectedProvider schemas.ModelProvider
 	currentWeight := 0.0
 	for _, config := range allowedProviderConfigs {
-		currentWeight += config.Weight
+		currentWeight += getWeight(config.Weight)
 		if randomValue <= currentWeight {
 			selectedProvider = schemas.ModelProvider(config.Provider)
 			break
@@ -306,7 +306,7 @@ func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *
 	if !hasFallbacks && len(allowedProviderConfigs) > 1 {
 		// Sort allowed provider configs by weight (descending)
 		sort.Slice(allowedProviderConfigs, func(i, j int) bool {
-			return allowedProviderConfigs[i].Weight > allowedProviderConfigs[j].Weight
+			return getWeight(allowedProviderConfigs[i].Weight) > getWeight(allowedProviderConfigs[j].Weight)
 		})
 
 		// Filter out the selected provider and create fallbacks array

@@ -145,7 +145,7 @@ export const modelProviderKeySchema = z
 		value: z.string().optional(),
 		models: z.array(z.string()).default([]).optional(),
 		weight: z.union([
-			z.number().min(0.1, "Weight must be greater than 0.1").max(1, "Weight must be less than 1"),
+			z.number().min(0, "Weight must be equal to or greater than 0").max(1, "Weight must be equal to or less than 1"),
 			z
 				.string()
 				.transform((val) => {
@@ -162,7 +162,7 @@ export const modelProviderKeySchema = z
 					}
 					return num;
 				})
-				.pipe(z.number().min(0.1, "Weight must be greater than 0.1").max(1, "Weight must be less than 1")),
+				.pipe(z.number().min(0, "Weight must be equal to or greater than 0").max(1, "Weight must be equal to or less than 1")),
 		]),
 		azure_key_config: azureKeyConfigSchema.optional(),
 		vertex_key_config: vertexKeyConfigSchema.optional(),

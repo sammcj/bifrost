@@ -538,11 +538,57 @@ go build -buildmode=plugin -o plugin.so main.go
 
 **Error**: `plugin was built with a different version of package`
 
-**Solution**: Rebuild your plugin with the exact same Go version as Bifrost:
+**Why this happens**: Go's plugin system requires **exact version matching** for:
+- The Go compiler version
+- **All shared packages** (especially `github.com/maximhq/bifrost/core`)
+- **Transitive dependencies** (packages that your dependencies depend on)
+
+This is more strict than typical Go builds. Even if only one transitive dependency differs by a patch version, the plugin will fail to load.
+
+**Solution**: Ensure your plugin is built with the exact same versions as Bifrost.
+
+**Step 1: Diagnose the mismatch**
+
+Use `go version -m` to inspect the build info of both your plugin and the Bifrost binary:
+
 ```bash
-go version  # Check your Go version
-# Rebuild with matching version
+# Check what versions your plugin was built with:
+$ go version -m my-plugin.so
+my-plugin.so: go1.25.5
+  dep  github.com/maximhq/bifrost/core  v1.3.50
+  dep  github.com/valyala/fasthttp      v1.51.0
+
+# Check what versions Bifrost was built with:
+$ go version -m bifrost-http
+bifrost-http: go1.25.5
+  dep  github.com/maximhq/bifrost/core  v1.3.54   # <-- MISMATCH!
+  dep  github.com/valyala/fasthttp      v1.55.0   # <-- MISMATCH!
 ```
+
+Notice that even though the Go version matches (`go1.25.5`), the **package versions** are different — this causes the error.
+
+**Step 2: Update your plugin dependencies**
+
+```bash
+# Update to match Bifrost's core version
+go get github.com/maximhq/bifrost/core@v1.3.54
+go mod tidy
+
+# Rebuild the plugin
+go build -buildmode=plugin -o my-plugin.so main.go
+```
+
+**Step 3: Verify the fix**
+
+```bash
+# Confirm versions now match
+$ go version -m my-plugin.so | grep bifrost
+  dep  github.com/maximhq/bifrost/core  v1.3.54  # Now matches!
+```
+
+<Tip>
+**Pro tip**: Pin exact versions in your `go.mod` and keep your plugin's dependencies in sync with the Bifrost version you're deploying. Consider building both Bifrost and your plugins in the same CI pipeline to guarantee version alignment.
+</Tip>
 
 ### Platform/Architecture Mismatch
 
@@ -718,7 +764,7 @@ plugin: symbol Init not found in plugin github.com/you/plugin
 plugin was built with a different version of package github.com/maximhq/bifrost/core
 ```
 
-**Solution:** Rebuild the plugin with the correct core version.
+**Solution:** Rebuild the plugin with the correct core version. See the [Version Mismatch Errors](#version-mismatch-errors) troubleshooting section for detailed diagnosis steps using `go version -m`.
 
 ### How do I test plugins before production deployment?
 

@@ -24,7 +24,7 @@ type TableVirtualKeyProviderConfig struct {
 	ID            uint     `gorm:"primaryKey;autoIncrement" json:"id"`
 	VirtualKeyID  string   `gorm:"type:varchar(255);not null" json:"virtual_key_id"`
 	Provider      string   `gorm:"type:varchar(50);not null" json:"provider"`
-	Weight        float64  `gorm:"default:1.0" json:"weight"`
+	Weight        *float64 `json:"weight"`
 	AllowedModels []string `gorm:"type:text;serializer:json" json:"allowed_models"` // Empty means all models allowed
 	BudgetID      *string  `gorm:"type:varchar(255);index" json:"budget_id,omitempty"`
 	RateLimitID   *string  `gorm:"type:varchar(255);index" json:"rate_limit_id,omitempty"`
