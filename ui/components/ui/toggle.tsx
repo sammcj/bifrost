@@ -17,7 +17,7 @@ const Toggle = ({ className, label, val, setVal, required = false, disabled = fa
 		<div className="w-full">
 			<label
 				className={cn(
-					`dark:bg-input/30 flex w-full items-center justify-between gap-2 py-2 text-sm select-none ${disabled ? "cursor-default" : "cursor-pointer"}`,
+					`flex w-full items-center justify-between gap-2 py-2 text-sm select-none ${disabled ? "cursor-default" : "cursor-pointer"}`,
 					className,
 				)}
 			>

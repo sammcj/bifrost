@@ -17,6 +17,7 @@ type Key struct {
 	HuggingFaceKeyConfig *HuggingFaceKeyConfig `json:"huggingface_key_config,omitempty"` // Hugging Face-specific key configuration
 	Enabled              *bool                 `json:"enabled,omitempty"`                // Whether the key is active (default:true)
 	UseForBatchAPI       *bool                 `json:"use_for_batch_api,omitempty"`      // Whether this key can be used for batch API operations (default:false for new keys, migrated keys default to true)
+	ConfigHash           string                `json:"-"`                                // Internal: hash of config.json version, used for change detection
 }
 
 // AzureKeyConfig represents the Azure-specific configuration.

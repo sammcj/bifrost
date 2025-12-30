@@ -1,1 +1,3 @@
-- chore: upgrade core to 1.2.44
+- feat: adds config_hash columns for provider keys
+- chore: adds CRUD testcases for config store
+- chore: upgrade core to 1.2.45

@@ -108,35 +108,49 @@ func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 	if cd.Providers == nil {
 		cd.Providers = make(map[string]configstore.ProviderConfig)
 	}
-	// Extract provider configs from virtual keys
+	// Extract provider configs from virtual keys.
+	// Keys can be either full definitions (with value) or references (name only).
+	// References are resolved by looking up the key by name from the providers section.
 	if cd.Governance != nil && cd.Governance.VirtualKeys != nil {
 		for _, virtualKey := range cd.Governance.VirtualKeys {
 			if virtualKey.ProviderConfigs != nil {
 				for _, providerConfig := range virtualKey.ProviderConfigs {
-					// Convert TableKey to schemas.Key
-					keys := make([]schemas.Key, len(providerConfig.Keys))
-					for i, tableKey := range providerConfig.Keys {
-						keys[i] = schemas.Key{
-							ID:               tableKey.KeyID,
-							Name:             tableKey.Name,
-							Value:            tableKey.Value,
-							Models:           tableKey.Models,
-							Weight:           getWeight(tableKey.Weight),
-							Enabled:          tableKey.Enabled,
-							UseForBatchAPI:   tableKey.UseForBatchAPI,
-							AzureKeyConfig:   tableKey.AzureKeyConfig,
-							VertexKeyConfig:  tableKey.VertexKeyConfig,
-							BedrockKeyConfig: tableKey.BedrockKeyConfig,
+					var keys []schemas.Key
+					for _, tableKey := range providerConfig.Keys {
+						if tableKey.Value != "" {
+							// Full key definition - use as-is
+							keys = append(keys, schemas.Key{
+								ID:               tableKey.KeyID,
+								Name:             tableKey.Name,
+								Value:            tableKey.Value,
+								Models:           tableKey.Models,
+								Weight:           getWeight(tableKey.Weight),
+								Enabled:          tableKey.Enabled,
+								UseForBatchAPI:   tableKey.UseForBatchAPI,
+								AzureKeyConfig:   tableKey.AzureKeyConfig,
+								VertexKeyConfig:  tableKey.VertexKeyConfig,
+								BedrockKeyConfig: tableKey.BedrockKeyConfig,
+							})
+						} else if existingProvider, ok := cd.Providers[providerConfig.Provider]; ok {
+							// Reference - look up by name from provider's keys
+							for _, existingKey := range existingProvider.Keys {
+								if existingKey.Name == tableKey.Name {
+									keys = append(keys, existingKey)
+									break
+								}
+							}
 						}
 					}
 
 					// Merge or create provider entry
-					if existing, ok := cd.Providers[providerConfig.Provider]; ok {
-						existing.Keys = append(existing.Keys, keys...)
-						cd.Providers[providerConfig.Provider] = existing
-					} else {
-						cd.Providers[providerConfig.Provider] = configstore.ProviderConfig{
-							Keys: keys,
+					if len(keys) > 0 {
+						if existing, ok := cd.Providers[providerConfig.Provider]; ok {
+							existing.Keys = append(existing.Keys, keys...)
+							cd.Providers[providerConfig.Provider] = existing
+						} else {
+							cd.Providers[providerConfig.Provider] = configstore.ProviderConfig{
+								Keys: keys,
+							}
 						}
 					}
 				}
@@ -723,28 +737,39 @@ func mergeProviderKeys(provider schemas.ModelProvider, fileKeys, dbKeys []schema
 				}
 				continue
 			}
-			dbKeyHash, err := configstore.GenerateKeyHash(schemas.Key{
-				Name:             dbKey.Name,
-				Value:            dbKey.Value,
-				Models:           dbKey.Models,
-				Weight:           dbKey.Weight,
-				AzureKeyConfig:   dbKey.AzureKeyConfig,
-				VertexKeyConfig:  dbKey.VertexKeyConfig,
-				BedrockKeyConfig: dbKey.BedrockKeyConfig,
-			})
-			if err != nil {
-				logger.Warn("failed to generate key hash for db key %s (%s): %v, falling back to name comparison", dbKey.Name, provider, err)
-				if fileKey.Name == dbKey.Name {
+
+			// Use stored ConfigHash for comparison if available
+			if dbKey.ConfigHash != "" {
+				if fileKeyHash == dbKey.ConfigHash || fileKey.Name == dbKey.Name {
 					fileKeys[i].ID = dbKey.ID
 					found = true
 					break
 				}
-				continue
-			}
-			if fileKeyHash == dbKeyHash || fileKey.Name == dbKey.Name {
-				fileKeys[i].ID = dbKey.ID
-				found = true
-				break
+			} else {
+				// No stored hash (legacy) - fall back to generating fresh hash
+				dbKeyHash, err := configstore.GenerateKeyHash(schemas.Key{
+					Name:             dbKey.Name,
+					Value:            dbKey.Value,
+					Models:           dbKey.Models,
+					Weight:           dbKey.Weight,
+					AzureKeyConfig:   dbKey.AzureKeyConfig,
+					VertexKeyConfig:  dbKey.VertexKeyConfig,
+					BedrockKeyConfig: dbKey.BedrockKeyConfig,
+				})
+				if err != nil {
+					logger.Warn("failed to generate key hash for db key %s (%s): %v, falling back to name comparison", dbKey.Name, provider, err)
+					if fileKey.Name == dbKey.Name {
+						fileKeys[i].ID = dbKey.ID
+						found = true
+						break
+					}
+					continue
+				}
+				if fileKeyHash == dbKeyHash || fileKey.Name == dbKey.Name {
+					fileKeys[i].ID = dbKey.ID
+					found = true
+					break
+				}
 			}
 		}
 		if !found {
@@ -775,30 +800,46 @@ func reconcileProviderKeys(provider schemas.ModelProvider, fileKeys, dbKeys []sc
 				delete(fileKeysByName, dbKey.Name)
 				continue
 			}
-			dbKeyHash, err := configstore.GenerateKeyHash(schemas.Key{
-				Name:             dbKey.Name,
-				Value:            dbKey.Value,
-				Models:           dbKey.Models,
-				Weight:           dbKey.Weight,
-				AzureKeyConfig:   dbKey.AzureKeyConfig,
-				VertexKeyConfig:  dbKey.VertexKeyConfig,
-				BedrockKeyConfig: dbKey.BedrockKeyConfig,
-			})
-			if err != nil {
-				logger.Warn("failed to generate key hash for db key %s (%s): %v", dbKey.Name, provider, err)
-				mergedKeys = append(mergedKeys, dbKey)
-				delete(fileKeysByName, dbKey.Name)
-				continue
-			}
 
-			if fileKeyHash != dbKeyHash {
-				// Key changed in file - use file version but preserve ID
-				logger.Debug("key %s changed in config file for provider %s, updating", fileKey.Name, provider)
-				fileKey.ID = dbKey.ID
-				mergedKeys = append(mergedKeys, fileKey)
+			// Compare file hash against STORED config hash (not fresh hash from DB values)
+			// This ensures DB updates are preserved when config.json hasn't changed
+			if dbKey.ConfigHash != "" {
+				if fileKeyHash == dbKey.ConfigHash {
+					// File unchanged - keep DB version (preserves user updates)
+					mergedKeys = append(mergedKeys, dbKey)
+				} else {
+					// File changed - use file version but preserve ID
+					logger.Debug("key %s changed in config file for provider %s, updating", fileKey.Name, provider)
+					fileKey.ID = dbKey.ID
+					mergedKeys = append(mergedKeys, fileKey)
+				}
 			} else {
-				// Key unchanged - keep DB version
-				mergedKeys = append(mergedKeys, dbKey)
+				// No stored hash (legacy) - fall back to generating fresh hash for comparison
+				dbKeyHash, err := configstore.GenerateKeyHash(schemas.Key{
+					Name:             dbKey.Name,
+					Value:            dbKey.Value,
+					Models:           dbKey.Models,
+					Weight:           dbKey.Weight,
+					AzureKeyConfig:   dbKey.AzureKeyConfig,
+					VertexKeyConfig:  dbKey.VertexKeyConfig,
+					BedrockKeyConfig: dbKey.BedrockKeyConfig,
+				})
+				if err != nil {
+					logger.Warn("failed to generate key hash for db key %s (%s): %v", dbKey.Name, provider, err)
+					mergedKeys = append(mergedKeys, dbKey)
+					delete(fileKeysByName, dbKey.Name)
+					continue
+				}
+
+				if fileKeyHash != dbKeyHash {
+					// Key changed in file - use file version but preserve ID
+					logger.Debug("key %s changed in config file for provider %s, updating", fileKey.Name, provider)
+					fileKey.ID = dbKey.ID
+					mergedKeys = append(mergedKeys, fileKey)
+				} else {
+					// Key unchanged - keep DB version
+					mergedKeys = append(mergedKeys, dbKey)
+				}
 			}
 			delete(fileKeysByName, dbKey.Name) // Mark as processed
 		} else {
@@ -899,8 +940,23 @@ func mergeMCPConfig(ctx context.Context, config *Config, configData *ConfigData,
 
 // loadGovernanceConfigFromFile loads and merges governance config from file
 func loadGovernanceConfigFromFile(ctx context.Context, config *Config, configData *ConfigData) {
+	logger.Debug("loadGovernanceConfigFromFile called")
 	var governanceConfig *configstore.GovernanceConfig
 	var err error
+
+	// Debug: Check what's in configData.Governance
+	if configData.Governance != nil {
+		logger.Debug("configData.Governance is present: %d budgets, %d rate_limits, %d virtual_keys",
+			len(configData.Governance.Budgets),
+			len(configData.Governance.RateLimits),
+			len(configData.Governance.VirtualKeys))
+		for i, vk := range configData.Governance.VirtualKeys {
+			logger.Debug("  VK[%d]: id=%s, name=%s, provider_configs=%d",
+				i, vk.ID, vk.Name, vk.Value, len(vk.ProviderConfigs))
+		}
+	} else {
+		logger.Debug("configData.Governance is nil")
+	}
 
 	if config.ConfigStore != nil {
 		logger.Debug("getting governance config from store")
@@ -908,6 +964,16 @@ func loadGovernanceConfigFromFile(ctx context.Context, config *Config, configDat
 		if err != nil {
 			logger.Warn("failed to get governance config from store: %v", err)
 		}
+		if governanceConfig != nil {
+			logger.Debug("governance config from store: %d budgets, %d rate_limits, %d virtual_keys",
+				len(governanceConfig.Budgets),
+				len(governanceConfig.RateLimits),
+				len(governanceConfig.VirtualKeys))
+		} else {
+			logger.Debug("governance config from store is nil")
+		}
+	} else {
+		logger.Debug("config.ConfigStore is nil, skipping store lookup")
 	}
 
 	if governanceConfig != nil {
@@ -921,6 +987,8 @@ func loadGovernanceConfigFromFile(ctx context.Context, config *Config, configDat
 		logger.Debug("no governance config found in store, processing from config file")
 		config.GovernanceConfig = configData.Governance
 		createGovernanceConfigInStore(ctx, config)
+	} else {
+		logger.Debug("no governance config in store or config file")
 	}
 }
 
@@ -1233,9 +1301,13 @@ func updateGovernanceConfigInStore(
 // createGovernanceConfigInStore creates governance config in store from config file
 func createGovernanceConfigInStore(ctx context.Context, config *Config) {
 	if config.ConfigStore == nil {
+		logger.Debug("createGovernanceConfigInStore: ConfigStore is nil, skipping")
 		return
 	}
-	logger.Debug("updating governance config in store")
+	logger.Debug("createGovernanceConfigInStore: creating %d budgets, %d rate_limits, %d virtual_keys",
+		len(config.GovernanceConfig.Budgets),
+		len(config.GovernanceConfig.RateLimits),
+		len(config.GovernanceConfig.VirtualKeys))
 	if err := config.ConfigStore.ExecuteTransaction(ctx, func(tx *gorm.DB) error {
 		for i := range config.GovernanceConfig.Budgets {
 			budget := &config.GovernanceConfig.Budgets[i]
@@ -1291,6 +1363,7 @@ func createGovernanceConfigInStore(ctx context.Context, config *Config) {
 
 		for i := range config.GovernanceConfig.VirtualKeys {
 			virtualKey := &config.GovernanceConfig.VirtualKeys[i]
+			logger.Debug("creating virtual key: id=%s, name=%s, value=%s", virtualKey.ID, virtualKey.Name, virtualKey.Value)
 			vkHash, err := configstore.GenerateVirtualKeyHash(*virtualKey)
 			if err != nil {
 				logger.Warn("failed to generate virtual key hash for %s: %v", virtualKey.ID, err)
@@ -1303,12 +1376,16 @@ func createGovernanceConfigInStore(ctx context.Context, config *Config) {
 			virtualKey.MCPConfigs = nil
 
 			if err := config.ConfigStore.CreateVirtualKey(ctx, virtualKey, tx); err != nil {
+				logger.Error("failed to create virtual key %s: %v", virtualKey.ID, err)
 				return fmt.Errorf("failed to create virtual key %s: %w", virtualKey.ID, err)
 			}
+			logger.Debug("created virtual key %s successfully", virtualKey.ID)
 
 			for _, pc := range providerConfigs {
 				pc.VirtualKeyID = virtualKey.ID
+				logger.Debug("creating provider config for VK %s: provider=%s, keys=%d", virtualKey.ID, pc.Provider, len(pc.Keys))
 				if err := config.ConfigStore.CreateVirtualKeyProviderConfig(ctx, &pc, tx); err != nil {
+					logger.Error("failed to create provider config for virtual key %s: %v", virtualKey.ID, err)
 					return fmt.Errorf("failed to create provider config for virtual key %s: %w", virtualKey.ID, err)
 				}
 			}
@@ -2590,7 +2667,7 @@ func (c *Config) GetAllKeys() ([]configstoreTables.TableKey, error) {
 			models := key.Models
 			if models == nil {
 				models = []string{}
-			}			
+			}
 			keys = append(keys, configstoreTables.TableKey{
 				KeyID:    key.ID,
 				Name:     key.Name,

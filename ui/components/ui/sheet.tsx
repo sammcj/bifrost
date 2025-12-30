@@ -112,7 +112,7 @@ function SheetHeader({
 				</button>
 			)}
 
-			<div className={cn("flex h-full min-w-0 flex-1 flex-row items-center", sheetContext?.expandable ? "ml-1" : "", className)}>
+			<div className={cn("flex h-full min-w-0 flex-1 flex-row items-center", sheetContext?.expandable ? "ml-1" : "ml-4", className)}>
 				{children}
 			</div>
 			{showCloseButton && (
