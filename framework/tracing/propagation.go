@@ -69,8 +69,10 @@ type W3CTraceContext struct {
 	TraceState string // Optional vendor-specific trace state
 }
 
-// ExtractParentID extracts the parent trace ID from W3C traceparent header
-// Returns empty string if header is not present or invalid
+// ExtractParentID extracts the trace ID from W3C traceparent header.
+// This returns the trace ID (32 hex chars) which should be used to continue
+// the distributed trace from the upstream service.
+// Returns empty string if header is not present or invalid.
 func ExtractParentID(header *fasthttp.RequestHeader) string {
 	traceParent := string(header.Peek(TraceParentHeader))
 	if traceParent == "" {
@@ -81,6 +83,23 @@ func ExtractParentID(header *fasthttp.RequestHeader) string {
 		return ""
 	}
 	return ctx.TraceID
+}
+
+// ExtractTraceParentSpanID extracts the parent span ID from W3C traceparent header.
+// This returns the span ID (16 hex chars) of the upstream service's span that
+// initiated this request. This should be set as the ParentID of the root span
+// in the receiving service to establish the parent-child relationship.
+// Returns empty string if header is not present or invalid.
+func ExtractTraceParentSpanID(header *fasthttp.RequestHeader) string {
+	traceParent := string(header.Peek(TraceParentHeader))
+	if traceParent == "" {
+		return ""
+	}
+	ctx := ParseTraceparent(traceParent)
+	if ctx == nil {
+		return ""
+	}
+	return ctx.ParentID
 }
 
 // ExtractTraceContext extracts full W3C trace context from headers

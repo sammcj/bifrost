@@ -324,21 +324,13 @@ func (h *GovernanceHandler) createVirtualKey(ctx *fasthttp.RequestCtx) {
 				providerConfig := &configstoreTables.TableVirtualKeyProviderConfig{
 					VirtualKeyID:  vk.ID,
 					Provider:      pc.Provider,
-					Weight:        pc.Weight,
+					Weight:        &pc.Weight,
 					AllowedModels: pc.AllowedModels,
 					Keys:          keys,
 				}
 
-			providerConfig := &configstoreTables.TableVirtualKeyProviderConfig{
-				VirtualKeyID:  vk.ID,
-				Provider:      pc.Provider,
-				Weight:        &pc.Weight,
-				AllowedModels: pc.AllowedModels,
-				Keys:          keys,
-			}
-
-			// Create budget for provider config if provided
-			if pc.Budget != nil {
+				// Create budget for provider config if provided
+				if pc.Budget != nil {
 					budget := configstoreTables.TableBudget{
 						ID:            uuid.NewString(),
 						MaxLimit:      pc.Budget.MaxLimit,
@@ -581,9 +573,6 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 					rateLimit.RequestResetDuration = req.RateLimit.RequestResetDuration
 				}
 
-				if err := validateRateLimit(&rateLimit); err != nil {
-					return err
-				}
 				if err := h.configStore.UpdateRateLimit(ctx, &rateLimit, tx); err != nil {
 					return err
 				}
@@ -641,18 +630,18 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 							return fmt.Errorf("both max_limit and reset_duration are required when creating a new provider budget")
 						}
 					}
-					// Get keys for this provider config if specified
-					var keys []configstoreTables.TableKey
-					if len(pc.KeyIDs) > 0 {
-						var err error
-						keys, err = h.configStore.GetKeysByIDs(ctx, pc.KeyIDs)
-						if err != nil {
-							return fmt.Errorf("failed to get keys by IDs for provider %s: %w", pc.Provider, err)
-						}
-						if len(keys) != len(pc.KeyIDs) {
-							return fmt.Errorf("some keys not found for provider %s: expected %d, found %d", pc.Provider, len(pc.KeyIDs), len(keys))
-						}
-					}
+			// Get keys for this provider config if specified
+			var keys []configstoreTables.TableKey
+			if len(pc.KeyIDs) > 0 {
+				var err error
+				keys, err = h.configStore.GetKeysByIDs(ctx, pc.KeyIDs)
+				if err != nil {
+					return fmt.Errorf("failed to get keys by IDs for provider %s: %w", pc.Provider, err)
+				}
+				if len(keys) != len(pc.KeyIDs) {
+					return fmt.Errorf("some keys not found for provider %s: expected %d, found %d", pc.Provider, len(pc.KeyIDs), len(keys))
+				}
+			}
 
 				// Create new provider config
 				providerConfig := &configstoreTables.TableVirtualKeyProviderConfig{
@@ -720,27 +709,13 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 					if err != nil {
 						return fmt.Errorf("failed to get keys by IDs for provider %s: %w", pc.Provider, err)
 					}
-					requestConfigsMap[*pc.ID] = true
-					existing.Provider = pc.Provider
-					existing.Weight = pc.Weight
-					existing.AllowedModels = pc.AllowedModels
-
-					// Update keys only if KeyIDs field was present in the request.
-					// - If pc.KeyIDs is nil (field omitted), leave existing.Keys unchanged.
-					// - If pc.KeyIDs is an empty slice (field present but empty), clear keys.
-					// - If pc.KeyIDs has values, update keys accordingly.
-					if pc.KeyIDs != nil {
-						keys, err := h.configStore.GetKeysByIDs(ctx, pc.KeyIDs)
-						if err != nil {
-							return fmt.Errorf("failed to get keys by IDs for provider %s: %w", pc.Provider, err)
-						}
-						if len(keys) != len(pc.KeyIDs) {
-							return fmt.Errorf("some keys not found for provider %s: expected %d, found %d", pc.Provider, len(pc.KeyIDs), len(keys))
-						}
-						existing.Keys = keys
+					if len(keys) != len(pc.KeyIDs) {
+						return fmt.Errorf("some keys not found for provider %s: expected %d, found %d", pc.Provider, len(pc.KeyIDs), len(keys))
 					}
+				}
+				existing.Keys = keys
 
-					// Handle budget updates for provider config
+				// Handle budget updates for provider config
 					if pc.Budget != nil {
 						if existing.BudgetID != nil {
 							// Update existing budget
@@ -806,9 +781,6 @@ func (h *GovernanceHandler) updateVirtualKey(ctx *fasthttp.RequestCtx) {
 							}
 							if pc.RateLimit.RequestResetDuration != nil {
 								rateLimit.RequestResetDuration = pc.RateLimit.RequestResetDuration
-							}
-							if err := validateRateLimit(&rateLimit); err != nil {
-								return err
 							}
 							if err := h.configStore.UpdateRateLimit(ctx, &rateLimit, tx); err != nil {
 								return err

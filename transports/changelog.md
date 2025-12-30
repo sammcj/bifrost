@@ -2,4 +2,5 @@
 - fix: gemini tool conversion with array parameters
 - fix: file name normalization in bedrock document blocks
 - fix: plugin status sync using configuration name
-- chore: upgrade core to 1.2.44 and framework to 1.1.54
+- chore: upgrade core to 1.3.1 and framework to 1.2.1
+- fix: adds parser for parent span id and root span parent to fix distributed tracing for datadog

@@ -233,12 +233,22 @@ func (m *TracingMiddleware) Middleware() schemas.BifrostHTTPMiddleware {
 				next(ctx)
 				return
 			}
-			// Extract parent trace ID from W3C headers (if present)
-			parentID := tracing.ExtractParentID(&ctx.Request.Header)
+			// Extract trace ID from W3C traceparent header (if present)
+			// This is the 32-char trace ID that links all spans in a distributed trace
+			inheritedTraceID := tracing.ExtractParentID(&ctx.Request.Header)
 			// Create trace in store - only ID returned (trace data stays in store)
-			traceID := m.tracer.Load().CreateTrace(parentID)
+			traceID := m.tracer.Load().CreateTrace(inheritedTraceID)
 			// Only trace ID goes into context (lightweight, no bloat)
 			ctx.SetUserValue(schemas.BifrostContextKeyTraceID, traceID)
+
+			// Extract parent span ID from W3C traceparent header (if present)
+			// This is the 16-char span ID from the upstream service that should be
+			// set as the ParentID of our root span for proper trace linking in Datadog/etc.
+			parentSpanID := tracing.ExtractTraceParentSpanID(&ctx.Request.Header)
+			if parentSpanID != "" {
+				ctx.SetUserValue(schemas.BifrostContextKeyParentSpanID, parentSpanID)
+			}
+
 			// Store a trace completion callback for streaming handlers to use
 			ctx.SetUserValue(schemas.BifrostContextKeyTraceCompleter, func() {
 				m.completeAndFlushTrace(traceID)
