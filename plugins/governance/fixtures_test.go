@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/stretchr/testify/assert"
@@ -176,7 +177,7 @@ func buildProviderConfig(provider string, allowedModels []string) configstoreTab
 	return configstoreTables.TableVirtualKeyProviderConfig{
 		Provider:      provider,
 		AllowedModels: allowedModels,
-		Weight:        1.0,
+		Weight:        bifrost.Ptr(1.0),
 		RateLimit:     nil,
 		Budget:        nil,
 		Keys:          []configstoreTables.TableKey{},
