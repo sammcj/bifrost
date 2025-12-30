@@ -61,13 +61,26 @@ type spanHandle struct {
 // StartSpan creates a new span as a child of the current span in context.
 // It reads the trace ID and parent span ID from context, creates the span,
 // and returns an updated context with the new span ID.
+//
+// Parent span resolution order:
+// 1. BifrostContextKeySpanID - existing span in this service (for child spans)
+// 2. BifrostContextKeyParentSpanID - incoming parent from W3C traceparent (for root spans)
+// 3. No parent - creates a root span with no parent
 func (t *Tracer) StartSpan(ctx context.Context, name string, kind schemas.SpanKind) (context.Context, schemas.SpanHandle) {
 	traceID := GetTraceID(ctx)
 	if traceID == "" {
 		return ctx, nil
 	}
-	// Get parent span ID from context
+
+	// Get parent span ID from context - first check for existing span in this service
 	parentSpanID, _ := ctx.Value(schemas.BifrostContextKeySpanID).(string)
+
+	// If no existing span, check for incoming parent span ID from W3C traceparent header
+	// This links the root span of this service to the upstream service's span
+	if parentSpanID == "" {
+		parentSpanID, _ = ctx.Value(schemas.BifrostContextKeyParentSpanID).(string)
+	}
+
 	var span *schemas.Span
 	if parentSpanID != "" {
 		span = t.store.StartChildSpan(traceID, parentSpanID, name, kind)

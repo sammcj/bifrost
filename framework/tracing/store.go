@@ -12,19 +12,19 @@ import (
 
 // DeferredSpanInfo stores information about a deferred span for streaming requests
 type DeferredSpanInfo struct {
-	SpanID             string
-	StartTime          time.Time
-	Tracer             schemas.Tracer // Reference to tracer for completing the span
-	RequestID          string         // Request ID for accumulator lookup
-	FirstChunkTime     time.Time      // Timestamp of first chunk (for TTFT calculation)
-	AccumulatedChunks  []*schemas.BifrostResponse // Accumulated streaming chunks
-	mu                 sync.Mutex     // Mutex for thread-safe chunk accumulation
+	SpanID            string
+	StartTime         time.Time
+	Tracer            schemas.Tracer             // Reference to tracer for completing the span
+	RequestID         string                     // Request ID for accumulator lookup
+	FirstChunkTime    time.Time                  // Timestamp of first chunk (for TTFT calculation)
+	AccumulatedChunks []*schemas.BifrostResponse // Accumulated streaming chunks
+	mu                sync.Mutex                 // Mutex for thread-safe chunk accumulation
 }
 
 // TraceStore manages traces with thread-safe access and object pooling
 type TraceStore struct {
-	traces        sync.Map // map[traceID]*schemas.Trace - thread-safe concurrent access
-	deferredSpans sync.Map // map[traceID]*DeferredSpanInfo - deferred spans for streaming requests
+	traces        sync.Map  // map[traceID]*schemas.Trace - thread-safe concurrent access
+	deferredSpans sync.Map  // map[traceID]*DeferredSpanInfo - deferred spans for streaming requests
 	tracePool     sync.Pool // Reuse Trace objects to reduce allocations
 	spanPool      sync.Pool // Reuse Span objects to reduce allocations
 	logger        schemas.Logger
@@ -66,13 +66,24 @@ func NewTraceStore(ttl time.Duration, logger schemas.Logger) *TraceStore {
 	return store
 }
 
-// CreateTrace creates a new trace and stores it, returns trace ID only
-func (s *TraceStore) CreateTrace(parentID string) string {
+// CreateTrace creates a new trace and stores it, returns trace ID only.
+// The inheritedTraceID parameter is the trace ID from an incoming W3C traceparent header.
+// If provided, this trace will use that ID to continue the distributed trace.
+// If empty, a new trace ID will be generated.
+// Note: The parent span ID (for linking to upstream spans) is handled separately
+// via context in StartSpan, not stored on the trace itself.
+func (s *TraceStore) CreateTrace(inheritedTraceID string) string {
 	trace := s.tracePool.Get().(*schemas.Trace)
-
 	// Reset and initialize the trace
-	trace.TraceID = generateTraceID()
-	trace.ParentID = parentID
+	if inheritedTraceID != "" {
+		trace.TraceID = inheritedTraceID
+	} else {
+		trace.TraceID = generateTraceID()
+	}
+	// Note: trace.ParentID is intentionally not set here.
+	// Parent-child relationships are between spans, not traces.
+	// The root span's ParentID is set in StartSpan from context.
+	trace.ParentID = ""
 	trace.StartTime = time.Now()
 	trace.EndTime = time.Time{}
 	trace.RootSpan = nil
@@ -273,6 +284,13 @@ func (s *TraceStore) StartChildSpan(traceID, parentSpanID, name string, kind sch
 		span.Attributes = make(map[string]any)
 	} else {
 		clear(span.Attributes)
+	}
+
+	// Set as root span if this is the first span in the trace.
+	// This can happen when the span has an external parent (from W3C traceparent)
+	// but is the first span within this service's trace.
+	if trace.RootSpan == nil {
+		trace.RootSpan = span
 	}
 
 	// Add span to trace
