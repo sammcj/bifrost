@@ -1,2 +1,0 @@
-- fix: adds parser for parent span id and root span parent to fix distributed tracing for datadog
-- chore: upgrade core to 1.3.1
