@@ -1,29 +1,29 @@
-"use client"
+"use client";
 
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alertDialog"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { getErrorMessage, useDeleteTeamMutation } from "@/lib/store"
-import { Customer, Team, VirtualKey } from "@/lib/types/governance"
-import { cn } from "@/lib/utils"
-import { formatCurrency, parseResetPeriod } from "@/lib/utils/governance"
-import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib"
-import { Edit, Plus, Trash2 } from "lucide-react"
-import { useState } from "react"
-import { toast } from "sonner"
-import TeamDialog from "./teamDialog"
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "@/components/ui/alertDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { getErrorMessage, useDeleteTeamMutation } from "@/lib/store";
+import { Customer, Team, VirtualKey } from "@/lib/types/governance";
+import { cn } from "@/lib/utils";
+import { formatCurrency, parseResetPeriod } from "@/lib/utils/governance";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
+import { Edit, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import TeamDialog from "./teamDialog";
 
 interface TeamsTableProps {
 	teams: Team[];
@@ -32,14 +32,14 @@ interface TeamsTableProps {
 }
 
 export default function TeamsTable({ teams, customers, virtualKeys }: TeamsTableProps) {
-  const [showTeamDialog, setShowTeamDialog] = useState(false)
-  const [editingTeam, setEditingTeam] = useState<Team | null>(null)
+	const [showTeamDialog, setShowTeamDialog] = useState(false);
+	const [editingTeam, setEditingTeam] = useState<Team | null>(null);
 
-  const hasCreateAccess = useRbac(RbacResource.Teams, RbacOperation.Create)
-  const hasUpdateAccess = useRbac(RbacResource.Teams, RbacOperation.Update)
-  const hasDeleteAccess = useRbac(RbacResource.Teams, RbacOperation.Delete)
+	const hasCreateAccess = useRbac(RbacResource.Teams, RbacOperation.Create);
+	const hasUpdateAccess = useRbac(RbacResource.Teams, RbacOperation.Update);
+	const hasDeleteAccess = useRbac(RbacResource.Teams, RbacOperation.Delete);
 
-  const [deleteTeam, { isLoading: isDeleting }] = useDeleteTeamMutation()
+	const [deleteTeam, { isLoading: isDeleting }] = useDeleteTeamMutation();
 
 	const handleDelete = async (teamId: string) => {
 		try {
@@ -87,13 +87,13 @@ export default function TeamsTable({ teams, customers, virtualKeys }: TeamsTable
 						<div>
 							<p className="text-muted-foreground text-sm">Organize users into teams with shared budgets and access controls.</p>
 						</div>
-						<Button onClick={handleAddTeam} disabled={!hasCreateAccess}>
+						<Button data-testid="create-team-btn" onClick={handleAddTeam} disabled={!hasCreateAccess}>
 							<Plus className="h-4 w-4" />
 							Add Team
 						</Button>
 					</div>
 
-					<div className="rounded-sm border">
+					<div className="rounded-sm border" data-testid="teams-table">
 						<Table>
 							<TableHeader>
 								<TableRow>
