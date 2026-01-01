@@ -166,8 +166,8 @@ github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWE
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mattn/go-sqlite3 v1.14.32 h1:JD12Ag3oLy1zQA+BNn74xRgaBbdhbNIDYvQUEuuErjs=
 github.com/mattn/go-sqlite3 v1.14.32/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
-github.com/maximhq/bifrost/core v1.2.44 h1:v5Kmsevw3rA5j8KdQJW2YwHDMqbVLYt7HwUGqUUhJzs=
-github.com/maximhq/bifrost/core v1.2.44/go.mod h1:1msCedjIgC8d9TNJyB1z7s+348vh2Bd0u66qAPgpZoA=
+github.com/maximhq/bifrost/core v1.2.45 h1:9BxJgZuT+sB1e2G3kY2lLuVqRfOk5aT9NTAgikY2u4E=
+github.com/maximhq/bifrost/core v1.2.45/go.mod h1:1msCedjIgC8d9TNJyB1z7s+348vh2Bd0u66qAPgpZoA=
 github.com/oklog/ulid v1.3.1 h1:EGfNDEx6MqHz8B3uNV6QAib1UR2Lm97sHi3ocA6ESJ4=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
