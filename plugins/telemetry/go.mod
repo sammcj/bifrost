@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/maximhq/bifrost/core v1.2.45
-	github.com/maximhq/bifrost/framework v1.1.55
+	github.com/maximhq/bifrost/framework v1.1.56
 	github.com/prometheus/client_golang v1.23.0
 	github.com/valyala/fasthttp v1.68.0
 )
