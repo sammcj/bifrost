@@ -832,10 +832,10 @@ func (a *Accumulator) processAccumulatedResponsesStreamingChunks(requestID strin
 func (a *Accumulator) processResponsesStreamingResponse(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*ProcessedStreamResponse, error) {
 	a.logger.Debug("[streaming] processing responses streaming response")
 
-	// Extract request ID from context
-	requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)
+	// Extract accumulator ID from context
+	requestID, ok := getAccumulatorID(ctx)
 	if !ok || requestID == "" {
-		return nil, fmt.Errorf("request-id not found in context or is empty")
+		return nil, fmt.Errorf("accumulator-id not found in context or is empty")
 	}
 
 	_, provider, model := bifrost.GetResponseFields(result, bifrostErr)

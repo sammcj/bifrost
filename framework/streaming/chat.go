@@ -239,11 +239,11 @@ func (a *Accumulator) processAccumulatedChatStreamingChunks(requestID string, re
 // processChatStreamingResponse processes a chat streaming response
 func (a *Accumulator) processChatStreamingResponse(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*ProcessedStreamResponse, error) {
 	a.logger.Debug("[streaming] processing chat streaming response")
-	// Extract request ID from context
-	requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)
+	// Extract accumulator ID from context
+	requestID, ok := getAccumulatorID(ctx)
 	if !ok || requestID == "" {
 		// Log error but don't fail the request
-		return nil, fmt.Errorf("request-id not found in context or is empty")
+		return nil, fmt.Errorf("accumulator-id not found in context or is empty")
 	}
 	requestType, provider, model := bifrost.GetResponseFields(result, bifrostErr)
 

@@ -120,11 +120,11 @@ func (a *Accumulator) processAccumulatedAudioStreamingChunks(requestID string, b
 
 // processAudioStreamingResponse processes a audio streaming response
 func (a *Accumulator) processAudioStreamingResponse(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*ProcessedStreamResponse, error) {
-	// Extract request ID from context
-	requestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)
+	// Extract accumulator ID from context
+	requestID, ok := getAccumulatorID(ctx)
 	if !ok || requestID == "" {
 		// Log error but don't fail the request
-		return nil, fmt.Errorf("request-id not found in context or is empty")
+		return nil, fmt.Errorf("accumulator-id not found in context or is empty")
 	}
 	_, provider, model := bifrost.GetResponseFields(result, bifrostErr)
 	isFinalChunk := bifrost.IsFinalChunk(ctx)
