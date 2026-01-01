@@ -460,11 +460,15 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 				}
 			}
 		}
-		err = h.configManager.UpdateAuthConfig(ctx, payload.AuthConfig)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("failed to update auth config: %v", err))
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update auth config: %v", err))
-			return
+		// Get auth config from store
+		authConfig, _ = h.store.ConfigStore.GetAuthConfig(ctx)
+		if authConfig != nil {
+			err = h.configManager.UpdateAuthConfig(ctx, payload.AuthConfig)
+			if err != nil {
+				logger.Warn(fmt.Sprintf("failed to update auth config: %v", err))
+				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update auth config: %v", err))
+				return
+			}
 		}
 	}
 

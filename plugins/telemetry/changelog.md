@@ -1,1 +1,1 @@
-- chore: upgrade core to 1.2.44 and framework to 1.1.54
+- chore: upgrade core to 1.2.45 and framework to 1.1.55

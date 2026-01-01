@@ -1,5 +1,2 @@
-- fix: handling of nullable text fields in bedrock reasoning content
-- fix: gemini tool conversion with array parameters
-- fix: file name normalization in bedrock document blocks
-- fix: plugin status sync using configuration name
-- chore: upgrade core to 1.2.44 and framework to 1.1.54
+- fix: handles overwriting of key values in case of collision between config.json and db
+- fix: fixes support for referring allowed keys in virtual_keys when setting up Bifrost using config.json
