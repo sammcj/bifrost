@@ -3,6 +3,7 @@ package openai
 import (
 	"strings"
 
+	"github.com/maximhq/bifrost/core/providers/utils"
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
@@ -126,6 +127,33 @@ func ToOpenAIResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *Open
 		}
 		// Drop user field if it exceeds OpenAI's 64 character limit
 		req.ResponsesParameters.User = SanitizeUserField(req.ResponsesParameters.User)
+
+		// Handle reasoning parameter: OpenAI uses effort-based reasoning
+		// Priority: effort (native) > max_tokens (estimated)
+		if req.ResponsesParameters.Reasoning != nil {
+			if req.ResponsesParameters.Reasoning.Effort != nil {
+				// Native field is provided, use it (and clear max_tokens)
+				effort := *req.ResponsesParameters.Reasoning.Effort
+				// Convert "minimal" to "low" for non-OpenAI providers
+				if effort == "minimal" {
+					req.ResponsesParameters.Reasoning.Effort = schemas.Ptr("low")
+				}
+				// Clear max_tokens since OpenAI doesn't use it
+				req.ResponsesParameters.Reasoning.MaxTokens = nil
+			} else if req.ResponsesParameters.Reasoning.MaxTokens != nil {
+				// Estimate effort from max_tokens
+				maxTokens := *req.ResponsesParameters.Reasoning.MaxTokens
+				maxOutputTokens := DefaultCompletionMaxTokens
+				if req.ResponsesParameters.MaxOutputTokens != nil {
+					maxOutputTokens = *req.ResponsesParameters.MaxOutputTokens
+				}
+				effort := utils.GetReasoningEffortFromBudgetTokens(maxTokens, MinReasoningMaxTokens, maxOutputTokens)
+				req.ResponsesParameters.Reasoning.Effort = schemas.Ptr(effort)
+				// Clear max_tokens since OpenAI doesn't use it
+				req.ResponsesParameters.Reasoning.MaxTokens = nil
+			}
+		}
+
 		// Filter out tools that OpenAI doesn't support
 		req.filterUnsupportedTools()
 	}

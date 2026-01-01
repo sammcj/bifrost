@@ -8,9 +8,11 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
-const (
-	MinMaxCompletionTokens = 16
-)
+const MinMaxCompletionTokens = 16
+
+const MinReasoningMaxTokens = 1 // Minimum max tokens for reasoning - used for estimation of effort level
+
+const DefaultCompletionMaxTokens = 4096 // Only used for relative reasoning max token calculation - not passed in body by default
 
 // REQUEST TYPES
 

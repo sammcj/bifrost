@@ -172,7 +172,7 @@ for event in response.get("body"):
 
 Pass AWS credentials or Bedrock API keys directly in requests to bypass Bifrost's load balancing. This requires the **Allow Direct API keys** option to be enabled in Bifrost configuration.
 
-> **Learn more:** See [Key Management](../../../features/keys-management#direct-key-bypass) for enabling direct API key usage.
+> **Learn more:** See [Key Management](../../features/keys-management#direct-key-bypass) for enabling direct API key usage.
 
 When direct keys are enabled, you can pass your AWS credentials directly to the boto3 client instead of using dummy credentials.
 
@@ -221,6 +221,6 @@ The Bedrock integration currently supports:
 
 - **[Files and Batch API](./files-and-batch)** - S3-based file operations and batch processing
 - **[What is an integration?](../what-is-an-integration)** - Core integration concepts  
-- **[Configuration](../../../quickstart)** - Bedrock provider setup and API key management  
+- **[Configuration](../../quickstart/gateway/provider-configuration)** - Bedrock provider setup and API key management  
 - **[Core Features](../../features/)** - Governance, semantic caching, and more
 
