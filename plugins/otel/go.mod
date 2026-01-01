@@ -3,8 +3,8 @@ module github.com/maximhq/bifrost/plugins/otel
 go 1.25.5
 
 require (
-	github.com/maximhq/bifrost/core v1.2.44
-	github.com/maximhq/bifrost/framework v1.1.54
+	github.com/maximhq/bifrost/core v1.2.45
+	github.com/maximhq/bifrost/framework v1.1.55
 	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.11
 )
