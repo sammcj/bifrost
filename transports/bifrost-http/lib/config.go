@@ -111,15 +111,19 @@ func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 	// Extract provider configs from virtual keys.
 	// Keys can be either full definitions (with value) or references (name only).
 	// References are resolved by looking up the key by name from the providers section.
+	// NOTE: Only FULL key definitions (with Value) should be added to the provider.
+	// Reference lookups are for virtual key resolution only - they should NOT be added
+	// back to the provider since they already exist there.
 	if cd.Governance != nil && cd.Governance.VirtualKeys != nil {
 		for _, virtualKey := range cd.Governance.VirtualKeys {
 			if virtualKey.ProviderConfigs != nil {
 				for _, providerConfig := range virtualKey.ProviderConfigs {
-					var keys []schemas.Key
+					// Only collect keys with Value (full definitions) to add to provider
+					var keysToAddToProvider []schemas.Key
 					for _, tableKey := range providerConfig.Keys {
 						if tableKey.Value != "" {
-							// Full key definition - use as-is
-							keys = append(keys, schemas.Key{
+							// Full key definition - add to provider
+							keysToAddToProvider = append(keysToAddToProvider, schemas.Key{
 								ID:               tableKey.KeyID,
 								Name:             tableKey.Name,
 								Value:            tableKey.Value,
@@ -131,25 +135,18 @@ func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 								VertexKeyConfig:  tableKey.VertexKeyConfig,
 								BedrockKeyConfig: tableKey.BedrockKeyConfig,
 							})
-						} else if existingProvider, ok := cd.Providers[providerConfig.Provider]; ok {
-							// Reference - look up by name from provider's keys
-							for _, existingKey := range existingProvider.Keys {
-								if existingKey.Name == tableKey.Name {
-									keys = append(keys, existingKey)
-									break
-								}
-							}
 						}
+						// Reference lookups (no Value) are NOT added to provider - they already exist there
 					}
 
-					// Merge or create provider entry
-					if len(keys) > 0 {
+					// Merge or create provider entry - only for full key definitions
+					if len(keysToAddToProvider) > 0 {
 						if existing, ok := cd.Providers[providerConfig.Provider]; ok {
-							existing.Keys = append(existing.Keys, keys...)
+							existing.Keys = append(existing.Keys, keysToAddToProvider...)
 							cd.Providers[providerConfig.Provider] = existing
 						} else {
 							cd.Providers[providerConfig.Provider] = configstore.ProviderConfig{
-								Keys: keys,
+								Keys: keysToAddToProvider,
 							}
 						}
 					}
@@ -2525,6 +2522,12 @@ func (c *Config) UpdateProviderConfig(ctx context.Context, provider schemas.Mode
 	if err := ValidateCustomProviderUpdate(config, existingConfig, provider); err != nil {
 		return err
 	}
+
+	// Preserve the existing ConfigHash - this is the original hash from config.json
+	// and must be retained so that on server restart, the hash comparison works correctly
+	// and user's key value changes are preserved (not overwritten by config.json)
+	config.ConfigHash = existingConfig.ConfigHash
+
 	// Track new environment variables being added
 	newEnvKeys := make(map[string]struct{})
 
