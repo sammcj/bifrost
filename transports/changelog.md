@@ -1,2 +1,0 @@
-- fix: fixes allowed_keys parsing from config.json as a string array
-- chore: removes some extra debug logs
