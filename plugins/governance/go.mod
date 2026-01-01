@@ -6,7 +6,7 @@ require gorm.io/gorm v1.31.1
 
 require (
 	github.com/maximhq/bifrost/core v1.2.45
-	github.com/maximhq/bifrost/framework v1.1.55
+	github.com/maximhq/bifrost/framework v1.1.56
 )
 
 require (
