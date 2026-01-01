@@ -1,2 +1,0 @@
-- fix: handles overwriting of key values in case of collision between config.json and db
-- fix: fixes support for referring allowed keys in virtual_keys when setting up Bifrost using config.json
