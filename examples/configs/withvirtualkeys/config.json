@@ -1,0 +1,101 @@
+{
+    "$schema": "https://www.getbifrost.ai/schema",
+    "client": {
+        "allow_direct_keys": false,
+        "allowed_origins": [
+            "*"
+        ],
+        "disable_content_logging": false,
+        "drop_excess_requests": false,
+        "enable_governance": true,
+        "enable_litellm_fallbacks": false,
+        "enable_logging": true,
+        "enforce_governance_header": true,
+        "initial_pool_size": 100,
+        "log_retention_days": 365,
+        "max_request_body_size_mb": 100
+    },
+    "config_store": {
+        "config": {
+            "path": "../../examples/configs/withvirtualkeys/config.db"
+        },
+        "enabled": true,
+        "type": "sqlite"
+    },
+    "framework": {
+        "pricing": {
+            "pricing_sync_interval": 86400
+        }
+    },
+    "governance": {
+        "budgets": [
+            {
+                "id": "budget-dev",
+                "max_limit": 50,
+                "reset_duration": "1M"
+            }
+        ],
+        "rate_limits": [
+            {
+                "id": "rate-limit-standard",
+                "request_max_limit": 1000,
+                "request_reset_duration": "1h",
+                "token_max_limit": 100000,
+                "token_reset_duration": "1h"
+            }
+        ],
+        "virtual_keys": [
+            {
+                "budget_id": "budget-dev",
+                "id": "vk-test",
+                "is_active": true,
+                "name": "Test Key",
+                "provider_configs": [
+                    {
+                        "keys": [
+                            {
+                                "name": "openai-primary"
+                            }
+                        ],
+                        "provider": "openai",
+                        "weight": 1
+                    }
+                ],
+                "rate_limit_id": "rate-limit-standard",
+                "value": "vk-test-xxxxx"
+            }
+        ]
+    },
+    "logs_store": {
+        "config": {
+            "path": "../../examples/configs/withvirtualkeys/logs.db"
+        },
+        "enabled": true,
+        "type": "sqlite"
+    },
+    "plugins": [
+        {
+            "config": {},
+            "enabled": true,
+            "name": "logging"
+        },
+        {
+            "config": {
+                "is_vk_mandatory": false
+            },
+            "enabled": true,
+            "name": "governance"
+        }
+    ],
+    "providers": {        
+        "openai": {                        
+            "keys": [
+                {                    
+                    "name": "openai-primary",
+                    "value": "sk-dummy-key",
+                    "weight": 1
+                }
+            ]
+        }
+    }
+}

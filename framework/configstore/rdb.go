@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -249,10 +250,15 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 		// Create keys for this provider
 		dbKeys := make([]tables.TableKey, 0, len(providerConfig.Keys))
 		for _, key := range providerConfig.Keys {
-			// Generate key hash
-			keyHash, err := GenerateKeyHash(key)
-			if err != nil {
-				return fmt.Errorf("failed to generate key hash: %w", err)
+			// Use existing ConfigHash if set (came from reconciliation with DB),
+			// otherwise generate new hash (new key from config.json)
+			keyHash := key.ConfigHash
+			if keyHash == "" {
+				var err error
+				keyHash, err = GenerateKeyHash(key)
+				if err != nil {
+					return fmt.Errorf("failed to generate key hash: %w", err)
+				}
 			}
 			dbKey := tables.TableKey{
 				Provider:         dbProvider.Name,
@@ -308,6 +314,9 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 
 		// Upsert keys to handle duplicates properly
 		for _, dbKey := range dbKeys {
+			// #region agent log
+			func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H1","location":"rdb.go:UpdateProvidersConfig","message":"upserting key","data":{"keyName":"%s","keyID":"%s","provider":"%s"},"timestamp":%d}`+"\n", dbKey.Name, dbKey.KeyID, dbKey.Provider, time.Now().UnixMilli())); f.Close() } }()
+			// #endregion
 			// First try to find existing key by KeyID
 			var existingKey tables.TableKey
 			result := txDB.WithContext(ctx).Where("key_id = ?", dbKey.KeyID).First(&existingKey)
@@ -320,10 +329,35 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 				if err := txDB.WithContext(ctx).Save(&dbKey).Error; err != nil {
 					return s.parseGormError(err)
 				}
+				// #region agent log
+				func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H1","location":"rdb.go:UpdateProvidersConfig","message":"updated existing key by KeyID","data":{"keyName":"%s","dbID":%d},"timestamp":%d}`+"\n", dbKey.Name, dbKey.ID, time.Now().UnixMilli())); f.Close() } }()
+				// #endregion
 			} else if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-				// Create new key
-				if err := txDB.WithContext(ctx).Create(&dbKey).Error; err != nil {
-					return s.parseGormError(err)
+				// KeyID not found, try fallback lookup by Name (handles config reload with new UUID)
+				result = txDB.WithContext(ctx).Where("name = ?", dbKey.Name).First(&existingKey)
+				if result.Error == nil {
+					// Found by name - update existing key, preserve original KeyID
+					dbKey.ID = existingKey.ID
+					dbKey.KeyID = existingKey.KeyID       // Preserve original KeyID
+					dbKey.ProviderID = existingKey.ProviderID
+					dbKey.Enabled = existingKey.Enabled
+					if err := txDB.WithContext(ctx).Save(&dbKey).Error; err != nil {
+						return s.parseGormError(err)
+					}
+					// #region agent log
+					func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H1","location":"rdb.go:UpdateProvidersConfig","message":"updated existing key by Name","data":{"keyName":"%s","dbID":%d},"timestamp":%d}`+"\n", dbKey.Name, dbKey.ID, time.Now().UnixMilli())); f.Close() } }()
+					// #endregion
+				} else if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+					// Neither KeyID nor Name found - create new key
+					if err := txDB.WithContext(ctx).Create(&dbKey).Error; err != nil {
+						return s.parseGormError(err)
+					}
+					// #region agent log
+					func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H1","location":"rdb.go:UpdateProvidersConfig","message":"created new key","data":{"keyName":"%s","dbID":%d,"provider":"%s"},"timestamp":%d}`+"\n", dbKey.Name, dbKey.ID, dbKey.Provider, time.Now().UnixMilli())); f.Close() } }()
+					// #endregion
+				} else {
+					// Other error occurred during name lookup
+					return result.Error
 				}
 			} else {
 				// Other error occurred
@@ -443,16 +477,19 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 
 		// Check if this key already exists
 		if existingKey, exists := existingKeysMap[key.ID]; exists {
-			// Update existing key - preserve the database ID
+			// Update existing key - preserve the database ID and ConfigHash
+			// ConfigHash should only be set during initial sync from config.json,
+			// not when updating via UI (so DB updates aren't overwritten on restart)
 			dbKey.ID = existingKey.ID
 			dbKey.Enabled = existingKey.Enabled
+			dbKey.ConfigHash = existingKey.ConfigHash
 			if err := txDB.WithContext(ctx).Save(&dbKey).Error; err != nil {
 				return s.parseGormError(err)
 			}
 			// Remove from map to track which keys are still in use
 			delete(existingKeysMap, key.ID)
 		} else {
-			// Create new key
+			// Create new key - ConfigHash is set from the generated hash above
 			if err := txDB.WithContext(ctx).Create(&dbKey).Error; err != nil {
 				return s.parseGormError(err)
 			}
@@ -694,6 +731,7 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 				AzureKeyConfig:   azureConfig,
 				VertexKeyConfig:  vertexConfig,
 				BedrockKeyConfig: bedrockConfig,
+				ConfigHash:       dbKey.ConfigHash,
 			}
 		}
 		providerConfig := ProviderConfig{
@@ -1502,6 +1540,9 @@ func (s *RDBConfigStore) GetVirtualKeyProviderConfigs(ctx context.Context, virtu
 
 // CreateVirtualKeyProviderConfig creates a new virtual key provider config in the database.
 func (s *RDBConfigStore) CreateVirtualKeyProviderConfig(ctx context.Context, virtualKeyProviderConfig *tables.TableVirtualKeyProviderConfig, tx ...*gorm.DB) error {
+	// #region agent log
+	func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H2","location":"rdb.go:CreateVirtualKeyProviderConfig","message":"entry","data":{"vkID":"%s","provider":"%s","keysCount":%d},"timestamp":%d}`+"\n", virtualKeyProviderConfig.VirtualKeyID, virtualKeyProviderConfig.Provider, len(virtualKeyProviderConfig.Keys), time.Now().UnixMilli())); f.Close() } }()
+	// #endregion
 	var txDB *gorm.DB
 	if len(tx) > 0 {
 		txDB = tx[0]
@@ -1517,6 +1558,9 @@ func (s *RDBConfigStore) CreateVirtualKeyProviderConfig(ctx context.Context, vir
 		resolvedKeys := make([]tables.TableKey, 0, len(keysToAssociate))
 		var unresolvedKeys []string
 		for i, k := range keysToAssociate {
+			// #region agent log
+			func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H2","location":"rdb.go:CreateVirtualKeyProviderConfig","message":"resolving key","data":{"keyName":"%s","keyKeyID":"%s","keyDBID":%d,"provider":"%s"},"timestamp":%d}`+"\n", k.Name, k.KeyID, k.ID, virtualKeyProviderConfig.Provider, time.Now().UnixMilli())); f.Close() } }()
+			// #endregion
 			// If key already has a database ID (from UI), use it directly
 			if k.ID > 0 {
 				resolvedKeys = append(resolvedKeys, k)
@@ -1529,12 +1573,22 @@ func (s *RDBConfigStore) CreateVirtualKeyProviderConfig(ctx context.Context, vir
 				if err := txDB.WithContext(ctx).Where("key_id = ?", k.KeyID).First(&dbKey).Error; err == nil {
 					resolvedKeys = append(resolvedKeys, dbKey)
 					resolved = true
+					// #region agent log
+					func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H3","location":"rdb.go:CreateVirtualKeyProviderConfig","message":"resolved by KeyID","data":{"keyName":"%s","resolvedDBID":%d},"timestamp":%d}`+"\n", k.Name, dbKey.ID, time.Now().UnixMilli())); f.Close() } }()
+					// #endregion
 				}
 			}
 			if !resolved && k.Name != "" {
 				if err := txDB.WithContext(ctx).Where("name = ? AND provider = ?", k.Name, virtualKeyProviderConfig.Provider).First(&dbKey).Error; err == nil {
 					resolvedKeys = append(resolvedKeys, dbKey)
 					resolved = true
+					// #region agent log
+					func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H3","location":"rdb.go:CreateVirtualKeyProviderConfig","message":"resolved by Name","data":{"keyName":"%s","resolvedDBID":%d,"provider":"%s"},"timestamp":%d}`+"\n", k.Name, dbKey.ID, dbKey.Provider, time.Now().UnixMilli())); f.Close() } }()
+					// #endregion
+				} else {
+					// #region agent log
+					func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H2","location":"rdb.go:CreateVirtualKeyProviderConfig","message":"name lookup failed","data":{"keyName":"%s","provider":"%s","error":"%v"},"timestamp":%d}`+"\n", k.Name, virtualKeyProviderConfig.Provider, err, time.Now().UnixMilli())); f.Close() } }()
+					// #endregion
 				}
 			}
 			if !resolved {
@@ -1549,18 +1603,34 @@ func (s *RDBConfigStore) CreateVirtualKeyProviderConfig(ctx context.Context, vir
 			}
 		}
 		if len(unresolvedKeys) > 0 {
+			// #region agent log
+			func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H2","location":"rdb.go:CreateVirtualKeyProviderConfig","message":"unresolved keys","data":{"unresolvedKeys":"%v"},"timestamp":%d}`+"\n", unresolvedKeys, time.Now().UnixMilli())); f.Close() } }()
+			// #endregion
 			return &ErrUnresolvedKeys{Identifiers: unresolvedKeys}
 		}
 		keysToAssociate = resolvedKeys
 	}
 
+	// Clear Keys before Create to prevent GORM from auto-associating unresolved keys (with ID=0)
+	// We'll manually associate the resolved keys after Create
+	virtualKeyProviderConfig.Keys = nil
+
 	if err := txDB.WithContext(ctx).Create(virtualKeyProviderConfig).Error; err != nil {
+		// #region agent log
+		func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H5","location":"rdb.go:CreateVirtualKeyProviderConfig","message":"create failed","data":{"error":"%v"},"timestamp":%d}`+"\n", err, time.Now().UnixMilli())); f.Close() } }()
+		// #endregion
 		return s.parseGormError(err)
 	}
 
 	// Associate keys after the provider config has an ID
 	if len(keysToAssociate) > 0 {
+		// #region agent log
+		func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H3","location":"rdb.go:CreateVirtualKeyProviderConfig","message":"associating keys","data":{"providerConfigID":%d,"keysCount":%d},"timestamp":%d}`+"\n", virtualKeyProviderConfig.ID, len(keysToAssociate), time.Now().UnixMilli())); f.Close() } }()
+		// #endregion
 		if err := txDB.WithContext(ctx).Model(virtualKeyProviderConfig).Association("Keys").Append(keysToAssociate); err != nil {
+			// #region agent log
+			func() { f, _ := os.OpenFile("/Users/akshay/Codebase/universe/bifrost/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if f != nil { f.WriteString(fmt.Sprintf(`{"hypothesisId":"H3","location":"rdb.go:CreateVirtualKeyProviderConfig","message":"association failed","data":{"error":"%v"},"timestamp":%d}`+"\n", err, time.Now().UnixMilli())); f.Close() } }()
+			// #endregion
 			return err
 		}
 	}
@@ -1621,6 +1691,10 @@ func (s *RDBConfigStore) UpdateVirtualKeyProviderConfig(ctx context.Context, vir
 		}
 		keysToAssociate = resolvedKeys
 	}
+
+	// Clear Keys before Save to prevent GORM from auto-associating unresolved keys (with ID=0)
+	// We'll manually manage the association after Save
+	virtualKeyProviderConfig.Keys = nil
 
 	if err := txDB.WithContext(ctx).Save(virtualKeyProviderConfig).Error; err != nil {
 		return s.parseGormError(err)
@@ -2065,7 +2139,12 @@ func (s *RDBConfigStore) GetGovernanceConfig(ctx context.Context) (*GovernanceCo
 	var rateLimits []tables.TableRateLimit
 	var governanceConfigs []tables.TableGovernanceConfig
 
-	if err := s.db.WithContext(ctx).Preload("ProviderConfigs").Find(&virtualKeys).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Preload("ProviderConfigs").
+		Preload("ProviderConfigs.Keys", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, name, key_id, models_json, provider")
+		}).
+		Find(&virtualKeys).Error; err != nil {
 		return nil, err
 	}
 	if err := s.db.WithContext(ctx).Find(&teams).Error; err != nil {

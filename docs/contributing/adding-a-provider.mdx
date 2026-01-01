@@ -1597,7 +1597,7 @@ cerebras: "Cerebras",
 
 ---
 
-### Step 4: Update OpenAPI Specification (`docs/apis/openapi.json`)
+### Step 4: Update OpenAPI Specification (`docs/openapi/openapi.json`)
 
 Add your provider to the API documentation's provider enum:
 
@@ -1617,7 +1617,7 @@ Add your provider to the API documentation's provider enum:
 }
 ```
 
-**Location**: Search for the `"AI model provider"` description in `docs/apis/openapi.json` and add your provider to the enum array.
+**Location**: Search for the `"AI model provider"` description in `docs/openapi/openapi.json` and add your provider to the enum array.
 
 ---
 
@@ -1776,7 +1776,7 @@ Before submitting your PR, verify all UI changes:
 - ✅ Provider icon added to `ui/lib/constants/icons.tsx`
 - ✅ Provider name added to `ui/lib/constants/logs.ts` (KnownProvidersNames)
 - ✅ Provider label added to `ui/lib/constants/logs.ts` (ProviderLabels)
-- ✅ Provider added to OpenAPI spec enum (`docs/apis/openapi.json`)
+- ✅ Provider added to OpenAPI spec enum (`docs/openapi/openapi.json`)
 - ✅ Provider added to config schema (`transports/config.schema.json`) - 2 locations
 - ✅ Provider listed in UI README (`ui/README.md`)
 - ✅ Provider import added to `core/bifrost.go`
@@ -1786,7 +1786,284 @@ Before submitting your PR, verify all UI changes:
 
 ---
 
+## Creating Provider Documentation
 
+**MANDATORY**: Every new provider must have comprehensive documentation in the docs directory. This documentation helps users understand how the provider works, what parameters it supports, and any special considerations.
+
+---
+
+### Documentation File Location
+
+Create a new MDX file at: `docs/providers/supported-providers/[provider_name].mdx`
+
+**Example**: For a provider named "example", create: `docs/providers/supported-providers/example.mdx`
+
+---
+
+### Documentation Structure
+
+Your provider documentation should follow this structure for consistency. **Reference complete examples**:
+- **Groq**: `docs/providers/supported-providers/groq.mdx` (OpenAI-compatible provider)
+- **Bedrock**: `docs/providers/supported-providers/bedrock.mdx` (Custom API provider with multiple features)
+- **Cerebras**: `docs/providers/supported-providers/cerebras.mdx` (OpenAI-compatible, simple)
+- **Mistral**: `docs/providers/supported-providers/mistral.mdx` (Transcription + chat support)
+- **Ollama**: `docs/providers/supported-providers/ollama.mdx` (Local-first infrastructure)
+
+### Required Sections
+
+#### 1. Front Matter (Frontmatter)
+
+```yaml
+---
+title: "[Provider Full Name]"
+description: "[Brief description] - parameter mapping, [key features], and [auth method]"
+icon: "[icon letter or emoji]"
+---
+```
+
+**Example**:
+```yaml
+---
+title: "Groq"
+description: "Groq API conversion guide - OpenAI-compatible format, parameter handling, text completion fallback, streaming, and tool support"
+icon: "g"
+---
+```
+
+#### 2. Overview Section
+
+Start with a brief overview explaining:
+- What the provider is and its key characteristics
+- How Bifrost converts requests to/from this provider's format
+- List of major transformation features
+
+**Template**:
+```markdown
+## Overview
+
+[Provider Name] is a **[type: OpenAI-compatible/custom API/local-first]** provider offering [key features]. Bifrost converts requests to [Provider]'s expected format with [specific features]. Key characteristics:
+- **[Feature 1]** - brief description
+- **[Feature 2]** - brief description
+- **[Feature 3]** - brief description
+```
+
+#### 3. Supported Operations Table
+
+Create a table showing which operations are supported:
+
+```markdown
+### Supported Operations
+
+| Operation | Non-Streaming | Streaming | Endpoint | Notes |
+|-----------|---------------|-----------|----------|-------|
+| Chat Completions | ✅ | ✅ | `/v1/chat/completions` | |
+| Text Completions | ❌ | ❌ | Not supported | |
+| Embeddings | ✅ | ❌ | `/v1/embeddings` | |
+| List Models | ✅ | ❌ | `/v1/models` | |
+```
+
+#### 4. Feature Sections (One per Supported Feature)
+
+For each major feature (Chat Completions, Embeddings, etc.):
+
+##### a. Request Parameters
+```markdown
+## Request Parameters
+
+### Parameter Mapping
+
+| Parameter | Transformation | Notes |
+|-----------|----------------|-------|
+| `max_completion_tokens` | Direct pass-through | Minimum X tokens |
+| `temperature` | Renamed to `temp` | Provider-specific name |
+```
+
+Include:
+- OpenAI parameter name
+- How it's transformed for the provider (renamed, dropped, etc.)
+- Any special notes or constraints
+
+##### b. Filtered/Dropped Parameters
+```markdown
+### Filtered Parameters
+
+Removed for [Provider] compatibility:
+- `prompt_cache_key` - Not supported
+- `store` - Not supported
+```
+
+##### c. Special Features
+```markdown
+### [Feature Name]
+
+Document any provider-specific features like:
+- Reasoning/thinking support
+- Special authentication
+- Unique parameters
+- Format conversions
+```
+
+##### d. Message Conversion
+```markdown
+## Message Conversion
+
+Content types supported:
+- ✅ Text content
+- ✅ Images (URL and base64)
+- ❌ Audio input
+```
+
+##### e. Response Conversion
+```markdown
+## Response Conversion
+
+Field mapping from provider format back to Bifrost standard.
+```
+
+#### 5. Streaming Section (If Supported)
+
+```markdown
+## Streaming
+
+[Provider] uses **[protocol: SSE/WebSocket/custom]** streaming with:
+- Request configuration: stream: true
+- Event format: [description]
+- End marker: [description]
+```
+
+#### 6. Authentication Section
+
+```markdown
+## Authentication
+
+**[Authentication Type]:**
+
+```
+Authorization: [format]
+```
+
+[Additional details about key management, etc.]
+```
+
+#### 7. Configuration Section
+
+```markdown
+## Configuration
+
+**HTTP Settings:**
+- **Base URL**: `[default URL]` (default)
+- **API Version**: [version info]
+- **Max Connections**: 5000 per host
+- **Idle Timeout**: 60 seconds
+```
+
+#### 8. Caveats/Important Notes
+
+Use collapsible accordion sections for limitations:
+
+```markdown
+## Caveats
+
+<Accordion title="[Caveat Title]">
+**Severity**: [High/Medium/Low]
+**Behavior**: [What happens]
+**Impact**: [What breaks/changes]
+**Code**: [File references if relevant]
+</Accordion>
+
+<Accordion title="[Another Caveat]">
+...
+</Accordion>
+```
+
+Common caveats to document:
+- Unsupported content types (images, audio, etc.)
+- Parameter limitations
+- Streaming restrictions
+- Special handling required
+- Breaking behavioral differences from OpenAI standard
+
+#### 9. Warnings/Notes
+
+Use special callouts for important information:
+
+```markdown
+<Warning>
+**Unsupported Operations**: [List operations], [List operations].
+</Warning>
+
+<Note>
+[Provider] requires [special setup/configuration].
+</Note>
+
+<Tip>
+[Helpful tip for using this provider effectively].
+</Tip>
+```
+
+### Code Examples in Documentation
+
+Include examples in both formats where applicable:
+
+```markdown
+&lt;Tabs&gt;
+&lt;Tab title="Gateway"&gt;
+
+`````bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "[provider]/[model]",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+`````
+&lt;/Tab&gt;
+&lt;Tab title="Go SDK"&gt;
+
+`````go
+response, err := client.ChatCompletion(ctx, &schemas.BifrostChatRequest{
+    Provider: schemas.ProviderName,
+    Model:    "model-name",
+    Input:    messages,
+})
+`````
+
+&lt;/Tab&gt;
+&lt;/Tabs&gt;
+```
+
+### Documentation Formatting Standards
+
+- **Markdown**: Use standard MDX syntax compatible with the documentation site
+- **Code blocks**: Always specify language (bash, go, json, yaml)
+- **Tables**: Use pipes for alignment and clarity
+- **Sections**: Use H1 (#) for main provider, H2 (##) for major sections, H3 (###) for subsections
+- **Lists**: Use bullets (-) for unordered, numbers (1.) for ordered
+- **Emphasis**: Use **bold** for important terms, `code` for inline code
+
+### Documentation Checklist
+
+Before submitting your documentation:
+
+- ✅ File created: `docs/providers/supported-providers/[provider_name].mdx`
+- ✅ Front matter with title, description, and icon
+- ✅ Overview section explaining the provider
+- ✅ Supported Operations table (accurate for your implementation)
+- ✅ Parameter mapping documented for each supported feature
+- ✅ Filtered parameters listed
+- ✅ Message conversion explained (content types)
+- ✅ Tool/function support documented (if applicable)
+- ✅ Response conversion patterns explained
+- ✅ Streaming behavior documented (if supported)
+- ✅ Authentication method clearly explained
+- ✅ Configuration section with base URL and settings
+- ✅ Caveats documented with severity ratings
+- ✅ Code examples for Gateway and Go SDK (where applicable)
+- ✅ All special features explained
+- ✅ Links to reference existing implementations (if applicable)
+- ✅ Warnings for unsupported features
+
+---
 
 ## Adding Automated Tests
 
