@@ -146,12 +146,12 @@ func ToAnthropicChatRequest(bifrostReq *schemas.BifrostChatRequest) (*AnthropicM
 		case schemas.ChatMessageRoleSystem:
 			// Handle system message separately
 			if msg.Content != nil {
-				if msg.Content.ContentStr != nil {
+				if msg.Content.ContentStr != nil && *msg.Content.ContentStr != "" {
 					systemContent = &AnthropicContent{ContentStr: msg.Content.ContentStr}
 				} else if msg.Content.ContentBlocks != nil {
 					blocks := make([]AnthropicContentBlock, 0, len(msg.Content.ContentBlocks))
 					for _, block := range msg.Content.ContentBlocks {
-						if block.Text != nil {
+						if block.Text != nil && *block.Text != "" {
 							blocks = append(blocks, AnthropicContentBlock{
 								Type:         AnthropicContentBlockTypeText,
 								Text:         block.Text,
@@ -181,12 +181,12 @@ func ToAnthropicChatRequest(bifrostReq *schemas.BifrostChatRequest) (*AnthropicM
 
 					// Convert tool result content
 					if toolMsg.Content != nil {
-						if toolMsg.Content.ContentStr != nil {
+						if toolMsg.Content.ContentStr != nil && *toolMsg.Content.ContentStr != "" {
 							toolResult.Content = &AnthropicContent{ContentStr: toolMsg.Content.ContentStr}
 						} else if toolMsg.Content.ContentBlocks != nil {
 							blocks := make([]AnthropicContentBlock, 0, len(toolMsg.Content.ContentBlocks))
 							for _, block := range toolMsg.Content.ContentBlocks {
-								if block.Text != nil {
+								if block.Text != nil && *block.Text != "" {
 									blocks = append(blocks, AnthropicContentBlock{
 										Type:         AnthropicContentBlockTypeText,
 										Text:         block.Text,
@@ -236,14 +236,14 @@ func ToAnthropicChatRequest(bifrostReq *schemas.BifrostChatRequest) (*AnthropicM
 
 			if msg.Content != nil {
 				// Convert text content
-				if msg.Content.ContentStr != nil {
+				if msg.Content.ContentStr != nil && *msg.Content.ContentStr != "" {
 					content = append(content, AnthropicContentBlock{
 						Type: AnthropicContentBlockTypeText,
 						Text: msg.Content.ContentStr,
 					})
 				} else if msg.Content.ContentBlocks != nil {
 					for _, block := range msg.Content.ContentBlocks {
-						if block.Text != nil {
+						if block.Text != nil && *block.Text != "" {
 							content = append(content, AnthropicContentBlock{
 								Type:         AnthropicContentBlockTypeText,
 								Text:         block.Text,

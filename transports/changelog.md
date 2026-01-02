@@ -1,0 +1,1 @@
+- fix: empty string handling in Anthropic provider to prevent sending empty content blocks in chat requests
