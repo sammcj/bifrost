@@ -497,16 +497,10 @@ func (t *Tracer) ProcessStreamingChunk(ctx *schemas.BifrostContext, traceID stri
 		return nil
 	}
 
-	// Create a new context that wraps the original but overrides requestID with traceID.
-	// BifrostContextKeyRequestID is a reserved key, so we can't use SetValue.
-	// Instead, we create a new parent context with the traceID as requestID,
-	// then create a BifrostContext that inherits the stream end indicator from the original.
-	parent := context.WithValue(ctx, schemas.BifrostContextKeyRequestID, traceID)
-	// Copy stream end indicator from the original context's parent (if available)
-	if streamEnd := ctx.Value(schemas.BifrostContextKeyStreamEndIndicator); streamEnd != nil {
-		parent = context.WithValue(parent, schemas.BifrostContextKeyStreamEndIndicator, streamEnd)
-	}
-	accumCtx := schemas.NewBifrostContext(parent, time.Time{})
+	// Create a new context for accumulator that sets the traceID as the accumulator lookup ID.
+	// This inherits from the original context (preserves stream end indicator).
+	accumCtx := schemas.NewBifrostContext(ctx, time.Time{})
+	accumCtx.SetValue(schemas.BifrostContextKeyAccumulatorID, traceID)
 
 	processedResp, processErr := t.accumulator.ProcessStreamingResponse(accumCtx, result, err)
 	if processErr != nil || processedResp == nil {

@@ -10,6 +10,15 @@ import (
 	"github.com/maximhq/bifrost/framework/modelcatalog"
 )
 
+// getAccumulatorID extracts the ID for accumulator lookup from context.
+// Returns the value of BifrostContextKeyAccumulatorID.
+func getAccumulatorID(ctx *schemas.BifrostContext) (string, bool) {
+	if id, ok := (*ctx).Value(schemas.BifrostContextKeyAccumulatorID).(string); ok && id != "" {
+		return id, true
+	}
+	return "", false
+}
+
 // Accumulator manages accumulation of streaming chunks
 type Accumulator struct {
 	logger schemas.Logger
