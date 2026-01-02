@@ -56,6 +56,8 @@ function SheetContent({
 	children,
 	side = "right",
 	expandable = false,
+	onPointerDownOutside,
+	onInteractOutside,
 	...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
 	side?: "top" | "right" | "bottom" | "left";
@@ -63,12 +65,45 @@ function SheetContent({
 }) {
 	const [expanded, setExpanded] = useState(false);
 
+	// Check if the target is a portaled element (like react-select menu)
+	const isPortaledElement = (target: HTMLElement | null): boolean => {
+		if (!target) return false;
+		// Check for react-select menu portal elements
+		return !!(
+			target.closest('[class*="-menu"]') ||
+			target.closest('[class*="MenuPortal"]') ||
+			target.closest('[role="listbox"]') ||
+			target.closest('[role="option"]') ||
+			target.closest('[data-radix-popper-content-wrapper]')
+		);
+	};
+
+	const handlePointerDownOutside = (event: React.PointerEvent | CustomEvent) => {
+		const target = (event as CustomEvent).detail?.originalEvent?.target as HTMLElement;
+		if (isPortaledElement(target)) {
+			event.preventDefault();
+			return;
+		}
+		onPointerDownOutside?.(event as any);
+	};
+
+	const handleInteractOutside = (event: React.FocusEvent | CustomEvent) => {
+		const target = (event as CustomEvent).detail?.originalEvent?.target as HTMLElement;
+		if (isPortaledElement(target)) {
+			event.preventDefault();
+			return;
+		}
+		onInteractOutside?.(event as any);
+	};
+
 	return (
 		<SheetContext.Provider value={{ expanded, setExpanded, side, expandable }}>
 			<SheetPortal>
 				<SheetOverlay />
 				<SheetPrimitive.Content
 					data-slot="sheet-content"
+					onPointerDownOutside={handlePointerDownOutside}
+					onInteractOutside={handleInteractOutside}
 					className={cn(
 						"bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col shadow-lg transition-all ease-in-out data-[state=closed]:duration-100 data-[state=open]:duration-100",
 						side === "right" &&
