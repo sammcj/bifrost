@@ -1,0 +1,1 @@
+- chore: upgrade core to 1.3.2 and framework to 1.2.2
