@@ -1,1 +1,2 @@
+- chore: added max_tokens -> max_completion_tokens mapping for chat completions
 - fix: empty string handling in Anthropic provider to prevent sending empty content blocks in chat requests

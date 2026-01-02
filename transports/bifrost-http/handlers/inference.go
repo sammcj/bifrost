@@ -633,6 +633,26 @@ func (h *CompletionHandler) chatCompletion(ctx *fasthttp.RequestCtx) {
 	if err != nil {
 		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
 	} else {
+		// Handle max_tokens -> max_completion_tokens mapping after extracting extra params
+		// If max_completion_tokens is nil and max_tokens is present in extra params, map it
+		// This is to support the legacy max_tokens field, which is still used by some implementations.
+		if req.ChatParameters.MaxCompletionTokens == nil {
+			if maxTokensVal, exists := extraParams["max_tokens"]; exists {
+				// Type check and convert to int
+				// JSON numbers are unmarshaled as float64, so we need to handle that
+				var maxTokens int
+				if maxTokensFloat, ok := maxTokensVal.(float64); ok {
+					maxTokens = int(maxTokensFloat)
+					req.ChatParameters.MaxCompletionTokens = &maxTokens
+					// Remove max_tokens from extra params since we've mapped it
+					delete(extraParams, "max_tokens")
+				} else if maxTokensInt, ok := maxTokensVal.(int); ok {
+					req.ChatParameters.MaxCompletionTokens = &maxTokensInt
+					// Remove max_tokens from extra params since we've mapped it
+					delete(extraParams, "max_tokens")
+				}
+			}
+		}
 		req.ChatParameters.ExtraParams = extraParams
 	}
 
