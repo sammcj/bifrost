@@ -2076,12 +2076,10 @@ func (r *GeminiGenerationRequest) convertParamsToGenerationConfigResponses(param
 
 // convertResponsesToolsToGemini converts Responses tools to Gemini tools
 func convertResponsesToolsToGemini(tools []schemas.ResponsesTool) []Tool {
-	var geminiTools []Tool
+	geminiTool := Tool{}
 
 	for _, tool := range tools {
 		if tool.Type == "function" {
-			geminiTool := Tool{}
-
 			// Extract function information from ResponsesExtendedTool
 			if tool.ResponsesToolFunction != nil {
 				if tool.Name != nil && tool.ResponsesToolFunction != nil {
@@ -2100,17 +2098,16 @@ func convertResponsesToolsToGemini(tools []schemas.ResponsesTool) []Tool {
 							return nil
 						}(),
 					}
-					geminiTool.FunctionDeclarations = []*FunctionDeclaration{funcDecl}
+					geminiTool.FunctionDeclarations = append(geminiTool.FunctionDeclarations, funcDecl)
 				}
-			}
-
-			if len(geminiTool.FunctionDeclarations) > 0 {
-				geminiTools = append(geminiTools, geminiTool)
 			}
 		}
 	}
 
-	return geminiTools
+	if len(geminiTool.FunctionDeclarations) > 0 {
+		return []Tool{geminiTool}
+	}
+	return []Tool{}
 }
 
 // convertResponsesToolChoiceToGemini converts Responses tool choice to Gemini tool config
