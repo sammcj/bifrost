@@ -88,7 +88,34 @@ resp, err := client.ChatCompletionRequest(ctx, &schemas.BifrostChatRequest{
 
 ### Key Configuration
 
-The key configuration for Azure requires:
+Azure supports two authentication methods:
+
+#### Azure Entra ID (Service Principal)
+
+If you set `client_id`, `client_secret`, and `tenant_id`, Azure Entra ID authentication will be used with priority over API key authentication.
+
+```json
+{
+  "azure_key_config": {
+    "endpoint": "https://your-org.openai.azure.com",
+    "client_id": "your-client-id",
+    "client_secret": "your-client-secret",
+    "tenant_id": "your-tenant-id",
+    "api_version": "2024-10-21",
+    "deployments": {
+      "gpt-4": "my-gpt4-deployment",
+      "gpt-4-turbo": "my-gpt4-turbo-deployment",
+      "claude-3": "my-claude-deployment"
+    }
+  }
+}
+```
+
+**Required Azure Roles**:
+- For OpenAI models: `Cognitive Services OpenAI User`
+- For Anthropic models: `Cognitive Services AI Services User`
+
+#### Direct Authentication (API Key)
 
 ```json
 {
@@ -106,6 +133,9 @@ The key configuration for Azure requires:
 
 **Configuration Details**:
 - `endpoint` - Azure OpenAI resource endpoint (required)
+- `client_id` - Azure Entra ID client ID (optional, for Service Principal auth)
+- `client_secret` - Azure Entra ID client secret (optional, for Service Principal auth)
+- `tenant_id` - Azure Entra ID tenant ID (optional, for Service Principal auth)
 - `api_version` - API version to use (default: `2024-10-21`)
 - `deployments` - Map of model names to deployment IDs (optional, can be provided per-request)
 - `allowed_models` - List of allowed models to use from this key (optional)

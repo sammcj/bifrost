@@ -173,6 +173,13 @@ async function getLatestVersion() {
 	return data.name;
 }
 
+// Check if a specific version exists on the download server
+async function checkVersionExists(version, platformDir, archDir, binaryName) {
+	const url = `${BASE_URL}/bifrost/${version}/${platformDir}/${archDir}/${binaryName}`;
+	const res = await fetch(url, { method: "HEAD" });
+	return res.ok;
+}
+
 function formatBytes(bytes) {
 	if (bytes === 0) return "0 B";
 	const k = 1024;
@@ -185,7 +192,21 @@ function formatBytes(bytes) {
 	const platformInfo = await getPlatformArchAndBinary();
 	const { platformDir, archDir, binaryName } = platformInfo;
 
-	const namedVersion = VERSION === "latest" ? await getLatestVersion() : VERSION;
+	let namedVersion;
+
+	if (VERSION === "latest") {
+		// For "latest", fetch the latest version from the API
+		namedVersion = await getLatestVersion();
+	} else {
+		// For explicitly specified versions, verify it exists on the server
+		const versionExists = await checkVersionExists(VERSION, platformDir, archDir, binaryName);
+		if (!versionExists) {
+			console.error(`❌ Transport version '${VERSION}' not found.`);
+			console.error(`Please verify the version exists at: ${BASE_URL}/bifrost/`);
+			process.exit(1);
+		}
+		namedVersion = VERSION;
+	}
 
 	// Check if we got a valid version for namedVersion
 	// If namedVersion is null, there is no way to get the latest version

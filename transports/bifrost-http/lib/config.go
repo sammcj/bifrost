@@ -116,15 +116,19 @@ func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 	// Extract provider configs from virtual keys.
 	// Keys can be either full definitions (with value) or references (name only).
 	// References are resolved by looking up the key by name from the providers section.
+	// NOTE: Only FULL key definitions (with Value) should be added to the provider.
+	// Reference lookups are for virtual key resolution only - they should NOT be added
+	// back to the provider since they already exist there.
 	if cd.Governance != nil && cd.Governance.VirtualKeys != nil {
 		for _, virtualKey := range cd.Governance.VirtualKeys {
 			if virtualKey.ProviderConfigs != nil {
 				for _, providerConfig := range virtualKey.ProviderConfigs {
-					var keys []schemas.Key
+					// Only collect keys with Value (full definitions) to add to provider
+					var keysToAddToProvider []schemas.Key
 					for _, tableKey := range providerConfig.Keys {
 						if tableKey.Value != "" {
-							// Full key definition - use as-is
-							keys = append(keys, schemas.Key{
+							// Full key definition - add to provider
+							keysToAddToProvider = append(keysToAddToProvider, schemas.Key{
 								ID:               tableKey.KeyID,
 								Name:             tableKey.Name,
 								Value:            tableKey.Value,
@@ -136,25 +140,18 @@ func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 								VertexKeyConfig:  tableKey.VertexKeyConfig,
 								BedrockKeyConfig: tableKey.BedrockKeyConfig,
 							})
-						} else if existingProvider, ok := cd.Providers[providerConfig.Provider]; ok {
-							// Reference - look up by name from provider's keys
-							for _, existingKey := range existingProvider.Keys {
-								if existingKey.Name == tableKey.Name {
-									keys = append(keys, existingKey)
-									break
-								}
-							}
 						}
+						// Reference lookups (no Value) are NOT added to provider - they already exist there
 					}
 
-					// Merge or create provider entry
-					if len(keys) > 0 {
+					// Merge or create provider entry - only for full key definitions
+					if len(keysToAddToProvider) > 0 {
 						if existing, ok := cd.Providers[providerConfig.Provider]; ok {
-							existing.Keys = append(existing.Keys, keys...)
+							existing.Keys = append(existing.Keys, keysToAddToProvider...)
 							cd.Providers[providerConfig.Provider] = existing
 						} else {
 							cd.Providers[providerConfig.Provider] = configstore.ProviderConfig{
-								Keys: keys,
+								Keys: keysToAddToProvider,
 							}
 						}
 					}
@@ -2340,7 +2337,34 @@ func (c *Config) GetProviderConfigRedacted(provider schemas.ModelProvider) (*con
 					azureConfig.APIVersion = key.AzureKeyConfig.APIVersion
 				}
 			}
+			// Redact ClientID if present
+			if key.AzureKeyConfig.ClientID != nil {
+				path = fmt.Sprintf("providers.%s.keys[%s].azure_key_config.client_id", provider, key.ID)
+				if envVar, ok := envVarsByPath[path]; ok {
+					azureConfig.ClientID = bifrost.Ptr("env." + envVar)
+				} else {
+					azureConfig.ClientID = bifrost.Ptr(RedactKey(*key.AzureKeyConfig.ClientID))
+				}
+			}
+			// Redact ClientSecret if present
+			if key.AzureKeyConfig.ClientSecret != nil {
+				path = fmt.Sprintf("providers.%s.keys[%s].azure_key_config.client_secret", provider, key.ID)
+				if envVar, ok := envVarsByPath[path]; ok {
+					azureConfig.ClientSecret = bifrost.Ptr("env." + envVar)
+				} else if !strings.HasPrefix(*key.AzureKeyConfig.ClientSecret, "env.") {
+					azureConfig.ClientSecret = bifrost.Ptr(RedactKey(*key.AzureKeyConfig.ClientSecret))
+				}
+			}
 
+			// Redact TenantID if present
+			if key.AzureKeyConfig.TenantID != nil {
+				path = fmt.Sprintf("providers.%s.keys[%s].azure_key_config.tenant_id", provider, key.ID)
+				if envVar, ok := envVarsByPath[path]; ok {
+					azureConfig.TenantID = bifrost.Ptr("env." + envVar)
+				} else {
+					azureConfig.TenantID = bifrost.Ptr(RedactKey(*key.AzureKeyConfig.TenantID))
+				}
+			}
 			redactedConfig.Keys[i].AzureKeyConfig = azureConfig
 		}
 
@@ -2582,6 +2606,12 @@ func (c *Config) UpdateProviderConfig(ctx context.Context, provider schemas.Mode
 	if err := ValidateCustomProviderUpdate(config, existingConfig, provider); err != nil {
 		return err
 	}
+
+	// Preserve the existing ConfigHash - this is the original hash from config.json
+	// and must be retained so that on server restart, the hash comparison works correctly
+	// and user's key value changes are preserved (not overwritten by config.json)
+	config.ConfigHash = existingConfig.ConfigHash
+
 	// Track new environment variables being added
 	newEnvKeys := make(map[string]struct{})
 
@@ -3446,6 +3476,18 @@ func (c *Config) getFieldValue(key schemas.Key, fieldName string) string {
 		if key.AzureKeyConfig != nil && key.AzureKeyConfig.APIVersion != nil {
 			return *key.AzureKeyConfig.APIVersion
 		}
+	case "client_id":
+		if key.AzureKeyConfig != nil && key.AzureKeyConfig.ClientID != nil {
+			return *key.AzureKeyConfig.ClientID
+		}
+	case "client_secret":
+		if key.AzureKeyConfig != nil && key.AzureKeyConfig.ClientSecret != nil {
+			return *key.AzureKeyConfig.ClientSecret
+		}
+	case "tenant_id":
+		if key.AzureKeyConfig != nil && key.AzureKeyConfig.TenantID != nil {
+			return *key.AzureKeyConfig.TenantID
+		}
 	case "access_key":
 		if key.BedrockKeyConfig != nil {
 			return key.BedrockKeyConfig.AccessKey
@@ -3579,6 +3621,63 @@ func (c *Config) processAzureKeyConfigEnvVars(key *schemas.Key, provider schemas
 		azureConfig.APIVersion = &processedAPIVersion
 	}
 
+	// Process ClientID if present
+	if azureConfig.ClientID != nil {
+		processedClientID, envVar, err := c.processEnvValue(*azureConfig.ClientID)
+		if err != nil {
+			return err
+		}
+		if envVar != "" {
+			newEnvKeys[envVar] = struct{}{}
+			c.EnvKeys[envVar] = append(c.EnvKeys[envVar], configstore.EnvKeyInfo{
+				EnvVar:     envVar,
+				Provider:   provider,
+				KeyType:    "azure_config",
+				ConfigPath: fmt.Sprintf("providers.%s.keys[%s].azure_key_config.client_id", provider, key.ID),
+				KeyID:      key.ID,
+			})
+		}
+		azureConfig.ClientID = &processedClientID
+	}
+
+	// Process ClientSecret if present
+	if azureConfig.ClientSecret != nil {
+		processedClientSecret, envVar, err := c.processEnvValue(*azureConfig.ClientSecret)
+		if err != nil {
+			return err
+		}
+		azureConfig.ClientSecret = &processedClientSecret
+		if envVar != "" {
+			newEnvKeys[envVar] = struct{}{}
+			c.EnvKeys[envVar] = append(c.EnvKeys[envVar], configstore.EnvKeyInfo{
+				EnvVar:     envVar,
+				Provider:   provider,
+				KeyType:    "azure_config",
+				ConfigPath: fmt.Sprintf("providers.%s.keys[%s].azure_key_config.client_secret", provider, key.ID),
+				KeyID:      key.ID,
+			})
+		}
+		azureConfig.ClientSecret = &processedClientSecret
+	}
+
+	// Process TenantID if present
+	if azureConfig.TenantID != nil {
+		processedTenantID, envVar, err := c.processEnvValue(*azureConfig.TenantID)
+		if err != nil {
+			return err
+		}
+		if envVar != "" {
+			newEnvKeys[envVar] = struct{}{}
+			c.EnvKeys[envVar] = append(c.EnvKeys[envVar], configstore.EnvKeyInfo{
+				EnvVar:     envVar,
+				Provider:   provider,
+				KeyType:    "azure_config",
+				ConfigPath: fmt.Sprintf("providers.%s.keys[%s].azure_key_config.tenant_id", provider, key.ID),
+				KeyID:      key.ID,
+			})
+		}
+		azureConfig.TenantID = &processedTenantID
+	}
 	return nil
 }
 

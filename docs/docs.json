@@ -350,25 +350,32 @@
         "tab": "Changelogs",
         "icon": "bolt",
         "pages": [
-          "changelogs/v1.4.0-prerelease2",
-          "changelogs/v1.4.0-prerelease1",
-          "changelogs/v1.3.54",
-          "changelogs/v1.3.53",
-          "changelogs/v1.3.52",
-          "changelogs/v1.3.51",
-          "changelogs/v1.3.50",
-          "changelogs/v1.3.49",
-          "changelogs/v1.3.48",
-          "changelogs/v1.3.47",
-          "changelogs/v1.3.46",
-          "changelogs/v1.3.45",
-          "changelogs/v1.3.44",
-          "changelogs/v1.3.43",
-          "changelogs/v1.3.42",
-          "changelogs/v1.3.41",
-          "changelogs/v1.3.40",
-          "changelogs/v1.3.39",
-          "changelogs/v1.3.38",
+          "changelogs/v1.3.57",
+          "changelogs/v1.3.56",
+          {
+            "group": "December 2025",
+            "pages": [
+              "changelogs/v1.4.0-prerelease2",
+              "changelogs/v1.4.0-prerelease1",
+              "changelogs/v1.3.54",
+              "changelogs/v1.3.53",
+              "changelogs/v1.3.52",
+              "changelogs/v1.3.51",
+              "changelogs/v1.3.50",
+              "changelogs/v1.3.49",
+              "changelogs/v1.3.48",
+              "changelogs/v1.3.47",
+              "changelogs/v1.3.46",
+              "changelogs/v1.3.45",
+              "changelogs/v1.3.44",
+              "changelogs/v1.3.43",
+              "changelogs/v1.3.42",
+              "changelogs/v1.3.41",
+              "changelogs/v1.3.40",
+              "changelogs/v1.3.39",
+              "changelogs/v1.3.38"
+            ]
+          },
           {
             "group": "November 2025",
             "pages": [
@@ -438,14 +445,14 @@
     ]
   },
   "redirects": [
-  {
-    "source": "/features/unified-interface",
-    "destination": "/providers/supported-providers/overview"
-  },
-  {
-    "source": "/providers/huggingface",
-    "destination": "/providers/supported-providers/huggingface"
-  }
+    {
+      "source": "/features/unified-interface",
+      "destination": "/providers/supported-providers/overview"
+    },
+    {
+      "source": "/providers/huggingface",
+      "destination": "/providers/supported-providers/huggingface"
+    }
   ],
   "footer": {
     "socials": {

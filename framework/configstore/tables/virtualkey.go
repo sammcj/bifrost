@@ -1,6 +1,7 @@
 package tables
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -40,6 +41,35 @@ func (TableVirtualKeyProviderConfig) TableName() string {
 	return "governance_virtual_key_provider_configs"
 }
 
+// UnmarshalJSON custom unmarshaller to handle both "keys" ([]TableKey) and "allowed_keys" ([]string) formats
+func (pc *TableVirtualKeyProviderConfig) UnmarshalJSON(data []byte) error {
+	// Temporary struct to capture all fields including allowed_keys
+	type Alias TableVirtualKeyProviderConfig
+	type TempProviderConfig struct {
+		Alias
+		AllowedKeys []string `json:"allowed_keys"` // Config file format: array of key names
+	}
+
+	var temp TempProviderConfig
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	// Copy all standard fields
+	*pc = TableVirtualKeyProviderConfig(temp.Alias)
+
+	// If allowed_keys is provided (config file format), convert to Keys
+	// This takes precedence if Keys is empty but allowed_keys has values
+	if len(temp.AllowedKeys) > 0 && len(pc.Keys) == 0 {
+		pc.Keys = make([]TableKey, len(temp.AllowedKeys))
+		for i, keyName := range temp.AllowedKeys {
+			pc.Keys[i] = TableKey{Name: keyName}
+		}
+	}
+
+	return nil
+}
+
 // AfterFind hook for TableVirtualKeyProviderConfig to clear sensitive data from associated keys
 func (pc *TableVirtualKeyProviderConfig) AfterFind(tx *gorm.DB) error {
 	if pc.Keys != nil {
@@ -53,6 +83,9 @@ func (pc *TableVirtualKeyProviderConfig) AfterFind(tx *gorm.DB) error {
 			// Clear all Azure-related sensitive fields
 			key.AzureEndpoint = nil
 			key.AzureAPIVersion = nil
+			key.AzureClientID = nil
+			key.AzureClientSecret = nil
+			key.AzureTenantID = nil
 			key.AzureDeploymentsJSON = nil
 			key.AzureKeyConfig = nil
 

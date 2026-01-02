@@ -425,11 +425,11 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 	return (
 		<Sheet open={isOpen} onOpenChange={(open) => !open && handleClose()}>
 			<SheetContent
-				className="dark:bg-card flex w-full flex-col overflow-x-hidden bg-white p-8"
+				className="dark:bg-card flex w-full flex-col overflow-x-hidden bg-white px-4  pb-8"
 				onInteractOutside={(e) => e.preventDefault()}
 				onEscapeKeyDown={(e) => e.preventDefault()}
 			>
-				<SheetHeader className="flex flex-col items-start p-0">
+				<SheetHeader className="flex flex-col items-start  pt-8">
 					<SheetTitle className="flex items-center gap-2">{isEditing ? virtualKey?.name : "Create Virtual Key"}</SheetTitle>
 					<SheetDescription>
 						{isEditing
@@ -439,7 +439,7 @@ export default function VirtualKeySheet({ virtualKey, teams, customers, onSave, 
 				</SheetHeader>
 
 				<Form {...form}>
-					<form onSubmit={form.handleSubmit(onSubmit)} className="flex h-full flex-col gap-6">
+					<form onSubmit={form.handleSubmit(onSubmit)} className="flex h-full flex-col gap-6 px-4">
 						<div className="space-y-4">
 							{/* Basic Information */}
 							<div className="space-y-4">
