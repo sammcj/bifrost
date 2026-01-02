@@ -136,7 +136,7 @@ export function ModelMultiselect({
 			isCreatable={true}
 			dynamicOptionCreation={true}
 			createOptionText="Press enter to add new model"
-			defaultOptions={defaultOptions.length > 0 ? defaultOptions : true}
+			defaultOptions={defaultOptions.length > 0 ? defaultOptions : ([] as ModelOption[])}
 			isLoading={isLoading}
 			placeholder={placeholder}
 			disabled={disabled || !provider}
@@ -152,7 +152,7 @@ export function ModelMultiselect({
 			noResultsFoundPlaceholder="No models found"
 			emptyResultPlaceholder={provider ? "Start typing to search models..." : "Please select a provider first"}
 			views={{
-				dropdownIndicator: () => <></>,				
+				dropdownIndicator: () => <></>,
 				multiValue: (multiValueProps: MultiValueProps<ModelOption>) => {
 					return (
 						<div
