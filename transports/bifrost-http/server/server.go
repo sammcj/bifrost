@@ -101,6 +101,8 @@ type BifrostHTTPServer struct {
 	pluginStatusMutex sync.RWMutex
 	pluginStatus      []schemas.PluginStatus
 
+	tracingMiddleware *handlers.TracingMiddleware
+
 	Client *bifrost.Bifrost
 	Config *lib.Config
 
@@ -831,7 +833,26 @@ func (s *BifrostHTTPServer) ReloadPlugin(ctx context.Context, name string, path 
 		s.UpdatePluginStatus(name, schemas.PluginStatusError, []string{fmt.Sprintf("error loading plugin %s: %v", name, err)})
 		return err
 	}
-	return s.SyncLoadedPlugin(ctx, name, newPlugin)
+	err = s.SyncLoadedPlugin(ctx, name, newPlugin)
+	if err != nil {
+		return err
+	}
+	// Here if its observability plugin, we need to reload it
+	if _, ok := newPlugin.(schemas.ObservabilityPlugin); ok {
+		// We will re-collect the observability plugins from the plugins list
+		observabilityPlugins := []schemas.ObservabilityPlugin{}
+		s.PluginsMutex.RLock()
+		defer s.PluginsMutex.RUnlock()
+		for _, plugin := range s.Plugins {
+			if observabilityPlugin, ok := plugin.(schemas.ObservabilityPlugin); ok {
+				observabilityPlugins = append(observabilityPlugins, observabilityPlugin)
+			}
+		}
+		if len(observabilityPlugins) > 0 {
+			s.tracingMiddleware.SetObservabilityPlugins(observabilityPlugins)
+		}
+	}
+	return nil
 }
 
 // ReloadPricingManager reloads the pricing manager
@@ -921,6 +942,11 @@ func (s *BifrostHTTPServer) GetModelsForProvider(provider schemas.ModelProvider)
 // RemovePlugin removes a plugin from the server.
 // Uses atomic CompareAndSwap with retry loop to handle concurrent updates safely.
 func (s *BifrostHTTPServer) RemovePlugin(ctx context.Context, name string) error {
+	// Get plugin
+	plugin, err := FindPluginByName[schemas.Plugin](s.Plugins, name)
+	if err != nil {
+		return fmt.Errorf("failed to find plugin %s: %s", name, err.Error())
+	}
 	if err := s.Client.RemovePlugin(name); err != nil {
 		return err
 	}
@@ -931,6 +957,7 @@ func (s *BifrostHTTPServer) RemovePlugin(ctx context.Context, name string) error
 		// Plugin is being deleted - remove the status entry completely
 		s.DeletePluginStatus(name)
 	}
+
 	// CAS retry loop (matching bifrost.go pattern)
 	for {
 		oldPlugins := s.Config.Plugins.Load()
@@ -950,12 +977,26 @@ func (s *BifrostHTTPServer) RemovePlugin(ctx context.Context, name string) error
 		// Atomic compare-and-swap
 		if s.Config.Plugins.CompareAndSwap(oldPlugins, &newPlugins) {
 			s.PluginsMutex.Lock()
-			defer s.PluginsMutex.Unlock()
 			s.Plugins = newPlugins // Keep BifrostHTTPServer.Plugins in sync
-			return nil
+			s.PluginsMutex.Unlock()
+			break
 		}
 		// Retry on contention (extremely rare for plugin updates)
 	}
+	// Here if its observability plugin, we need to reload it
+	if _, ok := plugin.(schemas.ObservabilityPlugin); ok {
+		// We will re-collect the observability plugins from the plugins list
+		observabilityPlugins := []schemas.ObservabilityPlugin{}
+		s.PluginsMutex.RLock()
+		defer s.PluginsMutex.RUnlock()
+		for _, plugin := range s.Plugins {
+			if observabilityPlugin, ok := plugin.(schemas.ObservabilityPlugin); ok {
+				observabilityPlugins = append(observabilityPlugins, observabilityPlugin)
+			}
+		}
+		s.tracingMiddleware.SetObservabilityPlugins(observabilityPlugins)
+	}
+	return nil
 }
 
 // RegisterInferenceRoutes initializes the routes for the inference handler
@@ -1253,23 +1294,15 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 			observabilityPlugins = append(observabilityPlugins, observabilityPlugin)
 		}
 	}
-	// Check if logging plugin is enabled
-	loggingPluginEnabled := false
-	if _, err := FindPluginByName[*logging.LoggerPlugin](s.Plugins, logging.PluginName); err == nil {
-		loggingPluginEnabled = true
-	}
-	// Initialize tracer when observability plugins OR logging plugin is enabled
 	// This enables the central streaming accumulator for both use cases
-	if len(observabilityPlugins) > 0 || loggingPluginEnabled {
-		// Initializing tracer with embedded streaming accumulator
-		traceStore := tracing.NewTraceStore(60*time.Minute, logger)
-		tracer := tracing.NewTracer(traceStore, s.Config.PricingManager, logger)
-		s.Client.SetTracer(tracer)
-		// Always add tracing middleware when tracer is enabled - it creates traces and sets traceID in context
-		// The observability plugins are optional (can be empty if only logging is enabled)
-		tracingMiddleware := handlers.NewTracingMiddleware(tracer, observabilityPlugins)
-		inferenceMiddlewares = append([]schemas.BifrostHTTPMiddleware{tracingMiddleware.Middleware()}, inferenceMiddlewares...)
-	}
+	// Initializing tracer with embedded streaming accumulator
+	traceStore := tracing.NewTraceStore(60*time.Minute, logger)
+	tracer := tracing.NewTracer(traceStore, s.Config.PricingManager, logger)
+	s.Client.SetTracer(tracer)
+	// Always add tracing middleware when tracer is enabled - it creates traces and sets traceID in context
+	// The observability plugins are optional (can be empty if only logging is enabled)
+	s.tracingMiddleware = handlers.NewTracingMiddleware(tracer, observabilityPlugins)
+	inferenceMiddlewares = append([]schemas.BifrostHTTPMiddleware{s.tracingMiddleware.Middleware()}, inferenceMiddlewares...)
 	err = s.RegisterInferenceRoutes(s.ctx, inferenceMiddlewares...)
 	if err != nil {
 		return fmt.Errorf("failed to initialize inference routes: %v", err)
@@ -1293,7 +1326,7 @@ func (s *BifrostHTTPServer) Start() error {
 	for _, pluginStatus := range s.pluginStatus {
 		logger.Info("plugin status: %s - %s", pluginStatus.Name, pluginStatus.Status)
 	}
-	s.pluginStatusMutex.RUnlock()	
+	s.pluginStatusMutex.RUnlock()
 	// Create channels for signal and error handling
 	sigChan := make(chan os.Signal, 1)
 	errChan := make(chan error, 1)
