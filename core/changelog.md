@@ -1,1 +1,2 @@
 - fix: empty string handling in Anthropic provider to prevent sending empty content blocks in chat requests
+- fix: Gemini/Vertex tool conversion to append all function declarations to a single Tool object
