@@ -1,1 +1,2 @@
 - chore: upgraded maxim-go to v0.1.15
+- chore: upgrades core to 1.2.46 and framework to 1.1.57
