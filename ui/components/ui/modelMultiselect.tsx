@@ -136,7 +136,7 @@ export function ModelMultiselect({
 			isCreatable={true}
 			dynamicOptionCreation={true}
 			createOptionText="Press enter to add new model"
-			defaultOptions={defaultOptions.length > 0 ? defaultOptions : true}
+			defaultOptions={defaultOptions.length > 0 ? defaultOptions : [] as Option<ModelOption>[]}
 			isLoading={isLoading}
 			placeholder={placeholder}
 			disabled={disabled || !provider}
