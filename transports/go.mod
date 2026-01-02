@@ -8,14 +8,14 @@ require (
 	github.com/fasthttp/router v1.5.4
 	github.com/fasthttp/websocket v1.5.12
 	github.com/google/uuid v1.6.0
-	github.com/maximhq/bifrost/core v1.2.45
-	github.com/maximhq/bifrost/framework v1.1.56
-	github.com/maximhq/bifrost/plugins/governance v1.3.57
-	github.com/maximhq/bifrost/plugins/logging v1.3.57
-	github.com/maximhq/bifrost/plugins/maxim v1.4.57
-	github.com/maximhq/bifrost/plugins/otel v1.0.56
-	github.com/maximhq/bifrost/plugins/semanticcache v1.3.56
-	github.com/maximhq/bifrost/plugins/telemetry v1.3.56
+	github.com/maximhq/bifrost/core v1.2.46
+	github.com/maximhq/bifrost/framework v1.1.57
+	github.com/maximhq/bifrost/plugins/governance v1.3.58
+	github.com/maximhq/bifrost/plugins/logging v1.3.58
+	github.com/maximhq/bifrost/plugins/maxim v1.4.59
+	github.com/maximhq/bifrost/plugins/otel v1.0.57
+	github.com/maximhq/bifrost/plugins/semanticcache v1.3.57
+	github.com/maximhq/bifrost/plugins/telemetry v1.3.57
 	github.com/prometheus/client_golang v1.23.0
 	github.com/stretchr/testify v1.11.1
 	github.com/valyala/fasthttp v1.68.0
@@ -25,6 +25,10 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
+	github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.0 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.6 // indirect
@@ -77,6 +81,7 @@ require (
 	github.com/go-openapi/swag/yamlutils v0.25.4 // indirect
 	github.com/go-openapi/validate v0.25.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
@@ -88,15 +93,17 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mailru/easyjson v0.9.1 // indirect
 	github.com/mark3labs/mcp-go v0.43.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-sqlite3 v1.14.32 // indirect
-	github.com/maximhq/bifrost/plugins/mocker v1.3.56 // indirect
+	github.com/maximhq/bifrost/plugins/mocker v1.3.57 // indirect
 	github.com/maximhq/maxim-go v0.1.15 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
+	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
