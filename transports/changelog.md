@@ -1,0 +1,1 @@
+- fix: added missing logs filter checks in ui for live updates

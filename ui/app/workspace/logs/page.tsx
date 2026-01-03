@@ -447,6 +447,15 @@ export default function LogsPage() {
 		if (filters.status?.length && !filters.status.includes(log.status)) {
 			return false;
 		}
+		if (filters.objects?.length && !filters.objects.includes(log.object)) {
+			return false;
+		}
+		if (filters.selected_key_ids?.length && !filters.selected_key_ids.includes(log.selected_key_id)) {
+			return false;
+		}
+		if (filters.virtual_key_ids?.length && log.virtual_key_id && !filters.virtual_key_ids.includes(log.virtual_key_id)) {
+			return false;
+		}
 		if (filters.start_time && new Date(log.timestamp) < new Date(filters.start_time)) {
 			return false;
 		}
