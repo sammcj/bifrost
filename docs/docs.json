@@ -351,6 +351,7 @@
         "icon": "bolt",
         "pages": [
           "changelogs/v1.4.0-prerelease3",
+          "changelogs/v1.3.58",
           "changelogs/v1.3.57",
           "changelogs/v1.3.56",
           {
