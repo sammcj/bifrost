@@ -35,6 +35,7 @@ import (
 	"github.com/maximhq/bifrost/core/providers/sgl"
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	"github.com/maximhq/bifrost/core/providers/vertex"
+	"github.com/maximhq/bifrost/core/providers/xai"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/valyala/fasthttp"
 )
@@ -2075,6 +2076,8 @@ func (bifrost *Bifrost) createBaseProvider(providerKey schemas.ModelProvider, co
 		return nebius.NewNebiusProvider(config, bifrost.logger)
 	case schemas.HuggingFace:
 		return huggingface.NewHuggingFaceProvider(config, bifrost.logger), nil
+	case schemas.XAI:
+		return xai.NewXAIProvider(config, bifrost.logger)
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", targetProviderKey)
 	}
@@ -2362,6 +2365,11 @@ func (bifrost *Bifrost) handleRequest(ctx context.Context, req *schemas.BifrostR
 
 	// Try the primary provider first
 	ctx = context.WithValue(ctx, schemas.BifrostContextKeyFallbackIndex, 0)
+	// Ensure request ID is set in context before PreHooks
+	if _, ok := ctx.Value(schemas.BifrostContextKeyRequestID).(string); !ok {
+		requestID := uuid.New().String()
+		ctx = context.WithValue(ctx, schemas.BifrostContextKeyRequestID, requestID)
+	}
 	primaryResult, primaryErr := bifrost.tryRequest(ctx, req)
 	if primaryErr != nil {
 		if primaryErr.Error != nil {
@@ -2472,6 +2480,11 @@ func (bifrost *Bifrost) handleStreamRequest(ctx context.Context, req *schemas.Bi
 
 	// Try the primary provider first
 	ctx = context.WithValue(ctx, schemas.BifrostContextKeyFallbackIndex, 0)
+	// Ensure request ID is set in context before PreHooks
+	if _, ok := ctx.Value(schemas.BifrostContextKeyRequestID).(string); !ok {
+		requestID := uuid.New().String()
+		ctx = context.WithValue(ctx, schemas.BifrostContextKeyRequestID, requestID)
+	}
 	primaryResult, primaryErr := bifrost.tryStreamRequest(ctx, req)
 
 	// Check if we should proceed with fallbacks
