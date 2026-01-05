@@ -47,7 +47,8 @@ export const ModelPlaceholders = {
 	ollama: "e.g. llama3.1, llama2",
 	openai: "e.g. gpt-4, gpt-4o, gpt-4o-mini, gpt-3.5-turbo",
 	vertex: "e.g. gemini-1.5-pro, text-bison, chat-bison",
-	nebius: "e.g. openai/gpt-oss-120b, google/gemma-2-9b-it-fast, Qwen/Qwen2.5-VL-72B-Instruct"
+	nebius: "e.g. openai/gpt-oss-120b, google/gemma-2-9b-it-fast, Qwen/Qwen2.5-VL-72B-Instruct",
+	xai: "e.g. grok-4-0709, grok-3-mini, grok-3, grok-2-vision-1212",
 };
 
 export const isKeyRequiredByProvider: Record<ProviderName, boolean> = {
@@ -69,6 +70,7 @@ export const isKeyRequiredByProvider: Record<ProviderName, boolean> = {
 	vertex: true,
 	perplexity: true,
 	nebius: true,
+	xai: true,
 };
 
 export const DefaultNetworkConfig = {

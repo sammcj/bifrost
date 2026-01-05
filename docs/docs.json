@@ -107,7 +107,8 @@
                   "providers/supported-providers/parasail",
                   "providers/supported-providers/perplexity",
                   "providers/supported-providers/sgl",
-                  "providers/supported-providers/vertex"
+                  "providers/supported-providers/vertex",
+                  "providers/supported-providers/xai"
                 ]
               },
               "providers/reasoning",
