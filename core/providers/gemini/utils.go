@@ -6,8 +6,63 @@ import (
 	"strings"
 
 	"github.com/bytedance/sonic"
+	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	"github.com/maximhq/bifrost/core/schemas"
 )
+
+// isGemini3Plus returns true if the model is Gemini 3.0 or higher
+// Uses simple string operations for hot path performance
+func isGemini3Plus(model string) bool {
+	// Convert to lowercase for case-insensitive comparison
+	model = strings.ToLower(model)
+
+	// Find "gemini-" prefix
+	idx := strings.Index(model, "gemini-")
+	if idx == -1 {
+		return false
+	}
+
+	// Get the part after "gemini-"
+	afterPrefix := model[idx+7:] // len("gemini-") = 7
+	if len(afterPrefix) == 0 {
+		return false
+	}
+
+	// Check first character - if it's '3' or higher, it's 3.0+
+	firstChar := afterPrefix[0]
+	return firstChar >= '3'
+}
+
+// effortToThinkingLevel converts reasoning effort to Gemini ThinkingLevel string
+// Pro models only support "low" or "high"
+// Other models support "minimal", "low", "medium", and "high"
+func effortToThinkingLevel(effort string, model string) string {
+	isPro := strings.Contains(strings.ToLower(model), "pro")
+
+	switch effort {
+	case "none":
+		return "" // Empty string for no thinking
+	case "minimal":
+		if isPro {
+			return "low" // Pro models don't support minimal, use low
+		}
+		return "minimal"
+	case "low":
+		return "low"
+	case "medium":
+		if isPro {
+			return "high" // Pro models don't support medium, use high
+		}
+		return "medium"
+	case "high":
+		return "high"
+	default:
+		if isPro {
+			return "high"
+		}
+		return "medium"
+	}
+}
 
 func (r *GeminiGenerationRequest) convertGenerationConfigToResponsesParameters() *schemas.ResponsesParameters {
 	params := &schemas.ResponsesParameters{
@@ -36,23 +91,56 @@ func (r *GeminiGenerationRequest) convertGenerationConfigToResponsesParameters()
 		if strings.Contains(r.Model, "openai") {
 			params.Reasoning.Summary = schemas.Ptr("auto")
 		}
-		if config.ThinkingConfig.ThinkingLevel != ThinkingLevelUnspecified {
-			switch config.ThinkingConfig.ThinkingLevel {
-			case ThinkingLevelLow:
-				params.Reasoning.Effort = schemas.Ptr("low")
-			case ThinkingLevelHigh:
-				params.Reasoning.Effort = schemas.Ptr("high")
-			}
+
+		// Determine max tokens for conversions
+		maxTokens := DefaultCompletionMaxTokens
+		if config.MaxOutputTokens > 0 {
+			maxTokens = int(config.MaxOutputTokens)
 		}
+		minBudget := DefaultReasoningMinBudget
+
+		// Priority: Budget first (if present), then Level
 		if config.ThinkingConfig.ThinkingBudget != nil {
-			params.Reasoning.MaxTokens = schemas.Ptr(int(*config.ThinkingConfig.ThinkingBudget))
-			switch *config.ThinkingConfig.ThinkingBudget {
+			// Budget is set - use it directly
+			budget := int(*config.ThinkingConfig.ThinkingBudget)
+			params.Reasoning.MaxTokens = schemas.Ptr(budget)
+
+			// Also provide effort for compatibility
+			effort := providerUtils.GetReasoningEffortFromBudgetTokens(budget, minBudget, maxTokens)
+			params.Reasoning.Effort = schemas.Ptr(effort)
+
+			// Handle special cases
+			switch budget {
 			case 0:
 				params.Reasoning.Effort = schemas.Ptr("none")
-			case -1:
-				// dynamic thinking budget
-				params.Reasoning.Effort = schemas.Ptr("medium")
-				params.Reasoning.MaxTokens = schemas.Ptr(-1)
+			case DynamicReasoningBudget:
+				params.Reasoning.Effort = schemas.Ptr("medium") // dynamic
+			}
+		} else if config.ThinkingConfig.ThinkingLevel != nil && *config.ThinkingConfig.ThinkingLevel != "" {
+			// Level is set (only on 3.0+) - convert to effort and budget
+			level := *config.ThinkingConfig.ThinkingLevel
+			var effort string
+
+			// Map Gemini thinking level to Bifrost effort
+			switch level {
+			case "minimal":
+				effort = "minimal"
+			case "low":
+				effort = "low"
+			case "medium":
+				effort = "medium"
+			case "high":
+				effort = "high"
+			default:
+				effort = "medium"
+			}
+
+			params.Reasoning.Effort = schemas.Ptr(effort)
+
+			// Also convert to budget for compatibility
+			if effort != "none" {
+				budget, _ := providerUtils.GetBudgetTokensFromReasoningEffort(effort, minBudget, maxTokens)
+				params.Reasoning.MaxTokens = schemas.Ptr(budget)
 			}
 		}
 	}
@@ -357,7 +445,7 @@ func convertGeminiUsageMetadataToResponsesUsage(metadata *GenerateContentRespons
 }
 
 // convertParamsToGenerationConfig converts Bifrost parameters to Gemini GenerationConfig
-func convertParamsToGenerationConfig(params *schemas.ChatParameters, responseModalities []string) GenerationConfig {
+func convertParamsToGenerationConfig(params *schemas.ChatParameters, responseModalities []string, model string) GenerationConfig {
 	config := GenerationConfig{}
 
 	// Add response modalities if specified
@@ -396,14 +484,54 @@ func convertParamsToGenerationConfig(params *schemas.ChatParameters, responseMod
 		config.ThinkingConfig = &GenerationConfigThinkingConfig{
 			IncludeThoughts: true,
 		}
-		if params.Reasoning.MaxTokens != nil {
-			config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(*params.Reasoning.MaxTokens))
-		} else if params.Reasoning.Effort != nil {
-			switch *params.Reasoning.Effort {
-			case "minimal", "low":
-				config.ThinkingConfig.ThinkingLevel = ThinkingLevelLow
-			case "medium", "high":
-				config.ThinkingConfig.ThinkingLevel = ThinkingLevelHigh
+
+		// Get max tokens for conversions
+		maxTokens := DefaultCompletionMaxTokens
+		if config.MaxOutputTokens > 0 {
+			maxTokens = int(config.MaxOutputTokens)
+		}
+		minBudget := DefaultReasoningMinBudget
+
+		hasMaxTokens := params.Reasoning.MaxTokens != nil
+		hasEffort := params.Reasoning.Effort != nil
+		supportsLevel := isGemini3Plus(model) // Check if model is 3.0+
+
+		// PRIORITY RULE: If both max_tokens and effort are present, use ONLY max_tokens (budget)
+		// This ensures we send only thinkingBudget to Gemini, not thinkingLevel
+
+		// Handle "none" effort explicitly (only if max_tokens not present)
+		if !hasMaxTokens && hasEffort && *params.Reasoning.Effort == "none" {
+			config.ThinkingConfig.IncludeThoughts = false
+			config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(0))
+		} else if hasMaxTokens {
+			// User provided max_tokens - use thinkingBudget (all Gemini models support this)
+			// If both max_tokens and effort are present, we ignore effort and use ONLY max_tokens
+			budget := *params.Reasoning.MaxTokens
+			switch budget {
+			case 0:
+				config.ThinkingConfig.IncludeThoughts = false
+				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(0))
+			case DynamicReasoningBudget: // Special case: -1 means dynamic budget
+				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(DynamicReasoningBudget))
+			default:
+				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(budget))
+			}
+		} else if hasEffort {
+			// User provided effort only (no max_tokens)
+			if supportsLevel {
+				// Gemini 3.0+ - use thinkingLevel (more native)
+				level := effortToThinkingLevel(*params.Reasoning.Effort, model)
+				config.ThinkingConfig.ThinkingLevel = &level
+			} else {
+				// Gemini < 3.0 - must convert effort to budget
+				budgetTokens, err := providerUtils.GetBudgetTokensFromReasoningEffort(
+					*params.Reasoning.Effort,
+					minBudget,
+					maxTokens,
+				)
+				if err == nil {
+					config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(budgetTokens))
+				}
 			}
 		}
 	}

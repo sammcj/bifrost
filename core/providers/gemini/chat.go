@@ -21,7 +21,7 @@ func ToGeminiChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) *Gemi
 
 	// Convert parameters to generation config
 	if bifrostReq.Params != nil {
-		geminiReq.GenerationConfig = convertParamsToGenerationConfig(bifrostReq.Params, []string{})
+		geminiReq.GenerationConfig = convertParamsToGenerationConfig(bifrostReq.Params, []string{}, bifrostReq.Model)
 
 		// Handle tool-related parameters
 		if len(bifrostReq.Params.Tools) > 0 {
