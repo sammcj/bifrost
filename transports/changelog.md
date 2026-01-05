@@ -1,2 +1,3 @@
 - fix: added missing logs filter checks in ui for live updates
 - fix: ensure request ID is consistently set in context before PreHooks are executed
+- docs: updated docs for xai provider
