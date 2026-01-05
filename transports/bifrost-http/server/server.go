@@ -943,10 +943,7 @@ func (s *BifrostHTTPServer) GetModelsForProvider(provider schemas.ModelProvider)
 // Uses atomic CompareAndSwap with retry loop to handle concurrent updates safely.
 func (s *BifrostHTTPServer) RemovePlugin(ctx context.Context, name string) error {
 	// Get plugin
-	plugin, err := FindPluginByName[schemas.Plugin](s.Plugins, name)
-	if err != nil {
-		return fmt.Errorf("failed to find plugin %s: %s", name, err.Error())
-	}
+	plugin, _ := FindPluginByName[schemas.Plugin](s.Plugins, name)
 	if err := s.Client.RemovePlugin(name); err != nil {
 		return err
 	}
