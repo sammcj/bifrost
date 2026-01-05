@@ -74,7 +74,7 @@ func (r *GeminiGenerationRequest) convertGenerationConfigToResponsesParameters()
 	if config.ResponseMIMEType != "" {
 		switch config.ResponseMIMEType {
 		case "application/json":
-			params.Text = buildOpenAIResponseFormat(config.ResponseSchema, config.ResponseJSONSchema)
+			params.Text = buildOpenAIResponseFormat(config.ResponseJSONSchema)
 		case "text/plain":
 			params.Text = &schemas.ResponsesTextConfig{
 				Format: &schemas.ResponsesTextConfigFormat{
@@ -417,9 +417,9 @@ func convertParamsToGenerationConfig(params *schemas.ChatParameters, responseMod
 				switch formatType {
 				case "json_schema":
 					// OpenAI Structured Outputs: {"type": "json_schema", "json_schema": {...}}
-					if schema := extractSchemaFromResponseFormat(params.ResponseFormat); schema != nil {
+					if schemaMap := extractSchemaMapFromResponseFormat(params.ResponseFormat); schemaMap != nil {
 						config.ResponseMIMEType = "application/json"
-						config.ResponseSchema = schema
+						config.ResponseJSONSchema = schemaMap
 					}
 				case "json_object":
 					// Maps to Gemini's responseMimeType without schema
@@ -438,15 +438,7 @@ func convertParamsToGenerationConfig(params *schemas.ChatParameters, responseMod
 		if responseMimeType, ok := schemas.SafeExtractString(params.ExtraParams["response_mime_type"]); ok {
 			config.ResponseMIMEType = responseMimeType
 		}
-		// Override with explicit response_schema if provided in ExtraParams
-		if responseSchema, ok := params.ExtraParams["response_schema"]; ok {
-			if schemaBytes, err := sonic.Marshal(responseSchema); err == nil {
-				schema := &Schema{}
-				if err := sonic.Unmarshal(schemaBytes, schema); err == nil {
-					config.ResponseSchema = schema
-				}
-			}
-		}
+		// Override with explicit response_json_schema if provided in ExtraParams
 		if responseJsonSchema, ok := params.ExtraParams["response_json_schema"]; ok {
 			config.ResponseJSONSchema = responseJsonSchema
 		}
@@ -945,41 +937,32 @@ func buildJSONSchemaFromMap(schemaMap map[string]interface{}) *schemas.Responses
 }
 
 // buildOpenAIResponseFormat builds OpenAI response_format for JSON types
-func buildOpenAIResponseFormat(responseSchema *Schema, responseJsonSchema interface{}) *schemas.ResponsesTextConfig {
-	var schemaMap map[string]interface{}
-	name := "response_schema"
-
-	// Prefer responseSchema over responseJsonSchema
-	if responseSchema != nil {
-		// Convert Schema struct to map
-		schemaBytes, err := sonic.Marshal(responseSchema)
-		if err == nil {
-			if err := sonic.Unmarshal(schemaBytes, &schemaMap); err == nil {
-				if responseSchema.Title != "" {
-					name = responseSchema.Title
-				}
-			}
-			// If unmarshal failed, schemaMap remains nil - will try next option
-		}
-	}
-
-	if schemaMap == nil && responseJsonSchema != nil {
-		// Use responseJsonSchema directly if it's a map
-		if m, ok := responseJsonSchema.(map[string]interface{}); ok {
-			schemaMap = m
-			if title, ok := m["title"].(string); ok && title != "" {
-				name = title
-			}
-		}
-	}
+func buildOpenAIResponseFormat(responseJsonSchema interface{}) *schemas.ResponsesTextConfig {
+	name := "json_response"
 
 	// No schema provided - use json_object mode
-	if schemaMap == nil {
+	if responseJsonSchema == nil {
 		return &schemas.ResponsesTextConfig{
 			Format: &schemas.ResponsesTextConfigFormat{
 				Type: "json_object",
 			},
 		}
+	}
+
+	// Use responseJsonSchema directly if it's a map
+	schemaMap, ok := responseJsonSchema.(map[string]interface{})
+	if !ok {
+		// If not a map, fall back to json_object mode
+		return &schemas.ResponsesTextConfig{
+			Format: &schemas.ResponsesTextConfigFormat{
+				Type: "json_object",
+			},
+		}
+	}
+
+	// Extract name/title if present
+	if title, ok := schemaMap["title"].(string); ok && title != "" {
+		name = title
 	}
 
 	// Build JSONSchema with individual fields spread out
@@ -995,8 +978,141 @@ func buildOpenAIResponseFormat(responseSchema *Schema, responseJsonSchema interf
 	}
 }
 
-// extractSchemaFromResponseFormat extracts Gemini Schema from OpenAI's response_format structure
-func extractSchemaFromResponseFormat(responseFormat *interface{}) *Schema {
+// extractTypesFromValue extracts type strings from various formats (string, []string, []interface{})
+func extractTypesFromValue(typeVal interface{}) []string {
+	switch t := typeVal.(type) {
+	case string:
+		return []string{t}
+	case []string:
+		return t
+	case []interface{}:
+		types := make([]string, 0, len(t))
+		for _, item := range t {
+			if typeStr, ok := item.(string); ok {
+				types = append(types, typeStr)
+			}
+		}
+		return types
+	default:
+		return nil
+	}
+}
+
+// normalizeSchemaForGemini recursively normalizes a JSON schema to be compatible with Gemini's API.
+// This handles cases where:
+// 1. type is an array like ["string", "null"] - kept as-is (Gemini supports this)
+// 2. type is an array with multiple non-null types like ["string", "integer"] - converted to anyOf
+// 3. Enums with nullable types need special handling
+func normalizeSchemaForGemini(schema map[string]interface{}) map[string]interface{} {
+	if schema == nil {
+		return nil
+	}
+
+	normalized := make(map[string]interface{})
+	for k, v := range schema {
+		normalized[k] = v
+	}
+
+	// Handle type field if it's an array (e.g., ["string", "null"] or ["string", "integer"])
+	if typeVal, exists := normalized["type"]; exists {
+		types := extractTypesFromValue(typeVal)
+		if len(types) > 1 {
+			// Count non-null types
+			nonNullTypes := make([]string, 0, len(types))
+			hasNull := false
+			for _, t := range types {
+				if t != "null" {
+					nonNullTypes = append(nonNullTypes, t)
+				} else {
+					hasNull = true
+				}
+			}
+
+			// If we have multiple non-null types, we need to convert to anyOf
+			// because Gemini only supports ["type", "null"] but not ["type1", "type2"]
+			if len(nonNullTypes) > 1 {
+				// Multiple non-null types - must use anyOf
+				delete(normalized, "type")
+
+				// Build anyOf with each non-null type
+				anyOfSchemas := make([]interface{}, 0, len(types))
+				for _, t := range nonNullTypes {
+					typeSchema := map[string]interface{}{"type": t}
+					anyOfSchemas = append(anyOfSchemas, typeSchema)
+				}
+
+				// If original had null, add it to anyOf
+				if hasNull {
+					anyOfSchemas = append(anyOfSchemas, map[string]interface{}{"type": "null"})
+				}
+
+				normalized["anyOf"] = anyOfSchemas
+
+				// Remove enum from top level if present, as it may not be compatible with anyOf
+				delete(normalized, "enum")
+			} else if len(nonNullTypes) == 1 && hasNull {
+				// Single non-null type with null - keep as array (Gemini supports this)
+				normalized["type"] = []interface{}{nonNullTypes[0], "null"}
+			} else if len(nonNullTypes) == 1 && !hasNull {
+				// Single type only - simplify to string
+				normalized["type"] = nonNullTypes[0]
+			} else if len(nonNullTypes) == 0 && hasNull {
+				// Only null type
+				normalized["type"] = "null"
+			}
+		}
+	}
+
+	// Recursively normalize properties
+	if properties, ok := schema["properties"].(map[string]interface{}); ok {
+		newProps := make(map[string]interface{})
+		for key, prop := range properties {
+			if propMap, ok := prop.(map[string]interface{}); ok {
+				newProps[key] = normalizeSchemaForGemini(propMap)
+			} else {
+				newProps[key] = prop
+			}
+		}
+		normalized["properties"] = newProps
+	}
+
+	// Recursively normalize items (for arrays)
+	if items, ok := schema["items"].(map[string]interface{}); ok {
+		normalized["items"] = normalizeSchemaForGemini(items)
+	}
+
+	// Recursively normalize anyOf
+	if anyOf, ok := schema["anyOf"].([]interface{}); ok {
+		newAnyOf := make([]interface{}, 0, len(anyOf))
+		for _, item := range anyOf {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				newAnyOf = append(newAnyOf, normalizeSchemaForGemini(itemMap))
+			} else {
+				newAnyOf = append(newAnyOf, item)
+			}
+		}
+		normalized["anyOf"] = newAnyOf
+	}
+
+	// Recursively normalize oneOf
+	if oneOf, ok := schema["oneOf"].([]interface{}); ok {
+		newOneOf := make([]interface{}, 0, len(oneOf))
+		for _, item := range oneOf {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				newOneOf = append(newOneOf, normalizeSchemaForGemini(itemMap))
+			} else {
+				newOneOf = append(newOneOf, item)
+			}
+		}
+		normalized["oneOf"] = newOneOf
+	}
+
+	return normalized
+}
+
+// extractSchemaMapFromResponseFormat extracts the JSON schema map from OpenAI's response_format structure
+// This returns the raw schema map to be used with ResponseJSONSchema
+func extractSchemaMapFromResponseFormat(responseFormat *interface{}) map[string]interface{} {
 	formatMap, ok := (*responseFormat).(map[string]interface{})
 	if !ok {
 		return nil
@@ -1022,18 +1138,8 @@ func extractSchemaFromResponseFormat(responseFormat *interface{}) *Schema {
 		return nil
 	}
 
-	// Convert map to Gemini Schema type via JSON marshaling
-	schemaBytes, err := sonic.Marshal(schemaMap)
-	if err != nil {
-		return nil
-	}
-
-	schema := &Schema{}
-	if err := sonic.Unmarshal(schemaBytes, schema); err != nil {
-		return nil
-	}
-
-	return schema
+	// Normalize the schema for Gemini compatibility
+	return normalizeSchemaForGemini(schemaMap)
 }
 
 // extractFunctionResponseOutput extracts the output text from a FunctionResponse.

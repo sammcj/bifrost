@@ -1,2 +1,2 @@
-- feat: Add schema normalization for Anthropic to handle enum fields with multiple types like ["string", "integer"]
+- feat: added support for multiple types in gemini and anthropic structured outputs properties
 - fix: ensure request ID is consistently set in context before PreHooks are executed
