@@ -965,7 +965,6 @@ func (s *BifrostHTTPServer) RemovePlugin(ctx context.Context, name string) error
 		if oldPlugins != nil {
 			oldPluginsSlice = *oldPlugins
 		}
-
 		// Create new slice without the removed plugin
 		newPlugins := make([]schemas.Plugin, 0, len(oldPluginsSlice))
 		for _, existing := range oldPluginsSlice {
@@ -973,7 +972,6 @@ func (s *BifrostHTTPServer) RemovePlugin(ctx context.Context, name string) error
 				newPlugins = append(newPlugins, existing)
 			}
 		}
-
 		// Atomic compare-and-swap
 		if s.Config.Plugins.CompareAndSwap(oldPlugins, &newPlugins) {
 			s.PluginsMutex.Lock()

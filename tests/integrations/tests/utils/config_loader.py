@@ -423,6 +423,30 @@ class ConfigLoader:
         
         return self._config["scenario_capabilities"].get(scenario, "chat")
 
+    def get_virtual_key(self) -> str:
+        """Get the virtual key value for testing
+        
+        Returns:
+            Virtual key string or empty string if not configured
+        """
+        if "virtual_key" not in self._config:
+            return ""
+        
+        vk_config = self._config["virtual_key"]
+        if not vk_config.get("enabled", False):
+            return ""
+        
+        return vk_config.get("value", "")
+
+    def is_virtual_key_configured(self) -> bool:
+        """Check if virtual key testing is enabled and configured
+        
+        Returns:
+            True if virtual key is available for testing
+        """
+        vk = self.get_virtual_key()
+        return vk is not None and vk.strip() != ""
+
 
 # Global configuration instance
 _config_loader = None
@@ -478,6 +502,16 @@ def provider_supports_scenario(provider: str, scenario: str) -> bool:
 def get_providers_for_scenario(scenario: str) -> List[str]:
     """Convenience function to get providers for scenario"""
     return get_config().get_providers_for_scenario(scenario)
+
+
+def get_virtual_key() -> str:
+    """Convenience function to get virtual key"""
+    return get_config().get_virtual_key()
+
+
+def is_virtual_key_configured() -> bool:
+    """Convenience function to check if virtual key is configured"""
+    return get_config().is_virtual_key_configured()
 
 
 if __name__ == "__main__":

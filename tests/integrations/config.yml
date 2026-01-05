@@ -695,6 +695,12 @@ environments:
         simple: 20
         complex: 40
 
+# Virtual key testing configuration
+# When enabled, cross-provider tests will run twice: with and without the x-bf-vk header
+virtual_key:
+  enabled: true
+  value: "sk-bf-test-key"
+
 # Logging configuration
 logging:
   level: "INFO"
