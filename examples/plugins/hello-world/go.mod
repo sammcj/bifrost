@@ -3,7 +3,7 @@ module github.com/maximhq/bifrost/examples/plugins/hello-world
 go 1.25.5
 
 require (
-	github.com/maximhq/bifrost/core v1.3.2
+	github.com/maximhq/bifrost/core v1.3.3
 	github.com/valyala/fasthttp v1.68.0
 )
 
