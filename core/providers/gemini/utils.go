@@ -6,8 +6,63 @@ import (
 	"strings"
 
 	"github.com/bytedance/sonic"
+	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	"github.com/maximhq/bifrost/core/schemas"
 )
+
+// isGemini3Plus returns true if the model is Gemini 3.0 or higher
+// Uses simple string operations for hot path performance
+func isGemini3Plus(model string) bool {
+	// Convert to lowercase for case-insensitive comparison
+	model = strings.ToLower(model)
+
+	// Find "gemini-" prefix
+	idx := strings.Index(model, "gemini-")
+	if idx == -1 {
+		return false
+	}
+
+	// Get the part after "gemini-"
+	afterPrefix := model[idx+7:] // len("gemini-") = 7
+	if len(afterPrefix) == 0 {
+		return false
+	}
+
+	// Check first character - if it's '3' or higher, it's 3.0+
+	firstChar := afterPrefix[0]
+	return firstChar >= '3'
+}
+
+// effortToThinkingLevel converts reasoning effort to Gemini ThinkingLevel string
+// Pro models only support "low" or "high"
+// Other models support "minimal", "low", "medium", and "high"
+func effortToThinkingLevel(effort string, model string) string {
+	isPro := strings.Contains(strings.ToLower(model), "pro")
+
+	switch effort {
+	case "none":
+		return "" // Empty string for no thinking
+	case "minimal":
+		if isPro {
+			return "low" // Pro models don't support minimal, use low
+		}
+		return "minimal"
+	case "low":
+		return "low"
+	case "medium":
+		if isPro {
+			return "high" // Pro models don't support medium, use high
+		}
+		return "medium"
+	case "high":
+		return "high"
+	default:
+		if isPro {
+			return "high"
+		}
+		return "medium"
+	}
+}
 
 func (r *GeminiGenerationRequest) convertGenerationConfigToResponsesParameters() *schemas.ResponsesParameters {
 	params := &schemas.ResponsesParameters{
@@ -36,23 +91,56 @@ func (r *GeminiGenerationRequest) convertGenerationConfigToResponsesParameters()
 		if strings.Contains(r.Model, "openai") {
 			params.Reasoning.Summary = schemas.Ptr("auto")
 		}
-		if config.ThinkingConfig.ThinkingLevel != ThinkingLevelUnspecified {
-			switch config.ThinkingConfig.ThinkingLevel {
-			case ThinkingLevelLow:
-				params.Reasoning.Effort = schemas.Ptr("low")
-			case ThinkingLevelHigh:
-				params.Reasoning.Effort = schemas.Ptr("high")
-			}
+
+		// Determine max tokens for conversions
+		maxTokens := DefaultCompletionMaxTokens
+		if config.MaxOutputTokens > 0 {
+			maxTokens = int(config.MaxOutputTokens)
 		}
+		minBudget := DefaultReasoningMinBudget
+
+		// Priority: Budget first (if present), then Level
 		if config.ThinkingConfig.ThinkingBudget != nil {
-			params.Reasoning.MaxTokens = schemas.Ptr(int(*config.ThinkingConfig.ThinkingBudget))
-			switch *config.ThinkingConfig.ThinkingBudget {
+			// Budget is set - use it directly
+			budget := int(*config.ThinkingConfig.ThinkingBudget)
+			params.Reasoning.MaxTokens = schemas.Ptr(budget)
+
+			// Also provide effort for compatibility
+			effort := providerUtils.GetReasoningEffortFromBudgetTokens(budget, minBudget, maxTokens)
+			params.Reasoning.Effort = schemas.Ptr(effort)
+
+			// Handle special cases
+			switch budget {
 			case 0:
 				params.Reasoning.Effort = schemas.Ptr("none")
-			case -1:
-				// dynamic thinking budget
-				params.Reasoning.Effort = schemas.Ptr("medium")
-				params.Reasoning.MaxTokens = schemas.Ptr(-1)
+			case DynamicReasoningBudget:
+				params.Reasoning.Effort = schemas.Ptr("medium") // dynamic
+			}
+		} else if config.ThinkingConfig.ThinkingLevel != nil && *config.ThinkingConfig.ThinkingLevel != "" {
+			// Level is set (only on 3.0+) - convert to effort and budget
+			level := *config.ThinkingConfig.ThinkingLevel
+			var effort string
+
+			// Map Gemini thinking level to Bifrost effort
+			switch level {
+			case "minimal":
+				effort = "minimal"
+			case "low":
+				effort = "low"
+			case "medium":
+				effort = "medium"
+			case "high":
+				effort = "high"
+			default:
+				effort = "medium"
+			}
+
+			params.Reasoning.Effort = schemas.Ptr(effort)
+
+			// Also convert to budget for compatibility
+			if effort != "none" {
+				budget, _ := providerUtils.GetBudgetTokensFromReasoningEffort(effort, minBudget, maxTokens)
+				params.Reasoning.MaxTokens = schemas.Ptr(budget)
 			}
 		}
 	}
@@ -74,7 +162,7 @@ func (r *GeminiGenerationRequest) convertGenerationConfigToResponsesParameters()
 	if config.ResponseMIMEType != "" {
 		switch config.ResponseMIMEType {
 		case "application/json":
-			params.Text = buildOpenAIResponseFormat(config.ResponseSchema, config.ResponseJSONSchema)
+			params.Text = buildOpenAIResponseFormat(config.ResponseJSONSchema)
 		case "text/plain":
 			params.Text = &schemas.ResponsesTextConfig{
 				Format: &schemas.ResponsesTextConfigFormat{
@@ -357,7 +445,7 @@ func convertGeminiUsageMetadataToResponsesUsage(metadata *GenerateContentRespons
 }
 
 // convertParamsToGenerationConfig converts Bifrost parameters to Gemini GenerationConfig
-func convertParamsToGenerationConfig(params *schemas.ChatParameters, responseModalities []string) GenerationConfig {
+func convertParamsToGenerationConfig(params *schemas.ChatParameters, responseModalities []string, model string) GenerationConfig {
 	config := GenerationConfig{}
 
 	// Add response modalities if specified
@@ -396,14 +484,54 @@ func convertParamsToGenerationConfig(params *schemas.ChatParameters, responseMod
 		config.ThinkingConfig = &GenerationConfigThinkingConfig{
 			IncludeThoughts: true,
 		}
-		if params.Reasoning.MaxTokens != nil {
-			config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(*params.Reasoning.MaxTokens))
-		} else if params.Reasoning.Effort != nil {
-			switch *params.Reasoning.Effort {
-			case "minimal", "low":
-				config.ThinkingConfig.ThinkingLevel = ThinkingLevelLow
-			case "medium", "high":
-				config.ThinkingConfig.ThinkingLevel = ThinkingLevelHigh
+
+		// Get max tokens for conversions
+		maxTokens := DefaultCompletionMaxTokens
+		if config.MaxOutputTokens > 0 {
+			maxTokens = int(config.MaxOutputTokens)
+		}
+		minBudget := DefaultReasoningMinBudget
+
+		hasMaxTokens := params.Reasoning.MaxTokens != nil
+		hasEffort := params.Reasoning.Effort != nil
+		supportsLevel := isGemini3Plus(model) // Check if model is 3.0+
+
+		// PRIORITY RULE: If both max_tokens and effort are present, use ONLY max_tokens (budget)
+		// This ensures we send only thinkingBudget to Gemini, not thinkingLevel
+
+		// Handle "none" effort explicitly (only if max_tokens not present)
+		if !hasMaxTokens && hasEffort && *params.Reasoning.Effort == "none" {
+			config.ThinkingConfig.IncludeThoughts = false
+			config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(0))
+		} else if hasMaxTokens {
+			// User provided max_tokens - use thinkingBudget (all Gemini models support this)
+			// If both max_tokens and effort are present, we ignore effort and use ONLY max_tokens
+			budget := *params.Reasoning.MaxTokens
+			switch budget {
+			case 0:
+				config.ThinkingConfig.IncludeThoughts = false
+				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(0))
+			case DynamicReasoningBudget: // Special case: -1 means dynamic budget
+				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(DynamicReasoningBudget))
+			default:
+				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(budget))
+			}
+		} else if hasEffort {
+			// User provided effort only (no max_tokens)
+			if supportsLevel {
+				// Gemini 3.0+ - use thinkingLevel (more native)
+				level := effortToThinkingLevel(*params.Reasoning.Effort, model)
+				config.ThinkingConfig.ThinkingLevel = &level
+			} else {
+				// Gemini < 3.0 - must convert effort to budget
+				budgetTokens, err := providerUtils.GetBudgetTokensFromReasoningEffort(
+					*params.Reasoning.Effort,
+					minBudget,
+					maxTokens,
+				)
+				if err == nil {
+					config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(budgetTokens))
+				}
 			}
 		}
 	}
@@ -417,9 +545,9 @@ func convertParamsToGenerationConfig(params *schemas.ChatParameters, responseMod
 				switch formatType {
 				case "json_schema":
 					// OpenAI Structured Outputs: {"type": "json_schema", "json_schema": {...}}
-					if schema := extractSchemaFromResponseFormat(params.ResponseFormat); schema != nil {
+					if schemaMap := extractSchemaMapFromResponseFormat(params.ResponseFormat); schemaMap != nil {
 						config.ResponseMIMEType = "application/json"
-						config.ResponseSchema = schema
+						config.ResponseJSONSchema = schemaMap
 					}
 				case "json_object":
 					// Maps to Gemini's responseMimeType without schema
@@ -438,15 +566,7 @@ func convertParamsToGenerationConfig(params *schemas.ChatParameters, responseMod
 		if responseMimeType, ok := schemas.SafeExtractString(params.ExtraParams["response_mime_type"]); ok {
 			config.ResponseMIMEType = responseMimeType
 		}
-		// Override with explicit response_schema if provided in ExtraParams
-		if responseSchema, ok := params.ExtraParams["response_schema"]; ok {
-			if schemaBytes, err := sonic.Marshal(responseSchema); err == nil {
-				schema := &Schema{}
-				if err := sonic.Unmarshal(schemaBytes, schema); err == nil {
-					config.ResponseSchema = schema
-				}
-			}
-		}
+		// Override with explicit response_json_schema if provided in ExtraParams
 		if responseJsonSchema, ok := params.ExtraParams["response_json_schema"]; ok {
 			config.ResponseJSONSchema = responseJsonSchema
 		}
@@ -671,15 +791,15 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []Content {
 							Text: *block.Text,
 						})
 					} else if block.File != nil {
-						// Handle file blocks - use FileID if available (uploaded file)
-						if block.File.FileID != nil && *block.File.FileID != "" {
+						// Handle file blocks - use FileURL if available (uploaded file)
+						if block.File.FileURL != nil && *block.File.FileURL != "" {
 							mimeType := "application/pdf"
 							if block.File.FileType != nil {
 								mimeType = *block.File.FileType
 							}
 							parts = append(parts, &Part{
 								FileData: &FileData{
-									FileURI:  *block.File.FileID,
+									FileURI:  *block.File.FileURL,
 									MIMEType: mimeType,
 								},
 							})
@@ -945,41 +1065,32 @@ func buildJSONSchemaFromMap(schemaMap map[string]interface{}) *schemas.Responses
 }
 
 // buildOpenAIResponseFormat builds OpenAI response_format for JSON types
-func buildOpenAIResponseFormat(responseSchema *Schema, responseJsonSchema interface{}) *schemas.ResponsesTextConfig {
-	var schemaMap map[string]interface{}
-	name := "response_schema"
-
-	// Prefer responseSchema over responseJsonSchema
-	if responseSchema != nil {
-		// Convert Schema struct to map
-		schemaBytes, err := sonic.Marshal(responseSchema)
-		if err == nil {
-			if err := sonic.Unmarshal(schemaBytes, &schemaMap); err == nil {
-				if responseSchema.Title != "" {
-					name = responseSchema.Title
-				}
-			}
-			// If unmarshal failed, schemaMap remains nil - will try next option
-		}
-	}
-
-	if schemaMap == nil && responseJsonSchema != nil {
-		// Use responseJsonSchema directly if it's a map
-		if m, ok := responseJsonSchema.(map[string]interface{}); ok {
-			schemaMap = m
-			if title, ok := m["title"].(string); ok && title != "" {
-				name = title
-			}
-		}
-	}
+func buildOpenAIResponseFormat(responseJsonSchema interface{}) *schemas.ResponsesTextConfig {
+	name := "json_response"
 
 	// No schema provided - use json_object mode
-	if schemaMap == nil {
+	if responseJsonSchema == nil {
 		return &schemas.ResponsesTextConfig{
 			Format: &schemas.ResponsesTextConfigFormat{
 				Type: "json_object",
 			},
 		}
+	}
+
+	// Use responseJsonSchema directly if it's a map
+	schemaMap, ok := responseJsonSchema.(map[string]interface{})
+	if !ok {
+		// If not a map, fall back to json_object mode
+		return &schemas.ResponsesTextConfig{
+			Format: &schemas.ResponsesTextConfigFormat{
+				Type: "json_object",
+			},
+		}
+	}
+
+	// Extract name/title if present
+	if title, ok := schemaMap["title"].(string); ok && title != "" {
+		name = title
 	}
 
 	// Build JSONSchema with individual fields spread out
@@ -995,8 +1106,141 @@ func buildOpenAIResponseFormat(responseSchema *Schema, responseJsonSchema interf
 	}
 }
 
-// extractSchemaFromResponseFormat extracts Gemini Schema from OpenAI's response_format structure
-func extractSchemaFromResponseFormat(responseFormat *interface{}) *Schema {
+// extractTypesFromValue extracts type strings from various formats (string, []string, []interface{})
+func extractTypesFromValue(typeVal interface{}) []string {
+	switch t := typeVal.(type) {
+	case string:
+		return []string{t}
+	case []string:
+		return t
+	case []interface{}:
+		types := make([]string, 0, len(t))
+		for _, item := range t {
+			if typeStr, ok := item.(string); ok {
+				types = append(types, typeStr)
+			}
+		}
+		return types
+	default:
+		return nil
+	}
+}
+
+// normalizeSchemaForGemini recursively normalizes a JSON schema to be compatible with Gemini's API.
+// This handles cases where:
+// 1. type is an array like ["string", "null"] - kept as-is (Gemini supports this)
+// 2. type is an array with multiple non-null types like ["string", "integer"] - converted to anyOf
+// 3. Enums with nullable types need special handling
+func normalizeSchemaForGemini(schema map[string]interface{}) map[string]interface{} {
+	if schema == nil {
+		return nil
+	}
+
+	normalized := make(map[string]interface{})
+	for k, v := range schema {
+		normalized[k] = v
+	}
+
+	// Handle type field if it's an array (e.g., ["string", "null"] or ["string", "integer"])
+	if typeVal, exists := normalized["type"]; exists {
+		types := extractTypesFromValue(typeVal)
+		if len(types) > 1 {
+			// Count non-null types
+			nonNullTypes := make([]string, 0, len(types))
+			hasNull := false
+			for _, t := range types {
+				if t != "null" {
+					nonNullTypes = append(nonNullTypes, t)
+				} else {
+					hasNull = true
+				}
+			}
+
+			// If we have multiple non-null types, we need to convert to anyOf
+			// because Gemini only supports ["type", "null"] but not ["type1", "type2"]
+			if len(nonNullTypes) > 1 {
+				// Multiple non-null types - must use anyOf
+				delete(normalized, "type")
+
+				// Build anyOf with each non-null type
+				anyOfSchemas := make([]interface{}, 0, len(types))
+				for _, t := range nonNullTypes {
+					typeSchema := map[string]interface{}{"type": t}
+					anyOfSchemas = append(anyOfSchemas, typeSchema)
+				}
+
+				// If original had null, add it to anyOf
+				if hasNull {
+					anyOfSchemas = append(anyOfSchemas, map[string]interface{}{"type": "null"})
+				}
+
+				normalized["anyOf"] = anyOfSchemas
+
+				// Remove enum from top level if present, as it may not be compatible with anyOf
+				delete(normalized, "enum")
+			} else if len(nonNullTypes) == 1 && hasNull {
+				// Single non-null type with null - keep as array (Gemini supports this)
+				normalized["type"] = []interface{}{nonNullTypes[0], "null"}
+			} else if len(nonNullTypes) == 1 && !hasNull {
+				// Single type only - simplify to string
+				normalized["type"] = nonNullTypes[0]
+			} else if len(nonNullTypes) == 0 && hasNull {
+				// Only null type
+				normalized["type"] = "null"
+			}
+		}
+	}
+
+	// Recursively normalize properties
+	if properties, ok := schema["properties"].(map[string]interface{}); ok {
+		newProps := make(map[string]interface{})
+		for key, prop := range properties {
+			if propMap, ok := prop.(map[string]interface{}); ok {
+				newProps[key] = normalizeSchemaForGemini(propMap)
+			} else {
+				newProps[key] = prop
+			}
+		}
+		normalized["properties"] = newProps
+	}
+
+	// Recursively normalize items (for arrays)
+	if items, ok := schema["items"].(map[string]interface{}); ok {
+		normalized["items"] = normalizeSchemaForGemini(items)
+	}
+
+	// Recursively normalize anyOf
+	if anyOf, ok := schema["anyOf"].([]interface{}); ok {
+		newAnyOf := make([]interface{}, 0, len(anyOf))
+		for _, item := range anyOf {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				newAnyOf = append(newAnyOf, normalizeSchemaForGemini(itemMap))
+			} else {
+				newAnyOf = append(newAnyOf, item)
+			}
+		}
+		normalized["anyOf"] = newAnyOf
+	}
+
+	// Recursively normalize oneOf
+	if oneOf, ok := schema["oneOf"].([]interface{}); ok {
+		newOneOf := make([]interface{}, 0, len(oneOf))
+		for _, item := range oneOf {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				newOneOf = append(newOneOf, normalizeSchemaForGemini(itemMap))
+			} else {
+				newOneOf = append(newOneOf, item)
+			}
+		}
+		normalized["oneOf"] = newOneOf
+	}
+
+	return normalized
+}
+
+// extractSchemaMapFromResponseFormat extracts the JSON schema map from OpenAI's response_format structure
+// This returns the raw schema map to be used with ResponseJSONSchema
+func extractSchemaMapFromResponseFormat(responseFormat *interface{}) map[string]interface{} {
 	formatMap, ok := (*responseFormat).(map[string]interface{})
 	if !ok {
 		return nil
@@ -1022,18 +1266,8 @@ func extractSchemaFromResponseFormat(responseFormat *interface{}) *Schema {
 		return nil
 	}
 
-	// Convert map to Gemini Schema type via JSON marshaling
-	schemaBytes, err := sonic.Marshal(schemaMap)
-	if err != nil {
-		return nil
-	}
-
-	schema := &Schema{}
-	if err := sonic.Unmarshal(schemaBytes, schema); err != nil {
-		return nil
-	}
-
-	return schema
+	// Normalize the schema for Gemini compatibility
+	return normalizeSchemaForGemini(schemaMap)
 }
 
 // extractFunctionResponseOutput extracts the output text from a FunctionResponse.

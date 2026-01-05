@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
+	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
@@ -1962,43 +1963,51 @@ func convertTextConfigToGenerationConfig(textConfig *schemas.ResponsesTextConfig
 
 // reconstructSchemaFromJSONSchema rebuilds a schema map from ResponsesTextConfigFormatJSONSchema
 func reconstructSchemaFromJSONSchema(jsonSchema *schemas.ResponsesTextConfigFormatJSONSchema) interface{} {
+	var schema map[string]interface{}
+
 	if jsonSchema.Schema != nil {
-		return *jsonSchema.Schema
+		// If Schema field is set, use it directly
+		schemaMap, ok := (*jsonSchema.Schema).(map[string]interface{})
+		if !ok {
+			return *jsonSchema.Schema
+		}
+		schema = schemaMap
+	} else {
+		// New format: Schema is spread across individual fields
+		schema = make(map[string]interface{})
+
+		if jsonSchema.Type != nil {
+			schema["type"] = *jsonSchema.Type
+		}
+
+		if jsonSchema.Properties != nil {
+			schema["properties"] = *jsonSchema.Properties
+		}
+
+		if len(jsonSchema.Required) > 0 {
+			schema["required"] = jsonSchema.Required
+		}
+
+		if jsonSchema.Description != nil {
+			schema["description"] = *jsonSchema.Description
+		}
+
+		if jsonSchema.AdditionalProperties != nil {
+			schema["additionalProperties"] = *jsonSchema.AdditionalProperties
+		}
+
+		if jsonSchema.Name != nil {
+			schema["title"] = *jsonSchema.Name
+		}
+
+		// Return nil if no fields were populated
+		if len(schema) == 0 {
+			return nil
+		}
 	}
 
-	// New format: Schema is spread across individual fields
-	schema := make(map[string]interface{})
-
-	if jsonSchema.Type != nil {
-		schema["type"] = *jsonSchema.Type
-	}
-
-	if jsonSchema.Properties != nil {
-		schema["properties"] = *jsonSchema.Properties
-	}
-
-	if len(jsonSchema.Required) > 0 {
-		schema["required"] = jsonSchema.Required
-	}
-
-	if jsonSchema.Description != nil {
-		schema["description"] = *jsonSchema.Description
-	}
-
-	if jsonSchema.AdditionalProperties != nil {
-		schema["additionalProperties"] = *jsonSchema.AdditionalProperties
-	}
-
-	if jsonSchema.Name != nil {
-		schema["title"] = *jsonSchema.Name
-	}
-
-	// Return nil if no fields were populated
-	if len(schema) == 0 {
-		return nil
-	}
-
-	return schema
+	// Normalize the schema for Gemini compatibility (handle union types, etc.)
+	return normalizeSchemaForGemini(schema)
 }
 
 // convertParamsToGenerationConfigResponses converts ChatParameters to GenerationConfig for Responses
@@ -2018,28 +2027,53 @@ func (r *GeminiGenerationRequest) convertParamsToGenerationConfigResponses(param
 		config.ThinkingConfig = &GenerationConfigThinkingConfig{
 			IncludeThoughts: true,
 		}
-		// only set thinking level if max tokens is not set
-		if params.Reasoning.Effort != nil && params.Reasoning.MaxTokens == nil {
-			switch *params.Reasoning.Effort {
-			case "none":
-				// turn off thinking
-				config.ThinkingConfig.IncludeThoughts = false
-				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(0))
-			case "minimal", "low":
-				config.ThinkingConfig.ThinkingLevel = ThinkingLevelLow
-			case "medium", "high":
-				config.ThinkingConfig.ThinkingLevel = ThinkingLevelHigh
-			}
+
+		// Get max tokens for conversions
+		maxTokens := DefaultCompletionMaxTokens
+		if config.MaxOutputTokens > 0 {
+			maxTokens = int(config.MaxOutputTokens)
 		}
-		if params.Reasoning.MaxTokens != nil {
-			switch *params.Reasoning.MaxTokens {
-			case 0: // turn off thinking
+		minBudget := DefaultReasoningMinBudget
+
+		hasMaxTokens := params.Reasoning.MaxTokens != nil
+		hasEffort := params.Reasoning.Effort != nil
+		supportsLevel := isGemini3Plus(r.Model) // Check if model is 3.0+
+
+		// PRIORITY RULE: If both max_tokens and effort are present, use ONLY max_tokens (budget)
+		// This ensures we send only thinkingBudget to Gemini, not thinkingLevel
+
+		// Handle "none" effort explicitly (only if max_tokens not present)
+		if !hasMaxTokens && hasEffort && *params.Reasoning.Effort == "none" {
+			config.ThinkingConfig.IncludeThoughts = false
+			config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(0))
+		} else if hasMaxTokens {
+			// User provided max_tokens - use thinkingBudget (all Gemini models support this)
+			// If both max_tokens and effort are present, we ignore effort and use ONLY max_tokens
+			budget := *params.Reasoning.MaxTokens
+			switch budget {
+			case 0:
 				config.ThinkingConfig.IncludeThoughts = false
 				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(0))
-			case -1: // dynamic thinking budget
-				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(-1))
-			default: // constrained thinking budget
-				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(*params.Reasoning.MaxTokens))
+			case DynamicReasoningBudget: // Special case: -1 means dynamic budget
+				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(DynamicReasoningBudget))
+			default:
+				config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(budget))
+			}
+		} else if hasEffort {
+			// User provided effort only (no max_tokens)
+			if supportsLevel {
+				// Gemini 3.0+ - use thinkingLevel (more native)
+				config.ThinkingConfig.ThinkingLevel = schemas.Ptr(effortToThinkingLevel(*params.Reasoning.Effort, r.Model))
+			} else {
+				// Gemini < 3.0 - must convert effort to budget
+				budgetTokens, err := providerUtils.GetBudgetTokensFromReasoningEffort(
+					*params.Reasoning.Effort,
+					minBudget,
+					maxTokens,
+				)
+				if err == nil {
+					config.ThinkingConfig.ThinkingBudget = schemas.Ptr(int32(budgetTokens))
+				}
 			}
 		}
 	}
@@ -2430,10 +2464,6 @@ func convertContentBlockToGeminiPart(block schemas.ResponsesMessageContentBlock)
 						MIMEType: mimeType,
 						FileURI:  *fileBlock.FileURL,
 					},
-				}
-
-				if fileBlock.Filename != nil {
-					part.FileData.DisplayName = *fileBlock.Filename
 				}
 
 				return part, nil

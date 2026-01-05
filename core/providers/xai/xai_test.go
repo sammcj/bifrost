@@ -41,6 +41,8 @@ func TestXAI(t *testing.T) {
 			AutomaticFunctionCall: true,
 			ImageURL:              true,
 			ImageBase64:           true,
+			FileBase64:            false,
+			FileURL:               false,
 			MultipleImages:        true,
 			CompleteEnd2End:       true,
 			Reasoning:             true,

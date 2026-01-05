@@ -40,7 +40,7 @@ Google Gemini's API has different structure from OpenAI. Bifrost performs extens
 | `max_completion_tokens` | Renamed to `maxOutputTokens` |
 | `temperature`, `top_p` | Direct pass-through |
 | `stop` | Renamed to `stopSequences` |
-| `response_format` | Converted to `responseMimeType` and `responseSchema` |
+| `response_format` | Converted to `responseMimeType` and `responseJsonSchema` |
 | `tools` | Schema restructured (see [Tool Conversion](#tool-conversion)) |
 | `tool_choice` | Mapped to `functionCallingConfig` (see [Tool Conversion](#tool-conversion)) |
 | `reasoning` | Mapped to `thinkingConfig` (see [Reasoning / Thinking](#reasoning--thinking)) |
@@ -194,7 +194,7 @@ The Responses API uses the same underlying `/generateContent` endpoint but conve
 | `tools` | Schema restructured (see [Chat Completions](#1-chat-completions)) |
 | `tool_choice` | Type mapped (see [Chat Completions](#1-chat-completions)) |
 | `reasoning` | Mapped to `thinkingConfig` (see [Reasoning / Thinking](#reasoning--thinking)) |
-| `text` | Maps to `responseMimeType` and `responseSchema` |
+| `text` | Maps to `responseMimeType` and `responseJsonSchema` |
 | `stop` | Via `extra_params`, renamed to `stopSequences` |
 | `top_k` | Via `extra_params` |
 

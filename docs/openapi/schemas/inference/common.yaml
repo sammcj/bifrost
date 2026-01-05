@@ -22,6 +22,7 @@ ModelProvider:
     - elevenlabs
     - huggingface
     - nebius
+    - xai
 
 Fallback:
   type: object

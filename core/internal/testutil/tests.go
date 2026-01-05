@@ -36,6 +36,8 @@ func RunAllComprehensiveTests(t *testing.T, client *bifrost.Bifrost, ctx context
 		RunImageURLTest,
 		RunImageBase64Test,
 		RunMultipleImagesTest,
+		RunFileBase64Test,
+		RunFileURLTest,
 		RunCompleteEnd2EndTest,
 		RunSpeechSynthesisTest,
 		RunSpeechSynthesisAdvancedTest,
@@ -67,6 +69,10 @@ func RunAllComprehensiveTests(t *testing.T, client *bifrost.Bifrost, ctx context
 		RunCountTokenTest,
 		RunChatAudioTest,
 		RunChatAudioStreamTest,
+		RunStructuredOutputChatTest,
+		RunStructuredOutputChatStreamTest,
+		RunStructuredOutputResponsesTest,
+		RunStructuredOutputResponsesStreamTest,
 	}
 
 	// Execute all test scenarios
@@ -96,6 +102,8 @@ func printTestSummary(t *testing.T, testConfig ComprehensiveTestConfig) {
 		{"ImageURL", testConfig.Scenarios.ImageURL},
 		{"ImageBase64", testConfig.Scenarios.ImageBase64},
 		{"MultipleImages", testConfig.Scenarios.MultipleImages},
+		{"FileBase64", testConfig.Scenarios.FileBase64},
+		{"FileURL", testConfig.Scenarios.FileURL},
 		{"CompleteEnd2End", testConfig.Scenarios.CompleteEnd2End},
 		{"SpeechSynthesis", testConfig.Scenarios.SpeechSynthesis},
 		{"SpeechSynthesisStream", testConfig.Scenarios.SpeechSynthesisStream},
@@ -122,6 +130,10 @@ func printTestSummary(t *testing.T, testConfig ComprehensiveTestConfig) {
 		{"CountTokens", testConfig.Scenarios.CountTokens},
 		{"ChatAudio", testConfig.Scenarios.ChatAudio && testConfig.ChatAudioModel != ""},
 		{"ChatAudioStream", testConfig.Scenarios.ChatAudio && testConfig.ChatAudioModel != ""},
+		{"StructuredOutputChat", testConfig.Scenarios.StructuredOutputs},
+		{"StructuredOutputChatStream", testConfig.Scenarios.StructuredOutputs && testConfig.Scenarios.CompletionStream},
+		{"StructuredOutputResponses", testConfig.Scenarios.StructuredOutputs},
+		{"StructuredOutputResponsesStream", testConfig.Scenarios.StructuredOutputs && testConfig.Scenarios.CompletionStream},
 	}
 
 	supported := 0

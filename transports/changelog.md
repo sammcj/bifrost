@@ -1,2 +1,5 @@
+- feat: added support for multiple types in gemini and anthropic structured outputs properties
 - fix: added missing logs filter checks in ui for live updates
 - fix: ensure request ID is consistently set in context before PreHooks are executed
+- docs: updated docs for xai provider
+- fix: correct conversion of thinking level to thinking budget and vice versa in gemini

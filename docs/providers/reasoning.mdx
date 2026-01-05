@@ -21,7 +21,8 @@ Bifrost normalizes all provider-specific reasoning formats to a consistent OpenA
 | OpenAI | `reasoning` | `reasoning_details` | None | `minimal`, `low`, `medium`, `high` | ✅ |
 | Anthropic | `thinking` | Content blocks | **1024 tokens** | `enabled` only | ✅ |
 | Bedrock (Anthropic) | `thinking` | Content blocks | **1024 tokens** | `enabled` only | ✅ |
-| Gemini | `thinking_config` | `thought` parts | None | `off`, `low`, `medium`, `high` | ✅ |
+| Gemini 2.5+ | `thinking_config` | `thought` parts | 1024 | Budget-only | ✅ |
+| Gemini 3.0+ | `thinking_config` | `thought` parts | 1024 | `minimal`, `low`, `medium`, `high` + Budget | ✅ |
 
 ---
 
@@ -534,24 +535,49 @@ chatReq := &schemas.BifrostChatRequest{
 
 ### Gemini
 
-Gemini uses `thinking_config` with effort-based configuration.
+Gemini uses `thinking_config` with dual support for both token budgets and effort levels, depending on the model version.
+
+#### Model Version Support
+
+| Gemini Version | `thinkingBudget` | `thinkingLevel` | Notes |
+|----------------|------------------|-----------------|-------|
+| **2.5+** | ✅ | ❌ | Budget-only models |
+| **3.0+** | ✅ | ✅ | Support both budget and level |
+
+<Warning>
+**Important**: Only ONE parameter (`thinkingBudget` or `thinkingLevel`) should be sent to Gemini at a time. When both `reasoning.max_tokens` and `reasoning.effort` are provided in a Bifrost request, `max_tokens` takes priority and is converted to `thinkingBudget`.
+</Warning>
+
+#### Priority Rules
+
+When both `reasoning.max_tokens` and `reasoning.effort` are present:
+
+```
+1. If max_tokens is provided → USE thinkingBudget (ignores effort)
+2. Else if effort is provided:
+   - Gemini 3.0+ → USE thinkingLevel (more native)
+   - Gemini 2.5 → CONVERT effort to thinkingBudget
+3. Else → disable reasoning
+```
 
 <Tabs>
-<Tab title="Request Conversion (JSON)">
+<Tab title="Budget Priority (JSON)">
 
 ```json
-// Bifrost Request
+// Bifrost Request - Both fields provided
 {
+  "model": "gemini-3.0-flash",
   "reasoning": {
-    "effort": "high",
-    "max_tokens": 4096
+    "effort": "high",        // Ignored
+    "max_tokens": 4096      // Takes priority
   }
 }
 
-// Gemini Request
+// Gemini 3.0+ Request - Only budget sent
 {
   "generation_config": {
     "thinking_config": {
+      "include_thoughts": true,
       "thinking_budget": 4096
     }
   }
@@ -559,10 +585,142 @@ Gemini uses `thinking_config` with effort-based configuration.
 ```
 
 </Tab>
-<Tab title="Request Conversion (Go)">
+<Tab title="Effort to Level (Gemini 3.0+)">
+
+```json
+// Bifrost Request - Effort only
+{
+  "model": "gemini-3.0-flash",
+  "reasoning": {
+    "effort": "high"
+  }
+}
+
+// Gemini 3.0+ Request - Converted to level
+{
+  "generation_config": {
+    "thinking_config": {
+      "include_thoughts": true,
+      "thinking_level": "high"
+    }
+  }
+}
+```
+
+</Tab>
+<Tab title="Effort to Budget (Gemini 2.5)">
+
+```json
+// Bifrost Request - Effort only
+{
+  "model": "gemini-2.5-flash",
+  "max_completion_tokens": 4096,
+  "reasoning": {
+    "effort": "high"
+  }
+}
+
+// Gemini 2.5 Request - Converted to budget
+// Calculation: 1024 + (0.80 × (4096 - 1024)) = 3482
+{
+  "generation_config": {
+    "thinking_config": {
+      "include_thoughts": true,
+      "thinking_budget": 3482
+    }
+  }
+}
+```
+
+</Tab>
+</Tabs>
+
+#### Model-Specific Level Conversions
+
+Gemini Pro models have stricter constraints on thinking levels:
+
+| Bifrost Effort | Non-Pro Models | Pro Models | Notes |
+|----------------|----------------|------------|-------|
+| `"none"` | Empty string | Empty string | Disables thinking |
+| `"minimal"` | `"minimal"` | `"low"` | Pro doesn't support minimal |
+| `"low"` | `"low"` | `"low"` | Supported on all |
+| `"medium"` | `"medium"` | `"high"` | Pro doesn't support medium |
+| `"high"` | `"high"` | `"high"` | Supported on all |
+
+**Example**:
+```go
+// For "gemini-3.0-flash-thinking-exp" (non-Pro)
+effort: "medium" → thinkingLevel: "medium"
+
+// For "gemini-3.0-pro" (Pro model)
+effort: "medium" → thinkingLevel: "high"  // Converted up
+```
+
+#### Special Values
+
+| Value | Field | Behavior | Use Case |
+|-------|-------|----------|----------|
+| `0` | `max_tokens` | `thinking_budget: 0`, `include_thoughts: false` | Explicitly disable reasoning |
+| `-1` | `max_tokens` | `thinking_budget: -1` | **Dynamic budget** (Gemini decides) |
+| `"none"` | `effort` | `thinking_budget: 0`, `include_thoughts: false` | Disable reasoning |
+
+<Tabs>
+<Tab title="Dynamic Budget (JSON)">
+
+```json
+// Bifrost Request - Dynamic budget
+{
+  "reasoning": {
+    "max_tokens": -1
+  }
+}
+
+// Gemini Request - Sent as-is
+{
+  "generation_config": {
+    "thinking_config": {
+      "include_thoughts": true,
+      "thinking_budget": -1
+    }
+  }
+}
+```
+
+</Tab>
+<Tab title="Disable Reasoning (JSON)">
+
+```json
+// Bifrost Request - Method 1
+{
+  "reasoning": {
+    "max_tokens": 0
+  }
+}
+
+// Bifrost Request - Method 2
+{
+  "reasoning": {
+    "effort": "none"
+  }
+}
+
+// Gemini Request - Both become
+{
+  "generation_config": {
+    "thinking_config": {
+      "include_thoughts": false,
+      "thinking_budget": 0
+    }
+  }
+}
+```
+
+</Tab>
+<Tab title="Go SDK Examples">
 
 ```go
 // Using Bifrost Go SDK with Gemini
+// Example 1: Dynamic budget
 chatReq := &schemas.BifrostChatRequest{
   Provider: schemas.Gemini,
   Model:    "gemini-2.0-flash-thinking-exp-1219",
@@ -570,21 +728,45 @@ chatReq := &schemas.BifrostChatRequest{
   Params: &schemas.ChatParameters{
     MaxCompletionTokens: schemas.Ptr(4096),
     Reasoning: &schemas.ChatReasoning{
-      MaxTokens: schemas.Ptr(4096), // Gemini native field
+      MaxTokens: schemas.Ptr(-1), // Let Gemini decide
     },
   },
 }
 
-// Bifrost converts to Gemini format:
-// generation_config: {
-//   thinking_config: {
-//     thinking_budget: 4096
-//   }
-// }
+// Example 2: Effort-based for Gemini 3.0+
+chatReq := &schemas.BifrostChatRequest{
+  Provider: schemas.Gemini,
+  Model:    "gemini-3.0-flash",
+  Input:    messages,
+  Params: &schemas.ChatParameters{
+    MaxCompletionTokens: schemas.Ptr(4096),
+    Reasoning: &schemas.ChatReasoning{
+      Effort: schemas.Ptr("high"), // Converts to thinkingLevel
+    },
+  },
+}
+
+// Example 3: Budget-based (all versions)
+chatReq := &schemas.BifrostChatRequest{
+  Provider: schemas.Gemini,
+  Model:    "gemini-2.5-flash",
+  Input:    messages,
+  Params: &schemas.ChatParameters{
+    MaxCompletionTokens: schemas.Ptr(4096),
+    Reasoning: &schemas.ChatReasoning{
+      MaxTokens: schemas.Ptr(3000), // Direct budget
+    },
+  },
+}
 ```
 
 </Tab>
-<Tab title="Response Conversion (JSON)">
+</Tabs>
+
+#### Response Conversion
+
+<Tabs>
+<Tab title="Response (JSON)">
 
 ```json
 // Gemini Response
@@ -609,6 +791,7 @@ chatReq := &schemas.BifrostChatRequest{
   "choices": [{
     "message": {
       "content": "The answer is 42.",
+      "reasoning": "Analyzing the problem...",
       "reasoning_details": [{
         "index": 0,
         "type": "text",
@@ -620,7 +803,7 @@ chatReq := &schemas.BifrostChatRequest{
 ```
 
 </Tab>
-<Tab title="Response Conversion (Go)">
+<Tab title="Response (Go)">
 
 ```go
 // After calling Bifrost Chat Completions with Gemini
@@ -633,7 +816,10 @@ if err != nil {
 choice := resp.Choices[0]
 message := choice.Message
 
-// Access reasoning blocks
+// Access combined reasoning text
+fmt.Printf("Reasoning: %s\n", message.Reasoning)
+
+// Access detailed reasoning blocks
 for i, details := range message.ReasoningDetails {
   if details.Type == "text" {
     fmt.Printf("Thinking block %d:\n%s\n", i, details.Text)
@@ -647,16 +833,34 @@ fmt.Printf("Answer:\n%s\n", message.Content)
 </Tab>
 </Tabs>
 
-**Effort Level Mapping**:
+#### Conversion Summary
 
-| Bifrost Effort | Gemini Mode |
-|----------------|-------------|
-| Not set | `off` |
-| `low` | Uses budget |
-| `medium` | Uses budget |
-| `high` | Uses budget |
+**Bifrost → Gemini (Request)**:
 
-**Code Reference**: `core/providers/gemini/chat.go`
+| Input | Gemini 2.5 | Gemini 3.0+ | Note |
+|-------|------------|-------------|------|
+| `max_tokens: 4096` | `thinking_budget: 4096` | `thinking_budget: 4096` | Direct pass-through |
+| `max_tokens: -1` | `thinking_budget: -1` | `thinking_budget: -1` | Dynamic budget |
+| `max_tokens: 0` | `thinking_budget: 0` | `thinking_budget: 0` | Disabled |
+| `effort: "high"` only | `thinking_budget: 3482`* | `thinking_level: "high"` | Estimated or native |
+| `effort: "medium"` only | `thinking_budget: 2330`* | `thinking_level: "medium"` or `"high"`** | Estimated or native |
+| Both `effort` + `max_tokens` | Uses `max_tokens` | Uses `max_tokens` | Priority rule |
+
+\* Assumes `max_completion_tokens: 8192` (default), uses estimation formula  
+\*\* Pro models convert `"medium"` to `"high"`
+
+**Gemini → Bifrost (Response)**:
+
+| Gemini Field | Bifrost Field | Conversion |
+|--------------|---------------|------------|
+| `thinking_budget` | `reasoning.max_tokens` | Direct mapping |
+| `thinking_level` | `reasoning.effort` | Level → effort mapping |
+| `thought: true` parts | `reasoning_details[]` | Array of reasoning blocks |
+
+**Code References**: 
+- `core/providers/gemini/utils.go` (Chat Completions)
+- `core/providers/gemini/responses.go` (Responses API)
+- `core/providers/gemini/types.go` (Constants)
 
 ---
 
@@ -879,7 +1083,7 @@ Different providers have different constraints on reasoning budget:
 | Bedrock Anthropic | `core/providers/bedrock/types.go` | **1024** | Same as Anthropic |
 | Bedrock Nova | `core/providers/bedrock/types.go` | 1 | More flexible |
 | Cohere | `core/providers/cohere/types.go` | 1 | Flexible |
-| Gemini | `core/providers/gemini/types.go` | 1 | Flexible |
+| Gemini | `core/providers/gemini/types.go` | 1024 | Default minimum for conversions |
 
 ### Default Completion Tokens (for ratio calculation)
 
@@ -887,7 +1091,8 @@ When `max_completion_tokens` is not provided, these defaults are used for ratio 
 
 | Provider | Default | File |
 |----------|---------|------|
-| All providers | 4096 | `core/providers/*/types.go` |
+| OpenAI, Anthropic, Cohere, Bedrock | 4096 | `core/providers/*/types.go` |
+| Gemini | 8192 | `core/providers/gemini/types.go` |
 
 ---
 
@@ -1256,6 +1461,27 @@ data: {"type": "content_block_stop"}
 **Impact**: Cannot disable thinking once reasoning param is present
 </Accordion>
 
+<Accordion title="Gemini: Only One Parameter Sent">
+**Severity**: Medium
+**Behavior**: When both `effort` and `max_tokens` are provided, only `thinkingBudget` is sent to Gemini (effort is dropped)
+**Impact**: Effort value is completely ignored when max_tokens is present
+**Workaround**: Provide only the parameter you want to use
+</Accordion>
+
+<Accordion title="Gemini: Model Version Differences">
+**Severity**: Medium
+**Behavior**: Gemini 2.5 only supports `thinkingBudget`, while 3.0+ supports both `thinkingBudget` and `thinkingLevel`
+**Impact**: Effort-only requests on 2.5 are converted to budget; on 3.0+ they use native levels
+**Note**: Bifrost automatically detects version and uses appropriate conversion
+</Accordion>
+
+<Accordion title="Gemini Pro: Limited Level Support">
+**Severity**: Low
+**Behavior**: Pro models only support "low" and "high" thinking levels
+**Impact**: `"minimal"` → `"low"`, `"medium"` → `"high"` for Pro models
+**Note**: Non-Pro models support all four levels: minimal, low, medium, high
+</Accordion>
+
 ---
 
 ## Complete Provider Comparison
@@ -1268,7 +1494,8 @@ data: {"type": "content_block_stop"}
 | Anthropic | Thinking blocks | Token budget | **1024** | ✅ |
 | Bedrock (Anthropic) | Reasoning config | Token budget | **1024** | ✅ |
 | Bedrock (Nova) | Reasoning config | Effort-based | None | ❌ |
-| Gemini | Thinking config | Token-based | None | ✅ |
+| Gemini 2.5+ | Thinking config | Token budget | 1024 | ✅ |
+| Gemini 3.0+ | Thinking config | Dual (budget + level) | 1024 | ✅ |
 
 ### Parameter Support
 
@@ -1278,7 +1505,8 @@ data: {"type": "content_block_stop"}
 | Anthropic | ❌ (binary) | ✅ | ✅ | ✅ |
 | Bedrock (Anthropic) | ❌ (binary) | ✅ | ✅ | ✅ |
 | Bedrock (Nova) | ✅ (3 levels) | ⚠️ (ignored) | ❌ | ✅ |
-| Gemini | ✅ (implicit) | ✅ | ❌ | ✅ |
+| Gemini 2.5+ | ⚠️ (converts to budget) | ✅ | ❌ | ✅ |
+| Gemini 3.0+ | ✅ (4 levels) | ✅ | ❌ | ✅ |
 
 ---
 

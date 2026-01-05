@@ -24,7 +24,7 @@ func TestAnthropic(t *testing.T) {
 
 	testConfig := testutil.ComprehensiveTestConfig{
 		Provider:  schemas.Anthropic,
-		ChatModel: "claude-sonnet-4-20250514",
+		ChatModel: "claude-sonnet-4-5",
 		Fallbacks: []schemas.Fallback{
 			{Provider: schemas.Anthropic, Model: "claude-3-7-sonnet-20250219"},
 			{Provider: schemas.Anthropic, Model: "claude-sonnet-4-20250514"},
@@ -45,6 +45,8 @@ func TestAnthropic(t *testing.T) {
 			ImageURL:              true,
 			ImageBase64:           true,
 			MultipleImages:        true,
+			FileBase64:            true,
+			FileURL:               true,
 			CompleteEnd2End:       true,
 			Embedding:             false,
 			Reasoning:             true,
@@ -62,6 +64,7 @@ func TestAnthropic(t *testing.T) {
 			FileContent:           false,
 			FileBatchInput:        false, // Anthropic batch API only supports inline requests, not file-based input
 			CountTokens:           true,
+			StructuredOutputs:     true, // Structured outputs with nullable enum support
 		},
 	}
 

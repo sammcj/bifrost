@@ -1,1 +1,3 @@
+- feat: added support for multiple types in gemini and anthropic structured outputs properties
 - fix: ensure request ID is consistently set in context before PreHooks are executed
+- fix: correct conversion of thinking level to thinking budget and vice versa in gemini

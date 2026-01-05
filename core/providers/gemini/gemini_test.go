@@ -26,8 +26,11 @@ func TestGemini(t *testing.T) {
 	defer cancel()
 
 	testConfig := testutil.ComprehensiveTestConfig{
-		Provider:             schemas.Gemini,
-		ChatModel:            "gemini-2.0-flash",
+		Provider:  schemas.Gemini,
+		ChatModel: "gemini-2.0-flash",
+		Fallbacks: []schemas.Fallback{
+			{Provider: schemas.Gemini, Model: "gemini-2.5-flash"},
+		},
 		VisionModel:          "gemini-2.0-flash",
 		EmbeddingModel:       "text-embedding-004",
 		TranscriptionModel:   "gemini-2.5-flash",
@@ -49,6 +52,8 @@ func TestGemini(t *testing.T) {
 			ImageURL:              false,
 			ImageBase64:           true,
 			MultipleImages:        false,
+			FileBase64:            true,
+			FileURL:               false, // supported files via gemini files api
 			CompleteEnd2End:       true,
 			Embedding:             true,
 			Transcription:         false,
@@ -69,6 +74,7 @@ func TestGemini(t *testing.T) {
 			FileContent:           false,
 			FileBatchInput:        true,
 			CountTokens:           true,
+			StructuredOutputs:     true, // Structured outputs with nullable enum support
 		},
 	}
 
@@ -281,6 +287,364 @@ func TestBifrostToGeminiToolConversion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := gemini.ToGeminiChatCompletionRequest(tt.input)
 			require.NotNil(t, result, "Conversion should not return nil")
+			tt.validate(t, result)
+		})
+	}
+}
+
+// TestStructuredOutputConversion tests that response_format with json_schema is properly converted to Gemini's responseJsonSchema
+func TestStructuredOutputConversion(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *schemas.BifrostChatRequest
+		validate func(t *testing.T, result *gemini.GeminiGenerationRequest)
+	}{
+		{
+			name: "JSONSchemaWithUnionTypes_ConvertedToAnyOf",
+			input: &schemas.BifrostChatRequest{
+				Model: "gemini-2.5-pro",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Extract information: User ID is 12345, Status is \"active\""),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					ResponseFormat: schemas.Ptr[interface{}](map[string]interface{}{
+						"type": "json_schema",
+						"json_schema": map[string]interface{}{
+							"name": "UserInfo",
+							"schema": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"user_id": map[string]interface{}{
+										"type":        []interface{}{"string", "integer"},
+										"description": "User ID as string or integer",
+									},
+									"status": map[string]interface{}{
+										"type": "string",
+										"enum": []interface{}{"active", "inactive"},
+									},
+								},
+								"required":             []interface{}{"user_id", "status"},
+								"additionalProperties": false,
+							},
+						},
+					}),
+				},
+			},
+			validate: func(t *testing.T, result *gemini.GeminiGenerationRequest) {
+				// Verify ResponseMIMEType is set
+				assert.Equal(t, "application/json", result.GenerationConfig.ResponseMIMEType, "responseMimeType should be application/json")
+
+				// Verify ResponseJSONSchema is set
+				assert.NotNil(t, result.GenerationConfig.ResponseJSONSchema, "responseJsonSchema should be set")
+
+				// Validate the schema structure
+				schemaMap, ok := result.GenerationConfig.ResponseJSONSchema.(map[string]interface{})
+				require.True(t, ok, "ResponseJSONSchema should be a map")
+
+				// Check properties
+				properties, ok := schemaMap["properties"].(map[string]interface{})
+				require.True(t, ok, "properties should be a map")
+
+				// Validate user_id property - should be converted to anyOf
+				userID, ok := properties["user_id"].(map[string]interface{})
+				require.True(t, ok, "user_id should exist in properties")
+
+				// user_id should have anyOf instead of type array
+				anyOf, hasAnyOf := userID["anyOf"]
+				assert.True(t, hasAnyOf, "user_id should have anyOf for union types")
+
+				anyOfSlice, ok := anyOf.([]interface{})
+				require.True(t, ok, "anyOf should be a slice")
+				require.Len(t, anyOfSlice, 2, "anyOf should have 2 branches for string and integer")
+
+				// Verify the anyOf branches
+				stringBranch := anyOfSlice[0].(map[string]interface{})
+				assert.Equal(t, "string", stringBranch["type"])
+
+				integerBranch := anyOfSlice[1].(map[string]interface{})
+				assert.Equal(t, "integer", integerBranch["type"])
+
+				// Validate status property - should remain unchanged
+				status, ok := properties["status"].(map[string]interface{})
+				require.True(t, ok, "status should exist in properties")
+				assert.Equal(t, "string", status["type"])
+				enum := status["enum"].([]interface{})
+				assert.Len(t, enum, 2)
+			},
+		},
+		{
+			name: "JSONSchemaWithNullableType_KeptAsArray",
+			input: &schemas.BifrostChatRequest{
+				Model: "gemini-2.5-pro",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Extract nullable field"),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					ResponseFormat: schemas.Ptr[interface{}](map[string]interface{}{
+						"type": "json_schema",
+						"json_schema": map[string]interface{}{
+							"name": "NullableData",
+							"schema": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"name": map[string]interface{}{
+										"type": []interface{}{"string", "null"},
+									},
+								},
+							},
+						},
+					}),
+				},
+			},
+			validate: func(t *testing.T, result *gemini.GeminiGenerationRequest) {
+				schemaMap := result.GenerationConfig.ResponseJSONSchema.(map[string]interface{})
+				properties := schemaMap["properties"].(map[string]interface{})
+				name := properties["name"].(map[string]interface{})
+
+				// Nullable types should be kept as array (Gemini supports this)
+				typeVal := name["type"]
+				typeSlice, ok := typeVal.([]interface{})
+				require.True(t, ok, "type should remain as array for nullable types")
+				require.Len(t, typeSlice, 2)
+				assert.Contains(t, typeSlice, "string")
+				assert.Contains(t, typeSlice, "null")
+			},
+		},
+		{
+			name: "JSONSchemaComplex",
+			input: &schemas.BifrostChatRequest{
+				Model: "gemini-2.5-pro",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Extract nested data"),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					ResponseFormat: schemas.Ptr[interface{}](map[string]interface{}{
+						"type": "json_schema",
+						"json_schema": map[string]interface{}{
+							"name": "ComplexData",
+							"schema": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"items": map[string]interface{}{
+										"type": "array",
+										"items": map[string]interface{}{
+											"type": "object",
+											"properties": map[string]interface{}{
+												"id": map[string]interface{}{
+													"type": "integer",
+												},
+												"name": map[string]interface{}{
+													"type": "string",
+												},
+											},
+											"required": []interface{}{"id", "name"},
+										},
+									},
+								},
+								"required": []interface{}{"items"},
+							},
+						},
+					}),
+				},
+			},
+			validate: func(t *testing.T, result *gemini.GeminiGenerationRequest) {
+				assert.Equal(t, "application/json", result.GenerationConfig.ResponseMIMEType)
+				assert.NotNil(t, result.GenerationConfig.ResponseJSONSchema)
+
+				schemaMap := result.GenerationConfig.ResponseJSONSchema.(map[string]interface{})
+				properties := schemaMap["properties"].(map[string]interface{})
+				items := properties["items"].(map[string]interface{})
+
+				// Validate array items
+				assert.Equal(t, "array", items["type"])
+				itemsSchema := items["items"].(map[string]interface{})
+				assert.Equal(t, "object", itemsSchema["type"])
+
+				// Validate nested properties
+				nestedProps := itemsSchema["properties"].(map[string]interface{})
+				assert.Contains(t, nestedProps, "id")
+				assert.Contains(t, nestedProps, "name")
+			},
+		},
+		{
+			name: "JSONObjectFormat",
+			input: &schemas.BifrostChatRequest{
+				Model: "gemini-2.5-pro",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Return JSON"),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					ResponseFormat: schemas.Ptr[interface{}](map[string]interface{}{
+						"type": "json_object",
+					}),
+				},
+			},
+			validate: func(t *testing.T, result *gemini.GeminiGenerationRequest) {
+				// json_object should only set ResponseMIMEType without schema
+				assert.Equal(t, "application/json", result.GenerationConfig.ResponseMIMEType)
+				assert.Nil(t, result.GenerationConfig.ResponseJSONSchema)
+				assert.Nil(t, result.GenerationConfig.ResponseSchema)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := gemini.ToGeminiChatCompletionRequest(tt.input)
+			require.NotNil(t, result, "Conversion should not return nil")
+			tt.validate(t, result)
+		})
+	}
+}
+
+// TestResponsesStructuredOutputConversion tests that Responses API text config with union types is properly handled
+func TestResponsesStructuredOutputConversion(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *schemas.BifrostResponsesRequest
+		validate func(t *testing.T, result *gemini.GeminiGenerationRequest)
+	}{
+		{
+			name: "ResponsesAPI_UnionTypes_ConvertedToAnyOf",
+			input: &schemas.BifrostResponsesRequest{
+				Provider: schemas.Gemini,
+				Model:    "gemini-2.5-pro",
+				Input: []schemas.ResponsesMessage{
+					{
+						Role: schemas.Ptr(schemas.ResponsesInputMessageRoleUser),
+						Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
+						Content: &schemas.ResponsesMessageContent{
+							ContentStr: schemas.Ptr("Extract info with union types"),
+						},
+					},
+				},
+				Params: &schemas.ResponsesParameters{
+					Text: &schemas.ResponsesTextConfig{
+						Format: &schemas.ResponsesTextConfigFormat{
+							Type: "json_schema",
+							Name: schemas.Ptr("UserInfo"),
+							JSONSchema: &schemas.ResponsesTextConfigFormatJSONSchema{
+								Type: schemas.Ptr("object"),
+								Properties: &map[string]interface{}{
+									"user_id": map[string]interface{}{
+										"type":        []interface{}{"string", "integer"},
+										"description": "User ID as string or integer",
+									},
+									"status": map[string]interface{}{
+										"type": "string",
+										"enum": []interface{}{"active", "inactive"},
+									},
+								},
+								Required:             []string{"user_id", "status"},
+								AdditionalProperties: schemas.Ptr(false),
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *gemini.GeminiGenerationRequest) {
+				// Verify ResponseMIMEType is set
+				assert.Equal(t, "application/json", result.GenerationConfig.ResponseMIMEType)
+				assert.NotNil(t, result.GenerationConfig.ResponseJSONSchema)
+
+				// Validate the schema structure
+				schemaMap, ok := result.GenerationConfig.ResponseJSONSchema.(map[string]interface{})
+				require.True(t, ok, "ResponseJSONSchema should be a map")
+
+				properties, ok := schemaMap["properties"].(map[string]interface{})
+				require.True(t, ok, "properties should be a map")
+
+				// Validate user_id property - should be converted to anyOf
+				userID, ok := properties["user_id"].(map[string]interface{})
+				require.True(t, ok, "user_id should exist in properties")
+
+				// user_id should have anyOf instead of type array
+				anyOf, hasAnyOf := userID["anyOf"]
+				assert.True(t, hasAnyOf, "user_id should have anyOf for union types in Responses API")
+
+				anyOfSlice, ok := anyOf.([]interface{})
+				require.True(t, ok, "anyOf should be a slice")
+				require.Len(t, anyOfSlice, 2, "anyOf should have 2 branches for string and integer")
+
+				// Verify the anyOf branches
+				stringBranch := anyOfSlice[0].(map[string]interface{})
+				assert.Equal(t, "string", stringBranch["type"])
+
+				integerBranch := anyOfSlice[1].(map[string]interface{})
+				assert.Equal(t, "integer", integerBranch["type"])
+			},
+		},
+		{
+			name: "ResponsesAPI_NullableType_KeptAsArray",
+			input: &schemas.BifrostResponsesRequest{
+				Provider: schemas.Gemini,
+				Model:    "gemini-2.5-pro",
+				Input: []schemas.ResponsesMessage{
+					{
+						Role: schemas.Ptr(schemas.ResponsesInputMessageRoleUser),
+						Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
+						Content: &schemas.ResponsesMessageContent{
+							ContentStr: schemas.Ptr("Extract nullable field"),
+						},
+					},
+				},
+				Params: &schemas.ResponsesParameters{
+					Text: &schemas.ResponsesTextConfig{
+						Format: &schemas.ResponsesTextConfigFormat{
+							Type: "json_schema",
+							Name: schemas.Ptr("NullableData"),
+							JSONSchema: &schemas.ResponsesTextConfigFormatJSONSchema{
+								Type: schemas.Ptr("object"),
+								Properties: &map[string]interface{}{
+									"name": map[string]interface{}{
+										"type": []interface{}{"string", "null"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *gemini.GeminiGenerationRequest) {
+				schemaMap := result.GenerationConfig.ResponseJSONSchema.(map[string]interface{})
+				properties := schemaMap["properties"].(map[string]interface{})
+				name := properties["name"].(map[string]interface{})
+
+				// Nullable types should be kept as array (Gemini supports this)
+				typeVal := name["type"]
+				typeSlice, ok := typeVal.([]interface{})
+				require.True(t, ok, "type should remain as array for nullable types in Responses API")
+				require.Len(t, typeSlice, 2)
+				assert.Contains(t, typeSlice, "string")
+				assert.Contains(t, typeSlice, "null")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := gemini.ToGeminiResponsesRequest(tt.input)
+			require.NotNil(t, result, "Responses API conversion should not return nil")
 			tt.validate(t, result)
 		})
 	}

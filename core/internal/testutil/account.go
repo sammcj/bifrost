@@ -33,6 +33,8 @@ type TestScenarios struct {
 	ImageURL              bool
 	ImageBase64           bool
 	MultipleImages        bool
+	FileBase64            bool
+	FileURL               bool
 	CompleteEnd2End       bool
 	SpeechSynthesis       bool // Text-to-speech functionality
 	SpeechSynthesisStream bool // Streaming text-to-speech functionality
@@ -55,6 +57,7 @@ type TestScenarios struct {
 	FileBatchInput        bool // Whether batch create supports file-based input (InputFileID)
 	CountTokens           bool // Count tokens functionality
 	ChatAudio             bool // Chat completion with audio input/output functionality
+	StructuredOutputs     bool // Structured outputs (JSON schema) functionality
 }
 
 // ComprehensiveTestConfig extends TestConfig with additional scenarios

@@ -988,37 +988,14 @@ func mergeMCPConfig(ctx context.Context, config *Config, configData *ConfigData,
 
 // loadGovernanceConfigFromFile loads and merges governance config from file
 func loadGovernanceConfigFromFile(ctx context.Context, config *Config, configData *ConfigData) {
-	logger.Debug("loadGovernanceConfigFromFile called")
 	var governanceConfig *configstore.GovernanceConfig
 	var err error
-
-	// Debug: Check what's in configData.Governance
-	if configData.Governance != nil {
-		logger.Debug("configData.Governance is present: %d budgets, %d rate_limits, %d virtual_keys",
-			len(configData.Governance.Budgets),
-			len(configData.Governance.RateLimits),
-			len(configData.Governance.VirtualKeys))
-		for i, vk := range configData.Governance.VirtualKeys {
-			logger.Debug("  VK[%d]: id=%s, name=%s, provider_configs=%d",
-				i, vk.ID, vk.Name, vk.Value, len(vk.ProviderConfigs))
-		}
-	} else {
-		logger.Debug("configData.Governance is nil")
-	}
 
 	if config.ConfigStore != nil {
 		logger.Debug("getting governance config from store")
 		governanceConfig, err = config.ConfigStore.GetGovernanceConfig(ctx)
 		if err != nil {
 			logger.Warn("failed to get governance config from store: %v", err)
-		}
-		if governanceConfig != nil {
-			logger.Debug("governance config from store: %d budgets, %d rate_limits, %d virtual_keys",
-				len(governanceConfig.Budgets),
-				len(governanceConfig.RateLimits),
-				len(governanceConfig.VirtualKeys))
-		} else {
-			logger.Debug("governance config from store is nil")
 		}
 	} else {
 		logger.Debug("config.ConfigStore is nil, skipping store lookup")
@@ -1200,6 +1177,24 @@ func mergeGovernanceConfig(ctx context.Context, config *Config, configData *Conf
 		}
 		if !found {
 			configData.Governance.VirtualKeys[i].ConfigHash = fileVKHash
+			// if the virtual key value is env.VIRTUAL_KEY_VALUE, then we will need to resolve the environment variable
+			// Process environment variable for virtual key value
+			processedValue, envVar, err := config.processEnvValue(configData.Governance.VirtualKeys[i].Value)
+			if err != nil {
+				logger.Warn("failed to process env var for virtual key %s: %v", configData.Governance.VirtualKeys[i].ID, err)
+				continue
+			}
+			configData.Governance.VirtualKeys[i].Value = processedValue
+			// Track environment variable if used
+			if envVar != "" {
+				config.EnvKeys[envVar] = append(config.EnvKeys[envVar], configstore.EnvKeyInfo{
+					EnvVar:     envVar,
+					Provider:   "",
+					KeyType:    "virtual_key",
+					ConfigPath: fmt.Sprintf("governance.virtual_keys[%s].value", configData.Governance.VirtualKeys[i].ID),
+					KeyID:      "",
+				})
+			}
 			virtualKeysToAdd = append(virtualKeysToAdd, configData.Governance.VirtualKeys[i])
 		}
 	}

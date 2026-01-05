@@ -43,10 +43,12 @@ func TestVertex(t *testing.T) {
 			ImageBase64:           true,
 			MultipleImages:        true,
 			CompleteEnd2End:       true,
+			FileBase64:            true,
 			Embedding:             true,
 			Reasoning:             false, // Not supported right now because we are not using native gemini converters
 			ListModels:            false,
 			CountTokens:           true,
+			StructuredOutputs:     true, // Structured outputs with nullable enum support
 		},
 	}
 

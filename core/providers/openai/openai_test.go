@@ -53,6 +53,8 @@ func TestOpenAI(t *testing.T) {
 			ImageURL:              true,
 			ImageBase64:           true,
 			MultipleImages:        true,
+			FileBase64:            true,
+			FileURL:               true,
 			CompleteEnd2End:       true,
 			SpeechSynthesis:       true,
 			SpeechSynthesisStream: true,
@@ -74,6 +76,7 @@ func TestOpenAI(t *testing.T) {
 			FileBatchInput:        true,
 			CountTokens:           true,
 			ChatAudio:             true,
+			StructuredOutputs:     true, // Structured outputs with nullable enum support
 		},
 	}
 
