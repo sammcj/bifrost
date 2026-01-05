@@ -24,7 +24,7 @@ func TestOpenRouter(t *testing.T) {
 
 	testConfig := testutil.ComprehensiveTestConfig{
 		Provider:       schemas.OpenRouter,
-		ChatModel:      "openai/gpt-4o",
+		ChatModel:      "openai/gpt-4.1",
 		VisionModel:    "openai/gpt-4o",
 		TextModel:      "google/gemini-2.5-flash",
 		EmbeddingModel: "",
@@ -42,6 +42,8 @@ func TestOpenRouter(t *testing.T) {
 			ImageURL:              false, // OpenRouter's responses API is in Beta
 			ImageBase64:           false, // OpenRouter's responses API is in Beta
 			MultipleImages:        false, // OpenRouter's responses API is in Beta
+			FileBase64:            true,
+			FileURL:               true,
 			CompleteEnd2End:       false, // OpenRouter's responses API is in Beta
 			Reasoning:             true,
 			ListModels:            true,
