@@ -525,3 +525,222 @@ func TestChainMiddlewares_ShortCircuitMiddlePosition(t *testing.T) {
 		t.Errorf("Expected body 'Unauthorized', got '%s'", string(ctx.Response.Body()))
 	}
 }
+
+// TestAuthMiddleware_NilAuthConfig tests that auth middleware allows requests when auth config is nil
+func TestAuthMiddleware_NilAuthConfig(t *testing.T) {
+	SetLogger(&mockLogger{})
+
+	am := &AuthMiddleware{}
+	// authConfig is nil by default (simulates app start with no auth config)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/api/some-endpoint")
+
+	nextCalled := false
+	next := func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	}
+
+	middleware := am.Middleware()
+	handler := middleware(next)
+	handler(ctx)
+
+	// When auth config is nil, requests should be allowed through
+	if !nextCalled {
+		t.Error("Next handler should be called when auth config is nil")
+	}
+}
+
+// TestAuthMiddleware_DisabledAuthConfig tests that auth middleware allows requests when auth is disabled
+func TestAuthMiddleware_DisabledAuthConfig(t *testing.T) {
+	SetLogger(&mockLogger{})
+
+	am := &AuthMiddleware{}
+	am.UpdateAuthConfig(&configstore.AuthConfig{
+		AdminUserName: "admin",
+		AdminPassword: "password",
+		IsEnabled:     false,
+	})
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/api/some-endpoint")
+
+	nextCalled := false
+	next := func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	}
+
+	middleware := am.Middleware()
+	handler := middleware(next)
+	handler(ctx)
+
+	// When auth is disabled, requests should be allowed through
+	if !nextCalled {
+		t.Error("Next handler should be called when auth is disabled")
+	}
+}
+
+// TestAuthMiddleware_EnabledAuthConfig_NoAuth tests that auth middleware blocks unauthenticated requests
+func TestAuthMiddleware_EnabledAuthConfig_NoAuth(t *testing.T) {
+	SetLogger(&mockLogger{})
+
+	am := &AuthMiddleware{}
+	am.UpdateAuthConfig(&configstore.AuthConfig{
+		AdminUserName: "admin",
+		AdminPassword: "hashedpassword",
+		IsEnabled:     true,
+	})
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/api/some-endpoint")
+
+	nextCalled := false
+	next := func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	}
+
+	middleware := am.Middleware()
+	handler := middleware(next)
+	handler(ctx)
+
+	// When auth is enabled and no auth header is provided, request should be blocked
+	if nextCalled {
+		t.Error("Next handler should NOT be called when auth is enabled and no credentials provided")
+	}
+	if ctx.Response.StatusCode() != fasthttp.StatusUnauthorized {
+		t.Errorf("Expected status code %d, got %d", fasthttp.StatusUnauthorized, ctx.Response.StatusCode())
+	}
+}
+
+// TestAuthMiddleware_WhitelistedRoutes tests that whitelisted routes bypass auth
+func TestAuthMiddleware_WhitelistedRoutes(t *testing.T) {
+	SetLogger(&mockLogger{})
+
+	am := &AuthMiddleware{}
+	am.UpdateAuthConfig(&configstore.AuthConfig{
+		AdminUserName: "admin",
+		AdminPassword: "hashedpassword",
+		IsEnabled:     true,
+	})
+
+	whitelistedRoutes := []string{
+		"/api/session/is-auth-enabled",
+		"/api/session/login",
+		"/api/session/logout",
+		"/health",
+	}
+
+	for _, route := range whitelistedRoutes {
+		t.Run(route, func(t *testing.T) {
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Request.SetRequestURI(route)
+
+			nextCalled := false
+			next := func(ctx *fasthttp.RequestCtx) {
+				nextCalled = true
+			}
+
+			middleware := am.Middleware()
+			handler := middleware(next)
+			handler(ctx)
+
+			if !nextCalled {
+				t.Errorf("Next handler should be called for whitelisted route %s", route)
+			}
+		})
+	}
+}
+
+// TestAuthMiddleware_UpdateAuthConfig_NilToEnabled tests updating auth config from nil to enabled
+func TestAuthMiddleware_UpdateAuthConfig_NilToEnabled(t *testing.T) {
+	SetLogger(&mockLogger{})
+
+	am := &AuthMiddleware{}
+	// Initially auth config is nil
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/api/some-endpoint")
+
+	// First request should pass (nil config)
+	nextCalled := false
+	next := func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	}
+
+	middleware := am.Middleware()
+	handler := middleware(next)
+	handler(ctx)
+
+	if !nextCalled {
+		t.Error("First request should pass when auth config is nil")
+	}
+
+	// Now enable auth
+	am.UpdateAuthConfig(&configstore.AuthConfig{
+		AdminUserName: "admin",
+		AdminPassword: "hashedpassword",
+		IsEnabled:     true,
+	})
+
+	// Second request should be blocked (auth enabled, no credentials)
+	ctx2 := &fasthttp.RequestCtx{}
+	ctx2.Request.SetRequestURI("/api/some-endpoint")
+
+	nextCalled = false
+	handler(ctx2)
+
+	if nextCalled {
+		t.Error("Second request should be blocked after auth is enabled")
+	}
+	if ctx2.Response.StatusCode() != fasthttp.StatusUnauthorized {
+		t.Errorf("Expected status code %d, got %d", fasthttp.StatusUnauthorized, ctx2.Response.StatusCode())
+	}
+}
+
+// TestAuthMiddleware_UpdateAuthConfig_EnabledToDisabled tests disabling auth after it was enabled
+func TestAuthMiddleware_UpdateAuthConfig_EnabledToDisabled(t *testing.T) {
+	SetLogger(&mockLogger{})
+
+	am := &AuthMiddleware{}
+	// Start with auth enabled
+	am.UpdateAuthConfig(&configstore.AuthConfig{
+		AdminUserName: "admin",
+		AdminPassword: "hashedpassword",
+		IsEnabled:     true,
+	})
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/api/some-endpoint")
+
+	// First request should be blocked (auth enabled, no credentials)
+	nextCalled := false
+	next := func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	}
+
+	middleware := am.Middleware()
+	handler := middleware(next)
+	handler(ctx)
+
+	if nextCalled {
+		t.Error("First request should be blocked when auth is enabled")
+	}
+
+	// Now disable auth
+	am.UpdateAuthConfig(&configstore.AuthConfig{
+		AdminUserName: "admin",
+		AdminPassword: "hashedpassword",
+		IsEnabled:     false,
+	})
+
+	// Second request should pass (auth disabled)
+	ctx2 := &fasthttp.RequestCtx{}
+	ctx2.Request.SetRequestURI("/api/some-endpoint")
+
+	nextCalled = false
+	handler(ctx2)
+
+	if !nextCalled {
+		t.Error("Second request should pass after auth is disabled")
+	}
+}

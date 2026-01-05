@@ -1405,7 +1405,6 @@ func loadAuthConfigFromFile(ctx context.Context, config *Config, configData *Con
 		return
 	}
 
-	var err error
 	if config.ConfigStore != nil {
 		configStoreAuthConfig, err := config.ConfigStore.GetAuthConfig(ctx)
 		if err == nil && configStoreAuthConfig == nil {
@@ -1413,19 +1412,8 @@ func loadAuthConfigFromFile(ctx context.Context, config *Config, configData *Con
 				logger.Warn("failed to update auth config: %v", err)
 			}
 		}
-	} else if config.GovernanceConfig != nil && config.GovernanceConfig.AuthConfig == nil {
-		config.GovernanceConfig.AuthConfig = configData.AuthConfig
-		// Resolve username and password if they contain env.VAR_NAME
-		if configData.AuthConfig.AdminUserName != "" {
-			if configData.AuthConfig.AdminUserName, _, err = config.processEnvValue(configData.AuthConfig.AdminUserName); err != nil {
-				logger.Warn("failed to resolve username: %v", err)
-			}
-		}
-		if configData.AuthConfig.AdminPassword != "" {
-			if configData.AuthConfig.AdminPassword, _, err = config.processEnvValue(configData.AuthConfig.AdminPassword); err != nil {
-				logger.Warn("failed to resolve admin password from environment")
-			}
-		}
+	} else {
+		logger.Warn("config store is required to load auth config from file")
 	}
 }
 

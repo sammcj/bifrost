@@ -40,7 +40,6 @@ export default function SecurityView() {
 	const [updateCoreConfig, { isLoading }] = useUpdateCoreConfigMutation();
 	const [localConfig, setLocalConfig] = useState<CoreConfig>(defaultConfig);
 	const [needsRestart, setNeedsRestart] = useState<boolean>(false);
-	const [authNeedsRestart, setAuthNeedsRestart] = useState<boolean>(false);
 	const hideAuthDashboard = IS_ENTERPRISE;
 
 	const [localValues, setLocalValues] = useState<{
@@ -100,44 +99,25 @@ export default function SecurityView() {
 		setLocalConfig((prev) => ({ ...prev, [field]: value }));
 	}, []);
 
-	const checkAuthNeedsRestart = useCallback(
-		(newAuthConfig: AuthConfig) => {
-			const originalAuth = bifrostConfig?.auth_config;
-			const hasChanged =
-				newAuthConfig.is_enabled !== (originalAuth?.is_enabled ?? false) ||
-				newAuthConfig.admin_username !== (originalAuth?.admin_username ?? "") ||
-				newAuthConfig.admin_password !== (originalAuth?.admin_password ?? "") ||
-				newAuthConfig.disable_auth_on_inference !== (originalAuth?.disable_auth_on_inference ?? false);
-			setAuthNeedsRestart(hasChanged);
-		},
-		[bifrostConfig?.auth_config],
-	);
-
 	const handleAuthToggle = useCallback(
 		(checked: boolean) => {
-			const newAuthConfig = { ...authConfig, is_enabled: checked };
-			setAuthConfig(newAuthConfig);
-			checkAuthNeedsRestart(newAuthConfig);
+			setAuthConfig((prev) => ({ ...prev, is_enabled: checked }));
 		},
-		[authConfig, checkAuthNeedsRestart],
+		[],
 	);
 
 	const handleDisableAuthOnInferenceToggle = useCallback(
 		(checked: boolean) => {
-			const newAuthConfig = { ...authConfig, disable_auth_on_inference: checked };
-			setAuthConfig(newAuthConfig);
-			checkAuthNeedsRestart(newAuthConfig);
+			setAuthConfig((prev) => ({ ...prev, disable_auth_on_inference: checked }));
 		},
-		[authConfig, checkAuthNeedsRestart],
+		[],
 	);
 
 	const handleAuthFieldChange = useCallback(
 		(field: "admin_username" | "admin_password", value: string) => {
-			const newAuthConfig = { ...authConfig, [field]: value };
-			setAuthConfig(newAuthConfig);
-			checkAuthNeedsRestart(newAuthConfig);
+			setAuthConfig((prev) => ({ ...prev, [field]: value }));
 		},
-		[authConfig, checkAuthNeedsRestart],
+		[],
 	);
 
 	const handleSave = useCallback(async () => {
@@ -159,7 +139,6 @@ export default function SecurityView() {
 						: { ...authConfig, is_enabled: false },
 			}).unwrap();
 			toast.success("Security settings updated successfully.");
-			setAuthNeedsRestart(false);
 			setNeedsRestart(false);
 		} catch (error) {
 			toast.error(getErrorMessage(error));
@@ -179,7 +158,6 @@ export default function SecurityView() {
 			</div>
 
 			<div className="space-y-4">
-				{authNeedsRestart && <RestartWarning />}
 				{authConfig.is_enabled && !authConfig.disable_auth_on_inference && (
 					<Alert variant="default" className="border-blue-20">
 						<Info className="h-4 w-4 text-blue-600" />

@@ -19,8 +19,6 @@ type RestartRequiredConfig struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
-
-
 // GlobalProxyConfig represents the global proxy configuration
 type GlobalProxyConfig struct {
 	Enabled       bool                    `json:"enabled"`
