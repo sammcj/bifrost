@@ -1962,43 +1962,51 @@ func convertTextConfigToGenerationConfig(textConfig *schemas.ResponsesTextConfig
 
 // reconstructSchemaFromJSONSchema rebuilds a schema map from ResponsesTextConfigFormatJSONSchema
 func reconstructSchemaFromJSONSchema(jsonSchema *schemas.ResponsesTextConfigFormatJSONSchema) interface{} {
+	var schema map[string]interface{}
+
 	if jsonSchema.Schema != nil {
-		return *jsonSchema.Schema
+		// If Schema field is set, use it directly
+		schemaMap, ok := (*jsonSchema.Schema).(map[string]interface{})
+		if !ok {
+			return *jsonSchema.Schema
+		}
+		schema = schemaMap
+	} else {
+		// New format: Schema is spread across individual fields
+		schema = make(map[string]interface{})
+
+		if jsonSchema.Type != nil {
+			schema["type"] = *jsonSchema.Type
+		}
+
+		if jsonSchema.Properties != nil {
+			schema["properties"] = *jsonSchema.Properties
+		}
+
+		if len(jsonSchema.Required) > 0 {
+			schema["required"] = jsonSchema.Required
+		}
+
+		if jsonSchema.Description != nil {
+			schema["description"] = *jsonSchema.Description
+		}
+
+		if jsonSchema.AdditionalProperties != nil {
+			schema["additionalProperties"] = *jsonSchema.AdditionalProperties
+		}
+
+		if jsonSchema.Name != nil {
+			schema["title"] = *jsonSchema.Name
+		}
+
+		// Return nil if no fields were populated
+		if len(schema) == 0 {
+			return nil
+		}
 	}
 
-	// New format: Schema is spread across individual fields
-	schema := make(map[string]interface{})
-
-	if jsonSchema.Type != nil {
-		schema["type"] = *jsonSchema.Type
-	}
-
-	if jsonSchema.Properties != nil {
-		schema["properties"] = *jsonSchema.Properties
-	}
-
-	if len(jsonSchema.Required) > 0 {
-		schema["required"] = jsonSchema.Required
-	}
-
-	if jsonSchema.Description != nil {
-		schema["description"] = *jsonSchema.Description
-	}
-
-	if jsonSchema.AdditionalProperties != nil {
-		schema["additionalProperties"] = *jsonSchema.AdditionalProperties
-	}
-
-	if jsonSchema.Name != nil {
-		schema["title"] = *jsonSchema.Name
-	}
-
-	// Return nil if no fields were populated
-	if len(schema) == 0 {
-		return nil
-	}
-
-	return schema
+	// Normalize the schema for Gemini compatibility (handle union types, etc.)
+	return normalizeSchemaForGemini(schema)
 }
 
 // convertParamsToGenerationConfigResponses converts ChatParameters to GenerationConfig for Responses
