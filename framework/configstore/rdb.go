@@ -55,6 +55,7 @@ func (s *RDBConfigStore) UpdateClientConfig(ctx context.Context, config *ClientC
 		MCPToolExecutionTimeout: config.MCPToolExecutionTimeout,
 		MCPCodeModeBindingLevel: config.MCPCodeModeBindingLevel,
 		HeaderFilterConfig:      config.HeaderFilterConfig,
+		ConfigHash:              config.ConfigHash,
 	}
 	// Delete existing client config and create new one in a transaction
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -212,6 +213,7 @@ func (s *RDBConfigStore) GetClientConfig(ctx context.Context) (*ClientConfig, er
 		MCPToolExecutionTimeout: dbConfig.MCPToolExecutionTimeout,
 		MCPCodeModeBindingLevel: dbConfig.MCPCodeModeBindingLevel,
 		HeaderFilterConfig:      dbConfig.HeaderFilterConfig,
+		ConfigHash:              dbConfig.ConfigHash,
 	}, nil
 }
 

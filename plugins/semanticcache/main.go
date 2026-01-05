@@ -335,9 +335,9 @@ func (plugin *Plugin) GetName() string {
 	return PluginName
 }
 
-// HTTPTransportMiddleware is not used for this plugin
-func (plugin *Plugin) HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return nil
+// HTTPTransportIntercept is not used for this plugin
+func (plugin *Plugin) HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	return nil, nil
 }
 
 // PreHook is called before a request is processed by Bifrost.

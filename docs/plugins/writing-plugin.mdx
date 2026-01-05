@@ -71,7 +71,6 @@ import (
 	"fmt"
 
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/valyala/fasthttp"
 )
 
 // Init is called when the plugin is loaded
@@ -87,18 +86,15 @@ func GetName() string {
 	return "Hello World Plugin"
 }
 
-// HTTPTransportMiddleware returns a middleware for HTTP transport
+// HTTPTransportIntercept intercepts requests at the HTTP transport layer
+// Modify req in-place. Return (*HTTPResponse, nil) to short-circuit.
 // Only called when using HTTP transport (bifrost-http)
-func HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
-		return func(ctx *fasthttp.RequestCtx) {
-			fmt.Println("HTTPTransportMiddleware called")
-			// Modify request headers/body via ctx.Request before calling next
-			// Call next handler in the chain
-			next(ctx)
-			// Can also modify response via ctx.Response after next returns
-		}
-	}
+func HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	fmt.Println("HTTPTransportIntercept called")
+	// Modify request in-place (headers, body, query params)
+	req.Headers["X-Custom-Header"] = "custom-value"
+	// Return nil to continue, or return &schemas.HTTPResponse{} to short-circuit
+	return nil, nil
 }
 
 // PreHook is called before the request is sent to the provider
@@ -212,15 +208,20 @@ Returns a unique identifier for your plugin. This name appears in logs and statu
 
 <Tabs>
   <Tab title="v1.4.x+">
-#### `HTTPTransportMiddleware()`
+#### `HTTPTransportIntercept(ctx, req)`
 
-**HTTP transport only.** Returns a middleware that wraps the HTTP request handler chain. Use this to:
-- Intercept and modify requests before they enter Bifrost core
-- Intercept and modify responses before they're returned to clients
-- Implement authentication or logging at the transport layer
-- Access raw `*fasthttp.RequestCtx` for full HTTP control
+**HTTP transport only.** Intercepts requests at the transport layer. Use this to:
+- Modify request headers, body, or query params in-place
+- Short-circuit with a custom response
+- Access `BifrostContext` for request metadata
+- Works with both native .so and WASM plugins
 
-The middleware pattern requires calling `next(ctx)` to pass control to subsequent handlers.
+Key points:
+- Receives serializable `*HTTPRequest` (not raw fasthttp)
+- Modify `req.Headers`, `req.Body`, `req.Query` directly
+- Return `(nil, nil)` to continue to next plugin/handler
+- Return `(*HTTPResponse, nil)` to short-circuit with response
+- Return `(nil, error)` to short-circuit with error
 
 <Warning>
 This function is **only called** when using `bifrost-http`. It's **not invoked** when using Bifrost as a Go SDK.
@@ -429,7 +430,7 @@ Check the logs for plugin hook calls:
 <Tabs>
   <Tab title="v1.4.x+">
 ```
-HTTPTransportMiddleware called
+HTTPTransportIntercept called
 PreHook called
 PostHook called
 ```

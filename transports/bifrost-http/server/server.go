@@ -220,7 +220,7 @@ func LoadPlugin[T schemas.Plugin](ctx context.Context, name string, path *string
 	if path != nil {
 		logger.Info("loading dynamic plugin %s from path %s", name, *path)
 		// Load dynamic plugin
-		plugins, err := dynamicPlugins.LoadPlugins(&dynamicPlugins.Config{
+		plugins, err := dynamicPlugins.LoadPlugins(bifrostConfig.PluginLoader, &dynamicPlugins.Config{
 			Plugins: []dynamicPlugins.DynamicPluginConfig{
 				{
 					Path:    *path,
@@ -1194,6 +1194,8 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config %v", err)
 	}
+	// Initializing plugin loader
+	s.Config.PluginLoader = &dynamicPlugins.SharedObjectPluginLoader{}
 	// Initialize log retention cleaner if log store is configured
 	if s.Config.LogsStore != nil {
 		// If log retention days remains 0, then we wont be initializing the log retention cleaner

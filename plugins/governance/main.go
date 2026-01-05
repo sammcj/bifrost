@@ -16,7 +16,6 @@ import (
 	"github.com/maximhq/bifrost/framework/configstore"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/modelcatalog"
-	"github.com/valyala/fasthttp"
 )
 
 // PluginName is the name of the governance plugin
@@ -41,7 +40,7 @@ type InMemoryStore interface {
 
 type BaseGovernancePlugin interface {
 	GetName() string
-	HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware
+	HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error)
 	PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error)
 	PostHook(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)
 	Cleanup() error
@@ -230,13 +229,13 @@ func (p *GovernancePlugin) GetName() string {
 	return PluginName
 }
 
-func parseVirtualKey(ctx *fasthttp.RequestCtx) *string {
+func parseVirtualKeyFromHTTPRequest(req *schemas.HTTPRequest) *string {
 	var virtualKeyValue string
-	vkHeader := ctx.Request.Header.Peek("x-bf-vk")
-	if string(vkHeader) != "" {
-		return bifrost.Ptr(string(vkHeader))
+	vkHeader := req.Headers["x-bf-vk"]
+	if vkHeader != "" {
+		return bifrost.Ptr(vkHeader)
 	}
-	authHeader := string(ctx.Request.Header.Peek("Authorization"))
+	authHeader := req.Headers["Authorization"]
 	if authHeader != "" {
 		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
 			authHeaderValue := strings.TrimSpace(authHeader[7:]) // Remove "Bearer " prefix
@@ -248,69 +247,59 @@ func parseVirtualKey(ctx *fasthttp.RequestCtx) *string {
 	if virtualKeyValue != "" {
 		return bifrost.Ptr(virtualKeyValue)
 	}
-	xAPIKey := string(ctx.Request.Header.Peek("x-api-key"))
+	xAPIKey := req.Headers["x-api-key"]
 	if xAPIKey != "" && strings.HasPrefix(strings.ToLower(xAPIKey), VirtualKeyPrefix) {
 		return bifrost.Ptr(xAPIKey)
 	}
 	// Checking x-goog-api-key header
-	xGoogleAPIKey := string(ctx.Request.Header.Peek("x-goog-api-key"))
+	xGoogleAPIKey := req.Headers["x-goog-api-key"]
 	if xGoogleAPIKey != "" && strings.HasPrefix(strings.ToLower(xGoogleAPIKey), VirtualKeyPrefix) {
 		return bifrost.Ptr(xGoogleAPIKey)
 	}
 	return nil
 }
 
-// HTTPTransportMiddleware intercepts requests before they are processed (governance decision point)
-func (p *GovernancePlugin) HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
-		return func(ctx *fasthttp.RequestCtx) {
-			virtualKeyValue := parseVirtualKey(ctx)
-			if virtualKeyValue == nil {
-				next(ctx)
-				return
-			}
-			// Get the virtual key from the store
-			virtualKey, ok := p.store.GetVirtualKey(*virtualKeyValue)
-			if !ok || virtualKey == nil || !virtualKey.IsActive {
-				next(ctx)
-				return
-			}
-			headers, err := p.addMCPIncludeTools(nil, virtualKey)
-			if err != nil {
-				p.logger.Error("failed to add MCP include tools: %v", err)
-				next(ctx)
-				return
-			}
-			for header, value := range headers {
-				ctx.Request.Header.Set(header, value)
-			}
-			if ctx.Request.Body() == nil {
-				next(ctx)
-				return
-			}
-			var payload map[string]any
-			err = sonic.Unmarshal(ctx.Request.Body(), &payload)
-			if err != nil {
-				p.logger.Error("failed to unmarshal request body to check for virtual key: %v", err)
-				next(ctx)
-				return
-			}
-			payload, err = p.loadBalanceProvider(payload, virtualKey)
-			if err != nil {
-				p.logger.Error("failed to load balance provider: %v", err)
-				next(ctx)
-				return
-			}
-			body, err := sonic.Marshal(payload)
-			if err != nil {
-				p.logger.Error("failed to marshal request body to check for virtual key: %v", err)
-				next(ctx)
-				return
-			}
-			ctx.Request.SetBody(body)
-			next(ctx)
-		}
+// HTTPTransportIntercept intercepts requests before they are processed (governance decision point)
+// It modifies the request in-place and returns nil to continue, or an HTTPResponse to short-circuit.
+func (p *GovernancePlugin) HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	virtualKeyValue := parseVirtualKeyFromHTTPRequest(req)
+	if virtualKeyValue == nil {
+		return nil, nil
 	}
+	// Get the virtual key from the store
+	virtualKey, ok := p.store.GetVirtualKey(*virtualKeyValue)
+	if !ok || virtualKey == nil || !virtualKey.IsActive {
+		return nil, nil
+	}
+	headers, err := p.addMCPIncludeTools(nil, virtualKey)
+	if err != nil {
+		p.logger.Error("failed to add MCP include tools: %v", err)
+		return nil, nil
+	}
+	for header, value := range headers {
+		req.Headers[header] = value
+	}
+	if len(req.Body) == 0 {
+		return nil, nil
+	}
+	var payload map[string]any
+	err = sonic.Unmarshal(req.Body, &payload)
+	if err != nil {
+		p.logger.Error("failed to unmarshal request body to check for virtual key: %v", err)
+		return nil, nil
+	}
+	payload, err = p.loadBalanceProvider(payload, virtualKey)
+	if err != nil {
+		p.logger.Error("failed to load balance provider: %v", err)
+		return nil, nil
+	}
+	body, err := sonic.Marshal(payload)
+	if err != nil {
+		p.logger.Error("failed to marshal request body to check for virtual key: %v", err)
+		return nil, nil
+	}
+	req.Body = body
+	return nil, nil
 }
 
 // loadBalanceProvider loads balances the provider for the request

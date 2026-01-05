@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/valyala/fasthttp"
 )
 
 func Init(config any) error {
@@ -16,14 +15,14 @@ func GetName() string {
 	return "Hello World Plugin"
 }
 
-func HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
-		return func(ctx *fasthttp.RequestCtx) {
-			fmt.Println("HTTPTransportMiddleware called")
-			ctx.SetUserValue(schemas.BifrostContextKey("hello-world-plugin-transport-interceptor"), "transport-interceptor-value")
-			next(ctx)
-		}
-	}
+func HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	fmt.Println("HTTPTransportIntercept called")
+	// Modify request in-place
+	req.Headers["X-Hello-World-Plugin"] = "transport-interceptor-value"
+	// Store value in context for PreHook/PostHook
+	ctx.SetValue(schemas.BifrostContextKey("hello-world-plugin-transport-interceptor"), "transport-interceptor-value")
+	// Return nil to continue processing, or return &schemas.HTTPResponse{} to short-circuit
+	return nil, nil
 }
 
 func PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {

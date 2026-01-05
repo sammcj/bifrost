@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-
-	"github.com/bytedance/sonic"
 )
 
 const (
@@ -468,17 +466,17 @@ type BifrostStream struct {
 // This ensures that only the non-nil embedded struct is marshaled,
 func (bs BifrostStream) MarshalJSON() ([]byte, error) {
 	if bs.BifrostTextCompletionResponse != nil {
-		return sonic.Marshal(bs.BifrostTextCompletionResponse)
+		return Marshal(bs.BifrostTextCompletionResponse)
 	} else if bs.BifrostChatResponse != nil {
-		return sonic.Marshal(bs.BifrostChatResponse)
+		return Marshal(bs.BifrostChatResponse)
 	} else if bs.BifrostResponsesStreamResponse != nil {
-		return sonic.Marshal(bs.BifrostResponsesStreamResponse)
+		return Marshal(bs.BifrostResponsesStreamResponse)
 	} else if bs.BifrostSpeechStreamResponse != nil {
-		return sonic.Marshal(bs.BifrostSpeechStreamResponse)
+		return Marshal(bs.BifrostSpeechStreamResponse)
 	} else if bs.BifrostTranscriptionStreamResponse != nil {
-		return sonic.Marshal(bs.BifrostTranscriptionStreamResponse)
+		return Marshal(bs.BifrostTranscriptionStreamResponse)
 	} else if bs.BifrostError != nil {
-		return sonic.Marshal(bs.BifrostError)
+		return Marshal(bs.BifrostError)
 	}
 	// Return empty object if both are nil (shouldn't happen in practice)
 	return []byte("{}"), nil

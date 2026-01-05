@@ -276,9 +276,9 @@ func (p *PrometheusPlugin) GetName() string {
 	return PluginName
 }
 
-// HTTPTransportMiddleware is not used for this plugin
-func (p *PrometheusPlugin) HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return nil
+// HTTPTransportIntercept is not used for this plugin
+func (p *PrometheusPlugin) HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	return nil, nil
 }
 
 // PreHook records the start time of the request in the context.

@@ -13,7 +13,6 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/valyala/fasthttp"
 )
 
 const (
@@ -39,7 +38,8 @@ func TestDynamicPluginLifecycle(t *testing.T) {
 		},
 	}
 
-	plugins, err := LoadPlugins(config)
+	loader := &SharedObjectPluginLoader{}
+	plugins, err := LoadPlugins(loader, config)
 	require.NoError(t, err, "Failed to load plugins")
 	require.Len(t, plugins, 1, "Expected exactly one plugin to be loaded")
 
@@ -51,36 +51,31 @@ func TestDynamicPluginLifecycle(t *testing.T) {
 		assert.Equal(t, "Hello World Plugin", name, "Plugin name should match")
 	})
 
-	// Test HTTPTransportMiddleware
-	t.Run("HTTPTransportMiddleware", func(t *testing.T) {
-		// Track if the next handler was called
-		nextHandlerCalled := false
+	// Test HTTPTransportIntercept
+	t.Run("HTTPTransportIntercept", func(t *testing.T) {
+		ctx := context.Background()
+		pluginCtx, cancel := schemas.NewBifrostContextWithTimeout(ctx, 10*time.Second)
+		defer cancel()
 
-		// Create a mock next handler
-		nextHandler := func(ctx *fasthttp.RequestCtx) {
-			nextHandlerCalled = true
+		// Create a test HTTP request
+		req := &schemas.HTTPRequest{
+			Method: "POST",
+			Path:   "/api",
+			Headers: map[string]string{
+				"Content-Type":  "application/json",
+				"Authorization": "Bearer token123",
+			},
+			Query: map[string]string{},
+			Body:  []byte(`{"test": "data"}`),
 		}
 
-		// Get the middleware function
-		middleware := plugin.HTTPTransportMiddleware()
-		require.NotNil(t, middleware, "HTTPTransportMiddleware should return a middleware function")
+		// Call HTTPTransportIntercept
+		resp, err := plugin.HTTPTransportIntercept(pluginCtx, req)
+		require.NoError(t, err, "HTTPTransportIntercept should not return error")
+		assert.Nil(t, resp, "HTTPTransportIntercept should return nil response to continue")
 
-		// Wrap the next handler with the middleware
-		wrappedHandler := middleware(nextHandler)
-		require.NotNil(t, wrappedHandler, "Middleware should return a wrapped handler")
-
-		// Create a test request context
-		ctx := &fasthttp.RequestCtx{}
-		ctx.Request.SetRequestURI("http://example.com/api")
-		ctx.Request.Header.SetMethod("POST")
-		ctx.Request.Header.Set("Content-Type", "application/json")
-		ctx.Request.Header.Set("Authorization", "Bearer token123")
-
-		// Call the wrapped handler
-		wrappedHandler(ctx)
-
-		// Verify the next handler was called
-		assert.True(t, nextHandlerCalled, "Next handler should have been called")
+		// Verify headers were modified (hello-world plugin adds a header)
+		assert.Equal(t, "transport-interceptor-value", req.Headers["X-Hello-World-Plugin"], "Plugin should have added custom header")
 	})
 
 	// Test PreHook
@@ -183,7 +178,8 @@ func TestLoadPlugins_DisabledPlugin(t *testing.T) {
 		},
 	}
 
-	plugins, err := LoadPlugins(config)
+	loader := &SharedObjectPluginLoader{}
+	plugins, err := LoadPlugins(loader, config)
 	require.NoError(t, err, "LoadPlugins should not error for disabled plugins")
 	assert.Len(t, plugins, 0, "No plugins should be loaded when all are disabled")
 }
@@ -210,7 +206,8 @@ func TestLoadPlugins_MultiplePlugins(t *testing.T) {
 		},
 	}
 
-	plugins, err := LoadPlugins(config)
+	loader := &SharedObjectPluginLoader{}
+	plugins, err := LoadPlugins(loader, config)
 	require.NoError(t, err, "LoadPlugins should succeed for multiple plugins")
 	assert.Len(t, plugins, 2, "Two plugins should be loaded")
 
@@ -232,7 +229,8 @@ func TestLoadPlugins_InvalidPath(t *testing.T) {
 		},
 	}
 
-	plugins, err := LoadPlugins(config)
+	loader := &SharedObjectPluginLoader{}
+	plugins, err := LoadPlugins(loader, config)
 	assert.Error(t, err, "LoadPlugins should return error for invalid path")
 	assert.Nil(t, plugins, "No plugins should be loaded on error")
 }
@@ -242,8 +240,8 @@ func TestLoadPlugins_EmptyConfig(t *testing.T) {
 	config := &Config{
 		Plugins: []DynamicPluginConfig{},
 	}
-
-	plugins, err := LoadPlugins(config)
+	loader := &SharedObjectPluginLoader{}
+	plugins, err := LoadPlugins(loader, config)
 	require.NoError(t, err, "LoadPlugins should succeed with empty config")
 	assert.Len(t, plugins, 0, "No plugins should be loaded with empty config")
 }
@@ -253,7 +251,8 @@ func TestDynamicPlugin_ContextPropagation(t *testing.T) {
 	pluginPath := buildHelloWorldPlugin(t)
 	defer cleanupHelloWorldPlugin(t)
 
-	plugin, err := loadDynamicPlugin(pluginPath, nil)
+	loader := &SharedObjectPluginLoader{}
+	plugin, err := loader.LoadDynamicPlugin(pluginPath, nil)
 	require.NoError(t, err, "Failed to load plugin")
 
 	// Create a context with a value
@@ -288,7 +287,8 @@ func TestDynamicPlugin_ConcurrentCalls(t *testing.T) {
 	pluginPath := buildHelloWorldPlugin(t)
 	defer cleanupHelloWorldPlugin(t)
 
-	plugin, err := loadDynamicPlugin(pluginPath, nil)
+	loader := &SharedObjectPluginLoader{}
+	plugin, err := loader.LoadDynamicPlugin(pluginPath, nil)
 	require.NoError(t, err, "Failed to load plugin")
 
 	// Run multiple goroutines calling plugin methods
@@ -395,7 +395,8 @@ func TestLoadDynamicPlugin_DirectCall(t *testing.T) {
 	pluginPath := buildHelloWorldPlugin(t)
 	defer cleanupHelloWorldPlugin(t)
 
-	plugin, err := loadDynamicPlugin(pluginPath, map[string]interface{}{
+	loader := &SharedObjectPluginLoader{}
+	plugin, err := loader.LoadDynamicPlugin(pluginPath, map[string]interface{}{
 		"test": "config",
 	})
 	require.NoError(t, err, "loadDynamicPlugin should succeed")
@@ -412,7 +413,8 @@ func TestDynamicPlugin_NilConfig(t *testing.T) {
 	pluginPath := buildHelloWorldPlugin(t)
 	defer cleanupHelloWorldPlugin(t)
 
-	plugin, err := loadDynamicPlugin(pluginPath, nil)
+	loader := &SharedObjectPluginLoader{}
+	plugin, err := loader.LoadDynamicPlugin(pluginPath, nil)
 	require.NoError(t, err, "loadDynamicPlugin should succeed with nil config")
 	assert.NotNil(t, plugin, "Plugin should not be nil")
 
@@ -426,7 +428,8 @@ func TestDynamicPlugin_ShortCircuitNil(t *testing.T) {
 	pluginPath := buildHelloWorldPlugin(t)
 	defer cleanupHelloWorldPlugin(t)
 
-	plugin, err := loadDynamicPlugin(pluginPath, nil)
+	loader := &SharedObjectPluginLoader{}
+	plugin, err := loader.LoadDynamicPlugin(pluginPath, nil)
 	require.NoError(t, err, "Failed to load plugin")
 
 	ctx := context.Background()
@@ -451,7 +454,8 @@ func BenchmarkDynamicPlugin_PreHook(b *testing.B) {
 	pluginPath := buildHelloWorldPluginForBenchmark(b)
 	defer cleanupHelloWorldPluginForBenchmark(b)
 
-	plugin, err := loadDynamicPlugin(pluginPath, nil)
+	loader := &SharedObjectPluginLoader{}
+	plugin, err := loader.LoadDynamicPlugin(pluginPath, nil)
 	require.NoError(b, err, "Failed to load plugin")
 
 	ctx := context.Background()
@@ -476,7 +480,8 @@ func BenchmarkDynamicPlugin_PostHook(b *testing.B) {
 	pluginPath := buildHelloWorldPluginForBenchmark(b)
 	defer cleanupHelloWorldPluginForBenchmark(b)
 
-	plugin, err := loadDynamicPlugin(pluginPath, nil)
+	loader := &SharedObjectPluginLoader{}
+	plugin, err := loader.LoadDynamicPlugin(pluginPath, nil)
 	require.NoError(b, err, "Failed to load plugin")
 
 	ctx := context.Background()
@@ -499,7 +504,8 @@ func BenchmarkDynamicPlugin_GetName(b *testing.B) {
 	pluginPath := buildHelloWorldPluginForBenchmark(b)
 	defer cleanupHelloWorldPluginForBenchmark(b)
 
-	plugin, err := loadDynamicPlugin(pluginPath, nil)
+	loader := &SharedObjectPluginLoader{}
+	plugin, err := loader.LoadDynamicPlugin(pluginPath, nil)
 	require.NoError(b, err, "Failed to load plugin")
 
 	b.ResetTimer()
@@ -566,7 +572,8 @@ func TestDynamicPlugin_GetNameNotEmpty(t *testing.T) {
 	pluginPath := buildHelloWorldPlugin(t)
 	defer cleanupHelloWorldPlugin(t)
 
-	plugin, err := loadDynamicPlugin(pluginPath, nil)
+	loader := &SharedObjectPluginLoader{}
+	plugin, err := loader.LoadDynamicPlugin(pluginPath, nil)
 	require.NoError(t, err, "Failed to load plugin")
 
 	name := plugin.GetName()

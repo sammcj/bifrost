@@ -156,9 +156,9 @@ func (plugin *Plugin) GetName() string {
 	return PluginName
 }
 
-// HTTPTransportMiddleware is not used for this plugin
-func (plugin *Plugin) HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return nil
+// HTTPTransportIntercept is not used for this plugin
+func (plugin *Plugin) HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	return nil, nil
 }
 
 // getEffectiveLogRepoID determines which single log repo ID to use based on priority:

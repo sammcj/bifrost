@@ -6,7 +6,7 @@ icon: "arrow-up-right-dots"
 
 ## Overview
 
-Bifrost v1.4.x introduces a new plugin interface for HTTP transport layer interception. This guide helps you migrate existing plugins from the v1.3.x `TransportInterceptor` pattern to the v1.4.x `HTTPTransportMiddleware` pattern.
+Bifrost v1.4.x introduces a new plugin interface for HTTP transport layer interception. This guide helps you migrate existing plugins from the v1.3.x `TransportInterceptor` pattern to the v1.4.x `HTTPTransportIntercept` pattern.
 
 <Note>
 If your plugin doesn't use `TransportInterceptor`, no migration is needed. The `PreHook`, `PostHook`, `Init`, `GetName`, and `Cleanup` functions remain unchanged.
@@ -14,39 +14,42 @@ If your plugin doesn't use `TransportInterceptor`, no migration is needed. The `
 
 ## What Changed?
 
-The HTTP transport interception mechanism changed from a simple function that receives and returns headers/body to a middleware pattern that wraps the entire request handler chain.
+The HTTP transport interception mechanism changed from a simple function that receives and returns headers/body to a serializable intercept pattern that works with both native `.so` plugins and WASM plugins.
 
 ### Key Differences
 
-| Aspect | v1.3.x (TransportInterceptor) | v1.4.x+ (HTTPTransportMiddleware) |
-|--------|-------------------------------|-----------------------------------|
-| Function signature | `TransportInterceptor(ctx, url, headers, body)` | `HTTPTransportMiddleware()` |
-| Return type | `(headers, body, error)` | `BifrostHTTPMiddleware` |
-| Access scope | Headers and body as maps | Full `*fasthttp.RequestCtx` |
-| Flow control | Implicit (return modified values) | Explicit (`next(ctx)` call) |
-| Capability | Request modification only | Request AND response modification |
+| Aspect | v1.3.x (TransportInterceptor) | v1.4.x+ (HTTPTransportIntercept) |
+|--------|-------------------------------|----------------------------------|
+| Signature | `TransportInterceptor(ctx, url, headers, body)` | `HTTPTransportIntercept(ctx, req)` |
+| Return type | `(headers, body, error)` | `(*HTTPResponse, error)` |
+| Request type | Separate `headers map`, `body map` | Unified `*HTTPRequest` struct |
+| Modification | Return modified maps | Modify `req` in-place |
+| Short-circuit | Return error | Return `*HTTPResponse` |
+| WASM support | No | Yes |
+| Context | Limited `BifrostContext` | Full `*BifrostContext` |
 
 ### Why the Change?
 
-The new middleware pattern provides:
+The new intercept pattern provides:
 
-1. **Full HTTP control** - Access to the complete `*fasthttp.RequestCtx` including method, path, query params, and all headers
-2. **Response interception** - Ability to modify responses after they return from downstream handlers
-3. **Better composability** - Standard middleware pattern that chains naturally with other handlers
-4. **More flexibility** - Can short-circuit requests, add timing, implement retries, etc.
+1. **WASM plugin support** - Serializable types work across WASM boundary
+2. **Simpler API** - No middleware wrapper, direct function call
+3. **Better testability** - No fasthttp dependency in plugin tests
+4. **Full context access** - BifrostContext available for request metadata
+5. **Custom response short-circuits** - Return a full response to short-circuit
 
 ## Migration Steps
 
 ### Step 1: Update Imports
 
-Add the `fasthttp` import to your plugin:
+Remove the `fasthttp` import if present:
 
 ```go
 import (
 	"fmt"
 
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/valyala/fasthttp"  // Add this import
+	// Remove: "github.com/valyala/fasthttp"
 )
 ```
 
@@ -70,29 +73,26 @@ func TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[s
 **After (v1.4.x+):**
 
 ```go
-// HTTPTransportMiddleware returns a middleware for HTTP transport
-func HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
-		return func(ctx *fasthttp.RequestCtx) {
-			// Add custom header
-			ctx.Request.Header.Set("X-Custom-Header", "value")
-			
-			// Modify body (if needed)
-			// Note: Body modification requires parsing and re-serializing
-			// ctx.Request.SetBody(modifiedBody)
-			
-			// Call next handler in chain
-			next(ctx)
-			
-			// Can also modify response here after next() returns
-		}
-	}
+// HTTPTransportIntercept intercepts requests at the transport layer
+// Modify req in-place. Return (*HTTPResponse, nil) to short-circuit.
+func HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	// Add custom header (in-place modification)
+	req.Headers["X-Custom-Header"] = "value"
+	
+	// Modify body (in-place modification)
+	var body map[string]any
+	sonic.Unmarshal(req.Body, &body)
+	body["custom_field"] = "custom_value"
+	req.Body, _ = sonic.Marshal(body)
+	
+	// Return nil to continue, or return &HTTPResponse{} to short-circuit
+	return nil, nil
 }
 ```
 
 ### Step 3: Update Body Modification Logic
 
-In v1.3.x, you received the body as a `map[string]any`. In v1.4.x, you work with raw bytes:
+In v1.3.x, you received the body as a `map[string]any`. In v1.4.x, you work with `req.Body` bytes:
 
 **Before (v1.3.x):**
 
@@ -109,46 +109,16 @@ func TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[s
 ```go
 import "github.com/bytedance/sonic"
 
-func HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
-		return func(ctx *fasthttp.RequestCtx) {
-			// Parse existing body
-			var body map[string]any
-			if err := sonic.Unmarshal(ctx.Request.Body(), &body); err == nil {
-				// Modify body
-				body["model"] = "gpt-4"
-				
-				// Re-serialize and set
-				if newBody, err := sonic.Marshal(body); err == nil {
-					ctx.Request.SetBody(newBody)
-				}
-			}
-			
-			next(ctx)
-		}
+func HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	// Parse body
+	var body map[string]any
+	if err := sonic.Unmarshal(req.Body, &body); err == nil {
+		// Modify body
+		body["model"] = "gpt-4"
+		// Update req.Body in-place
+		req.Body, _ = sonic.Marshal(body)
 	}
-}
-```
-
-### Step 4: Handle Response Modification (New Capability)
-
-The new pattern allows you to modify responses, which wasn't possible in v1.3.x:
-
-```go
-func HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
-		return func(ctx *fasthttp.RequestCtx) {
-			// Before request
-			startTime := time.Now()
-			
-			// Process request
-			next(ctx)
-			
-			// After response - NEW CAPABILITY
-			duration := time.Since(startTime)
-			ctx.Response.Header.Set("X-Processing-Time", duration.String())
-		}
-	}
+	return nil, nil
 }
 ```
 
@@ -164,8 +134,8 @@ return headers, body, nil
 
 **v1.4.x+:**
 ```go
-ctx.Request.Header.Set("Authorization", "Bearer " + token)
-next(ctx)
+req.Headers["Authorization"] = "Bearer " + token
+return nil, nil
 ```
 
 ### Reading Headers
@@ -177,7 +147,7 @@ apiKey := headers["X-API-Key"]
 
 **v1.4.x+:**
 ```go
-apiKey := string(ctx.Request.Header.Peek("X-API-Key"))
+apiKey := req.Headers["X-API-Key"]
 ```
 
 ### Conditional Processing
@@ -195,21 +165,16 @@ func TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[s
 
 **v1.4.x+:**
 ```go
-func HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
-		return func(ctx *fasthttp.RequestCtx) {
-			if string(ctx.Request.Header.Peek("X-Skip-Processing")) == "true" {
-				next(ctx)
-				return
-			}
-			// Process...
-			next(ctx)
-		}
+func HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	if req.Headers["X-Skip-Processing"] == "true" {
+		return nil, nil // Continue without modification
 	}
+	// Process...
+	return nil, nil
 }
 ```
 
-### Error Handling
+### Error Handling / Short-Circuit
 
 **v1.3.x:**
 ```go
@@ -223,17 +188,38 @@ func TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[s
 
 **v1.4.x+:**
 ```go
-func HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
-		return func(ctx *fasthttp.RequestCtx) {
-			if len(ctx.Request.Header.Peek("X-API-Key")) == 0 {
-				ctx.SetStatusCode(401)
-				ctx.SetBodyString(`{"error": "missing API key"}`)
-				return // Don't call next - short-circuit the request
-			}
-			next(ctx)
-		}
+func HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	if req.Headers["X-API-Key"] == "" {
+		// Return a custom response to short-circuit
+		return &schemas.HTTPResponse{
+			StatusCode: 401,
+			Headers:    map[string]string{"Content-Type": "application/json"},
+			Body:       []byte(`{"error": "missing API key"}`),
+		}, nil
 	}
+	return nil, nil
+}
+```
+
+### Accessing Request Method and Path
+
+**v1.3.x:**
+```go
+// url parameter contained the full URL
+func TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
+	// Limited access to URL
+	return headers, body, nil
+}
+```
+
+**v1.4.x+:**
+```go
+func HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	// Full access to request properties
+	method := req.Method      // "GET", "POST", etc.
+	path := req.Path          // "/v1/chat/completions"
+	query := req.Query        // map[string]string of query params
+	return nil, nil
 }
 ```
 
@@ -256,9 +242,9 @@ func HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
      -d '{"model": "openai/gpt-4o-mini", "messages": [{"role": "user", "content": "Hello"}]}'
    ```
 
-4. **Verify logs show the new middleware being called:**
+4. **Verify logs show the new intercept being called:**
    ```
-   HTTPTransportMiddleware called
+   HTTPTransportIntercept called
    PreHook called
    PostHook called
    ```
@@ -270,33 +256,38 @@ func HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
 **Error:** `plugin: symbol TransportInterceptor not found`
 
 This error occurs if Bifrost v1.4.x is looking for the old function. Make sure:
-1. You've updated to `HTTPTransportMiddleware`
-2. The function signature matches exactly
+1. You've updated to `HTTPTransportIntercept`
+2. The function signature matches exactly: `func HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error)`
 3. You've rebuilt the plugin with the correct core version
 
 ### Body modification not working
 
-Make sure you're calling `ctx.Request.SetBody()` with the serialized bytes, not the map directly:
+Make sure you're assigning back to `req.Body`:
 
 ```go
-// Wrong
-ctx.Request.SetBody(body) // body is map[string]any
+// Wrong - body changes lost
+var body map[string]any
+sonic.Unmarshal(req.Body, &body)
+body["model"] = "gpt-4"
+// Missing: req.Body = ...
 
-// Correct
-bodyBytes, _ := sonic.Marshal(body)
-ctx.Request.SetBody(bodyBytes)
+// Correct - body changes applied
+var body map[string]any
+sonic.Unmarshal(req.Body, &body)
+body["model"] = "gpt-4"
+req.Body, _ = sonic.Marshal(body)  // Assign back!
 ```
 
 ### Headers not being set
 
-Remember that `fasthttp` header methods are case-sensitive for custom headers:
+Make sure you're modifying `req.Headers` directly:
 
 ```go
-// Set header
-ctx.Request.Header.Set("X-Custom-Header", "value")
+// Set header (case-sensitive keys)
+req.Headers["X-Custom-Header"] = "value"
 
-// Read header - use Peek for []byte or string conversion
-value := string(ctx.Request.Header.Peek("X-Custom-Header"))
+// Read header
+value := req.Headers["X-Custom-Header"]
 ```
 
 ## Need Help?
