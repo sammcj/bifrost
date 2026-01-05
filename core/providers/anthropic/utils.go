@@ -341,6 +341,240 @@ func parseJSONInput(jsonStr string) interface{} {
 	return result
 }
 
+// extractTypesFromValue extracts type strings from various formats (string, []string, []interface{})
+func extractTypesFromValue(typeVal interface{}) []string {
+	switch t := typeVal.(type) {
+	case string:
+		return []string{t}
+	case []string:
+		return t
+	case []interface{}:
+		types := make([]string, 0, len(t))
+		for _, item := range t {
+			if typeStr, ok := item.(string); ok {
+				types = append(types, typeStr)
+			}
+		}
+		return types
+	default:
+		return nil
+	}
+}
+
+// filterEnumValuesByType filters enum values to only include those matching the specified JSON schema type.
+// This ensures that when we split multi-type fields into anyOf branches, each branch only contains
+// enum values compatible with its declared type.
+func filterEnumValuesByType(enumValues []interface{}, schemaType string) []interface{} {
+	if len(enumValues) == 0 {
+		return nil
+	}
+
+	filtered := make([]interface{}, 0, len(enumValues))
+	for _, val := range enumValues {
+		// Determine the actual type of the enum value
+		var actualType string
+		switch val.(type) {
+		case string:
+			actualType = "string"
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+			actualType = "integer"
+		case float32, float64:
+			// Check if it's actually an integer value in float form
+			if fv, ok := val.(float64); ok && fv == float64(int64(fv)) {
+				actualType = "integer"
+			} else {
+				actualType = "number"
+			}
+		case bool:
+			actualType = "boolean"
+		case nil:
+			actualType = "null"
+		default:
+			// For other types (objects, arrays), include them in all branches
+			filtered = append(filtered, val)
+			continue
+		}
+
+		// Include the value if its type matches the schema type
+		// Also handle "number" type which includes both integers and floats
+		if actualType == schemaType || (schemaType == "number" && actualType == "integer") {
+			filtered = append(filtered, val)
+		}
+	}
+
+	return filtered
+}
+
+// normalizeSchemaForAnthropic recursively normalizes a JSON schema to be compatible with Anthropic's API.
+// This handles cases where:
+// 1. type is an array like ["string", "null"] - converted to single type
+// 2. type is an array with multiple types like ["string", "integer"] - converted to anyOf
+// 3. Enums with nullable types need special handling
+func normalizeSchemaForAnthropic(schema map[string]interface{}) map[string]interface{} {
+	if schema == nil {
+		return nil
+	}
+
+	normalized := make(map[string]interface{})
+	for k, v := range schema {
+		normalized[k] = v
+	}
+
+	// Handle type field if it's an array (e.g., ["string", "null"] or ["string", "integer"])
+	if typeVal, exists := normalized["type"]; exists {
+		types := extractTypesFromValue(typeVal)
+		if len(types) > 0 {
+			nonNullTypes := make([]string, 0, len(types))
+			for _, t := range types {
+				if t != "null" {
+					nonNullTypes = append(nonNullTypes, t)
+				}
+			}
+
+			if len(nonNullTypes) == 0 {
+				// Only null type
+				normalized["type"] = "null"
+			} else if len(nonNullTypes) == 1 && len(types) == 1 {
+				// Single type, no null (e.g., ["string"])
+				// Just use the single type
+				normalized["type"] = nonNullTypes[0]
+			} else {
+				// Multiple types OR single type with null
+				// Convert to anyOf structure for correctness
+				// Examples: ["string", "null"], ["string", "integer"], ["string", "integer", "null"]
+				delete(normalized, "type")
+
+				// Build anyOf with each non-null type
+				anyOfSchemas := make([]interface{}, 0, len(types))
+				for _, t := range nonNullTypes {
+					typeSchema := map[string]interface{}{"type": t}
+
+					// If there's an enum, filter enum values by type for each anyOf branch
+					if enumVal, hasEnum := normalized["enum"]; hasEnum {
+						// Convert enum to []interface{} if it's []string or other slice type
+						var enumArray []interface{}
+						switch e := enumVal.(type) {
+						case []interface{}:
+							enumArray = e
+						case []string:
+							enumArray = make([]interface{}, len(e))
+							for i, v := range e {
+								enumArray[i] = v
+							}
+						default:
+							// If enum is not a slice, skip filtering
+							typeSchema["enum"] = enumVal
+							anyOfSchemas = append(anyOfSchemas, typeSchema)
+							continue
+						}
+
+						filteredEnum := filterEnumValuesByType(enumArray, t)
+						if len(filteredEnum) > 0 {
+							typeSchema["enum"] = filteredEnum
+						}
+					}
+
+					anyOfSchemas = append(anyOfSchemas, typeSchema)
+				}
+
+				// If original had null, add it to anyOf
+				if len(nonNullTypes) < len(types) {
+					anyOfSchemas = append(anyOfSchemas, map[string]interface{}{"type": "null"})
+				}
+
+				normalized["anyOf"] = anyOfSchemas
+
+				// Remove enum from top level since it's now in anyOf branches
+				delete(normalized, "enum")
+			}
+		}
+	}
+
+	// Recursively normalize properties
+	if properties, ok := schema["properties"].(map[string]interface{}); ok {
+		newProps := make(map[string]interface{})
+		for key, prop := range properties {
+			if propMap, ok := prop.(map[string]interface{}); ok {
+				newProps[key] = normalizeSchemaForAnthropic(propMap)
+			} else {
+				newProps[key] = prop
+			}
+		}
+		normalized["properties"] = newProps
+	}
+
+	// Recursively normalize items (for arrays)
+	if items, ok := schema["items"].(map[string]interface{}); ok {
+		normalized["items"] = normalizeSchemaForAnthropic(items)
+	}
+
+	// Recursively normalize anyOf
+	if anyOf, ok := schema["anyOf"].([]interface{}); ok {
+		newAnyOf := make([]interface{}, 0, len(anyOf))
+		for _, item := range anyOf {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				newAnyOf = append(newAnyOf, normalizeSchemaForAnthropic(itemMap))
+			} else {
+				newAnyOf = append(newAnyOf, item)
+			}
+		}
+		normalized["anyOf"] = newAnyOf
+	}
+
+	// Recursively normalize oneOf
+	if oneOf, ok := schema["oneOf"].([]interface{}); ok {
+		newOneOf := make([]interface{}, 0, len(oneOf))
+		for _, item := range oneOf {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				newOneOf = append(newOneOf, normalizeSchemaForAnthropic(itemMap))
+			} else {
+				newOneOf = append(newOneOf, item)
+			}
+		}
+		normalized["oneOf"] = newOneOf
+	}
+
+	// Recursively normalize allOf
+	if allOf, ok := schema["allOf"].([]interface{}); ok {
+		newAllOf := make([]interface{}, 0, len(allOf))
+		for _, item := range allOf {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				newAllOf = append(newAllOf, normalizeSchemaForAnthropic(itemMap))
+			} else {
+				newAllOf = append(newAllOf, item)
+			}
+		}
+		normalized["allOf"] = newAllOf
+	}
+
+	// Recursively normalize definitions/defs
+	if definitions, ok := schema["definitions"].(map[string]interface{}); ok {
+		newDefs := make(map[string]interface{})
+		for key, def := range definitions {
+			if defMap, ok := def.(map[string]interface{}); ok {
+				newDefs[key] = normalizeSchemaForAnthropic(defMap)
+			} else {
+				newDefs[key] = def
+			}
+		}
+		normalized["definitions"] = newDefs
+	}
+
+	if defs, ok := schema["$defs"].(map[string]interface{}); ok {
+		newDefs := make(map[string]interface{})
+		for key, def := range defs {
+			if defMap, ok := def.(map[string]interface{}); ok {
+				newDefs[key] = normalizeSchemaForAnthropic(defMap)
+			} else {
+				newDefs[key] = def
+			}
+		}
+		normalized["$defs"] = newDefs
+	}
+
+	return normalized
+}
+
 // convertChatResponseFormatToAnthropicOutputFormat converts OpenAI Chat Completions response_format
 // to Anthropic's output_format structure.
 //
@@ -390,7 +624,9 @@ func convertChatResponseFormatToAnthropicOutputFormat(responseFormat *interface{
 	}
 
 	if schema, ok := jsonSchemaObj["schema"].(map[string]interface{}); ok {
-		outputFormat["schema"] = schema
+		// Normalize the schema to handle type arrays like ["string", "null"]
+		normalizedSchema := normalizeSchemaForAnthropic(schema)
+		outputFormat["schema"] = normalizedSchema
 	}
 
 	return outputFormat
@@ -454,7 +690,9 @@ func convertResponsesTextConfigToAnthropicOutputFormat(textConfig *schemas.Respo
 			schema["additionalProperties"] = *format.JSONSchema.AdditionalProperties
 		}
 
-		outputFormat["schema"] = schema
+		// Normalize the schema to handle type arrays like ["string", "null"]
+		normalizedSchema := normalizeSchemaForAnthropic(schema)
+		outputFormat["schema"] = normalizedSchema
 	}
 
 	return outputFormat
