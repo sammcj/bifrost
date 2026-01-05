@@ -196,9 +196,45 @@ func (req *OpenAIResponsesRequest) filterUnsupportedTools() {
 		if supportedTypes[tool.Type] {
 			// check for computer use preview
 			if tool.Type == schemas.ResponsesToolTypeComputerUsePreview && tool.ResponsesToolComputerUsePreview != nil && tool.ResponsesToolComputerUsePreview.EnableZoom != nil {
-				// create new tool and assign it to the filtered tools
 				newTool := tool
-				newTool.ResponsesToolComputerUsePreview.EnableZoom = nil
+				newComputerUse := &schemas.ResponsesToolComputerUsePreview{
+					DisplayHeight: tool.ResponsesToolComputerUsePreview.DisplayHeight,
+					DisplayWidth:  tool.ResponsesToolComputerUsePreview.DisplayWidth,
+					Environment:   tool.ResponsesToolComputerUsePreview.Environment,
+					// EnableZoom is intentionally omitted (nil) - OpenAI doesn't support it
+				}
+				newTool.ResponsesToolComputerUsePreview = newComputerUse
+				filteredTools = append(filteredTools, newTool)
+			} else if tool.Type == schemas.ResponsesToolTypeWebSearch && tool.ResponsesToolWebSearch != nil {
+				// Create a proper deep copy with new nested pointers to avoid mutating the original
+				newTool := tool
+				newWebSearch := &schemas.ResponsesToolWebSearch{}
+
+				// MaxUses is intentionally omitted (nil) - OpenAI doesn't support it
+
+				// Handle Filters: OpenAI doesn't support BlockedDomains
+				if tool.ResponsesToolWebSearch.Filters != nil {
+					hasAllowedDomains := len(tool.ResponsesToolWebSearch.Filters.AllowedDomains) > 0
+
+					if hasAllowedDomains {
+						// Keep only AllowedDomains (copy the slice to avoid sharing)
+						newWebSearch.Filters = &schemas.ResponsesToolWebSearchFilters{
+							AllowedDomains: append([]string(nil), tool.ResponsesToolWebSearch.Filters.AllowedDomains...),
+							// BlockedDomains is intentionally omitted - OpenAI doesn't support it
+						}
+					}
+					// If only blocked domains or both empty, Filters stays nil
+				}
+
+				// Copy other fields if they exist
+				if tool.ResponsesToolWebSearch.UserLocation != nil {
+					newWebSearch.UserLocation = tool.ResponsesToolWebSearch.UserLocation
+				}
+				if tool.ResponsesToolWebSearch.SearchContextSize != nil {
+					newWebSearch.SearchContextSize = tool.ResponsesToolWebSearch.SearchContextSize
+				}
+
+				newTool.ResponsesToolWebSearch = newWebSearch
 				filteredTools = append(filteredTools, newTool)
 			} else {
 				filteredTools = append(filteredTools, tool)

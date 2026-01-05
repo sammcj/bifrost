@@ -1524,7 +1524,7 @@ func (provider *VertexProvider) CountTokens(ctx *schemas.BifrostContext, key sch
 			ctx,
 			request,
 			func() (any, error) {
-				return anthropic.ToAnthropicResponsesRequest(request)
+				return anthropic.ToAnthropicResponsesRequest(ctx, request)
 			},
 			providerName,
 		)

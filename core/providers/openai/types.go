@@ -116,10 +116,11 @@ func (r *OpenAIChatRequest) MarshalJSON() ([]byte, error) {
 				contentCopy := *msg.Content
 				contentCopy.ContentBlocks = make([]schemas.ChatContentBlock, len(msg.Content.ContentBlocks))
 				for j, block := range msg.Content.ContentBlocks {
-					needsBlockCopy := block.CacheControl != nil || (block.File != nil && block.File.FileType != nil)
+					needsBlockCopy := block.CacheControl != nil || block.Citations != nil || (block.File != nil && block.File.FileType != nil)
 					if needsBlockCopy {
 						blockCopy := block
 						blockCopy.CacheControl = nil
+						blockCopy.Citations = nil
 						// Strip FileType and FileURL from file block
 						if blockCopy.File != nil && (blockCopy.File.FileType != nil || blockCopy.File.FileURL != nil) {
 							fileCopy := *blockCopy.File
@@ -291,17 +292,33 @@ func (r *OpenAIResponsesRequestInput) MarshalJSON() ([]byte, error) {
 			// Copy only this message
 			messagesCopy[i] = msg
 
-			// Strip CacheControl and FileType from content blocks if needed
+			// Strip CacheControl, FileType, and filter unsupported citation types from content blocks if needed
 			if msg.Content != nil && msg.Content.ContentBlocks != nil {
 				contentCopy := *msg.Content
 				contentCopy.ContentBlocks = make([]schemas.ResponsesMessageContentBlock, len(msg.Content.ContentBlocks))
 				hasContentModification := false
 				for j, block := range msg.Content.ContentBlocks {
-					needsBlockCopy := block.CacheControl != nil || (block.ResponsesInputMessageContentBlockFile != nil && block.ResponsesInputMessageContentBlockFile.FileType != nil)
+					needsBlockCopy := block.CacheControl != nil || block.Citations != nil || (block.ResponsesInputMessageContentBlockFile != nil && block.ResponsesInputMessageContentBlockFile.FileType != nil) || (block.ResponsesOutputMessageContentText != nil && len(block.ResponsesOutputMessageContentText.Annotations) > 0)
 					if needsBlockCopy {
 						hasContentModification = true
 						blockCopy := block
 						blockCopy.CacheControl = nil
+						blockCopy.Citations = nil
+
+						// Filter out unsupported citation types from annotations
+						if blockCopy.ResponsesOutputMessageContentText != nil && len(blockCopy.ResponsesOutputMessageContentText.Annotations) > 0 {
+							textCopy := *blockCopy.ResponsesOutputMessageContentText
+							filteredAnnotations := filterSupportedAnnotations(textCopy.Annotations)
+							if len(filteredAnnotations) > 0 {
+								textCopy.Annotations = filteredAnnotations
+								blockCopy.ResponsesOutputMessageContentText = &textCopy
+							} else {
+								// If no supported annotations remain, remove the annotations array
+								textCopy.Annotations = nil
+								blockCopy.ResponsesOutputMessageContentText = &textCopy
+							}
+						}
+
 						// Strip FileType from file block
 						if blockCopy.ResponsesInputMessageContentBlockFile != nil && blockCopy.ResponsesInputMessageContentBlockFile.FileType != nil {
 							fileCopy := *blockCopy.ResponsesInputMessageContentBlockFile
@@ -318,19 +335,54 @@ func (r *OpenAIResponsesRequestInput) MarshalJSON() ([]byte, error) {
 				}
 			}
 
-			// Strip CacheControl and FileType from tool message output blocks if needed
-			if msg.ResponsesToolMessage != nil && msg.ResponsesToolMessage.Output != nil {
-				if msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
+			// Strip unsupported fields from tool message
+			if msg.ResponsesToolMessage != nil {
+				toolMsgCopy := *msg.ResponsesToolMessage
+				toolMsgModified := false
+
+				// Strip unsupported fields from web search sources
+				if msg.ResponsesToolMessage.Action != nil && msg.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction != nil {
+					sources := msg.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction.Sources
+					if len(sources) > 0 {
+						needsSourceCopy := false
+						for _, source := range sources {
+							if source.Title != nil || source.EncryptedContent != nil || source.PageAge != nil {
+								needsSourceCopy = true
+								break
+							}
+						}
+
+						if needsSourceCopy {
+							actionCopy := *msg.ResponsesToolMessage.Action
+							webSearchActionCopy := *msg.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction
+							strippedSources := make([]schemas.ResponsesWebSearchToolCallActionSearchSource, len(sources))
+							for j, source := range sources {
+								// Only keep Type and URL for OpenAI
+								strippedSources[j] = schemas.ResponsesWebSearchToolCallActionSearchSource{
+									Type: source.Type,
+									URL:  source.URL,
+									// Title, EncryptedContent, and PageAge are omitted
+								}
+							}
+							webSearchActionCopy.Sources = strippedSources
+							actionCopy.ResponsesWebSearchToolCallAction = &webSearchActionCopy
+							toolMsgCopy.Action = &actionCopy
+							toolMsgModified = true
+						}
+					}
+				}
+
+				// Strip CacheControl and FileType from tool message output blocks if needed
+				if msg.ResponsesToolMessage.Output != nil && msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
 					hasToolModification := false
 					for _, block := range msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks {
-						if block.CacheControl != nil || (block.ResponsesInputMessageContentBlockFile != nil && block.ResponsesInputMessageContentBlockFile.FileType != nil) {
+						if block.CacheControl != nil || block.Citations != nil || (block.ResponsesInputMessageContentBlockFile != nil && block.ResponsesInputMessageContentBlockFile.FileType != nil) {
 							hasToolModification = true
 							break
 						}
 					}
 
 					if hasToolModification {
-						toolMsgCopy := *msg.ResponsesToolMessage
 						outputCopy := *msg.ResponsesToolMessage.Output
 						outputCopy.ResponsesFunctionToolCallOutputBlocks = make([]schemas.ResponsesMessageContentBlock, len(msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks))
 						for j, block := range msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks {
@@ -338,6 +390,7 @@ func (r *OpenAIResponsesRequestInput) MarshalJSON() ([]byte, error) {
 							if needsBlockCopy {
 								blockCopy := block
 								blockCopy.CacheControl = nil
+								blockCopy.Citations = nil
 								// Strip FileType from file block
 								if blockCopy.ResponsesInputMessageContentBlockFile != nil && blockCopy.ResponsesInputMessageContentBlockFile.FileType != nil {
 									fileCopy := *blockCopy.ResponsesInputMessageContentBlockFile
@@ -350,8 +403,12 @@ func (r *OpenAIResponsesRequestInput) MarshalJSON() ([]byte, error) {
 							}
 						}
 						toolMsgCopy.Output = &outputCopy
-						messagesCopy[i].ResponsesToolMessage = &toolMsgCopy
+						toolMsgModified = true
 					}
+				}
+
+				if toolMsgModified {
+					messagesCopy[i].ResponsesToolMessage = &toolMsgCopy
 				}
 			}
 		}
@@ -365,6 +422,9 @@ func hasFieldsToStripInChatMessage(msg OpenAIMessage) bool {
 	if msg.Content != nil && msg.Content.ContentBlocks != nil {
 		for _, block := range msg.Content.ContentBlocks {
 			if block.CacheControl != nil {
+				return true
+			}
+			if block.Citations != nil {
 				return true
 			}
 			if block.File != nil && (block.File.FileType != nil || block.File.FileURL != nil) {
@@ -382,13 +442,28 @@ func hasFieldsToStripInResponsesMessage(msg schemas.ResponsesMessage) bool {
 			if block.CacheControl != nil {
 				return true
 			}
+			if block.Citations != nil {
+				return true
+			}
 			if block.ResponsesInputMessageContentBlockFile != nil && block.ResponsesInputMessageContentBlockFile.FileType != nil {
+				return true
+			}
+			if block.ResponsesOutputMessageContentText != nil && len(block.ResponsesOutputMessageContentText.Annotations) > 0 {
 				return true
 			}
 		}
 	}
-	if msg.ResponsesToolMessage != nil && msg.ResponsesToolMessage.Output != nil {
-		if msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
+	if msg.ResponsesToolMessage != nil {
+		// Check if we need to strip fields from web search sources
+		if msg.ResponsesToolMessage.Action != nil && msg.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction != nil {
+			for _, source := range msg.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction.Sources {
+				if source.Title != nil || source.EncryptedContent != nil || source.PageAge != nil {
+					return true
+				}
+			}
+		}
+		// Check output blocks
+		if msg.ResponsesToolMessage.Output != nil && msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
 			for _, block := range msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks {
 				if block.CacheControl != nil {
 					return true
@@ -400,6 +475,35 @@ func hasFieldsToStripInResponsesMessage(msg schemas.ResponsesMessage) bool {
 		}
 	}
 	return false
+}
+
+// filterSupportedAnnotations filters out unsupported (non-OpenAI native) citation types
+// OpenAI supports: file_citation, url_citation, container_file_citation, file_path
+func filterSupportedAnnotations(annotations []schemas.ResponsesOutputMessageContentTextAnnotation) []schemas.ResponsesOutputMessageContentTextAnnotation {
+	if len(annotations) == 0 {
+		return annotations
+	}
+
+	supportedAnnotations := make([]schemas.ResponsesOutputMessageContentTextAnnotation, 0, len(annotations))
+	for _, annotation := range annotations {
+		switch annotation.Type {
+		case "url_citation":
+			supportedAnnotations = append(supportedAnnotations, schemas.ResponsesOutputMessageContentTextAnnotation{
+				Type:       "url_citation",
+				URL:        annotation.URL,
+				Title:      annotation.Title,
+				StartIndex: annotation.StartIndex,
+				EndIndex:   annotation.EndIndex,
+			})
+		case "file_citation", "container_file_citation", "file_path", "text_annotation":
+			// OpenAI native types - keep them
+			supportedAnnotations = append(supportedAnnotations, annotation)
+		default:
+			continue
+		}
+	}
+
+	return supportedAnnotations
 }
 
 type OpenAIResponsesRequest struct {

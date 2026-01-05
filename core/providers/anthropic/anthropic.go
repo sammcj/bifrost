@@ -2093,7 +2093,7 @@ func (provider *AnthropicProvider) CountTokens(ctx *schemas.BifrostContext, key 
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToAnthropicResponsesRequest(request) },
+		func() (any, error) { return ToAnthropicResponsesRequest(ctx, request) },
 		provider.GetProviderKey(),
 	)
 	if bifrostErr != nil {

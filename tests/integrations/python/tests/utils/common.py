@@ -2615,4 +2615,406 @@ def assert_valid_input_tokens_response(response: Any, library: str):
         assert hasattr(response, "input_tokens"), "Response should have input_tokens attribute"
         assert isinstance(response.input_tokens, int), "input_tokens should be an integer"
         assert response.input_tokens > 0, f"input_tokens should be positive, got {response.input_tokens}"
+
+
+# =========================================================================
+# CITATIONS TEST DATA AND UTILITIES
+# =========================================================================
+
+# Test document content for citations
+CITATION_TEXT_DOCUMENT = """The Theory of Relativity was developed by Albert Einstein in the early 20th century.
+It consists of two parts: Special Relativity published in 1905, and General Relativity published in 1915.
+
+Special Relativity deals with objects moving at constant velocities and introduced the famous equation E=mc².
+General Relativity extends this to accelerating objects and provides a new understanding of gravity.
+
+Einstein's work revolutionized our understanding of space, time, and gravity, and its predictions have been
+confirmed by numerous experiments and observations over the past century."""
+
+# Multiple documents for testing document_index
+CITATION_MULTI_DOCUMENT_SET = [
+    {
+        "title": "Physics Document",
+        "content": """Quantum mechanics is a fundamental theory in physics that describes the behavior of matter and energy at the atomic and subatomic level.
+It was developed in the early 20th century by physicists including Max Planck, Albert Einstein, Niels Bohr, and Werner Heisenberg."""
+    },
+    {
+        "title": "Chemistry Document", 
+        "content": """The periodic table organizes chemical elements by their atomic number, electron configuration, and recurring chemical properties.
+It was first published by Dmitri Mendeleev in 1869 and has become a fundamental tool in chemistry."""
+    }
+]
+
+
+def create_anthropic_document(
+    content: str,
+    doc_type: str,
+    title: str = "Test Document",
+    citations_enabled: bool = True
+) -> Dict[str, Any]:
+    """
+    Create a properly formatted document block for Anthropic API with citations.
     
+    Args:
+        content: Document content (text or base64)
+        doc_type: Document type - "text", "pdf", or "base64"
+        title: Document title
+        citations_enabled: Whether to enable citations
+    
+    Returns:
+        Formatted document block dict
+    """
+    document = {
+        "type": "document",
+        "title": title,
+        "citations": {"enabled": citations_enabled}
+    }
+    
+    if doc_type == "text":
+        document["source"] = {
+            "type": "text",
+            "media_type": "text/plain",
+            "data": content
+        }
+    elif doc_type == "pdf" or doc_type == "base64":
+        document["source"] = {
+            "type": "base64",
+            "media_type": "application/pdf",
+            "data": content
+        }
+    else:
+        raise ValueError(f"Unsupported doc_type: {doc_type}. Use 'text', 'pdf', or 'base64'")
+    
+    return document
+
+
+def validate_citation_indices(citation: Any, citation_type: str) -> None:
+    """
+    Validate citation indices based on type.
+    
+    Args:
+        citation: Citation object to validate
+        citation_type: Expected citation type (char_location, page_location)
+    """
+    if citation_type == "char_location":
+        # Character indices: 0-indexed, exclusive end
+        assert hasattr(citation, "start_char_index"), "char_location should have start_char_index"
+        assert hasattr(citation, "end_char_index"), "char_location should have end_char_index"
+        assert citation.start_char_index >= 0, "start_char_index should be >= 0"
+        assert citation.end_char_index > citation.start_char_index, \
+            f"end_char_index ({citation.end_char_index}) should be > start_char_index ({citation.start_char_index})"
+    
+    elif citation_type == "page_location":
+        # Page numbers: 1-indexed, exclusive end
+        assert hasattr(citation, "start_page_number"), "page_location should have start_page_number"
+        assert hasattr(citation, "end_page_number"), "page_location should have end_page_number"
+        assert citation.start_page_number >= 1, "start_page_number should be >= 1 (1-indexed)"
+        assert citation.end_page_number > citation.start_page_number, \
+            f"end_page_number ({citation.end_page_number}) should be > start_page_number ({citation.start_page_number})"
+
+
+def assert_valid_anthropic_citation(
+    citation: Any,
+    expected_type: str,
+    document_index: int = 0
+) -> None:
+    """
+    Assert that an Anthropic citation is valid and matches expected structure.
+    
+    Args:
+        citation: Citation object from Anthropic response
+        expected_type: Expected citation type (char_location, page_location)
+        document_index: Expected document index (0-indexed)
+    """
+    # Check basic structure
+    assert hasattr(citation, "type"), "Citation should have type field"
+    assert citation.type == expected_type, \
+        f"Citation type should be {expected_type}, got {citation.type}"
+    
+    # Check required fields
+    assert hasattr(citation, "cited_text"), "Citation should have cited_text"
+    assert isinstance(citation.cited_text, str), "cited_text should be a string"
+    assert len(citation.cited_text) > 0, "cited_text should not be empty"
+    
+    # Check document reference
+    assert hasattr(citation, "document_index"), "Citation should have document_index"
+    assert citation.document_index == document_index, \
+        f"document_index should be {document_index}, got {citation.document_index}"
+    
+    # Check document title (optional but common)
+    if hasattr(citation, "document_title"):
+        assert isinstance(citation.document_title, str), "document_title should be a string"
+    
+    # Validate type-specific indices
+    validate_citation_indices(citation, expected_type)
+
+
+def assert_valid_openai_annotation(
+    annotation: Any,
+    expected_type: str
+) -> None:
+    """
+    Assert that an OpenAI annotation is valid and matches expected structure.
+    
+    Args:
+        annotation: Annotation object from OpenAI Responses API
+        expected_type: Expected annotation type (file_citation, url_citation, etc.)
+    """
+    if isinstance(annotation, dict):
+        ann_type = annotation.get("type")
+        assert ann_type == expected_type, f"Annotation type should be {expected_type}, got {ann_type}"
+        getter = annotation.get
+        has = annotation.__contains__
+    else:
+        assert hasattr(annotation, "type"), "Annotation should have type field"
+        assert annotation.type == expected_type, f"Annotation type should be {expected_type}, got {annotation.type}"
+        getter = lambda k: getattr(annotation, k, None)
+        has = lambda k: hasattr(annotation, k)
+    
+    # Validate based on type
+    if expected_type == "file_citation":
+        if has("file_id"):
+            assert isinstance(getter("file_id"), str), "file_id should be a string"
+        if has("filename"):
+            assert isinstance(getter("filename"), str), "filename should be a string"
+        if has("index"):
+            assert isinstance(getter("index"), int), "index should be an integer"
+            assert getter("index") >= 0, "index should be >= 0"
+    
+    elif expected_type == "url_citation":
+        # url_citation: url, title, start_index, end_index
+        if has("url"):
+            assert isinstance(getter("url"), str), "url should be a string"
+        if has("title"):
+            assert isinstance(getter("title"), str), "title should be a string"
+        if has("start_index") and has("end_index"):
+            assert isinstance(getter("start_index"), int), "start_index should be an integer"
+            assert isinstance(getter("end_index"), int), "end_index should be an integer"
+            assert getter("end_index") > getter("start_index"), "end_index should be > start_index"
+
+    
+    elif expected_type == "container_file_citation":
+        # container_file_citation: container_id, file_id, filename, start_index, end_index
+        if has("container_id"):
+            assert isinstance(getter("container_id"), str), "container_id should be a string"
+        if has("file_id"):
+            assert isinstance(getter("file_id"), str), "file_id should be a string"
+        if has("filename"):
+            assert isinstance(getter("filename"), str), "filename should be a string"
+
+    
+    elif expected_type == "file_path":
+        if has("file_id"):
+            assert isinstance(getter("file_id"), str), "file_id should be a string"
+        if has("index"):
+            assert isinstance(getter("index"), int), "index should be an integer"
+            assert getter("index") >= 0, "index should be >= 0"
+    
+    # Check for char_location (Anthropic native type that may come through)
+    elif expected_type == "char_location":
+        if has("start_char_index"):
+            assert isinstance(getter("start_char_index"), int), "start_char_index should be an integer"
+        if has("end_char_index"):
+            assert isinstance(getter("end_char_index"), int), "end_char_index should be an integer"
+
+
+def collect_anthropic_streaming_citations(
+    stream,
+    timeout: int = 30
+) -> tuple[str, list, int]:
+    """
+    Collect text content and citations from an Anthropic streaming response.
+    
+    Args:
+        stream: Anthropic streaming response iterator
+        timeout: Maximum time to collect (seconds)
+    
+    Returns:
+        Tuple of (complete_text, citations_list, chunk_count)
+    """
+    import time
+    start_time = time.time()
+    
+    text_parts = []
+    citations = []
+    chunk_count = 0
+    
+    for event in stream:
+        chunk_count += 1
+        
+        # Check timeout
+        if time.time() - start_time > timeout:
+            break
+        
+        if hasattr(event, "type"):
+            event_type = event.type
+            
+            # Handle content_block_delta events
+            if event_type == "content_block_delta":
+                if hasattr(event, "delta") and event.delta:
+                    # Check for text delta
+                    if hasattr(event.delta, "type"):
+                        if event.delta.type == "text_delta":
+                            if hasattr(event.delta, "text"):
+                                text_parts.append(str(event.delta.text))
+                        
+                        # Check for citations delta
+                        elif event.delta.type == "citations_delta":
+                            if hasattr(event.delta, "citation"):
+                                citations.append(event.delta.citation)
+        
+        # Safety check
+        if chunk_count > 2000:
+            break
+    
+    complete_text = "".join(text_parts)
+    return complete_text, citations, chunk_count
+
+
+def collect_openai_streaming_annotations(
+    stream,
+    timeout: int = 30
+) -> tuple[str, list, int]:
+    """
+    Collect text content and annotations from OpenAI Responses API streaming.
+    
+    Args:
+        stream: OpenAI Responses API streaming response iterator
+        timeout: Maximum time to collect (seconds)
+    
+    Returns:
+        Tuple of (complete_text, annotations_list, chunk_count)
+    """
+    import time
+    start_time = time.time()
+    
+    text_parts = []
+    annotations = []
+    chunk_count = 0
+    
+    for chunk in stream:
+        chunk_count += 1
+        
+        # Check timeout
+        if time.time() - start_time > timeout:
+            break
+        
+        if hasattr(chunk, "type"):
+            chunk_type = chunk.type
+            
+            # Handle text delta
+            if chunk_type == "response.output_text.delta":
+                if hasattr(chunk, "delta"):
+                    text_parts.append(chunk.delta)
+            
+            # Handle annotation added
+            elif chunk_type == "response.output_text.annotation.added":
+                if hasattr(chunk, "annotation"):
+                    annotations.append(chunk.annotation)
+        
+        # Safety check
+        if chunk_count > 5000:
+            break
+    
+    complete_text = "".join(text_parts)
+    return complete_text, annotations, chunk_count
+
+
+# ============================================================================
+# WEB SEARCH VALIDATION HELPERS
+# ============================================================================
+
+def assert_valid_web_search_citation(citation, sdk_type="anthropic"):
+    """
+    Validate web search citation structure.
+    
+    Args:
+        citation: Citation object to validate
+        sdk_type: Either "anthropic" or "openai"
+    """
+    if sdk_type == "anthropic":
+        assert hasattr(citation, "type"), "Citation should have type"
+        assert citation.type == "web_search_result_location", f"Expected web_search_result_location, got {citation.type}"
+        assert hasattr(citation, "url") and citation.url, "Citation should have non-empty URL"
+        assert hasattr(citation, "title") and citation.title, "Citation should have non-empty title"
+        assert hasattr(citation, "encrypted_index"), "Citation should have encrypted_index"
+        assert hasattr(citation, "cited_text"), "Citation should have cited_text"
+        if citation.cited_text:
+            assert len(citation.cited_text) <= 150, f"cited_text should be <= 150 chars, got {len(citation.cited_text)}"
+    elif sdk_type == "openai":
+        assert hasattr(citation, "type"), "Annotation should have type"
+        assert citation.type == "url_citation", f"Expected url_citation, got {citation.type}"
+        assert hasattr(citation, "url") and citation.url, "Annotation should have non-empty URL"
+        assert hasattr(citation, "title"), "Annotation should have title"
+    else:
+        raise ValueError(f"Unknown sdk_type: {sdk_type}")
+
+
+def assert_web_search_sources_valid(sources):
+    """
+    Validate web search sources structure.
+    
+    Args:
+        sources: List of source objects to validate
+    """
+    assert sources is not None, "Sources should not be None"
+    assert len(sources) > 0, "Sources should not be empty"
+    
+    for i, source in enumerate(sources):
+        assert hasattr(source, "url"), f"Source {i} should have url"
+        assert source.url, f"Source {i} url should not be empty"
+        assert hasattr(source, "title"), f"Source {i} should have title"
+        # encrypted_content and page_age are optional
+
+
+def extract_domain(url: str) -> str:
+    """
+    Extract domain from URL for validation.
+    
+    Args:
+        url: Full URL string
+        
+    Returns:
+        Domain string (e.g., "en.wikipedia.org")
+    """
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    return parsed.netloc.lower()
+
+
+def validate_domain_filter(sources, allowed=None, blocked=None):
+    """
+    Validate sources respect domain filters.
+    
+    Args:
+        sources: List of source objects with url attribute
+        allowed: List of allowed domain patterns (optional)
+        blocked: List of blocked domain patterns (optional)
+    """
+    for source in sources:
+        if not hasattr(source, "url"):
+            continue
+            
+        domain = extract_domain(source.url)
+        
+        if allowed:
+            # Check if domain matches any allowed pattern
+            matches_allowed = False
+            for allowed_pattern in allowed:
+                # Handle subdomains: example.com should match docs.example.com
+                if domain == allowed_pattern or domain.endswith('.' + allowed_pattern):
+                    matches_allowed = True
+                    break
+                # Handle subdomain pattern: docs.example.com matches exactly
+                if allowed_pattern == domain:
+                    matches_allowed = True
+                    break
+            
+            assert matches_allowed, f"Domain {domain} not in allowed domains {allowed}"
+        
+        if blocked:
+            # Check if domain matches any blocked pattern
+            for blocked_pattern in blocked:
+                is_blocked = (domain == blocked_pattern or 
+                            domain.endswith('.' + blocked_pattern))
+                assert not is_blocked, f"Domain {domain} should be blocked by {blocked_pattern}"
