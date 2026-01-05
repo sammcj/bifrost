@@ -48,6 +48,7 @@ func TestVertex(t *testing.T) {
 			Reasoning:             false, // Not supported right now because we are not using native gemini converters
 			ListModels:            false,
 			CountTokens:           true,
+			StructuredOutputs:     true, // Structured outputs with nullable enum support
 		},
 	}
 

@@ -58,6 +58,7 @@ func TestAzure(t *testing.T) {
 			TranscriptionStream:   false, // Not properly supported yet by Azure
 			SpeechSynthesis:       true,
 			SpeechSynthesisStream: true,
+			StructuredOutputs:     true, // Structured outputs with nullable enum support
 		},
 	}
 

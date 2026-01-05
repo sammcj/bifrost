@@ -69,6 +69,10 @@ func RunAllComprehensiveTests(t *testing.T, client *bifrost.Bifrost, ctx context
 		RunCountTokenTest,
 		RunChatAudioTest,
 		RunChatAudioStreamTest,
+		RunStructuredOutputChatTest,
+		RunStructuredOutputChatStreamTest,
+		RunStructuredOutputResponsesTest,
+		RunStructuredOutputResponsesStreamTest,
 	}
 
 	// Execute all test scenarios
@@ -126,6 +130,10 @@ func printTestSummary(t *testing.T, testConfig ComprehensiveTestConfig) {
 		{"CountTokens", testConfig.Scenarios.CountTokens},
 		{"ChatAudio", testConfig.Scenarios.ChatAudio && testConfig.ChatAudioModel != ""},
 		{"ChatAudioStream", testConfig.Scenarios.ChatAudio && testConfig.ChatAudioModel != ""},
+		{"StructuredOutputChat", testConfig.Scenarios.StructuredOutputs},
+		{"StructuredOutputChatStream", testConfig.Scenarios.StructuredOutputs && testConfig.Scenarios.CompletionStream},
+		{"StructuredOutputResponses", testConfig.Scenarios.StructuredOutputs},
+		{"StructuredOutputResponsesStream", testConfig.Scenarios.StructuredOutputs && testConfig.Scenarios.CompletionStream},
 	}
 
 	supported := 0

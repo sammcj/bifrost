@@ -47,6 +47,7 @@ func TestOpenRouter(t *testing.T) {
 			CompleteEnd2End:       false, // OpenRouter's responses API is in Beta
 			Reasoning:             true,
 			ListModels:            true,
+			StructuredOutputs:     true, // Structured outputs with nullable enum support
 		},
 	}
 

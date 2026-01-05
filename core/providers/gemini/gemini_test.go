@@ -26,8 +26,11 @@ func TestGemini(t *testing.T) {
 	defer cancel()
 
 	testConfig := testutil.ComprehensiveTestConfig{
-		Provider:             schemas.Gemini,
-		ChatModel:            "gemini-2.5-flash",
+		Provider:  schemas.Gemini,
+		ChatModel: "gemini-2.0-flash",
+		Fallbacks: []schemas.Fallback{
+			{Provider: schemas.Gemini, Model: "gemini-2.5-flash"},
+		},
 		VisionModel:          "gemini-2.0-flash",
 		EmbeddingModel:       "text-embedding-004",
 		TranscriptionModel:   "gemini-2.5-flash",
@@ -71,6 +74,7 @@ func TestGemini(t *testing.T) {
 			FileContent:           false,
 			FileBatchInput:        true,
 			CountTokens:           true,
+			StructuredOutputs:     true, // Structured outputs with nullable enum support
 		},
 	}
 
