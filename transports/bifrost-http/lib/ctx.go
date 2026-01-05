@@ -207,7 +207,7 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool, hea
 		}
 		// Handle virtual key header (x-bf-vk, authorization, x-api-key, x-goog-api-key headers)
 		if keyStr == string(schemas.BifrostContextKeyVirtualKey) {
-			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKey(keyStr), string(value))
+			bifrostCtx = context.WithValue(bifrostCtx, schemas.BifrostContextKeyVirtualKey, string(value))
 			return true
 		}
 		if keyStr == "authorization" {

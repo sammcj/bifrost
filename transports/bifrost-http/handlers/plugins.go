@@ -313,7 +313,7 @@ func (h *PluginsHandler) updatePlugin(ctx *fasthttp.RequestCtx) {
 				Enabled:  false,
 				Config:   map[string]any{},
 				Path:     nil,
-				IsCustom: true,
+				IsCustom: false,
 			}
 			if err := h.configStore.CreatePlugin(ctx, plugin); err != nil {
 				logger.Error("failed to create plugin: %v", err)

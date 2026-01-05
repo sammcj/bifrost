@@ -510,13 +510,15 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 	// allows providers that check ctx.Done() to cancel early if needed. This is less critical than
 	// streaming requests (where we actively detect write errors), but still provides a mechanism
 	// for providers to respect cancellation.
+	requestCtx := *bifrostCtx
 	
 	var response interface{}
+	
 	var err error
 
 	switch {
 	case bifrostReq.ListModelsRequest != nil:
-		listModelsResponse, bifrostErr := g.client.ListModelsRequest(ctx, bifrostReq.ListModelsRequest)
+		listModelsResponse, bifrostErr := g.client.ListModelsRequest(requestCtx, bifrostReq.ListModelsRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
 			return
@@ -536,7 +538,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 
 		response, err = config.ListModelsResponseConverter(bifrostCtx, listModelsResponse)
 	case bifrostReq.TextCompletionRequest != nil:
-		textCompletionResponse, bifrostErr := g.client.TextCompletionRequest(ctx, bifrostReq.TextCompletionRequest)
+		textCompletionResponse, bifrostErr := g.client.TextCompletionRequest(requestCtx, bifrostReq.TextCompletionRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
 			return
@@ -559,7 +561,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 		// Convert Bifrost response to integration-specific format and send
 		response, err = config.TextResponseConverter(bifrostCtx, textCompletionResponse)
 	case bifrostReq.ChatRequest != nil:
-		chatResponse, bifrostErr := g.client.ChatCompletionRequest(ctx, bifrostReq.ChatRequest)
+		chatResponse, bifrostErr := g.client.ChatCompletionRequest(requestCtx, bifrostReq.ChatRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
 			return
@@ -582,7 +584,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 		// Convert Bifrost response to integration-specific format and send
 		response, err = config.ChatResponseConverter(bifrostCtx, chatResponse)
 	case bifrostReq.ResponsesRequest != nil:
-		responsesResponse, bifrostErr := g.client.ResponsesRequest(ctx, bifrostReq.ResponsesRequest)
+		responsesResponse, bifrostErr := g.client.ResponsesRequest(requestCtx, bifrostReq.ResponsesRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
 			return
@@ -605,7 +607,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 		// Convert Bifrost response to integration-specific format and send
 		response, err = config.ResponsesResponseConverter(bifrostCtx, responsesResponse)
 	case bifrostReq.EmbeddingRequest != nil:
-		embeddingResponse, bifrostErr := g.client.EmbeddingRequest(ctx, bifrostReq.EmbeddingRequest)
+		embeddingResponse, bifrostErr := g.client.EmbeddingRequest(requestCtx, bifrostReq.EmbeddingRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
 			return
@@ -628,7 +630,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 		// Convert Bifrost response to integration-specific format and send
 		response, err = config.EmbeddingResponseConverter(bifrostCtx, embeddingResponse)
 	case bifrostReq.SpeechRequest != nil:
-		speechResponse, bifrostErr := g.client.SpeechRequest(ctx, bifrostReq.SpeechRequest)
+		speechResponse, bifrostErr := g.client.SpeechRequest(requestCtx, bifrostReq.SpeechRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
 			return
@@ -662,7 +664,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 			return
 		}
 	case bifrostReq.TranscriptionRequest != nil:
-		transcriptionResponse, bifrostErr := g.client.TranscriptionRequest(ctx, bifrostReq.TranscriptionRequest)
+		transcriptionResponse, bifrostErr := g.client.TranscriptionRequest(requestCtx, bifrostReq.TranscriptionRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
 			return
@@ -685,7 +687,7 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 		// Convert Bifrost response to integration-specific format and send
 		response, err = config.TranscriptionResponseConverter(bifrostCtx, transcriptionResponse)
 	case bifrostReq.CountTokensRequest != nil:
-		countTokensResponse, bifrostErr := g.client.CountTokensRequest(ctx, bifrostReq.CountTokensRequest)
+		countTokensResponse, bifrostErr := g.client.CountTokensRequest(requestCtx, bifrostReq.CountTokensRequest)
 		if bifrostErr != nil {
 			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
 			return
