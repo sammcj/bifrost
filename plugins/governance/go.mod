@@ -5,8 +5,8 @@ go 1.25.5
 require gorm.io/gorm v1.31.1
 
 require (
-	github.com/maximhq/bifrost/core v1.2.46
-	github.com/maximhq/bifrost/framework v1.1.57
+	github.com/maximhq/bifrost/core v1.2.47
+	github.com/maximhq/bifrost/framework v1.1.58
 )
 
 require (
