@@ -3,8 +3,8 @@ module github.com/maximhq/bifrost/plugins/telemetry
 go 1.25.5
 
 require (
-	github.com/maximhq/bifrost/core v1.2.46
-	github.com/maximhq/bifrost/framework v1.1.57
+	github.com/maximhq/bifrost/core v1.2.47
+	github.com/maximhq/bifrost/framework v1.1.58
 	github.com/prometheus/client_golang v1.23.0
 	github.com/valyala/fasthttp v1.68.0
 )
