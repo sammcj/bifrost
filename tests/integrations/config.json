@@ -151,7 +151,11 @@
         }
     },
     "config_store": {
-        "enabled": false
+        "enabled": true,
+        "type": "sqlite",
+        "config": {
+            "path": "../../tests/integrations/config.db"
+        }
     },
     "logs_store": {
         "enabled": true,
@@ -160,6 +164,15 @@
             "path": "./logs.db"
         }
     },
+    "governance": {
+        "virtual_keys": [
+            {
+                "id": "vk-test",
+                "value": "sk-bf-test-key",
+                "is_active": true
+            }
+        ]
+    },
     "client": {
         "drop_excess_requests": false,
         "initial_pool_size": 300,
@@ -167,8 +180,8 @@
             "*"
         ],
         "enable_logging": true,
-        "enable_governance": false,
-        "enforce_governance_header": false,
+        "enable_governance": true,
+        "enforce_governance_header": true,
         "allow_direct_keys": false,
         "max_request_body_size_mb": 100,
         "enable_litellm_fallbacks": false
