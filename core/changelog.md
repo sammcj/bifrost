@@ -1,0 +1,1 @@
+- fix: tracer lifecycle management fixes

@@ -426,8 +426,11 @@ func (a *Accumulator) Cleanup() {
 }
 
 // CreateStreamAccumulator creates a new stream accumulator for a request
+// It increments the reference counter atomically for concurrent access tracking
 func (a *Accumulator) CreateStreamAccumulator(requestID string, startTimestamp time.Time) *StreamAccumulator {
 	sc := a.getOrCreateStreamAccumulator(requestID)
+	// Atomically increment reference counter
+	sc.refCount.Add(1)
 	// Lock before writing to StartTimestamp
 	sc.mu.Lock()
 	sc.StartTimestamp = startTimestamp
@@ -435,16 +438,25 @@ func (a *Accumulator) CreateStreamAccumulator(requestID string, startTimestamp t
 	return sc
 }
 
-// CleanupStreamAccumulator cleans up the stream accumulator for a request
+// CleanupStreamAccumulator decrements the reference counter for a stream accumulator.
+// The accumulator is only cleaned up when the reference counter reaches 0.
+// This function is idempotent - calling it after cleanup has already happened is safe.
 func (a *Accumulator) CleanupStreamAccumulator(requestID string) error {
 	acc, exists := a.streamAccumulators.Load(requestID)
 	if !exists {
-		return fmt.Errorf("accumulator not found for request ID: %s", requestID)
+		// Accumulator already cleaned up - this is expected when multiple callers
+		// (e.g., completeDeferredSpan and HTTP middleware) both call cleanup
+		return nil
 	}
 	if accumulator, ok := acc.(*StreamAccumulator); ok {
-		accumulator.mu.Lock()
-		defer accumulator.mu.Unlock()
-		a.cleanupStreamAccumulator(requestID)
+		// Atomically decrement reference counter
+		newCount := accumulator.refCount.Add(-1)
+		// Only cleanup when reference counter reaches 0
+		if newCount <= 0 {
+			accumulator.mu.Lock()
+			defer accumulator.mu.Unlock()
+			a.cleanupStreamAccumulator(requestID)
+		}
 	}
 	return nil
 }

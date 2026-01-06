@@ -360,9 +360,15 @@ func (bifrost *Bifrost) ListModelsRequest(ctx context.Context, req *schemas.Bifr
 		}
 	}
 
+	// Store tracer in context BEFORE calling requestHandler, so streaming goroutines
+	// have access to it for completing deferred spans when the stream ends.
+	// The streaming goroutine captures the context when it starts, so these values
+	// must be set before requestHandler() is called.
+	ctx = context.WithValue(ctx, schemas.BifrostContextKeyTracer, bifrost.getTracer())
+
 	response, bifrostErr := executeRequestWithRetries(&ctx, config, func() (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
 		return provider.ListModels(ctx, keys, request)
-	}, schemas.ListModelsRequest, req.Provider, "", bifrost.getTracer(), nil)
+	}, schemas.ListModelsRequest, req.Provider, "", nil)
 	if bifrostErr != nil {
 		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
 			RequestType: schemas.ListModelsRequest,
@@ -2577,6 +2583,17 @@ func (bifrost *Bifrost) tryRequest(ctx context.Context, req *schemas.BifrostRequ
 		req = bifrost.mcpManager.AddToolsToRequest(ctx, req)
 	}
 
+	tracer := bifrost.getTracer()
+	if tracer == nil {
+		return nil, newBifrostErrorFromMsg("tracer not found in context")
+	}
+
+	// Store tracer in context BEFORE calling requestHandler, so streaming goroutines
+	// have access to it for completing deferred spans when the stream ends.
+	// The streaming goroutine captures the context when it starts, so these values
+	// must be set before requestHandler() is called.
+	ctx = context.WithValue(ctx, schemas.BifrostContextKeyTracer, tracer)
+
 	pipeline := bifrost.getPluginPipeline()
 	defer bifrost.releasePluginPipeline(pipeline)
 
@@ -2692,6 +2709,17 @@ func (bifrost *Bifrost) tryStreamRequest(ctx context.Context, req *schemas.Bifro
 	if req.RequestType != schemas.SpeechStreamRequest && req.RequestType != schemas.TranscriptionStreamRequest && bifrost.mcpManager != nil {
 		req = bifrost.mcpManager.AddToolsToRequest(ctx, req)
 	}
+
+	tracer := bifrost.getTracer()
+	if tracer == nil {
+		return nil, newBifrostErrorFromMsg("tracer not found in context")
+	}
+
+	// Store tracer in context BEFORE calling RunPreHooks, so plugins and streaming goroutines
+	// have access to it for completing deferred spans when the stream ends.
+	// The streaming goroutine captures the context when it starts, so these values
+	// must be set before requestHandler() is called.
+	ctx = context.WithValue(ctx, schemas.BifrostContextKeyTracer, tracer)
 
 	pipeline := bifrost.getPluginPipeline()
 	defer bifrost.releasePluginPipeline(pipeline)
@@ -2860,7 +2888,6 @@ func executeRequestWithRetries[T any](
 	requestType schemas.RequestType,
 	providerKey schemas.ModelProvider,
 	model string,
-	tracer schemas.Tracer,
 	req *schemas.BifrostRequest,
 ) (T, *schemas.BifrostError) {
 	var result T
@@ -2891,6 +2918,11 @@ func executeRequestWithRetries[T any](
 		logger.Debug("attempting %s request for provider %s", requestType, providerKey)
 
 		// Start span for LLM call (or retry attempt)
+		tracer, ok := (*ctx).Value(schemas.BifrostContextKeyTracer).(schemas.Tracer)
+		if !ok || tracer == nil {
+			logger.Error("tracer not found in context of executeRequestWithRetries")
+			return result, newBifrostErrorFromMsg("tracer not found in context")
+		}
 		var spanName string
 		var spanKind schemas.SpanKind
 		if attempts > 0 {
@@ -2915,12 +2947,6 @@ func executeRequestWithRetries[T any](
 
 		// Update context with span ID
 		*ctx = spanCtx
-
-		// Store tracer in context BEFORE calling requestHandler, so streaming goroutines
-		// have access to it for completing deferred spans when the stream ends.
-		// The streaming goroutine captures the context when it starts, so these values
-		// must be set before requestHandler() is called.
-		*ctx = context.WithValue(*ctx, schemas.BifrostContextKeyTracer, tracer)
 
 		// Record stream start time for TTFT calculation (only for streaming requests)
 		// This is also used by RunPostHooks to detect streaming mode
@@ -3112,15 +3138,14 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 		}
 
 		// Execute request with retries
-		reqTracer := bifrost.getTracer()
 		if IsStreamRequestType(req.RequestType) {
 			stream, bifrostError = executeRequestWithRetries(&req.Context, config, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
 				return bifrost.handleProviderStreamRequest(provider, req, key, postHookRunner)
-			}, req.RequestType, provider.GetProviderKey(), model, reqTracer, &req.BifrostRequest)
+			}, req.RequestType, provider.GetProviderKey(), model, &req.BifrostRequest)
 		} else {
 			result, bifrostError = executeRequestWithRetries(&req.Context, config, func() (*schemas.BifrostResponse, *schemas.BifrostError) {
 				return bifrost.handleProviderRequest(provider, req, key, keys)
-			}, req.RequestType, provider.GetProviderKey(), model, reqTracer, &req.BifrostRequest)
+			}, req.RequestType, provider.GetProviderKey(), model, &req.BifrostRequest)
 		}
 
 		// Release pipeline immediately for non-streaming requests only
@@ -3497,7 +3522,7 @@ func (p *PluginPipeline) accumulatePluginTiming(pluginName string, duration time
 // This should be called once at the end of streaming to create one span per plugin with average timing.
 // Spans are nested to mirror the pre-hook hierarchy (each post-hook is a child of the previous one).
 func (p *PluginPipeline) FinalizeStreamingPostHookSpans(ctx context.Context) {
-	if p.postHookTimings == nil || len(p.postHookTimings) == 0 || len(p.postHookPluginOrder) == 0 {
+	if p.postHookTimings == nil || len(p.postHookPluginOrder) == 0 {
 		return
 	}
 

@@ -13,7 +13,6 @@ type SpanHandle interface{}
 // StreamAccumulatorResult contains the accumulated data from streaming chunks.
 // This is the return type for tracer's streaming accumulation methods.
 type StreamAccumulatorResult struct {
-	IsFinal             bool                          // Whether this is the final chunk
 	RequestID           string                        // Request ID
 	Model               string                        // Model used
 	Provider            ModelProvider                 // Provider used
@@ -143,7 +142,8 @@ func (n *NoOpTracer) AddEvent(_ SpanHandle, _ string, _ map[string]any) {}
 func (n *NoOpTracer) PopulateLLMRequestAttributes(_ SpanHandle, _ *BifrostRequest) {}
 
 // PopulateLLMResponseAttributes does nothing.
-func (n *NoOpTracer) PopulateLLMResponseAttributes(_ SpanHandle, _ *BifrostResponse, _ *BifrostError) {}
+func (n *NoOpTracer) PopulateLLMResponseAttributes(_ SpanHandle, _ *BifrostResponse, _ *BifrostError) {
+}
 
 // StoreDeferredSpan does nothing.
 func (n *NoOpTracer) StoreDeferredSpan(_ string, _ SpanHandle) {}
@@ -184,4 +184,3 @@ func DefaultTracer() Tracer {
 
 // Ensure NoOpTracer implements Tracer at compile time
 var _ Tracer = (*NoOpTracer)(nil)
-

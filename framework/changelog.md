@@ -1,1 +1,3 @@
 - feat: added flush session functionality to config store to clear all existing sessions
+- fix: stream accumulator reference count management fixes
+- fix: stream accumulator deduplication fixes

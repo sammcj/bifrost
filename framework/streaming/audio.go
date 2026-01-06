@@ -28,13 +28,9 @@ func (a *Accumulator) processAccumulatedAudioStreamingChunks(requestID string, b
 	accumulator := a.getOrCreateStreamAccumulator(requestID)
 	// Lock the accumulator
 	accumulator.mu.Lock()
-	defer func() {
-		if isFinalChunk {
-			// Cleanup BEFORE unlocking to prevent other goroutines from accessing chunks being returned to pool
-			a.cleanupStreamAccumulator(requestID)
-		}
-		accumulator.mu.Unlock()
-	}()
+	defer accumulator.mu.Unlock()
+	// Note: Cleanup is handled by CleanupStreamAccumulator when refcount reaches 0
+	// This is called from completeDeferredSpan after streaming ends
 
 	// Calculate Time to First Token (TTFT) in milliseconds
 	var ttft int64
@@ -151,36 +147,35 @@ func (a *Accumulator) processAudioStreamingResponse(ctx *schemas.BifrostContext,
 	if addErr := a.addAudioStreamChunk(requestID, chunk, isFinalChunk); addErr != nil {
 		return nil, fmt.Errorf("failed to add stream chunk for request %s: %w", requestID, addErr)
 	}
+	// Always return data on final chunk - multiple plugins may need the result
 	if isFinalChunk {
-		shouldProcess := false
+		// Get the accumulator and mark as complete (idempotent)
 		accumulator := a.getOrCreateStreamAccumulator(requestID)
 		accumulator.mu.Lock()
-		shouldProcess = !accumulator.IsComplete
-		if shouldProcess {
+		if !accumulator.IsComplete {
 			accumulator.IsComplete = true
 		}
 		accumulator.mu.Unlock()
-		if shouldProcess {
-			data, processErr := a.processAccumulatedAudioStreamingChunks(requestID, bifrostErr, isFinalChunk)
-			if processErr != nil {
-				a.logger.Error("failed to process accumulated chunks for request %s: %v", requestID, processErr)
-				return nil, processErr
-			}
-			var rawRequest interface{}
-			if result != nil && result.SpeechStreamResponse != nil && result.SpeechStreamResponse.ExtraFields.RawRequest != nil {
-				rawRequest = result.SpeechStreamResponse.ExtraFields.RawRequest
-			}
-			return &ProcessedStreamResponse{
-				Type:       StreamResponseTypeFinal,
-				RequestID:  requestID,
-				StreamType: StreamTypeAudio,
-				Model:      model,
-				Provider:   provider,
-				Data:       data,
-				RawRequest: &rawRequest,
-			}, nil
+
+		// Always process and return data on final chunk
+		// Multiple plugins can call this - the processing is idempotent
+		data, processErr := a.processAccumulatedAudioStreamingChunks(requestID, bifrostErr, isFinalChunk)
+		if processErr != nil {
+			a.logger.Error("failed to process accumulated chunks for request %s: %v", requestID, processErr)
+			return nil, processErr
 		}
-		return nil, nil
+		var rawRequest interface{}
+		if result != nil && result.SpeechStreamResponse != nil && result.SpeechStreamResponse.ExtraFields.RawRequest != nil {
+			rawRequest = result.SpeechStreamResponse.ExtraFields.RawRequest
+		}
+		return &ProcessedStreamResponse{
+			RequestID:  requestID,
+			StreamType: StreamTypeAudio,
+			Model:      model,
+			Provider:   provider,
+			Data:       data,
+			RawRequest: &rawRequest,
+		}, nil
 	}
 	data, processErr := a.processAccumulatedAudioStreamingChunks(requestID, bifrostErr, isFinalChunk)
 	if processErr != nil {
@@ -188,7 +183,6 @@ func (a *Accumulator) processAudioStreamingResponse(ctx *schemas.BifrostContext,
 		return nil, processErr
 	}
 	return &ProcessedStreamResponse{
-		Type:       StreamResponseTypeDelta,
 		RequestID:  requestID,
 		StreamType: StreamTypeAudio,
 		Model:      model,

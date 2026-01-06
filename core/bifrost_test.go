@@ -68,7 +68,6 @@ func TestExecuteRequestWithRetries_SuccessScenarios(t *testing.T) {
 			schemas.ChatCompletionRequest,
 			schemas.OpenAI,
 			"gpt-4",
-			schemas.DefaultTracer(),
 			nil,
 		)
 
@@ -103,7 +102,6 @@ func TestExecuteRequestWithRetries_SuccessScenarios(t *testing.T) {
 			schemas.ChatCompletionRequest,
 			schemas.OpenAI,
 			"gpt-4",
-			schemas.DefaultTracer(),
 			nil,
 		)
 
@@ -138,7 +136,6 @@ func TestExecuteRequestWithRetries_RetryLimits(t *testing.T) {
 			schemas.ChatCompletionRequest,
 			schemas.OpenAI,
 			"gpt-4",
-			schemas.DefaultTracer(),
 			nil,
 		)
 
@@ -202,7 +199,6 @@ func TestExecuteRequestWithRetries_NonRetryableErrors(t *testing.T) {
 				schemas.ChatCompletionRequest,
 				schemas.OpenAI,
 				"gpt-4",
-				schemas.DefaultTracer(),
 				nil,
 			)
 
@@ -276,7 +272,6 @@ func TestExecuteRequestWithRetries_RetryableConditions(t *testing.T) {
 				schemas.ChatCompletionRequest,
 				schemas.OpenAI,
 				"gpt-4",
-				schemas.DefaultTracer(),
 				nil,
 			)
 
@@ -506,7 +501,6 @@ func TestExecuteRequestWithRetries_LoggingAndCounting(t *testing.T) {
 		schemas.ChatCompletionRequest,
 		schemas.OpenAI,
 		"gpt-4",
-		schemas.DefaultTracer(),
 		nil,
 	)
 

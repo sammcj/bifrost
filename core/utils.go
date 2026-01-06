@@ -198,6 +198,18 @@ func IsStreamRequestType(reqType schemas.RequestType) bool {
 	return reqType == schemas.TextCompletionStreamRequest || reqType == schemas.ChatCompletionStreamRequest || reqType == schemas.ResponsesStreamRequest || reqType == schemas.SpeechStreamRequest || reqType == schemas.TranscriptionStreamRequest
 }
 
+func GetTracerFromContext(ctx *schemas.BifrostContext) (schemas.Tracer, string, error) {
+	tracer, ok := ctx.Value(schemas.BifrostContextKeyTracer).(schemas.Tracer)
+	if !ok || tracer == nil {
+		return nil, "", fmt.Errorf("tracer not found in context")
+	}
+	traceID, ok := ctx.Value(schemas.BifrostContextKeyTraceID).(string)
+	if !ok || traceID == "" {
+		return nil, "", fmt.Errorf("traceID not found in context")
+	}
+	return tracer, traceID, nil
+}
+
 // isBatchRequestType returns true if the given request type is a batch API operation.
 func isBatchRequestType(reqType schemas.RequestType) bool {
 	return reqType == schemas.BatchCreateRequest || reqType == schemas.BatchListRequest || reqType == schemas.BatchRetrieveRequest || reqType == schemas.BatchCancelRequest || reqType == schemas.BatchResultsRequest
