@@ -1,12 +1,10 @@
 package testutil
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"strings"
 	"testing"
-
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
@@ -14,7 +12,7 @@ import (
 )
 
 // RunToolCallsTest executes the tool calls test scenario using dual API testing framework
-func RunToolCallsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunToolCallsTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ToolCalls {
 		t.Logf("Tool calls not supported for provider %s", testConfig.Provider)
 		return

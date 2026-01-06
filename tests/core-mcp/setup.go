@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
@@ -20,7 +19,7 @@ func (a *TestAccount) GetConfiguredProviders() ([]schemas.ModelProvider, error) 
 	return []schemas.ModelProvider{schemas.OpenAI}, nil
 }
 
-func (a *TestAccount) GetKeysForProvider(ctx *context.Context, providerKey schemas.ModelProvider) ([]schemas.Key, error) {
+func (a *TestAccount) GetKeysForProvider(ctx *schemas.BifrostContext, providerKey schemas.ModelProvider) ([]schemas.Key, error) {
 	return []schemas.Key{
 		{
 			Value:  os.Getenv("OPENAI_API_KEY"),
@@ -39,14 +38,14 @@ func (a *TestAccount) GetConfigForProvider(providerKey schemas.ModelProvider) (*
 
 // setupTestBifrost initializes and returns a Bifrost instance for testing
 // This creates a basic Bifrost instance without any MCP clients configured
-func setupTestBifrost(ctx context.Context) (*bifrost.Bifrost, error) {
+func setupTestBifrost(ctx *schemas.BifrostContext) (*bifrost.Bifrost, error) {
 	return setupTestBifrostWithMCPConfig(ctx, &schemas.MCPConfig{
 		ClientConfigs: []schemas.MCPClientConfig{},
 		ToolManagerConfig: &schemas.MCPToolManagerConfig{
 			MaxAgentDepth:        10,
 			ToolExecutionTimeout: 30 * time.Second,
 		},
-		FetchNewRequestIDFunc: func(ctx context.Context) string {
+		FetchNewRequestIDFunc: func(ctx *schemas.BifrostContext) string {
 			return "test-request-id"
 		},
 	})
@@ -55,7 +54,7 @@ func setupTestBifrost(ctx context.Context) (*bifrost.Bifrost, error) {
 // setupTestBifrostWithCodeMode initializes and returns a Bifrost instance for testing with CodeMode
 // This sets up bifrostInternal client as a code mode client
 // Note: Tools must be registered first to create the bifrostInternal client
-func setupTestBifrostWithCodeMode(ctx context.Context) (*bifrost.Bifrost, error) {
+func setupTestBifrostWithCodeMode(ctx *schemas.BifrostContext) (*bifrost.Bifrost, error) {
 	b, err := setupTestBifrost(ctx)
 	if err != nil {
 		return nil, err
@@ -108,13 +107,13 @@ func setupTestBifrostWithCodeMode(ctx context.Context) (*bifrost.Bifrost, error)
 }
 
 // setupTestBifrostWithMCPConfig initializes Bifrost with custom MCP config
-func setupTestBifrostWithMCPConfig(ctx context.Context, mcpConfig *schemas.MCPConfig) (*bifrost.Bifrost, error) {
+func setupTestBifrostWithMCPConfig(ctx *schemas.BifrostContext, mcpConfig *schemas.MCPConfig) (*bifrost.Bifrost, error) {
 	account := &TestAccount{}
 
 	// Ensure FetchNewRequestIDFunc is set if not provided
 	// This is required for the tools handler to be fully setup
 	if mcpConfig.FetchNewRequestIDFunc == nil {
-		mcpConfig.FetchNewRequestIDFunc = func(ctx context.Context) string {
+		mcpConfig.FetchNewRequestIDFunc = func(ctx *schemas.BifrostContext) string {
 			return "test-request-id"
 		}
 	}
@@ -149,7 +148,7 @@ func registerTestTools(b *bifrost.Bifrost) error {
 			Description: schemas.Ptr("Echoes back the input message"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &map[string]interface{}{
+				Properties: &schemas.OrderedMap{
 					"message": map[string]interface{}{
 						"type":        "string",
 						"description": "The message to echo",
@@ -181,7 +180,7 @@ func registerTestTools(b *bifrost.Bifrost) error {
 			Description: schemas.Ptr("Adds two numbers"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &map[string]interface{}{
+				Properties: &schemas.OrderedMap{
 					"a": map[string]interface{}{
 						"type":        "number",
 						"description": "First number",
@@ -221,7 +220,7 @@ func registerTestTools(b *bifrost.Bifrost) error {
 			Description: schemas.Ptr("Multiplies two numbers"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &map[string]interface{}{
+				Properties: &schemas.OrderedMap{
 					"a": map[string]interface{}{
 						"type":        "number",
 						"description": "First number",
@@ -261,7 +260,7 @@ func registerTestTools(b *bifrost.Bifrost) error {
 			Description: schemas.Ptr("Returns structured data"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type:       "object",
-				Properties: &map[string]interface{}{},
+				Properties: &schemas.OrderedMap{},
 				Required:   []string{},
 			},
 		},
@@ -280,7 +279,7 @@ func registerTestTools(b *bifrost.Bifrost) error {
 			Description: schemas.Ptr("A tool that always returns an error"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type:       "object",
-				Properties: &map[string]interface{}{},
+				Properties: &schemas.OrderedMap{},
 				Required:   []string{},
 			},
 		},
@@ -299,7 +298,7 @@ func registerTestTools(b *bifrost.Bifrost) error {
 			Description: schemas.Ptr("A tool that takes time to execute"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &map[string]interface{}{
+				Properties: &schemas.OrderedMap{
 					"delay_ms": map[string]interface{}{
 						"type":        "number",
 						"description": "Delay in milliseconds",
@@ -332,7 +331,7 @@ func registerTestTools(b *bifrost.Bifrost) error {
 			Description: schemas.Ptr("A tool that accepts complex nested arguments"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &map[string]interface{}{
+				Properties: &schemas.OrderedMap{
 					"data": map[string]interface{}{
 						"type":        "object",
 						"description": "Complex nested data",

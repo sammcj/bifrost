@@ -1,12 +1,14 @@
 /**
  * Type definitions for Bifrost WASM plugins.
- * These structures mirror the Go SDK types for interoperability.
+ * 
+ * Uses json-as library with @json decorators for safe JSON parsing.
+ * These types mirror the Go SDK types for interoperability.
  */
 
 import { JSON } from 'json-as'
 
 // =============================================================================
-// Context Structure
+// HTTP Transport Input/Output Types
 // =============================================================================
 
 /**
@@ -54,11 +56,13 @@ export class HTTPResponse {
 
 /**
  * HTTPInterceptInput is the input for http_intercept hook.
+ * Context is a dynamic object (JSON.Obj) since Go sends map[string]interface{}.
+ * Request is kept as JSON.Raw to pass through without full parsing.
  */
 @json
 export class HTTPInterceptInput {
-  context: BifrostContext = new BifrostContext()
-  request: HTTPRequest = new HTTPRequest()
+  context: JSON.Obj = new JSON.Obj()
+  request: JSON.Raw = new JSON.Raw('null')
 }
 
 /**
@@ -66,144 +70,15 @@ export class HTTPInterceptInput {
  */
 @json
 export class HTTPInterceptOutput {
-  context: BifrostContext = new BifrostContext()
-  request: HTTPRequest | null = null
-  response: HTTPResponse | null = null
+  context: JSON.Obj = new JSON.Obj()
+  request: JSON.Raw = new JSON.Raw('null')
+  response: JSON.Raw = new JSON.Raw('null')
   has_response: bool = false
   error: string = ''
 }
 
 // =============================================================================
-// Chat Completion Structures (BifrostRequest)
-// =============================================================================
-
-/**
- * ChatMessage represents a message in the conversation.
- */
-@json
-export class ChatMessage {
-  role: string = ''  // "user", "assistant", "system", "tool"
-  content: string = ''
-  name: string = ''
-  tool_call_id: string = ''
-}
-
-/**
- * ChatParameters contains optional parameters for chat completion.
- */
-@json
-export class ChatParameters {
-  temperature: f64 = 0
-  max_completion_tokens: i32 = 0
-  top_p: f64 = 0
-}
-
-/**
- * BifrostChatRequest represents a chat completion request.
- */
-@json
-export class BifrostChatRequest {
-  provider: string = ''
-  model: string = ''
-  input: ChatMessage[] = []
-  params: ChatParameters = new ChatParameters()
-}
-
-/**
- * BifrostRequest is the unified request structure.
- */
-@json
-export class BifrostRequest {
-  chat_request: BifrostChatRequest | null = null
-
-  // Direct fields for simpler request structures
-  provider: string = ''
-  model: string = ''
-  input: ChatMessage[] = []
-  params: ChatParameters | null = null
-}
-
-// =============================================================================
-// Response Structures (BifrostResponse)
-// =============================================================================
-
-/**
- * LLMUsage contains token usage information.
- */
-@json
-export class LLMUsage {
-  prompt_tokens: i32 = 0
-  completion_tokens: i32 = 0
-  total_tokens: i32 = 0
-}
-
-/**
- * ResponseChoice represents a single completion choice.
- */
-@json
-export class ResponseChoice {
-  index: i32 = 0
-  message: ChatMessage = new ChatMessage()
-  finish_reason: string = 'stop'
-}
-
-/**
- * BifrostChatResponse represents a chat completion response.
- */
-@json
-export class BifrostChatResponse {
-  id: string = ''
-  model: string = ''
-  choices: ResponseChoice[] = []
-  usage: LLMUsage = new LLMUsage()
-}
-
-/**
- * BifrostResponse is the unified response structure.
- */
-@json
-export class BifrostResponse {
-  chat_response: BifrostChatResponse | null = null
-}
-
-// =============================================================================
-// Error Structure
-// =============================================================================
-
-/**
- * ErrorField contains the error details.
- */
-@json
-export class ErrorField {
-  message: string = ''
-  type: string = ''
-  code: string = ''
-}
-
-/**
- * BifrostError represents an error response.
- */
-@json
-export class BifrostError {
-  error: ErrorField = new ErrorField()
-  status_code: i32 = 0
-}
-
-// =============================================================================
-// Short Circuit Structure
-// =============================================================================
-
-/**
- * PluginShortCircuit allows plugins to short-circuit the request flow.
- */
-@json
-export class PluginShortCircuit {
-  response: BifrostResponse | null = null
-  error: BifrostError | null = null
-}
-
-// =============================================================================
-// Hook Input/Output Structures
+// Pre-Hook Input/Output Types
 // =============================================================================
 
 /**
@@ -211,8 +86,8 @@ export class PluginShortCircuit {
  */
 @json
 export class PreHookInput {
-  context: BifrostContext = new BifrostContext()
-  request: BifrostRequest = new BifrostRequest()
+  context: JSON.Obj = new JSON.Obj()
+  request: JSON.Raw = new JSON.Raw('null')
 }
 
 /**
@@ -220,21 +95,25 @@ export class PreHookInput {
  */
 @json
 export class PreHookOutput {
-  context: BifrostContext = new BifrostContext()
-  request: BifrostRequest | null = null
-  short_circuit: PluginShortCircuit | null = null
+  context: JSON.Obj = new JSON.Obj()
+  request: JSON.Raw = new JSON.Raw('null')
+  short_circuit: JSON.Raw = new JSON.Raw('null')
   has_short_circuit: bool = false
   error: string = ''
 }
+
+// =============================================================================
+// Post-Hook Input/Output Types
+// =============================================================================
 
 /**
  * PostHookInput is the input for post_hook.
  */
 @json
 export class PostHookInput {
-  context: BifrostContext = new BifrostContext()
-  response: BifrostResponse | null = null
-  error: BifrostError | null = null
+  context: JSON.Obj = new JSON.Obj()
+  response: JSON.Raw = new JSON.Raw('null')
+  error: JSON.Raw = new JSON.Raw('null')
   has_error: bool = false
 }
 
@@ -243,9 +122,9 @@ export class PostHookInput {
  */
 @json
 export class PostHookOutput {
-  context: BifrostContext = new BifrostContext()
-  response: BifrostResponse | null = null
-  error: BifrostError | null = null
+  context: JSON.Obj = new JSON.Obj()
+  response: JSON.Raw = new JSON.Raw('null')
+  error: JSON.Raw = new JSON.Raw('null')
   has_error: bool = false
   hook_error: string = ''
 }

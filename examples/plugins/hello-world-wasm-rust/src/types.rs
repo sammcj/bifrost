@@ -5,41 +5,131 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // =============================================================================
+// Nullable Deserializers
+// =============================================================================
+
+/// Helper module for deserializing fields that may be null in JSON.
+/// Go's JSON encoder outputs `null` for nil slices/maps, but Rust's serde
+/// with `#[serde(default)]` only handles missing fields, not explicit nulls.
+mod nullable {
+    use serde::{Deserialize, Deserializer};
+    use std::collections::HashMap;
+
+    /// Deserialize a string that may be null, converting null to empty string.
+    pub fn string<'de, D>(deserializer: D) -> Result<String, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Option::<String>::deserialize(deserializer).map(|opt| opt.unwrap_or_default())
+    }
+
+    /// Deserialize a HashMap<String, String> that may be null or contain null values.
+    /// Handles both `null` (entire map is null) and `{"key": null}` (value is null).
+    pub fn string_map<'de, D>(deserializer: D) -> Result<HashMap<String, String>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // First deserialize as Option<HashMap<String, Option<String>>> to handle null values
+        let opt_map: Option<HashMap<String, Option<String>>> = Option::deserialize(deserializer)?;
+        
+        match opt_map {
+            None => Ok(HashMap::new()),
+            Some(map) => {
+                // Filter out null values and unwrap the rest
+                Ok(map
+                    .into_iter()
+                    .filter_map(|(k, v)| v.map(|val| (k, val)))
+                    .collect())
+            }
+        }
+    }
+
+    /// Deserialize an i32 that may be null, converting null to 0.
+    pub fn i32_field<'de, D>(deserializer: D) -> Result<i32, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Option::<i32>::deserialize(deserializer).map(|opt| opt.unwrap_or_default())
+    }
+
+    /// Deserialize an HTTPRequest that may be null, converting null to default.
+    pub fn http_request<'de, D>(deserializer: D) -> Result<super::HTTPRequest, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Option::<super::HTTPRequest>::deserialize(deserializer).map(|opt| opt.unwrap_or_default())
+    }
+
+    /// Deserialize a BifrostContext that may be null, converting null to default.
+    pub fn context<'de, D>(deserializer: D) -> Result<super::BifrostContext, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Option::<super::BifrostContext>::deserialize(deserializer).map(|opt| opt.unwrap_or_default())
+    }
+}
+
+// =============================================================================
 // Context Structure
 // =============================================================================
 
 /// BifrostContext holds request-scoped values passed between hooks.
+/// This is a dynamic map (map[string]any in Go) that can hold any JSON values.
 /// Common keys include:
 /// - request_id: Unique identifier for the request
 /// - Custom plugin values can be added and will be persisted across hooks
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct BifrostContext {
-    #[serde(default)]
-    pub request_id: Option<String>,
-
-    /// Custom values set by plugins
-    #[serde(flatten)]
-    pub values: HashMap<String, serde_json::Value>,
-}
+#[serde(transparent)]
+pub struct BifrostContext(pub HashMap<String, serde_json::Value>);
 
 impl BifrostContext {
     pub fn new() -> Self {
-        Self::default()
+        Self(HashMap::new())
     }
 
     /// Set a custom value in the context
     pub fn set_value(&mut self, key: &str, value: impl Into<serde_json::Value>) {
-        self.values.insert(key.to_string(), value.into());
+        self.0.insert(key.to_string(), value.into());
+    }
+
+    /// Get a value from the context
+    pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
+        self.0.get(key)
     }
 
     /// Get a string value from the context
     pub fn get_string(&self, key: &str) -> Option<&str> {
-        self.values.get(key).and_then(|v| v.as_str())
+        self.0.get(key).and_then(|v| v.as_str())
     }
 
     /// Get a boolean value from the context
     pub fn get_bool(&self, key: &str) -> Option<bool> {
-        self.values.get(key).and_then(|v| v.as_bool())
+        self.0.get(key).and_then(|v| v.as_bool())
+    }
+
+    /// Get an i64 value from the context
+    pub fn get_i64(&self, key: &str) -> Option<i64> {
+        self.0.get(key).and_then(|v| v.as_i64())
+    }
+
+    /// Check if a key exists in the context
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.0.contains_key(key)
+    }
+
+    /// Remove a value from the context
+    pub fn remove(&mut self, key: &str) -> Option<serde_json::Value> {
+        self.0.remove(key)
+    }
+
+    /// Get the underlying HashMap for iteration
+    pub fn inner(&self) -> &HashMap<String, serde_json::Value> {
+        &self.0
+    }
+
+    /// Get mutable access to the underlying HashMap
+    pub fn inner_mut(&mut self) -> &mut HashMap<String, serde_json::Value> {
+        &mut self.0
     }
 }
 
@@ -51,44 +141,44 @@ impl BifrostContext {
 /// Body is base64-encoded.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HTTPRequest {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable::string")]
     pub method: String,
 
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable::string")]
     pub path: String,
 
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable::string_map")]
     pub headers: HashMap<String, String>,
 
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable::string_map")]
     pub query: HashMap<String, String>,
 
     /// Base64-encoded request body
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable::string")]
     pub body: String,
 }
 
 /// HTTPResponse represents an HTTP response to return.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HTTPResponse {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable::i32_field")]
     pub status_code: i32,
 
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable::string_map")]
     pub headers: HashMap<String, String>,
 
     /// Base64-encoded response body
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable::string")]
     pub body: String,
 }
 
 /// HTTPInterceptInput is the input for http_intercept hook.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HTTPInterceptInput {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable::context")]
     pub context: BifrostContext,
 
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable::http_request")]
     pub request: HTTPRequest,
 }
 
@@ -97,8 +187,8 @@ pub struct HTTPInterceptInput {
 pub struct HTTPInterceptOutput {
     pub context: BifrostContext,
 
-    #[serde(default)]
-    pub request: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request: Option<serde_json::Value>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response: Option<HTTPResponse>,
@@ -506,8 +596,8 @@ impl PreHookInput {
 pub struct PreHookOutput {
     pub context: BifrostContext,
 
-    #[serde(default)]
-    pub request: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request: Option<serde_json::Value>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub short_circuit: Option<PluginShortCircuit>,
@@ -556,11 +646,11 @@ impl PostHookInput {
 pub struct PostHookOutput {
     pub context: BifrostContext,
 
-    #[serde(default)]
-    pub response: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response: Option<serde_json::Value>,
 
-    #[serde(default)]
-    pub error: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<serde_json::Value>,
 
     #[serde(default)]
     pub has_error: bool,
@@ -591,12 +681,43 @@ mod tests {
     #[test]
     fn test_context_serialization() {
         let mut ctx = BifrostContext::new();
-        ctx.request_id = Some("test-123".to_string());
+        ctx.set_value("request_id", "test-123");
         ctx.set_value("custom_key", "custom_value");
+        ctx.set_value("is_enabled", true);
+        ctx.set_value("count", 42);
         
         let json = serde_json::to_string(&ctx).unwrap();
         assert!(json.contains("request_id"));
         assert!(json.contains("custom_key"));
+        assert!(json.contains("is_enabled"));
+        assert!(json.contains("count"));
+    }
+
+    #[test]
+    fn test_context_deserialization() {
+        let json = r#"{"request_id": "test-123", "custom_key": "custom_value", "is_enabled": true}"#;
+        let ctx: BifrostContext = serde_json::from_str(json).unwrap();
+        
+        assert_eq!(ctx.get_string("request_id"), Some("test-123"));
+        assert_eq!(ctx.get_string("custom_key"), Some("custom_value"));
+        assert_eq!(ctx.get_bool("is_enabled"), Some(true));
+    }
+
+    #[test]
+    fn test_context_methods() {
+        let mut ctx = BifrostContext::new();
+        ctx.set_value("key1", "value1");
+        ctx.set_value("enabled", true);
+        ctx.set_value("count", 42);
+        
+        assert_eq!(ctx.get_string("key1"), Some("value1"));
+        assert_eq!(ctx.get_bool("enabled"), Some(true));
+        assert_eq!(ctx.get_i64("count"), Some(42));
+        assert!(ctx.contains_key("key1"));
+        assert!(!ctx.contains_key("nonexistent"));
+        
+        ctx.remove("key1");
+        assert!(!ctx.contains_key("key1"));
     }
 
     #[test]
@@ -627,15 +748,87 @@ mod tests {
     #[test]
     fn test_pre_hook_input_parsing() {
         let json = r#"{
-            "context": {"request_id": "test-123"},
+            "context": {"request_id": "test-123", "custom": "value"},
             "request": {"provider": "openai", "model": "gpt-4"}
         }"#;
         
         let input: PreHookInput = serde_json::from_str(json).unwrap();
-        assert_eq!(input.context.request_id, Some("test-123".to_string()));
+        assert_eq!(input.context.get_string("request_id"), Some("test-123"));
+        assert_eq!(input.context.get_string("custom"), Some("value"));
         
         let (provider, model) = input.get_provider_model();
         assert_eq!(provider, "openai");
         assert_eq!(model, "gpt-4");
+    }
+
+    #[test]
+    fn test_http_request_with_null_fields() {
+        // Simulates Go sending null for nil []byte and nil maps
+        let json = r#"{
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "headers": null,
+            "query": null,
+            "body": null
+        }"#;
+        
+        let req: HTTPRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.path, "/v1/chat/completions");
+        assert!(req.headers.is_empty());
+        assert!(req.query.is_empty());
+        assert_eq!(req.body, "");
+    }
+
+    #[test]
+    fn test_http_request_with_missing_fields() {
+        // Test that missing fields also work (default behavior)
+        let json = r#"{
+            "method": "GET",
+            "path": "/health"
+        }"#;
+        
+        let req: HTTPRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.path, "/health");
+        assert!(req.headers.is_empty());
+        assert!(req.query.is_empty());
+        assert_eq!(req.body, "");
+    }
+
+    #[test]
+    fn test_http_intercept_input_with_nulls() {
+        // Simulates a full HTTP intercept input with null body from Go
+        let json = r#"{
+            "context": {"request_id": "abc-123"},
+            "request": {
+                "method": "POST",
+                "path": "/v1/chat/completions",
+                "headers": {"content-type": "application/json"},
+                "query": {},
+                "body": null
+            }
+        }"#;
+        
+        let input: HTTPInterceptInput = serde_json::from_str(json).unwrap();
+        assert_eq!(input.context.get_string("request_id"), Some("abc-123"));
+        assert_eq!(input.request.method, "POST");
+        assert_eq!(input.request.path, "/v1/chat/completions");
+        assert_eq!(input.request.headers.get("content-type"), Some(&"application/json".to_string()));
+        assert_eq!(input.request.body, "");
+    }
+
+    #[test]
+    fn test_http_response_with_null_fields() {
+        let json = r#"{
+            "status_code": null,
+            "headers": null,
+            "body": null
+        }"#;
+        
+        let resp: HTTPResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.status_code, 0);
+        assert!(resp.headers.is_empty());
+        assert_eq!(resp.body, "");
     }
 }

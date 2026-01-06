@@ -220,7 +220,7 @@ func TestExecuteAgentForChatRequest(t *testing.T) {
 	}
 
 	llmCaller := &MockLLMCaller{}
-	makeReq := func(ctx context.Context, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+	makeReq := func(ctx *schemas.BifrostContext, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 		return llmCaller.ChatCompletionRequest(ctx, req)
 	}
 	originalReq := &schemas.BifrostChatRequest{
@@ -236,9 +236,9 @@ func TestExecuteAgentForChatRequest(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
-	result, err := ExecuteAgentForChatRequest(&ctx, 10, originalReq, responseNoTools, makeReq, nil, nil, &MockClientManager{})
+	result, err := ExecuteAgentForChatRequest(ctx, 10, originalReq, responseNoTools, makeReq, nil, nil, &MockClientManager{})
 	if err != nil {
 		t.Errorf("Expected no error for response without tool calls, got: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestExecuteAgentForChatRequest_WithNonAutoExecutableTools(t *testing.T) {
 	}
 
 	llmCaller := &MockLLMCaller{}
-	makeReq := func(ctx context.Context, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+	makeReq := func(ctx *schemas.BifrostContext, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 		return llmCaller.ChatCompletionRequest(ctx, req)
 	}
 	originalReq := &schemas.BifrostChatRequest{
@@ -296,10 +296,10 @@ func TestExecuteAgentForChatRequest_WithNonAutoExecutableTools(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 	// Execute agent mode - should return immediately with non-auto-executable tools
-	result, err := ExecuteAgentForChatRequest(&ctx, 10, originalReq, responseWithNonAutoTools, makeReq, nil, nil, &MockClientManager{})
+	result, err := ExecuteAgentForChatRequest(ctx, 10, originalReq, responseWithNonAutoTools, makeReq, nil, nil, &MockClientManager{})
 
 	// Should not return error for non-auto-executable tools
 	if err != nil {
@@ -394,7 +394,7 @@ func TestExecuteAgentForResponsesRequest(t *testing.T) {
 	}
 
 	llmCaller := &MockLLMCaller{}
-	makeReq := func(ctx context.Context, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
+	makeReq := func(ctx *schemas.BifrostContext, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
 		return llmCaller.ResponsesRequest(ctx, req)
 	}
 	originalReq := &schemas.BifrostResponsesRequest{
@@ -411,9 +411,9 @@ func TestExecuteAgentForResponsesRequest(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
-	result, err := ExecuteAgentForResponsesRequest(&ctx, 10, originalReq, responseNoTools, makeReq, nil, nil, &MockClientManager{})
+	result, err := ExecuteAgentForResponsesRequest(ctx, 10, originalReq, responseNoTools, makeReq, nil, nil, &MockClientManager{})
 	if err != nil {
 		t.Errorf("Expected no error for response without tool calls, got: %v", err)
 	}
@@ -442,7 +442,7 @@ func TestExecuteAgentForResponsesRequest_WithNonAutoExecutableTools(t *testing.T
 	}
 
 	llmCaller := &MockLLMCaller{}
-	makeReq := func(ctx context.Context, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
+	makeReq := func(ctx *schemas.BifrostContext, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
 		return llmCaller.ResponsesRequest(ctx, req)
 	}
 	originalReq := &schemas.BifrostResponsesRequest{
@@ -459,10 +459,10 @@ func TestExecuteAgentForResponsesRequest_WithNonAutoExecutableTools(t *testing.T
 		},
 	}
 
-	ctx := context.Background()
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 	// Execute agent mode - should return immediately with non-auto-executable tools
-	result, err := ExecuteAgentForResponsesRequest(&ctx, 10, originalReq, responseWithNonAutoTools, makeReq, nil, nil, &MockClientManager{})
+	result, err := ExecuteAgentForResponsesRequest(ctx, 10, originalReq, responseWithNonAutoTools, makeReq, nil, nil, &MockClientManager{})
 
 	// Should not return error for non-auto-executable tools
 	if err != nil {

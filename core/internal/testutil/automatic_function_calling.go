@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"strings"
 	"testing"
@@ -11,7 +10,7 @@ import (
 )
 
 // RunAutomaticFunctionCallingTest executes the automatic function calling test scenario using dual API testing framework
-func RunAutomaticFunctionCallingTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunAutomaticFunctionCallingTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.AutomaticFunctionCall {
 		t.Logf("Automatic function calling not supported for provider %s", testConfig.Provider)
 		return

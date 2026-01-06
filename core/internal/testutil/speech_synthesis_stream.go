@@ -14,7 +14,7 @@ import (
 )
 
 // RunSpeechSynthesisStreamTest executes the streaming speech synthesis test scenario
-func RunSpeechSynthesisStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunSpeechSynthesisStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.SpeechSynthesisStream {
 		t.Logf("Speech synthesis streaming not supported for provider %s", testConfig.Provider)
 		return
@@ -115,7 +115,7 @@ func RunSpeechSynthesisStreamTest(t *testing.T, client *bifrost.Bifrost, ctx con
 					},
 				}
 
-				requestCtx := context.Background()
+				requestCtx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 				responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
 					return client.SpeechStreamRequest(requestCtx, request)
@@ -249,7 +249,7 @@ func RunSpeechSynthesisStreamTest(t *testing.T, client *bifrost.Bifrost, ctx con
 }
 
 // RunSpeechSynthesisStreamAdvancedTest executes advanced streaming speech synthesis test scenarios
-func RunSpeechSynthesisStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunSpeechSynthesisStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.SpeechSynthesisStream {
 		t.Logf("Speech synthesis streaming not supported for provider %s", testConfig.Provider)
 		return
@@ -306,7 +306,7 @@ func RunSpeechSynthesisStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost,
 				},
 			}
 
-			requestCtx := context.Background()
+			requestCtx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 			responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
 				return client.SpeechStreamRequest(requestCtx, request)
@@ -452,7 +452,7 @@ func RunSpeechSynthesisStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost,
 						},
 					}
 
-					requestCtx := context.Background()
+					requestCtx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 					// Use retry framework with stream validation
 					var accumulatedAudio bytes.Buffer // Accumulate audio for codec validation

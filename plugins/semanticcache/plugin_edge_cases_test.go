@@ -575,7 +575,7 @@ func TestErrorHandlingEdgeCases(t *testing.T) {
 
 	// Test without cache key (should not crash and bypass cache)
 	t.Run("Request without cache key", func(t *testing.T) {
-		ctxNoKey := context.Background() // No cache key
+		ctxNoKey := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 		response, err := setup.Client.ChatCompletionRequest(ctxNoKey, testRequest)
 		if err != nil {
@@ -600,7 +600,7 @@ func TestErrorHandlingEdgeCases(t *testing.T) {
 		WaitForCache()
 
 		// Now test with invalid key type - should bypass cache
-		ctxInvalidKey := context.WithValue(context.Background(), CacheKey, 12345) // Wrong type (int instead of string)
+		ctxInvalidKey := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline).WithValue(CacheKey, 12345)
 
 		response, err := setup.Client.ChatCompletionRequest(ctxInvalidKey, testRequest)
 		if err != nil {

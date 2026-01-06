@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -11,7 +10,7 @@ import (
 
 // RunCountTokenTest validates the CountTokens API for the configured provider/model.
 // It sends a simple prompt as Responses messages and asserts token counts and metadata.
-func RunCountTokenTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunCountTokenTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.CountTokens {
 		t.Logf("Count tokens not supported for provider %s", testConfig.Provider)
 		return

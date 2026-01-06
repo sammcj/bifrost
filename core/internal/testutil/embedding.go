@@ -1,13 +1,11 @@
 package testutil
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"os"
 	"strings"
 	"testing"
-
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
@@ -37,7 +35,7 @@ func cosineSimilarity(a, b []float32) float64 {
 }
 
 // RunEmbeddingTest executes the embedding test scenario
-func RunEmbeddingTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunEmbeddingTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.Embedding {
 		t.Logf("Embedding not supported for provider %s", testConfig.Provider)
 		return

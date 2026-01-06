@@ -1,6 +1,5 @@
 "use client";
 
-import { DevProfiler } from "@/components/devProfiler";
 import FullPageLoader from "@/components/fullPageLoader";
 import NotAvailableBanner from "@/components/notAvailableBanner";
 import ProgressProvider from "@/components/progressBar";
@@ -11,10 +10,17 @@ import { WebSocketProvider } from "@/hooks/useWebSocket";
 import { getErrorMessage, ReduxProvider, useGetCoreConfigQuery } from "@/lib/store";
 import { BifrostConfig } from "@/lib/types/config";
 import { RbacProvider } from "@enterprise/lib/contexts/rbacContext";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { useEffect } from "react";
 import { toast, Toaster } from "sonner";
+
+// Dynamic import - only loaded in development, completely excluded from prod bundle
+const DevProfiler = dynamic(
+  () => import("@/components/devProfiler").then(mod => ({ default: mod.DevProfiler })),
+  { ssr: false }
+);
 
 function AppContent({ children }: { children: React.ReactNode }) {
 	const { data: bifrostConfig, error, isLoading } = useGetCoreConfigQuery({});
@@ -59,7 +65,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 					<NuqsAdapter>
 						<RbacProvider>
 							<AppContent>{children}</AppContent>
-							<DevProfiler />
+							{process.env.NODE_ENV === 'development' && <DevProfiler />}
 						</RbacProvider>
 					</NuqsAdapter>
 				</ReduxProvider>

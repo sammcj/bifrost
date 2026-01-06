@@ -214,7 +214,7 @@ func (acc *StreamingToolCallAccumulator) GetFinalResponsesToolCalls() []ToolCall
 }
 
 // RunToolCallsStreamingTest executes the tool calls streaming test scenario
-func RunToolCallsStreamingTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunToolCallsStreamingTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ToolCallsStreaming {
 		t.Logf("Tool calls streaming not supported for provider %s", testConfig.Provider)
 		return

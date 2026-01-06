@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -10,7 +9,7 @@ import (
 )
 
 // RunTextCompletionTest tests text completion functionality
-func RunTextCompletionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunTextCompletionTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.TextCompletion || testConfig.TextModel == "" {
 		t.Logf("⏭️ Text completion not supported for provider %s", testConfig.Provider)
 		return

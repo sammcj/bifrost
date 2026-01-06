@@ -335,7 +335,7 @@ func (p *PrometheusPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas
 
 		// Get all prometheus labels from context
 		for _, key := range p.customLabels {
-			if value := (*ctx).Value(schemas.BifrostContextKey(key)); value != nil {
+			if value := ctx.Value(schemas.BifrostContextKey(key)); value != nil {
 				if strValue, ok := value.(string); ok {
 					labelValues[key] = strValue
 				}
@@ -348,7 +348,7 @@ func (p *PrometheusPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas
 		// For streaming requests, handle per-token metrics for intermediate chunks
 		if bifrost.IsStreamRequestType(requestType) {
 			// Determine if this is the final chunk
-			streamEndIndicatorValue := (*ctx).Value(schemas.BifrostContextKeyStreamEndIndicator)
+			streamEndIndicatorValue := ctx.Value(schemas.BifrostContextKeyStreamEndIndicator)
 			isFinalChunk, ok := streamEndIndicatorValue.(bool)
 
 			// For intermediate chunks, record per-token metrics and exit.

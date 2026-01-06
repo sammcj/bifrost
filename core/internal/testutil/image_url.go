@@ -1,18 +1,16 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"strings"
 	"testing"
-
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
 // RunImageURLTest executes the image URL test scenario using dual API testing framework
-func RunImageURLTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunImageURLTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ImageURL {
 		t.Logf("Image URL not supported for provider %s", testConfig.Provider)
 		return

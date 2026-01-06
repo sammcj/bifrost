@@ -11,7 +11,7 @@ import (
 )
 
 func TestMCPManagerInitialization(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -25,7 +25,7 @@ func TestMCPManagerInitialization(t *testing.T) {
 }
 
 func TestLocalToolRegistration(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -64,7 +64,7 @@ func TestLocalToolRegistration(t *testing.T) {
 }
 
 func TestToolDiscovery(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	// Use CodeMode since we're testing CodeMode tools (listToolFiles, readToolFile)
@@ -73,8 +73,8 @@ func TestToolDiscovery(t *testing.T) {
 	// Tools are already registered in setupTestBifrostWithCodeMode
 
 	// Test listToolFiles
-	listToolCall := createToolCall("listToolFiles", map[string]interface{}{})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, listToolCall)
+	listToolCall := createResponsesToolCall("listToolFiles", schemas.OrderedMap{})
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, listToolCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -85,10 +85,10 @@ func TestToolDiscovery(t *testing.T) {
 	assert.Contains(t, responseText, "BifrostClient.d.ts", "Should list BifrostClient server")
 
 	// Test readToolFile
-	readToolCall := createToolCall("readToolFile", map[string]interface{}{
+	readToolCall := createResponsesToolCall("readToolFile", schemas.OrderedMap{
 		"fileName": "BifrostClient.d.ts",
 	})
-	result, bifrostErr = b.ExecuteMCPTool(ctx, readToolCall)
+	result, bifrostErr = b.ExecuteResponsesMCPTool(ctx, readToolCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -101,7 +101,7 @@ func TestToolDiscovery(t *testing.T) {
 }
 
 func TestToolExecution(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -112,10 +112,10 @@ func TestToolExecution(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test echo tool
-	echoCall := createToolCall("echo", map[string]interface{}{
+	echoCall := createResponsesToolCall("echo", schemas.OrderedMap{
 		"message": "test message",
 	})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, echoCall)
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, echoCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -125,11 +125,11 @@ func TestToolExecution(t *testing.T) {
 	assert.Equal(t, "test message", responseText)
 
 	// Test add tool
-	addCall := createToolCall("add", map[string]interface{}{
-		"a": float64(5),
-		"b": float64(3),
+	addCall := createResponsesToolCall("add", schemas.OrderedMap{
+		"a": schemas.Ptr(5),
+		"b": schemas.Ptr(3),
 	})
-	result, bifrostErr = b.ExecuteMCPTool(ctx, addCall)
+	result, bifrostErr = b.ExecuteResponsesMCPTool(ctx, addCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -139,11 +139,11 @@ func TestToolExecution(t *testing.T) {
 	assert.Equal(t, "8", responseText)
 
 	// Test multiply tool
-	multiplyCall := createToolCall("multiply", map[string]interface{}{
-		"a": float64(4),
-		"b": float64(7),
+	multiplyCall := createResponsesToolCall("multiply", schemas.OrderedMap{
+		"a": schemas.Ptr(4),
+		"b": schemas.Ptr(7),
 	})
-	result, bifrostErr = b.ExecuteMCPTool(ctx, multiplyCall)
+	result, bifrostErr = b.ExecuteResponsesMCPTool(ctx, multiplyCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -154,7 +154,7 @@ func TestToolExecution(t *testing.T) {
 }
 
 func TestMultipleServers(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	// Use CodeMode since we're testing CodeMode tools (listToolFiles)
@@ -168,8 +168,8 @@ func TestMultipleServers(t *testing.T) {
 	require.NotEmpty(t, clients)
 
 	// Test listToolFiles with multiple servers
-	listToolCall := createToolCall("listToolFiles", map[string]interface{}{})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, listToolCall)
+	listToolCall := createResponsesToolCall("listToolFiles", schemas.OrderedMap{})
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, listToolCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -185,7 +185,7 @@ func TestMultipleServers(t *testing.T) {
 func TestExternalMCPConnection(t *testing.T) {
 	t.Skip("Skipping external MCP connection test - requires credentials")
 
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	_, err := setupTestBifrost(ctx)
@@ -217,7 +217,7 @@ func TestExternalMCPConnection(t *testing.T) {
 }
 
 func TestToolExecutionTimeout(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -228,12 +228,12 @@ func TestToolExecutionTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test slow tool with short timeout
-	slowCall := createToolCall("slow_tool", map[string]interface{}{
-		"delay_ms": float64(100),
+	slowCall := createResponsesToolCall("slow_tool", schemas.OrderedMap{
+		"delay_ms": schemas.Ptr(100),
 	})
 
 	start := time.Now()
-	result, bifrostErr := b.ExecuteMCPTool(ctx, slowCall)
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, slowCall)
 	duration := time.Since(start)
 
 	requireNoBifrostError(t, bifrostErr)
@@ -242,7 +242,7 @@ func TestToolExecutionTimeout(t *testing.T) {
 }
 
 func TestToolExecutionError(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -253,8 +253,8 @@ func TestToolExecutionError(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test error tool - tool execution succeeds but result contains error message
-	errorCall := createToolCall("error_tool", map[string]interface{}{})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, errorCall)
+	errorCall := createResponsesToolCall("error_tool", schemas.OrderedMap{})
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, errorCall)
 
 	// Tool execution should succeed (no bifrostErr), but result should contain error message
 	requireNoBifrostError(t, bifrostErr)
@@ -268,7 +268,7 @@ func TestToolExecutionError(t *testing.T) {
 }
 
 func TestComplexArgsTool(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -279,7 +279,7 @@ func TestComplexArgsTool(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test complex args tool
-	complexCall := createToolCall("complex_args_tool", map[string]interface{}{
+	complexCall := createResponsesToolCall("complex_args_tool", schemas.OrderedMap{
 		"data": map[string]interface{}{
 			"nested": map[string]interface{}{
 				"value": float64(42),
@@ -287,7 +287,7 @@ func TestComplexArgsTool(t *testing.T) {
 			},
 		},
 	})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, complexCall)
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, complexCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)

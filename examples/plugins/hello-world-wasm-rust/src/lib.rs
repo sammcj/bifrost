@@ -59,35 +59,37 @@ pub extern "C" fn http_intercept(input_ptr: u32, input_len: u32) -> u64 {
     let input: HTTPInterceptInput = match serde_json::from_str(&input_str) {
         Ok(i) => i,
         Err(e) => {
+            // Include context around the error position for debugging
+            let error_context = if let Some(col) = extract_column(&e.to_string()) {
+                let start = col.saturating_sub(50);
+                let end = (col + 50).min(input_str.len());
+                format!(" | context: ...{}...", &input_str[start..end])
+            } else {
+                String::new()
+            };
             let output = HTTPInterceptOutput {
-                error: format!("Failed to parse input: {}", e),
+                error: format!("Failed to parse input: {}{}", e, error_context),
                 ..Default::default()
             };
             return write_string(&serde_json::to_string(&output).unwrap_or_default());
         }
     };
     
-    // Create output with context preserved
+
+    // Add context value like Go plugin does
+    let mut context = input.context;
+    context.set_value("from-http", serde_json::json!("123"));
+    
+    // Create output with context and request preserved (pass-through)
+    // Serialize request to Value to ensure proper JSON structure
+    let request_value = serde_json::to_value(&input.request).ok();
+    
     let output = HTTPInterceptOutput {
         context: input.context,
         request: input.request,
         has_response: false,
         ..Default::default()
     };
-    
-    // Example: Short-circuit health check endpoint
-    // Uncomment to test:
-    /*
-    if input.request.path == "/health" {
-        output.has_response = true;
-        output.response = Some(HTTPResponse {
-            status_code: 200,
-            headers: HashMap::new(),
-            body: base64::encode(r#"{"status":"ok"}"#),
-        });
-        return write_string(&serde_json::to_string(&output).unwrap_or_default());
-    }
-    */
     
     // Pass through
     write_string(&serde_json::to_string(&output).unwrap_or_default())
@@ -119,10 +121,6 @@ pub extern "C" fn pre_hook(input_ptr: u32, input_len: u32) -> u64 {
         has_short_circuit: false,
         ..Default::default()
     };
-    
-    // Add custom values to context for tracking
-    output.context.set_value("plugin_processed", serde_json::json!(true));
-    output.context.set_value("plugin_name", serde_json::json!("hello-world-wasm-rust"));
     
     // Get provider and model for potential modifications
     let (_provider, model) = input.get_provider_model();
@@ -213,42 +211,32 @@ pub extern "C" fn post_hook(input_ptr: u32, input_len: u32) -> u64 {
         }
     };
     
-    // Create output with context preserved
-    let mut output = PostHookOutput {
-        context: input.context.clone(),
-        response: serde_json::json!({}),
-        error: serde_json::json!({}),
-        has_error: false,
+    // Add context value like Go plugin does
+    let mut context = input.context.clone();
+    context.set_value("from-post-hook", serde_json::json!("456"));
+    
+    // Create output with context and response/error preserved (pass-through)
+    // This matches Go plugin behavior exactly
+    let output = PostHookOutput {
+        context,
+        response: Some(input.response.clone()),
+        error: Some(input.error.clone()),
+        has_error: input.has_error,
         hook_error: String::new(),
     };
     
-    // Check if our plugin processed this request
-    let plugin_processed = input.context.get_bool("plugin_processed").unwrap_or(false);
-    
-    if plugin_processed {
-        // Plugin was involved in pre_hook, add completion marker
-        output.context.set_value("post_hook_completed", serde_json::json!(true));
-    }
-    
-    // Handle error case
+    // Example: Modify error message when has_error is true
+    // Uncomment to test:
+    /*
     if input.has_error {
-        output.has_error = true;
-        output.error = input.error.clone();
-        
-        // Example: Modify error message
-        // Uncomment to test:
-        /*
         if let Some(mut error) = input.parse_error() {
             error.error.message = format!("{} (processed by Rust WASM plugin)", error.error.message);
-            output.error = serde_json::to_value(&error).unwrap_or_default();
+            let mut output = output;
+            output.error = Some(serde_json::to_value(&error).unwrap_or_default());
+            return write_string(&serde_json::to_string(&output).unwrap_or_default());
         }
-        */
-        
-        return write_string(&serde_json::to_string(&output).unwrap_or_default());
     }
-    
-    // Handle success case - pass through response
-    output.response = input.response;
+    */
     
     // Example: Modify response
     // Uncomment to test:
@@ -259,7 +247,9 @@ pub extern "C" fn post_hook(input_ptr: u32, input_len: u32) -> u64 {
             // Add a marker to the model name
             chat.model = format!("{} (via rust-wasm)", chat.model);
         }
-        output.response = serde_json::to_value(&response).unwrap_or_default();
+        let mut output = output;
+        output.response = Some(serde_json::to_value(&response).unwrap_or_default());
+        return write_string(&serde_json::to_string(&output).unwrap_or_default());
     }
     */
     
@@ -282,6 +272,17 @@ pub extern "C" fn cleanup() -> i32 {
 // =============================================================================
 // Helper Functions
 // =============================================================================
+
+/// Extract column number from serde error message for debugging
+fn extract_column(error_msg: &str) -> Option<usize> {
+    // Error format: "... at line X column Y"
+    if let Some(idx) = error_msg.rfind("column ") {
+        let col_str = &error_msg[idx + 7..];
+        col_str.split_whitespace().next()?.parse().ok()
+    } else {
+        None
+    }
+}
 
 /// Example rate limit check function
 #[allow(dead_code)]

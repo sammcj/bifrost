@@ -90,7 +90,7 @@ func (h *MCPServerHandler) handleMCPServer(ctx *fasthttp.RequestCtx) {
 
 	// Use mcp-go server to handle the request
 	// HandleMessage processes JSON-RPC messages and returns appropriate responses
-	response := mcpServer.HandleMessage(*bifrostCtx, ctx.PostBody())
+	response := mcpServer.HandleMessage(bifrostCtx, ctx.PostBody())
 
 	// Check if response is nil (notification - no response needed)
 	if response == nil {

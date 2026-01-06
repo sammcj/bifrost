@@ -14,7 +14,7 @@ import (
 )
 
 // RunTranscriptionStreamTest executes the streaming transcription test scenario
-func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.TranscriptionStream {
 		t.Logf("Transcription streaming not supported for provider %s", testConfig.Provider)
 		return
@@ -332,7 +332,7 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 }
 
 // RunTranscriptionStreamAdvancedTest executes advanced streaming transcription test scenarios
-func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.TranscriptionStream {
 		t.Logf("Transcription streaming not supported for provider %s", testConfig.Provider)
 		return

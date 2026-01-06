@@ -10,7 +10,7 @@ import (
 )
 
 func TestCodeModeClientCallingNonCodeModeClientTool(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -23,7 +23,7 @@ func TestCodeModeClientCallingNonCodeModeClientTool(t *testing.T) {
 		"code": CodeFixtures.CodeCallingNonCodeModeTool,
 	})
 
-	result, bifrostErr := b.ExecuteMCPTool(ctx, toolCall)
+	result, bifrostErr := b.ExecuteChatMCPTool(ctx, toolCall)
 	// Should fail with runtime error - tool call succeeds but code execution fails
 	requireNoBifrostError(t, bifrostErr, "Tool call should succeed")
 	require.NotNil(t, result, "Result should be present")
@@ -31,7 +31,7 @@ func TestCodeModeClientCallingNonCodeModeClientTool(t *testing.T) {
 }
 
 func TestNonCodeModeClientToolCalledFromExecuteToolCode(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -44,7 +44,7 @@ func TestNonCodeModeClientToolCalledFromExecuteToolCode(t *testing.T) {
 		"code": `const result = await NonExistentClient.tool({}); return result`,
 	})
 
-	result, bifrostErr := b.ExecuteMCPTool(ctx, toolCall)
+	result, bifrostErr := b.ExecuteChatMCPTool(ctx, toolCall)
 	// Should fail with runtime error - tool call succeeds but code execution fails
 	requireNoBifrostError(t, bifrostErr, "Tool call should succeed")
 	require.NotNil(t, result, "Result should be present")
@@ -52,7 +52,7 @@ func TestNonCodeModeClientToolCalledFromExecuteToolCode(t *testing.T) {
 }
 
 func TestToolNotInToolsToExecute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -72,14 +72,14 @@ func TestToolNotInToolsToExecute(t *testing.T) {
 		"a": float64(1),
 		"b": float64(2),
 	})
-	_, bifrostErr := b.ExecuteMCPTool(ctx, addCall)
+	_, bifrostErr := b.ExecuteChatMCPTool(ctx, addCall)
 
 	// Should fail - tool not available
 	assert.NotNil(t, bifrostErr, "Should fail when tool not in ToolsToExecute")
 }
 
 func TestToolExecutionTimeoutEdgeCase(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -93,7 +93,7 @@ func TestToolExecutionTimeoutEdgeCase(t *testing.T) {
 		"delay_ms": float64(100),
 	})
 
-	result, bifrostErr := b.ExecuteMCPTool(ctx, slowCall)
+	result, bifrostErr := b.ExecuteChatMCPTool(ctx, slowCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -104,7 +104,7 @@ func TestToolExecutionTimeoutEdgeCase(t *testing.T) {
 }
 
 func TestToolExecutionErrorPropagation(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -115,7 +115,7 @@ func TestToolExecutionErrorPropagation(t *testing.T) {
 
 	// Test error tool
 	errorCall := createToolCall("error_tool", map[string]interface{}{})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, errorCall)
+	result, bifrostErr := b.ExecuteChatMCPTool(ctx, errorCall)
 
 	// Tool execution should succeed (no bifrostErr), but result should contain error message
 	requireNoBifrostError(t, bifrostErr)
@@ -129,7 +129,7 @@ func TestToolExecutionErrorPropagation(t *testing.T) {
 }
 
 func TestEmptyCodeExecution(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -140,14 +140,14 @@ func TestEmptyCodeExecution(t *testing.T) {
 		"code": CodeFixtures.EmptyCode,
 	})
 
-	_, bifrostErr := b.ExecuteMCPTool(ctx, toolCall)
+	_, bifrostErr := b.ExecuteChatMCPTool(ctx, toolCall)
 	// Empty code should return an error
 	require.NotNil(t, bifrostErr, "Empty code should return an error")
 	assert.Contains(t, bifrostErr.Error.Message, "code parameter is required", "Error should mention code parameter")
 }
 
 func TestCodeWithSyntaxErrors(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -158,7 +158,7 @@ func TestCodeWithSyntaxErrors(t *testing.T) {
 		"code": CodeFixtures.SyntaxError,
 	})
 
-	result, bifrostErr := b.ExecuteMCPTool(ctx, toolCall)
+	result, bifrostErr := b.ExecuteChatMCPTool(ctx, toolCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 
@@ -168,7 +168,7 @@ func TestCodeWithSyntaxErrors(t *testing.T) {
 }
 
 func TestCodeWithTypeScriptCompilationErrors(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -181,7 +181,7 @@ func TestCodeWithTypeScriptCompilationErrors(t *testing.T) {
 		"code": invalidCode,
 	})
 
-	result, bifrostErr := b.ExecuteMCPTool(ctx, toolCall)
+	result, bifrostErr := b.ExecuteChatMCPTool(ctx, toolCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 
@@ -193,7 +193,7 @@ func TestCodeWithTypeScriptCompilationErrors(t *testing.T) {
 }
 
 func TestCodeWithRuntimeErrors(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -204,7 +204,7 @@ func TestCodeWithRuntimeErrors(t *testing.T) {
 		"code": CodeFixtures.RuntimeError,
 	})
 
-	result, bifrostErr := b.ExecuteMCPTool(ctx, toolCall)
+	result, bifrostErr := b.ExecuteChatMCPTool(ctx, toolCall)
 	// Should fail with runtime error
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
@@ -212,7 +212,7 @@ func TestCodeWithRuntimeErrors(t *testing.T) {
 }
 
 func TestCodeCallingToolsWithInvalidArguments(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -225,7 +225,7 @@ func TestCodeCallingToolsWithInvalidArguments(t *testing.T) {
 		"code": invalidArgsCode,
 	})
 
-	result, bifrostErr := b.ExecuteMCPTool(ctx, toolCall)
+	result, bifrostErr := b.ExecuteChatMCPTool(ctx, toolCall)
 	// Should fail - tool expects "message" parameter
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
@@ -233,7 +233,7 @@ func TestCodeCallingToolsWithInvalidArguments(t *testing.T) {
 }
 
 func TestCodeModeToolsAlwaysAutoExecutable(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -254,13 +254,13 @@ func TestCodeModeToolsAlwaysAutoExecutable(t *testing.T) {
 	// This is tested in integration tests that verify agent mode behavior
 	// For now, verify they can be executed directly
 	listCall := createToolCall("listToolFiles", map[string]interface{}{})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, listCall)
+	result, bifrostErr := b.ExecuteChatMCPTool(ctx, listCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 }
 
 func TestCommentsOnlyCode(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -271,7 +271,7 @@ func TestCommentsOnlyCode(t *testing.T) {
 		"code": CodeFixtures.CommentsOnly,
 	})
 
-	result, bifrostErr := b.ExecuteMCPTool(ctx, toolCall)
+	result, bifrostErr := b.ExecuteChatMCPTool(ctx, toolCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 
@@ -280,7 +280,7 @@ func TestCommentsOnlyCode(t *testing.T) {
 }
 
 func TestUndefinedVariableError(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -291,7 +291,7 @@ func TestUndefinedVariableError(t *testing.T) {
 		"code": CodeFixtures.UndefinedVariable,
 	})
 
-	result, bifrostErr := b.ExecuteMCPTool(ctx, toolCall)
+	result, bifrostErr := b.ExecuteChatMCPTool(ctx, toolCall)
 	// Should fail with runtime error
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)

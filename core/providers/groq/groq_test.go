@@ -1,7 +1,6 @@
 package groq_test
 
 import (
-	"context"
 	"os"
 	"strings"
 	"testing"
@@ -58,7 +57,7 @@ func TestGroq(t *testing.T) {
 		},
 	}
 
-	ctx = context.WithValue(ctx, schemas.BifrostContextKey("x-litellm-fallback"), "true")
+	ctx.SetValue(schemas.BifrostContextKey("x-litellm-fallback"), "true")
 
 	t.Run("GroqTests", func(t *testing.T) {
 		testutil.RunAllComprehensiveTests(t, client, ctx, testConfig)

@@ -13,7 +13,7 @@ import (
 )
 
 // RunResponsesStreamTest executes the responses streaming test scenario
-func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.CompletionStream {
 		t.Logf("Responses completion stream not supported for provider %s", testConfig.Provider)
 		return

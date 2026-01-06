@@ -4,7 +4,6 @@
 package testutil
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
@@ -123,7 +122,7 @@ func (account *ComprehensiveTestAccount) GetConfiguredProviders() ([]schemas.Mod
 }
 
 // GetKeysForProvider returns the API keys and associated models for a given provider.
-func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *context.Context, providerKey schemas.ModelProvider) ([]schemas.Key, error) {
+func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx *schemas.BifrostContext, providerKey schemas.ModelProvider) ([]schemas.Key, error) {
 	switch providerKey {
 	case schemas.OpenAI:
 		return []schemas.Key{

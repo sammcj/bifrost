@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/bytedance/sonic"
@@ -52,7 +51,7 @@ type agentAPIAdapter interface {
 	createNewRequest(conversation []interface{}) interface{}
 
 	// Make LLM call
-	makeLLMCall(ctx context.Context, request interface{}) (interface{}, *schemas.BifrostError)
+	makeLLMCall(ctx *schemas.BifrostContext, request interface{}) (interface{}, *schemas.BifrostError)
 
 	// Create response with executed tools and non-auto-executable calls
 	createResponseWithExecutedTools(
@@ -67,7 +66,7 @@ type agentAPIAdapter interface {
 type chatAPIAdapter struct {
 	originalReq     *schemas.BifrostChatRequest
 	initialResponse *schemas.BifrostChatResponse
-	makeReq         func(ctx context.Context, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError)
+	makeReq         func(ctx *schemas.BifrostContext, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError)
 }
 
 // responsesAPIAdapter implements agentAPIAdapter for Responses API.
@@ -87,7 +86,7 @@ type chatAPIAdapter struct {
 type responsesAPIAdapter struct {
 	originalReq     *schemas.BifrostResponsesRequest
 	initialResponse *schemas.BifrostResponsesResponse
-	makeReq         func(ctx context.Context, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError)
+	makeReq         func(ctx *schemas.BifrostContext, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError)
 }
 
 // Chat API adapter implementations
@@ -157,7 +156,7 @@ func (c *chatAPIAdapter) createNewRequest(conversation []interface{}) interface{
 	}
 }
 
-func (c *chatAPIAdapter) makeLLMCall(ctx context.Context, request interface{}) (interface{}, *schemas.BifrostError) {
+func (c *chatAPIAdapter) makeLLMCall(ctx *schemas.BifrostContext, request interface{}) (interface{}, *schemas.BifrostError) {
 	chatRequest := request.(*schemas.BifrostChatRequest)
 	return c.makeReq(ctx, chatRequest)
 }
@@ -370,7 +369,7 @@ func (r *responsesAPIAdapter) createNewRequest(conversation []interface{}) inter
 	}
 }
 
-func (r *responsesAPIAdapter) makeLLMCall(ctx context.Context, request interface{}) (interface{}, *schemas.BifrostError) {
+func (r *responsesAPIAdapter) makeLLMCall(ctx *schemas.BifrostContext, request interface{}) (interface{}, *schemas.BifrostError) {
 	responsesRequest := request.(*schemas.BifrostResponsesRequest)
 	return r.makeReq(ctx, responsesRequest)
 }
