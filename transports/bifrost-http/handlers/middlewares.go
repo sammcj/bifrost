@@ -316,8 +316,6 @@ func (m *TracingMiddleware) Middleware() schemas.BifrostHTTPMiddleware {
 func (m *TracingMiddleware) completeAndFlushTrace(traceID string) {
 	go func() {
 		// Clean up the stream accumulator for this trace
-		// This must happen before EndTrace to ensure all accumulated data is available
-		m.tracer.Load().CleanupStreamAccumulator(traceID)
 
 		// Get completed trace from store
 		completedTrace := m.tracer.Load().EndTrace(traceID)

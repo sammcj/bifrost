@@ -250,14 +250,6 @@ func convertToProcessedStreamResponse(result *schemas.StreamAccumulatorResult, r
 		streamType = streaming.StreamTypeChat
 	}
 
-	// Determine response type
-	var responseType streaming.StreamResponseType
-	if result.IsFinal {
-		responseType = streaming.StreamResponseTypeFinal
-	} else {
-		responseType = streaming.StreamResponseTypeDelta
-	}
-
 	// Build accumulated data
 	data := &streaming.AccumulatedData{
 		RequestID:           result.RequestID,
@@ -283,7 +275,6 @@ func convertToProcessedStreamResponse(result *schemas.StreamAccumulatorResult, r
 	}
 
 	resp := &streaming.ProcessedStreamResponse{
-		Type:       responseType,
 		RequestID:  result.RequestID,
 		StreamType: streamType,
 		Provider:   result.Provider,

@@ -224,11 +224,9 @@ func (p *LoggerPlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.Bifrost
 
 	// If request type is streaming we create a stream accumulator via the tracer
 	if bifrost.IsStreamRequestType(req.RequestType) {
-		if tracer, ok := ctx.Value(schemas.BifrostContextKeyTracer).(schemas.Tracer); ok && tracer != nil {
-			// Use traceID for the central accumulator
-			if traceID, ok := ctx.Value(schemas.BifrostContextKeyTraceID).(string); ok && traceID != "" {
-				tracer.CreateStreamAccumulator(traceID, createdTimestamp)
-			}
+		tracer, traceID, err := bifrost.GetTracerFromContext(ctx)
+		if err == nil && tracer != nil && traceID != "" {
+			tracer.CreateStreamAccumulator(traceID, createdTimestamp)
 		}
 	}
 
@@ -361,8 +359,20 @@ func (p *LoggerPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bif
 	virtualKeyName := getStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-virtual-key-name"))
 	numberOfRetries := getIntFromContext(ctx, schemas.BifrostContextKeyNumberOfRetries)
 
+	requestType, _, _ := bifrost.GetResponseFields(result, bifrostErr)
+
+	var tracer schemas.Tracer
+	var traceID string
+	if bifrost.IsStreamRequestType(requestType) {
+		var err error
+		tracer, traceID, err = bifrost.GetTracerFromContext(ctx)
+		if err != nil {
+			p.logger.Warn("failed to get traceID/tracer from context of logging plugin posthook: %v", err)
+			return result, bifrostErr, nil
+		}
+	}
+
 	go func() {
-		requestType, _, _ := bifrost.GetResponseFields(result, bifrostErr)
 		// Queue the log update message (non-blocking) - use same pattern for both streaming and regular
 		logMsg := p.getLogMessage()
 		logMsg.RequestID = requestID
@@ -422,20 +432,18 @@ func (p *LoggerPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bif
 
 			// Process streaming response via tracer's central accumulator
 			var streamResponse *streaming.ProcessedStreamResponse
-			if tracer, ok := ctx.Value(schemas.BifrostContextKeyTracer).(schemas.Tracer); ok && tracer != nil {
-				if traceID, ok := ctx.Value(schemas.BifrostContextKeyTraceID).(string); ok && traceID != "" {
-					// Pass the context so the accumulator can detect final chunks via StreamEndIndicator
-					accResult := tracer.ProcessStreamingChunk(ctx, traceID, result, bifrostErr)
-					if accResult != nil {
-						// Convert StreamAccumulatorResult to ProcessedStreamResponse
-						streamResponse = convertToProcessedStreamResponse(accResult, requestType)
-					}
+			if tracer != nil && traceID != "" {
+				accResult := tracer.ProcessStreamingChunk(ctx, traceID, result, bifrostErr)
+				if accResult != nil {
+					streamResponse = convertToProcessedStreamResponse(accResult, requestType)
 				}
+			} else {
+				p.logger.Debug("tracer or traceID not available in streaming path for request %s, skipping stream processing", logMsg.RequestID)
 			}
 
 			if streamResponse == nil {
 				p.logger.Debug("failed to process streaming response: tracer or traceID not available")
-			} else if streamResponse.Type == streaming.StreamResponseTypeFinal {
+			} else if bifrost.IsFinalChunk(ctx) {
 				// Prepare final log data
 				logMsg.Operation = LogOperationStreamUpdate
 				logMsg.StreamResponse = streamResponse
@@ -450,7 +458,7 @@ func (p *LoggerPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bif
 						logMsg.NumberOfRetries,
 						logMsg.SemanticCacheDebug,
 						logMsg.StreamResponse,
-						streamResponse.Type == streaming.StreamResponseTypeFinal,
+						bifrost.IsFinalChunk(ctx),
 					)
 				})
 				if processingErr != nil {
@@ -466,7 +474,11 @@ func (p *LoggerPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bif
 					}
 					p.mu.Unlock()
 				}
-				// Note: Stream accumulator cleanup is handled by the tracing middleware
+				// Note: Stream accumulator cleanup is handled by the tracer
+				if tracer != nil && traceID != "" {
+					p.logger.Debug("cleaning up stream accumulator for trace ID: %s in logging plugin posthook", traceID)
+					tracer.CleanupStreamAccumulator(traceID)
+				}
 			}
 		} else {
 			// Handle regular response

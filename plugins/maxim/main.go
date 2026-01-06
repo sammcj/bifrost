@@ -106,10 +106,6 @@ func convertAccResultToProcessedStreamResponse(accResult *schemas.StreamAccumula
 	if accResult == nil {
 		return nil
 	}
-	responseType := streaming.StreamResponseTypeDelta
-	if accResult.IsFinal {
-		responseType = streaming.StreamResponseTypeFinal
-	}
 	// Determine StreamType based on the response content
 	streamType := streaming.StreamTypeChat
 	if accResult.AudioOutput != nil {
@@ -120,7 +116,6 @@ func convertAccResultToProcessedStreamResponse(accResult *schemas.StreamAccumula
 		streamType = streaming.StreamTypeResponses
 	}
 	return &streaming.ProcessedStreamResponse{
-		Type:       responseType,
 		RequestID:  accResult.RequestID,
 		StreamType: streamType,
 		Model:      accResult.Model,
@@ -446,10 +441,9 @@ func (plugin *Plugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostR
 
 		// If streaming, create accumulator via central tracer using traceID
 		if bifrost.IsStreamRequestType(req.RequestType) {
-			if tracer, ok := ctx.Value(schemas.BifrostContextKeyTracer).(schemas.Tracer); ok && tracer != nil {
-				if bifrostTraceID, ok := ctx.Value(schemas.BifrostContextKeyTraceID).(string); ok && bifrostTraceID != "" {
-					tracer.CreateStreamAccumulator(bifrostTraceID, time.Now())
-				}
+			tracer, bifrostTraceID, err := bifrost.GetTracerFromContext(ctx)
+			if err == nil && tracer != nil && bifrostTraceID != "" {
+				tracer.CreateStreamAccumulator(bifrostTraceID, time.Now())
 			}
 		}
 	}
@@ -495,17 +489,16 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bifr
 		var streamResponse *streaming.ProcessedStreamResponse
 		if bifrost.IsStreamRequestType(requestType) {
 			// Use central tracer's accumulator
-			if tracer, ok := ctx.Value(schemas.BifrostContextKeyTracer).(schemas.Tracer); ok && tracer != nil {
-				if bifrostTraceID, ok := ctx.Value(schemas.BifrostContextKeyTraceID).(string); ok && bifrostTraceID != "" {
-					accResult := tracer.ProcessStreamingChunk(ctx, bifrostTraceID, result, bifrostErr)
-					if accResult != nil {
-						streamResponse = convertAccResultToProcessedStreamResponse(accResult)
-					}
+			tracer, bifrostTraceID, err := bifrost.GetTracerFromContext(ctx)
+			if err == nil && tracer != nil && bifrostTraceID != "" {
+				accResult := tracer.ProcessStreamingChunk(ctx, bifrostTraceID, result, bifrostErr)
+				if accResult != nil {
+					streamResponse = convertAccResultToProcessedStreamResponse(accResult)
 				}
 			}
 
 			// Return if no stream response or it's a delta response
-			if streamResponse == nil || streamResponse.Type == streaming.StreamResponseTypeDelta {
+			if streamResponse == nil || !bifrost.IsFinalChunk(ctx) {
 				return
 			}
 		}
@@ -539,10 +532,9 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bifr
 
 				if bifrost.IsStreamRequestType(requestType) {
 					// Cleanup via central tracer
-					if tracer, ok := ctx.Value(schemas.BifrostContextKeyTracer).(schemas.Tracer); ok && tracer != nil {
-						if bifrostTraceID, ok := ctx.Value(schemas.BifrostContextKeyTraceID).(string); ok && bifrostTraceID != "" {
-							tracer.CleanupStreamAccumulator(bifrostTraceID)
-						}
+					tracer, bifrostTraceID, err := bifrost.GetTracerFromContext(ctx)
+					if err == nil && tracer != nil && bifrostTraceID != "" {
+						tracer.CleanupStreamAccumulator(bifrostTraceID)
 					}
 				}
 			} else if result != nil {
@@ -566,12 +558,11 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bifr
 						logger.AddResultToGeneration(generationID, result.ResponsesResponse)
 					}
 				}
-				if streamResponse != nil && streamResponse.Type == streaming.StreamResponseTypeFinal {
+				if streamResponse != nil && bifrost.IsFinalChunk(ctx) {
 					// Cleanup via central tracer
-					if tracer, ok := ctx.Value(schemas.BifrostContextKeyTracer).(schemas.Tracer); ok && tracer != nil {
-						if bifrostTraceID, ok := ctx.Value(schemas.BifrostContextKeyTraceID).(string); ok && bifrostTraceID != "" {
-							tracer.CleanupStreamAccumulator(bifrostTraceID)
-						}
+					tracer, bifrostTraceID, err := bifrost.GetTracerFromContext(ctx)
+					if err == nil && tracer != nil && bifrostTraceID != "" {
+						tracer.CleanupStreamAccumulator(bifrostTraceID)
 					}
 				}
 			}

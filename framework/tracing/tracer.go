@@ -483,9 +483,16 @@ func (t *Tracer) CreateStreamAccumulator(traceID string, startTime time.Time) {
 // This should be called after the streaming request is complete.
 func (t *Tracer) CleanupStreamAccumulator(traceID string) {
 	if traceID == "" || t.accumulator == nil {
+		if t.store != nil && t.store.logger != nil {
+			t.store.logger.Error("traceID or accumulator is nil in CleanupStreamAccumulator")
+		}
 		return
 	}
-	_ = t.accumulator.CleanupStreamAccumulator(traceID)
+	if err := t.accumulator.CleanupStreamAccumulator(traceID); err != nil {
+		if t.store != nil && t.store.logger != nil {
+			t.store.logger.Error("error in CleanupStreamAccumulator: %v", err)
+		}
+	}
 }
 
 // ProcessStreamingChunk processes a streaming chunk and accumulates it.
@@ -509,7 +516,6 @@ func (t *Tracer) ProcessStreamingChunk(ctx *schemas.BifrostContext, traceID stri
 
 	// Convert ProcessedStreamResponse to StreamAccumulatorResult
 	accResult := &schemas.StreamAccumulatorResult{
-		IsFinal:   processedResp.Type == streaming.StreamResponseTypeFinal,
 		RequestID: processedResp.RequestID,
 		Model:     processedResp.Model,
 		Provider:  processedResp.Provider,
