@@ -198,20 +198,14 @@ func (a *Accumulator) processAccumulatedChatStreamingChunks(requestID string, re
 		data.ToolCalls = data.OutputMessage.ChatAssistantMessage.ToolCalls
 	}
 	data.ErrorDetails = respErr
-	// Update token usage from final chunk if available
-	if len(accumulator.ChatStreamChunks) > 0 {
-		lastChunk := accumulator.ChatStreamChunks[len(accumulator.ChatStreamChunks)-1]
+	// Update metadata from the chunk with highest index (contains TokenUsage, Cost, FinishReason)
+	if lastChunk := accumulator.getLastChatChunk(); lastChunk != nil {
 		if lastChunk.TokenUsage != nil {
 			data.TokenUsage = lastChunk.TokenUsage
 		}
-		// Handle cache debug
 		if lastChunk.SemanticCacheDebug != nil {
 			data.CacheDebug = lastChunk.SemanticCacheDebug
 		}
-	}
-	// Update cost from final chunk if available
-	if len(accumulator.ChatStreamChunks) > 0 {
-		lastChunk := accumulator.ChatStreamChunks[len(accumulator.ChatStreamChunks)-1]
 		if lastChunk.Cost != nil {
 			data.Cost = lastChunk.Cost
 		}

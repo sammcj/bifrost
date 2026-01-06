@@ -115,12 +115,22 @@ func (a *Accumulator) putResponsesStreamChunk(chunk *ResponsesStreamChunk) {
 func (a *Accumulator) createStreamAccumulator(requestID string) *StreamAccumulator {
 	now := time.Now()
 	sc := &StreamAccumulator{
-		RequestID:             requestID,
-		ChatStreamChunks:      make([]*ChatStreamChunk, 0),
-		ResponsesStreamChunks: make([]*ResponsesStreamChunk, 0),
-		IsComplete:            false,
-		Timestamp:             now,
-		StartTimestamp:        now, // Set default StartTimestamp for proper TTFT/latency calculation
+		RequestID:                  requestID,
+		ChatStreamChunks:           make([]*ChatStreamChunk, 0),
+		ResponsesStreamChunks:      make([]*ResponsesStreamChunk, 0),
+		TranscriptionStreamChunks:  make([]*TranscriptionStreamChunk, 0),
+		AudioStreamChunks:          make([]*AudioStreamChunk, 0),
+		ChatChunksSeen:             make(map[int]struct{}),
+		ResponsesChunksSeen:        make(map[int]struct{}),
+		TranscriptionChunksSeen:    make(map[int]struct{}),
+		AudioChunksSeen:            make(map[int]struct{}),
+		MaxChatChunkIndex:          -1,
+		MaxResponsesChunkIndex:     -1,
+		MaxTranscriptionChunkIndex: -1,
+		MaxAudioChunkIndex:         -1,
+		IsComplete:                 false,
+		Timestamp:                  now,
+		StartTimestamp:             now, // Set default StartTimestamp for proper TTFT/latency calculation
 	}
 	a.streamAccumulators.Store(requestID, sc)
 	return sc
@@ -148,8 +158,15 @@ func (a *Accumulator) addChatStreamChunk(requestID string, chunk *ChatStreamChun
 	if accumulator.FirstChunkTimestamp.IsZero() {
 		accumulator.FirstChunkTimestamp = chunk.Timestamp
 	}
-	// Add chunk to the list (chunks arrive in order)
-	accumulator.ChatStreamChunks = append(accumulator.ChatStreamChunks, chunk)
+	// De-dup check - only add if not seen (handles out-of-order arrival and multiple plugins)
+	if _, seen := accumulator.ChatChunksSeen[chunk.ChunkIndex]; !seen {
+		accumulator.ChatChunksSeen[chunk.ChunkIndex] = struct{}{}
+		accumulator.ChatStreamChunks = append(accumulator.ChatStreamChunks, chunk)
+		// Track max index for metadata extraction
+		if chunk.ChunkIndex > accumulator.MaxChatChunkIndex {
+			accumulator.MaxChatChunkIndex = chunk.ChunkIndex
+		}
+	}
 	// Check if this is the final chunk
 	// Set FinalTimestamp when either FinishReason is present or token usage exists
 	// This handles both normal completion chunks and usage-only last chunks
@@ -172,8 +189,14 @@ func (a *Accumulator) addTranscriptionStreamChunk(requestID string, chunk *Trans
 	if accumulator.FirstChunkTimestamp.IsZero() {
 		accumulator.FirstChunkTimestamp = chunk.Timestamp
 	}
-	// Add chunk to the list (chunks arrive in order)
-	accumulator.TranscriptionStreamChunks = append(accumulator.TranscriptionStreamChunks, chunk)
+	if _, seen := accumulator.TranscriptionChunksSeen[chunk.ChunkIndex]; !seen {
+		accumulator.TranscriptionChunksSeen[chunk.ChunkIndex] = struct{}{}
+		accumulator.TranscriptionStreamChunks = append(accumulator.TranscriptionStreamChunks, chunk)
+		// Track max index for metadata extraction
+		if chunk.ChunkIndex > accumulator.MaxTranscriptionChunkIndex {
+			accumulator.MaxTranscriptionChunkIndex = chunk.ChunkIndex
+		}
+	}
 	// Check if this is the final chunk
 	// Set FinalTimestamp when either FinishReason is present or token usage exists
 	// This handles both normal completion chunks and usage-only last chunks
@@ -196,8 +219,14 @@ func (a *Accumulator) addAudioStreamChunk(requestID string, chunk *AudioStreamCh
 	if accumulator.FirstChunkTimestamp.IsZero() {
 		accumulator.FirstChunkTimestamp = chunk.Timestamp
 	}
-	// Add chunk to the list (chunks arrive in order)
-	accumulator.AudioStreamChunks = append(accumulator.AudioStreamChunks, chunk)
+	if _, seen := accumulator.AudioChunksSeen[chunk.ChunkIndex]; !seen {
+		accumulator.AudioChunksSeen[chunk.ChunkIndex] = struct{}{}
+		accumulator.AudioStreamChunks = append(accumulator.AudioStreamChunks, chunk)
+		// Track max index for metadata extraction
+		if chunk.ChunkIndex > accumulator.MaxAudioChunkIndex {
+			accumulator.MaxAudioChunkIndex = chunk.ChunkIndex
+		}
+	}
 	// Check if this is the final chunk
 	// Set FinalTimestamp when either FinishReason is present or token usage exists
 	// This handles both normal completion chunks and usage-only last chunks
@@ -220,8 +249,14 @@ func (a *Accumulator) addResponsesStreamChunk(requestID string, chunk *Responses
 	if accumulator.FirstChunkTimestamp.IsZero() {
 		accumulator.FirstChunkTimestamp = chunk.Timestamp
 	}
-	// Add chunk to the list (chunks arrive in order)
-	accumulator.ResponsesStreamChunks = append(accumulator.ResponsesStreamChunks, chunk)
+	if _, seen := accumulator.ResponsesChunksSeen[chunk.ChunkIndex]; !seen {
+		accumulator.ResponsesChunksSeen[chunk.ChunkIndex] = struct{}{}
+		accumulator.ResponsesStreamChunks = append(accumulator.ResponsesStreamChunks, chunk)
+		// Track max index for metadata extraction
+		if chunk.ChunkIndex > accumulator.MaxResponsesChunkIndex {
+			accumulator.MaxResponsesChunkIndex = chunk.ChunkIndex
+		}
+	}
 	// Check if this is the final chunk
 	// Set FinalTimestamp when either FinishReason is present or token usage exists
 	// This handles both normal completion chunks and usage-only last chunks
