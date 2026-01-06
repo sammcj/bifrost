@@ -108,10 +108,75 @@ type StreamAccumulator struct {
 	ResponsesStreamChunks     []*ResponsesStreamChunk
 	TranscriptionStreamChunks []*TranscriptionStreamChunk
 	AudioStreamChunks         []*AudioStreamChunk
-	IsComplete                bool
-	FinalTimestamp            time.Time
-	mu                        sync.Mutex
-	Timestamp                 time.Time
+
+	// De-dup maps to prevent chunk loss on out-of-order arrival
+	ChatChunksSeen          map[int]struct{}
+	ResponsesChunksSeen     map[int]struct{}
+	TranscriptionChunksSeen map[int]struct{}
+	AudioChunksSeen         map[int]struct{}
+
+	// Track highest ChunkIndex for metadata extraction (TokenUsage, Cost, FinishReason)
+	MaxChatChunkIndex          int
+	MaxResponsesChunkIndex     int
+	MaxTranscriptionChunkIndex int
+	MaxAudioChunkIndex         int
+
+	IsComplete     bool
+	FinalTimestamp time.Time
+	mu             sync.Mutex
+	Timestamp      time.Time
+}
+
+// getLastChatChunk returns the chunk with the highest ChunkIndex (contains metadata like TokenUsage, Cost)
+func (sa *StreamAccumulator) getLastChatChunk() *ChatStreamChunk {
+	if sa.MaxChatChunkIndex < 0 {
+		return nil
+	}
+	for _, chunk := range sa.ChatStreamChunks {
+		if chunk.ChunkIndex == sa.MaxChatChunkIndex {
+			return chunk
+		}
+	}
+	return nil
+}
+
+// getLastResponsesChunk returns the chunk with the highest ChunkIndex (contains metadata like TokenUsage, Cost)
+func (sa *StreamAccumulator) getLastResponsesChunk() *ResponsesStreamChunk {
+	if sa.MaxResponsesChunkIndex < 0 {
+		return nil
+	}
+	for _, chunk := range sa.ResponsesStreamChunks {
+		if chunk.ChunkIndex == sa.MaxResponsesChunkIndex {
+			return chunk
+		}
+	}
+	return nil
+}
+
+// getLastTranscriptionChunk returns the chunk with the highest ChunkIndex (contains metadata like TokenUsage, Cost)
+func (sa *StreamAccumulator) getLastTranscriptionChunk() *TranscriptionStreamChunk {
+	if sa.MaxTranscriptionChunkIndex < 0 {
+		return nil
+	}
+	for _, chunk := range sa.TranscriptionStreamChunks {
+		if chunk.ChunkIndex == sa.MaxTranscriptionChunkIndex {
+			return chunk
+		}
+	}
+	return nil
+}
+
+// getLastAudioChunk returns the chunk with the highest ChunkIndex (contains metadata like TokenUsage, Cost)
+func (sa *StreamAccumulator) getLastAudioChunk() *AudioStreamChunk {
+	if sa.MaxAudioChunkIndex < 0 {
+		return nil
+	}
+	for _, chunk := range sa.AudioStreamChunks {
+		if chunk.ChunkIndex == sa.MaxAudioChunkIndex {
+			return chunk
+		}
+	}
+	return nil
 }
 
 // ProcessedStreamResponse represents a processed streaming response

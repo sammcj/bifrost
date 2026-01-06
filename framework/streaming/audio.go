@@ -74,9 +74,8 @@ func (a *Accumulator) processAccumulatedAudioStreamingChunks(requestID string, b
 	data.EndTimestamp = accumulator.FinalTimestamp
 	data.AudioOutput = completeMessage
 	data.ErrorDetails = bifrostErr
-	// Update token usage from final chunk if available
-	if len(accumulator.AudioStreamChunks) > 0 {
-		lastChunk := accumulator.AudioStreamChunks[len(accumulator.AudioStreamChunks)-1]
+	// Update metadata from the chunk with highest index (contains TokenUsage, Cost, CacheDebug)
+	if lastChunk := accumulator.getLastAudioChunk(); lastChunk != nil {
 		if lastChunk.TokenUsage != nil {
 			data.TokenUsage = &schemas.BifrostLLMUsage{
 				PromptTokens:     lastChunk.TokenUsage.InputTokens,
@@ -84,17 +83,9 @@ func (a *Accumulator) processAccumulatedAudioStreamingChunks(requestID string, b
 				TotalTokens:      lastChunk.TokenUsage.TotalTokens,
 			}
 		}
-	}
-	// Update cost from final chunk if available
-	if len(accumulator.AudioStreamChunks) > 0 {
-		lastChunk := accumulator.AudioStreamChunks[len(accumulator.AudioStreamChunks)-1]
 		if lastChunk.Cost != nil {
 			data.Cost = lastChunk.Cost
 		}
-	}
-	// Update semantic cache debug from final chunk if available
-	if len(accumulator.AudioStreamChunks) > 0 {
-		lastChunk := accumulator.AudioStreamChunks[len(accumulator.AudioStreamChunks)-1]
 		if lastChunk.SemanticCacheDebug != nil {
 			data.CacheDebug = lastChunk.SemanticCacheDebug
 		}

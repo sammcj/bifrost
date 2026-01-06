@@ -81,9 +81,8 @@ func (a *Accumulator) processAccumulatedTranscriptionStreamingChunks(requestID s
 	data.EndTimestamp = accumulator.FinalTimestamp
 	data.TranscriptionOutput = completeMessage
 	data.ErrorDetails = bifrostErr
-	// Update token usage from final chunk if available
-	if len(accumulator.TranscriptionStreamChunks) > 0 {
-		lastChunk := accumulator.TranscriptionStreamChunks[len(accumulator.TranscriptionStreamChunks)-1]
+	// Update metadata from the chunk with highest index (contains TokenUsage, Cost, CacheDebug)
+	if lastChunk := accumulator.getLastTranscriptionChunk(); lastChunk != nil {
 		if lastChunk.TokenUsage != nil {
 			data.TokenUsage = &schemas.BifrostLLMUsage{}
 			if lastChunk.TokenUsage.InputTokens != nil {
@@ -96,17 +95,9 @@ func (a *Accumulator) processAccumulatedTranscriptionStreamingChunks(requestID s
 				data.TokenUsage.TotalTokens = *lastChunk.TokenUsage.TotalTokens
 			}
 		}
-	}
-	// Update cost from final chunk if available
-	if len(accumulator.TranscriptionStreamChunks) > 0 {
-		lastChunk := accumulator.TranscriptionStreamChunks[len(accumulator.TranscriptionStreamChunks)-1]
 		if lastChunk.Cost != nil {
 			data.Cost = lastChunk.Cost
 		}
-	}
-	// Update semantic cache debug from final chunk if available
-	if len(accumulator.TranscriptionStreamChunks) > 0 {
-		lastChunk := accumulator.TranscriptionStreamChunks[len(accumulator.TranscriptionStreamChunks)-1]
 		if lastChunk.SemanticCacheDebug != nil {
 			data.CacheDebug = lastChunk.SemanticCacheDebug
 		}
