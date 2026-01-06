@@ -106,13 +106,13 @@ type BifrostHTTPServer struct {
 	Client *bifrost.Bifrost
 	Config *lib.Config
 
-	OSSToEnterprisePluginNameOverrides map[string]string
-	Server                             *fasthttp.Server
-	Router                             *router.Router
-	WebSocketHandler                   *handlers.WebSocketHandler
-	LogsCleaner                        *logstore.LogsCleaner
-	MCPServerHandler                   *handlers.MCPServerHandler
-	devPprofHandler                    *handlers.DevPprofHandler
+	Server           *fasthttp.Server
+	Router           *router.Router
+	WebSocketHandler *handlers.WebSocketHandler
+	LogsCleaner      *logstore.LogsCleaner
+	MCPServerHandler *handlers.MCPServerHandler
+	devPprofHandler  *handlers.DevPprofHandler
+	AuthMiddleware   *handlers.AuthMiddleware
 }
 
 var logger schemas.Logger
@@ -697,18 +697,35 @@ func (s *BifrostHTTPServer) ReloadClientConfigFromConfigStore(ctx context.Contex
 	return nil
 }
 
-// UpdateAuthConfig updates auth config
+// UpdateAuthConfig updates auth config in the config store and updates the AuthMiddleware's in-memory config
 func (s *BifrostHTTPServer) UpdateAuthConfig(ctx context.Context, authConfig *configstore.AuthConfig) error {
 	if authConfig == nil {
-		return fmt.Errorf("config store not found")
+		return fmt.Errorf("auth config is nil")
 	}
 	if s.Config == nil || s.Config.ConfigStore == nil {
 		return fmt.Errorf("config store not found")
 	}
-	if authConfig.AdminUserName == "" || authConfig.AdminPassword == "" {
-		return fmt.Errorf("username and password are required")
+	// Allow disabling auth without credentials, but require them when enabling
+	if authConfig.IsEnabled && (authConfig.AdminUserName == "" || authConfig.AdminPassword == "") {
+		return fmt.Errorf("username and password are required when auth is enabled")
 	}
-	return s.Config.ConfigStore.UpdateAuthConfig(ctx, authConfig)
+	// Update the config store
+	if err := s.Config.ConfigStore.UpdateAuthConfig(ctx, authConfig); err != nil {
+		return err
+	}
+	// Update the AuthMiddleware's in-memory config
+	if s.AuthMiddleware != nil {
+		// Fetch the updated config from the store to ensure we have the latest
+		updatedAuthConfig, err := s.Config.ConfigStore.GetAuthConfig(ctx)
+		if err != nil {
+			logger.Warn("failed to get auth config from store after update: %v", err)
+			// Still update with what we have
+			s.AuthMiddleware.UpdateAuthConfig(authConfig)
+		} else {
+			s.AuthMiddleware.UpdateAuthConfig(updatedAuthConfig)
+		}
+	}
+	return nil
 }
 
 // UpdateDropExcessRequests updates excess requests config
@@ -1258,18 +1275,12 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	commonMiddlewares := s.PrepareCommonMiddlewares()
 	apiMiddlewares := commonMiddlewares
 	inferenceMiddlewares := commonMiddlewares
-	var authConfig *configstore.AuthConfig
-	if s.Config.ConfigStore != nil {
-		authConfig, err = s.Config.ConfigStore.GetAuthConfig(ctx)
-		if err != nil {
-			logger.Error("failed to get auth config: %v", err)
-			return fmt.Errorf("failed to get auth config: %v", err)
-		}
-	} else if s.Config.GovernanceConfig != nil && s.Config.GovernanceConfig.AuthConfig != nil {
-		authConfig = s.Config.GovernanceConfig.AuthConfig
+	s.AuthMiddleware, err = handlers.InitAuthMiddleware(s.Config.ConfigStore)
+	if err != nil {
+		return fmt.Errorf("failed to initialize auth middleware: %v", err)
 	}
-	if ctx.Value("isEnterprise") == nil && authConfig != nil && authConfig.IsEnabled {
-		apiMiddlewares = append(apiMiddlewares, handlers.AuthMiddleware(s.Config.ConfigStore))
+	if ctx.Value("isEnterprise") == nil {
+		apiMiddlewares = append(apiMiddlewares, s.AuthMiddleware.Middleware())
 	}
 	// Register routes
 	err = s.RegisterAPIRoutes(s.ctx, s, apiMiddlewares...)
@@ -1277,8 +1288,8 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize routes: %v", err)
 	}
 	// Registering inference routes
-	if ctx.Value("isEnterprise") == nil && authConfig != nil && authConfig.IsEnabled && !authConfig.DisableAuthOnInference {
-		inferenceMiddlewares = append(inferenceMiddlewares, handlers.AuthMiddleware(s.Config.ConfigStore))
+	if ctx.Value("isEnterprise") == nil {
+		inferenceMiddlewares = append(inferenceMiddlewares, s.AuthMiddleware.Middleware())
 	}
 	// Registering inference middlewares
 	inferenceMiddlewares = append([]schemas.BifrostHTTPMiddleware{handlers.TransportInterceptorMiddleware(s.Config)}, inferenceMiddlewares...)

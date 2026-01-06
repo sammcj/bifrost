@@ -54,7 +54,7 @@ It is a modern, open-source chat client that supports multiple providers.
 
 ### [Claude Code](https://www.claude.com/product/claude-code)
 
-It brings Sonnet 4.5 directly to your terminal with powerful coding capabilities.
+It brings AI-powered coding capabilities directly to your terminal.
 
 **Setup:**
 
@@ -78,6 +78,99 @@ Now all Claude Code traffic flows through Bifrost, giving you access to any prov
 
 <Note>
 This setup automatically detects if you're using Anthropic MAX account instead of a regular API key authentication :)
+</Note>
+
+#### Model Configuration
+
+Claude Code uses three model tiers: **Sonnet** (default), **Opus** (complex tasks), and **Haiku** (fast, lightweight). With Bifrost, you can override these defaults to use any model from any provider.
+
+**Override Default Models:**
+
+Set environment variables to replace Claude Code's default model tiers with any Bifrost-configured model:
+
+```bash
+# Replace Sonnet tier with GPT-5
+export ANTHROPIC_DEFAULT_SONNET_MODEL="openai/gpt-5"
+
+# Replace Opus tier with Claude Opus 4.5
+export ANTHROPIC_DEFAULT_OPUS_MODEL="anthropic/claude-opus-4-5-20251101"
+
+# Replace Haiku tier with Azure-hosted Claude
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="azure/claude-haiku-4-5"
+```
+
+<Warning>
+Alternative models must support **tool use capabilities** for file operations, terminal commands, and code editing to work properly with Claude Code.
+</Warning>
+
+**Start with a Specific Model:**
+
+Launch Claude Code with a specific model using the `--model` flag:
+
+```bash
+# Start with Opus
+claude --model claude-opus-4-5-20251101
+
+# Start with Haiku for lightweight tasks
+claude --model claude-haiku-4-5-20251001
+```
+
+#### Switching Models Mid-Session
+
+Use the `/model` command to switch models during an active session:
+
+```bash
+# Using shorthand
+/model opus
+/model sonnet
+/model haiku
+
+# Using full model names
+/model claude-opus-4-5-20251101
+/model claude-sonnet-4-5-20250929
+
+# Using different providers dynamically via Bifrost
+/model vertex/claude-haiku-4-5
+/model azure/claude-sonnet-4-5
+/model bedrock/claude-sonnet-4-5
+```
+
+<Tip>
+Run `/model` without arguments to check your current model. The switch is instantaneous and Claude Code seamlessly continues your conversation context with the new model.
+</Tip>
+
+<Warning>
+If you use Claude-specific features like **web search**, **computer use**, or **citations**, ensure the model you switch to also supports these capabilities. Non-Claude models or Claude models on certain providers may not support all features.
+</Warning>
+
+#### Model Selection Guide
+
+| Model | Best For | Cost |
+|-------|----------|------|
+| **Sonnet 4.5** | Daily development, general coding tasks | Medium |
+| **Opus 4.5** | Complex reasoning, architectural decisions, state-of-the-art engineering | High |
+| **Haiku 4.5** | Lightweight agents, high-frequency tasks, quick iterations | Low |
+
+#### Example: Full Bifrost Setup
+
+Here's a complete setup using Bifrost with custom model overrides:
+
+```bash
+# Core Bifrost configuration
+export ANTHROPIC_API_KEY=your-bifrost-virtual-key
+export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic
+
+# Custom model tiers (optional)
+export ANTHROPIC_DEFAULT_SONNET_MODEL="anthropic/claude-sonnet-4-5-20250929"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="openai/gpt-5"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="azure/claude-haiku-4-5"
+
+# Start Claude Code
+claude
+```
+
+<Note>
+Add these exports to your `~/.bashrc` or `~/.zshrc` for persistent configuration across terminal sessions.
 </Note>
 
 ### [Codex CLI](https://developers.openai.com/codex/cli/)

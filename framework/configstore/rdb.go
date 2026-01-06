@@ -331,7 +331,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 				if result.Error == nil {
 					// Found by name - update existing key, preserve original KeyID
 					dbKey.ID = existingKey.ID
-					dbKey.KeyID = existingKey.KeyID       // Preserve original KeyID
+					dbKey.KeyID = existingKey.KeyID // Preserve original KeyID
 					dbKey.ProviderID = existingKey.ProviderID
 					dbKey.Enabled = existingKey.Enabled
 					if err := txDB.WithContext(ctx).Save(&dbKey).Error; err != nil {
@@ -2348,6 +2348,11 @@ func (s *RDBConfigStore) CreateSession(ctx context.Context, session *tables.Sess
 // DeleteSession deletes a session from the database.
 func (s *RDBConfigStore) DeleteSession(ctx context.Context, token string) error {
 	return s.db.WithContext(ctx).Delete(&tables.SessionsTable{}, "token = ?", token).Error
+}
+
+// FlushSessions flushes all sessions from the database.
+func (s *RDBConfigStore) FlushSessions(ctx context.Context) error {
+	return s.db.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&tables.SessionsTable{}).Error
 }
 
 // ExecuteTransaction executes a transaction.

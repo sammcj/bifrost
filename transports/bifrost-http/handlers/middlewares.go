@@ -81,23 +81,40 @@ func validateSession(_ *fasthttp.RequestCtx, store configstore.ConfigStore, toke
 	return true
 }
 
-// AuthMiddleware if authConfig is set, it will verify the auth cookie in the header
-// This uses basic auth style username + password based authentication
-// No session tracking is used, so this is not suitable for production environments
-// These basicauth routes are only used for the dashboard and API routes
-func AuthMiddleware(store configstore.ConfigStore) schemas.BifrostHTTPMiddleware {
+type AuthMiddleware struct {
+	store      configstore.ConfigStore
+	authConfig atomic.Pointer[configstore.AuthConfig]
+}
+
+func InitAuthMiddleware(store configstore.ConfigStore) (*AuthMiddleware, error) {
 	if store == nil {
-		logger.Info("auth middleware is disabled because store is not present")
-		return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
-			return next
-		}
+		return nil, fmt.Errorf("store is not present")
 	}
 	authConfig, err := store.GetAuthConfig(context.Background())
-	if err != nil || authConfig == nil || !authConfig.IsEnabled {
-		return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
-			return next
-		}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get auth config from store: %v", err)
 	}
+	am := &AuthMiddleware{
+		store:      store,
+		authConfig: atomic.Pointer[configstore.AuthConfig]{},
+	}
+	am.authConfig.Store(authConfig)
+	return am, nil
+}
+
+func (m *AuthMiddleware) UpdateAuthConfig(authConfig *configstore.AuthConfig) {
+	m.authConfig.Store(authConfig)
+}
+
+// AuthMiddleware if authConfig is set, it will verify authentication based on the request type.
+// Three authentication methods are supported:
+//   - Basic auth: Uses username + password validation (no session tracking). Used for inference API calls.
+//   - Bearer token: Uses session validation via validateSession(). Used for dashboard calls.
+//   - WebSocket: Uses session validation via validateSession() with token from query parameters.
+//
+// Basic auth may be acceptable for limited use cases, while Bearer and WebSocket flows provide
+// session-based authentication suitable for production environments.
+func (m *AuthMiddleware) Middleware() schemas.BifrostHTTPMiddleware {
 	whitelistedRoutes := []string{
 		"/api/session/is-auth-enabled",
 		"/api/session/login",
@@ -106,6 +123,12 @@ func AuthMiddleware(store configstore.ConfigStore) schemas.BifrostHTTPMiddleware
 	}
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
+			authConfig := m.authConfig.Load()
+			if authConfig == nil || !authConfig.IsEnabled {
+				logger.Debug("auth middleware is disabled because auth config is not present or not enabled")
+				next(ctx)
+				return
+			}
 			// We skip authorization for the login route
 			if slices.Contains(whitelistedRoutes, string(ctx.Request.URI().RequestURI())) {
 				next(ctx)
@@ -123,7 +146,7 @@ func AuthMiddleware(store configstore.ConfigStore) schemas.BifrostHTTPMiddleware
 						return
 					}
 					// Verify the session
-					if !validateSession(ctx, store, token) {
+					if !validateSession(ctx, m.store, token) {
 						SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
 						return
 					}
@@ -175,7 +198,7 @@ func AuthMiddleware(store configstore.ConfigStore) schemas.BifrostHTTPMiddleware
 			// Checking bearer auth for dashboard calls
 			if scheme == "Bearer" {
 				// Verify the session
-				if !validateSession(ctx, store, token) {
+				if !validateSession(ctx, m.store, token) {
 					SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
 					return
 				}

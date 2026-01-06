@@ -13,6 +13,10 @@ This feature is only available on `v1.4.0-prerelease1` and above. Please check t
 
 **Agent Mode** enables Bifrost to automatically execute tool calls without requiring explicit execution API calls for each tool. This transforms Bifrost from a simple gateway into an autonomous agent runtime.
 
+<Warning>
+**Streaming Not Supported**: Agent Mode is not compatible with streaming operations (`chat_stream` and `responses_stream`). Due to architectural limitations, the autonomous tool execution loop requires complete responses before proceeding to the next iteration (we cannot store all streaming chunks in memory just "in case" we get any tool calls, this would be a big anti-pattern). Use non-streaming endpoints (`chat` and `responses`) when Agent Mode is enabled.
+</Warning>
+
 When Agent Mode is enabled:
 1. LLM returns tool calls in its response
 2. Bifrost automatically executes **auto-executable** tools
