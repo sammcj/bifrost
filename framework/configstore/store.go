@@ -132,6 +132,7 @@ type ConfigStore interface {
 	GetSession(ctx context.Context, token string) (*tables.SessionsTable, error)
 	CreateSession(ctx context.Context, session *tables.SessionsTable) error
 	DeleteSession(ctx context.Context, token string) error
+	FlushSessions(ctx context.Context) error
 
 	// Model pricing CRUD
 	GetModelPrices(ctx context.Context) ([]tables.TableModelPricing, error)

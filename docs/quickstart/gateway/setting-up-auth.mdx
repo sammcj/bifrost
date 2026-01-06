@@ -45,7 +45,7 @@ This option is useful if you want to protect your dashboard and admin functions 
 ### Step 4: Save Changes
 
 1. Click **Save Changes** to apply your authentication settings
-2. You may need to **restart Bifrost** for the changes to take effect (a warning will be displayed if a restart is required)
+2. Changes take effect immediately - no restart required
 
 ## Logging In
 
@@ -90,7 +90,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ## Important Notes
 
-- **Restart Required**: After enabling or changing authentication settings, you may need to restart Bifrost for changes to take effect
+- **No Restart Required**: Authentication changes take effect immediately without requiring a server restart
 - **Session Duration**: Login sessions last for 30 days
 - **Password Security**: Passwords are hashed and stored securely in the database
 - **Inference Calls**: If you disable authentication on inference calls, only dashboard and admin API endpoints will be protected
@@ -102,6 +102,5 @@ To disable authentication:
 1. Navigate to **Workspace** → **Config** → **Security**
 2. Toggle off the **Password protect the dashboard** switch
 3. Click **Save Changes**
-4. Restart Bifrost if prompted
 
-After disabling, the dashboard will be accessible without authentication.
+After disabling, the dashboard will be accessible without authentication immediately.

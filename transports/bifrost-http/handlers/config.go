@@ -413,7 +413,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 			}
 		}
 
-		// Check if auth config has changed (for restart required flag)
+		// Check if auth config has changed
 		authChanged := false
 		if authConfig == nil {
 			// No existing config, any enabled state is a change
@@ -424,13 +424,9 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 			// Compare with existing config
 			if payload.AuthConfig.IsEnabled != authConfig.IsEnabled ||
 				payload.AuthConfig.AdminUserName != authConfig.AdminUserName ||
-				payload.AuthConfig.DisableAuthOnInference != authConfig.DisableAuthOnInference ||
 				(payload.AuthConfig.AdminPassword != "<redacted>" && payload.AuthConfig.AdminPassword != "") {
 				authChanged = true
 			}
-		}
-		if authChanged {
-			restartReasons = append(restartReasons, "Authentication")
 		}
 
 		if payload.AuthConfig.IsEnabled {
@@ -459,10 +455,21 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 					payload.AuthConfig.AdminPassword = string(hashedPassword)
 				}
 			}
-		}
-		// Get auth config from store
-		authConfig, _ = h.store.ConfigStore.GetAuthConfig(ctx)
-		if authConfig != nil {
+			// Save auth config - this handles both first-time creation and updates
+			err = h.configManager.UpdateAuthConfig(ctx, payload.AuthConfig)
+			if err != nil {
+				logger.Warn(fmt.Sprintf("failed to update auth config: %v", err))
+				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update auth config: %v", err))
+				return
+			}
+		} else if authConfig != nil {
+			// Auth is being disabled but there's an existing config - preserve credentials and update disabled state
+			if payload.AuthConfig.AdminPassword == "<redacted>" || payload.AuthConfig.AdminPassword == "" {
+				payload.AuthConfig.AdminPassword = authConfig.AdminPassword
+			}
+			if payload.AuthConfig.AdminUserName == "" {
+				payload.AuthConfig.AdminUserName = authConfig.AdminUserName
+			}
 			err = h.configManager.UpdateAuthConfig(ctx, payload.AuthConfig)
 			if err != nil {
 				logger.Warn(fmt.Sprintf("failed to update auth config: %v", err))
@@ -470,6 +477,16 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 				return
 			}
 		}
+
+		// Flush all existing sessions if auth details have been changed
+		if authChanged {
+			if err := h.store.ConfigStore.FlushSessions(ctx); err != nil {
+				logger.Warn(fmt.Sprintf("updated auth config but failed to flush existing sessions, please restart the server: %v", err))
+				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("updated auth config but failed to flush existing sessions, please restart the server: %v", err))
+				return
+			}
+		}
+		// Note: AuthMiddleware is updated via ServerCallbacks.UpdateAuthConfig (handled by BifrostHTTPServer)
 	}
 
 	// Set restart required flag if any restart-requiring configs changed
