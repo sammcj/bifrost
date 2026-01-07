@@ -140,19 +140,18 @@ cd ..
 
 # Run integration tests with different configurations
 echo "🧪 Running integration tests with different configurations..."
-# CONFIGS_TO_TEST=(
-#   "default"
-#   "emptystate"
-#   "noconfigstorenologstore"
-#   "witconfigstorelogstorepostgres"
-#   "withconfigstore"
-#   "withconfigstorelogsstorepostgres"
-#   "withconfigstorelogsstoresqlite"
-#   "withdynamicplugin"
-#   "withobservability"
-#   "withsemanticcache"
-# )
-CONFIGS_TO_TEST=()
+CONFIGS_TO_TEST=(
+  "default"
+  "emptystate"
+  "noconfigstorenologstore"
+  "witconfigstorelogstorepostgres"
+  "withconfigstore"
+  "withconfigstorelogsstorepostgres"
+  "withconfigstorelogsstoresqlite"
+  "withdynamicplugin"
+  "withobservability"
+  "withsemanticcache"
+)
 
 TEST_BINARY="../tmp/bifrost-http"
 CONFIGS_DIR="../.github/workflows/configs"
@@ -238,7 +237,7 @@ for config in "${CONFIGS_TO_TEST[@]}"; do
   SERVER_LOG=$(mktemp)
   
   # Start the server in background with a timeout, logging to file and console
-  timeout 180s $TEST_BINARY --app-dir "$config_path" --port 18080 --log-level debug 2>&1 | tee "$SERVER_LOG" &
+  timeout 120s $TEST_BINARY --app-dir "$config_path" --port 18080 --log-level debug 2>&1 | tee "$SERVER_LOG" &
   SERVER_PID=$!
   
   # Wait for server to be ready by looking for the startup message

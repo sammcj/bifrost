@@ -354,7 +354,6 @@ func (plugin *Plugin) HTTPTransportIntercept(ctx *schemas.BifrostContext, req *s
 //   - error: Any error that occurred during cache lookup
 func (plugin *Plugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
 	provider, model, _ := req.GetRequestFields()
-
 	// Get the cache key from the context
 	var cacheKey string
 	var ok bool

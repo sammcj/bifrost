@@ -1289,7 +1289,7 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 			return fmt.Errorf("failed to initialize auth middleware: %v", err)
 		}
 		if ctx.Value("isEnterprise") == nil {
-			apiMiddlewares = append(apiMiddlewares, s.AuthMiddleware.Middleware())
+			apiMiddlewares = append(apiMiddlewares, s.AuthMiddleware.APIMiddleware())
 		}
 	}
 	// Register routes
@@ -1299,7 +1299,7 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	}
 	// Registering inference routes
 	if ctx.Value("isEnterprise") == nil && s.AuthMiddleware != nil {
-		inferenceMiddlewares = append(inferenceMiddlewares, s.AuthMiddleware.Middleware())
+		inferenceMiddlewares = append(inferenceMiddlewares, s.AuthMiddleware.InferenceMiddleware())
 	}
 	// Registering inference middlewares
 	inferenceMiddlewares = append([]schemas.BifrostHTTPMiddleware{handlers.TransportInterceptorMiddleware(s.Config)}, inferenceMiddlewares...)

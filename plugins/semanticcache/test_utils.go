@@ -335,6 +335,7 @@ func NewTestSetup(t *testing.T) *TestSetup {
 	return NewTestSetupWithConfig(t, &Config{
 		Provider:          schemas.OpenAI,
 		EmbeddingModel:    "text-embedding-3-small",
+		Dimension:         1536,
 		Threshold:         0.8,
 		CleanUpOnShutdown: true,
 		Keys: []schemas.Key{
@@ -571,6 +572,7 @@ func CreateTestSetupWithConversationThreshold(t *testing.T, threshold int) *Test
 	config := &Config{
 		Provider:                     schemas.OpenAI,
 		EmbeddingModel:               "text-embedding-3-small",
+		Dimension:                    1536,
 		CleanUpOnShutdown:            true,
 		Threshold:                    0.8,
 		ConversationHistoryThreshold: threshold,
@@ -591,6 +593,7 @@ func CreateTestSetupWithExcludeSystemPrompt(t *testing.T, excludeSystem bool) *T
 	config := &Config{
 		Provider:            schemas.OpenAI,
 		EmbeddingModel:      "text-embedding-3-small",
+		Dimension:           1536,
 		CleanUpOnShutdown:   true,
 		Threshold:           0.8,
 		ExcludeSystemPrompt: &excludeSystem,
@@ -611,6 +614,7 @@ func CreateTestSetupWithThresholdAndExcludeSystem(t *testing.T, threshold int, e
 	config := &Config{
 		Provider:                     schemas.OpenAI,
 		EmbeddingModel:               "text-embedding-3-small",
+		Dimension:                    1536,
 		CleanUpOnShutdown:            true,
 		Threshold:                    0.8,
 		ConversationHistoryThreshold: threshold,
