@@ -177,7 +177,14 @@
             "pages": [
               "plugins/getting-started",
               "plugins/building-dynamic-binary",
-              "plugins/writing-plugin",
+              {
+                "group": "Writing Plugins",
+                "icon": "code",
+                "pages": [
+                  "plugins/writing-go-plugin",
+                  "plugins/writing-wasm-plugin"
+                ]
+              },
               "plugins/migration-guide"
             ]
           },
@@ -354,7 +361,6 @@
           "changelogs/v1.4.0-prerelease5",
           "changelogs/v1.4.0-prerelease4",
           "changelogs/v1.4.0-prerelease3",
-          "changelogs/v1.3.61",
           "changelogs/v1.3.60",
           "changelogs/v1.3.59",
           "changelogs/v1.3.58",
@@ -460,6 +466,10 @@
     {
       "source": "/providers/huggingface",
       "destination": "/providers/supported-providers/huggingface"
+    },
+    {
+      "source": "/plugins/writing-plugin",
+      "destination": "/plugins/writing-go-plugin"
     }
   ],
   "footer": {

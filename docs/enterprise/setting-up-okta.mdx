@@ -71,9 +71,21 @@ Configure the following settings for your application:
 
 ---
 
-## Step 3: Configure Authorization Server
+## Step 3: Configure Authorization Server (optional)
 
-Bifrost uses Okta's Authorization Server to issue tokens. You can use the default authorization server or create a custom one.
+<Note>
+The default authorization server (`/oauth2/default`) is available to all Okta plans and **supports custom claims**, including role claims. The API Access Management paid add-on is only required to create additional custom authorization servers beyond the default.
+</Note>
+
+Bifrost uses Okta's Authorization Server to issue tokens. You have three options:
+
+1. **Use `/oauth2/default` with role claims (recommended)** — Complete Steps 4-7 to configure custom role claims on the default authorization server. This enables automatic RBAC synchronization.
+
+2. **Use `/oauth2/default` without role claims** — Skip Steps 4-7. The first user to sign in automatically receives the Admin role and can manage RBAC for all subsequent users through the Bifrost dashboard.
+
+3. **Skip Step 3 entirely** — Authorization is not configured through Okta. You'll need an alternative authentication mechanism.
+
+### Configuring the Authorization Server
 
 1. Navigate to **Security** → **API**
 2. Click on **Authorization Servers**
@@ -224,6 +236,10 @@ Adjust the group filter expression based on your naming convention. The example 
 
 4. Click **Save and Go Back**
 
+<Note>
+Role claims are available only when you configure custom claims on your authorization server. Ensure you add role claims to your chosen authorization server (for example, `/oauth2/default`) to enable RBAC. If you skipped Steps 4-7, the first user to sign in automatically receives the **Admin** role and can manage RBAC for all subsequent users through the Bifrost dashboard.
+</Note>
+
 ---
 
 ## Step 8: Configure Bifrost
@@ -239,7 +255,7 @@ Now configure Bifrost to use Okta as the identity provider.
 | Field | Value |
 |-------|-------|
 | **Client ID** | Your Okta application Client ID |
-| **Issuer URL** | `https://your-domain.okta.com/oauth2/default` |
+| **Issuer URL** | Issuer URL |
 | **Audience** | Your API audience (e.g., `api://default` or custom) |
 | **Client Secret** | Your Okta application Client Secret (optional, for token revocation) |
 
