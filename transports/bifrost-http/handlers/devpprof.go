@@ -3,9 +3,12 @@ package handlers
 import (
 	"bytes"
 	"os"
+	"regexp"
 	"runtime"
 	"runtime/pprof"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -57,6 +60,34 @@ type AllocationInfo struct {
 	Line     int    `json:"line"`
 	Bytes    int64  `json:"bytes"`
 	Count    int64  `json:"count"`
+}
+
+// GoroutineGroup represents a group of goroutines with the same stack trace
+type GoroutineGroup struct {
+	Count       int      `json:"count"`
+	State       string   `json:"state"`
+	WaitReason  string   `json:"wait_reason,omitempty"`
+	WaitMinutes int      `json:"wait_minutes,omitempty"` // Parsed wait time in minutes
+	TopFunc     string   `json:"top_func"`
+	Stack       []string `json:"stack"`
+	Category    string   `json:"category"` // "background", "per-request", "unknown"
+}
+
+// GoroutineProfile represents the goroutine profile response
+type GoroutineProfile struct {
+	Timestamp       string           `json:"timestamp"`
+	TotalGoroutines int              `json:"total_goroutines"`
+	Groups          []GoroutineGroup `json:"groups"`
+	Summary         GoroutineSummary `json:"summary"`
+	RawProfile      string           `json:"raw_profile,omitempty"`
+}
+
+// GoroutineSummary provides a quick overview of goroutine health
+type GoroutineSummary struct {
+	Background       int `json:"background"`        // Expected long-running goroutines
+	PerRequest       int `json:"per_request"`       // Goroutines that should complete with requests
+	LongWaiting      int `json:"long_waiting"`      // Goroutines waiting > 1 minute (potential leaks)
+	PotentiallyStuck int `json:"potentially_stuck"` // Per-request goroutines waiting > 1 minute
 }
 
 // HistoryPoint represents a single point in the metrics history
@@ -337,6 +368,7 @@ func (h *DevPprofHandler) RegisterRoutes(r *router.Router, middlewares ...schema
 	h.collector.Start()
 
 	r.GET("/api/dev/pprof", lib.ChainMiddlewares(h.getPprof, middlewares...))
+	r.GET("/api/dev/pprof/goroutines", lib.ChainMiddlewares(h.getGoroutines, middlewares...))
 }
 
 // getPprof handles GET /api/dev/pprof
@@ -366,6 +398,257 @@ func (h *DevPprofHandler) getPprof(ctx *fasthttp.RequestCtx) {
 	}
 
 	SendJSON(ctx, data)
+}
+
+// getGoroutines handles GET /api/dev/pprof/goroutines
+// Returns goroutine stack traces grouped by stack signature
+func (h *DevPprofHandler) getGoroutines(ctx *fasthttp.RequestCtx) {
+	// Check if raw output is requested
+	includeRaw := string(ctx.QueryArgs().Peek("raw")) == "true"
+
+	// Get goroutine profile
+	var buf bytes.Buffer
+	if err := pprof.Lookup("goroutine").WriteTo(&buf, 2); err != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		SendJSON(ctx, map[string]string{"error": "failed to get goroutine profile"})
+		return
+	}
+
+	rawProfile := buf.String()
+	groups := parseGoroutineProfile(rawProfile)
+
+	// Calculate summary
+	summary := GoroutineSummary{}
+	for i := range groups {
+		categorizeGoroutine(&groups[i])
+
+		switch groups[i].Category {
+		case "background":
+			summary.Background += groups[i].Count
+		case "per-request":
+			summary.PerRequest += groups[i].Count
+		}
+
+		if groups[i].WaitMinutes >= 1 {
+			summary.LongWaiting += groups[i].Count
+			if groups[i].Category == "per-request" {
+				summary.PotentiallyStuck += groups[i].Count
+			}
+		}
+	}
+
+	// Sort: potentially stuck first, then by wait time, then by count
+	sort.Slice(groups, func(i, j int) bool {
+		// Potentially stuck (per-request + long wait) first
+		iStuck := groups[i].Category == "per-request" && groups[i].WaitMinutes >= 1
+		jStuck := groups[j].Category == "per-request" && groups[j].WaitMinutes >= 1
+		if iStuck != jStuck {
+			return iStuck
+		}
+		// Then by wait time
+		if groups[i].WaitMinutes != groups[j].WaitMinutes {
+			return groups[i].WaitMinutes > groups[j].WaitMinutes
+		}
+		// Then by count
+		return groups[i].Count > groups[j].Count
+	})
+
+	response := GoroutineProfile{
+		Timestamp:       time.Now().Format(time.RFC3339),
+		TotalGoroutines: runtime.NumGoroutine(),
+		Groups:          groups,
+		Summary:         summary,
+	}
+
+	if includeRaw {
+		response.RawProfile = rawProfile
+	}
+
+	SendJSON(ctx, response)
+}
+
+// categorizeGoroutine determines if a goroutine is a background worker or per-request
+func categorizeGoroutine(g *GoroutineGroup) {
+	// Parse wait time from wait reason (e.g., "5 minutes" -> 5)
+	g.WaitMinutes = parseWaitMinutes(g.WaitReason)
+
+	stackStr := strings.Join(g.Stack, " ")
+
+	// Background goroutines - expected to run forever
+	backgroundPatterns := []string{
+		"requestWorker",              // Provider queue workers
+		"collectLoop",                // Metrics collector
+		"cleanupWorker",              // Various cleanup workers
+		"startAccumulatorMapCleanup", // Stream accumulator cleanup
+		"cleanupOldTraces",           // Trace store cleanup
+		"startCleanup",               // Generic cleanup
+		"monitorLoop",                // Health monitor
+		"StartHeartbeat",             // WebSocket heartbeat
+		"time.Sleep",                 // Ticker-based workers
+		"runtime.gopark",             // Runtime parking (often tickers)
+		"sync.(*Cond).Wait",          // Condition variable waits
+		"net/http.(*persistConn)",    // HTTP connection pool
+		"internal/poll.runtime_pollWait", // Network polling
+	}
+
+	for _, pattern := range backgroundPatterns {
+		if strings.Contains(stackStr, pattern) {
+			g.Category = "background"
+			return
+		}
+	}
+
+	// Per-request goroutines - should complete when request ends
+	perRequestPatterns := []string{
+		"PreHook",
+		"PostHook",
+		"completeAndFlushTrace",
+		"ProcessAndSend",
+		"handleProvider",
+		"Inject",                // Observability plugin inject
+		"insertInitialLogEntry", // Logging
+		"updateLogEntry",        // Logging
+		"updateStreamingLogEntry",
+		"retryOnNotFound",
+		"BroadcastLogUpdate",
+	}
+
+	for _, pattern := range perRequestPatterns {
+		if strings.Contains(stackStr, pattern) {
+			g.Category = "per-request"
+			return
+		}
+	}
+
+	g.Category = "unknown"
+}
+
+// parseWaitMinutes extracts wait time in minutes from wait reason string
+func parseWaitMinutes(waitReason string) int {
+	if waitReason == "" {
+		return 0
+	}
+
+	// Match patterns like "5 minutes", "1 minute", "30 seconds", "2 hours"
+	minuteRegex := regexp.MustCompile(`(\d+)\s*minute`)
+	if matches := minuteRegex.FindStringSubmatch(waitReason); len(matches) >= 2 {
+		if mins, err := strconv.Atoi(matches[1]); err == nil {
+			return mins
+		}
+	}
+
+	hourRegex := regexp.MustCompile(`(\d+)\s*hour`)
+	if matches := hourRegex.FindStringSubmatch(waitReason); len(matches) >= 2 {
+		if hours, err := strconv.Atoi(matches[1]); err == nil {
+			return hours * 60
+		}
+	}
+
+	secondRegex := regexp.MustCompile(`(\d+)\s*second`)
+	if matches := secondRegex.FindStringSubmatch(waitReason); len(matches) >= 2 {
+		if secs, err := strconv.Atoi(matches[1]); err == nil {
+			return secs / 60 // Convert to minutes, will be 0 for < 60 seconds
+		}
+	}
+
+	return 0
+}
+
+// parseGoroutineProfile parses the text output of pprof goroutine profile
+// and groups goroutines by their stack trace
+func parseGoroutineProfile(profile string) []GoroutineGroup {
+	// Regex to match goroutine header: "goroutine N [state, wait reason]:"
+	// Examples:
+	//   goroutine 1 [running]:
+	//   goroutine 42 [select, 5 minutes]:
+	//   goroutine 100 [chan receive]:
+	headerRegex := regexp.MustCompile(`goroutine \d+ \[([^\]]+)\]:`)
+
+	// Split by "goroutine " to get individual goroutine blocks
+	blocks := strings.Split(profile, "goroutine ")
+
+	// Map to group goroutines by stack signature
+	groupMap := make(map[string]*GoroutineGroup)
+
+	for _, block := range blocks {
+		block = strings.TrimSpace(block)
+		if block == "" {
+			continue
+		}
+
+		// Re-add "goroutine " prefix for regex matching
+		fullBlock := "goroutine " + block
+
+		// Extract state from header
+		matches := headerRegex.FindStringSubmatch(fullBlock)
+		if len(matches) < 2 {
+			continue
+		}
+
+		stateInfo := matches[1]
+		state := stateInfo
+		waitReason := ""
+
+		// Parse state and wait reason (e.g., "select, 5 minutes" -> state="select", waitReason="5 minutes")
+		if idx := strings.Index(stateInfo, ","); idx != -1 {
+			state = strings.TrimSpace(stateInfo[:idx])
+			waitReason = strings.TrimSpace(stateInfo[idx+1:])
+		}
+
+		// Get stack trace (everything after the header line)
+		lines := strings.Split(block, "\n")
+		if len(lines) < 2 {
+			continue
+		}
+
+		// Extract stack frames (skip the header line which is lines[0])
+		var stackLines []string
+		var topFunc string
+		for i := 1; i < len(lines); i++ {
+			line := strings.TrimSpace(lines[i])
+			if line == "" {
+				continue
+			}
+			stackLines = append(stackLines, line)
+
+			// First function line (not a file:line) is the top function
+			if topFunc == "" && !strings.HasPrefix(line, "/") && !strings.Contains(line, ".go:") {
+				topFunc = line
+			}
+		}
+
+		if len(stackLines) == 0 {
+			continue
+		}
+
+		// Create a signature from the stack (top 10 frames for grouping)
+		maxFrames := 10
+		if len(stackLines) < maxFrames {
+			maxFrames = len(stackLines)
+		}
+		signature := state + "|" + strings.Join(stackLines[:maxFrames], "|")
+
+		// Group by signature
+		if existing, ok := groupMap[signature]; ok {
+			existing.Count++
+		} else {
+			groupMap[signature] = &GoroutineGroup{
+				Count:      1,
+				State:      state,
+				WaitReason: waitReason,
+				TopFunc:    topFunc,
+				Stack:      stackLines,
+			}
+		}
+	}
+
+	// Convert map to slice
+	groups := make([]GoroutineGroup, 0, len(groupMap))
+	for _, group := range groupMap {
+		groups = append(groups, *group)
+	}
+
+	return groups
 }
 
 // Cleanup stops the metrics collector

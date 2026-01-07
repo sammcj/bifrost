@@ -73,9 +73,10 @@ import (
 // Example Usage:
 //
 //	fastCtx := &fasthttp.RequestCtx{...}
-//	bifrostCtx, cancel := ConvertToBifrostContext(fastCtx, true)
+//	bifrostCtx, cancel := ConvertToBifrostContext(fastCtx, true, nil)
 //	defer cancel() // Ensure cleanup
-//	// bifrostCtx now contains any prometheus and maxim header values
+//	// bifrostCtx now contains propagated header values including Prometheus metrics,
+//	// Maxim tracing data, MCP filters, governance keys, API keys, cache settings, and extra headers
 
 func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool, headerFilterConfig *configstoreTables.GlobalHeaderFilterConfig) (*schemas.BifrostContext, context.CancelFunc) {
 	// Create cancellable context for all requests
