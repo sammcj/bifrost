@@ -1,9 +1,0 @@
-- feat: remove restart required for auth config changes
-- fix: resolved issue where new auth configs were not being created
-- ci: added workflow to auto-generate openapi.json documentation when openapi yaml files change
-- fix: tracer lifecycle management fixes
-- fix: stream accumulator deduplication fixes
-- fix: image url and input audio handling in gemini chat converters
-- fix: support both responseJsonSchema and responseSchema for JSON response formatting in gemini
-- fix: disable auth on inference routes not working correctly
-- fix: fixes Anthropic to Azure/OpenAI for input_text/output_text
