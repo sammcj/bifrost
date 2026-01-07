@@ -13,7 +13,7 @@ import (
 
 // TestResponsesNonCodeModeToolExecution tests direct tool execution via Responses API
 func TestResponsesNonCodeModeToolExecution(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -30,10 +30,11 @@ func TestResponsesNonCodeModeToolExecution(t *testing.T) {
 	require.NoError(t, err)
 
 	// Execute tool directly to verify it works
-	echoCall := createToolCall("echo", map[string]interface{}{
-		"message": "test message",
-	})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, echoCall)
+	echoCall := &schemas.ResponsesToolMessage{
+		Name: schemas.Ptr("echo"),
+		Arguments: schemas.Ptr("{\"message\": \"test message\"}"),
+	}
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, echoCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -44,7 +45,7 @@ func TestResponsesNonCodeModeToolExecution(t *testing.T) {
 
 // TestResponsesCodeModeToolExecution tests code mode tool execution via Responses API
 func TestResponsesCodeModeToolExecution(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -52,25 +53,36 @@ func TestResponsesCodeModeToolExecution(t *testing.T) {
 	// Tools are already registered in setupTestBifrostWithCodeMode
 
 	// Test executeToolCode directly to verify code mode works
-	toolCall := createToolCall("executeToolCode", map[string]interface{}{
-		"code": CodeFixtures.SimpleExpression,
-	})
+	toolCall := &schemas.ResponsesToolMessage{
+		Name: schemas.Ptr("executeToolCode"),
+		Arguments: schemas.Ptr("{\"code\": \"console.log('test');\"}"),
+	}
+	
 
-	result, bifrostErr := b.ExecuteMCPTool(ctx, toolCall)
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, toolCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
 	require.NotNil(t, result.Content.ContentStr)
-	assertExecutionResult(t, result, true, nil, "")
-	assertResultContains(t, result, "completed successfully")
+	assertResponsesExecutionResult(t, result, true, nil, "")
+	assertResponsesResultContains(t, result, "completed successfully")
 }
 
 // TestResponsesAgentModeWithAutoExecuteTools tests agent mode configuration with auto-executable tools
 func TestResponsesAgentModeWithAutoExecuteTools(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
-	b, err := setupTestBifrost(ctx)
+	b, err := setupTestBifrostWithMCPConfig(ctx, &schemas.MCPConfig{
+		ClientConfigs: []schemas.MCPClientConfig{},
+		ToolManagerConfig: &schemas.MCPToolManagerConfig{
+			MaxAgentDepth:        10,
+			ToolExecutionTimeout: 30 * time.Second,
+		},
+		FetchNewRequestIDFunc: func(ctx *schemas.BifrostContext) string {
+			return "test-request-id"
+		},
+	})
 	require.NoError(t, err)
 
 	err = registerTestTools(b)
@@ -101,10 +113,11 @@ func TestResponsesAgentModeWithAutoExecuteTools(t *testing.T) {
 	assert.False(t, canAutoExecuteTool("multiply", bifrostClient.Config), "multiply should not be auto-executable")
 
 	// Verify echo tool can be executed directly
-	echoCall := createToolCall("echo", map[string]interface{}{
-		"message": "test message",
-	})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, echoCall)
+	echoCall := &schemas.ResponsesToolMessage{
+		Name: schemas.Ptr("echo"),
+		Arguments: schemas.Ptr("{\"message\": \"test message\"}"),
+	}
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, echoCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -115,10 +128,19 @@ func TestResponsesAgentModeWithAutoExecuteTools(t *testing.T) {
 
 // TestResponsesAgentModeWithNonAutoExecuteTools tests agent mode configuration with non-auto-executable tools
 func TestResponsesAgentModeWithNonAutoExecuteTools(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
-	b, err := setupTestBifrost(ctx)
+	b, err := setupTestBifrostWithMCPConfig(ctx, &schemas.MCPConfig{
+		ClientConfigs: []schemas.MCPClientConfig{},
+		ToolManagerConfig: &schemas.MCPToolManagerConfig{
+			MaxAgentDepth:        10,
+			ToolExecutionTimeout: 30 * time.Second,
+		},
+		FetchNewRequestIDFunc: func(ctx *schemas.BifrostContext) string {
+			return "test-request-id"
+		},
+	})
 	require.NoError(t, err)
 
 	err = registerTestTools(b)
@@ -149,11 +171,11 @@ func TestResponsesAgentModeWithNonAutoExecuteTools(t *testing.T) {
 	assert.False(t, canAutoExecuteTool("multiply", bifrostClient.Config), "multiply should not be auto-executable")
 
 	// Verify multiply tool can still be executed directly (just not auto-executed)
-	multiplyCall := createToolCall("multiply", map[string]interface{}{
-		"a": float64(2),
-		"b": float64(3),
-	})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, multiplyCall)
+	multiplyCall := &schemas.ResponsesToolMessage{
+		Name: schemas.Ptr("multiply"),
+		Arguments: schemas.Ptr("{\"a\": 2, \"b\": 3}"),
+	}
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, multiplyCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -164,7 +186,7 @@ func TestResponsesAgentModeWithNonAutoExecuteTools(t *testing.T) {
 
 // TestResponsesAgentModeMaxDepth tests agent mode max depth configuration via Responses API
 func TestResponsesAgentModeMaxDepth(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	// Create Bifrost with max depth of 2
@@ -174,7 +196,7 @@ func TestResponsesAgentModeMaxDepth(t *testing.T) {
 			MaxAgentDepth:        2,
 			ToolExecutionTimeout: 30 * time.Second,
 		},
-		FetchNewRequestIDFunc: func(ctx context.Context) string {
+		FetchNewRequestIDFunc: func(ctx *schemas.BifrostContext) string {
 			return "test-request-id"
 		},
 	}
@@ -192,10 +214,11 @@ func TestResponsesAgentModeMaxDepth(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify tools still work with max depth configured
-	echoCall := createToolCall("echo", map[string]interface{}{
-		"message": "test",
-	})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, echoCall)
+	echoCall := &schemas.ResponsesToolMessage{
+		Name: schemas.Ptr("echo"),
+		Arguments: schemas.Ptr("{\"message\": \"test\"}"),
+	}
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, echoCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -206,7 +229,7 @@ func TestResponsesAgentModeMaxDepth(t *testing.T) {
 
 // TestResponsesToolExecutionTimeout tests tool execution timeout via Responses API
 func TestResponsesToolExecutionTimeout(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	// Create Bifrost with short timeout
@@ -216,7 +239,7 @@ func TestResponsesToolExecutionTimeout(t *testing.T) {
 			MaxAgentDepth:        10,
 			ToolExecutionTimeout: 100 * time.Millisecond, // Very short timeout
 		},
-		FetchNewRequestIDFunc: func(ctx context.Context) string {
+		FetchNewRequestIDFunc: func(ctx *schemas.BifrostContext) string {
 			return "test-request-id"
 		},
 	}
@@ -267,7 +290,7 @@ func TestResponsesToolExecutionTimeout(t *testing.T) {
 
 // TestResponsesMultipleToolCalls tests multiple tool calls via Responses API
 func TestResponsesMultipleToolCalls(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -284,10 +307,11 @@ func TestResponsesMultipleToolCalls(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test echo tool
-	echoCall := createToolCall("echo", map[string]interface{}{
-		"message": "test",
-	})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, echoCall)
+	echoCall := &schemas.ResponsesToolMessage{
+		Name: schemas.Ptr("echo"),
+		Arguments: schemas.Ptr("{\"message\": \"test\"}"),
+	}
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, echoCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -296,11 +320,11 @@ func TestResponsesMultipleToolCalls(t *testing.T) {
 	assert.Equal(t, "test", responseText, "Echo tool should return correct result")
 
 	// Test add tool
-	addCall := createToolCall("add", map[string]interface{}{
-		"a": float64(5),
-		"b": float64(3),
+	addCall := createResponsesToolCall("add", schemas.OrderedMap{
+		"a": schemas.Ptr(5),
+		"b": schemas.Ptr(3),
 	})
-	result, bifrostErr = b.ExecuteMCPTool(ctx, addCall)
+	result, bifrostErr = b.ExecuteResponsesMCPTool(ctx, addCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -311,7 +335,7 @@ func TestResponsesMultipleToolCalls(t *testing.T) {
 
 // TestResponsesCodeModeWithCodeExecution tests code mode with code execution via Responses API
 func TestResponsesCodeModeWithCodeExecution(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -319,21 +343,21 @@ func TestResponsesCodeModeWithCodeExecution(t *testing.T) {
 	// Tools are already registered in setupTestBifrostWithCodeMode
 
 	// Test code calling code mode client tools
-	toolCall := createToolCall("executeToolCode", map[string]interface{}{
+	toolCall := createResponsesToolCall("executeToolCode", schemas.OrderedMap{
 		"code": CodeFixtures.CodeCallingCodeModeTool,
 	})
 
-	result, bifrostErr := b.ExecuteMCPTool(ctx, toolCall)
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, toolCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result.Content)
 	require.NotNil(t, result.Content.ContentStr)
-	assertExecutionResult(t, result, true, nil, "")
-	assertResultContains(t, result, "test")
+	assertResponsesExecutionResult(t, result, true, nil, "")
+	assertResponsesResultContains(t, result, "test")
 }
 
 // TestResponsesToolFiltering tests tool filtering via Responses API
 func TestResponsesToolFiltering(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -351,10 +375,10 @@ func TestResponsesToolFiltering(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify allowed tools work
-	echoCall := createToolCall("echo", map[string]interface{}{
+	echoCall := createResponsesToolCall("echo", schemas.OrderedMap{
 		"message": "test",
 	})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, echoCall)
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, echoCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -362,11 +386,11 @@ func TestResponsesToolFiltering(t *testing.T) {
 	responseText := *result.Content.ContentStr
 	assert.Equal(t, "test", responseText, "Echo tool should work")
 
-	addCall := createToolCall("add", map[string]interface{}{
-		"a": float64(1),
-		"b": float64(2),
+	addCall := createResponsesToolCall("add", schemas.OrderedMap{
+		"a": schemas.Ptr(1),
+		"b": schemas.Ptr(2),
 	})
-	result, bifrostErr = b.ExecuteMCPTool(ctx, addCall)
+	result, bifrostErr = b.ExecuteResponsesMCPTool(ctx, addCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -375,18 +399,18 @@ func TestResponsesToolFiltering(t *testing.T) {
 	assert.Equal(t, "3", responseText, "Add tool should work")
 
 	// Verify multiply tool is NOT available (should fail)
-	multiplyCall := createToolCall("multiply", map[string]interface{}{
+	multiplyCall := createResponsesToolCall("multiply", schemas.OrderedMap{
 		"a": float64(2),
 		"b": float64(3),
 	})
-	result, bifrostErr = b.ExecuteMCPTool(ctx, multiplyCall)
+	result, bifrostErr = b.ExecuteResponsesMCPTool(ctx, multiplyCall)
 	// Should fail because multiply is not in ToolsToExecute
 	assert.NotNil(t, bifrostErr, "Multiply tool should fail when not in ToolsToExecute")
 }
 
 // TestResponsesComplexWorkflow tests a complex workflow via Responses API
 func TestResponsesComplexWorkflow(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -403,10 +427,10 @@ func TestResponsesComplexWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test echo tool
-	echoCall := createToolCall("echo", map[string]interface{}{
+	echoCall := createResponsesToolCall("echo", schemas.OrderedMap{
 		"message": "hello",
 	})
-	result, bifrostErr := b.ExecuteMCPTool(ctx, echoCall)
+	result, bifrostErr := b.ExecuteResponsesMCPTool(ctx, echoCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -415,11 +439,11 @@ func TestResponsesComplexWorkflow(t *testing.T) {
 	assert.Equal(t, "hello", responseText, "Echo tool should return correct result")
 
 	// Test add tool
-	addCall := createToolCall("add", map[string]interface{}{
-		"a": float64(5),
-		"b": float64(3),
+	addCall := createResponsesToolCall("add", schemas.OrderedMap{
+		"a": schemas.Ptr(5),
+		"b": schemas.Ptr(3),
 	})
-	result, bifrostErr = b.ExecuteMCPTool(ctx, addCall)
+	result, bifrostErr = b.ExecuteResponsesMCPTool(ctx, addCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
@@ -428,11 +452,11 @@ func TestResponsesComplexWorkflow(t *testing.T) {
 	assert.Equal(t, "8", responseText, "Add tool should return correct result")
 
 	// Test multiply tool with result from add
-	multiplyCall := createToolCall("multiply", map[string]interface{}{
-		"a": float64(8), // Result from add
-		"b": float64(2),
+	multiplyCall := createResponsesToolCall("multiply", schemas.OrderedMap{
+		"a": schemas.Ptr(8), // Result from add
+		"b": schemas.Ptr(2),
 	})
-	result, bifrostErr = b.ExecuteMCPTool(ctx, multiplyCall)
+	result, bifrostErr = b.ExecuteResponsesMCPTool(ctx, multiplyCall)
 	requireNoBifrostError(t, bifrostErr)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)

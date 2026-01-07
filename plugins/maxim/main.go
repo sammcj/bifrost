@@ -248,25 +248,25 @@ func (plugin *Plugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostR
 
 	// Check if context already has traceID and generationID
 	if ctx != nil {
-		if existingGenerationID, ok := (*ctx).Value(GenerationIDKey).(string); ok && existingGenerationID != "" {
+		if existingGenerationID, ok := ctx.Value(GenerationIDKey).(string); ok && existingGenerationID != "" {
 			// If generationID exists, return early
 			return req, nil, nil
 		}
 
-		if existingTraceID, ok := (*ctx).Value(TraceIDKey).(string); ok && existingTraceID != "" {
+		if existingTraceID, ok := ctx.Value(TraceIDKey).(string); ok && existingTraceID != "" {
 			// If traceID exists, and no generationID, create a new generation on the trace
 			traceID = existingTraceID
 		}
 
-		if existingSessionID, ok := (*ctx).Value(SessionIDKey).(string); ok && existingSessionID != "" {
+		if existingSessionID, ok := ctx.Value(SessionIDKey).(string); ok && existingSessionID != "" {
 			sessionID = existingSessionID
 		}
 
-		if existingTraceName, ok := (*ctx).Value(TraceNameKey).(string); ok && existingTraceName != "" {
+		if existingTraceName, ok := ctx.Value(TraceNameKey).(string); ok && existingTraceName != "" {
 			traceName = existingTraceName
 		}
 
-		if existingGenerationName, ok := (*ctx).Value(GenerationNameKey).(string); ok && existingGenerationName != "" {
+		if existingGenerationName, ok := ctx.Value(GenerationNameKey).(string); ok && existingGenerationName != "" {
 			generationName = existingGenerationName
 		}
 	}
@@ -507,7 +507,7 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bifr
 		if err != nil {
 			return
 		}
-		generationID, ok := (*ctx).Value(GenerationIDKey).(string)
+		generationID, ok := ctx.Value(GenerationIDKey).(string)
 		if ok {
 			if bifrostErr != nil {
 				// Safely extract message from nested error
@@ -569,13 +569,13 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bifr
 
 			logger.EndGeneration(generationID)
 		}
-		traceID, ok := (*ctx).Value(TraceIDKey).(string)
+		traceID, ok := ctx.Value(TraceIDKey).(string)
 		if ok {
 			logger.EndTrace(traceID)
 		}
 
 		// add tags to the generation and trace
-		tags, ok := (*ctx).Value(TagsKey).(map[string]string)
+		tags, ok := ctx.Value(TagsKey).(map[string]string)
 		if ok {
 			for key, value := range tags {
 				if generationID != "" {

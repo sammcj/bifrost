@@ -83,7 +83,7 @@ type ServerCallbacks interface {
 
 // BifrostHTTPServer represents a HTTP server instance.
 type BifrostHTTPServer struct {
-	ctx    context.Context
+	ctx    *schemas.BifrostContext
 	cancel context.CancelFunc
 
 	Version   string
@@ -496,12 +496,14 @@ func (s *BifrostHTTPServer) RemoveMCPClient(ctx context.Context, id string) erro
 
 // ExecuteChatMCPTool executes an MCP tool call and returns the result as a chat message.
 func (s *BifrostHTTPServer) ExecuteChatMCPTool(ctx context.Context, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, *schemas.BifrostError) {
-	return s.Client.ExecuteChatMCPTool(ctx, toolCall)
+	bifrostCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+	return s.Client.ExecuteChatMCPTool(bifrostCtx, toolCall)
 }
 
 // ExecuteResponsesMCPTool executes an MCP tool call and returns the result as a responses message.
 func (s *BifrostHTTPServer) ExecuteResponsesMCPTool(ctx context.Context, toolCall *schemas.ResponsesToolMessage) (*schemas.ResponsesMessage, *schemas.BifrostError) {
-	return s.Client.ExecuteResponsesMCPTool(ctx, toolCall)
+	bifrostCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+	return s.Client.ExecuteResponsesMCPTool(bifrostCtx, toolCall)
 }
 
 func (s *BifrostHTTPServer) GetAvailableMCPTools(ctx context.Context) []schemas.ChatTool {
@@ -927,7 +929,9 @@ func (s *BifrostHTTPServer) RefetchModelsForProvider(ctx context.Context, provid
 	if s.Client == nil {
 		return fmt.Errorf("bifrost client not found")
 	}
-	allModels, err := s.Client.ListModelsRequest(ctx, &schemas.BifrostListModelsRequest{
+	bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+	defer bfCtx.Cancel()
+	allModels, err := s.Client.ListModelsRequest(bfCtx, &schemas.BifrostListModelsRequest{
 		Provider: provider,
 	})
 	if err != nil {
@@ -1180,7 +1184,7 @@ func (s *BifrostHTTPServer) PrepareCommonMiddlewares() []schemas.BifrostHTTPMidd
 //   - GET /metrics: For Prometheus metrics
 func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	var err error
-	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.ctx, s.cancel = schemas.NewBifrostContextWithCancel(ctx)
 	handlers.SetVersion(s.Version)
 	configDir := GetDefaultConfigDir(s.AppDir)
 	s.pluginStatusMutex = sync.RWMutex{}
@@ -1237,7 +1241,7 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	}
 	mcpConfig := s.Config.MCPConfig
 	if mcpConfig != nil {
-		mcpConfig.FetchNewRequestIDFunc = func(ctx context.Context) string {
+		mcpConfig.FetchNewRequestIDFunc = func(ctx *schemas.BifrostContext) string {
 			return uuid.New().String()
 		}
 	}
@@ -1259,7 +1263,7 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	logger.Info("bifrost client initialized")
 	// List all models and add to model catalog
 	logger.Info("listing all models and adding to model catalog")
-	modelData, listModelsErr := s.Client.ListAllModels(ctx, nil)
+	modelData, listModelsErr := s.Client.ListAllModels(s.ctx, nil)
 	if listModelsErr != nil {
 		if listModelsErr.Error != nil {
 			logger.Error("failed to list all models: %s", listModelsErr.Error.Message)

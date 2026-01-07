@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -10,7 +9,7 @@ import (
 )
 
 // RunMultiTurnConversationTest executes the multi-turn conversation test scenario
-func RunMultiTurnConversationTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunMultiTurnConversationTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.MultiTurnConversation {
 		t.Logf("Multi-turn conversation not supported for provider %s", testConfig.Provider)
 		return

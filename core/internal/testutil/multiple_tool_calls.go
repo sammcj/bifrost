@@ -1,10 +1,8 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"testing"
-
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
@@ -20,7 +18,7 @@ func getKeysFromMap(m map[string]bool) []string {
 }
 
 // RunMultipleToolCallsTest executes the multiple tool calls test scenario using dual API testing framework
-func RunMultipleToolCallsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunMultipleToolCallsTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.MultipleToolCalls {
 		t.Logf("Multiple tool calls not supported for provider %s", testConfig.Provider)
 		return

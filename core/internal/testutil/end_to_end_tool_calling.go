@@ -1,18 +1,16 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"strings"
 	"testing"
-
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
 // RunEnd2EndToolCallingTest executes the end-to-end tool calling test scenario
-func RunEnd2EndToolCallingTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunEnd2EndToolCallingTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.End2EndToolCalling {
 		t.Logf("End-to-end tool calling not supported for provider %s", testConfig.Provider)
 		return

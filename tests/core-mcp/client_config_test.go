@@ -10,7 +10,7 @@ import (
 )
 
 func TestSingleCodeModeClient(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -36,7 +36,7 @@ func TestSingleCodeModeClient(t *testing.T) {
 }
 
 func TestSingleNonCodeModeClient(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -69,7 +69,7 @@ func TestSingleNonCodeModeClient(t *testing.T) {
 }
 
 func TestMultipleCodeModeClients(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -98,7 +98,7 @@ func TestMultipleCodeModeClients(t *testing.T) {
 }
 
 func TestMultipleNonCodeModeClients(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -127,7 +127,7 @@ func TestMultipleNonCodeModeClients(t *testing.T) {
 }
 
 func TestMixedCodeModeAndNonCodeModeClients(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -158,7 +158,7 @@ func TestMixedCodeModeAndNonCodeModeClients(t *testing.T) {
 }
 
 func TestClientConnectionStates(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrostWithCodeMode(ctx)
@@ -176,7 +176,7 @@ func TestClientConnectionStates(t *testing.T) {
 }
 
 func TestClientWithNoTools(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -204,7 +204,7 @@ func TestClientWithNoTools(t *testing.T) {
 }
 
 func TestClientWithEmptyToolLists(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -235,7 +235,7 @@ func TestClientWithEmptyToolLists(t *testing.T) {
 }
 
 func TestClientConfigUpdate(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -282,7 +282,7 @@ func TestClientConfigUpdate(t *testing.T) {
 }
 
 func TestClientWithToolsToExecuteWildcard(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -313,7 +313,7 @@ func TestClientWithToolsToExecuteWildcard(t *testing.T) {
 }
 
 func TestClientWithSpecificToolsToExecute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)

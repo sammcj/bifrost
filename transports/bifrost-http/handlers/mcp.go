@@ -88,7 +88,7 @@ func (h *MCPHandler) executeChatMCPTool(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Execute MCP tool
-	toolMessage, bifrostErr := h.client.ExecuteChatMCPTool(*bifrostCtx, req)
+	toolMessage, bifrostErr := h.client.ExecuteChatMCPTool(bifrostCtx, req)
 	if bifrostErr != nil {
 		SendBifrostError(ctx, bifrostErr)
 		return
@@ -121,7 +121,7 @@ func (h *MCPHandler) executeResponsesMCPTool(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Execute MCP tool
-	toolMessage, bifrostErr := h.client.ExecuteResponsesMCPTool(*bifrostCtx, &req)
+	toolMessage, bifrostErr := h.client.ExecuteResponsesMCPTool(bifrostCtx, &req)
 	if bifrostErr != nil {
 		SendBifrostError(ctx, bifrostErr)
 		return

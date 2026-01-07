@@ -499,7 +499,7 @@ func (p *GovernancePlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.Bif
 
 	if result.Decision != DecisionAllow {
 		if ctx != nil {
-			if _, ok := (*ctx).Value(governanceRejectedContextKey).(bool); !ok {
+			if _, ok := ctx.Value(governanceRejectedContextKey).(bool); !ok {
 				ctx.SetValue(governanceRejectedContextKey, true)
 			}
 		}
@@ -591,7 +591,7 @@ func (p *GovernancePlugin) PostHook(ctx *schemas.BifrostContext, result *schemas
 			isCacheRead = b
 		}
 	}
-	if val := (*ctx).Value(governanceIsBatchContextKey); val != nil {
+	if val := ctx.Value(governanceIsBatchContextKey); val != nil {
 		if b, ok := val.(bool); ok {
 			isBatch = b
 		}

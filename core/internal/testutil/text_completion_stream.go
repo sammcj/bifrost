@@ -8,13 +8,12 @@ import (
 	"testing"
 	"time"
 
-
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
 // RunTextCompletionStreamTest executes the text completion streaming test scenario
-func RunTextCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunTextCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.TextCompletionStream {
 		t.Logf("Text completion stream not supported for provider %s", testConfig.Provider)
 		return

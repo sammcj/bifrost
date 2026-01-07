@@ -832,7 +832,7 @@ func ShouldSendBackRawResponse(ctx context.Context, defaultSendBackRawResponse b
 }
 
 // SendCreatedEventResponsesChunk sends a ResponsesStreamResponseTypeCreated event.
-func SendCreatedEventResponsesChunk(ctx context.Context, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream) {
+func SendCreatedEventResponsesChunk(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream) {
 	firstChunk := &schemas.BifrostResponsesStreamResponse{
 		Type:           schemas.ResponsesStreamResponseTypeCreated,
 		SequenceNumber: 0,
@@ -853,7 +853,7 @@ func SendCreatedEventResponsesChunk(ctx context.Context, postHookRunner schemas.
 }
 
 // SendInProgressEventResponsesChunk sends a ResponsesStreamResponseTypeInProgress event
-func SendInProgressEventResponsesChunk(ctx context.Context, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream) {
+func SendInProgressEventResponsesChunk(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream) {
 	chunk := &schemas.BifrostResponsesStreamResponse{
 		Type:           schemas.ResponsesStreamResponseTypeInProgress,
 		SequenceNumber: 1,
@@ -879,7 +879,7 @@ func SendInProgressEventResponsesChunk(ctx context.Context, postHookRunner schem
 // proper context cancellation handling.
 // It also completes the deferred LLM span when the final chunk is sent (StreamEndIndicator is true).
 func ProcessAndSendResponse(
-	ctx context.Context,
+	ctx *schemas.BifrostContext,
 	postHookRunner schemas.PostHookRunner,
 	response *schemas.BifrostResponse,
 	responseChan chan *schemas.BifrostStream,
@@ -892,13 +892,13 @@ func ProcessAndSendResponse(
 	}
 
 	// Run post hooks on the response first so span reflects post-processed data
-	processedResponse, processedError := postHookRunner(&ctx, response, nil)
+	processedResponse, processedError := postHookRunner(ctx, response, nil)
 
 	if HandleStreamControlSkip(processedError) {
 		// Even if skipping, complete the deferred span if this is the final chunk
 		if isFinalChunk := ctx.Value(schemas.BifrostContextKeyStreamEndIndicator); isFinalChunk != nil {
 			if final, ok := isFinalChunk.(bool); ok && final {
-				completeDeferredSpan(&ctx, processedResponse, processedError)
+				completeDeferredSpan(ctx, processedResponse, processedError)
 			}
 		}
 		return
@@ -925,7 +925,7 @@ func ProcessAndSendResponse(
 	// Check if this is the final chunk and complete deferred span with post-processed data
 	if isFinalChunk := ctx.Value(schemas.BifrostContextKeyStreamEndIndicator); isFinalChunk != nil {
 		if final, ok := isFinalChunk.(bool); ok && final {
-			completeDeferredSpan(&ctx, processedResponse, processedError)
+			completeDeferredSpan(ctx, processedResponse, processedError)
 		}
 	}
 }
@@ -936,20 +936,20 @@ func ProcessAndSendResponse(
 // proper context cancellation handling.
 // It also completes the deferred LLM span when the final chunk is sent (StreamEndIndicator is true).
 func ProcessAndSendBifrostError(
-	ctx context.Context,
+	ctx *schemas.BifrostContext,
 	postHookRunner schemas.PostHookRunner,
 	bifrostErr *schemas.BifrostError,
 	responseChan chan *schemas.BifrostStream,
 	logger schemas.Logger,
 ) {
 	// Run post hooks first so span reflects post-processed data
-	processedResponse, processedError := postHookRunner(&ctx, nil, bifrostErr)
+	processedResponse, processedError := postHookRunner(ctx, nil, bifrostErr)
 
 	if HandleStreamControlSkip(processedError) {
 		// Even if skipping, complete the deferred span if this is the final chunk
 		if isFinalChunk := ctx.Value(schemas.BifrostContextKeyStreamEndIndicator); isFinalChunk != nil {
 			if final, ok := isFinalChunk.(bool); ok && final {
-				completeDeferredSpan(&ctx, processedResponse, processedError)
+				completeDeferredSpan(ctx, processedResponse, processedError)
 			}
 		}
 		return
@@ -975,7 +975,7 @@ func ProcessAndSendBifrostError(
 	// Check if this is the final chunk and complete deferred span with post-processed data
 	if isFinalChunk := ctx.Value(schemas.BifrostContextKeyStreamEndIndicator); isFinalChunk != nil {
 		if final, ok := isFinalChunk.(bool); ok && final {
-			completeDeferredSpan(&ctx, processedResponse, processedError)
+			completeDeferredSpan(ctx, processedResponse, processedError)
 		}
 	}
 }
@@ -985,7 +985,7 @@ func ProcessAndSendBifrostError(
 // the common pattern of running post hooks, handling errors, and sending responses with
 // proper context cancellation handling.
 func ProcessAndSendError(
-	ctx context.Context,
+	ctx *schemas.BifrostContext,
 	postHookRunner schemas.PostHookRunner,
 	err error,
 	responseChan chan *schemas.BifrostStream,
@@ -1008,7 +1008,7 @@ func ProcessAndSendError(
 				ModelRequested: model,
 			},
 		}
-	processedResponse, processedError := postHookRunner(&ctx, nil, bifrostError)
+	processedResponse, processedError := postHookRunner(ctx, nil, bifrostError)
 
 	if HandleStreamControlSkip(processedError) {
 		return
@@ -1281,10 +1281,10 @@ func extractSuccessfulListModelsResponses(
 // It launches concurrent requests for all keys and waits for all goroutines to complete.
 // It returns the aggregated response or an error if the request fails.
 func HandleMultipleListModelsRequests(
-	ctx context.Context,
+	ctx *schemas.BifrostContext,
 	keys []schemas.Key,
 	request *schemas.BifrostListModelsRequest,
-	listModelsByKey func(ctx context.Context, key schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError),
+	listModelsByKey func(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError),
 	logger schemas.Logger,
 ) (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
 	startTime := time.Now()
@@ -1425,19 +1425,19 @@ func GetBudgetTokensFromReasoningEffort(
 // This is called when the final chunk is processed (when StreamEndIndicator is true).
 // It retrieves the deferred span handle from TraceStore using the trace ID from context,
 // populates response attributes from accumulated chunks, and ends the span.
-func completeDeferredSpan(ctx *context.Context, result *schemas.BifrostResponse, err *schemas.BifrostError) {
+func completeDeferredSpan(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, err *schemas.BifrostError) {
 	if ctx == nil {
 		return
 	}
 
 	// Get the trace ID from context (this IS available in the provider's goroutine)
-	traceID, ok := (*ctx).Value(schemas.BifrostContextKeyTraceID).(string)
+	traceID, ok := ctx.Value(schemas.BifrostContextKeyTraceID).(string)
 	if !ok || traceID == "" {
 		return
 	}
 
 	// Get the tracer from context
-	tracerVal := (*ctx).Value(schemas.BifrostContextKeyTracer)
+	tracerVal := ctx.Value(schemas.BifrostContextKeyTracer)
 	if tracerVal == nil {
 		return
 	}
@@ -1484,14 +1484,14 @@ func completeDeferredSpan(ctx *context.Context, result *schemas.BifrostResponse,
 	// Finalize aggregated post-hook spans before ending the LLM span
 	// This creates one span per plugin with average execution time
 	// We need to set the llm.call span ID in context so post-hook spans become its children
-	if finalizer, ok := (*ctx).Value(schemas.BifrostContextKeyPostHookSpanFinalizer).(func(context.Context)); ok && finalizer != nil {
+	if finalizer, ok := ctx.Value(schemas.BifrostContextKeyPostHookSpanFinalizer).(func(context.Context)); ok && finalizer != nil {
 		// Get the deferred span ID (the llm.call span) to set as parent for post-hook spans
 		spanID := tracer.GetDeferredSpanID(traceID)
 		if spanID != "" {
-			finalizerCtx := context.WithValue(*ctx, schemas.BifrostContextKeySpanID, spanID)
+			finalizerCtx := context.WithValue(ctx, schemas.BifrostContextKeySpanID, spanID)
 			finalizer(finalizerCtx)
 		} else {
-			finalizer(*ctx)
+			finalizer(ctx)
 		}
 	}
 

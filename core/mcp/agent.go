@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -28,13 +27,13 @@ import (
 //   - *schemas.BifrostChatResponse: The final response after agent execution
 //   - *schemas.BifrostError: Any error that occurred during agent execution
 func ExecuteAgentForChatRequest(
-	ctx *context.Context,
+	ctx *schemas.BifrostContext,
 	maxAgentDepth int,
 	originalReq *schemas.BifrostChatRequest,
 	initialResponse *schemas.BifrostChatResponse,
-	makeReq func(ctx context.Context, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError),
-	fetchNewRequestIDFunc func(ctx context.Context) string,
-	executeToolFunc func(ctx context.Context, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, error),
+	makeReq func(ctx *schemas.BifrostContext, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError),
+	fetchNewRequestIDFunc func(ctx *schemas.BifrostContext) string,
+	executeToolFunc func(ctx *schemas.BifrostContext, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, error),
 	clientManager ClientManager,
 ) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 	// Create adapter for Chat API
@@ -81,13 +80,13 @@ func ExecuteAgentForChatRequest(
 //   - *schemas.BifrostResponsesResponse: The final response after agent execution
 //   - *schemas.BifrostError: Any error that occurred during agent execution
 func ExecuteAgentForResponsesRequest(
-	ctx *context.Context,
+	ctx *schemas.BifrostContext,
 	maxAgentDepth int,
 	originalReq *schemas.BifrostResponsesRequest,
 	initialResponse *schemas.BifrostResponsesResponse,
-	makeReq func(ctx context.Context, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError),
-	fetchNewRequestIDFunc func(ctx context.Context) string,
-	executeToolFunc func(ctx context.Context, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, error),
+	makeReq func(ctx *schemas.BifrostContext, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError),
+	fetchNewRequestIDFunc func(ctx *schemas.BifrostContext) string,
+	executeToolFunc func(ctx *schemas.BifrostContext, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, error),
 	clientManager ClientManager,
 ) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
 	// Create adapter for Responses API
@@ -133,11 +132,11 @@ func ExecuteAgentForResponsesRequest(
 //   - interface{}: The final response after agent execution (type depends on adapter)
 //   - *schemas.BifrostError: Any error that occurred during agent execution
 func executeAgent(
-	ctx *context.Context,
+	ctx *schemas.BifrostContext,
 	maxAgentDepth int,
 	adapter agentAPIAdapter,
-	fetchNewRequestIDFunc func(ctx context.Context) string,
-	executeToolFunc func(ctx context.Context, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, error),
+	fetchNewRequestIDFunc func(ctx *schemas.BifrostContext) string,
+	executeToolFunc func(ctx *schemas.BifrostContext, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, error),
 	clientManager ClientManager,
 ) (interface{}, *schemas.BifrostError) {
 	logger.Debug("Entering agent mode - detected tool calls in response")
@@ -154,9 +153,9 @@ func executeAgent(
 	allExecutedToolResults := make([]*schemas.ChatMessage, 0)
 	allExecutedToolCalls := make([]schemas.ChatAssistantMessageToolCall, 0)
 
-	originalRequestID, ok := (*ctx).Value(schemas.BifrostContextKeyRequestID).(string)
+	originalRequestID, ok := ctx.Value(schemas.BifrostContextKeyRequestID).(string)
 	if ok {
-		*ctx = context.WithValue(*ctx, schemas.BifrostMCPAgentOriginalRequestID, originalRequestID)
+		ctx.SetValue(schemas.BifrostMCPAgentOriginalRequestID, originalRequestID)
 	}
 
 	for depth < maxAgentDepth {
@@ -190,7 +189,7 @@ func executeAgent(
 					continue
 				} else if toolName == ToolTypeExecuteToolCode {
 					// Build allowed auto-execution tools map for code mode validation
-					allClientNames, allowedAutoExecutionTools := buildAllowedAutoExecutionTools(*ctx, clientManager)
+					allClientNames, allowedAutoExecutionTools := buildAllowedAutoExecutionTools(ctx, clientManager)
 
 					// Parse tool arguments
 					var arguments map[string]interface{}
@@ -293,7 +292,7 @@ func executeAgent(
 			for _, toolCall := range autoExecutableTools {
 				go func(toolCall schemas.ChatAssistantMessageToolCall) {
 					defer wg.Done()
-					toolResult, toolErr := executeToolFunc(*ctx, toolCall)
+					toolResult, toolErr := executeToolFunc(ctx, toolCall)
 					if toolErr != nil {
 						logger.Warn(fmt.Sprintf("Tool execution failed: %v", toolErr))
 						channelToolResults <- createToolResultMessage(toolCall, "", toolErr)
@@ -334,14 +333,14 @@ func executeAgent(
 		newReq := adapter.createNewRequest(conversationHistory)
 
 		if fetchNewRequestIDFunc != nil {
-			newID := fetchNewRequestIDFunc(*ctx)
+			newID := fetchNewRequestIDFunc(ctx)
 			if newID != "" {
-				*ctx = context.WithValue(*ctx, schemas.BifrostContextKeyRequestID, newID)
+				ctx.SetValue(schemas.BifrostContextKeyRequestID, newID)
 			}
 		}
 
 		// Make new LLM request
-		response, err := adapter.makeLLMCall(*ctx, newReq)
+		response, err := adapter.makeLLMCall(ctx, newReq)
 		if err != nil {
 			logger.Error("Agent mode: LLM request failed: %v", err)
 			return nil, err
@@ -426,7 +425,7 @@ func createToolResultMessage(toolCall schemas.ChatAssistantMessageToolCall, resu
 // Returns:
 //   - []string: List of all client names
 //   - map[string][]string: Map of client names to their auto-executable tool names (as they appear in code)
-func buildAllowedAutoExecutionTools(ctx context.Context, clientManager ClientManager) ([]string, map[string][]string) {
+func buildAllowedAutoExecutionTools(ctx *schemas.BifrostContext, clientManager ClientManager) ([]string, map[string][]string) {
 	allowedTools := make(map[string][]string)
 	availableToolsPerClient := clientManager.GetToolPerClient(ctx)
 	allClientNames := []string{}

@@ -130,7 +130,7 @@ func (m *MCPManager) GetAvailableTools(ctx context.Context) []schemas.ChatTool {
 // Returns:
 //   - *schemas.ChatMessage: The result message containing tool execution output
 //   - error: Any error that occurred during tool execution
-func (m *MCPManager) ExecuteChatTool(ctx context.Context, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, error) {
+func (m *MCPManager) ExecuteChatTool(ctx *schemas.BifrostContext, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, error) {
 	return m.toolsManager.ExecuteChatTool(ctx, toolCall)
 }
 
@@ -142,7 +142,7 @@ func (m *MCPManager) ExecuteChatTool(ctx context.Context, toolCall schemas.ChatA
 // Returns:
 //   - *schemas.ResponsesMessage: The result message containing tool execution output
 //   - error: Any error that occurred during tool execution
-func (m *MCPManager) ExecuteResponsesTool(ctx context.Context, toolCall *schemas.ResponsesToolMessage) (*schemas.ResponsesMessage, error) {
+func (m *MCPManager) ExecuteResponsesTool(ctx *schemas.BifrostContext, toolCall *schemas.ResponsesToolMessage) (*schemas.ResponsesMessage, error) {
 	return m.toolsManager.ExecuteResponsesTool(ctx, toolCall)
 }
 
@@ -178,10 +178,10 @@ func (m *MCPManager) UpdateToolManagerConfig(config *schemas.MCPToolManagerConfi
 //   - *schemas.BifrostChatResponse: The final response after agent execution (or original if no tool calls)
 //   - *schemas.BifrostError: Any error that occurred during agent execution
 func (m *MCPManager) CheckAndExecuteAgentForChatRequest(
-	ctx *context.Context,
+	ctx *schemas.BifrostContext,
 	req *schemas.BifrostChatRequest,
 	response *schemas.BifrostChatResponse,
-	makeReq func(ctx context.Context, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError),
+	makeReq func(ctx *schemas.BifrostContext, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError),
 ) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 	if makeReq == nil {
 		return nil, &schemas.BifrostError{
@@ -229,10 +229,10 @@ func (m *MCPManager) CheckAndExecuteAgentForChatRequest(
 //   - *schemas.BifrostResponsesResponse: The final response after agent execution (or original if no tool calls)
 //   - *schemas.BifrostError: Any error that occurred during agent execution
 func (m *MCPManager) CheckAndExecuteAgentForResponsesRequest(
-	ctx *context.Context,
+	ctx *schemas.BifrostContext,
 	req *schemas.BifrostResponsesRequest,
 	response *schemas.BifrostResponsesResponse,
-	makeReq func(ctx context.Context, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError),
+	makeReq func(ctx *schemas.BifrostContext, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError),
 ) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
 	if makeReq == nil {
 		return nil, &schemas.BifrostError{

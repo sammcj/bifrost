@@ -13,7 +13,7 @@ import (
 // getAccumulatorID extracts the ID for accumulator lookup from context.
 // Returns the value of BifrostContextKeyAccumulatorID.
 func getAccumulatorID(ctx *schemas.BifrostContext) (string, bool) {
-	if id, ok := (*ctx).Value(schemas.BifrostContextKeyAccumulatorID).(string); ok && id != "" {
+	if id, ok := ctx.Value(schemas.BifrostContextKeyAccumulatorID).(string); ok && id != "" {
 		return id, true
 	}
 	return "", false

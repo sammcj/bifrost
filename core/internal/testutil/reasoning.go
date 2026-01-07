@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -10,7 +9,7 @@ import (
 )
 
 // RunResponsesReasoningTest executes the reasoning test scenario to test thinking capabilities via Responses API only
-func RunResponsesReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunResponsesReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.Reasoning {
 		t.Logf("⏭️ Reasoning not supported for provider %s", testConfig.Provider)
 		return
@@ -199,7 +198,7 @@ func validateResponsesAPIReasoning(t *testing.T, response *schemas.BifrostRespon
 }
 
 // RunChatCompletionReasoningTest executes the reasoning test scenario to test thinking capabilities via Chat Completions API
-func RunChatCompletionReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunChatCompletionReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.Reasoning {
 		t.Logf("⏭️ Reasoning not supported for provider %s", testConfig.Provider)
 		return

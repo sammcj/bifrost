@@ -1,17 +1,15 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"testing"
-
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
 // RunSimpleChatTest executes the simple chat test scenario using dual API testing framework
-func RunSimpleChatTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunSimpleChatTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.SimpleChat {
 		t.Logf("Simple chat not supported for provider %s", testConfig.Provider)
 		return

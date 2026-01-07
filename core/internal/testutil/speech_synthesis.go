@@ -13,7 +13,7 @@ import (
 )
 
 // RunSpeechSynthesisTest executes the speech synthesis test scenario
-func RunSpeechSynthesisTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunSpeechSynthesisTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.SpeechSynthesis {
 		t.Logf("Speech synthesis not supported for provider %s", testConfig.Provider)
 		return
@@ -110,7 +110,7 @@ func RunSpeechSynthesisTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 					OnFinalFail: retryConfig.OnFinalFail,
 				}
 
-				requestCtx := context.Background()
+				requestCtx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 				speechResponse, bifrostErr := WithSpeechTestRetry(t, speechRetryConfig, retryContext, expectations, "SpeechSynthesis_"+tc.name, func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
 					return client.SpeechRequest(requestCtx, request)
@@ -147,7 +147,7 @@ func RunSpeechSynthesisTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 }
 
 // RunSpeechSynthesisAdvancedTest executes advanced speech synthesis test scenarios
-func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.SpeechSynthesis {
 		t.Logf("Speech synthesis not supported for provider %s", testConfig.Provider)
 		return
@@ -216,7 +216,7 @@ func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx c
 				OnFinalFail: retryConfig.OnFinalFail,
 			}
 
-			requestCtx := context.Background()
+			requestCtx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 			speechResponse, bifrostErr := WithSpeechTestRetry(t, speechRetryConfig, retryContext, expectations, "SpeechSynthesis_HD", func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
 				return client.SpeechRequest(requestCtx, request)
@@ -298,7 +298,7 @@ func RunSpeechSynthesisAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx c
 						OnFinalFail: voiceRetryConfig.OnFinalFail,
 					}
 
-					requestCtx := context.Background()
+					requestCtx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 					speechResponse, bifrostErr := WithSpeechTestRetry(t, voiceSpeechRetryConfig, voiceRetryContext, expectations, "SpeechSynthesis_VoiceType_"+voiceType, func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
 						return client.SpeechRequest(requestCtx, request)

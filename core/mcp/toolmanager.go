@@ -30,7 +30,7 @@ type ToolsManager struct {
 	// this is used to ensure that the tool call result messages are unique and can be tracked in plugins or by the user.
 	// This id is attached to ctx.Value(schemas.BifrostContextKeyRequestID) in the agent mode.
 	// If not provided, same request ID is used for all tool call result messages without any overrides.
-	fetchNewRequestIDFunc func(ctx context.Context) string
+	fetchNewRequestIDFunc func(ctx *schemas.BifrostContext) string
 }
 
 const (
@@ -50,7 +50,7 @@ const (
 //
 // Returns:
 //   - *ToolsManager: Initialized tools manager instance
-func NewToolsManager(config *schemas.MCPToolManagerConfig, clientManager ClientManager, fetchNewRequestIDFunc func(ctx context.Context) string) *ToolsManager {
+func NewToolsManager(config *schemas.MCPToolManagerConfig, clientManager ClientManager, fetchNewRequestIDFunc func(ctx *schemas.BifrostContext) string) *ToolsManager {
 	if config == nil {
 		config = &schemas.MCPToolManagerConfig{
 			ToolExecutionTimeout: schemas.DefaultToolExecutionTimeout,
@@ -319,7 +319,7 @@ func (m *ToolsManager) ParseAndAddToolsToRequest(ctx context.Context, req *schem
 // Returns:
 //   - *schemas.ChatMessage: Tool message with execution result
 //   - error: Any execution error
-func (m *ToolsManager) ExecuteChatTool(ctx context.Context, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, error) {
+func (m *ToolsManager) ExecuteChatTool(ctx *schemas.BifrostContext, toolCall schemas.ChatAssistantMessageToolCall) (*schemas.ChatMessage, error) {
 	if toolCall.Function.Name == nil {
 		return nil, fmt.Errorf("tool call missing function name")
 	}
@@ -433,7 +433,7 @@ func (m *ToolsManager) ExecuteChatTool(ctx context.Context, toolCall schemas.Cha
 //	resultMsg, err := toolsManager.ExecuteResponsesTool(ctx, responsesToolMsg, "call-123")
 //	// resultMsg is a ResponsesMessage with type=function_call_output
 func (m *ToolsManager) ExecuteResponsesTool(
-	ctx context.Context,
+	ctx *schemas.BifrostContext,
 	toolMessage *schemas.ResponsesToolMessage,
 ) (*schemas.ResponsesMessage, error) {
 	if toolMessage == nil {
@@ -478,10 +478,10 @@ func (m *ToolsManager) ExecuteResponsesTool(
 //   - *schemas.BifrostChatResponse: The final response after agent execution
 //   - *schemas.BifrostError: Any error that occurred during agent execution
 func (m *ToolsManager) ExecuteAgentForChatRequest(
-	ctx *context.Context,
+	ctx *schemas.BifrostContext,
 	req *schemas.BifrostChatRequest,
 	resp *schemas.BifrostChatResponse,
-	makeReq func(ctx context.Context, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError),
+	makeReq func(ctx *schemas.BifrostContext, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError),
 ) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 	return ExecuteAgentForChatRequest(
 		ctx,
@@ -509,10 +509,10 @@ func (m *ToolsManager) ExecuteAgentForChatRequest(
 //   - *schemas.BifrostResponsesResponse: The final response after agent execution
 //   - *schemas.BifrostError: Any error that occurred during agent execution
 func (m *ToolsManager) ExecuteAgentForResponsesRequest(
-	ctx *context.Context,
+	ctx *schemas.BifrostContext,
 	req *schemas.BifrostResponsesRequest,
 	resp *schemas.BifrostResponsesResponse,
-	makeReq func(ctx context.Context, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError),
+	makeReq func(ctx *schemas.BifrostContext, req *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError),
 ) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
 	return ExecuteAgentForResponsesRequest(
 		ctx,

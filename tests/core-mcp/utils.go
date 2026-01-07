@@ -13,7 +13,7 @@ import (
 )
 
 // createToolCall creates a tool call message for testing
-func createToolCall(toolName string, arguments map[string]interface{}) schemas.ChatAssistantMessageToolCall {
+func createToolCall(toolName string, arguments schemas.OrderedMap) schemas.ChatAssistantMessageToolCall {
 	argsJSON, _ := json.Marshal(arguments)
 	argsStr := string(argsJSON)
 	id := fmt.Sprintf("test-tool-call-%d", len(argsStr))
@@ -26,6 +26,42 @@ func createToolCall(toolName string, arguments map[string]interface{}) schemas.C
 			Name:      &toolName,
 			Arguments: argsStr,
 		},
+	}
+}
+
+// createResponsesToolCall creates a tool call message for testing
+func createResponsesToolCall(toolName string, arguments schemas.OrderedMap) *schemas.ResponsesToolMessage {
+	argsJSON, _ := json.Marshal(arguments)
+	argsStr := string(argsJSON)
+	id := fmt.Sprintf("test-tool-call-%d", len(argsStr))
+
+	return &schemas.ResponsesToolMessage{
+		CallID:    &id,
+		Name:      &toolName,
+		Arguments: &argsStr,
+	}
+}
+
+// assertResponsesExecutionResult validates execution results
+func assertResponsesExecutionResult(t *testing.T, result *schemas.ResponsesMessage, expectedSuccess bool, expectedLogs []string, expectedErrorKind string) {
+	require.NotNil(t, result)
+	require.NotNil(t, result.Content)
+	require.NotNil(t, result.Content.ContentStr)
+
+	responseText := *result.Content.ContentStr
+
+	if expectedSuccess {
+		// Success case - should not contain error indicators (but allow console.error output)
+		assert.NotContains(t, responseText, "Execution runtime error", "Response should not contain execution runtime error for successful execution")
+		assert.NotContains(t, responseText, "Execution typescript error", "Response should not contain execution typescript error for successful execution")
+		assert.NotContains(t, responseText, "Error:", "Response should not contain Error: prefix for successful execution")
+	} else {
+		// Error case - should contain error information
+		assert.Contains(t, responseText, "error", "Response should contain error for failed execution")
+
+		if expectedErrorKind != "" {
+			assert.Contains(t, responseText, expectedErrorKind, "Response should contain expected error kind")
+		}
 	}
 }
 
@@ -61,6 +97,16 @@ func assertExecutionResult(t *testing.T, result *schemas.ChatMessage, expectedSu
 
 // assertResultContains validates that the result contains specific text
 func assertResultContains(t *testing.T, result *schemas.ChatMessage, expectedText string) {
+	require.NotNil(t, result)
+	require.NotNil(t, result.Content)
+	require.NotNil(t, result.Content.ContentStr)
+
+	responseText := *result.Content.ContentStr
+	assert.Contains(t, responseText, expectedText, "Response should contain expected text")
+}
+
+// assertResponsesResultContains validates that the result contains specific text
+func assertResponsesResultContains(t *testing.T, result *schemas.ResponsesMessage, expectedText string) {
 	require.NotNil(t, result)
 	require.NotNil(t, result.Content)
 	require.NotNil(t, result.Content.ContentStr)

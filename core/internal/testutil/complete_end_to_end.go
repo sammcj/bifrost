@@ -1,18 +1,16 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"strings"
 	"testing"
-
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
 // RunCompleteEnd2EndTest executes the complete end-to-end test scenario
-func RunCompleteEnd2EndTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunCompleteEnd2EndTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.CompleteEnd2End {
 		t.Logf("Complete end-to-end not supported for provider %s", testConfig.Provider)
 		return

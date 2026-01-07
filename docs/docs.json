@@ -177,7 +177,14 @@
             "pages": [
               "plugins/getting-started",
               "plugins/building-dynamic-binary",
-              "plugins/writing-plugin",
+              {
+                "group": "Writing Plugins",
+                "icon": "code",
+                "pages": [
+                  "plugins/writing-go-plugin",
+                  "plugins/writing-wasm-plugin"
+                ]
+              },
               "plugins/migration-guide"
             ]
           },
@@ -459,6 +466,10 @@
     {
       "source": "/providers/huggingface",
       "destination": "/providers/supported-providers/huggingface"
+    },
+    {
+      "source": "/plugins/writing-plugin",
+      "destination": "/plugins/writing-go-plugin"
     }
   ],
   "footer": {

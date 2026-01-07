@@ -42,7 +42,7 @@ var structuredOutputSchema = map[string]interface{}{
 }
 
 // RunStructuredOutputChatTest tests structured outputs with Chat Completions API (non-streaming)
-func RunStructuredOutputChatTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunStructuredOutputChatTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.StructuredOutputs {
 		t.Logf("Structured outputs not supported for provider %s", testConfig.Provider)
 		return
@@ -65,7 +65,7 @@ func RunStructuredOutputChatTest(t *testing.T, client *bifrost.Bifrost, ctx cont
 	})
 }
 
-func testStructuredOutputChatWithValue(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig, expectValue bool) {
+func testStructuredOutputChatWithValue(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig, expectValue bool) {
 	var chatMessages []schemas.ChatMessage
 	if expectValue {
 		chatMessages = []schemas.ChatMessage{
@@ -107,7 +107,7 @@ func testStructuredOutputChatWithValue(t *testing.T, client *bifrost.Bifrost, ct
 			extraHeaders := map[string][]string{
 				"anthropic-beta": {"structured-outputs-2025-11-13"},
 			}
-			reqCtx = context.WithValue(ctx, schemas.BifrostContextKeyExtraHeaders, extraHeaders)
+			reqCtx.SetValue(schemas.BifrostContextKeyExtraHeaders, extraHeaders)
 		}
 
 		chatReq := &schemas.BifrostChatRequest{
@@ -200,7 +200,7 @@ func testStructuredOutputChatWithValue(t *testing.T, client *bifrost.Bifrost, ct
 }
 
 // RunStructuredOutputChatStreamTest tests structured outputs with Chat Completions API (streaming)
-func RunStructuredOutputChatStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunStructuredOutputChatStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.StructuredOutputs || !testConfig.Scenarios.CompletionStream {
 		t.Logf("Structured outputs streaming not supported for provider %s", testConfig.Provider)
 		return
@@ -222,7 +222,7 @@ func RunStructuredOutputChatStreamTest(t *testing.T, client *bifrost.Bifrost, ct
 			extraHeaders := map[string][]string{
 				"anthropic-beta": {"structured-outputs-2025-11-13"},
 			}
-			reqCtx = context.WithValue(ctx, schemas.BifrostContextKeyExtraHeaders, extraHeaders)
+			reqCtx.SetValue(schemas.BifrostContextKeyExtraHeaders, extraHeaders)
 		}
 
 		request := &schemas.BifrostChatRequest{
@@ -356,7 +356,7 @@ func RunStructuredOutputChatStreamTest(t *testing.T, client *bifrost.Bifrost, ct
 }
 
 // RunStructuredOutputResponsesTest tests structured outputs with Responses API (non-streaming)
-func RunStructuredOutputResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunStructuredOutputResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.StructuredOutputs {
 		t.Logf("Structured outputs not supported for provider %s", testConfig.Provider)
 		return
@@ -378,7 +378,7 @@ func RunStructuredOutputResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx
 			extraHeaders := map[string][]string{
 				"anthropic-beta": {"structured-outputs-2025-11-13"},
 			}
-			reqCtx = context.WithValue(ctx, schemas.BifrostContextKeyExtraHeaders, extraHeaders)
+			reqCtx.SetValue(schemas.BifrostContextKeyExtraHeaders, extraHeaders)
 		}
 
 		retryConfig := GetTestRetryConfigForScenario("StructuredOutputResponses", testConfig)
@@ -488,7 +488,7 @@ func RunStructuredOutputResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx
 }
 
 // RunStructuredOutputResponsesStreamTest tests structured outputs with Responses API (streaming)
-func RunStructuredOutputResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunStructuredOutputResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.StructuredOutputs || !testConfig.Scenarios.CompletionStream {
 		t.Logf("Structured outputs streaming not supported for provider %s", testConfig.Provider)
 		return
@@ -515,7 +515,7 @@ func RunStructuredOutputResponsesStreamTest(t *testing.T, client *bifrost.Bifros
 			extraHeaders := map[string][]string{
 				"anthropic-beta": {"structured-outputs-2025-11-13"},
 			}
-			reqCtx = context.WithValue(ctx, schemas.BifrostContextKeyExtraHeaders, extraHeaders)
+			reqCtx.SetValue(schemas.BifrostContextKeyExtraHeaders, extraHeaders)
 		}
 
 		typeStr := "object"

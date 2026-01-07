@@ -17,7 +17,7 @@ import (
 // TestAgentModeConfiguration tests the configuration aspects of agent mode
 // Full agent mode flow testing requires LLM integration (see integration_test.go)
 func TestAgentModeConfiguration(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -53,7 +53,7 @@ func TestAgentModeConfiguration(t *testing.T) {
 }
 
 func TestAgentModeMaxDepthConfiguration(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	// Create Bifrost with max depth of 2
@@ -63,7 +63,7 @@ func TestAgentModeMaxDepthConfiguration(t *testing.T) {
 			MaxAgentDepth:        2,
 			ToolExecutionTimeout: 30 * time.Second,
 		},
-		FetchNewRequestIDFunc: func(ctx context.Context) string {
+		FetchNewRequestIDFunc: func(ctx *schemas.BifrostContext) string {
 			return "test-request-id"
 		},
 	}

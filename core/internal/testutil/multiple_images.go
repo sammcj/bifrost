@@ -1,18 +1,16 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"strings"
 	"testing"
-
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
 // RunMultipleImagesTest executes the multiple images test scenario
-func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.MultipleImages {
 		t.Logf("Multiple images not supported for provider %s", testConfig.Provider)
 		return

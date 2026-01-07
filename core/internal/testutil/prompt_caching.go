@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"testing"
 	"time"
@@ -273,7 +272,7 @@ func GetPromptCachingTools() []schemas.ChatTool {
 // This test verifies that OpenAI's prompt caching works correctly with tools
 // by making multiple requests with the same long prefix and tools, and verifying
 // that cached tokens increase in subsequent requests.
-func RunPromptCachingTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunPromptCachingTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.SimpleChat {
 		t.Logf("Prompt caching test requires SimpleChat support")
 		return

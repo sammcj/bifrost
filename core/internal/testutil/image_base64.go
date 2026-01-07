@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"strings"
 	"testing"
@@ -11,7 +10,7 @@ import (
 )
 
 // RunImageBase64Test executes the image base64 test scenario using dual API testing framework
-func RunImageBase64Test(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunImageBase64Test(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ImageBase64 {
 		t.Logf("Image base64 not supported for provider %s", testConfig.Provider)
 		return

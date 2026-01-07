@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,7 +15,7 @@ import (
 )
 
 // RunTranscriptionTest executes the transcription test scenario
-func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.Transcription {
 		t.Logf("Transcription not supported for provider %s", testConfig.Provider)
 		return
@@ -339,7 +338,7 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Con
 }
 
 // RunTranscriptionAdvancedTest executes advanced transcription test scenarios
-func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.Transcription {
 		t.Logf("Transcription not supported for provider %s", testConfig.Provider)
 		return

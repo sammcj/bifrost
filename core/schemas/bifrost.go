@@ -2,7 +2,6 @@
 package schemas
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 )
@@ -11,7 +10,7 @@ const (
 	DefaultInitialPoolSize = 5000
 )
 
-type KeySelector func(ctx *context.Context, keys []Key, providerKey ModelProvider, model string) (Key, error)
+type KeySelector func(ctx *BifrostContext, keys []Key, providerKey ModelProvider, model string) (Key, error)
 
 // BifrostConfig represents the configuration for initializing a Bifrost instance.
 // It contains the necessary components for setting up the system including account details,

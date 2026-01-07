@@ -1,17 +1,15 @@
 package testutil
 
 import (
-	"context"
 	"os"
 	"testing"
-
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
 // RunListModelsTest executes the list models test scenario
-func RunListModelsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunListModelsTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ListModels {
 		t.Logf("List models not supported for provider %s", testConfig.Provider)
 		return
@@ -109,7 +107,7 @@ func RunListModelsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Contex
 }
 
 // RunListModelsPaginationTest executes pagination test for list models
-func RunListModelsPaginationTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunListModelsPaginationTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ListModels {
 		t.Logf("List models not supported for provider %s", testConfig.Provider)
 		return

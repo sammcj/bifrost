@@ -10,7 +10,7 @@ import (
 )
 
 func TestToolInToolsToExecuteButNotInToolsToAutoExecute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -44,7 +44,7 @@ func TestToolInToolsToExecuteButNotInToolsToAutoExecute(t *testing.T) {
 }
 
 func TestToolInBothToolsToExecuteAndToolsToAutoExecute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -78,7 +78,7 @@ func TestToolInBothToolsToExecuteAndToolsToAutoExecute(t *testing.T) {
 }
 
 func TestToolInToolsToAutoExecuteButNotInToolsToExecute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -111,7 +111,7 @@ func TestToolInToolsToAutoExecuteButNotInToolsToExecute(t *testing.T) {
 }
 
 func TestWildcardInToolsToAutoExecute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -145,7 +145,7 @@ func TestWildcardInToolsToAutoExecute(t *testing.T) {
 }
 
 func TestEmptyToolsToAutoExecute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -178,7 +178,7 @@ func TestEmptyToolsToAutoExecute(t *testing.T) {
 }
 
 func TestNilToolsToAutoExecute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -216,7 +216,7 @@ func TestNilToolsToAutoExecute(t *testing.T) {
 }
 
 func TestMultipleToolsWithMixedAutoExecuteConfigs(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -250,7 +250,7 @@ func TestMultipleToolsWithMixedAutoExecuteConfigs(t *testing.T) {
 }
 
 func TestToolsToExecuteEmptyList(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)
@@ -284,7 +284,7 @@ func TestToolsToExecuteEmptyList(t *testing.T) {
 }
 
 func TestToolsToExecuteNil(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
 	defer cancel()
 
 	b, err := setupTestBifrost(ctx)

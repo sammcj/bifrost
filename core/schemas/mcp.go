@@ -21,7 +21,7 @@ type MCPConfig struct {
 	// this is used to ensure that the tool call result messages are unique and can be tracked in plugins or by the user.
 	// This id is attached to ctx.Value(schemas.BifrostContextKeyRequestID) in the agent mode.
 	// If not provider, same request ID is used for all tool call result messages without any overrides.
-	FetchNewRequestIDFunc func(ctx context.Context) string `json:"-"`
+	FetchNewRequestIDFunc func(ctx *BifrostContext) string `json:"-"`
 }
 
 type MCPToolManagerConfig struct {

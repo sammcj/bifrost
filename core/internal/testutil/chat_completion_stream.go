@@ -13,7 +13,7 @@ import (
 )
 
 // RunChatCompletionStreamTest executes the chat completion stream test scenario
-func RunChatCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+func RunChatCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.CompletionStream {
 		t.Logf("Chat completion stream not supported for provider %s", testConfig.Provider)
 		return
