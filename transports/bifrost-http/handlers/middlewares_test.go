@@ -541,7 +541,7 @@ func TestAuthMiddleware_NilAuthConfig(t *testing.T) {
 		nextCalled = true
 	}
 
-	middleware := am.Middleware()
+	middleware := am.APIMiddleware()
 	handler := middleware(next)
 	handler(ctx)
 
@@ -570,7 +570,7 @@ func TestAuthMiddleware_DisabledAuthConfig(t *testing.T) {
 		nextCalled = true
 	}
 
-	middleware := am.Middleware()
+	middleware := am.APIMiddleware()
 	handler := middleware(next)
 	handler(ctx)
 
@@ -599,7 +599,7 @@ func TestAuthMiddleware_EnabledAuthConfig_NoAuth(t *testing.T) {
 		nextCalled = true
 	}
 
-	middleware := am.Middleware()
+	middleware := am.APIMiddleware()
 	handler := middleware(next)
 	handler(ctx)
 
@@ -640,7 +640,7 @@ func TestAuthMiddleware_WhitelistedRoutes(t *testing.T) {
 				nextCalled = true
 			}
 
-			middleware := am.Middleware()
+			middleware := am.APIMiddleware()
 			handler := middleware(next)
 			handler(ctx)
 
@@ -667,7 +667,7 @@ func TestAuthMiddleware_UpdateAuthConfig_NilToEnabled(t *testing.T) {
 		nextCalled = true
 	}
 
-	middleware := am.Middleware()
+	middleware := am.APIMiddleware()
 	handler := middleware(next)
 	handler(ctx)
 
@@ -718,7 +718,7 @@ func TestAuthMiddleware_UpdateAuthConfig_EnabledToDisabled(t *testing.T) {
 		nextCalled = true
 	}
 
-	middleware := am.Middleware()
+	middleware := am.APIMiddleware()
 	handler := middleware(next)
 	handler(ctx)
 

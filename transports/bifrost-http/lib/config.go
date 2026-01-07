@@ -766,7 +766,8 @@ func mergeProviderWithHash(
 	}
 }
 
-// mergeProviderKeys merges keys when provider hash has changed
+// mergeProviderKeys syncs keys when provider hash has changed (file is source of truth).
+// Keys in file are kept, keys only in DB are removed.
 func mergeProviderKeys(provider schemas.ModelProvider, fileKeys, dbKeys []schemas.Key) []schemas.Key {
 	mergedKeys := fileKeys
 	for _, dbKey := range dbKeys {
@@ -819,8 +820,8 @@ func mergeProviderKeys(provider schemas.ModelProvider, fileKeys, dbKeys []schema
 			}
 		}
 		if !found {
-			// Key exists in DB but not in file - preserve it (added via dashboard)
-			mergedKeys = append(mergedKeys, dbKey)
+			// Key exists in DB but not in file - skip it (file is source of truth when hash changed)
+			logger.Debug("key %s exists in DB but not in file for provider %s, removing", dbKey.Name, provider)
 		}
 	}
 	return mergedKeys
@@ -1189,7 +1190,7 @@ func mergeGovernanceConfig(ctx context.Context, config *Config, configData *Conf
 					Provider:   "",
 					KeyType:    "virtual_key",
 					ConfigPath: fmt.Sprintf("governance.virtual_keys[%s].value", configData.Governance.VirtualKeys[i].ID),
-					KeyID:      "",
+					KeyID:      "",					
 				})
 			}
 			virtualKeysToAdd = append(virtualKeysToAdd, configData.Governance.VirtualKeys[i])
@@ -2007,12 +2008,10 @@ func initDefaultFrameworkConfig(ctx context.Context, config *Config) error {
 // meaning something in config.json was modified for this VK. It is NOT called
 // when hashes match (in that case, DB config is kept as-is).
 //
-// Reconciliation strategy (preserves dashboard-added configs):
-// - Configs in both file and DB → update from file (since VK hash changed, file is source of truth)
+// Reconciliation strategy (file is source of truth when hash changes):
+// - Configs in both file and DB → update from file
 // - Configs only in file → create new
-// - Configs only in DB → PRESERVE (they were added via dashboard)
-//
-// This matches the behavior of global provider keys which also preserves DB-only keys.
+// - Configs only in DB → DELETE (file is source of truth, extra configs are removed)
 func reconcileVirtualKeyAssociations(
 	ctx context.Context,
 	store configstore.ConfigStore,
@@ -2034,7 +2033,9 @@ func reconcileVirtualKeyAssociations(
 	}
 
 	// Process provider configs from config.json
+	newProviderSet := make(map[string]bool)
 	for _, newPC := range newProviderConfigs {
+		newProviderSet[newPC.Provider] = true
 		newPC.VirtualKeyID = vkID
 		if existing, found := existingByProvider[newPC.Provider]; found {
 			// Update existing provider config from file
@@ -2053,8 +2054,15 @@ func reconcileVirtualKeyAssociations(
 			}
 		}
 	}
-	// NOTE: Provider configs that exist in DB but not in file are PRESERVED
-	// (they were added via dashboard and should not be deleted)
+
+	// Delete provider configs that exist in DB but not in file
+	for provider, existing := range existingByProvider {
+		if !newProviderSet[provider] {
+			if err := store.DeleteVirtualKeyProviderConfig(ctx, existing.ID, tx); err != nil {
+				return fmt.Errorf("failed to delete provider config for %s: %w", provider, err)
+			}
+		}
+	}
 
 	// Reconcile MCPConfigs
 	existingMCPConfigs, err := store.GetVirtualKeyMCPConfigs(ctx, vkID)
@@ -2069,7 +2077,9 @@ func reconcileVirtualKeyAssociations(
 	}
 
 	// Process MCP configs from config.json
+	newMCPSet := make(map[uint]bool)
 	for _, newMC := range newMCPConfigs {
+		newMCPSet[newMC.MCPClientID] = true
 		newMC.VirtualKeyID = vkID
 		if existing, found := existingByMCPClientID[newMC.MCPClientID]; found {
 			// Update existing MCP config from file
@@ -2084,8 +2094,15 @@ func reconcileVirtualKeyAssociations(
 			}
 		}
 	}
-	// NOTE: MCP configs that exist in DB but not in file are PRESERVED
-	// (they were added via dashboard and should not be deleted)
+
+	// Delete MCP configs that exist in DB but not in file
+	for mcpClientID, existing := range existingByMCPClientID {
+		if !newMCPSet[mcpClientID] {
+			if err := store.DeleteVirtualKeyMCPConfig(ctx, existing.ID, tx); err != nil {
+				return fmt.Errorf("failed to delete MCP config for client %d: %w", mcpClientID, err)
+			}
+		}
+	}
 
 	return nil
 }

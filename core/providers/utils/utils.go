@@ -1330,7 +1330,7 @@ func GetRandomString(length int) string {
 		return ""
 	}
 	randomSource := rand.New(rand.NewSource(time.Now().UnixNano()))
-	letters := []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+	letters := []rune("abcdef0123456789")
 	b := make([]rune, length)
 	for i := range b {
 		b[i] = letters[randomSource.Intn(len(letters))]
