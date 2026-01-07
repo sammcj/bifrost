@@ -1,1 +1,0 @@
-- fix: fixes Anthropic to Azure/OpenAI for input_text/output_text
