@@ -2083,7 +2083,7 @@ func convertAnthropicSystemToBifrostMessages(systemContent *AnthropicContent) []
 		for _, block := range systemContent.ContentBlocks {
 			if block.Text != nil { // System messages will only have text content
 				contentBlocks = append(contentBlocks, schemas.ResponsesMessageContentBlock{
-					Type:         schemas.ResponsesOutputMessageContentTypeText,
+					Type:         schemas.ResponsesInputMessageContentBlockTypeText,
 					Text:         block.Text,
 					CacheControl: block.CacheControl,
 				})
@@ -2104,6 +2104,10 @@ func convertAnthropicSystemToBifrostMessages(systemContent *AnthropicContent) []
 
 // Helper function to convert a single Anthropic message to Bifrost messages
 func convertSingleAnthropicMessageToBifrostMessages(msg *AnthropicMessage, isOutputMessage bool) []schemas.ResponsesMessage {
+	// Determine if this message should use output types based on role
+	// Assistant messages in conversation history should use output_text
+	isOutput := isOutputMessage || msg.Role == AnthropicMessageRoleAssistant
+
 	// Handle text content (simple case)
 	if msg.Content.ContentStr != nil {
 		roleVal := schemas.ResponsesMessageRoleType(msg.Role)
@@ -2121,7 +2125,7 @@ func convertSingleAnthropicMessageToBifrostMessages(msg *AnthropicMessage, isOut
 	// Handle content blocks
 	if msg.Content.ContentBlocks != nil {
 		roleVal := schemas.ResponsesMessageRoleType(msg.Role)
-		return convertAnthropicContentBlocksToResponsesMessages(msg.Content.ContentBlocks, &roleVal, isOutputMessage)
+		return convertAnthropicContentBlocksToResponsesMessages(msg.Content.ContentBlocks, &roleVal, isOutput)
 	}
 
 	return []schemas.ResponsesMessage{}
@@ -2130,6 +2134,10 @@ func convertSingleAnthropicMessageToBifrostMessages(msg *AnthropicMessage, isOut
 // Helper function to convert a single Anthropic message to Bifrost messages, grouping text and tool calls
 // This keeps assistant messages with mixed text and tool_use blocks together
 func convertSingleAnthropicMessageToBifrostMessagesGrouped(msg *AnthropicMessage, isOutputMessage bool) []schemas.ResponsesMessage {
+	// Determine if this message should use output types based on role
+	// Assistant messages in conversation history should use output_text
+	isOutput := isOutputMessage || msg.Role == AnthropicMessageRoleAssistant
+
 	// Handle text content (simple case)
 	if msg.Content.ContentStr != nil {
 		roleVal := schemas.ResponsesMessageRoleType(msg.Role)
@@ -2147,7 +2155,7 @@ func convertSingleAnthropicMessageToBifrostMessagesGrouped(msg *AnthropicMessage
 	// Handle content blocks with grouping for text and tool calls
 	if msg.Content.ContentBlocks != nil {
 		roleVal := schemas.ResponsesMessageRoleType(msg.Role)
-		return convertAnthropicContentBlocksToResponsesMessagesGrouped(msg.Content.ContentBlocks, &roleVal, isOutputMessage)
+		return convertAnthropicContentBlocksToResponsesMessagesGrouped(msg.Content.ContentBlocks, &roleVal, isOutput)
 	}
 
 	return []schemas.ResponsesMessage{}
@@ -2347,7 +2355,7 @@ func convertAnthropicContentBlocksToResponsesMessagesGrouped(contentBlocks []Ant
 				},
 			}
 			if isOutputMessage {
-				bifrostMsg.ID = schemas.Ptr("msg_" + providerUtils.GetRandomString(50))
+				bifrostMsg.ID = schemas.Ptr("fc_" + providerUtils.GetRandomString(50))
 			}
 
 			// Check for computer tool use
@@ -2476,7 +2484,7 @@ func convertAnthropicContentBlocksToResponsesMessages(contentBlocks []AnthropicC
 					},
 				}
 				if isOutputMessage {
-					bifrostMsg.ID = schemas.Ptr("msg_" + providerUtils.GetRandomString(50))
+					bifrostMsg.ID = schemas.Ptr("fc_" + providerUtils.GetRandomString(50))
 				}
 
 				// here need to check for computer tool use
