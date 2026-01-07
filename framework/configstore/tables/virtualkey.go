@@ -70,6 +70,25 @@ func (pc *TableVirtualKeyProviderConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON custom marshaller to ensure AllowedModels is always an array (never null)
+func (pc TableVirtualKeyProviderConfig) MarshalJSON() ([]byte, error) {
+	type Alias TableVirtualKeyProviderConfig
+
+	// Ensure AllowedModels is an empty slice instead of nil
+	allowedModels := pc.AllowedModels
+	if allowedModels == nil {
+		allowedModels = []string{}
+	}
+
+	return json.Marshal(&struct {
+		Alias
+		AllowedModels []string `json:"allowed_models"`
+	}{
+		Alias:         Alias(pc),
+		AllowedModels: allowedModels,
+	})
+}
+
 // AfterFind hook for TableVirtualKeyProviderConfig to clear sensitive data from associated keys
 func (pc *TableVirtualKeyProviderConfig) AfterFind(tx *gorm.DB) error {
 	if pc.Keys != nil {

@@ -1,0 +1,2 @@
+- fix: disable auth on inference routes not working correctly
+- fix: fixes Anthropic to Azure/OpenAI for input_text/output_text
