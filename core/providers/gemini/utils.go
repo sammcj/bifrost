@@ -162,7 +162,7 @@ func (r *GeminiGenerationRequest) convertGenerationConfigToResponsesParameters()
 	if config.ResponseMIMEType != "" {
 		switch config.ResponseMIMEType {
 		case "application/json":
-			params.Text = buildOpenAIResponseFormat(config.ResponseJSONSchema)
+			params.Text = buildOpenAIResponseFormat(config.ResponseJSONSchema, config.ResponseSchema)
 		case "text/plain":
 			params.Text = &schemas.ResponsesTextConfig{
 				Format: &schemas.ResponsesTextConfigFormat{
@@ -772,10 +772,36 @@ func addSpeechConfigToGenerationConfig(config *GenerationConfig, voiceConfig *sc
 }
 
 // convertBifrostMessagesToGemini converts Bifrost messages to Gemini format
-func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []Content {
+func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) ([]Content, *Content) {
 	var contents []Content
+	var systemInstruction *Content
 
 	for _, message := range messages {
+		// Handle system messages separately - Gemini requires them in SystemInstruction field
+		if message.Role == schemas.ChatMessageRoleSystem {
+			if systemInstruction == nil {
+				systemInstruction = &Content{}
+			}
+
+			// Extract system message content
+			if message.Content != nil {
+				if message.Content.ContentStr != nil && *message.Content.ContentStr != "" {
+					systemInstruction.Parts = append(systemInstruction.Parts, &Part{
+						Text: *message.Content.ContentStr,
+					})
+				} else if message.Content.ContentBlocks != nil {
+					for _, block := range message.Content.ContentBlocks {
+						if block.Text != nil && *block.Text != "" {
+							systemInstruction.Parts = append(systemInstruction.Parts, &Part{
+								Text: *block.Text,
+							})
+						}
+					}
+				}
+			}
+			continue
+		}
+
 		var parts []*Part
 
 		// Handle content
@@ -826,8 +852,74 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []Content {
 								})
 							}
 						}
+					} else if block.ImageURLStruct != nil {
+						// Handle image blocks
+						imageURL := block.ImageURLStruct.URL
+
+						// Sanitize and parse the image URL
+						sanitizedURL, err := schemas.SanitizeImageURL(imageURL)
+						if err != nil {
+							// Skip this block if URL is invalid
+							continue
+						}
+
+						urlInfo := schemas.ExtractURLTypeInfo(sanitizedURL)
+
+						// Determine MIME type
+						mimeType := "image/jpeg" // default
+						if urlInfo.MediaType != nil {
+							mimeType = *urlInfo.MediaType
+						}
+
+						if urlInfo.Type == schemas.ImageContentTypeBase64 {
+							// Data URL - convert to InlineData (Blob)
+							if urlInfo.DataURLWithoutPrefix != nil {
+								decodedData, err := base64.StdEncoding.DecodeString(*urlInfo.DataURLWithoutPrefix)
+								if err == nil && len(decodedData) > 0 {
+									parts = append(parts, &Part{
+										InlineData: &Blob{
+											MIMEType: mimeType,
+											Data:     decodedData,
+										},
+									})
+								}
+							}
+						} else {
+							// Regular URL - use FileData
+							parts = append(parts, &Part{
+								FileData: &FileData{
+									MIMEType: mimeType,
+									FileURI:  sanitizedURL,
+								},
+							})
+						}
+					} else if block.InputAudio != nil {
+						// Decode the audio data (already base64 encoded in the schema)
+						decodedData, err := base64.StdEncoding.DecodeString(block.InputAudio.Data)
+						if err != nil || len(decodedData) == 0 {
+							continue
+						}
+
+						// Determine MIME type
+						mimeType := "audio/mpeg" // default
+						if block.InputAudio.Format != nil {
+							format := strings.ToLower(strings.TrimSpace(*block.InputAudio.Format))
+							if format != "" {
+								if strings.HasPrefix(format, "audio/") {
+									mimeType = format
+								} else {
+									mimeType = "audio/" + format
+								}
+							}
+						}
+
+						parts = append(parts, &Part{
+							InlineData: &Blob{
+								MIMEType: mimeType,
+								Data:     decodedData,
+							},
+						})
 					}
-					// Handle other content block types as needed
 				}
 			}
 		}
@@ -945,7 +1037,7 @@ func convertBifrostMessagesToGemini(messages []schemas.ChatMessage) []Content {
 		}
 	}
 
-	return contents
+	return contents, systemInstruction
 }
 
 // normalizeSchemaTypes recursively normalizes type values from uppercase to lowercase
@@ -1065,22 +1157,60 @@ func buildJSONSchemaFromMap(schemaMap map[string]interface{}) *schemas.Responses
 }
 
 // buildOpenAIResponseFormat builds OpenAI response_format for JSON types
-func buildOpenAIResponseFormat(responseJsonSchema interface{}) *schemas.ResponsesTextConfig {
+func buildOpenAIResponseFormat(responseJsonSchema interface{}, responseSchema *Schema) *schemas.ResponsesTextConfig {
 	name := "json_response"
 
-	// No schema provided - use json_object mode
-	if responseJsonSchema == nil {
-		return &schemas.ResponsesTextConfig{
-			Format: &schemas.ResponsesTextConfigFormat{
-				Type: "json_object",
-			},
-		}
-	}
+	var schemaMap map[string]interface{}
 
-	// Use responseJsonSchema directly if it's a map
-	schemaMap, ok := responseJsonSchema.(map[string]interface{})
-	if !ok {
-		// If not a map, fall back to json_object mode
+	// Try to use responseJsonSchema first
+	if responseJsonSchema != nil {
+		// Use responseJsonSchema directly if it's a map
+		var ok bool
+		schemaMap, ok = responseJsonSchema.(map[string]interface{})
+		if !ok {
+			// If not a map, fall back to json_object mode
+			return &schemas.ResponsesTextConfig{
+				Format: &schemas.ResponsesTextConfigFormat{
+					Type: "json_object",
+				},
+			}
+		}
+	} else if responseSchema != nil {
+		// Convert responseSchema to map using JSON marshaling and type normalization
+		data, err := sonic.Marshal(responseSchema)
+		if err != nil {
+			// If marshaling fails, fall back to json_object mode
+			return &schemas.ResponsesTextConfig{
+				Format: &schemas.ResponsesTextConfigFormat{
+					Type: "json_object",
+				},
+			}
+		}
+
+		var rawMap map[string]interface{}
+		if err := sonic.Unmarshal(data, &rawMap); err != nil {
+			// If unmarshaling fails, fall back to json_object mode
+			return &schemas.ResponsesTextConfig{
+				Format: &schemas.ResponsesTextConfigFormat{
+					Type: "json_object",
+				},
+			}
+		}
+
+		// Apply type normalization (convert types to lowercase)
+		normalized := convertTypeToLowerCase(rawMap)
+		var ok bool
+		schemaMap, ok = normalized.(map[string]interface{})
+		if !ok {
+			// If type assertion fails, fall back to json_object mode
+			return &schemas.ResponsesTextConfig{
+				Format: &schemas.ResponsesTextConfigFormat{
+					Type: "json_object",
+				},
+			}
+		}
+	} else {
+		// No schema provided - use json_object mode
 		return &schemas.ResponsesTextConfig{
 			Format: &schemas.ResponsesTextConfigFormat{
 				Type: "json_object",
