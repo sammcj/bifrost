@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,7 +16,7 @@ import (
 )
 
 // RunTranscriptionTest executes the transcription test scenario
-func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.Transcription {
 		t.Logf("Transcription not supported for provider %s", testConfig.Provider)
 		return
@@ -138,7 +139,8 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bi
 					}
 
 					ttsResponse, err := WithSpeechTestRetry(t, speechRetryConfig, ttsRetryContext, ttsExpectations, "Transcription_RoundTrip_TTS_"+tc.name, func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
-						return client.SpeechRequest(ctx, ttsRequest)
+						bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)	
+						return client.SpeechRequest(bfCtx, ttsRequest)
 					})
 					if err != nil {
 						t.Fatalf("❌ TTS generation failed for round-trip test after retries: %v", GetErrorMessage(err))
@@ -206,7 +208,8 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bi
 				}
 
 				transcriptionResponse, bifrostErr := WithTranscriptionTestRetry(t, transcriptionRetryConfig, retryContext, expectations, "Transcription_RoundTrip_"+tc.name, func() (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
-					return client.TranscriptionRequest(ctx, transcriptionRequest)
+					bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+					return client.TranscriptionRequest(bfCtx, transcriptionRequest)
 				})
 
 				if bifrostErr != nil {
@@ -314,7 +317,8 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bi
 					}
 
 					response, err := WithTranscriptionTestRetry(t, customTranscriptionRetryConfig, customRetryContext, customExpectations, "Transcription_Custom_"+tc.name, func() (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
-						return client.TranscriptionRequest(ctx, request)
+						bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+						return client.TranscriptionRequest(bfCtx, request)
 					})
 					if err != nil {
 						errorMsg := GetErrorMessage(err)
@@ -338,7 +342,7 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bi
 }
 
 // RunTranscriptionAdvancedTest executes advanced transcription test scenarios
-func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.Transcription {
 		t.Logf("Transcription not supported for provider %s", testConfig.Provider)
 		return
@@ -423,7 +427,8 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx *sc
 					}
 
 					response, err := WithTranscriptionTestRetry(t, formatTranscriptionRetryConfig, formatRetryContext, formatExpectations, "Transcription_Format_"+format, func() (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
-						return client.TranscriptionRequest(ctx, request)
+						bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+						return client.TranscriptionRequest(bfCtx, request)
 					})
 					if err != nil {
 						errorMsg := GetErrorMessage(err)
@@ -518,7 +523,8 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx *sc
 			}
 
 			response, err := WithTranscriptionTestRetry(t, advancedTranscriptionRetryConfig, advancedRetryContext, advancedExpectations, "Transcription_Advanced_CustomParams", func() (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
-				return client.TranscriptionRequest(ctx, request)
+				bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+				return client.TranscriptionRequest(bfCtx, request)
 			})
 			if err != nil {
 				errorMsg := GetErrorMessage(err)
@@ -615,7 +621,8 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx *sc
 					}
 
 					response, err := WithTranscriptionTestRetry(t, langTranscriptionRetryConfig, langRetryContext, langExpectations, "Transcription_Language_"+lang, func() (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
-						return client.TranscriptionRequest(ctx, request)
+						bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+						return client.TranscriptionRequest(bfCtx, request)
 					})
 					if err != nil {
 						errorMsg := GetErrorMessage(err)

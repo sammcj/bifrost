@@ -13,7 +13,7 @@ import (
 )
 
 // RunTextCompletionStreamTest executes the text completion streaming test scenario
-func RunTextCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunTextCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.TextCompletionStream {
 		t.Logf("Text completion stream not supported for provider %s", testConfig.Provider)
 		return
@@ -64,7 +64,8 @@ func RunTextCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *sch
 
 		// Use proper streaming retry wrapper for the stream request
 		responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-			return client.TextCompletionStreamRequest(ctx, request)
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			return client.TextCompletionStreamRequest(bfCtx, request)
 		})
 
 		// Enhanced error handling
@@ -263,7 +264,8 @@ func RunTextCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *sch
 				}
 
 				responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-					return client.TextCompletionStreamRequest(ctx, request)
+					bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+					return client.TextCompletionStreamRequest(bfCtx, request)
 				})
 
 				RequireNoError(t, err, "Text completion stream with varied prompts failed")
@@ -405,7 +407,8 @@ func RunTextCompletionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *sch
 				}
 
 				responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-					return client.TextCompletionStreamRequest(ctx, request)
+					bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+					return client.TextCompletionStreamRequest(bfCtx, request)
 				})
 
 				RequireNoError(t, err, "Text completion stream with parameters failed")

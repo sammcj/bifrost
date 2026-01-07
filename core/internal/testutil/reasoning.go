@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 )
 
 // RunResponsesReasoningTest executes the reasoning test scenario to test thinking capabilities via Responses API only
-func RunResponsesReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunResponsesReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.Reasoning {
 		t.Logf("⏭️ Reasoning not supported for provider %s", testConfig.Provider)
 		return
@@ -84,7 +85,8 @@ func RunResponsesReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx *schem
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 
 		response, responsesError := WithResponsesTestRetry(t, responsesRetryConfig, retryContext, expectations, "Reasoning", func() (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
-			return client.ResponsesRequest(ctx, responsesReq)
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			return client.ResponsesRequest(bfCtx, responsesReq)
 		})
 
 		if responsesError != nil {
@@ -198,7 +200,7 @@ func validateResponsesAPIReasoning(t *testing.T, response *schemas.BifrostRespon
 }
 
 // RunChatCompletionReasoningTest executes the reasoning test scenario to test thinking capabilities via Chat Completions API
-func RunChatCompletionReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunChatCompletionReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.Reasoning {
 		t.Logf("⏭️ Reasoning not supported for provider %s", testConfig.Provider)
 		return
@@ -277,7 +279,8 @@ func RunChatCompletionReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx *
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 
 		response, chatError := WithChatTestRetry(t, chatRetryConfig, retryContext, expectations, "Reasoning", func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
-			return client.ChatCompletionRequest(ctx, chatReq)
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			return client.ChatCompletionRequest(bfCtx, chatReq)
 		})
 
 		if chatError != nil {

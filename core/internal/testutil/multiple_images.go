@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -10,7 +11,7 @@ import (
 )
 
 // RunMultipleImagesTest executes the multiple images test scenario
-func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.MultipleImages {
 		t.Logf("Multiple images not supported for provider %s", testConfig.Provider)
 		return
@@ -99,7 +100,8 @@ func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.B
 		}...) // Failure to process multiple images indicators
 
 		response, bifrostError := WithChatTestRetry(t, chatRetryConfig, retryContext, expectations, "MultipleImages", func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
-			return client.ChatCompletionRequest(ctx, request)
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			return client.ChatCompletionRequest(bfCtx, request)
 		})
 
 		// Validation now happens inside WithTestRetry - no need to check again

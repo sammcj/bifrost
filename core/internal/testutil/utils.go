@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -567,7 +568,7 @@ func getEmbeddingVector(embedding schemas.EmbeddingData) ([]float32, error) {
 
 // GenerateTTSAudioForTest generates real audio using TTS and writes a temp file.
 // Returns audio bytes and temp filepath. Caller’s t will clean it up.
-func GenerateTTSAudioForTest(ctx *schemas.BifrostContext, t *testing.T, client *bifrost.Bifrost, provider schemas.ModelProvider, ttsModel string, text string, voiceType string, format string) ([]byte, string) {
+func GenerateTTSAudioForTest(ctx context.Context, t *testing.T, client *bifrost.Bifrost, provider schemas.ModelProvider, ttsModel string, text string, voiceType string, format string) ([]byte, string) {
 	// inline import guard comment: context/testing/os are required at call sites; Go compiler will include them.
 	voice := GetProviderVoice(provider, voiceType)
 	if voice == "" {
@@ -615,7 +616,8 @@ func GenerateTTSAudioForTest(ctx *schemas.BifrostContext, t *testing.T, client *
 	}
 
 	resp, err := WithSpeechTestRetry(t, speechRetryConfig, retryContext, expectations, "GenerateTTSAudioForTest", func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
-		return client.SpeechRequest(ctx, req)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		return client.SpeechRequest(bfCtx, req)
 	})
 	if err != nil {
 		t.Fatalf("TTS request failed after retries: %v", GetErrorMessage(err))

@@ -21,7 +21,7 @@ func (baseAccount *BaseAccount) GetConfiguredProviders() ([]schemas.ModelProvide
 // GetKeysForProvider returns a dummy API key configuration for testing.
 // Since we're testing the mocker plugin, these keys should never be used
 // as the plugin intercepts requests before they reach the actual providers.
-func (baseAccount *BaseAccount) GetKeysForProvider(ctx *schemas.BifrostContext, providerKey schemas.ModelProvider) ([]schemas.Key, error) {
+func (baseAccount *BaseAccount) GetKeysForProvider(ctx context.Context, providerKey schemas.ModelProvider) ([]schemas.Key, error) {
 	return []schemas.Key{
 		{
 			Value:  "dummy-api-key-for-testing", // Dummy key

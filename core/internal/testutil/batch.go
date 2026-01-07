@@ -2,6 +2,7 @@
 package testutil
 
 import (
+	"context"
 	"testing"
 
 	bifrost "github.com/maximhq/bifrost/core"
@@ -9,7 +10,7 @@ import (
 )
 
 // RunBatchCreateTest tests the batch create functionality
-func RunBatchCreateTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunBatchCreateTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.BatchCreate {
 		t.Logf("[SKIPPED] Batch Create: Not supported by provider %s", testConfig.Provider)
 		return
@@ -37,8 +38,8 @@ func RunBatchCreateTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifr
 			CompletionWindow: "24h",
 			ExtraParams:      testConfig.BatchExtraParams,
 		}
-
-		response, err := client.BatchCreateRequest(ctx, request)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		response, err := client.BatchCreateRequest(bfCtx, request)
 		if err != nil {
 			// Check if this is an unsupported operation error
 			if err.Error != nil && (err.Error.Code != nil && *err.Error.Code == "unsupported_operation") {
@@ -64,7 +65,7 @@ func RunBatchCreateTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifr
 }
 
 // RunBatchListTest tests the batch list functionality
-func RunBatchListTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunBatchListTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.BatchList {
 		t.Logf("[SKIPPED] Batch List: Not supported by provider %s", testConfig.Provider)
 		return
@@ -78,7 +79,8 @@ func RunBatchListTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifros
 			Limit:    10,
 		}
 
-		response, err := client.BatchListRequest(ctx, request)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		response, err := client.BatchListRequest(bfCtx, request)
 		if err != nil {
 			// Check if this is an unsupported operation error
 			if err.Error != nil && (err.Error.Code != nil && *err.Error.Code == "unsupported_operation") {
@@ -99,7 +101,7 @@ func RunBatchListTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifros
 }
 
 // RunBatchRetrieveTest tests the batch retrieve functionality
-func RunBatchRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunBatchRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.BatchRetrieve {
 		t.Logf("[SKIPPED] Batch Retrieve: Not supported by provider %s", testConfig.Provider)
 		return
@@ -129,7 +131,8 @@ func RunBatchRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bi
 			ExtraParams:      testConfig.BatchExtraParams,
 		}
 
-		createResponse, createErr := client.BatchCreateRequest(ctx, createRequest)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		createResponse, createErr := client.BatchCreateRequest(bfCtx, createRequest)
 		if createErr != nil {
 			// Check if this is an unsupported operation error
 			if createErr.Error != nil && (createErr.Error.Code != nil && *createErr.Error.Code == "unsupported_operation") {
@@ -151,7 +154,8 @@ func RunBatchRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bi
 			BatchID:  createResponse.ID,
 		}
 
-		response, err := client.BatchRetrieveRequest(ctx, retrieveRequest)
+		bfCtx2 := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		response, err := client.BatchRetrieveRequest(bfCtx2, retrieveRequest)
 		if err != nil {
 			t.Errorf("BatchRetrieve failed: %v", err)
 			return
@@ -172,7 +176,7 @@ func RunBatchRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bi
 }
 
 // RunBatchCancelTest tests the batch cancel functionality
-func RunBatchCancelTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunBatchCancelTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.BatchCancel {
 		t.Logf("[SKIPPED] Batch Cancel: Not supported by provider %s", testConfig.Provider)
 		return
@@ -201,7 +205,8 @@ func RunBatchCancelTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifr
 			ExtraParams:      testConfig.BatchExtraParams,
 		}
 
-		createResponse, createErr := client.BatchCreateRequest(ctx, createRequest)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		createResponse, createErr := client.BatchCreateRequest(bfCtx, createRequest)
 		if createErr != nil {
 			// Check if this is an unsupported operation error
 			if createErr.Error != nil && (createErr.Error.Code != nil && *createErr.Error.Code == "unsupported_operation") {
@@ -223,7 +228,8 @@ func RunBatchCancelTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifr
 			BatchID:  createResponse.ID,
 		}
 
-		response, err := client.BatchCancelRequest(ctx, cancelRequest)
+		bfCtx2 := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		response, err := client.BatchCancelRequest(bfCtx2, cancelRequest)
 		if err != nil {
 			// Note: Cancel might fail if batch has already completed
 			t.Logf("[WARNING] BatchCancel failed (batch may have already completed): %v", err)
@@ -240,7 +246,7 @@ func RunBatchCancelTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifr
 }
 
 // RunBatchResultsTest tests the batch results functionality
-func RunBatchResultsTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunBatchResultsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.BatchResults {
 		t.Logf("[SKIPPED] Batch Results: Not supported by provider %s", testConfig.Provider)
 		return
@@ -260,7 +266,8 @@ func RunBatchResultsTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bif
 			BatchID:  "test-batch-id", // This would be a real batch ID in practice
 		}
 
-		_, err := client.BatchResultsRequest(ctx, request)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		_, err := client.BatchResultsRequest(bfCtx, request)
 		if err != nil {
 			// This is expected to fail with a "batch not found" error since we're using a fake ID
 			// In a real test, you would use an actual completed batch ID
@@ -273,7 +280,7 @@ func RunBatchResultsTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bif
 }
 
 // RunBatchUnsupportedTest tests that unsupported providers return appropriate errors
-func RunBatchUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunBatchUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	// Only run this test for providers that don't support batch
 	if testConfig.Scenarios.BatchCreate || testConfig.Scenarios.BatchList ||
 		testConfig.Scenarios.BatchRetrieve || testConfig.Scenarios.BatchCancel ||
@@ -309,7 +316,8 @@ func RunBatchUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas
 			},
 		}
 
-		_, err := client.BatchCreateRequest(ctx, request)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		_, err := client.BatchCreateRequest(bfCtx, request)
 		if err == nil {
 			t.Error("BatchCreate should have failed for unsupported provider")
 			return
@@ -330,7 +338,7 @@ func RunBatchUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas
 // ============================================================================
 
 // RunFileUploadTest tests the file upload functionality
-func RunFileUploadTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunFileUploadTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.FileUpload {
 		t.Logf("[SKIPPED] File Upload: Not supported by provider %s", testConfig.Provider)
 		return
@@ -351,7 +359,8 @@ func RunFileUploadTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifro
 			ExtraParams: testConfig.FileExtraParams,
 		}
 
-		response, err := client.FileUploadRequest(ctx, request)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		response, err := client.FileUploadRequest(bfCtx, request)
 		if err != nil {
 			// Check if this is an unsupported operation error
 			if err.Error != nil && (err.Error.Code != nil && *err.Error.Code == "unsupported_operation") {
@@ -377,7 +386,7 @@ func RunFileUploadTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifro
 }
 
 // RunFileListTest tests the file list functionality
-func RunFileListTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunFileListTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.FileList {
 		t.Logf("[SKIPPED] File List: Not supported by provider %s", testConfig.Provider)
 		return
@@ -392,7 +401,8 @@ func RunFileListTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifrost
 			ExtraParams: testConfig.FileExtraParams,
 		}
 
-		response, err := client.FileListRequest(ctx, request)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		response, err := client.FileListRequest(bfCtx, request)
 		if err != nil {
 			// Check if this is an unsupported operation error
 			if err.Error != nil && (err.Error.Code != nil && *err.Error.Code == "unsupported_operation") {
@@ -413,7 +423,7 @@ func RunFileListTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifrost
 }
 
 // RunFileRetrieveTest tests the file retrieve functionality
-func RunFileRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunFileRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.FileRetrieve {
 		t.Logf("[SKIPPED] File Retrieve: Not supported by provider %s", testConfig.Provider)
 		return
@@ -434,7 +444,8 @@ func RunFileRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bif
 			ExtraParams: testConfig.FileExtraParams,
 		}
 
-		uploadResponse, uploadErr := client.FileUploadRequest(ctx, uploadRequest)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		uploadResponse, uploadErr := client.FileUploadRequest(bfCtx, uploadRequest)
 		if uploadErr != nil {
 			if uploadErr.Error != nil && (uploadErr.Error.Code != nil && *uploadErr.Error.Code == "unsupported_operation") {
 				t.Logf("[EXPECTED] Provider %s returned unsupported operation error for upload", testConfig.Provider)
@@ -455,7 +466,8 @@ func RunFileRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bif
 			FileID:   uploadResponse.ID,
 		}
 
-		response, err := client.FileRetrieveRequest(ctx, retrieveRequest)
+		bfCtx2 := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		response, err := client.FileRetrieveRequest(bfCtx2, retrieveRequest)
 		if err != nil {
 			t.Errorf("FileRetrieve failed: %v", err)
 			return
@@ -476,7 +488,7 @@ func RunFileRetrieveTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bif
 }
 
 // RunFileDeleteTest tests the file delete functionality
-func RunFileDeleteTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunFileDeleteTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.FileDelete {
 		t.Logf("[SKIPPED] File Delete: Not supported by provider %s", testConfig.Provider)
 		return
@@ -497,7 +509,8 @@ func RunFileDeleteTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifro
 			ExtraParams: testConfig.FileExtraParams,
 		}
 
-		uploadResponse, uploadErr := client.FileUploadRequest(ctx, uploadRequest)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		uploadResponse, uploadErr := client.FileUploadRequest(bfCtx, uploadRequest)
 		if uploadErr != nil {
 			if uploadErr.Error != nil && (uploadErr.Error.Code != nil && *uploadErr.Error.Code == "unsupported_operation") {
 				t.Logf("[EXPECTED] Provider %s returned unsupported operation error for upload", testConfig.Provider)
@@ -518,7 +531,8 @@ func RunFileDeleteTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifro
 			FileID:   uploadResponse.ID,
 		}
 
-		response, err := client.FileDeleteRequest(ctx, deleteRequest)
+		bfCtx2 := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		response, err := client.FileDeleteRequest(bfCtx2, deleteRequest)
 		if err != nil {
 			t.Errorf("FileDelete failed: %v", err)
 			return
@@ -539,7 +553,7 @@ func RunFileDeleteTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifro
 }
 
 // RunFileContentTest tests the file content download functionality
-func RunFileContentTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunFileContentTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.FileContent {
 		t.Logf("[SKIPPED] File Content: Not supported by provider %s", testConfig.Provider)
 		return
@@ -560,7 +574,8 @@ func RunFileContentTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifr
 			ExtraParams: testConfig.FileExtraParams,
 		}
 
-		uploadResponse, uploadErr := client.FileUploadRequest(ctx, uploadRequest)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		uploadResponse, uploadErr := client.FileUploadRequest(bfCtx, uploadRequest)
 		if uploadErr != nil {
 			if uploadErr.Error != nil && (uploadErr.Error.Code != nil && *uploadErr.Error.Code == "unsupported_operation") {
 				t.Logf("[EXPECTED] Provider %s returned unsupported operation error for upload", testConfig.Provider)
@@ -581,7 +596,8 @@ func RunFileContentTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifr
 			FileID:   uploadResponse.ID,
 		}
 
-		response, err := client.FileContentRequest(ctx, contentRequest)
+		bfCtx2 := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		response, err := client.FileContentRequest(bfCtx2, contentRequest)
 		if err != nil {
 			t.Errorf("FileContent failed: %v", err)
 			return
@@ -603,7 +619,7 @@ func RunFileContentTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifr
 }
 
 // RunFileUnsupportedTest tests that unsupported providers return appropriate errors for file operations
-func RunFileUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunFileUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	// Only run this test for providers that don't support any file operations
 	if testConfig.Scenarios.FileUpload || testConfig.Scenarios.FileList ||
 		testConfig.Scenarios.FileRetrieve || testConfig.Scenarios.FileDelete ||
@@ -629,7 +645,8 @@ func RunFileUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.
 			Purpose:  "batch",
 		}
 
-		_, err := client.FileUploadRequest(ctx, request)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		_, err := client.FileUploadRequest(bfCtx, request)
 		if err == nil {
 			t.Error("FileUpload should have failed for unsupported provider")
 			return
@@ -646,7 +663,7 @@ func RunFileUnsupportedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.
 }
 
 // RunFileAndBatchIntegrationTest tests the integration between file upload and batch create
-func RunFileAndBatchIntegrationTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunFileAndBatchIntegrationTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	// Skip if file-based batch input is not supported
 	if !testConfig.Scenarios.FileBatchInput {
 		t.Logf("[SKIPPED] File and Batch Integration: FileBatchInput=%v for provider %s",
@@ -670,7 +687,8 @@ func RunFileAndBatchIntegrationTest(t *testing.T, client *bifrost.Bifrost, ctx *
 			ExtraParams: testConfig.FileExtraParams,
 		}
 
-		uploadResponse, uploadErr := client.FileUploadRequest(ctx, uploadRequest)
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		uploadResponse, uploadErr := client.FileUploadRequest(bfCtx, uploadRequest)
 		if uploadErr != nil {
 			if uploadErr.Error != nil && (uploadErr.Error.Code != nil && *uploadErr.Error.Code == "unsupported_operation") {
 				t.Logf("[EXPECTED] Provider %s returned unsupported operation error for upload", testConfig.Provider)
@@ -697,7 +715,8 @@ func RunFileAndBatchIntegrationTest(t *testing.T, client *bifrost.Bifrost, ctx *
 			ExtraParams:      testConfig.BatchExtraParams,
 		}
 
-		batchResponse, batchErr := client.BatchCreateRequest(ctx, batchRequest)
+		bfCtx2 := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		batchResponse, batchErr := client.BatchCreateRequest(bfCtx2, batchRequest)
 		if batchErr != nil {
 			if batchErr.Error != nil && (batchErr.Error.Code != nil && *batchErr.Error.Code == "unsupported_operation") {
 				t.Logf("[EXPECTED] Provider %s returned unsupported operation error for batch create", testConfig.Provider)

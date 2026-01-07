@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 )
 
 // RunListModelsTest executes the list models test scenario
-func RunListModelsTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunListModelsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ListModels {
 		t.Logf("List models not supported for provider %s", testConfig.Provider)
 		return
@@ -58,7 +59,8 @@ func RunListModelsTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifro
 		}
 
 		response, bifrostErr := WithListModelsTestRetry(t, listModelsRetryConfig, retryContext, expectations, "ListModels", func() (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
-			return client.ListModelsRequest(ctx, request)
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			return client.ListModelsRequest(bfCtx, request)
 		})
 
 		if bifrostErr != nil {
@@ -107,7 +109,7 @@ func RunListModelsTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifro
 }
 
 // RunListModelsPaginationTest executes pagination test for list models
-func RunListModelsPaginationTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunListModelsPaginationTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ListModels {
 		t.Logf("List models not supported for provider %s", testConfig.Provider)
 		return
@@ -159,7 +161,8 @@ func RunListModelsPaginationTest(t *testing.T, client *bifrost.Bifrost, ctx *sch
 		}
 
 		response, bifrostErr := WithListModelsTestRetry(t, listModelsRetryConfig, retryContext, expectations, "ListModelsPagination", func() (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
-			return client.ListModelsRequest(ctx, request)
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			return client.ListModelsRequest(bfCtx, request)
 		})
 
 		if bifrostErr != nil {
@@ -201,7 +204,8 @@ func RunListModelsPaginationTest(t *testing.T, client *bifrost.Bifrost, ctx *sch
 			}
 
 			nextPageResponse, nextPageErr := WithListModelsTestRetry(t, listModelsRetryConfig, nextPageRetryContext, expectations, "ListModelsPagination_NextPage", func() (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
-				return client.ListModelsRequest(ctx, nextPageRequest)
+				bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+				return client.ListModelsRequest(bfCtx, nextPageRequest)
 			})
 
 			if nextPageErr != nil {

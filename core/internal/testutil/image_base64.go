@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -10,7 +11,7 @@ import (
 )
 
 // RunImageBase64Test executes the image base64 test scenario using dual API testing framework
-func RunImageBase64Test(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunImageBase64Test(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ImageBase64 {
 		t.Logf("Image base64 not supported for provider %s", testConfig.Provider)
 		return
@@ -65,6 +66,7 @@ func RunImageBase64Test(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifr
 
 		// Create operations for both Chat Completions and Responses API
 		chatOperation := func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			chatReq := &schemas.BifrostChatRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.VisionModel,
@@ -74,10 +76,11 @@ func RunImageBase64Test(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifr
 				},
 				Fallbacks: testConfig.Fallbacks,
 			}
-			return client.ChatCompletionRequest(ctx, chatReq)
+			return client.ChatCompletionRequest(bfCtx, chatReq)
 		}
 
 		responsesOperation := func() (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			responsesReq := &schemas.BifrostResponsesRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.VisionModel,
@@ -87,7 +90,7 @@ func RunImageBase64Test(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifr
 				},
 				Fallbacks: testConfig.Fallbacks,
 			}
-			return client.ResponsesRequest(ctx, responsesReq)
+			return client.ResponsesRequest(bfCtx, responsesReq)
 		}
 
 		// Execute dual API test - passes only if BOTH APIs succeed

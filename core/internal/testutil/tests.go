@@ -1,18 +1,18 @@
 package testutil
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	bifrost "github.com/maximhq/bifrost/core"
-	"github.com/maximhq/bifrost/core/schemas"
 )
 
 // TestScenarioFunc defines the function signature for test scenario functions
-type TestScenarioFunc func(*testing.T, *bifrost.Bifrost, *schemas.BifrostContext, ComprehensiveTestConfig)
+type TestScenarioFunc func(*testing.T, *bifrost.Bifrost, context.Context, ComprehensiveTestConfig)
 
 // RunAllComprehensiveTests executes all comprehensive test scenarios for a given configuration
-func RunAllComprehensiveTests(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunAllComprehensiveTests(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if testConfig.SkipReason != "" {
 		t.Skipf("Skipping %s: %s", testConfig.Provider, testConfig.SkipReason)
 		return

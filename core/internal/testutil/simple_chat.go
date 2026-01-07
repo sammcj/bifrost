@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 )
 
 // RunSimpleChatTest executes the simple chat test scenario using dual API testing framework
-func RunSimpleChatTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunSimpleChatTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.SimpleChat {
 		t.Logf("Simple chat not supported for provider %s", testConfig.Provider)
 		return
@@ -69,6 +70,7 @@ func RunSimpleChatTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifro
 
 		// Test Chat Completions API
 		chatOperation := func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			chatReq := &schemas.BifrostChatRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.ChatModel,
@@ -78,7 +80,7 @@ func RunSimpleChatTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifro
 				},
 				Fallbacks: testConfig.Fallbacks,
 			}
-			response, err := client.ChatCompletionRequest(ctx, chatReq)
+			response, err := client.ChatCompletionRequest(bfCtx, chatReq)
 			if err != nil {
 				return nil, err
 			}
@@ -97,13 +99,14 @@ func RunSimpleChatTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifro
 
 		// Test Responses API
 		responsesOperation := func() (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			responsesReq := &schemas.BifrostResponsesRequest{
 				Provider:  testConfig.Provider,
 				Model:     testConfig.ChatModel,
 				Input:     responsesMessages,
 				Fallbacks: testConfig.Fallbacks,
 			}
-			response, err := client.ResponsesRequest(ctx, responsesReq)
+			response, err := client.ResponsesRequest(bfCtx, responsesReq)
 			if err != nil {
 				return nil, err
 			}

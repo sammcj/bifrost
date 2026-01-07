@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"os"
@@ -35,7 +36,7 @@ func cosineSimilarity(a, b []float32) float64 {
 }
 
 // RunEmbeddingTest executes the embedding test scenario
-func RunEmbeddingTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunEmbeddingTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.Embedding {
 		t.Logf("Embedding not supported for provider %s", testConfig.Provider)
 		return
@@ -98,7 +99,8 @@ func RunEmbeddingTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifros
 		}
 
 		embeddingResponse, bifrostErr := WithEmbeddingTestRetry(t, embeddingRetryConfig, retryContext, expectations, "Embedding", func() (*schemas.BifrostEmbeddingResponse, *schemas.BifrostError) {
-			return client.EmbeddingRequest(ctx, request)
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			return client.EmbeddingRequest(bfCtx, request)
 		})
 
 		if bifrostErr != nil {

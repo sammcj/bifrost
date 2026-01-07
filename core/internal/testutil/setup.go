@@ -48,8 +48,8 @@ func getBifrost(ctx context.Context) (*bifrost.Bifrost, error) {
 }
 
 // SetupTest initializes a test environment with timeout context
-func SetupTest() (*bifrost.Bifrost, *schemas.BifrostContext, context.CancelFunc, error) {
-	ctx, cancel := schemas.NewBifrostContextWithTimeout(context.Background(), TestTimeout)
+func SetupTest() (*bifrost.Bifrost, context.Context, context.CancelFunc, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
 	client, err := getBifrost(ctx)
 	if err != nil {
 		cancel()
