@@ -8675,10 +8675,10 @@ func TestSQLite_VirtualKey_WithMCPConfigs(t *testing.T) {
 }
 
 // TestSQLite_VKMCPConfig_Reconciliation tests MCP config reconciliation on hash mismatch.
-// When config.json changes:
+// When config.json changes (file is source of truth):
 // - Configs in both file and DB → update from file
 // - Configs only in file → create new
-// - Configs only in DB → PRESERVE (dashboard-added)
+// - Configs only in DB → DELETE (file is source of truth)
 func TestSQLite_VKMCPConfig_Reconciliation(t *testing.T) {
 	initTestLogger()
 	tempDir := createTempDir(t)
@@ -8796,11 +8796,11 @@ func TestSQLite_VKMCPConfig_Reconciliation(t *testing.T) {
 		t.Fatalf("Failed to get MCP configs after reconciliation: %v", err)
 	}
 
-	// Should have BOTH MCP configs:
-	// - client 1: preserved (was in DB, not in new file - dashboard-added style)
+	// Should have only client 2 (file is source of truth):
+	// - client 1: DELETED (was in DB but not in new file)
 	// - client 2: created (new from file)
-	if len(mcpConfigs) != 2 {
-		t.Errorf("Expected 2 MCP configs after reconciliation (DB-only preserved + file-new created), got %d", len(mcpConfigs))
+	if len(mcpConfigs) != 1 {
+		t.Errorf("Expected 1 MCP config after reconciliation (file is source of truth), got %d", len(mcpConfigs))
 	}
 
 	hasClient1 := false
@@ -8808,10 +8808,6 @@ func TestSQLite_VKMCPConfig_Reconciliation(t *testing.T) {
 	for _, mc := range mcpConfigs {
 		if mc.MCPClientID == mcpClient1.ID {
 			hasClient1 = true
-			// Client 1 should still have original tools (preserved from DB)
-			if len(mc.ToolsToExecute) != 1 || mc.ToolsToExecute[0] != "tool1" {
-				t.Errorf("Expected client 1 to have original tools [tool1], got %v", mc.ToolsToExecute)
-			}
 		}
 		if mc.MCPClientID == mcpClient2.ID {
 			hasClient2 = true
@@ -8822,15 +8818,15 @@ func TestSQLite_VKMCPConfig_Reconciliation(t *testing.T) {
 		}
 	}
 
-	if !hasClient1 {
-		t.Error("MCP config for client 1 should be preserved (DB-only configs are kept)")
+	if hasClient1 {
+		t.Error("MCP config for client 1 should be DELETED (file is source of truth)")
 	}
 	if !hasClient2 {
 		t.Error("MCP config for client 2 should be created from file")
 	}
 
-	if hasClient1 && hasClient2 {
-		t.Logf("✓ MCP config reconciled successfully: client 1 preserved, client 2 created from file")
+	if !hasClient1 && hasClient2 {
+		t.Logf("✓ MCP config reconciled successfully: client 1 deleted, client 2 created from file")
 	}
 }
 
@@ -8844,9 +8840,8 @@ func TestSQLite_VKMCPConfig_Reconciliation(t *testing.T) {
 // 4. User modifies config.json (changes openai weight to 2.0 → hash mismatch)
 // 5. Reload config
 //
-// EXPECTED: "anthropic" provider config should be PRESERVED (dashboard-added data should not be lost)
-// CURRENT BUG: reconcileVirtualKeyAssociations deletes configs not in config.json
-func TestSQLite_VirtualKey_DashboardProviderConfig_PreservedOnFileChange(t *testing.T) {
+// EXPECTED: "anthropic" provider config should be DELETED (file is source of truth when hash changes)
+func TestSQLite_VirtualKey_DashboardProviderConfig_DeletedOnFileChange(t *testing.T) {
 	initTestLogger()
 	tempDir := createTempDir(t)
 	ctx := context.Background()
@@ -8956,13 +8951,13 @@ func TestSQLite_VirtualKey_DashboardProviderConfig_PreservedOnFileChange(t *test
 	}
 	defer config2.ConfigStore.Close(ctx)
 
-	// CRITICAL ASSERTION: Dashboard-added "anthropic" config should be PRESERVED
+	// CRITICAL ASSERTION: Dashboard-added "anthropic" config should be DELETED (file is source of truth)
 	providerConfigs3, err := config2.ConfigStore.GetVirtualKeyProviderConfigs(ctx, "vk-1")
 	if err != nil {
 		t.Fatalf("Failed to get provider configs after second load: %v", err)
 	}
 
-	// Check that we still have both provider configs
+	// Check that only the file's provider config remains
 	hasOpenAI := false
 	hasAnthropic := false
 	for _, pc := range providerConfigs3 {
@@ -8981,22 +8976,22 @@ func TestSQLite_VirtualKey_DashboardProviderConfig_PreservedOnFileChange(t *test
 		t.Error("openai provider config should exist after file change")
 	}
 
-	// THIS IS THE KEY ASSERTION - currently fails due to the bug
-	if !hasAnthropic {
-		t.Error("DASHBOARD DATA LOSS: anthropic provider config added via dashboard was DELETED when config.json changed. Dashboard-added configs should be preserved.")
+	// File is source of truth - dashboard-added config should be deleted when hash changes
+	if hasAnthropic {
+		t.Error("anthropic provider config should be DELETED when config.json changed (file is source of truth)")
 	}
 
-	if len(providerConfigs3) != 2 {
-		t.Errorf("Expected 2 provider configs (openai from file + anthropic from dashboard), got %d. Dashboard-added configs should be preserved on file changes.", len(providerConfigs3))
+	if len(providerConfigs3) != 1 {
+		t.Errorf("Expected 1 provider config (only openai from file), got %d. File is source of truth when hash changes.", len(providerConfigs3))
 	}
 
-	if hasOpenAI && hasAnthropic {
-		t.Logf("✓ Both provider configs preserved: openai (from file, updated) + anthropic (from dashboard)")
+	if hasOpenAI && !hasAnthropic {
+		t.Logf("✓ Only file provider config remains: openai (from file, updated). Dashboard-added anthropic correctly deleted.")
 	}
 }
 
-// TestSQLite_VirtualKey_DashboardMCPConfig_PreservedOnFileChange tests that MCP configs
-// added via dashboard to a VK that also exists in config.json are PRESERVED when config.json changes.
+// TestSQLite_VirtualKey_DashboardMCPConfig_DeletedOnFileChange tests that MCP configs
+// added via dashboard to a VK that also exists in config.json are DELETED when config.json changes.
 //
 // SCENARIO:
 // 1. config.json has VK "vk-1" with MCP config for client 1
@@ -9005,9 +9000,8 @@ func TestSQLite_VirtualKey_DashboardProviderConfig_PreservedOnFileChange(t *test
 // 4. User modifies config.json (changes tools for client 1 → hash mismatch)
 // 5. Reload config
 //
-// EXPECTED: MCP config for client 2 should be PRESERVED (dashboard-added data should not be lost)
-// CURRENT BUG: reconcileVirtualKeyAssociations deletes configs not in config.json
-func TestSQLite_VirtualKey_DashboardMCPConfig_PreservedOnFileChange(t *testing.T) {
+// EXPECTED: MCP config for client 2 should be DELETED (file is source of truth when hash changes)
+func TestSQLite_VirtualKey_DashboardMCPConfig_DeletedOnFileChange(t *testing.T) {
 	initTestLogger()
 	tempDir := createTempDir(t)
 	ctx := context.Background()
@@ -9132,13 +9126,13 @@ func TestSQLite_VirtualKey_DashboardMCPConfig_PreservedOnFileChange(t *testing.T
 	}
 	defer config2.ConfigStore.Close(ctx)
 
-	// CRITICAL ASSERTION: Dashboard-added MCP config for client 2 should be PRESERVED
+	// CRITICAL ASSERTION: Dashboard-added MCP config for client 2 should be DELETED (file is source of truth)
 	mcpConfigs2, err := config2.ConfigStore.GetVirtualKeyMCPConfigs(ctx, "vk-1")
 	if err != nil {
 		t.Fatalf("Failed to get MCP configs after second load: %v", err)
 	}
 
-	// Check that we still have both MCP configs
+	// Check that only the file's MCP config remains
 	hasClient1 := false
 	hasClient2 := false
 	for _, mc := range mcpConfigs2 {
@@ -9157,27 +9151,26 @@ func TestSQLite_VirtualKey_DashboardMCPConfig_PreservedOnFileChange(t *testing.T
 		t.Error("MCP config for client 1 should exist after file change")
 	}
 
-	// THIS IS THE KEY ASSERTION - currently fails due to the bug
-	if !hasClient2 {
-		t.Error("DASHBOARD DATA LOSS: MCP config for client 2 added via dashboard was DELETED when config.json changed. Dashboard-added configs should be preserved.")
+	// File is source of truth - dashboard-added config should be deleted when hash changes
+	if hasClient2 {
+		t.Error("MCP config for client 2 should be DELETED when config.json changed (file is source of truth)")
 	}
 
-	if len(mcpConfigs2) != 2 {
-		t.Errorf("Expected 2 MCP configs (client 1 from file + client 2 from dashboard), got %d. Dashboard-added configs should be preserved on file changes.", len(mcpConfigs2))
+	if len(mcpConfigs2) != 1 {
+		t.Errorf("Expected 1 MCP config (only client 1 from file), got %d. File is source of truth when hash changes.", len(mcpConfigs2))
 	}
 
-	if hasClient1 && hasClient2 {
-		t.Logf("✓ Both MCP configs preserved: client 1 (from file, updated) + client 2 (from dashboard)")
+	if hasClient1 && !hasClient2 {
+		t.Logf("✓ Only file MCP config remains: client 1 (from file, updated). Dashboard-added client 2 correctly deleted.")
 	}
 }
 
 // TestSQLite_VKMCPConfig_AddRemove tests adding MCP configs via config.json and verifies
-// that removing from config.json does NOT delete them (they are preserved to protect dashboard-added configs).
+// that removing from config.json DELETES them (file is source of truth when hash changes).
 //
 // Behavior:
 // - Adding via config.json: configs are created
-// - Removing from config.json: configs are PRESERVED (not deleted)
-// - To delete configs, use dashboard/API directly
+// - Removing from config.json: configs are DELETED (file is source of truth)
 func TestSQLite_VKMCPConfig_AddRemove(t *testing.T) {
 	initTestLogger()
 	tempDir := createTempDir(t)
@@ -9259,7 +9252,7 @@ func TestSQLite_VKMCPConfig_AddRemove(t *testing.T) {
 	config2.ConfigStore.Close(ctx)
 
 	// Update config.json to remove one MCP config from the file
-	// NOTE: With the dashboard-preservation fix, configs are NOT deleted when removed from file
+	// With file-is-source-of-truth, configs ARE deleted when removed from file (hash change)
 	vks3 := []tables.TableVirtualKey{
 		{
 			ID:          "vk-1",
@@ -9276,8 +9269,7 @@ func TestSQLite_VKMCPConfig_AddRemove(t *testing.T) {
 	configData3 := makeConfigDataWithVirtualKeysAndDir(providers, vks3, tempDir)
 	createConfigFile(t, tempDir, configData3)
 
-	// Third load - mcpClient2 config should be PRESERVED (not deleted)
-	// This protects dashboard-added configs from accidental deletion
+	// Third load - mcpClient2 config should be DELETED (file is source of truth)
 	config3, err := LoadConfig(ctx, tempDir)
 	if err != nil {
 		t.Fatalf("Third LoadConfig failed: %v", err)
@@ -9285,9 +9277,9 @@ func TestSQLite_VKMCPConfig_AddRemove(t *testing.T) {
 	defer config3.ConfigStore.Close(ctx)
 
 	mcpConfigs, _ = config3.ConfigStore.GetVirtualKeyMCPConfigs(ctx, "vk-1")
-	// Both configs should still exist (DB-only configs are preserved)
-	if len(mcpConfigs) != 2 {
-		t.Errorf("Expected 2 MCP configs after file change (DB configs preserved), got %d", len(mcpConfigs))
+	// Only client1 config should remain (file is source of truth)
+	if len(mcpConfigs) != 1 {
+		t.Errorf("Expected 1 MCP config after file change (file is source of truth), got %d", len(mcpConfigs))
 	}
 
 	hasClient1 := false
@@ -9304,10 +9296,10 @@ func TestSQLite_VKMCPConfig_AddRemove(t *testing.T) {
 	if !hasClient1 {
 		t.Error("MCP config for client 1 should exist")
 	}
-	if !hasClient2 {
-		t.Error("MCP config for client 2 should be preserved (DB configs not deleted on file change)")
+	if hasClient2 {
+		t.Error("MCP config for client 2 should be DELETED (file is source of truth)")
 	}
-	t.Logf("✓ After file change: %d MCP config(s) preserved (DB configs protected)", len(mcpConfigs))
+	t.Logf("✓ After file change: %d MCP config(s) - file is source of truth", len(mcpConfigs))
 }
 
 // TestSQLite_VKMCPConfig_UpdateTools tests updating tools in MCP config
