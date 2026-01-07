@@ -52,7 +52,8 @@ func createBifrostError(message string, statusCode *int, errorType *string, isBi
 func TestExecuteRequestWithRetries_SuccessScenarios(t *testing.T) {
 	config := createTestConfig(3, 100*time.Millisecond, 1*time.Second)
 	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
-
+	// Adding dummy tracer to the context
+	ctx.SetValue(schemas.BifrostContextKeyTracer, &schemas.NoOpTracer{})
 	// Test immediate success
 	t.Run("ImmediateSuccess", func(t *testing.T) {
 		callCount := 0
@@ -121,6 +122,7 @@ func TestExecuteRequestWithRetries_SuccessScenarios(t *testing.T) {
 func TestExecuteRequestWithRetries_RetryLimits(t *testing.T) {
 	config := createTestConfig(2, 100*time.Millisecond, 1*time.Second)
 	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
+	ctx.SetValue(schemas.BifrostContextKeyTracer, &schemas.NoOpTracer{})
 	t.Run("ExceedsMaxRetries", func(t *testing.T) {
 		callCount := 0
 		handler := func() (string, *schemas.BifrostError) {
@@ -162,6 +164,7 @@ func TestExecuteRequestWithRetries_RetryLimits(t *testing.T) {
 func TestExecuteRequestWithRetries_NonRetryableErrors(t *testing.T) {
 	config := createTestConfig(3, 100*time.Millisecond, 1*time.Second)
 	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
+	ctx.SetValue(schemas.BifrostContextKeyTracer, &schemas.NoOpTracer{})
 	testCases := []struct {
 		name  string
 		error *schemas.BifrostError
@@ -219,6 +222,7 @@ func TestExecuteRequestWithRetries_NonRetryableErrors(t *testing.T) {
 func TestExecuteRequestWithRetries_RetryableConditions(t *testing.T) {
 	config := createTestConfig(1, 100*time.Millisecond, 1*time.Second)
 	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
+	ctx.SetValue(schemas.BifrostContextKeyTracer, &schemas.NoOpTracer{})
 	testCases := []struct {
 		name  string
 		error *schemas.BifrostError
@@ -292,7 +296,7 @@ func TestExecuteRequestWithRetries_RetryableConditions(t *testing.T) {
 // Test calculateBackoff - exponential growth (base calculations without jitter)
 func TestCalculateBackoff_ExponentialGrowth(t *testing.T) {
 	config := createTestConfig(5, 100*time.Millisecond, 5*time.Second)
-
+	
 	// Test the base exponential calculation by checking that results fall within expected ranges
 	// Since we can't easily mock rand.Float64, we'll test the bounds instead
 	testCases := []struct {
@@ -477,7 +481,7 @@ func TestIsRateLimitError_EdgeCases(t *testing.T) {
 func TestExecuteRequestWithRetries_LoggingAndCounting(t *testing.T) {
 	config := createTestConfig(2, 50*time.Millisecond, 1*time.Second)
 	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
-
+	ctx.SetValue(schemas.BifrostContextKeyTracer, &schemas.NoOpTracer{})
 	// Capture calls and timing for verification
 	var attemptCounts []int
 	callCount := 0
