@@ -1,2 +1,2 @@
-- chore: update framework version to 1.1.59
+- chore: upgrades core to v1.3.4 and framework to 1.2.4
 - fix: streaming tracer cleanup fixes
