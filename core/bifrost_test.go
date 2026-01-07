@@ -638,7 +638,7 @@ func (ma *MockAccount) GetConfigForProvider(provider schemas.ModelProvider) (*sc
 	return nil, fmt.Errorf("provider %s not configured", provider)
 }
 
-func (ma *MockAccount) GetKeysForProvider(ctx *schemas.BifrostContext, provider schemas.ModelProvider) ([]schemas.Key, error) {
+func (ma *MockAccount) GetKeysForProvider(ctx context.Context, provider schemas.ModelProvider) ([]schemas.Key, error) {
 	if keys, exists := ma.keys[provider]; exists {
 		return keys, nil
 	}

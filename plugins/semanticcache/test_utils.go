@@ -85,7 +85,7 @@ func (baseAccount *BaseAccount) GetConfiguredProviders() ([]schemas.ModelProvide
 	return []schemas.ModelProvider{schemas.OpenAI}, nil
 }
 
-func (baseAccount *BaseAccount) GetKeysForProvider(ctx *schemas.BifrostContext, providerKey schemas.ModelProvider) ([]schemas.Key, error) {
+func (baseAccount *BaseAccount) GetKeysForProvider(ctx context.Context, providerKey schemas.ModelProvider) ([]schemas.Key, error) {
 	return []schemas.Key{
 		{
 			Value:  os.Getenv("OPENAI_API_KEY"),

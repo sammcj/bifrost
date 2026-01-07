@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -64,7 +65,7 @@ func CreateDocumentResponsesMessage(text, documentBase64 string) schemas.Respons
 }
 
 // RunFileBase64Test executes the PDF file input test scenario with separate subtests for each API
-func RunFileBase64Test(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunFileBase64Test(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.FileBase64 {
 		t.Logf("File base64 not supported for provider %s", testConfig.Provider)
 		return
@@ -78,7 +79,7 @@ func RunFileBase64Test(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifro
 }
 
 // RunFileBase64ChatCompletionsTest executes the file base64 test using Chat Completions API
-func RunFileBase64ChatCompletionsTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunFileBase64ChatCompletionsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.FileBase64 {
 		t.Logf("File base64 not supported for provider %s", testConfig.Provider)
 		return
@@ -133,6 +134,7 @@ func RunFileBase64ChatCompletionsTest(t *testing.T, client *bifrost.Bifrost, ctx
 		}
 
 		response, chatError := WithChatTestRetry(t, chatRetryConfig, retryContext, expectations, "FileBase64", func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			chatReq := &schemas.BifrostChatRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.ChatModel,
@@ -142,7 +144,7 @@ func RunFileBase64ChatCompletionsTest(t *testing.T, client *bifrost.Bifrost, ctx
 				},
 				Fallbacks: testConfig.Fallbacks,
 			}
-			return client.ChatCompletionRequest(ctx, chatReq)
+			return client.ChatCompletionRequest(bfCtx, chatReq)
 		})
 
 		if chatError != nil {
@@ -158,7 +160,7 @@ func RunFileBase64ChatCompletionsTest(t *testing.T, client *bifrost.Bifrost, ctx
 }
 
 // RunFileBase64ResponsesTest executes the file base64 test using Responses API
-func RunFileBase64ResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunFileBase64ResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.FileBase64 {
 		t.Logf("File base64 not supported for provider %s", testConfig.Provider)
 		return
@@ -213,6 +215,7 @@ func RunFileBase64ResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx *sche
 		}
 
 		response, responsesError := WithResponsesTestRetry(t, responsesRetryConfig, retryContext, expectations, "FileBase64", func() (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			responsesReq := &schemas.BifrostResponsesRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.ChatModel,
@@ -222,7 +225,7 @@ func RunFileBase64ResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx *sche
 				},
 				Fallbacks: testConfig.Fallbacks,
 			}
-			return client.ResponsesRequest(ctx, responsesReq)
+			return client.ResponsesRequest(bfCtx, responsesReq)
 		})
 
 		if responsesError != nil {

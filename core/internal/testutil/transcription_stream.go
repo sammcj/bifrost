@@ -14,7 +14,7 @@ import (
 )
 
 // RunTranscriptionStreamTest executes the streaming transcription test scenario
-func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.TranscriptionStream {
 		t.Logf("Transcription streaming not supported for provider %s", testConfig.Provider)
 		return
@@ -113,7 +113,8 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *sche
 				}
 
 				ttsResponse, err := WithSpeechTestRetry(t, ttsSpeechRetryConfig, ttsRetryContext, ttsExpectations, "TranscriptionStream_TTS", func() (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
-					return client.SpeechRequest(ctx, ttsRequest)
+					bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+					return client.SpeechRequest(bfCtx, ttsRequest)
 				})
 				if err != nil {
 					t.Fatalf("❌ TTS generation failed for stream round-trip test after retries: %v", GetErrorMessage(err))
@@ -170,7 +171,8 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *sche
 				}
 
 				responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-					return client.TranscriptionStreamRequest(ctx, streamRequest)
+					bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+					return client.TranscriptionStreamRequest(bfCtx, streamRequest)
 				})
 
 				RequireNoError(t, err, "Transcription stream initiation failed")
@@ -332,7 +334,7 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *sche
 }
 
 // RunTranscriptionStreamAdvancedTest executes advanced streaming transcription test scenarios
-func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.TranscriptionStream {
 		t.Logf("Transcription streaming not supported for provider %s", testConfig.Provider)
 		return
@@ -387,7 +389,8 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 			}
 
 			responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-				return client.TranscriptionStreamRequest(ctx, request)
+				bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+				return client.TranscriptionStreamRequest(bfCtx, request)
 			})
 
 			RequireNoError(t, err, "JSON streaming failed")
@@ -487,7 +490,8 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 					}
 
 					responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-						return client.TranscriptionStreamRequest(ctx, request)
+						bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+						return client.TranscriptionStreamRequest(bfCtx, request)
 					})
 
 					RequireNoError(t, err, fmt.Sprintf("Streaming failed for language %s", lang))
@@ -581,7 +585,8 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 			}
 
 			responseChannel, err := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-				return client.TranscriptionStreamRequest(ctx, request)
+				bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+				return client.TranscriptionStreamRequest(bfCtx, request)
 			})
 
 			RequireNoError(t, err, "Custom prompt streaming failed")

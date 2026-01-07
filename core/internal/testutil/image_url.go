@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -10,7 +11,7 @@ import (
 )
 
 // RunImageURLTest executes the image URL test scenario using dual API testing framework
-func RunImageURLTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunImageURLTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ImageURL {
 		t.Logf("Image URL not supported for provider %s", testConfig.Provider)
 		return
@@ -56,6 +57,7 @@ func RunImageURLTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifrost
 
 		// Create operations for both Chat Completions and Responses API
 		chatOperation := func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			chatReq := &schemas.BifrostChatRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.VisionModel,
@@ -65,10 +67,11 @@ func RunImageURLTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifrost
 				Fallbacks: testConfig.Fallbacks,
 			}
 			chatReq.Input = chatMessages
-			return client.ChatCompletionRequest(ctx, chatReq)
+			return client.ChatCompletionRequest(bfCtx, chatReq)
 		}
 
 		responsesOperation := func() (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			responsesReq := &schemas.BifrostResponsesRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.VisionModel,
@@ -78,7 +81,7 @@ func RunImageURLTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifrost
 				Fallbacks: testConfig.Fallbacks,
 			}
 			responsesReq.Input = responsesMessages
-			return client.ResponsesRequest(ctx, responsesReq)
+			return client.ResponsesRequest(bfCtx, responsesReq)
 		}
 
 		// Execute dual API test - passes only if BOTH APIs succeed

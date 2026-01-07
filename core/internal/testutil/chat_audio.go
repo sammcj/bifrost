@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -10,7 +11,7 @@ import (
 )
 
 // RunChatAudioTest executes the chat audio test scenario
-func RunChatAudioTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunChatAudioTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ChatAudio || testConfig.ChatAudioModel == "" {
 		t.Logf("Chat audio not supported for provider %s", testConfig.Provider)
 		return
@@ -73,7 +74,8 @@ func RunChatAudioTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifros
 				},
 				Fallbacks: testConfig.Fallbacks,
 			}
-			response, err := client.ChatCompletionRequest(ctx, chatReq)
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			response, err := client.ChatCompletionRequest(bfCtx, chatReq)
 			if err != nil {
 				return nil, err
 			}
@@ -148,7 +150,7 @@ func RunChatAudioTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.Bifros
 }
 
 // RunChatAudioStreamTest executes the chat audio streaming test scenario
-func RunChatAudioStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunChatAudioStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.ChatAudio || testConfig.ChatAudioModel == "" {
 		t.Logf("Chat audio streaming not supported for provider %s", testConfig.Provider)
 		return
@@ -201,7 +203,8 @@ func RunChatAudioStreamTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.
 		}
 
 		responseChannel, bifrostErr := WithStreamRetry(t, retryConfig, retryContext, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
-			return client.ChatCompletionStreamRequest(ctx, chatReq)
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			return client.ChatCompletionStreamRequest(bfCtx, chatReq)
 		})
 
 		// Enhanced error handling

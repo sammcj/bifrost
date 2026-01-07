@@ -206,7 +206,7 @@ func (pa *PluginAccount) GetConfiguredProviders() ([]schemas.ModelProvider, erro
 	return []schemas.ModelProvider{pa.provider}, nil
 }
 
-func (pa *PluginAccount) GetKeysForProvider(ctx *schemas.BifrostContext, providerKey schemas.ModelProvider) ([]schemas.Key, error) {
+func (pa *PluginAccount) GetKeysForProvider(ctx context.Context, providerKey schemas.ModelProvider) ([]schemas.Key, error) {
 	return pa.keys, nil
 }
 

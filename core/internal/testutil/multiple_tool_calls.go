@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -18,7 +19,7 @@ func getKeysFromMap(m map[string]bool) []string {
 }
 
 // RunMultipleToolCallsTest executes the multiple tool calls test scenario using dual API testing framework
-func RunMultipleToolCallsTest(t *testing.T, client *bifrost.Bifrost, ctx *schemas.BifrostContext, testConfig ComprehensiveTestConfig) {
+func RunMultipleToolCallsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
 	if !testConfig.Scenarios.MultipleToolCalls {
 		t.Logf("Multiple tool calls not supported for provider %s", testConfig.Provider)
 		return
@@ -72,6 +73,7 @@ func RunMultipleToolCallsTest(t *testing.T, client *bifrost.Bifrost, ctx *schema
 
 		// Create operations for both Chat Completions and Responses API
 		chatOperation := func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			chatReq := &schemas.BifrostChatRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.ChatModel,
@@ -81,10 +83,11 @@ func RunMultipleToolCallsTest(t *testing.T, client *bifrost.Bifrost, ctx *schema
 				Fallbacks: testConfig.Fallbacks,
 			}
 			chatReq.Input = chatMessages
-			return client.ChatCompletionRequest(ctx, chatReq)
+			return client.ChatCompletionRequest(bfCtx, chatReq)
 		}
 
 		responsesOperation := func() (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			responsesReq := &schemas.BifrostResponsesRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.ChatModel,
@@ -94,7 +97,7 @@ func RunMultipleToolCallsTest(t *testing.T, client *bifrost.Bifrost, ctx *schema
 				Fallbacks: testConfig.Fallbacks,
 			}
 			responsesReq.Input = responsesMessages
-			return client.ResponsesRequest(ctx, responsesReq)
+			return client.ResponsesRequest(bfCtx, responsesReq)
 		}
 
 		// Execute dual API test - passes only if BOTH APIs succeed
