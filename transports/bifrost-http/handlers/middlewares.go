@@ -182,7 +182,14 @@ func (m *AuthMiddleware) UpdateAuthConfig(authConfig *configstore.AuthConfig) {
 	m.authConfig.Store(authConfig)
 }
 
-// AuthMiddleware if authConfig is set, it will verify authentication based on the request type.
+// InferenceMiddleware is for inference requests if authConfig is set, it will skip authentication if disableAuthOnInference is true.
+func (m *AuthMiddleware) InferenceMiddleware() lib.BifrostHTTPMiddleware {
+	return m.middleware(func(authConfig *configstore.AuthConfig, url string) bool {
+		return authConfig.DisableAuthOnInference
+	})
+}
+
+// APIMiddleware is for API requests if authConfig is set, it will verify authentication based on the request type.
 // Three authentication methods are supported:
 //   - Basic auth: Uses username + password validation (no session tracking). Used for inference API calls.
 //   - Bearer token: Uses session validation via validateSession(). Used for dashboard calls.
@@ -190,13 +197,19 @@ func (m *AuthMiddleware) UpdateAuthConfig(authConfig *configstore.AuthConfig) {
 //
 // Basic auth may be acceptable for limited use cases, while Bearer and WebSocket flows provide
 // session-based authentication suitable for production environments.
-func (m *AuthMiddleware) Middleware() lib.BifrostHTTPMiddleware {
+func (m *AuthMiddleware) APIMiddleware() lib.BifrostHTTPMiddleware {
 	whitelistedRoutes := []string{
 		"/api/session/is-auth-enabled",
 		"/api/session/login",
 		"/api/session/logout",
 		"/health",
 	}
+	return m.middleware(func(authConfig *configstore.AuthConfig, url string) bool {
+		return slices.Contains(whitelistedRoutes, url)
+	})
+}
+
+func (m *AuthMiddleware) middleware(shouldSkip func(*configstore.AuthConfig, string) bool) lib.BifrostHTTPMiddleware {
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			authConfig := m.authConfig.Load()
@@ -205,11 +218,13 @@ func (m *AuthMiddleware) Middleware() lib.BifrostHTTPMiddleware {
 				next(ctx)
 				return
 			}
+			url := string(ctx.Request.URI().RequestURI())
 			// We skip authorization for the login route
-			if slices.Contains(whitelistedRoutes, string(ctx.Request.URI().RequestURI())) {
+			if shouldSkip(authConfig, url) {
 				next(ctx)
 				return
 			}
+			// If inference is disabled, we skip authorization
 			// Get the authorization header
 			authorization := string(ctx.Request.Header.Peek("Authorization"))
 			if authorization == "" {

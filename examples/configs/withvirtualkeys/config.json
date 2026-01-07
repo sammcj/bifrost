@@ -58,9 +58,9 @@
                     },
                     {
                         "allowed_keys": [
-                            "bedrock-us-east-1-prod"
+                            "openai-us-key-1-prod"
                         ],
-                        "provider": "bedrock",
+                        "provider": "openai",
                         "weight": 0.5
                     }
                 ],
@@ -292,6 +292,15 @@
                     "weight": 1
                 }
             ]
-        }
+        },
+        "openai": {
+            "keys": [
+                {
+                    "name": "openai-us-key-1-prod",
+                    "value": "env.OPENAI_API_KEY_US_EAST_1",
+                    "weight": 1
+                }
+            ]
+        } 
     }
 }

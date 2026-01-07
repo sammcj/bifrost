@@ -1,0 +1,1 @@
+- chore: updates core to 1.2.49
