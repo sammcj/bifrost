@@ -1,3 +1,0 @@
-- feat: remove restart required for auth config changes
-- fix: resolved issue where new auth configs were not being created
-- ci: added workflow to auto-generate openapi.json documentation when openapi yaml files change

@@ -1,1 +1,0 @@
-- feat: added flush session functionality to config store to clear all existing sessions
