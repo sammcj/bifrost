@@ -7,8 +7,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/bytedance/sonic"
 )
 
 // Ptr creates a pointer to any value.
@@ -267,7 +265,7 @@ func JsonifyInput(input interface{}) string {
 	if input == nil {
 		return "{}"
 	}
-	jsonString, err := sonic.MarshalString(input)
+	jsonString, err := MarshalString(input)
 	if err != nil {
 		return "{}"
 	}

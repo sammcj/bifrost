@@ -3,8 +3,7 @@ package schemas
 
 import (
 	"context"
-
-	"github.com/valyala/fasthttp"
+	"sync"
 )
 
 // PluginShortCircuit represents a plugin's decision to short-circuit the normal flow.
@@ -33,9 +32,58 @@ type PluginStatus struct {
 	Logs   []string `json:"logs"`
 }
 
-// BifrostHTTPMiddleware is a middleware function for the Bifrost HTTP transport
-// It follows the standard pattern: receives the next handler and returns a new handler
-type BifrostHTTPMiddleware func(next fasthttp.RequestHandler) fasthttp.RequestHandler
+// HTTPRequest is a serializable representation of an HTTP request.
+// Used for plugin HTTP transport interception (supports both native .so and WASM plugins).
+// This type is pooled for allocation control - use AcquireHTTPRequest and ReleaseHTTPRequest.
+type HTTPRequest struct {
+	Method  string            `json:"method"`
+	Path    string            `json:"path"`
+	Headers map[string]string `json:"headers"`
+	Query   map[string]string `json:"query"`
+	Body    []byte            `json:"body"`
+}
+
+// HTTPResponse is a serializable representation of an HTTP response.
+// Used for short-circuit responses in plugin HTTP transport interception.
+type HTTPResponse struct {
+	StatusCode int               `json:"status_code"`
+	Headers    map[string]string `json:"headers"`
+	Body       []byte            `json:"body"`
+}
+
+// httpRequestPool is the pool for HTTPRequest objects to reduce allocations.
+var httpRequestPool = sync.Pool{
+	New: func() any {
+		return &HTTPRequest{
+			Headers: make(map[string]string, 16),
+			Query:   make(map[string]string, 8),
+		}
+	},
+}
+
+// AcquireHTTPRequest gets an HTTPRequest from the pool.
+// The returned HTTPRequest is ready to use with pre-allocated maps.
+// Call ReleaseHTTPRequest when done to return it to the pool.
+func AcquireHTTPRequest() *HTTPRequest {
+	return httpRequestPool.Get().(*HTTPRequest)
+}
+
+// ReleaseHTTPRequest returns an HTTPRequest to the pool.
+// The HTTPRequest is reset before being returned to the pool.
+// Do not use the HTTPRequest after calling this function.
+func ReleaseHTTPRequest(req *HTTPRequest) {
+	if req == nil {
+		return
+	}
+	// Clear the maps
+	clear(req.Headers)
+	clear(req.Query)
+	// Reset fields
+	req.Method = ""
+	req.Path = ""
+	req.Body = nil
+	httpRequestPool.Put(req)
+}
 
 // Plugin defines the interface for Bifrost plugins.
 // Plugins can intercept and modify requests and responses at different stages
@@ -45,7 +93,7 @@ type BifrostHTTPMiddleware func(next fasthttp.RequestHandler) fasthttp.RequestHa
 // PostHooks are executed in the reverse order of PreHooks.
 //
 // Execution order:
-// 1. HTTPTransportMiddleware (HTTP transport only, modifies raw headers/body before entering Bifrost core)
+// 1. HTTPTransportIntercept (HTTP transport only, modifies raw headers/body before entering Bifrost core)
 // 2. PreHook (executed in registration order)
 // 3. Provider call
 // 4. PostHook (executed in reverse order of PreHooks)
@@ -72,11 +120,18 @@ type Plugin interface {
 	// GetName returns the name of the plugin.
 	GetName() string
 
-	// HTTPTransportMiddleware is called at the HTTP transport layer before requests enter Bifrost core.
-	// It allows plugins to modify the request and response before they are processed by the next middleware.
+	// HTTPTransportIntercept is called at the HTTP transport layer before requests enter Bifrost core.
+	// It receives a serializable HTTPRequest and allows plugins to modify it in-place.
 	// Only invoked when using HTTP transport (bifrost-http), not when using Bifrost as a Go SDK directly.
-	// Returns a new handler that will be called next in the middleware chain.
-	HTTPTransportMiddleware() BifrostHTTPMiddleware
+	// Works with both native .so plugins and WASM plugins due to serializable types.
+	//
+	// Return values:
+	// - (nil, nil): Continue to next plugin/handler, request modifications are applied
+	// - (*HTTPResponse, nil): Short-circuit with this response, skip remaining plugins and provider call
+	// - (nil, error): Short-circuit with error response
+	//
+	// Return nil for both values if the plugin doesn't need HTTP transport interception.
+	HTTPTransportIntercept(ctx *BifrostContext, req *HTTPRequest) (*HTTPResponse, error)
 
 	// PreHook is called before a request is processed by a provider.
 	// It allows plugins to modify the request before it is sent to the provider.

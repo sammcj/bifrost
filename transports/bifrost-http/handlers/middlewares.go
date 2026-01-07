@@ -46,7 +46,9 @@ func CorsMiddleware(config *lib.Config) schemas.BifrostHTTPMiddleware {
 	}
 }
 
-// TransportInterceptorMiddleware collects all plugin HTTP transport middleware and chains them.
+// TransportInterceptorMiddleware runs all plugin HTTP transport interceptors.
+// It converts the fasthttp request to a serializable HTTPRequest, runs all plugin interceptors,
+// and applies any modifications back to the fasthttp context.
 func TransportInterceptorMiddleware(config *lib.Config) schemas.BifrostHTTPMiddleware {
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
@@ -55,17 +57,100 @@ func TransportInterceptorMiddleware(config *lib.Config) schemas.BifrostHTTPMiddl
 				next(ctx)
 				return
 			}
-			pluginsMiddlewareChain := []schemas.BifrostHTTPMiddleware{}
+
+			// Get or create BifrostContext from fasthttp context
+			bifrostCtx := getBifrostContextFromFastHTTP(ctx)
+			// Acquire pooled request
+			req := schemas.AcquireHTTPRequest()
+			defer schemas.ReleaseHTTPRequest(req)
+			fasthttpToHTTPRequest(ctx, req)
+			// Run plugin interceptors
 			for _, plugin := range plugins {
-				middleware := plugin.HTTPTransportMiddleware()
-				// Collect plugin HTTP transport middleware
-				if middleware == nil {
-					continue
+				resp, err := plugin.HTTPTransportIntercept(bifrostCtx, req)
+				if err != nil {
+					// Short-circuit with error
+					ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+					ctx.SetBodyString(err.Error())
+					return
 				}
-				pluginsMiddlewareChain = append(pluginsMiddlewareChain, middleware)
+				if resp != nil {
+					// Short-circuit with response
+					applyHTTPResponseToCtx(ctx, resp)
+					return
+				}
+				// If we got here, the plugin may have modified req in-place
 			}
-			lib.ChainMiddlewares(next, pluginsMiddlewareChain...)(ctx)
+			// Apply modifications back to fasthttp context
+			applyHTTPRequestToCtx(ctx, req)
+			// Adding user values
+			for key, value := range bifrostCtx.GetUserValues() {
+				ctx.SetUserValue(key, value)
+			}
+			next(ctx)
 		}
+	}
+}
+
+// getBifrostContextFromFastHTTP gets or creates a BifrostContext from fasthttp context.
+func getBifrostContextFromFastHTTP(ctx *fasthttp.RequestCtx) *schemas.BifrostContext {
+	return schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+}
+
+// fasthttpToHTTPRequest populates a pooled HTTPRequest from fasthttp context.
+func fasthttpToHTTPRequest(ctx *fasthttp.RequestCtx, req *schemas.HTTPRequest) {
+	req.Method = string(ctx.Method())
+	req.Path = string(ctx.Path())
+
+	// Copy headers
+	for key, values := range ctx.Request.Header.All() {
+		req.Headers[string(key)] = string(values)
+	}
+
+	// Copy query params
+	for key, values := range ctx.Request.URI().QueryArgs().All() {
+		for _, value := range values {
+			req.Query[string(key)] = string(value)
+		}
+	}
+
+	// Copy body
+	body := ctx.Request.Body()
+	if len(body) > 0 {
+		req.Body = make([]byte, len(body))
+		copy(req.Body, body)
+	}
+}
+
+// applyHTTPRequestToCtx applies modifications from HTTPRequest back to fasthttp context.
+func applyHTTPRequestToCtx(ctx *fasthttp.RequestCtx, req *schemas.HTTPRequest) {
+	// If path/method is different, throw error
+	if req.Method != string(ctx.Method()) || req.Path != string(ctx.Path()) {
+		logger.Error("request method/path mismatch: %s %s != %s %s", req.Method, req.Path, string(ctx.Method()), string(ctx.Path()))
+		SendError(ctx, fasthttp.StatusConflict, "request method/path was modified by a plugin, this is not allowed")
+		return
+	}
+	// Apply headers
+	for key, value := range req.Headers {
+		ctx.Request.Header.Set(key, value)
+	}
+	// Apply query params
+	for key, value := range req.Query {
+		ctx.Request.URI().QueryArgs().Set(key, value)
+	}
+	// Apply body if set
+	if req.Body != nil {
+		ctx.Request.SetBody(req.Body)
+	}
+}
+
+// applyHTTPResponseToCtx writes a short-circuit response to fasthttp context.
+func applyHTTPResponseToCtx(ctx *fasthttp.RequestCtx, resp *schemas.HTTPResponse) {
+	ctx.SetStatusCode(resp.StatusCode)
+	for key, value := range resp.Headers {
+		ctx.Response.Header.Set(key, value)
+	}
+	if resp.Body != nil {
+		ctx.SetBody(resp.Body)
 	}
 }
 

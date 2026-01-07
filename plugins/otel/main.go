@@ -145,9 +145,9 @@ func (p *OtelPlugin) GetName() string {
 	return PluginName
 }
 
-// HTTPTransportMiddleware is not used for this plugin
-func (p *OtelPlugin) HTTPTransportMiddleware() schemas.BifrostHTTPMiddleware {
-	return nil
+// HTTPTransportIntercept is not used for this plugin
+func (p *OtelPlugin) HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	return nil, nil
 }
 
 // ValidateConfig function for the OTEL plugin

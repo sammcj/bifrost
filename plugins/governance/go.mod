@@ -9,7 +9,6 @@ require (
 	github.com/maximhq/bifrost/core v1.3.3
 	github.com/maximhq/bifrost/framework v1.2.3
 	github.com/stretchr/testify v1.11.1
-	github.com/valyala/fasthttp v1.68.0
 )
 
 require (
@@ -102,6 +101,7 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasthttp v1.68.0 // indirect
 	github.com/weaviate/weaviate v1.34.5 // indirect
 	github.com/weaviate/weaviate-go-client/v5 v5.6.0 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect

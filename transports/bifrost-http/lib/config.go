@@ -25,6 +25,7 @@ import (
 	"github.com/maximhq/bifrost/framework/encrypt"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/framework/modelcatalog"
+	plugins "github.com/maximhq/bifrost/framework/plugins"
 	"github.com/maximhq/bifrost/framework/vectorstore"
 	"github.com/maximhq/bifrost/plugins/semanticcache"
 	"gorm.io/gorm"
@@ -232,7 +233,8 @@ type Config struct {
 	EnvKeys map[string][]configstore.EnvKeyInfo
 
 	// Plugin configs - atomic for lock-free reads with CAS updates
-	Plugins atomic.Pointer[[]schemas.Plugin]
+	Plugins      atomic.Pointer[[]schemas.Plugin]
+	PluginLoader plugins.PluginLoader
 
 	// Plugin configs from config file/database
 	PluginConfigs []*schemas.PluginConfig
@@ -473,7 +475,7 @@ func initStoresFromFile(ctx context.Context, config *Config, configData *ConfigD
 	return nil
 }
 
-// loadClientConfigFromFile loads and merges client config from file with store
+// loadClientConfigFromFile loads and merges client config from file with store using hash-based reconciliation
 func loadClientConfigFromFile(ctx context.Context, config *Config, configData *ConfigData) {
 	var clientConfig *configstore.ClientConfig
 	var err error
@@ -485,77 +487,30 @@ func loadClientConfigFromFile(ctx context.Context, config *Config, configData *C
 		}
 	}
 
-	if clientConfig != nil {
-		config.ClientConfig = *clientConfig
-		// For backward compatibility, handle cases where max request body size is not set
-		if config.ClientConfig.MaxRequestBodySizeMB == 0 {
-			config.ClientConfig.MaxRequestBodySizeMB = DefaultClientConfig.MaxRequestBodySizeMB
-		}
-
-		// Merge with config file if present
-		if configData.Client != nil {
-			logger.Debug("merging client config from config file with store")
-			// DB takes priority, but fill in empty/zero values from config file
-			if config.ClientConfig.InitialPoolSize == 0 && configData.Client.InitialPoolSize != 0 {
-				config.ClientConfig.InitialPoolSize = configData.Client.InitialPoolSize
-			}
-			if len(config.ClientConfig.PrometheusLabels) == 0 && len(configData.Client.PrometheusLabels) > 0 {
-				config.ClientConfig.PrometheusLabels = configData.Client.PrometheusLabels
-			}
-			if len(config.ClientConfig.AllowedOrigins) == 0 && len(configData.Client.AllowedOrigins) > 0 {
-				config.ClientConfig.AllowedOrigins = configData.Client.AllowedOrigins
-			}
-			if config.ClientConfig.MaxRequestBodySizeMB == 0 && configData.Client.MaxRequestBodySizeMB != 0 {
-				config.ClientConfig.MaxRequestBodySizeMB = configData.Client.MaxRequestBodySizeMB
-			}
-			// Boolean fields: only override if DB has false and config file has true
-			if !config.ClientConfig.DropExcessRequests && configData.Client.DropExcessRequests {
-				config.ClientConfig.DropExcessRequests = configData.Client.DropExcessRequests
-			}
-			if !config.ClientConfig.EnableLogging && configData.Client.EnableLogging {
-				config.ClientConfig.EnableLogging = configData.Client.EnableLogging
-			}
-			if !config.ClientConfig.DisableContentLogging && configData.Client.DisableContentLogging {
-				config.ClientConfig.DisableContentLogging = configData.Client.DisableContentLogging
-			}
-			if !config.ClientConfig.EnableGovernance && configData.Client.EnableGovernance {
-				config.ClientConfig.EnableGovernance = configData.Client.EnableGovernance
-			}
-			if !config.ClientConfig.EnforceGovernanceHeader && configData.Client.EnforceGovernanceHeader {
-				config.ClientConfig.EnforceGovernanceHeader = configData.Client.EnforceGovernanceHeader
-			}
-			if !config.ClientConfig.AllowDirectKeys && configData.Client.AllowDirectKeys {
-				config.ClientConfig.AllowDirectKeys = configData.Client.AllowDirectKeys
-			}
-			if !config.ClientConfig.EnableLiteLLMFallbacks && configData.Client.EnableLiteLLMFallbacks {
-				config.ClientConfig.EnableLiteLLMFallbacks = configData.Client.EnableLiteLLMFallbacks
-			}
-			if config.ClientConfig.MCPAgentDepth == 0 && configData.Client.MCPAgentDepth != 0 {
-				config.ClientConfig.MCPAgentDepth = configData.Client.MCPAgentDepth
-			}
-			if config.ClientConfig.MCPToolExecutionTimeout == 0 && configData.Client.MCPToolExecutionTimeout != 0 {
-				config.ClientConfig.MCPToolExecutionTimeout = configData.Client.MCPToolExecutionTimeout
-			}
-			if config.ClientConfig.MCPCodeModeBindingLevel == "" && configData.Client.MCPCodeModeBindingLevel != "" {
-				config.ClientConfig.MCPCodeModeBindingLevel = configData.Client.MCPCodeModeBindingLevel
-			}
-			// Update store with merged config
-			if config.ConfigStore != nil {
-				logger.Debug("updating merged client config in store")
-				if err = config.ConfigStore.UpdateClientConfig(ctx, &config.ClientConfig); err != nil {
-					logger.Warn("failed to update merged client config: %v", err)
-				}
-			}
-		}
-	} else {
+	// Case 1: No config in DB - use file config (or defaults)
+	if clientConfig == nil {
 		logger.Debug("client config not found in store, using config file")
 		if configData.Client != nil {
 			config.ClientConfig = *configData.Client
 			if config.ClientConfig.MaxRequestBodySizeMB == 0 {
 				config.ClientConfig.MaxRequestBodySizeMB = DefaultClientConfig.MaxRequestBodySizeMB
 			}
+			// Generate hash for the file config
+			fileHash, hashErr := configData.Client.GenerateClientConfigHash()
+			if hashErr != nil {
+				logger.Warn("failed to generate client config hash: %v", hashErr)
+			} else {
+				config.ClientConfig.ConfigHash = fileHash
+			}
 		} else {
 			config.ClientConfig = DefaultClientConfig
+			// Generate hash for default config
+			defaultHash, hashErr := config.ClientConfig.GenerateClientConfigHash()
+			if hashErr != nil {
+				logger.Warn("failed to generate default client config hash: %v", hashErr)
+			} else {
+				config.ClientConfig.ConfigHash = defaultHash
+			}
 		}
 		if config.ConfigStore != nil {
 			logger.Debug("updating client config in store")
@@ -563,6 +518,48 @@ func loadClientConfigFromFile(ctx context.Context, config *Config, configData *C
 				logger.Warn("failed to update client config: %v", err)
 			}
 		}
+		return
+	}
+
+	// Case 2: Config exists in DB
+	config.ClientConfig = *clientConfig
+	// For backward compatibility, handle cases where max request body size is not set
+	if config.ClientConfig.MaxRequestBodySizeMB == 0 {
+		config.ClientConfig.MaxRequestBodySizeMB = DefaultClientConfig.MaxRequestBodySizeMB
+	}
+
+	// Case 2a: No file config - use DB config as-is
+	if configData.Client == nil {
+		logger.Debug("no client config in file, using DB config")
+		return
+	}
+
+	// Case 2b: Both DB and file config exist - use hash-based reconciliation
+	fileHash, hashErr := configData.Client.GenerateClientConfigHash()
+	if hashErr != nil {
+		logger.Warn("failed to generate client config hash from file: %v", hashErr)
+		return
+	}
+
+	if clientConfig.ConfigHash != fileHash {
+		// Hash mismatch - config.json was changed, sync from file
+		logger.Debug("client config hash mismatch, syncing from config file")
+		config.ClientConfig = *configData.Client
+		config.ClientConfig.ConfigHash = fileHash
+		// Apply defaults for zero values
+		if config.ClientConfig.MaxRequestBodySizeMB == 0 {
+			config.ClientConfig.MaxRequestBodySizeMB = DefaultClientConfig.MaxRequestBodySizeMB
+		}
+		// Update store with file config
+		if config.ConfigStore != nil {
+			logger.Debug("updating client config in store from file")
+			if err = config.ConfigStore.UpdateClientConfig(ctx, &config.ClientConfig); err != nil {
+				logger.Warn("failed to update client config: %v", err)
+			}
+		}
+	} else {
+		// Hash matches - keep DB config (preserves UI changes)
+		logger.Debug("client config hash matches, keeping DB config")
 	}
 }
 
