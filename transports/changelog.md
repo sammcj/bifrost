@@ -1,0 +1,1 @@
+- fix: correct query parameter parsing in transport interceptor middleware
