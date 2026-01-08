@@ -1,1 +1,3 @@
 - fix: added custom error handling support for xAI provider
+- fix: strip unsupported parameters from xai request for reasoning models
+- fix: make the output field in BifrostResponsesResponse required by removing the omitempty tag.
