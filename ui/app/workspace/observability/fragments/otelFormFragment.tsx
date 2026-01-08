@@ -1,6 +1,5 @@
 "use client";
 
-import { RbacOperation, RbacResource, useRbac } from "@/app/enterprise/lib";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { HeadersTable } from "@/components/ui/headersTable";
@@ -9,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { otelFormSchema, type OtelFormSchema } from "@/lib/types/schemas";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm, type Resolver } from "react-hook-form";
