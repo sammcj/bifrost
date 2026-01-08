@@ -1,0 +1,1 @@
+- fix: added custom error handling support for xAI provider
