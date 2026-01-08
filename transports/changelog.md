@@ -1,5 +1,0 @@
-- fix: correct query parameter parsing in transport interceptor middleware
-- fix: added custom error handling support for xAI provider
-- fix: strip unsupported parameters from xai request for reasoning models
-- fix: make the output field in BifrostResponsesResponse required by removing the omitempty tag.
-- chore: upgrade core to v1.3.6 and framework to 1.2.6
