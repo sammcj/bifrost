@@ -1,1 +1,2 @@
 - fix: correct query parameter parsing in transport interceptor middleware
+- fix: added custom error handling support for xAI provider
