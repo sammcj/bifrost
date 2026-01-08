@@ -1,12 +1,12 @@
 "use client";
 
-import { RbacOperation, RbacResource, useRbac } from "@/app/enterprise/lib";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { maximFormSchema, type MaximFormSchema } from "@/lib/types/schemas";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
