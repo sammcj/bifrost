@@ -1,0 +1,1 @@
+- fix: gemini system message conversion and added support for using instructions parameter as a fallback when no system message
