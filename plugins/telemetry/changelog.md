@@ -1,2 +1,0 @@
-- feat: adds support for external Prometheus registry
-- chore: updated core version to 1.3.7 and framework version to 1.2.7
