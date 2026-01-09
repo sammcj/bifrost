@@ -235,7 +235,7 @@ func parseVirtualKeyFromHTTPRequest(req *schemas.HTTPRequest) *string {
 	if vkHeader != "" {
 		return bifrost.Ptr(vkHeader)
 	}
-	authHeader := req.Headers["Authorization"]
+	authHeader := req.Headers["authorization"]
 	if authHeader != "" {
 		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
 			authHeaderValue := strings.TrimSpace(authHeader[7:]) // Remove "Bearer " prefix

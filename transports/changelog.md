@@ -1,1 +1,3 @@
+- fix: vertex list models enhanced to support values from deployments
+- fix: header keys are now converted to lowercase for better consistency in plugin usage
 - fix: gemini system message conversion and added support for using instructions parameter as a fallback when no system message

@@ -1135,7 +1135,7 @@ func (h *CompletionHandler) countTokens(ctx *fasthttp.RequestCtx) {
 func (h *CompletionHandler) handleStreamingTextCompletion(ctx *fasthttp.RequestCtx, req *schemas.BifrostTextCompletionRequest, bifrostCtx *schemas.BifrostContext, cancel context.CancelFunc) {
 	// Use the cancellable context from ConvertToBifrostContext
 	// See router.go for detailed explanation of why we need a cancellable context
-	
+
 	getStream := func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
 		return h.client.TextCompletionStreamRequest(bifrostCtx, req)
 	}
