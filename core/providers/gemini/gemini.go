@@ -380,8 +380,30 @@ func HandleGeminiChatCompletionStream(
 
 	// Start streaming in a goroutine
 	go func() {
-		defer close(responseChan)
+		defer func() {
+			if ctx.Err() == context.Canceled {
+				providerUtils.HandleStreamCancellation(ctx, postHookRunner, responseChan, providerName, model, schemas.ChatCompletionStreamRequest, logger)
+			} else if ctx.Err() == context.DeadlineExceeded {
+				providerUtils.HandleStreamTimeout(ctx, postHookRunner, responseChan, providerName, model, schemas.ChatCompletionStreamRequest, logger)
+			}
+			close(responseChan)
+		}()
 		defer providerUtils.ReleaseStreamingResponse(resp)
+
+		if resp.BodyStream() == nil {
+			bifrostErr := providerUtils.NewBifrostOperationError(
+				"Provider returned an empty response",
+				fmt.Errorf("provider returned an empty response"),
+				providerName,
+			)
+			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+			providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, logger)
+			return
+		}
+
+		// Setup cancellation handler to close body stream on ctx cancellation
+		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), logger)
+		defer stopCancellation()
 
 		scanner := bufio.NewScanner(resp.BodyStream())
 		buf := make([]byte, 0, 1024*1024)
@@ -395,10 +417,9 @@ func HandleGeminiChatCompletionStream(
 		var modelName string
 
 		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
+			// If context was cancelled/timed out, let defer handle it
+			if ctx.Err() != nil {
 				return
-			default:
 			}
 			line := scanner.Text()
 
@@ -406,19 +427,15 @@ func HandleGeminiChatCompletionStream(
 			if line == "" || strings.HasPrefix(line, ":") {
 				continue
 			}
-
 			// Parse SSE data
 			if !strings.HasPrefix(line, "data: ") {
 				continue
 			}
-
 			eventData := strings.TrimPrefix(line, "data: ")
-
 			// Skip empty data
 			if strings.TrimSpace(eventData) == "" {
 				continue
 			}
-
 			// Process chunk using shared function
 			geminiResponse, err := processGeminiStreamChunk(eventData)
 			if err != nil {
@@ -511,6 +528,11 @@ func HandleGeminiChatCompletionStream(
 
 		// Handle scanner errors
 		if err := scanner.Err(); err != nil {
+			// If context was cancelled/timed out, let defer handle it
+			if ctx.Err() != nil {
+				return
+			}
+			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 			logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.ChatCompletionStreamRequest, providerName, model, logger)
 		}
@@ -687,8 +709,20 @@ func HandleGeminiResponsesStream(
 
 	// Start streaming in a goroutine
 	go func() {
-		defer close(responseChan)
+		defer func() {
+			if ctx.Err() == context.Canceled {
+				providerUtils.HandleStreamCancellation(ctx, postHookRunner, responseChan, providerName, model, schemas.ResponsesStreamRequest, logger)
+			} else if ctx.Err() == context.DeadlineExceeded {
+				providerUtils.HandleStreamTimeout(ctx, postHookRunner, responseChan, providerName, model, schemas.ResponsesStreamRequest, logger)
+			}
+			close(responseChan)
+		}()
+
 		defer providerUtils.ReleaseStreamingResponse(resp)
+
+		// Setup cancellation handler to close body stream on ctx cancellation
+		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), logger)
+		defer stopCancellation()
 
 		scanner := bufio.NewScanner(resp.BodyStream())
 		buf := make([]byte, 0, 1024*1024)
@@ -706,11 +740,11 @@ func HandleGeminiResponsesStream(
 		var lastUsageMetadata *GenerateContentResponseUsageMetadata
 
 		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
+			// If context was cancelled/timed out, let defer handle it
+			if ctx.Err() != nil {
 				return
-			default:
 			}
+
 			line := scanner.Text()
 
 			// Skip empty lines and comments
@@ -829,43 +863,50 @@ func HandleGeminiResponsesStream(
 
 		// Handle scanner errors
 		if err := scanner.Err(); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 			logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.ResponsesStreamRequest, providerName, model, logger)
-		} else {
-			// Finalize the stream by closing any open items
-			finalResponses := FinalizeGeminiResponsesStream(streamState, lastUsageMetadata, sequenceNumber)
-			for i, finalResponse := range finalResponses {
-				finalResponse.ExtraFields = schemas.BifrostResponseExtraFields{
-					RequestType:    schemas.ResponsesStreamRequest,
-					Provider:       providerName,
-					ModelRequested: model,
-					ChunkIndex:     chunkIndex,
-					Latency:        time.Since(lastChunkTime).Milliseconds(),
-				}
-
-				if postResponseConverter != nil {
-					finalResponse = postResponseConverter(finalResponse)
-					if finalResponse == nil {
-						logger.Warn("postResponseConverter returned nil; skipping final response")
-						continue
-					}
-				}
-
-				chunkIndex++
-				sequenceNumber++
-
-				if sendBackRawResponse {
-					finalResponse.ExtraFields.RawResponse = "{}" // Final event has no payload
-				}
-
-				// Set final latency on the last response (completed event)
-				if i == len(finalResponses)-1 {
-					finalResponse.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-				}
-
-				ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-				providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, finalResponse, nil, nil), responseChan)
+			return
+		}
+		// Finalize the stream by closing any open items
+		finalResponses := FinalizeGeminiResponsesStream(streamState, lastUsageMetadata, sequenceNumber)
+		for i, finalResponse := range finalResponses {
+			if finalResponse == nil {
+				logger.Warn("FinalizeGeminiResponsesStream returned nil; skipping final response")
+				continue
 			}
+			finalResponse.ExtraFields = schemas.BifrostResponseExtraFields{
+				RequestType:    schemas.ResponsesStreamRequest,
+				Provider:       providerName,
+				ModelRequested: model,
+				ChunkIndex:     chunkIndex,
+				Latency:        time.Since(lastChunkTime).Milliseconds(),
+			}
+
+			if postResponseConverter != nil {
+				finalResponse = postResponseConverter(finalResponse)
+				if finalResponse == nil {
+					logger.Warn("postResponseConverter returned nil; skipping final response")
+					continue
+				}
+			}
+
+			chunkIndex++
+			sequenceNumber++
+
+			if sendBackRawResponse {
+				finalResponse.ExtraFields.RawResponse = "{}" // Final event has no payload
+			}
+			isLast := i == len(finalResponses)-1
+			// Set final latency on the last response (completed event)
+			if isLast {
+				ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+				finalResponse.ExtraFields.Latency = time.Since(startTime).Milliseconds()
+			}			
+			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, finalResponse, nil, nil), responseChan)
 		}
 	}()
 
@@ -1091,8 +1132,20 @@ func (provider *GeminiProvider) SpeechStream(ctx *schemas.BifrostContext, postHo
 
 	// Start streaming in a goroutine
 	go func() {
+		defer func() {
+			if ctx.Err() == context.Canceled {
+				providerUtils.HandleStreamCancellation(ctx, postHookRunner, responseChan, providerName, request.Model, schemas.SpeechStreamRequest, provider.logger)
+			} else if ctx.Err() == context.DeadlineExceeded {
+				providerUtils.HandleStreamTimeout(ctx, postHookRunner, responseChan, providerName, request.Model, schemas.SpeechStreamRequest, provider.logger)
+			}
+			close(responseChan)
+		}()
+
 		defer providerUtils.ReleaseStreamingResponse(resp)
-		defer close(responseChan)
+
+		// Setup cancellation handler to close body stream on ctx cancellation
+		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), provider.logger)
+		defer stopCancellation()
 
 		scanner := bufio.NewScanner(resp.BodyStream())
 		// Increase buffer size to handle large chunks (especially for audio data)
@@ -1104,11 +1157,11 @@ func (provider *GeminiProvider) SpeechStream(ctx *schemas.BifrostContext, postHo
 		lastChunkTime := startTime
 
 		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
+			// If context was cancelled/timed out, let defer handle it
+			if ctx.Err() != nil {
 				return
-			default:
 			}
+
 			line := scanner.Text()
 
 			// Skip empty lines
@@ -1208,31 +1261,33 @@ func (provider *GeminiProvider) SpeechStream(ctx *schemas.BifrostContext, postHo
 				providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, response, nil), responseChan)
 			}
 		}
-
 		// Handle scanner errors
 		if err := scanner.Err(); err != nil {
-			provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
-			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.SpeechStreamRequest, providerName, request.Model, provider.logger)
-		} else {
-			response := &schemas.BifrostSpeechStreamResponse{
-				Type:  schemas.SpeechStreamResponseTypeDone,
-				Usage: usage,
-				ExtraFields: schemas.BifrostResponseExtraFields{
-					RequestType:    schemas.SpeechStreamRequest,
-					Provider:       providerName,
-					ModelRequested: request.Model,
-					ChunkIndex:     chunkIndex + 1,
-					Latency:        time.Since(startTime).Milliseconds(),
-				},
-			}
-
-			// Set raw request if enabled
-			if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
-				providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
+			if ctx.Err() != nil {
+				return
 			}
 			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, response, nil), responseChan)
+			provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
+			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.SpeechStreamRequest, providerName, request.Model, provider.logger)
+			return
 		}
+		response := &schemas.BifrostSpeechStreamResponse{
+			Type:  schemas.SpeechStreamResponseTypeDone,
+			Usage: usage,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType:    schemas.SpeechStreamRequest,
+				Provider:       providerName,
+				ModelRequested: request.Model,
+				ChunkIndex:     chunkIndex + 1,
+				Latency:        time.Since(startTime).Milliseconds(),
+			},
+		}
+		// Set raw request if enabled
+		if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+			providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
+		}
+		ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+		providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, response, nil), responseChan)
 	}()
 
 	return responseChan, nil
@@ -1360,8 +1415,18 @@ func (provider *GeminiProvider) TranscriptionStream(ctx *schemas.BifrostContext,
 
 	// Start streaming in a goroutine
 	go func() {
-		defer close(responseChan)
+		defer func() {
+			if ctx.Err() == context.Canceled {
+				providerUtils.HandleStreamCancellation(ctx, postHookRunner, responseChan, providerName, request.Model, schemas.TranscriptionStreamRequest, provider.logger)
+			} else if ctx.Err() == context.DeadlineExceeded {
+				providerUtils.HandleStreamTimeout(ctx, postHookRunner, responseChan, providerName, request.Model, schemas.TranscriptionStreamRequest, provider.logger)
+			}
+			close(responseChan)
+		}()
 		defer providerUtils.ReleaseStreamingResponse(resp)
+		// Setup cancellation handler to close body stream on ctx cancellation
+		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), provider.logger)
+		defer stopCancellation()
 
 		scanner := bufio.NewScanner(resp.BodyStream())
 		// Increase buffer size to handle large chunks (especially for audio data)
@@ -1375,11 +1440,11 @@ func (provider *GeminiProvider) TranscriptionStream(ctx *schemas.BifrostContext,
 		var fullTranscriptionText string
 
 		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
+			// If context was cancelled/timed out, let defer handle it
+			if ctx.Err() != nil {
 				return
-			default:
 			}
+
 			line := scanner.Text()
 
 			// Skip empty lines
@@ -1489,34 +1554,39 @@ func (provider *GeminiProvider) TranscriptionStream(ctx *schemas.BifrostContext,
 
 		// Handle scanner errors
 		if err := scanner.Err(); err != nil {
-			provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
-			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.TranscriptionStreamRequest, providerName, request.Model, provider.logger)
-		} else {
-			response := &schemas.BifrostTranscriptionStreamResponse{
-				Type: schemas.TranscriptionStreamResponseTypeDone,
-				Text: fullTranscriptionText,
-				Usage: &schemas.TranscriptionUsage{
-					Type:         "tokens",
-					InputTokens:  usage.InputTokens,
-					OutputTokens: usage.OutputTokens,
-					TotalTokens:  usage.TotalTokens,
-				},
-				ExtraFields: schemas.BifrostResponseExtraFields{
-					RequestType:    schemas.TranscriptionStreamRequest,
-					Provider:       providerName,
-					ModelRequested: request.Model,
-					ChunkIndex:     chunkIndex + 1,
-					Latency:        time.Since(startTime).Milliseconds(),
-				},
-			}
-
-			// Set raw request if enabled
-			if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
-				providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
+			if ctx.Err() != nil {
+				return
 			}
 			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, nil, response), responseChan)
+			provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
+			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.TranscriptionStreamRequest, providerName, request.Model, provider.logger)
+			return
 		}
+		response := &schemas.BifrostTranscriptionStreamResponse{
+			Type: schemas.TranscriptionStreamResponseTypeDone,
+			Text: fullTranscriptionText,
+			Usage: &schemas.TranscriptionUsage{
+				Type:         "tokens",
+				InputTokens:  usage.InputTokens,
+				OutputTokens: usage.OutputTokens,
+				TotalTokens:  usage.TotalTokens,
+			},
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType:    schemas.TranscriptionStreamRequest,
+				Provider:       providerName,
+				ModelRequested: request.Model,
+				ChunkIndex:     chunkIndex + 1,
+				Latency:        time.Since(startTime).Milliseconds(),
+			},
+		}
+
+		// Set raw request if enabled
+		if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+			providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
+		}
+		ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+		providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, nil, response), responseChan)
+
 	}()
 
 	return responseChan, nil
