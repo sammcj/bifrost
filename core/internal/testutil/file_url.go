@@ -167,8 +167,7 @@ func RunFileURLResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx context.
 			CreateFileURLResponsesMessage("What is this document about? Please provide a summary of its main topics.", TestFileURL),
 		}
 
-		// Use retry framework for file URL requests
-		retryConfig := GetTestRetryConfigForScenario("FileInput", testConfig)
+		// Set up retry context for file URL requests
 		retryContext := TestRetryContext{
 			ScenarioName: "FileURL-Responses",
 			ExpectedBehavior: map[string]interface{}{
@@ -198,14 +197,7 @@ func RunFileURLResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx context.
 			"cannot fetch", "download failed", "url not found",
 		}...) // File URL processing failure indicators
 
-		responsesRetryConfig := ResponsesRetryConfig{
-			MaxAttempts: retryConfig.MaxAttempts,
-			BaseDelay:   retryConfig.BaseDelay,
-			MaxDelay:    retryConfig.MaxDelay,
-			Conditions:  []ResponsesRetryCondition{},
-			OnRetry:     retryConfig.OnRetry,
-			OnFinalFail: retryConfig.OnFinalFail,
-		}
+		responsesRetryConfig := FileInputResponsesRetryConfig()
 
 		response, responsesError := WithResponsesTestRetry(t, responsesRetryConfig, retryContext, expectations, "FileURL", func() (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
 			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)

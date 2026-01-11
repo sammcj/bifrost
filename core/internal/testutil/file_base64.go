@@ -176,8 +176,7 @@ func RunFileBase64ResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 			CreateDocumentResponsesMessage("What is the main content of this PDF document? Summarize it.", HelloWorldPDFBase64),
 		}
 
-		// Use retry framework for document input requests
-		retryConfig := GetTestRetryConfigForScenario("FileInput", testConfig)
+		// Set up retry context for document input requests
 		retryContext := TestRetryContext{
 			ScenarioName: "FileBase64-Responses",
 			ExpectedBehavior: map[string]interface{}{
@@ -205,14 +204,7 @@ func RunFileBase64ResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 			"unable to read", "no file", "corrupted", "unsupported",
 		}...) // PDF processing failure indicators
 
-		responsesRetryConfig := ResponsesRetryConfig{
-			MaxAttempts: retryConfig.MaxAttempts,
-			BaseDelay:   retryConfig.BaseDelay,
-			MaxDelay:    retryConfig.MaxDelay,
-			Conditions:  []ResponsesRetryCondition{},
-			OnRetry:     retryConfig.OnRetry,
-			OnFinalFail: retryConfig.OnFinalFail,
-		}
+		responsesRetryConfig := FileInputResponsesRetryConfig()
 
 		response, responsesError := WithResponsesTestRetry(t, responsesRetryConfig, retryContext, expectations, "FileBase64", func() (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
 			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
