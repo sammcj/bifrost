@@ -569,6 +569,10 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, res *schemas.Bifrost
 		}
 	}
 
+	// Get metadata from context BEFORE goroutine to avoid race conditions
+	// when the same context is reused across multiple requests
+	paramsHash, _ := ctx.Value(requestParamsHashKey).(string)
+
 	// Cache everything in a unified VectorEntry asynchronously to avoid blocking the response
 	plugin.waitGroup.Add(1)
 	go func() {
@@ -576,9 +580,6 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, res *schemas.Bifrost
 		// Create a background context with timeout for the cache operation
 		cacheCtx, cancel := context.WithTimeout(context.Background(), CacheSetTimeout)
 		defer cancel()
-
-		// Get metadata from context
-		paramsHash, _ := ctx.Value(requestParamsHashKey).(string)
 
 		// Build unified metadata with provider, model, and all params
 		unifiedMetadata := plugin.buildUnifiedMetadata(provider, model, paramsHash, hash, cacheKey, cacheTTL)
