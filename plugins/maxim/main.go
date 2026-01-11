@@ -483,6 +483,12 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bifr
 		return result, bifrostErr, nil
 	}
 
+	// Capture context values BEFORE goroutine to avoid race conditions
+	// when the same context is reused across multiple requests
+	generationID, hasGenerationID := ctx.Value(GenerationIDKey).(string)
+	traceID, hasTraceID := ctx.Value(TraceIDKey).(string)
+	tags, hasTags := ctx.Value(TagsKey).(map[string]string)
+
 	go func() {
 		requestType, _, model := bifrost.GetResponseFields(result, bifrostErr)
 
@@ -507,8 +513,7 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bifr
 		if err != nil {
 			return
 		}
-		generationID, ok := ctx.Value(GenerationIDKey).(string)
-		if ok {
+		if hasGenerationID {
 			if bifrostErr != nil {
 				// Safely extract message from nested error
 				message := ""
@@ -569,14 +574,12 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bifr
 
 			logger.EndGeneration(generationID)
 		}
-		traceID, ok := ctx.Value(TraceIDKey).(string)
-		if ok {
+		if hasTraceID {
 			logger.EndTrace(traceID)
 		}
 
 		// add tags to the generation and trace
-		tags, ok := ctx.Value(TagsKey).(map[string]string)
-		if ok {
+		if hasTags {
 			for key, value := range tags {
 				if generationID != "" {
 					logger.AddTagToGeneration(generationID, key, value)
