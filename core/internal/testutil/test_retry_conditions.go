@@ -979,3 +979,172 @@ func (c *InvalidCountTokensCondition) ShouldRetry(response *schemas.BifrostRespo
 func (c *InvalidCountTokensCondition) GetConditionName() string {
 	return "InvalidCountTokens"
 }
+
+// =============================================================================
+// RESPONSES API CONDITIONS
+// These implement ResponsesRetryCondition for use with WithResponsesTestRetry
+// =============================================================================
+
+// ResponsesEmptyCondition checks for empty Responses API responses
+type ResponsesEmptyCondition struct{}
+
+func (c *ResponsesEmptyCondition) ShouldRetry(response *schemas.BifrostResponsesResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string) {
+	if err != nil {
+		return false, ""
+	}
+	if response == nil {
+		return true, "response is nil"
+	}
+	content := GetResponsesContent(response)
+	if strings.TrimSpace(content) == "" {
+		return true, "response has empty content"
+	}
+	return false, ""
+}
+
+func (c *ResponsesEmptyCondition) GetConditionName() string {
+	return "ResponsesEmpty"
+}
+
+// ResponsesFileNotProcessedCondition checks if file/document was not properly processed in Responses API
+type ResponsesFileNotProcessedCondition struct{}
+
+func (c *ResponsesFileNotProcessedCondition) ShouldRetry(response *schemas.BifrostResponsesResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string) {
+	if err != nil || response == nil {
+		return false, ""
+	}
+
+	content := strings.ToLower(GetResponsesContent(response))
+
+	// Check for generic responses that don't indicate file/document processing
+	fileProcessingFailurePhrases := []string{
+		"i can't read",
+		"i cannot read",
+		"unable to read",
+		"can't access",
+		"cannot access",
+		"no file",
+		"no document",
+		"not able to read",
+		"i don't see",
+		"i cannot process",
+		"unable to process",
+		"can't open",
+		"cannot open",
+		"invalid file",
+		"corrupted",
+		"unsupported format",
+		"failed to load",
+		"no pdf",
+		"cannot view",
+	}
+
+	for _, phrase := range fileProcessingFailurePhrases {
+		if strings.Contains(content, phrase) {
+			return true, fmt.Sprintf("response suggests file was not processed: contains '%s'", phrase)
+		}
+	}
+
+	// If content is suspiciously short for document analysis
+	if len(strings.TrimSpace(content)) < 15 {
+		return true, "response too short for meaningful document analysis"
+	}
+
+	return false, ""
+}
+
+func (c *ResponsesFileNotProcessedCondition) GetConditionName() string {
+	return "ResponsesFileNotProcessed"
+}
+
+// ResponsesGenericResponseCondition checks for generic/template responses in Responses API
+type ResponsesGenericResponseCondition struct{}
+
+func (c *ResponsesGenericResponseCondition) ShouldRetry(response *schemas.BifrostResponsesResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string) {
+	if err != nil || response == nil {
+		return false, ""
+	}
+
+	content := strings.ToLower(GetResponsesContent(response))
+
+	// Generic phrases that suggest the model didn't engage with the specific request
+	genericPhrases := []string{
+		"as an ai",
+		"as a language model",
+		"i'm an ai",
+		"i am an ai",
+		"i'm a language model",
+		"i am a language model",
+		"i can help you with",
+		"how can i assist you",
+		"what would you like to know",
+		"is there anything else",
+	}
+
+	// Check if response starts with generic phrases (more concerning)
+	for _, phrase := range genericPhrases {
+		if strings.HasPrefix(content, phrase) {
+			return true, fmt.Sprintf("response starts with generic phrase: '%s'", phrase)
+		}
+	}
+
+	// Check for overly generic responses (short and generic)
+	if len(strings.TrimSpace(content)) < 30 {
+		for _, phrase := range genericPhrases {
+			if strings.Contains(content, phrase) {
+				return true, fmt.Sprintf("short response contains generic phrase: '%s'", phrase)
+			}
+		}
+	}
+
+	return false, ""
+}
+
+func (c *ResponsesGenericResponseCondition) GetConditionName() string {
+	return "ResponsesGenericResponse"
+}
+
+// ResponsesContentValidationCondition checks if response fails basic content validation for Responses API
+type ResponsesContentValidationCondition struct{}
+
+func (c *ResponsesContentValidationCondition) ShouldRetry(response *schemas.BifrostResponsesResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string) {
+	if err != nil || response == nil {
+		return false, ""
+	}
+
+	content := strings.ToLower(GetResponsesContent(response))
+
+	// Skip if response is too short (other conditions will handle these)
+	if len(content) < 10 {
+		return false, ""
+	}
+
+	// Check for file/document processing scenarios
+	scenarioName := strings.ToLower(context.ScenarioName)
+	if strings.Contains(scenarioName, "file") || strings.Contains(scenarioName, "document") || strings.Contains(scenarioName, "pdf") {
+		// Check if this test has expected keywords from the TestRetryContext
+		if testMetadata, exists := context.TestMetadata["expected_keywords"]; exists {
+			if expectedKeywords, ok := testMetadata.([]string); ok && len(expectedKeywords) > 0 {
+				// Check if ANY of the expected keywords are present
+				foundExpectedKeyword := false
+				for _, keyword := range expectedKeywords {
+					if strings.Contains(content, strings.ToLower(keyword)) {
+						foundExpectedKeyword = true
+						break
+					}
+				}
+
+				// If valid response but missing ALL expected keywords, retry
+				if !foundExpectedKeyword && len(content) > 20 && len(content) < 2000 {
+					return true, fmt.Sprintf("response missing expected keywords %v, might include them on retry", expectedKeywords)
+				}
+			}
+		}
+	}
+
+	return false, ""
+}
+
+func (c *ResponsesContentValidationCondition) GetConditionName() string {
+	return "ResponsesContentValidation"
+}
