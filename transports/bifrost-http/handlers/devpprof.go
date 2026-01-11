@@ -328,6 +328,11 @@ func getTopAllocations() []AllocationInfo {
 			continue
 		}
 
+		// Skip allocations from the profiler itself
+		if isProfilerFunction(fn.Name, fn.Filename) {
+			continue
+		}
+
 		key := fn.Name
 		if existing, ok := allocMap[key]; ok {
 			existing.Bytes += sample.Value[allocSpaceIdx]
@@ -415,24 +420,35 @@ func (h *DevPprofHandler) getGoroutines(ctx *fasthttp.RequestCtx) {
 	}
 
 	rawProfile := buf.String()
-	groups := parseGoroutineProfile(rawProfile)
+	allGroups := parseGoroutineProfile(rawProfile)
 
-	// Calculate summary
+	// Filter out profiler goroutines and calculate summary
+	groups := make([]GoroutineGroup, 0, len(allGroups))
 	summary := GoroutineSummary{}
-	for i := range groups {
-		categorizeGoroutine(&groups[i])
+	profilerGoroutineCount := 0
 
-		switch groups[i].Category {
-		case "background":
-			summary.Background += groups[i].Count
-		case "per-request":
-			summary.PerRequest += groups[i].Count
+	for i := range allGroups {
+		categorizeGoroutine(&allGroups[i])
+
+		// Skip profiler's own goroutines
+		if isProfilerGoroutine(&allGroups[i]) {
+			profilerGoroutineCount += allGroups[i].Count
+			continue
 		}
 
-		if groups[i].WaitMinutes >= 1 {
-			summary.LongWaiting += groups[i].Count
-			if groups[i].Category == "per-request" {
-				summary.PotentiallyStuck += groups[i].Count
+		groups = append(groups, allGroups[i])
+
+		switch allGroups[i].Category {
+		case "background":
+			summary.Background += allGroups[i].Count
+		case "per-request":
+			summary.PerRequest += allGroups[i].Count
+		}
+
+		if allGroups[i].WaitMinutes >= 1 {
+			summary.LongWaiting += allGroups[i].Count
+			if allGroups[i].Category == "per-request" {
+				summary.PotentiallyStuck += allGroups[i].Count
 			}
 		}
 	}
@@ -453,9 +469,16 @@ func (h *DevPprofHandler) getGoroutines(ctx *fasthttp.RequestCtx) {
 		return groups[i].Count > groups[j].Count
 	})
 
+	// Calculate app goroutines (total minus profiler goroutines)
+	// Calculate total goroutines from profile snapshot
+	totalFromProfile := 0
+	for _, g := range groups {
+		totalFromProfile += g.Count
+	}
+
 	response := GoroutineProfile{
 		Timestamp:       time.Now().Format(time.RFC3339),
-		TotalGoroutines: runtime.NumGoroutine(),
+		TotalGoroutines: totalFromProfile,
 		Groups:          groups,
 		Summary:         summary,
 	}
@@ -476,18 +499,18 @@ func categorizeGoroutine(g *GoroutineGroup) {
 
 	// Background goroutines - expected to run forever
 	backgroundPatterns := []string{
-		"requestWorker",              // Provider queue workers
-		"collectLoop",                // Metrics collector
-		"cleanupWorker",              // Various cleanup workers
-		"startAccumulatorMapCleanup", // Stream accumulator cleanup
-		"cleanupOldTraces",           // Trace store cleanup
-		"startCleanup",               // Generic cleanup
-		"monitorLoop",                // Health monitor
-		"StartHeartbeat",             // WebSocket heartbeat
-		"time.Sleep",                 // Ticker-based workers
-		"runtime.gopark",             // Runtime parking (often tickers)
-		"sync.(*Cond).Wait",          // Condition variable waits
-		"net/http.(*persistConn)",    // HTTP connection pool
+		"requestWorker",                  // Provider queue workers
+		"collectLoop",                    // Metrics collector
+		"cleanupWorker",                  // Various cleanup workers
+		"startAccumulatorMapCleanup",     // Stream accumulator cleanup
+		"cleanupOldTraces",               // Trace store cleanup
+		"startCleanup",                   // Generic cleanup
+		"monitorLoop",                    // Health monitor
+		"StartHeartbeat",                 // WebSocket heartbeat
+		"time.Sleep",                     // Ticker-based workers
+		"runtime.gopark",                 // Runtime parking (often tickers)
+		"sync.(*Cond).Wait",              // Condition variable waits
+		"net/http.(*persistConn)",        // HTTP connection pool
 		"internal/poll.runtime_pollWait", // Network polling
 	}
 
@@ -649,6 +672,41 @@ func parseGoroutineProfile(profile string) []GoroutineGroup {
 	}
 
 	return groups
+}
+
+// profilerPatterns contains patterns to identify profiler-related code
+var profilerPatterns = []string{
+	"devpprof",
+	"pprof.WriteHeapProfile",
+	"pprof.Lookup",
+	"profile.Parse",
+	"MetricsCollector",
+	"collectLoop",
+	"getTopAllocations",
+	"parseGoroutineProfile",
+	"getGoroutines",
+	"getCPUSample",
+}
+
+// isProfilerFunction checks if a function belongs to the profiler itself
+func isProfilerFunction(funcName, fileName string) bool {
+	for _, pattern := range profilerPatterns {
+		if strings.Contains(funcName, pattern) || strings.Contains(fileName, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// isProfilerGoroutine checks if a goroutine belongs to the profiler
+func isProfilerGoroutine(g *GoroutineGroup) bool {
+	stackStr := strings.Join(g.Stack, " ")
+	for _, pattern := range profilerPatterns {
+		if strings.Contains(stackStr, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 // Cleanup stops the metrics collector
