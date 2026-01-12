@@ -1162,7 +1162,6 @@ var grokReasoningModels = []string{
 	"grok-3-mini",
 	"grok-4",
 	"grok-4-fast-reasoning",
-	"grok-4-fast-non-reasoning",
 	"grok-4-1-fast-reasoning",
 	"grok-code-fast-1",
 }
@@ -1172,7 +1171,7 @@ func IsGrokReasoningModel(model string) bool {
 	// Check if the model matches any of the reasoning models
 	for _, reasoningModel := range grokReasoningModels {
 		if strings.Contains(model, reasoningModel) {
-			// Make sure it's not a non-reasoning variant like "grok-4-fast-non-reasoning"
+			// Make sure it's not a non-reasoning variant. Safety check for variants
 			if strings.Contains(model, "non-reasoning") {
 				return false
 			}
