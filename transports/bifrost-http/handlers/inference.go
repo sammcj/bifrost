@@ -506,14 +506,14 @@ func (h *CompletionHandler) listModels(ctx *fasthttp.RequestCtx) {
 			}
 			if pricingEntry != nil && modelEntry.Pricing == nil {
 				pricing := &schemas.Pricing{
-					Prompt:     bifrost.Ptr(fmt.Sprintf("%f", pricingEntry.InputCostPerToken)),
-					Completion: bifrost.Ptr(fmt.Sprintf("%f", pricingEntry.OutputCostPerToken)),
+					Prompt:     bifrost.Ptr(fmt.Sprintf("%.10f", pricingEntry.InputCostPerToken)),
+					Completion: bifrost.Ptr(fmt.Sprintf("%.10f", pricingEntry.OutputCostPerToken)),
 				}
 				if pricingEntry.InputCostPerImage != nil {
-					pricing.Image = bifrost.Ptr(fmt.Sprintf("%f", *pricingEntry.InputCostPerImage))
+					pricing.Image = bifrost.Ptr(fmt.Sprintf("%.10f", *pricingEntry.InputCostPerImage))
 				}
 				if pricingEntry.CacheReadInputTokenCost != nil {
-					pricing.InputCacheRead = bifrost.Ptr(fmt.Sprintf("%f", *pricingEntry.CacheReadInputTokenCost))
+					pricing.InputCacheRead = bifrost.Ptr(fmt.Sprintf("%.10f", *pricingEntry.CacheReadInputTokenCost))
 				}
 				resp.Data[i].Pricing = pricing
 			}

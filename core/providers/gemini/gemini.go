@@ -905,7 +905,7 @@ func HandleGeminiResponsesStream(
 			if isLast {
 				ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 				finalResponse.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-			}			
+			}
 			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, finalResponse, nil, nil), responseChan)
 		}
 	}()
@@ -1032,7 +1032,9 @@ func (provider *GeminiProvider) Speech(ctx *schemas.BifrostContext, key schemas.
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
-	ctx.SetValue(BifrostContextKeyResponseFormat, request.Params.ResponseFormat)
+	if request.Params != nil {
+		ctx.SetValue(BifrostContextKeyResponseFormat, request.Params.ResponseFormat)
+	}
 	response, convErr := geminiResponse.ToBifrostSpeechResponse(ctx)
 	if convErr != nil {
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, convErr, provider.GetProviderKey())

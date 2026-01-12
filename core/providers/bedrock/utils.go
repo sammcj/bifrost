@@ -276,7 +276,7 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 			}
 			// Handle request metadata
 			if reqMetadata, exists := bifrostReq.Params.ExtraParams["requestMetadata"]; exists {
-				if metadata, ok := reqMetadata.(map[string]string); ok {
+				if metadata, ok := schemas.SafeExtractStringMap(reqMetadata); ok {
 					bedrockReq.RequestMetadata = metadata
 				}
 			}

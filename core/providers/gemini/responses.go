@@ -122,7 +122,7 @@ func ToGeminiResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *Gemi
 
 		if bifrostReq.Params.ExtraParams != nil {
 			if safetySettings, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "safety_settings"); ok {
-				if settings, ok := safetySettings.([]SafetySetting); ok {
+				if settings, ok := SafeExtractSafetySettings(safetySettings); ok {
 					geminiReq.SafetySettings = settings
 				}
 			}

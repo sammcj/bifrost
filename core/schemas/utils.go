@@ -522,6 +522,30 @@ func SafeExtractFromMap(m map[string]interface{}, key string) (interface{}, bool
 	return value, exists
 }
 
+// SafeExtractStringMap safely extracts a map[string]string from an interface{} with type checking.
+// Handles both direct map[string]string and JSON-deserialized map[string]interface{} cases.
+func SafeExtractStringMap(value interface{}) (map[string]string, bool) {
+	if value == nil {
+		return nil, false
+	}
+	switch v := value.(type) {
+	case map[string]string:
+		return v, true
+	case map[string]interface{}:
+		result := make(map[string]string, len(v))
+		for key, val := range v {
+			if str, ok := SafeExtractString(val); ok {
+				result[key] = str
+			} else {
+				return nil, false
+			}
+		}
+		return result, true
+	default:
+		return nil, false
+	}
+}
+
 func SafeExtractOrderedMap(value interface{}) (OrderedMap, bool) {
 	if value == nil {
 		return OrderedMap{}, false

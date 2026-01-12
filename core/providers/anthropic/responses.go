@@ -1502,7 +1502,7 @@ func ToAnthropicResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) (*
 		// Set system message if present
 		if systemContent != nil {
 			anthropicReq.System = systemContent
-		} else if bifrostReq.Params != nil && bifrostReq.Params.Instructions != nil {
+		} else if bifrostReq.Params != nil && bifrostReq.Params.Instructions != nil && *bifrostReq.Params.Instructions != "" {
 			// if no system content, check if instructions are present
 			// system messages take precedence over instructions
 			anthropicReq.System = &AnthropicContent{

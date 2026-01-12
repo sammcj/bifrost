@@ -455,6 +455,7 @@ func TestHierarchicalChainBudgetSwitch(t *testing.T) {
 	// Exhaust Customer1's budget (which is limiting Team1)
 	consumedBudget := 0.0
 	requestNum := 1
+	budgetExhausted := false
 
 	for requestNum <= 150 {
 		resp := MakeRequest(t, APIRequest{
@@ -471,6 +472,7 @@ func TestHierarchicalChainBudgetSwitch(t *testing.T) {
 
 		if resp.StatusCode >= 400 {
 			if CheckErrorMessage(t, resp, "budget") {
+				budgetExhausted = true
 				t.Logf("Customer1 budget exhausted at request %d (consumed: $%.6f)", requestNum, consumedBudget)
 				break
 			} else {
@@ -488,6 +490,10 @@ func TestHierarchicalChainBudgetSwitch(t *testing.T) {
 		}
 
 		requestNum++
+	}
+
+	if !budgetExhausted {
+		t.Fatalf("Budget should have been exhausted within 150 requests, but no budget rejection was observed (consumed: $%.6f)", consumedBudget)
 	}
 
 	// Switch VK to Team2 (under Customer2)
