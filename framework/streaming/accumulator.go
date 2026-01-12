@@ -129,6 +129,7 @@ func (a *Accumulator) createStreamAccumulator(requestID string) *StreamAccumulat
 		MaxTranscriptionChunkIndex: -1,
 		MaxAudioChunkIndex:         -1,
 		IsComplete:                 false,
+		mu:                         sync.Mutex{},
 		Timestamp:                  now,
 		StartTimestamp:             now, // Set default StartTimestamp for proper TTFT/latency calculation
 	}

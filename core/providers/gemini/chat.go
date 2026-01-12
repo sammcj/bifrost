@@ -37,7 +37,7 @@ func ToGeminiChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) *Gemi
 		if bifrostReq.Params.ExtraParams != nil {
 			// Safety settings
 			if safetySettings, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "safety_settings"); ok {
-				if settings, ok := safetySettings.([]SafetySetting); ok {
+				if settings, ok := SafeExtractSafetySettings(safetySettings); ok {
 					geminiReq.SafetySettings = settings
 				}
 			}
@@ -49,7 +49,7 @@ func ToGeminiChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) *Gemi
 
 			// Labels
 			if labels, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "labels"); ok {
-				if labelMap, ok := labels.(map[string]string); ok {
+				if labelMap, ok := schemas.SafeExtractStringMap(labels); ok {
 					geminiReq.Labels = labelMap
 				}
 			}

@@ -204,7 +204,15 @@ func RunFileBase64ResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 			"unable to read", "no file", "corrupted", "unsupported",
 		}...) // PDF processing failure indicators
 
-		responsesRetryConfig := FileInputResponsesRetryConfig()
+		retryConfig := GetTestRetryConfigForScenario("FileInput", testConfig)
+		responsesRetryConfig := ResponsesRetryConfig{
+			MaxAttempts: retryConfig.MaxAttempts,
+			BaseDelay:   retryConfig.BaseDelay,
+			MaxDelay:    retryConfig.MaxDelay,
+			Conditions:  []ResponsesRetryCondition{},
+			OnRetry:     retryConfig.OnRetry,
+			OnFinalFail: retryConfig.OnFinalFail,
+		}
 
 		response, responsesError := WithResponsesTestRetry(t, responsesRetryConfig, retryContext, expectations, "FileBase64", func() (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
 			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)

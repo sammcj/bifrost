@@ -891,7 +891,7 @@ func ProcessAndSendResponse(
 		}
 	}
 
-	// Run post hooks on the response first so span reflects post-processed data
+	// Run post hooks on the response (note: accumulated chunks above contain pre-hook data)
 	processedResponse, processedError := postHookRunner(ctx, response, nil)
 
 	if HandleStreamControlSkip(processedError) {

@@ -525,7 +525,7 @@ func (r *OpenAITranscriptionRequest) IsStreamingRequested() bool {
 	return r.Stream != nil && *r.Stream
 }
 
-// MODEL TYPES
+// OpenAIModel represents an OpenAI model
 type OpenAIModel struct {
 	ID      string `json:"id"`
 	Object  string `json:"object"`
@@ -537,6 +537,7 @@ type OpenAIModel struct {
 	ContextWindow *int  `json:"context_window,omitempty"`
 }
 
+// OpenAIListModelsResponse represents an OpenAI list models response
 type OpenAIListModelsResponse struct {
 	Object string        `json:"object"`
 	Data   []OpenAIModel `json:"data"`
