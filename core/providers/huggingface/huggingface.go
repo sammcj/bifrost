@@ -294,8 +294,8 @@ func (provider *HuggingFaceProvider) listModelsByKey(ctx *schemas.BifrostContext
 			req.SetRequestURI(modelHubURL)
 			req.Header.SetMethod(http.MethodGet)
 			req.Header.SetContentType("application/json")
-			if key.Value != "" {
-				req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key.Value))
+			if key.Value.GetValue() != "" {
+				req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key.Value.GetValue()))
 			}
 
 			latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
@@ -480,7 +480,7 @@ func (provider *HuggingFaceProvider) ChatCompletion(ctx *schemas.BifrostContext,
 
 	requestURL := provider.buildRequestURL(ctx, "/v1/chat/completions", schemas.ChatCompletionRequest)
 
-	responseBody, latency, err := provider.completeRequest(ctx, jsonBody, requestURL, key.Value, false, false)
+	responseBody, latency, err := provider.completeRequest(ctx, jsonBody, requestURL, key.Value.GetValue(), false, false)
 	if err != nil {
 		return nil, providerUtils.EnrichError(ctx, err, jsonBody, nil, provider.sendBackRawRequest, provider.sendBackRawResponse)
 	}
@@ -544,8 +544,8 @@ func (provider *HuggingFaceProvider) ChatCompletionStream(ctx *schemas.BifrostCo
 	request.Model = fmt.Sprintf("%s:%s", modelName, inferenceProvider)
 
 	var authHeader map[string]string
-	if key.Value != "" {
-		authHeader = map[string]string{"Authorization": "Bearer " + key.Value}
+	if key.Value.GetValue() != "" {
+		authHeader = map[string]string{"Authorization": "Bearer " + key.Value.GetValue()}
 	}
 
 	customRequestConverter := func(request *schemas.BifrostChatRequest) (any, error) {
@@ -646,7 +646,7 @@ func (provider *HuggingFaceProvider) Embedding(ctx *schemas.BifrostContext, key 
 	responseBody, latency, err := provider.completeRequestWithModelAliasCache(
 		ctx,
 		jsonBody,
-		key.Value,
+		key.Value.GetValue(),
 		false,
 		false,
 		inferenceProvider,
@@ -730,7 +730,7 @@ func (provider *HuggingFaceProvider) Speech(ctx *schemas.BifrostContext, key sch
 	responseBody, latency, err := provider.completeRequestWithModelAliasCache(
 		ctx,
 		jsonData,
-		key.Value,
+		key.Value.GetValue(),
 		false,
 		false,
 		inferenceProvider,
@@ -829,7 +829,7 @@ func (provider *HuggingFaceProvider) Transcription(ctx *schemas.BifrostContext, 
 	responseBody, latency, err := provider.completeRequestWithModelAliasCache(
 		ctx,
 		jsonData,
-		key.Value,
+		key.Value.GetValue(),
 		isHFInferenceAudioRequest,
 		false,
 		inferenceProvider,
@@ -926,7 +926,7 @@ func (provider *HuggingFaceProvider) ImageGeneration(ctx *schemas.BifrostContext
 	responseBody, latency, err := provider.completeRequestWithModelAliasCache(
 		ctx,
 		jsonBody,
-		key.Value,
+		key.Value.GetValue(),
 		false,
 		true,
 		inferenceProvider,
@@ -1011,8 +1011,9 @@ func (provider *HuggingFaceProvider) ImageGenerationStream(ctx *schemas.BifrostC
 	}
 
 	var authHeader map[string]string
-	if key.Value != "" {
-		authHeader = map[string]string{"Authorization": "Bearer " + key.Value}
+
+	if value := key.Value.GetValue(); value != "" {
+		authHeader = map[string]string{"Authorization": "Bearer " + value}
 	}
 
 	// Build streaming URL - append /stream to the fal-ai route, honoring path overrides
