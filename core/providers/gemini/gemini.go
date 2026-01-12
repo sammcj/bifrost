@@ -724,6 +724,17 @@ func HandleGeminiResponsesStream(
 		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), logger)
 		defer stopCancellation()
 
+		if resp.BodyStream() == nil {
+			bifrostErr := providerUtils.NewBifrostOperationError(
+				"Provider returned an empty response",
+				fmt.Errorf("provider returned an empty response"),
+				providerName,
+			)
+			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+			providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, logger)
+			return
+		}
+
 		scanner := bufio.NewScanner(resp.BodyStream())
 		buf := make([]byte, 0, 1024*1024)
 		scanner.Buffer(buf, 10*1024*1024)
