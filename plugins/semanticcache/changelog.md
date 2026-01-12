@@ -1,1 +1,2 @@
 - feat: added semantic caching support for image generation
+- chore: updated core to v1.3.9 and framework to v1.2.9
