@@ -26,7 +26,7 @@ include recipes/fly.mk
 include recipes/ecs.mk
 include recipes/local-k8s.mk
 
-.PHONY: all help dev build-ui build run install-air clean test install-ui setup-workspace work-init work-clean docs build-docker-image cleanup-enterprise mod-tidy
+.PHONY: all help dev build-ui build run install-air clean test install-ui setup-workspace work-init work-clean docs build-docker-image cleanup-enterprise mod-tidy test-integrations-py test-integrations-ts
 
 all: help
 
@@ -44,7 +44,7 @@ help: ## Show this help message
 	@echo "  LOG_LEVEL         Logger level: debug|info|warn|error (default: info)"
 	@echo "  APP_DIR           App data directory inside container (default: /app/data)"
 	@echo "  LOCAL             Use local go.work for builds (e.g., make build LOCAL=1)"
-	@echo "  DEBUG             Enable air + delve debugger on port 2345 (e.g., make dev DEBUG=1)"
+	@echo "  DEBUG             Enable delve debugger on port 2345 (e.g., make dev DEBUG=1, make test-core DEBUG=1)"
 	@echo ""
 	@echo "$(YELLOW)Test Configuration:$(NC)"
 	@echo "  TEST_REPORTS_DIR  Directory for HTML test reports (default: test-reports)"
@@ -333,7 +333,7 @@ test: install-gotestsum ## Run tests for bifrost-http
 		echo "$(CYAN)JUnit XML report: $(TEST_REPORTS_DIR)/bifrost-http.xml$(NC)"; \
 	fi
 
-test-core: install-gotestsum ## Run core tests (Usage: make test-core PROVIDER=openai TESTCASE=TestName or PATTERN=substring)
+test-core: install-gotestsum $(if $(DEBUG),install-delve) ## Run core tests (Usage: make test-core PROVIDER=openai TESTCASE=TestName or PATTERN=substring, DEBUG=1 for debugger)
 	@echo "$(GREEN)Running core tests...$(NC)"
 	@mkdir -p $(TEST_REPORTS_DIR)
 	@if [ -n "$(PATTERN)" ] && [ -n "$(TESTCASE)" ]; then \
@@ -356,6 +356,10 @@ test-core: install-gotestsum ## Run core tests (Usage: make test-core PROVIDER=o
 		echo "$(YELLOW)Loading environment variables from .env...$(NC)"; \
 		set -a; . ./.env; set +a; \
 	fi; \
+	if [ -n "$(DEBUG)" ]; then \
+		echo "$(CYAN)Debug mode enabled - delve debugger will listen on port 2345$(NC)"; \
+		echo "$(YELLOW)Attach your debugger to localhost:2345$(NC)"; \
+	fi; \
 	if [ -n "$(PROVIDER)" ]; then \
 		PROVIDER_TEST_NAME=$$(echo "$(PROVIDER)" | awk '{print toupper(substr($$0,1,1)) tolower(substr($$0,2))}' | sed 's/openai/OpenAI/i; s/sgl/SGL/i'); \
 		if [ -n "$(TESTCASE)" ]; then \
@@ -365,10 +369,14 @@ test-core: install-gotestsum ## Run core tests (Usage: make test-core PROVIDER=o
 			CLEAN_TESTCASE=$$(echo "$$CLEAN_TESTCASE" | sed 's|^Test[A-Z][A-Za-z]*/[A-Z][A-Za-z]*Tests/||'); \
 			echo "$(CYAN)Running Test$${PROVIDER_TEST_NAME}/$${PROVIDER_TEST_NAME}Tests/$$CLEAN_TESTCASE...$(NC)"; \
 			REPORT_FILE="$(TEST_REPORTS_DIR)/core-$(PROVIDER)-$$(echo $$CLEAN_TESTCASE | sed 's|/|_|g').xml"; \
-			cd core/providers/$(PROVIDER) && GOWORK=off gotestsum \
-				--format=$(GOTESTSUM_FORMAT) \
-				--junitfile=../../../$$REPORT_FILE \
-				-- -v -run "^Test$${PROVIDER_TEST_NAME}$$/.*Tests/$$CLEAN_TESTCASE$$" || TEST_FAILED=1; \
+			if [ -n "$(DEBUG)" ]; then \
+				cd core/providers/$(PROVIDER) && GOWORK=off dlv test --headless --listen=:2345 --api-version=2 -- -test.v -test.run "^Test$${PROVIDER_TEST_NAME}$$/.*Tests/$$CLEAN_TESTCASE$$" || TEST_FAILED=1; \
+			else \
+				cd core/providers/$(PROVIDER) && GOWORK=off gotestsum \
+					--format=$(GOTESTSUM_FORMAT) \
+					--junitfile=../../../$$REPORT_FILE \
+					-- -v -run "^Test$${PROVIDER_TEST_NAME}$$/.*Tests/$$CLEAN_TESTCASE$$" || TEST_FAILED=1; \
+			fi; \
 			cd ../../..; \
 			$(MAKE) cleanup-junit-xml REPORT_FILE=$$REPORT_FILE; \
 			if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
@@ -389,10 +397,14 @@ test-core: install-gotestsum ## Run core tests (Usage: make test-core PROVIDER=o
 		elif [ -n "$(PATTERN)" ]; then \
 			echo "$(CYAN)Running tests matching '$(PATTERN)' for $${PROVIDER_TEST_NAME}...$(NC)"; \
 			REPORT_FILE="$(TEST_REPORTS_DIR)/core-$(PROVIDER)-$(PATTERN).xml"; \
-			cd core/providers/$(PROVIDER) && GOWORK=off gotestsum \
-				--format=$(GOTESTSUM_FORMAT) \
-				--junitfile=../../../$$REPORT_FILE \
-				-- -v -run ".*$(PATTERN).*" || TEST_FAILED=1; \
+			if [ -n "$(DEBUG)" ]; then \
+				cd core/providers/$(PROVIDER) && GOWORK=off dlv test --headless --listen=:2345 --api-version=2 -- -test.v -test.run ".*$(PATTERN).*" || TEST_FAILED=1; \
+			else \
+				cd core/providers/$(PROVIDER) && GOWORK=off gotestsum \
+					--format=$(GOTESTSUM_FORMAT) \
+					--junitfile=../../../$$REPORT_FILE \
+					-- -v -run ".*$(PATTERN).*" || TEST_FAILED=1; \
+			fi; \
 			cd ../../..; \
 			$(MAKE) cleanup-junit-xml REPORT_FILE=$$REPORT_FILE; \
 			if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
@@ -413,10 +425,14 @@ test-core: install-gotestsum ## Run core tests (Usage: make test-core PROVIDER=o
 		else \
 			echo "$(CYAN)Running Test$${PROVIDER_TEST_NAME}...$(NC)"; \
 			REPORT_FILE="$(TEST_REPORTS_DIR)/core-$(PROVIDER).xml"; \
-			cd core/providers/$(PROVIDER) && GOWORK=off gotestsum \
-				--format=$(GOTESTSUM_FORMAT) \
-				--junitfile=../../../$$REPORT_FILE \
-				-- -v -run "^Test$${PROVIDER_TEST_NAME}$$" || TEST_FAILED=1; \
+			if [ -n "$(DEBUG)" ]; then \
+				cd core/providers/$(PROVIDER) && GOWORK=off dlv test --headless --listen=:2345 --api-version=2 -- -test.v -test.run "^Test$${PROVIDER_TEST_NAME}$$" || TEST_FAILED=1; \
+			else \
+				cd core/providers/$(PROVIDER) && GOWORK=off gotestsum \
+					--format=$(GOTESTSUM_FORMAT) \
+					--junitfile=../../../$$REPORT_FILE \
+					-- -v -run "^Test$${PROVIDER_TEST_NAME}$$" || TEST_FAILED=1; \
+			fi; \
 			cd ../../..; \
 			$(MAKE) cleanup-junit-xml REPORT_FILE=$$REPORT_FILE; \
 			if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
@@ -444,16 +460,24 @@ test-core: install-gotestsum ## Run core tests (Usage: make test-core PROVIDER=o
 		if [ -n "$(PATTERN)" ]; then \
 			echo "$(CYAN)Running tests matching '$(PATTERN)' across all providers...$(NC)"; \
 			REPORT_FILE="$(TEST_REPORTS_DIR)/core-all-$(PATTERN).xml"; \
-			cd core && GOWORK=off gotestsum \
-				--format=$(GOTESTSUM_FORMAT) \
-				--junitfile=../$$REPORT_FILE \
-				-- -v -run ".*$(PATTERN).*" ./providers/... || TEST_FAILED=1; \
+			if [ -n "$(DEBUG)" ]; then \
+				cd core && GOWORK=off dlv test --headless --listen=:2345 --api-version=2 ./providers/... -- -test.v -test.run ".*$(PATTERN).*" || TEST_FAILED=1; \
+			else \
+				cd core && GOWORK=off gotestsum \
+					--format=$(GOTESTSUM_FORMAT) \
+					--junitfile=../$$REPORT_FILE \
+					-- -v -run ".*$(PATTERN).*" ./providers/... || TEST_FAILED=1; \
+			fi; \
 		else \
 			REPORT_FILE="$(TEST_REPORTS_DIR)/core-all.xml"; \
-			cd core && GOWORK=off gotestsum \
-				--format=$(GOTESTSUM_FORMAT) \
-				--junitfile=../$$REPORT_FILE \
-				-- -v ./providers/... || TEST_FAILED=1; \
+			if [ -n "$(DEBUG)" ]; then \
+				cd core && GOWORK=off dlv test --headless --listen=:2345 --api-version=2 ./providers/... -- -test.v || TEST_FAILED=1; \
+			else \
+				cd core && GOWORK=off gotestsum \
+					--format=$(GOTESTSUM_FORMAT) \
+					--junitfile=../$$REPORT_FILE \
+					-- -v ./providers/... || TEST_FAILED=1; \
+			fi; \
 		fi; \
 		cd ..; \
 		$(MAKE) cleanup-junit-xml REPORT_FILE=$$REPORT_FILE; \
@@ -606,10 +630,10 @@ test-chatbot: ## Run interactive chatbot integration test (Usage: RUN_CHATBOT_TE
 	fi
 	@cd core && RUN_CHATBOT_TEST=1 go test -v -run TestChatbot
 
-test-integrations: ## Run Python integration tests (Usage: make test-integrations [INTEGRATION=openai] [TESTCASE=test_name] [PATTERN=substring] [VERBOSE=1])
+test-integrations-py: ## Run Python integration tests (Usage: make test-integrations-py [INTEGRATION=openai] [TESTCASE=test_name] [PATTERN=substring] [VERBOSE=1])
 	@echo "$(GREEN)Running Python integration tests...$(NC)"
-	@if [ ! -d "tests/integrations" ]; then \
-		echo "$(RED)Error: tests/integrations directory not found$(NC)"; \
+	@if [ ! -d "tests/integrations/python" ]; then \
+		echo "$(RED)Error: tests/integrations/python directory not found$(NC)"; \
 		exit 1; \
 	fi; \
 	if [ -n "$(PATTERN)" ] && [ -n "$(TESTCASE)" ]; then \
@@ -619,7 +643,7 @@ test-integrations: ## Run Python integration tests (Usage: make test-integration
 	fi; \
 	if [ -n "$(TESTCASE)" ] && [ -z "$(INTEGRATION)" ]; then \
 		echo "$(RED)Error: TESTCASE requires INTEGRATION to be specified$(NC)"; \
-		echo "$(YELLOW)Usage: make test-integrations INTEGRATION=anthropic TESTCASE=test_05_end2end_tool_calling$(NC)"; \
+		echo "$(YELLOW)Usage: make test-integrations-py INTEGRATION=anthropic TESTCASE=test_05_end2end_tool_calling$(NC)"; \
 		exit 1; \
 	fi; \
 	if [ -f .env ]; then \
@@ -636,7 +660,7 @@ test-integrations: ## Run Python integration tests (Usage: make test-integration
 		echo "$(GREEN)✓ Bifrost is already running$(NC)"; \
 	else \
 		echo "$(YELLOW)Bifrost not running, starting it...$(NC)"; \
-		./tmp/bifrost-http -host "$$TEST_HOST" -port "$$TEST_PORT" -log-style "$(LOG_STYLE)" -log-level "$(LOG_LEVEL)" -app-dir tests/integrations > /tmp/bifrost-test.log 2>&1 & \
+		./tmp/bifrost-http -host "$$TEST_HOST" -port "$$TEST_PORT" -log-style "$(LOG_STYLE)" -log-level "$(LOG_LEVEL)" -app-dir tests/integrations/python > /tmp/bifrost-test.log 2>&1 & \
 		BIFROST_PID=$$!; \
 		BIFROST_STARTED=1; \
 		echo "$(YELLOW)Waiting for Bifrost to be ready...$(NC)"; \
@@ -674,30 +698,26 @@ test-integrations: ## Run Python integration tests (Usage: make test-integration
 		if [ -n "$(INTEGRATION)" ]; then \
 			if [ -n "$(TESTCASE)" ]; then \
 				echo "$(CYAN)Running $(INTEGRATION) integration test: $(TESTCASE)...$(NC)"; \
-				cd tests/integrations && pytest tests/test_$(INTEGRATION).py::$(TESTCASE) $(if $(VERBOSE),-v,-q) || TEST_FAILED=1; \
+				cd tests/integrations/python && pytest tests/test_$(INTEGRATION).py::$(TESTCASE) $(if $(VERBOSE),-v,-q) || TEST_FAILED=1; \
 			elif [ -n "$(PATTERN)" ]; then \
 				echo "$(CYAN)Running $(INTEGRATION) integration tests matching '$(PATTERN)'...$(NC)"; \
-				cd tests/integrations && pytest tests/test_$(INTEGRATION).py -k "$(PATTERN)" $(if $(VERBOSE),-v,-q) || TEST_FAILED=1; \
+				cd tests/integrations/python && pytest tests/test_$(INTEGRATION).py -k "$(PATTERN)" $(if $(VERBOSE),-v,-q) || TEST_FAILED=1; \
 			else \
 				echo "$(CYAN)Running $(INTEGRATION) integration tests...$(NC)"; \
-				cd tests/integrations && pytest tests/test_$(INTEGRATION).py $(if $(VERBOSE),-v,-q) || TEST_FAILED=1; \
+				cd tests/integrations/python && pytest tests/test_$(INTEGRATION).py $(if $(VERBOSE),-v,-q) || TEST_FAILED=1; \
 			fi; \
 		else \
 			if [ -n "$(PATTERN)" ]; then \
 				echo "$(CYAN)Running all integration tests matching '$(PATTERN)'...$(NC)"; \
-				cd tests/integrations && pytest -k "$(PATTERN)" $(if $(VERBOSE),-v,-q) || TEST_FAILED=1; \
+				cd tests/integrations/python && pytest -k "$(PATTERN)" $(if $(VERBOSE),-v,-q) || TEST_FAILED=1; \
 			else \
 				echo "$(CYAN)Running all integration tests...$(NC)"; \
-				cd tests/integrations && pytest $(if $(VERBOSE),-v,-q) || TEST_FAILED=1; \
+				cd tests/integrations/python && pytest $(if $(VERBOSE),-v,-q) || TEST_FAILED=1; \
 			fi; \
 		fi; \
 	else \
 		echo "$(CYAN)Using uv (fast mode)$(NC)"; \
-		cd tests/integrations && \
-		if [ ! -f .venv/bin/python ]; then \
-			echo "$(YELLOW)Installing dependencies with uv...$(NC)"; \
-			uv venv && uv pip install -r requirements.txt; \
-		fi; \
+		cd tests/integrations/python && \
 		if [ -n "$(INTEGRATION)" ]; then \
 			if [ -n "$(TESTCASE)" ]; then \
 				echo "$(CYAN)Running $(INTEGRATION) integration test: $(TESTCASE)...$(NC)"; \
@@ -738,6 +758,114 @@ test-integrations: ## Run Python integration tests (Usage: make test-integration
 		exit 1; \
 	else \
 		echo "$(GREEN)✓ Integration tests complete$(NC)"; \
+	fi
+
+test-integrations-ts: ## Run TypeScript integration tests (Usage: make test-integrations-ts [INTEGRATION=openai] [TESTCASE=test_name] [PATTERN=substring] [VERBOSE=1])
+	@echo "$(GREEN)Running TypeScript integration tests...$(NC)"
+	@if [ ! -d "tests/integrations/typescript" ]; then \
+		echo "$(RED)Error: tests/integrations/typescript directory not found$(NC)"; \
+		exit 1; \
+	fi; \
+	if [ -n "$(PATTERN)" ] && [ -n "$(TESTCASE)" ]; then \
+		echo "$(RED)Error: PATTERN and TESTCASE are mutually exclusive$(NC)"; \
+		echo "$(YELLOW)Use PATTERN for substring matching or TESTCASE for exact match$(NC)"; \
+		exit 1; \
+	fi; \
+	if [ -n "$(TESTCASE)" ] && [ -z "$(INTEGRATION)" ]; then \
+		echo "$(RED)Error: TESTCASE requires INTEGRATION to be specified$(NC)"; \
+		echo "$(YELLOW)Usage: make test-integrations-ts INTEGRATION=openai TESTCASE=test_simple_chat$(NC)"; \
+		exit 1; \
+	fi; \
+	if [ -f .env ]; then \
+		echo "$(YELLOW)Loading environment variables from .env...$(NC)"; \
+		set -a; . ./.env; set +a; \
+	fi; \
+	BIFROST_STARTED=0; \
+	BIFROST_PID=""; \
+	TAIL_PID=""; \
+	TEST_PORT=$${PORT:-8080}; \
+	TEST_HOST=$${HOST:-localhost}; \
+	echo "$(CYAN)Checking if Bifrost is running on $$TEST_HOST:$$TEST_PORT...$(NC)"; \
+	if curl -s -o /dev/null -w "%{http_code}" http://$$TEST_HOST:$$TEST_PORT/health 2>/dev/null | grep -q "200\|404"; then \
+		echo "$(GREEN)✓ Bifrost is already running$(NC)"; \
+	else \
+		echo "$(YELLOW)Bifrost not running, starting it...$(NC)"; \
+		./tmp/bifrost-http -host "$$TEST_HOST" -port "$$TEST_PORT" -log-style "$(LOG_STYLE)" -log-level "$(LOG_LEVEL)" -app-dir tests/integrations/typescript > /tmp/bifrost-test.log 2>&1 & \
+		BIFROST_PID=$$!; \
+		BIFROST_STARTED=1; \
+		echo "$(YELLOW)Waiting for Bifrost to be ready...$(NC)"; \
+		echo "$(CYAN)Bifrost logs: /tmp/bifrost-test.log$(NC)"; \
+		(tail -f /tmp/bifrost-test.log 2>/dev/null | grep -E "error|panic|Error|ERRO|fatal|Fatal|FATAL" --line-buffered &) & \
+		TAIL_PID=$$!; \
+		for i in 1 2 3 4 5 6 7 8 9 10; do \
+			if curl -s -o /dev/null http://$$TEST_HOST:$$TEST_PORT/health 2>/dev/null; then \
+				echo "$(GREEN)✓ Bifrost is ready (PID: $$BIFROST_PID)$(NC)"; \
+				break; \
+			fi; \
+			if [ $$i -eq 10 ]; then \
+				echo "$(RED)Failed to start Bifrost$(NC)"; \
+				echo "$(YELLOW)Bifrost logs:$(NC)"; \
+				cat /tmp/bifrost-test.log 2>/dev/null || echo "No log file found"; \
+				[ -n "$$BIFROST_PID" ] && kill $$BIFROST_PID 2>/dev/null; \
+				[ -n "$$TAIL_PID" ] && kill $$TAIL_PID 2>/dev/null; \
+				exit 1; \
+			fi; \
+			sleep 1; \
+		done; \
+	fi; \
+	TEST_FAILED=0; \
+	if ! which npm > /dev/null 2>&1; then \
+		echo "$(RED)Error: npm not found$(NC)"; \
+		echo "$(YELLOW)Install Node.js: https://nodejs.org/$(NC)"; \
+		[ $$BIFROST_STARTED -eq 1 ] && [ -n "$$BIFROST_PID" ] && kill $$BIFROST_PID 2>/dev/null; \
+		[ -n "$$TAIL_PID" ] && kill $$TAIL_PID 2>/dev/null; \
+		exit 1; \
+	fi; \
+	echo "$(CYAN)Using npm$(NC)"; \
+	cd tests/integrations/typescript && \
+	if [ ! -d "node_modules" ]; then \
+		echo "$(YELLOW)Installing dependencies...$(NC)"; \
+		npm install; \
+	fi; \
+	if [ -n "$(INTEGRATION)" ]; then \
+		if [ -n "$(TESTCASE)" ]; then \
+			echo "$(CYAN)Running $(INTEGRATION) integration test: $(TESTCASE)...$(NC)"; \
+			npm test -- tests/test-$(INTEGRATION).test.ts -t "$(TESTCASE)" $(if $(VERBOSE),--reporter=verbose,) || TEST_FAILED=1; \
+		elif [ -n "$(PATTERN)" ]; then \
+			echo "$(CYAN)Running $(INTEGRATION) integration tests matching '$(PATTERN)'...$(NC)"; \
+			npm test -- tests/test-$(INTEGRATION).test.ts -t "$(PATTERN)" $(if $(VERBOSE),--reporter=verbose,) || TEST_FAILED=1; \
+		else \
+			echo "$(CYAN)Running $(INTEGRATION) integration tests...$(NC)"; \
+			npm test -- tests/test-$(INTEGRATION).test.ts $(if $(VERBOSE),--reporter=verbose,) || TEST_FAILED=1; \
+		fi; \
+	else \
+		if [ -n "$(PATTERN)" ]; then \
+			echo "$(CYAN)Running all integration tests matching '$(PATTERN)'...$(NC)"; \
+			npm test -- -t "$(PATTERN)" $(if $(VERBOSE),--reporter=verbose,) || TEST_FAILED=1; \
+		else \
+			echo "$(CYAN)Running all integration tests...$(NC)"; \
+			npm test $(if $(VERBOSE),-- --reporter=verbose,) || TEST_FAILED=1; \
+		fi; \
+	fi; \
+	if [ $$BIFROST_STARTED -eq 1 ] && [ -n "$$BIFROST_PID" ]; then \
+		echo "$(YELLOW)Stopping Bifrost (PID: $$BIFROST_PID)...$(NC)"; \
+		kill $$BIFROST_PID 2>/dev/null || true; \
+		[ -n "$$TAIL_PID" ] && kill $$TAIL_PID 2>/dev/null || true; \
+		wait $$BIFROST_PID 2>/dev/null || true; \
+		echo "$(GREEN)✓ Bifrost stopped$(NC)"; \
+		if [ $$TEST_FAILED -eq 1 ]; then \
+			echo ""; \
+			echo "$(YELLOW)Last 50 lines of Bifrost logs:$(NC)"; \
+			tail -50 /tmp/bifrost-test.log 2>/dev/null || echo "No log file found"; \
+		fi; \
+	fi; \
+	echo ""; \
+	if [ $$TEST_FAILED -eq 1 ]; then \
+		echo "$(RED)✗ TypeScript integration tests failed$(NC)"; \
+		echo "$(CYAN)Full Bifrost logs: /tmp/bifrost-test.log$(NC)"; \
+		exit 1; \
+	else \
+		echo "$(GREEN)✓ TypeScript integration tests complete$(NC)"; \
 	fi
 
 # Quick start with example config

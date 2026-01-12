@@ -751,6 +751,12 @@ Output: `build/plugin.wasm`
 
 ### http_intercept
 
+<Note>
+**Header and Query Parameter Handling**: Headers and query parameters in `request.headers` and `request.query` preserve the original casing sent by the client. When looking up headers/query params, you should perform case-insensitive comparisons in your WASM plugin code to handle various casing (e.g., `Content-Type`, `content-type`, `CONTENT-TYPE`).
+
+For Go native plugins, use the built-in `CaseInsensitiveHeaderLookup()` and `CaseInsensitiveQueryLookup()` helper methods.
+</Note>
+
 **Input:**
 ```json
 {
@@ -760,7 +766,7 @@ Output: `build/plugin.wasm`
   "request": {
     "method": "POST",
     "path": "/v1/chat/completions",
-    "headers": { "Content-Type": "application/json" },
+    "headers": { "content-type": "application/json" },
     "query": {},
     "body": "<base64-encoded>"
   }

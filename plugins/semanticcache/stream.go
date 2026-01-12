@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,7 @@ func (plugin *Plugin) createStreamAccumulator(requestID string, embedding []floa
 		Embedding:  embedding,
 		Metadata:   metadata,
 		TTL:        ttl,
+		mu:         sync.Mutex{},
 	}
 
 	plugin.streamAccumulators.Store(requestID, accumulator)

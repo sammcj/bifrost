@@ -91,8 +91,14 @@ func GetName() string {
 // Only called when using HTTP transport (bifrost-http)
 func HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
 	fmt.Println("HTTPTransportIntercept called")
-	// Modify request in-place (headers, body, query params)
-	req.Headers["X-Custom-Header"] = "custom-value"
+
+	// Read headers using case-insensitive helper (recommended)
+	contentType := req.CaseInsensitiveHeaderLookup("Content-Type")
+	fmt.Printf("Content-Type: %s\n", contentType)
+
+	// Modify request in-place (use lowercase for direct map access)
+	req.Headers["x-custom-header"] = "custom-value"
+
 	// Return nil to continue, or return &schemas.HTTPResponse{} to short-circuit
 	return nil, nil
 }
@@ -222,6 +228,25 @@ Key points:
 - Return `(nil, nil)` to continue to next plugin/handler
 - Return `(*HTTPResponse, nil)` to short-circuit with response
 - Return `(nil, error)` to short-circuit with error
+
+<Note>
+**Header and Query Parameter Lookups**: Use the case-insensitive helper methods for reading headers and query parameters:
+
+```go
+// ✅ Correct - use helper methods for case-insensitive lookup
+contentType := req.CaseInsensitiveHeaderLookup("Content-Type")
+apiKey := req.CaseInsensitiveQueryLookup("api_key")
+
+// Also works with any casing
+contentType := req.CaseInsensitiveHeaderLookup("content-type")
+contentType := req.CaseInsensitiveHeaderLookup("CONTENT-TYPE")
+
+// For setting headers, use direct map access
+req.Headers["X-Custom-Header"] = "value"
+```
+
+The helper methods (`CaseInsensitiveHeaderLookup` and `CaseInsensitiveQueryLookup`) ensure your plugin works correctly regardless of how the client sends header/query parameter names.
+</Note>
 
 <Warning>
 This function is **only called** when using `bifrost-http`. It's **not invoked** when using Bifrost as a Go SDK.

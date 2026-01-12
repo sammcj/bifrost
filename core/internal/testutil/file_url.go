@@ -125,6 +125,7 @@ func RunFileURLChatCompletionsTest(t *testing.T, client *bifrost.Bifrost, ctx co
 		}
 
 		response, chatError := WithChatTestRetry(t, chatRetryConfig, retryContext, expectations, "FileURL", func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			chatReq := &schemas.BifrostChatRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.ChatModel,
@@ -134,7 +135,7 @@ func RunFileURLChatCompletionsTest(t *testing.T, client *bifrost.Bifrost, ctx co
 				},
 				Fallbacks: testConfig.Fallbacks,
 			}
-			return client.ChatCompletionRequest(ctx, chatReq)
+			return client.ChatCompletionRequest(bfCtx, chatReq)
 		})
 
 		if chatError != nil {
@@ -166,8 +167,7 @@ func RunFileURLResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx context.
 			CreateFileURLResponsesMessage("What is this document about? Please provide a summary of its main topics.", TestFileURL),
 		}
 
-		// Use retry framework for file URL requests
-		retryConfig := GetTestRetryConfigForScenario("FileInput", testConfig)
+		// Set up retry context for file URL requests
 		retryContext := TestRetryContext{
 			ScenarioName: "FileURL-Responses",
 			ExpectedBehavior: map[string]interface{}{
@@ -197,16 +197,10 @@ func RunFileURLResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx context.
 			"cannot fetch", "download failed", "url not found",
 		}...) // File URL processing failure indicators
 
-		responsesRetryConfig := ResponsesRetryConfig{
-			MaxAttempts: retryConfig.MaxAttempts,
-			BaseDelay:   retryConfig.BaseDelay,
-			MaxDelay:    retryConfig.MaxDelay,
-			Conditions:  []ResponsesRetryCondition{},
-			OnRetry:     retryConfig.OnRetry,
-			OnFinalFail: retryConfig.OnFinalFail,
-		}
+		responsesRetryConfig := FileInputResponsesRetryConfig()
 
 		response, responsesError := WithResponsesTestRetry(t, responsesRetryConfig, retryContext, expectations, "FileURL", func() (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
 			responsesReq := &schemas.BifrostResponsesRequest{
 				Provider: testConfig.Provider,
 				Model:    testConfig.ChatModel,
@@ -216,7 +210,7 @@ func RunFileURLResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx context.
 				},
 				Fallbacks: testConfig.Fallbacks,
 			}
-			return client.ResponsesRequest(ctx, responsesReq)
+			return client.ResponsesRequest(bfCtx, responsesReq)
 		})
 
 		if responsesError != nil {

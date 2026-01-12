@@ -63,6 +63,7 @@ type PrometheusPlugin struct {
 
 type Config struct {
 	CustomLabels []string `json:"custom_labels"`
+	Registry     *prometheus.Registry
 }
 
 // Init creates a new PrometheusPlugin with initialized metrics.
@@ -75,7 +76,11 @@ func Init(config *Config, pricingManager *modelcatalog.ModelCatalog, logger sche
 		logger.Warn("telemetry plugin requires model catalog to calculate cost, all cost calculations will be skipped.")
 	}
 
-	registry := prometheus.NewRegistry()
+	registry := config.Registry
+	// If config has no registry, create a new one
+	if registry == nil {
+		registry = prometheus.NewRegistry()
+	}
 
 	// Create collectors and store references for cleanup
 	goCollector := collectors.NewGoCollector()
@@ -276,9 +281,9 @@ func (p *PrometheusPlugin) GetName() string {
 	return PluginName
 }
 
-// TransportInterceptor is not used for this plugin
-func (p *PrometheusPlugin) TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[string]string, body map[string]any) (map[string]string, map[string]any, error) {
-	return headers, body, nil
+// HTTPTransportIntercept is not used for this plugin
+func (p *PrometheusPlugin) HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+	return nil, nil
 }
 
 // PreHook records the start time of the request in the context.
@@ -315,45 +320,46 @@ func (p *PrometheusPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas
 	customerID := getStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-customer-id"))
 	customerName := getStringFromContext(ctx, schemas.BifrostContextKey("bf-governance-customer-name"))
 
-	// Calculate cost and record metrics in a separate goroutine to avoid blocking the main thread
-	go func() {
-		labelValues := map[string]string{
-			"provider":          string(provider),
-			"model":             model,
-			"method":            string(requestType),
-			"virtual_key_id":    virtualKeyID,
-			"virtual_key_name":  virtualKeyName,
-			"selected_key_id":   selectedKeyID,
-			"selected_key_name": selectedKeyName,
-			"number_of_retries": strconv.Itoa(numberOfRetries),
-			"fallback_index":    strconv.Itoa(fallbackIndex),
-			"team_id":           teamID,
-			"team_name":         teamName,
-			"customer_id":       customerID,
-			"customer_name":     customerName,
-		}
+	// Extract ALL context values BEFORE spawning the goroutine.		
+	labelValues := map[string]string{
+		"provider":          string(provider),
+		"model":             model,
+		"method":            string(requestType),
+		"virtual_key_id":    virtualKeyID,
+		"virtual_key_name":  virtualKeyName,
+		"selected_key_id":   selectedKeyID,
+		"selected_key_name": selectedKeyName,
+		"number_of_retries": strconv.Itoa(numberOfRetries),
+		"fallback_index":    strconv.Itoa(fallbackIndex),
+		"team_id":           teamID,
+		"team_name":         teamName,
+		"customer_id":       customerID,
+		"customer_name":     customerName,
+	}
 
-		// Get all prometheus labels from context
-		for _, key := range p.customLabels {
-			if value := (*ctx).Value(schemas.BifrostContextKey(key)); value != nil {
-				if strValue, ok := value.(string); ok {
-					labelValues[key] = strValue
-				}
+	// Get all custom prometheus labels from context BEFORE the goroutine
+	for _, key := range p.customLabels {
+		if value := ctx.Value(schemas.BifrostContextKey(key)); value != nil {
+			if strValue, ok := value.(string); ok {
+				labelValues[key] = strValue
 			}
 		}
+	}
 
-		// Get label values in the correct order (cache_type will be handled separately for cache hits)
-		promLabelValues := getPrometheusLabelValues(append(p.defaultBifrostLabels, p.customLabels...), labelValues)
+	// Get label values in the correct order (cache_type will be handled separately for cache hits)
+	promLabelValues := getPrometheusLabelValues(append(p.defaultBifrostLabels, p.customLabels...), labelValues)
 
+	// Extract stream end indicator BEFORE the goroutine
+	streamEndIndicatorValue := ctx.Value(schemas.BifrostContextKeyStreamEndIndicator)
+	isFinalChunk, hasFinalChunkIndicator := streamEndIndicatorValue.(bool)
+
+	// Calculate cost and record metrics in a separate goroutine to avoid blocking the main thread
+	go func() {
 		// For streaming requests, handle per-token metrics for intermediate chunks
 		if bifrost.IsStreamRequestType(requestType) {
-			// Determine if this is the final chunk
-			streamEndIndicatorValue := (*ctx).Value(schemas.BifrostContextKeyStreamEndIndicator)
-			isFinalChunk, ok := streamEndIndicatorValue.(bool)
-
 			// For intermediate chunks, record per-token metrics and exit.
 			// The final chunk will fall through to record full request metrics.
-			if !ok || !isFinalChunk {
+			if !hasFinalChunkIndicator || !isFinalChunk {
 				// Record metrics for the first token
 				if result != nil {
 					extraFields := result.GetExtraFields()
@@ -464,7 +470,7 @@ func (p *PrometheusPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas
 	return result, bifrostErr, nil
 }
 
-// PrometheusMiddleware wraps a FastHTTP handler to collect Prometheus metrics.
+// HTTPMiddleware wraps a FastHTTP handler to collect Prometheus metrics.
 // It tracks:
 //   - Total number of requests
 //   - Request duration

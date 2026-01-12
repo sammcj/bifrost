@@ -98,6 +98,40 @@ type SafetySetting struct {
 	Threshold string `json:"threshold,omitempty"`
 }
 
+// SafeExtractSafetySettings safely extracts []SafetySetting from an interface{} with type checking.
+// Handles both direct []SafetySetting and JSON-deserialized []interface{} cases.
+func SafeExtractSafetySettings(value interface{}) ([]SafetySetting, bool) {
+	if value == nil {
+		return nil, false
+	}
+	switch v := value.(type) {
+	case []SafetySetting:
+		return v, true
+	case []interface{}:
+		settings := make([]SafetySetting, 0, len(v))
+		for _, item := range v {
+			if m, ok := item.(map[string]interface{}); ok {
+				setting := SafetySetting{}
+				if method, ok := m["method"].(string); ok {
+					setting.Method = method
+				}
+				if category, ok := m["category"].(string); ok {
+					setting.Category = category
+				}
+				if threshold, ok := m["threshold"].(string); ok {
+					setting.Threshold = threshold
+				}
+				settings = append(settings, setting)
+			} else {
+				return nil, false
+			}
+		}
+		return settings, true
+	default:
+		return nil, false
+	}
+}
+
 // FunctionCallingConfig represents function calling configuration.
 type FunctionCallingConfig struct {
 	// Optional. Function calling mode.

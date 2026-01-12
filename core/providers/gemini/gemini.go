@@ -70,7 +70,7 @@ func (provider *GeminiProvider) GetProviderKey() schemas.ModelProvider {
 }
 
 // completeRequest handles the common HTTP request pattern for Gemini API calls
-func (provider *GeminiProvider) completeRequest(ctx context.Context, model string, key schemas.Key, jsonBody []byte, endpoint string, meta *providerUtils.RequestMetadata) (*GenerateContentResponse, interface{}, time.Duration, *schemas.BifrostError) {
+func (provider *GeminiProvider) completeRequest(ctx *schemas.BifrostContext, model string, key schemas.Key, jsonBody []byte, endpoint string, meta *providerUtils.RequestMetadata) (*GenerateContentResponse, interface{}, time.Duration, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Create request
@@ -130,7 +130,7 @@ func (provider *GeminiProvider) completeRequest(ctx context.Context, model strin
 
 // listModelsByKey performs a list models request for a single key.
 // Returns the response and latency, or an error if the request fails.
-func (provider *GeminiProvider) listModelsByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) listModelsByKey(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Create request
@@ -190,7 +190,7 @@ func (provider *GeminiProvider) listModelsByKey(ctx context.Context, key schemas
 
 // ListModels performs a list models request to Gemini's API.
 // Requests are made concurrently for improved performance.
-func (provider *GeminiProvider) ListModels(ctx context.Context, keys []schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) ListModels(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostListModelsRequest) (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.ListModelsRequest); err != nil {
 		return nil, err
 	}
@@ -207,19 +207,19 @@ func (provider *GeminiProvider) ListModels(ctx context.Context, keys []schemas.K
 }
 
 // TextCompletion is not supported by the Gemini provider.
-func (provider *GeminiProvider) TextCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (*schemas.BifrostTextCompletionResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) TextCompletion(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (*schemas.BifrostTextCompletionResponse, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.TextCompletionRequest, provider.GetProviderKey())
 }
 
 // TextCompletionStream performs a streaming text completion request to Gemini's API.
 // It formats the request, sends it to Gemini, and processes the response.
 // Returns a channel of BifrostStream objects or an error if the request fails.
-func (provider *GeminiProvider) TextCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (provider *GeminiProvider) TextCompletionStream(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTextCompletionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.TextCompletionStreamRequest, provider.GetProviderKey())
 }
 
 // ChatCompletion performs a chat completion request to the Gemini API.
-func (provider *GeminiProvider) ChatCompletion(ctx context.Context, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) ChatCompletion(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 	// Check if chat completion is allowed for this provider
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.ChatCompletionRequest); err != nil {
 		return nil, err
@@ -268,7 +268,7 @@ func (provider *GeminiProvider) ChatCompletion(ctx context.Context, key schemas.
 // ChatCompletionStream performs a streaming chat completion request to the Gemini API.
 // It supports real-time streaming of responses using Server-Sent Events (SSE).
 // Returns a channel containing BifrostResponse objects representing the stream or an error if the request fails.
-func (provider *GeminiProvider) ChatCompletionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostChatRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (provider *GeminiProvider) ChatCompletionStream(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostChatRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	// Check if chat completion stream is allowed for this provider
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.ChatCompletionStreamRequest); err != nil {
 		return nil, err
@@ -318,7 +318,7 @@ func (provider *GeminiProvider) ChatCompletionStream(ctx context.Context, postHo
 
 // HandleGeminiChatCompletionStream handles streaming for Gemini-compatible APIs.
 func HandleGeminiChatCompletionStream(
-	ctx context.Context,
+	ctx *schemas.BifrostContext,
 	client *fasthttp.Client,
 	url string,
 	jsonBody []byte,
@@ -380,8 +380,30 @@ func HandleGeminiChatCompletionStream(
 
 	// Start streaming in a goroutine
 	go func() {
-		defer close(responseChan)
+		defer func() {
+			if ctx.Err() == context.Canceled {
+				providerUtils.HandleStreamCancellation(ctx, postHookRunner, responseChan, providerName, model, schemas.ChatCompletionStreamRequest, logger)
+			} else if ctx.Err() == context.DeadlineExceeded {
+				providerUtils.HandleStreamTimeout(ctx, postHookRunner, responseChan, providerName, model, schemas.ChatCompletionStreamRequest, logger)
+			}
+			close(responseChan)
+		}()
 		defer providerUtils.ReleaseStreamingResponse(resp)
+
+		if resp.BodyStream() == nil {
+			bifrostErr := providerUtils.NewBifrostOperationError(
+				"Provider returned an empty response",
+				fmt.Errorf("provider returned an empty response"),
+				providerName,
+			)
+			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+			providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, logger)
+			return
+		}
+
+		// Setup cancellation handler to close body stream on ctx cancellation
+		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), logger)
+		defer stopCancellation()
 
 		scanner := bufio.NewScanner(resp.BodyStream())
 		buf := make([]byte, 0, 1024*1024)
@@ -395,10 +417,9 @@ func HandleGeminiChatCompletionStream(
 		var modelName string
 
 		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
+			// If context was cancelled/timed out, let defer handle it
+			if ctx.Err() != nil {
 				return
-			default:
 			}
 			line := scanner.Text()
 
@@ -406,19 +427,15 @@ func HandleGeminiChatCompletionStream(
 			if line == "" || strings.HasPrefix(line, ":") {
 				continue
 			}
-
 			// Parse SSE data
 			if !strings.HasPrefix(line, "data: ") {
 				continue
 			}
-
 			eventData := strings.TrimPrefix(line, "data: ")
-
 			// Skip empty data
 			if strings.TrimSpace(eventData) == "" {
 				continue
 			}
-
 			// Process chunk using shared function
 			geminiResponse, err := processGeminiStreamChunk(eventData)
 			if err != nil {
@@ -437,7 +454,7 @@ func HandleGeminiChatCompletionStream(
 							ModelRequested: model,
 						},
 					}
-					ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+					ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, logger)
 					return
 				}
@@ -461,7 +478,7 @@ func HandleGeminiChatCompletionStream(
 					Provider:       providerName,
 					ModelRequested: model,
 				}
-				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+				ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 				providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, logger)
 				return
 			}
@@ -499,7 +516,7 @@ func HandleGeminiChatCompletionStream(
 						providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
 					}
 					response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-					ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+					ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 					providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, response, nil, nil, nil), responseChan)
 					break
 				}
@@ -511,6 +528,11 @@ func HandleGeminiChatCompletionStream(
 
 		// Handle scanner errors
 		if err := scanner.Err(); err != nil {
+			// If context was cancelled/timed out, let defer handle it
+			if ctx.Err() != nil {
+				return
+			}
+			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 			logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.ChatCompletionStreamRequest, providerName, model, logger)
 		}
@@ -522,7 +544,7 @@ func HandleGeminiChatCompletionStream(
 // Responses performs a chat completion request to Gemini's API.
 // It formats the request, sends it to Gemini, and processes the response.
 // Returns a BifrostResponse containing the completion results or an error if the request fails.
-func (provider *GeminiProvider) Responses(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) Responses(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostResponsesResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.ResponsesRequest); err != nil {
 		return nil, err
 	}
@@ -576,7 +598,7 @@ func (provider *GeminiProvider) Responses(ctx context.Context, key schemas.Key, 
 }
 
 // ResponsesStream performs a streaming responses request to the Gemini API.
-func (provider *GeminiProvider) ResponsesStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (provider *GeminiProvider) ResponsesStream(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	// Check if responses stream is allowed for this provider
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.ResponsesStreamRequest); err != nil {
 		return nil, err
@@ -625,7 +647,7 @@ func (provider *GeminiProvider) ResponsesStream(ctx context.Context, postHookRun
 
 // HandleGeminiResponsesStream handles streaming for Gemini-compatible APIs.
 func HandleGeminiResponsesStream(
-	ctx context.Context,
+	ctx *schemas.BifrostContext,
 	client *fasthttp.Client,
 	url string,
 	jsonBody []byte,
@@ -687,8 +709,31 @@ func HandleGeminiResponsesStream(
 
 	// Start streaming in a goroutine
 	go func() {
-		defer close(responseChan)
+		defer func() {
+			if ctx.Err() == context.Canceled {
+				providerUtils.HandleStreamCancellation(ctx, postHookRunner, responseChan, providerName, model, schemas.ResponsesStreamRequest, logger)
+			} else if ctx.Err() == context.DeadlineExceeded {
+				providerUtils.HandleStreamTimeout(ctx, postHookRunner, responseChan, providerName, model, schemas.ResponsesStreamRequest, logger)
+			}
+			close(responseChan)
+		}()
+
 		defer providerUtils.ReleaseStreamingResponse(resp)
+
+		// Setup cancellation handler to close body stream on ctx cancellation
+		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), logger)
+		defer stopCancellation()
+
+		if resp.BodyStream() == nil {
+			bifrostErr := providerUtils.NewBifrostOperationError(
+				"Provider returned an empty response",
+				fmt.Errorf("provider returned an empty response"),
+				providerName,
+			)
+			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+			providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, logger)
+			return
+		}
 
 		scanner := bufio.NewScanner(resp.BodyStream())
 		buf := make([]byte, 0, 1024*1024)
@@ -706,11 +751,11 @@ func HandleGeminiResponsesStream(
 		var lastUsageMetadata *GenerateContentResponseUsageMetadata
 
 		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
+			// If context was cancelled/timed out, let defer handle it
+			if ctx.Err() != nil {
 				return
-			default:
 			}
+
 			line := scanner.Text()
 
 			// Skip empty lines and comments
@@ -748,7 +793,7 @@ func HandleGeminiResponsesStream(
 							ModelRequested: model,
 						},
 					}
-					ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+					ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, logger)
 					return
 				}
@@ -769,7 +814,7 @@ func HandleGeminiResponsesStream(
 					Provider:       providerName,
 					ModelRequested: model,
 				}
-				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+				ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 				providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, logger)
 				return
 			}
@@ -811,7 +856,7 @@ func HandleGeminiResponsesStream(
 							providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
 						}
 						response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-						ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+						ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 						providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, response, nil, nil), responseChan)
 						return
 					}
@@ -829,43 +874,50 @@ func HandleGeminiResponsesStream(
 
 		// Handle scanner errors
 		if err := scanner.Err(); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 			logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.ResponsesStreamRequest, providerName, model, logger)
-		} else {
-			// Finalize the stream by closing any open items
-			finalResponses := FinalizeGeminiResponsesStream(streamState, lastUsageMetadata, sequenceNumber)
-			for i, finalResponse := range finalResponses {
-				finalResponse.ExtraFields = schemas.BifrostResponseExtraFields{
-					RequestType:    schemas.ResponsesStreamRequest,
-					Provider:       providerName,
-					ModelRequested: model,
-					ChunkIndex:     chunkIndex,
-					Latency:        time.Since(lastChunkTime).Milliseconds(),
-				}
-
-				if postResponseConverter != nil {
-					finalResponse = postResponseConverter(finalResponse)
-					if finalResponse == nil {
-						logger.Warn("postResponseConverter returned nil; skipping final response")
-						continue
-					}
-				}
-
-				chunkIndex++
-				sequenceNumber++
-
-				if sendBackRawResponse {
-					finalResponse.ExtraFields.RawResponse = "{}" // Final event has no payload
-				}
-
-				// Set final latency on the last response (completed event)
-				if i == len(finalResponses)-1 {
-					finalResponse.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-				}
-
-				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
-				providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, finalResponse, nil, nil), responseChan)
+			return
+		}
+		// Finalize the stream by closing any open items
+		finalResponses := FinalizeGeminiResponsesStream(streamState, lastUsageMetadata, sequenceNumber)
+		for i, finalResponse := range finalResponses {
+			if finalResponse == nil {
+				logger.Warn("FinalizeGeminiResponsesStream returned nil; skipping final response")
+				continue
 			}
+			finalResponse.ExtraFields = schemas.BifrostResponseExtraFields{
+				RequestType:    schemas.ResponsesStreamRequest,
+				Provider:       providerName,
+				ModelRequested: model,
+				ChunkIndex:     chunkIndex,
+				Latency:        time.Since(lastChunkTime).Milliseconds(),
+			}
+
+			if postResponseConverter != nil {
+				finalResponse = postResponseConverter(finalResponse)
+				if finalResponse == nil {
+					logger.Warn("postResponseConverter returned nil; skipping final response")
+					continue
+				}
+			}
+
+			chunkIndex++
+			sequenceNumber++
+
+			if sendBackRawResponse {
+				finalResponse.ExtraFields.RawResponse = "{}" // Final event has no payload
+			}
+			isLast := i == len(finalResponses)-1
+			// Set final latency on the last response (completed event)
+			if isLast {
+				ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+				finalResponse.ExtraFields.Latency = time.Since(startTime).Milliseconds()
+			}
+			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, finalResponse, nil, nil), responseChan)
 		}
 	}()
 
@@ -873,7 +925,7 @@ func HandleGeminiResponsesStream(
 }
 
 // Embedding performs an embedding request to the Gemini API.
-func (provider *GeminiProvider) Embedding(ctx context.Context, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostEmbeddingResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) Embedding(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostEmbeddingRequest) (*schemas.BifrostEmbeddingResponse, *schemas.BifrostError) {
 	// Check if embedding is allowed for this provider
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.EmbeddingRequest); err != nil {
 		return nil, err
@@ -966,7 +1018,7 @@ func (provider *GeminiProvider) Embedding(ctx context.Context, key schemas.Key, 
 }
 
 // Speech performs a speech synthesis request to the Gemini API.
-func (provider *GeminiProvider) Speech(ctx context.Context, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) Speech(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostSpeechRequest) (*schemas.BifrostSpeechResponse, *schemas.BifrostError) {
 	// Check if speech is allowed for this provider
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.SpeechRequest); err != nil {
 		return nil, err
@@ -991,7 +1043,9 @@ func (provider *GeminiProvider) Speech(ctx context.Context, key schemas.Key, req
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
-	ctx = context.WithValue(ctx, BifrostContextKeyResponseFormat, request.Params.ResponseFormat)
+	if request.Params != nil {
+		ctx.SetValue(BifrostContextKeyResponseFormat, request.Params.ResponseFormat)
+	}
 	response, convErr := geminiResponse.ToBifrostSpeechResponse(ctx)
 	if convErr != nil {
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, convErr, provider.GetProviderKey())
@@ -1015,7 +1069,7 @@ func (provider *GeminiProvider) Speech(ctx context.Context, key schemas.Key, req
 }
 
 // SpeechStream performs a streaming speech synthesis request to the Gemini API.
-func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (provider *GeminiProvider) SpeechStream(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	// Check if speech stream is allowed for this provider
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.SpeechStreamRequest); err != nil {
 		return nil, err
@@ -1091,8 +1145,20 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 
 	// Start streaming in a goroutine
 	go func() {
+		defer func() {
+			if ctx.Err() == context.Canceled {
+				providerUtils.HandleStreamCancellation(ctx, postHookRunner, responseChan, providerName, request.Model, schemas.SpeechStreamRequest, provider.logger)
+			} else if ctx.Err() == context.DeadlineExceeded {
+				providerUtils.HandleStreamTimeout(ctx, postHookRunner, responseChan, providerName, request.Model, schemas.SpeechStreamRequest, provider.logger)
+			}
+			close(responseChan)
+		}()
+
 		defer providerUtils.ReleaseStreamingResponse(resp)
-		defer close(responseChan)
+
+		// Setup cancellation handler to close body stream on ctx cancellation
+		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), provider.logger)
+		defer stopCancellation()
 
 		scanner := bufio.NewScanner(resp.BodyStream())
 		// Increase buffer size to handle large chunks (especially for audio data)
@@ -1104,11 +1170,11 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 		lastChunkTime := startTime
 
 		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
+			// If context was cancelled/timed out, let defer handle it
+			if ctx.Err() != nil {
 				return
-			default:
 			}
+
 			line := scanner.Text()
 
 			// Skip empty lines
@@ -1148,7 +1214,7 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 							ModelRequested: request.Model,
 						},
 					}
-					ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+					ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, provider.logger)
 					return
 				}
@@ -1208,38 +1274,40 @@ func (provider *GeminiProvider) SpeechStream(ctx context.Context, postHookRunner
 				providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, response, nil), responseChan)
 			}
 		}
-
 		// Handle scanner errors
 		if err := scanner.Err(); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 			provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.SpeechStreamRequest, providerName, request.Model, provider.logger)
-		} else {
-			response := &schemas.BifrostSpeechStreamResponse{
-				Type:  schemas.SpeechStreamResponseTypeDone,
-				Usage: usage,
-				ExtraFields: schemas.BifrostResponseExtraFields{
-					RequestType:    schemas.SpeechStreamRequest,
-					Provider:       providerName,
-					ModelRequested: request.Model,
-					ChunkIndex:     chunkIndex + 1,
-					Latency:        time.Since(startTime).Milliseconds(),
-				},
-			}
-
-			// Set raw request if enabled
-			if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
-				providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
-			}
-			ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
-			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, response, nil), responseChan)
+			return
 		}
+		response := &schemas.BifrostSpeechStreamResponse{
+			Type:  schemas.SpeechStreamResponseTypeDone,
+			Usage: usage,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType:    schemas.SpeechStreamRequest,
+				Provider:       providerName,
+				ModelRequested: request.Model,
+				ChunkIndex:     chunkIndex + 1,
+				Latency:        time.Since(startTime).Milliseconds(),
+			},
+		}
+		// Set raw request if enabled
+		if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+			providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
+		}
+		ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+		providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, response, nil), responseChan)
 	}()
 
 	return responseChan, nil
 }
 
 // Transcription performs a speech-to-text request to the Gemini API.
-func (provider *GeminiProvider) Transcription(ctx context.Context, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) Transcription(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (*schemas.BifrostTranscriptionResponse, *schemas.BifrostError) {
 	// Check if transcription is allowed for this provider
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.TranscriptionRequest); err != nil {
 		return nil, err
@@ -1285,7 +1353,7 @@ func (provider *GeminiProvider) Transcription(ctx context.Context, key schemas.K
 }
 
 // TranscriptionStream performs a streaming speech-to-text request to the Gemini API.
-func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (provider *GeminiProvider) TranscriptionStream(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
 	// Check if transcription stream is allowed for this provider
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.TranscriptionStreamRequest); err != nil {
 		return nil, err
@@ -1360,8 +1428,18 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 
 	// Start streaming in a goroutine
 	go func() {
-		defer close(responseChan)
+		defer func() {
+			if ctx.Err() == context.Canceled {
+				providerUtils.HandleStreamCancellation(ctx, postHookRunner, responseChan, providerName, request.Model, schemas.TranscriptionStreamRequest, provider.logger)
+			} else if ctx.Err() == context.DeadlineExceeded {
+				providerUtils.HandleStreamTimeout(ctx, postHookRunner, responseChan, providerName, request.Model, schemas.TranscriptionStreamRequest, provider.logger)
+			}
+			close(responseChan)
+		}()
 		defer providerUtils.ReleaseStreamingResponse(resp)
+		// Setup cancellation handler to close body stream on ctx cancellation
+		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), provider.logger)
+		defer stopCancellation()
 
 		scanner := bufio.NewScanner(resp.BodyStream())
 		// Increase buffer size to handle large chunks (especially for audio data)
@@ -1375,11 +1453,11 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 		var fullTranscriptionText string
 
 		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
+			// If context was cancelled/timed out, let defer handle it
+			if ctx.Err() != nil {
 				return
-			default:
 			}
+
 			line := scanner.Text()
 
 			// Skip empty lines
@@ -1422,7 +1500,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 						ModelRequested: request.Model,
 					},
 				}
-				ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
+				ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 				providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, provider.logger)
 				return
 			}
@@ -1489,34 +1567,39 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 
 		// Handle scanner errors
 		if err := scanner.Err(); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
 			provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.TranscriptionStreamRequest, providerName, request.Model, provider.logger)
-		} else {
-			response := &schemas.BifrostTranscriptionStreamResponse{
-				Type: schemas.TranscriptionStreamResponseTypeDone,
-				Text: fullTranscriptionText,
-				Usage: &schemas.TranscriptionUsage{
-					Type:         "tokens",
-					InputTokens:  usage.InputTokens,
-					OutputTokens: usage.OutputTokens,
-					TotalTokens:  usage.TotalTokens,
-				},
-				ExtraFields: schemas.BifrostResponseExtraFields{
-					RequestType:    schemas.TranscriptionStreamRequest,
-					Provider:       providerName,
-					ModelRequested: request.Model,
-					ChunkIndex:     chunkIndex + 1,
-					Latency:        time.Since(startTime).Milliseconds(),
-				},
-			}
-
-			// Set raw request if enabled
-			if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
-				providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
-			}
-			ctx = context.WithValue(ctx, schemas.BifrostContextKeyStreamEndIndicator, true)
-			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, nil, response), responseChan)
+			return
 		}
+		response := &schemas.BifrostTranscriptionStreamResponse{
+			Type: schemas.TranscriptionStreamResponseTypeDone,
+			Text: fullTranscriptionText,
+			Usage: &schemas.TranscriptionUsage{
+				Type:         "tokens",
+				InputTokens:  usage.InputTokens,
+				OutputTokens: usage.OutputTokens,
+				TotalTokens:  usage.TotalTokens,
+			},
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				RequestType:    schemas.TranscriptionStreamRequest,
+				Provider:       providerName,
+				ModelRequested: request.Model,
+				ChunkIndex:     chunkIndex + 1,
+				Latency:        time.Since(startTime).Milliseconds(),
+			},
+		}
+
+		// Set raw request if enabled
+		if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+			providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
+		}
+		ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+		providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, nil, response), responseChan)
+
 	}()
 
 	return responseChan, nil
@@ -1527,7 +1610,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx context.Context, postHoo
 // BatchCreate creates a new batch job for Gemini.
 // Uses the asynchronous batchGenerateContent endpoint as per official documentation.
 // Supports both inline requests and file-based input (via InputFileID).
-func (provider *GeminiProvider) BatchCreate(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchCreateRequest) (*schemas.BifrostBatchCreateResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) BatchCreate(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostBatchCreateRequest) (*schemas.BifrostBatchCreateResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchCreateRequest); err != nil {
 		return nil, err
 	}
@@ -1698,7 +1781,7 @@ func (provider *GeminiProvider) BatchCreate(ctx context.Context, key schemas.Key
 }
 
 // batchListByKey lists batch jobs for Gemini for a single key.
-func (provider *GeminiProvider) batchListByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, time.Duration, *schemas.BifrostError) {
+func (provider *GeminiProvider) batchListByKey(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, time.Duration, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Create HTTP request
@@ -1808,7 +1891,7 @@ func (provider *GeminiProvider) batchListByKey(ctx context.Context, key schemas.
 // Note: The consumer API may have limited list functionality.
 // BatchList lists batch jobs using serial pagination across keys.
 // Exhausts all pages from one key before moving to the next.
-func (provider *GeminiProvider) BatchList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) BatchList(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostBatchListRequest) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchListRequest); err != nil {
 		return nil, err
 	}
@@ -1881,7 +1964,7 @@ func (provider *GeminiProvider) BatchList(ctx context.Context, keys []schemas.Ke
 }
 
 // batchRetrieveByKey retrieves a specific batch job for Gemini for a single key.
-func (provider *GeminiProvider) batchRetrieveByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchRetrieveRequest) (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) batchRetrieveByKey(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostBatchRetrieveRequest) (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Create HTTP request
@@ -1965,7 +2048,7 @@ func (provider *GeminiProvider) batchRetrieveByKey(ctx context.Context, key sche
 }
 
 // BatchRetrieve retrieves a specific batch job for Gemini, trying each key until successful.
-func (provider *GeminiProvider) BatchRetrieve(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchRetrieveRequest) (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) BatchRetrieve(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostBatchRetrieveRequest) (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchRetrieveRequest); err != nil {
 		return nil, err
 	}
@@ -1996,7 +2079,7 @@ func (provider *GeminiProvider) BatchRetrieve(ctx context.Context, keys []schema
 }
 
 // batchCancelByKey cancels a batch job for Gemini for a single key.
-func (provider *GeminiProvider) batchCancelByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchCancelRequest) (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) batchCancelByKey(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostBatchCancelRequest) (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Create HTTP request
@@ -2062,7 +2145,7 @@ func (provider *GeminiProvider) batchCancelByKey(ctx context.Context, key schema
 
 // BatchCancel cancels a batch job for Gemini, trying each key until successful.
 // Note: Cancellation support depends on the API version and batch state.
-func (provider *GeminiProvider) BatchCancel(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchCancelRequest) (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) BatchCancel(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostBatchCancelRequest) (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchCancelRequest); err != nil {
 		return nil, err
 	}
@@ -2115,7 +2198,7 @@ func processGeminiStreamChunk(jsonData string) (*GenerateContentResponse, error)
 }
 
 // batchResultsByKey retrieves batch results for Gemini for a single key.
-func (provider *GeminiProvider) batchResultsByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostBatchResultsRequest) (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) batchResultsByKey(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostBatchResultsRequest) (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// We need to get the full batch response with results, so make the API call directly
@@ -2275,7 +2358,7 @@ func (provider *GeminiProvider) batchResultsByKey(ctx context.Context, key schem
 // BatchResults retrieves batch results for Gemini, trying each key until successful.
 // Results are extracted from dest.inlinedResponses for inline batches,
 // or downloaded from dest.fileName for file-based batches.
-func (provider *GeminiProvider) BatchResults(ctx context.Context, keys []schemas.Key, request *schemas.BifrostBatchResultsRequest) (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) BatchResults(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostBatchResultsRequest) (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.BatchResultsRequest); err != nil {
 		return nil, err
 	}
@@ -2306,7 +2389,7 @@ func (provider *GeminiProvider) BatchResults(ctx context.Context, keys []schemas
 }
 
 // FileUpload uploads a file to Gemini.
-func (provider *GeminiProvider) FileUpload(ctx context.Context, key schemas.Key, request *schemas.BifrostFileUploadRequest) (*schemas.BifrostFileUploadResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) FileUpload(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostFileUploadRequest) (*schemas.BifrostFileUploadResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileUploadRequest); err != nil {
 		return nil, err
 	}
@@ -2443,7 +2526,7 @@ func (provider *GeminiProvider) FileUpload(ctx context.Context, key schemas.Key,
 }
 
 // fileListByKey lists files from Gemini for a single key.
-func (provider *GeminiProvider) fileListByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, time.Duration, *schemas.BifrostError) {
+func (provider *GeminiProvider) fileListByKey(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, time.Duration, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Create request
@@ -2548,7 +2631,7 @@ func (provider *GeminiProvider) fileListByKey(ctx context.Context, key schemas.K
 // FileList lists files from Gemini across all provided keys.
 // FileList lists files using serial pagination across keys.
 // Exhausts all pages from one key before moving to the next.
-func (provider *GeminiProvider) FileList(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) FileList(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostFileListRequest) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileListRequest); err != nil {
 		return nil, err
 	}
@@ -2621,7 +2704,7 @@ func (provider *GeminiProvider) FileList(ctx context.Context, keys []schemas.Key
 }
 
 // fileRetrieveByKey retrieves file metadata from Gemini for a single key.
-func (provider *GeminiProvider) fileRetrieveByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostFileRetrieveRequest) (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) fileRetrieveByKey(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostFileRetrieveRequest) (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Create request
@@ -2705,7 +2788,7 @@ func (provider *GeminiProvider) fileRetrieveByKey(ctx context.Context, key schem
 }
 
 // FileRetrieve retrieves file metadata from Gemini, trying each key until successful.
-func (provider *GeminiProvider) FileRetrieve(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileRetrieveRequest) (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) FileRetrieve(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostFileRetrieveRequest) (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileRetrieveRequest); err != nil {
 		return nil, err
 	}
@@ -2736,7 +2819,7 @@ func (provider *GeminiProvider) FileRetrieve(ctx context.Context, keys []schemas
 }
 
 // fileDeleteByKey deletes a file from Gemini for a single key.
-func (provider *GeminiProvider) fileDeleteByKey(ctx context.Context, key schemas.Key, request *schemas.BifrostFileDeleteRequest) (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) fileDeleteByKey(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostFileDeleteRequest) (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
 	// Create request
@@ -2787,7 +2870,7 @@ func (provider *GeminiProvider) fileDeleteByKey(ctx context.Context, key schemas
 }
 
 // FileDelete deletes a file from Gemini, trying each key until successful.
-func (provider *GeminiProvider) FileDelete(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileDeleteRequest) (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) FileDelete(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostFileDeleteRequest) (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileDeleteRequest); err != nil {
 		return nil, err
 	}
@@ -2820,7 +2903,7 @@ func (provider *GeminiProvider) FileDelete(ctx context.Context, keys []schemas.K
 // FileContent downloads file content from Gemini.
 // Note: Gemini Files API doesn't support direct content download.
 // Files are accessed via their URI in API requests.
-func (provider *GeminiProvider) FileContent(ctx context.Context, keys []schemas.Key, request *schemas.BifrostFileContentRequest) (*schemas.BifrostFileContentResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) FileContent(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostFileContentRequest) (*schemas.BifrostFileContentResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.FileContentRequest); err != nil {
 		return nil, err
 	}
@@ -2837,7 +2920,7 @@ func (provider *GeminiProvider) FileContent(ctx context.Context, keys []schemas.
 }
 
 // CountTokens performs a token counting request to Gemini's countTokens endpoint.
-func (provider *GeminiProvider) CountTokens(ctx context.Context, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostCountTokensResponse, *schemas.BifrostError) {
+func (provider *GeminiProvider) CountTokens(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostResponsesRequest) (*schemas.BifrostCountTokensResponse, *schemas.BifrostError) {
 	if err := providerUtils.CheckOperationAllowed(schemas.Gemini, provider.customProviderConfig, schemas.CountTokensRequest); err != nil {
 		return nil, err
 	}

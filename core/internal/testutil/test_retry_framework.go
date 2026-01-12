@@ -849,6 +849,24 @@ func FileInputRetryConfig() TestRetryConfig {
 	}
 }
 
+// FileInputResponsesRetryConfig creates a retry config for file/document input tests using Responses API
+func FileInputResponsesRetryConfig() ResponsesRetryConfig {
+	return ResponsesRetryConfig{
+		MaxAttempts: 10,
+		BaseDelay:   2000 * time.Millisecond,
+		MaxDelay:    10 * time.Second,
+		Conditions: []ResponsesRetryCondition{
+			&ResponsesEmptyCondition{},
+			&ResponsesFileNotProcessedCondition{},
+			&ResponsesGenericResponseCondition{},
+			&ResponsesContentValidationCondition{},
+		},
+		OnRetry: func(attempt int, reason string, t *testing.T) {
+			t.Logf("🔄 Retrying file input test (attempt %d): %s", attempt, reason)
+		},
+	}
+}
+
 // StreamingRetryConfig creates a retry config for streaming tests
 func StreamingRetryConfig() TestRetryConfig {
 	return TestRetryConfig{
