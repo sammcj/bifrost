@@ -430,9 +430,16 @@ func convertToolMessages(msgs []schemas.ChatMessage) (BedrockMessage, error) {
 				})
 			} else {
 				// Use the parsed JSON object
-				toolResultContent = append(toolResultContent, BedrockContentBlock{
-					JSON: parsedOutput,
-				})
+				// Bedrock does not consider a json array valid for this field, so we wrap it first.
+				if _, isArray := parsedOutput.([]any); isArray {
+					toolResultContent = append(toolResultContent, BedrockContentBlock{
+						JSON: map[string]any{"results": parsedOutput},
+					})
+				} else {
+					toolResultContent = append(toolResultContent, BedrockContentBlock{
+						JSON: parsedOutput,
+					})
+				}
 			}
 		} else if msg.Content.ContentBlocks != nil {
 			for _, block := range msg.Content.ContentBlocks {

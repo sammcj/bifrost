@@ -673,11 +673,143 @@ func TestBifrostToBedrockRequestConversion(t *testing.T) {
 				Messages: nil,
 			},
 		},
+		{
+			name: "ArrayToolMessage",
+			input: &schemas.BifrostChatRequest{
+				Model: "claude-3-sonnet",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("What's the weather like in New York?"),
+						},
+					},
+					{
+						Role: schemas.ChatMessageRoleAssistant,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("I'll invoke get_weather tool to know the weather in New York."),
+						},
+						ChatAssistantMessage: &schemas.ChatAssistantMessage{
+							ToolCalls: []schemas.ChatAssistantMessageToolCall{
+								{
+									Index: 0,
+									Type:  schemas.Ptr("function"),
+									ID:    schemas.Ptr("tooluse_Yl388l8ES0G_3TQtDcKq_g"),
+									Function: schemas.ChatAssistantMessageToolCallFunction{
+										Name:      schemas.Ptr("get_weather"),
+										Arguments: `{"location":"New York"}`,
+									},
+								},
+							},
+						},
+					},
+					{
+						Role: schemas.ChatMessageRoleTool,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr(`[{"period":"now","weather":"sunny"},{"period":"next_1_hour","weather":"cloudy"}]`),
+						},
+						ChatToolMessage: &schemas.ChatToolMessage{
+							ToolCallID: schemas.Ptr("tooluse_Yl388l8ES0G_3TQtDcKq_g"),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					Tools: []schemas.ChatTool{
+						{
+							Type: schemas.ChatToolTypeFunction,
+							Function: &schemas.ChatToolFunction{
+								Name:        "get_weather",
+								Description: schemas.Ptr("Get weather information"),
+								Parameters: &schemas.ToolFunctionParameters{
+									Type: "object",
+									Properties: &schemas.OrderedMap{
+										"location": map[string]interface{}{
+											"type":        "string",
+											"description": "The city name",
+										},
+									},
+									Required: []string{"location"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &bedrock.BedrockConverseRequest{
+				ModelID: "claude-3-sonnet",
+				Messages: []bedrock.BedrockMessage{
+					{
+						Role: bedrock.BedrockMessageRoleUser,
+						Content: []bedrock.BedrockContentBlock{
+							{
+								Text: schemas.Ptr("What's the weather like in New York?"),
+							},
+						},
+					},
+					{
+						Role: bedrock.BedrockMessageRoleAssistant,
+						Content: []bedrock.BedrockContentBlock{
+							{
+								Text: schemas.Ptr("I'll invoke get_weather tool to know the weather in New York."),
+							},
+							{
+								ToolUse: &bedrock.BedrockToolUse{
+									ToolUseID: "tooluse_Yl388l8ES0G_3TQtDcKq_g",
+									Name:      "get_weather",
+									Input: map[string]any{
+										"location": "New York",
+									},
+								},
+							},
+						},
+					},
+					{
+						Role: bedrock.BedrockMessageRoleUser,
+						Content: []bedrock.BedrockContentBlock{
+							{
+								ToolResult: &bedrock.BedrockToolResult{
+									ToolUseID: "tooluse_Yl388l8ES0G_3TQtDcKq_g",
+									Content: []bedrock.BedrockContentBlock{
+										{
+											JSON: map[string]any{
+												"results": []any{
+													any(map[string]any{"period": "now", "weather": "sunny"}),
+													any(map[string]any{"period": "next_1_hour", "weather": "cloudy"}),
+												},
+											},
+										},
+									},
+									Status: schemas.Ptr("success"),
+								},
+							},
+						},
+					},
+				},
+				InferenceConfig: &bedrock.BedrockInferenceConfig{},
+				ToolConfig: &bedrock.BedrockToolConfig{
+					Tools: []bedrock.BedrockTool{
+						{
+							ToolSpec: &bedrock.BedrockToolSpec{
+								Name:        "get_weather",
+								Description: schemas.Ptr("Get weather information"),
+								InputSchema: bedrock.BedrockToolInputSchema{
+									JSON: map[string]interface{}{
+										"type":       "object",
+										"properties": &props,
+										"required":   []string{"location"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := schemas.NewBifrostContext(context.Background(),schemas.NoDeadline)
+			ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 			actual, err := bedrock.ToBedrockChatCompletionRequest(ctx, tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -705,7 +837,7 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 	trace := testTrace
 	latency := testLatency
 	props := testProps
-	ctx := schemas.NewBifrostContext(context.Background(),schemas.NoDeadline)
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 	tests := []struct {
 		name     string
@@ -1775,7 +1907,7 @@ func TestBedrockToBifrostResponseConversion(t *testing.T) {
 	toolInput := map[string]interface{}{
 		"location": "NYC",
 	}
-	ctx := schemas.NewBifrostContext(context.Background(),schemas.NoDeadline)
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 
 	tests := []struct {
 		name     string
@@ -1986,7 +2118,7 @@ func TestToBedrockResponsesRequest_AdditionalFields(t *testing.T) {
 		},
 	}
 
-	ctx := schemas.NewBifrostContext(context.Background(),schemas.NoDeadline)
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 	bedrockReq, err := bedrock.ToBedrockResponsesRequest(ctx, req)
 	require.NoError(t, err)
 	require.NotNil(t, bedrockReq)
@@ -2013,7 +2145,7 @@ func TestToBedrockResponsesRequest_AdditionalFields_InterfaceSlice(t *testing.T)
 		},
 	}
 
-	ctx := schemas.NewBifrostContext(context.Background(),schemas.NoDeadline)
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 	bedrockReq, err := bedrock.ToBedrockResponsesRequest(ctx, req)
 	require.NoError(t, err)
 	require.NotNil(t, bedrockReq)
