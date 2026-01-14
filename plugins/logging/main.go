@@ -89,7 +89,7 @@ type InitialLogData struct {
 }
 
 // LogCallback is a function that gets called when a new log entry is created
-type LogCallback func(*logstore.Log)
+type LogCallback func(ctx context.Context, logEntry *logstore.Log)
 
 type Config struct {
 	DisableContentLogging *bool `json:"disable_content_logging"`
@@ -292,7 +292,7 @@ func (p *LoggerPlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.Bifrost
 	logMsg.InitialData = initialData
 	logMsg.FallbackIndex = fallbackIndex
 
-	go func(msg *LogMessage) {
+	go func(msg *LogMessage) {		
 		defer p.putLogMessage(msg) // Return to pool when done
 		if err := p.insertInitialLogEntry(
 			p.ctx,
@@ -324,7 +324,7 @@ func (p *LoggerPlugin) PreHook(ctx *schemas.BifrostContext, req *schemas.Bifrost
 					Stream:                      false, // Initially false, will be updated if streaming
 					CreatedAt:                   msg.Timestamp,
 				}
-				p.logCallback(initialEntry)
+				p.logCallback(p.ctx, initialEntry)
 			}
 		}
 	}(logMsg)
@@ -436,7 +436,7 @@ func (p *LoggerPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bif
 				p.mu.Lock()
 				if p.logCallback != nil {
 					if updatedEntry, getErr := p.getLogEntry(p.ctx, logMsg.RequestID); getErr == nil {
-						p.logCallback(updatedEntry)
+						p.logCallback(p.ctx, updatedEntry)
 					}
 				}
 				p.mu.Unlock()
@@ -486,7 +486,7 @@ func (p *LoggerPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bif
 					p.mu.Lock()
 					if p.logCallback != nil {
 						if updatedEntry, getErr := p.getLogEntry(p.ctx, logMsg.RequestID); getErr == nil {
-							p.logCallback(updatedEntry)
+							p.logCallback(p.ctx, updatedEntry)
 						}
 					}
 					p.mu.Unlock()
@@ -642,7 +642,7 @@ func (p *LoggerPlugin) PostHook(ctx *schemas.BifrostContext, result *schemas.Bif
 								Name: *updatedEntry.VirtualKeyName,
 							}
 						}
-						p.logCallback(updatedEntry)
+						p.logCallback(p.ctx, updatedEntry)
 					}
 				}
 				p.mu.Unlock()
