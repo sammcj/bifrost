@@ -1,1 +1,2 @@
-- feat: Fixed weighted provider routing to correctly match provider-prefixed models in allowed lists
+- feat: fixed weighted provider routing to correctly match provider-prefixed models in allowed lists
+- fix: added support for model lookup in Google GenAI integration by path parameter

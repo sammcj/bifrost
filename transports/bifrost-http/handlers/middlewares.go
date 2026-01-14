@@ -110,6 +110,27 @@ func fasthttpToHTTPRequest(ctx *fasthttp.RequestCtx, req *schemas.HTTPRequest) {
 		req.Query[string(key)] = string(value)
 	}
 
+	// Copy path parameters from user values
+	// The fasthttp router stores path variables (like {file_id}, {model}) as user values
+	// We extract all string user values that are likely path parameters
+	ctx.VisitUserValuesAll(func(key, value any) {
+		// Only process string keys and string values
+		keyStr, keyIsString := key.(string)
+		valueStr, valueIsString := value.(string)
+		if !keyIsString || !valueIsString {
+			return
+		}
+		// Skip internal Bifrost system keys and tracing keys
+		if strings.HasPrefix(keyStr, "bifrost-") ||
+			keyStr == "BifrostContextKeyRequestID" ||
+			keyStr == "trace_id" ||
+			keyStr == "span_id" {
+			return
+		}
+		// Store as path parameter
+		req.PathParams[keyStr] = valueStr
+	})
+
 	// Copy body
 	body := ctx.Request.Body()
 	if len(body) > 0 {

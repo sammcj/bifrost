@@ -827,3 +827,62 @@ func TestFasthttpToHTTPRequest(t *testing.T) {
 		}
 	}
 }
+
+// TestFasthttpToHTTPRequest_PathParams tests that path parameters are extracted correctly
+func TestFasthttpToHTTPRequest_PathParams(t *testing.T) {
+	ctx := &fasthttp.RequestCtx{}
+
+	// Set up test data
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.SetRequestURI("/v1beta/files/file-abc123")
+
+	// Simulate what the fasthttp router does - set path params as user values
+	ctx.SetUserValue("file_id", "file-abc123")
+	ctx.SetUserValue("model", "gemini-pro")
+
+	// Set some system values that should be ignored
+	ctx.SetUserValue("BifrostContextKeyRequestID", "req-123")
+	ctx.SetUserValue("trace_id", "trace-456")
+	ctx.SetUserValue("span_id", "span-789")
+
+	// Acquire HTTPRequest from pool
+	req := schemas.AcquireHTTPRequest()
+	defer schemas.ReleaseHTTPRequest(req)
+
+	// Call the function
+	fasthttpToHTTPRequest(ctx, req)
+
+	// Verify path parameters are extracted
+	expectedPathParams := map[string]string{
+		"file_id": "file-abc123",
+		"model":   "gemini-pro",
+	}
+
+	if len(req.PathParams) != len(expectedPathParams) {
+		t.Errorf("Expected %d path params, got %d", len(expectedPathParams), len(req.PathParams))
+	}
+
+	for key, expectedValue := range expectedPathParams {
+		if actualValue, exists := req.PathParams[key]; !exists {
+			t.Errorf("Expected path param '%s' to exist", key)
+		} else if actualValue != expectedValue {
+			t.Errorf("Expected path param '%s' to be '%s', got '%s'", key, expectedValue, actualValue)
+		}
+	}
+
+	// Verify system keys are NOT in path params
+	systemKeys := []string{"BifrostContextKeyRequestID", "trace_id", "span_id"}
+	for _, key := range systemKeys {
+		if _, exists := req.PathParams[key]; exists {
+			t.Errorf("System key '%s' should not be in path params", key)
+		}
+	}
+
+	// Test the helper method
+	if fileID := req.CaseInsensitivePathParamLookup("file_id"); fileID != "file-abc123" {
+		t.Errorf("CaseInsensitivePathParamLookup failed: expected 'file-abc123', got '%s'", fileID)
+	}
+	if fileID := req.CaseInsensitivePathParamLookup("FILE_ID"); fileID != "file-abc123" {
+		t.Errorf("CaseInsensitivePathParamLookup should be case-insensitive: expected 'file-abc123', got '%s'", fileID)
+	}
+}

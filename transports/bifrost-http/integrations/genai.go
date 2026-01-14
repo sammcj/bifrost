@@ -108,7 +108,7 @@ func CreateGenAIRouteConfigs(pathPrefix string) []RouteConfig {
 			}
 			return nil, errors.New("invalid request type")
 		},
-			ListModelsResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostListModelsResponse) (interface{}, error) {
+		ListModelsResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostListModelsResponse) (interface{}, error) {
 			return gemini.ToGeminiListModelsResponse(resp), nil
 		},
 		ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
@@ -377,14 +377,7 @@ func extractAndSetModelFromURL(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.Bif
 	isCountTokens := strings.HasSuffix(modelStr, ":countTokens")
 
 	// Remove Google GenAI API endpoint suffixes if present
-	for _, sfx := range []string{
-		":streamGenerateContent",
-		":generateContent",
-		":countTokens",
-		":embedContent",
-		":batchEmbedContents",
-		":predict",
-	} {
+	for _, sfx := range gemini.GeminiRequestSuffixPaths {
 		modelStr = strings.TrimSuffix(modelStr, sfx)
 	}
 

@@ -29,11 +29,12 @@ type PluginStatus struct {
 // Used for plugin HTTP transport interception (supports both native .so and WASM plugins).
 // This type is pooled for allocation control - use AcquireHTTPRequest and ReleaseHTTPRequest.
 type HTTPRequest struct {
-	Method  string            `json:"method"`
-	Path    string            `json:"path"`
-	Headers map[string]string `json:"headers"`
-	Query   map[string]string `json:"query"`
-	Body    []byte            `json:"body"`
+	Method     string            `json:"method"`
+	Path       string            `json:"path"`
+	Headers    map[string]string `json:"headers"`
+	Query      map[string]string `json:"query"`
+	Body       []byte            `json:"body"`
+	PathParams map[string]string `json:"path_params"` // Path variables extracted from the URL pattern (e.g., {model})
 }
 
 // CaseInsensitiveHeaderLookup looks up a header key in a case-insensitive manner
@@ -44,6 +45,11 @@ func (req *HTTPRequest) CaseInsensitiveHeaderLookup(key string) string {
 // CaseInsensitiveQueryLookup looks up a query key in a case-insensitive manner
 func (req *HTTPRequest) CaseInsensitiveQueryLookup(key string) string {
 	return caseInsensitiveLookup(req.Query, key)
+}
+
+// CaseInsensitivePathParamLookup looks up a path parameter key in a case-insensitive manner
+func (req *HTTPRequest) CaseInsensitivePathParamLookup(key string) string {
+	return caseInsensitiveLookup(req.PathParams, key)
 }
 
 // caseInsensitiveLookup looks up a key in a case-insensitive manner for a map of strings
@@ -82,8 +88,9 @@ type HTTPResponse struct {
 var httpRequestPool = sync.Pool{
 	New: func() any {
 		return &HTTPRequest{
-			Headers: make(map[string]string, 16),
-			Query:   make(map[string]string, 8),
+			Headers:    make(map[string]string, 16),
+			Query:      make(map[string]string, 8),
+			PathParams: make(map[string]string, 4),
 		}
 	},
 }
@@ -105,6 +112,7 @@ func ReleaseHTTPRequest(req *HTTPRequest) {
 	// Clear the maps
 	clear(req.Headers)
 	clear(req.Query)
+	clear(req.PathParams)
 	// Reset fields
 	req.Method = ""
 	req.Path = ""

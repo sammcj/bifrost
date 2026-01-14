@@ -12,6 +12,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	bifrost "github.com/maximhq/bifrost/core"
+	"github.com/maximhq/bifrost/core/providers/gemini"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/framework/configstore"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
@@ -288,7 +289,7 @@ func (p *GovernancePlugin) HTTPTransportIntercept(ctx *schemas.BifrostContext, r
 		p.logger.Error("failed to unmarshal request body to check for virtual key: %v", err)
 		return nil, nil
 	}
-	payload, err = p.loadBalanceProvider(payload, virtualKey)
+	payload, err = p.loadBalanceProvider(ctx, req, payload, virtualKey)
 	if err != nil {
 		p.logger.Error("failed to load balance provider: %v", err)
 		return nil, nil
@@ -304,23 +305,39 @@ func (p *GovernancePlugin) HTTPTransportIntercept(ctx *schemas.BifrostContext, r
 
 // loadBalanceProvider loads balances the provider for the request
 // Parameters:
+//   - req: The HTTP request
 //   - body: The request body
 //   - virtualKey: The virtual key configuration
 //
 // Returns:
 //   - map[string]any: The updated request body
 //   - error: Any error that occurred during processing
-func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *configstoreTables.TableVirtualKey) (map[string]any, error) {
+func (p *GovernancePlugin) loadBalanceProvider(ctx *schemas.BifrostContext, req *schemas.HTTPRequest, body map[string]any, virtualKey *configstoreTables.TableVirtualKey) (map[string]any, error) {
 	// Check if the request has a model field
 	modelValue, hasModel := body["model"]
 	if !hasModel {
-		return body, nil
+		// For genai integration, model is present in URL path instead of the request body
+		if strings.Contains(req.Path, "/genai") {
+			modelValue = req.CaseInsensitivePathParamLookup("model")
+		} else {
+			return body, nil
+		}
 	}
 	modelStr, ok := modelValue.(string)
 	if !ok || modelStr == "" {
 		return body, nil
 	}
-
+	var genaiRequestSuffix string
+	// Remove Google GenAI API endpoint suffixes if present
+	if strings.Contains(req.Path, "/genai") {
+		for _, sfx := range gemini.GeminiRequestSuffixPaths {
+			if before, ok := strings.CutSuffix(modelStr, sfx); ok {
+				modelStr = before
+				genaiRequestSuffix = sfx
+				break
+			}
+		}
+	}
 	// Check if model already has provider prefix (contains "/")
 	if strings.Contains(modelStr, "/") {
 		provider, _ := schemas.ParseModelString(modelStr, "")
@@ -393,8 +410,14 @@ func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *
 	if selectedProvider == "" && len(allowedProviderConfigs) > 0 {
 		selectedProvider = schemas.ModelProvider(allowedProviderConfigs[0].Provider)
 	}
-	// Update the model field in the request body
-	body["model"] = string(selectedProvider) + "/" + modelStr
+	// For genai integration, model is present in URL path instead of the request body
+	if strings.Contains(req.Path, "/genai") {
+		newModelWithRequestSuffix := string(selectedProvider) + "/" + modelStr + genaiRequestSuffix
+		ctx.SetValue("model", newModelWithRequestSuffix)
+	} else {
+		// Update the model field in the request body
+		body["model"] = string(selectedProvider) + "/" + modelStr
+	}
 
 	// Check if fallbacks field is already present
 	_, hasFallbacks := body["fallbacks"]

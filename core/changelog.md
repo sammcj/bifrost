@@ -1,1 +1,3 @@
 - chore: added case-insensitive helper methods for header and query parameter lookups in HTTPRequest
+- feat: added support for path parameter lookups in HTTPRequest
+- fix: missing request type in error response for anthropic SDK integration

@@ -1,9 +1,9 @@
 package anthropic
 
 import (
-	"encoding/json"
 	"fmt"
 
+	"github.com/bytedance/sonic"
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/valyala/fasthttp"
@@ -15,15 +15,13 @@ func ToAnthropicChatCompletionError(bifrostErr *schemas.BifrostError) *Anthropic
 		return nil
 	}
 
-	// Provide blank strings for nil pointer fields
+	// Safely extract type and message from nested error
 	errorType := ""
-	if bifrostErr.Type != nil {
-		errorType = *bifrostErr.Type
-	}
-
-	// Safely extract message from nested error
 	message := ""
 	if bifrostErr.Error != nil {
+		if bifrostErr.Error.Type != nil {
+			errorType = *bifrostErr.Error.Type
+		}
 		message = bifrostErr.Error.Message
 	}
 
@@ -48,7 +46,7 @@ func ToAnthropicResponsesStreamError(bifrostErr *schemas.BifrostError) string {
 	anthropicErr := ToAnthropicChatCompletionError(bifrostErr)
 
 	// Marshal to JSON
-	jsonData, err := json.Marshal(anthropicErr)
+	jsonData, err := sonic.Marshal(anthropicErr)
 	if err != nil {
 		return ""
 	}
