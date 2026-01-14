@@ -1747,3 +1747,12 @@ type GeminiCountTokensResponse struct {
 	// Output only. List of modalities that were processed in the cached content.
 	CacheTokensDetails []*ModalityTokenCount `json:"cacheTokensDetails,omitempty"`
 }
+
+var GeminiRequestSuffixPaths = []string{
+	":streamGenerateContent",
+	":generateContent",
+	":countTokens",
+	":embedContent",
+	":batchEmbedContents",
+	":predict",
+}
