@@ -9,6 +9,7 @@ import (
 
 	"github.com/maximhq/bifrost/core/schemas"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
+	"github.com/maximhq/bifrost/framework/modelcatalog"
 )
 
 // Decision represents the result of governance evaluation
@@ -62,15 +63,17 @@ type UsageInfo struct {
 
 // BudgetResolver provides decision logic for the new hierarchical governance system
 type BudgetResolver struct {
-	store  GovernanceStore
-	logger schemas.Logger
+	store        GovernanceStore
+	logger       schemas.Logger
+	modelCatalog *modelcatalog.ModelCatalog
 }
 
 // NewBudgetResolver creates a new budget-based governance resolver
-func NewBudgetResolver(store GovernanceStore, logger schemas.Logger) *BudgetResolver {
+func NewBudgetResolver(store GovernanceStore, modelCatalog *modelcatalog.ModelCatalog, logger schemas.Logger) *BudgetResolver {
 	return &BudgetResolver{
-		store:  store,
-		logger: logger,
+		store:        store,
+		logger:       logger,
+		modelCatalog: modelCatalog,
 	}
 }
 
@@ -158,13 +161,20 @@ func (r *BudgetResolver) EvaluateRequest(ctx *schemas.BifrostContext, evaluation
 
 // isModelAllowed checks if the requested model is allowed for this VK
 func (r *BudgetResolver) isModelAllowed(vk *configstoreTables.TableVirtualKey, provider schemas.ModelProvider, model string) bool {
-	// Empty AllowedModels means all models are allowed
+	// Empty ProviderConfigs means all models are allowed
 	if len(vk.ProviderConfigs) == 0 {
 		return true
 	}
 
 	for _, pc := range vk.ProviderConfigs {
 		if pc.Provider == string(provider) {
+			// Delegate model allowance check to model catalog
+			// This handles all cross-provider logic (OpenRouter, Vertex, Groq, Bedrock)
+			// and provider-prefixed allowed_models entries
+			if r.modelCatalog != nil {
+				return r.modelCatalog.IsModelAllowedForProvider(provider, model, pc.AllowedModels)
+			}
+			// Fallback when model catalog is not available: simple string matching
 			if len(pc.AllowedModels) == 0 {
 				return true
 			}

@@ -136,7 +136,7 @@ func Init(
 	}
 	// Initialize components in dependency order with fixed, optimal settings
 	// Resolver (pure decision engine for hierarchical governance, depends only on store)
-	resolver := NewBudgetResolver(governanceStore, logger)
+	resolver := NewBudgetResolver(governanceStore, modelCatalog, logger)
 
 	// 3. Tracker (business logic owner, depends on store and resolver)
 	tracker := NewUsageTracker(ctx, governanceStore, resolver, configStore, logger)
@@ -199,7 +199,7 @@ func InitFromStore(
 	if config != nil {
 		isVkMandatory = config.IsVkMandatory
 	}
-	resolver := NewBudgetResolver(governanceStore, logger)
+	resolver := NewBudgetResolver(governanceStore, modelCatalog, logger)
 	tracker := NewUsageTracker(ctx, governanceStore, resolver, configStore, logger)
 	// Perform startup reset check for any expired limits from downtime
 	if configStore != nil {
@@ -343,16 +343,22 @@ func (p *GovernancePlugin) loadBalanceProvider(body map[string]any, virtualKey *
 	}
 	allowedProviderConfigs := make([]configstoreTables.TableVirtualKeyProviderConfig, 0)
 	for _, config := range providerConfigs {
-		var allAllowedModelsForProvider []string
-		if p.modelCatalog != nil {
-			allAllowedModelsForProvider = p.modelCatalog.GetModelsForProvider(schemas.ModelProvider(config.Provider))
-		}
+		// Delegate model allowance check to model catalog
+		// This handles all cross-provider logic (OpenRouter, Vertex, Groq, Bedrock)
+		// and provider-prefixed allowed_models entries
 		isProviderAllowed := false
-		if len(config.AllowedModels) == 0 {
-			isProviderAllowed = len(allAllowedModelsForProvider) == 0 || slices.Contains(allAllowedModelsForProvider, modelStr)
+		if p.modelCatalog != nil {
+			isProviderAllowed = p.modelCatalog.IsModelAllowedForProvider(schemas.ModelProvider(config.Provider), modelStr, config.AllowedModels)
 		} else {
-			isProviderAllowed = slices.Contains(config.AllowedModels, modelStr)
+			// Fallback when model catalog is not available: simple string matching
+			if len(config.AllowedModels) == 0 {
+				// No restrictions, allow all models
+				isProviderAllowed = true
+			} else {
+				isProviderAllowed = slices.Contains(config.AllowedModels, modelStr)
+			}
 		}
+
 		if isProviderAllowed {
 			// Check if the provider's budget or rate limits are violated using resolver helper methods
 			if p.resolver.isProviderBudgetViolated(config) || p.resolver.isProviderRateLimitViolated(config) {

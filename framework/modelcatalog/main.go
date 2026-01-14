@@ -307,6 +307,81 @@ func (mc *ModelCatalog) GetProvidersForModel(model string) []schemas.ModelProvid
 	return providers
 }
 
+// IsModelAllowedForProvider checks if a model is allowed for a specific provider
+// based on the allowed models list and catalog data. It handles all cross-provider
+// logic including provider-prefixed models and special routing rules.
+//
+// Parameters:
+//   - provider: The provider to check against
+//   - model: The model name (without provider prefix, e.g., "gpt-4o" or "claude-3-5-sonnet")
+//   - allowedModels: List of allowed model names (can be empty, can include provider prefixes)
+//
+// Behavior:
+//   - If allowedModels is empty: Uses model catalog to check if provider supports the model
+//     (delegates to GetProvidersForModel which handles all cross-provider logic)
+//   - If allowedModels is not empty: Checks if model matches any entry in the list
+//     Provider-specific validation:
+//   - Direct matches: "gpt-4o" in allowedModels for any provider
+//   - Prefixed matches: Only if the prefixed model exists in provider's catalog
+//     (e.g., "openai/gpt-4o" in allowedModels only matches if openrouter's catalog
+//     contains "openai/gpt-4o" AND the model part matches the request)
+//
+// Returns:
+//   - bool: true if the model is allowed for the provider, false otherwise
+//
+// Examples:
+//
+//	// Empty allowedModels - uses catalog
+//	mc.IsModelAllowedForProvider("openrouter", "claude-3-5-sonnet", []string{})
+//	// Returns: true (catalog knows openrouter has "anthropic/claude-3-5-sonnet")
+//
+//	// Explicit allowedModels with prefix - validates against catalog
+//	mc.IsModelAllowedForProvider("openrouter", "gpt-4o", []string{"openai/gpt-4o"})
+//	// Returns: true (openrouter's catalog contains "openai/gpt-4o" AND model part is "gpt-4o")
+//
+//	// Explicit allowedModels with prefix - wrong model
+//	mc.IsModelAllowedForProvider("openrouter", "claude-3-5-sonnet", []string{"openai/gpt-4o"})
+//	// Returns: false (model part "gpt-4o" doesn't match request "claude-3-5-sonnet")
+//
+//	// Explicit allowedModels without prefix
+//	mc.IsModelAllowedForProvider("openai", "gpt-4o", []string{"gpt-4o"})
+//	// Returns: true (direct match)
+func (mc *ModelCatalog) IsModelAllowedForProvider(provider schemas.ModelProvider, model string, allowedModels []string) bool {
+	// Case 1: Empty allowedModels = use catalog to determine support
+	// This leverages GetProvidersForModel which already handles all cross-provider logic
+	if len(allowedModels) == 0 {
+		supportedProviders := mc.GetProvidersForModel(model)
+		return slices.Contains(supportedProviders, provider)
+	}
+
+	// Case 2: Explicit allowedModels = check if model matches any entry
+	// Get provider's catalog models for validation of prefixed entries
+	providerCatalogModels := mc.GetModelsForProvider(provider)
+
+	for _, allowedModel := range allowedModels {
+		// Direct match: "gpt-4o" == "gpt-4o"
+		if allowedModel == model {
+			return true
+		}
+
+		// Provider-prefixed match: verify it exists in provider's catalog first
+		// This ensures we only allow provider-specific model combinations that are actually supported
+		if strings.Contains(allowedModel, "/") {
+			// Check if this exact prefixed model exists in the provider's catalog
+			// e.g., for openrouter, check if "openai/gpt-4o" is in its catalog
+			if slices.Contains(providerCatalogModels, allowedModel) {
+				// Extract the model part and compare with request
+				_, modelPart := schemas.ParseModelString(allowedModel, "")
+				if modelPart == model {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
 // AddModelDataToPool adds model data to the model pool.
 func (mc *ModelCatalog) AddModelDataToPool(modelData *schemas.BifrostListModelsResponse) {
 	if modelData == nil {

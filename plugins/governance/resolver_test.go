@@ -23,7 +23,7 @@ func TestBudgetResolver_EvaluateRequest_AllowedRequest(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	result := resolver.EvaluateRequest(ctx, &EvaluationRequest{
@@ -43,7 +43,7 @@ func TestBudgetResolver_EvaluateRequest_VirtualKeyNotFound(t *testing.T) {
 	store, err := NewLocalGovernanceStore(context.Background(), logger, nil, &configstore.GovernanceConfig{})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	result := resolver.EvaluateRequest(ctx, &EvaluationRequest{
@@ -65,7 +65,7 @@ func TestBudgetResolver_EvaluateRequest_VirtualKeyBlocked(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	result := resolver.EvaluateRequest(ctx, &EvaluationRequest{
@@ -92,7 +92,7 @@ func TestBudgetResolver_EvaluateRequest_ProviderBlocked(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	// Try to use OpenAI (not allowed)
@@ -128,7 +128,7 @@ func TestBudgetResolver_EvaluateRequest_ModelBlocked(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	// Try to use gpt-4o-mini (not in allowed list)
@@ -155,7 +155,7 @@ func TestBudgetResolver_EvaluateRequest_RateLimitExceeded_TokenLimit(t *testing.
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	result := resolver.EvaluateRequest(ctx, &EvaluationRequest{
@@ -182,7 +182,7 @@ func TestBudgetResolver_EvaluateRequest_RateLimitExceeded_RequestLimit(t *testin
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	result := resolver.EvaluateRequest(ctx, &EvaluationRequest{
@@ -224,7 +224,7 @@ func TestBudgetResolver_EvaluateRequest_RateLimitExpired(t *testing.T) {
 	err = store.ResetExpiredRateLimits(context.Background(), expiredRateLimits)
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	result := resolver.EvaluateRequest(ctx, &EvaluationRequest{
@@ -250,7 +250,7 @@ func TestBudgetResolver_EvaluateRequest_BudgetExceeded(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	result := resolver.EvaluateRequest(ctx, &EvaluationRequest{
@@ -281,7 +281,7 @@ func TestBudgetResolver_EvaluateRequest_BudgetExpired(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	result := resolver.EvaluateRequest(ctx, &EvaluationRequest{
@@ -319,7 +319,7 @@ func TestBudgetResolver_EvaluateRequest_MultiLevelBudgetHierarchy(t *testing.T) 
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	// Test: All under limit should pass
@@ -361,7 +361,7 @@ func TestBudgetResolver_EvaluateRequest_ProviderLevelRateLimit(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	result := resolver.EvaluateRequest(ctx, &EvaluationRequest{
@@ -388,7 +388,7 @@ func TestBudgetResolver_CheckRateLimits_BothExceeded(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	result := resolver.EvaluateRequest(ctx, &EvaluationRequest{
@@ -407,7 +407,7 @@ func TestBudgetResolver_IsProviderAllowed(t *testing.T) {
 	store, err := NewLocalGovernanceStore(context.Background(), logger, nil, &configstore.GovernanceConfig{})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 
 	tests := []struct {
 		name            string
@@ -455,7 +455,7 @@ func TestBudgetResolver_IsModelAllowed(t *testing.T) {
 	store, err := NewLocalGovernanceStore(context.Background(), logger, nil, &configstore.GovernanceConfig{})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 
 	tests := []struct {
 		name            string
@@ -530,7 +530,7 @@ func TestBudgetResolver_ContextPopulation(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolver := NewBudgetResolver(store, logger)
+	resolver := NewBudgetResolver(store, nil, logger)
 	ctx := &schemas.BifrostContext{}
 
 	result := resolver.EvaluateRequest(ctx, &EvaluationRequest{
