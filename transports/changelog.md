@@ -1,0 +1,1 @@
+- feat: Improved model validation for provider-prefixed model configurations

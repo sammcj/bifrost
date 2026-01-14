@@ -6,6 +6,10 @@ icon: "book-open"
 
 The Model Catalog is a foundational component of Bifrost that provides a unified interface for managing AI models, including their pricing, capabilities, and availability. It serves as a centralized repository for all model-related information, enabling dynamic cost calculation, intelligent model routing, and efficient resource management.
 
+<Info>
+**Related Documentation**: The Model Catalog powers Bifrost's intelligent routing system. See [Provider Routing](/providers/provider-routing) for detailed examples of how governance and load balancing use the catalog to make routing decisions, including cross-provider scenarios and weighted routing via proxy providers.
+</Info>
+
 ## Core Features
 
 ### **1. Automatic Pricing Synchronization**
@@ -28,9 +32,10 @@ It supports diverse pricing models across different AI operation types:
 - **Image Processing**: Per-image costs with tiered pricing for high-token contexts.
 
 ### **3. Model Information Management**
-The Model Catalog maintains a pool of available models for each provider, populated from the pricing data. This allows for:
-- Listing all available models for a given provider.
-- Finding all providers that support a specific model.
+The Model Catalog maintains a pool of available models for each provider, populated from both pricing data and provider list models APIs. This enables:
+- **Model Discovery**: Listing all available models for a given provider
+- **Provider Discovery**: Finding all providers that support a specific model with intelligent cross-provider resolution (OpenRouter, Vertex, Groq, Bedrock)
+- **Model Validation**: Checking if a model is allowed for a provider based on allowed models lists (supports provider-prefixed entries)
 
 ### **4. Intelligent Cache Cost Handling**
 It integrates with semantic caching to provide accurate cost calculations:
@@ -130,6 +135,12 @@ type PricingEntry struct {
 
 ## Usage in Plugins
 
+The Model Catalog is designed to be shared across all Bifrost plugins, providing consistent model information and validation logic for governance, load balancing, and other routing mechanisms.
+
+<Note>
+**Governance & Load Balancing**: Both plugins delegate model validation to the Model Catalog's `IsModelAllowedForProvider` method, ensuring consistent handling of cross-provider scenarios and provider-prefixed allowed models. See [Provider Routing](/providers/provider-routing) for configuration examples.
+</Note>
+
 ### Initialization
 In Bifrost's gateway, the `ModelCatalog` is initialized once at the start and shared across all plugins:
 
@@ -199,18 +210,88 @@ Retrieve a list of all models supported by a specific provider.
 ```go
 openaiModels := modelCatalog.GetModelsForProvider(schemas.OpenAI)
 for _, model := range openaiModels {
-    logger.Info("Found OpenAI model: %s", model.ID)
+    logger.Info("Found OpenAI model: %s", model)
 }
 ```
 
+**Thread-safe**: Uses read lock for concurrent access.
+
 #### Get Providers for a Model
-Find all providers that offer a specific model.
+Find all providers that offer a specific model, including cross-provider resolution.
+
 ```go
-gpt4Providers := modelCatalog.GetProvidersForModel("gpt-4")
+gpt4Providers := modelCatalog.GetProvidersForModel("gpt-4o")
 for _, provider := range gpt4Providers {
-    logger.Info("gpt-4 is available from: %s", provider)
+    logger.Info("gpt-4o is available from: %s", provider)
 }
+// Result: [openai, azure, groq] (includes cross-provider mappings)
 ```
+
+**Cross-Provider Resolution**:
+
+This method implements intelligent cross-provider routing logic to discover all providers that can serve a model:
+
+1. **Direct Match**: Checks each provider's model list in `modelPool` for the exact model name
+2. **OpenRouter Format**: For models found in other providers, checks if `provider/model` exists in OpenRouter
+   - Example: `claude-3-5-sonnet` found in Anthropic → checks OpenRouter for `anthropic/claude-3-5-sonnet`
+3. **Vertex Format**: Similar check for Vertex with `provider/model` format
+4. **Groq OpenAI Compatibility**: For GPT models, checks if `openai/model` exists in Groq's catalog
+5. **Bedrock Claude Models**: For Claude models, flexible matching against Bedrock's full ARN format
+
+**Example**:
+```go
+providers := modelCatalog.GetProvidersForModel("claude-3-5-sonnet")
+// Returns: [anthropic, vertex, bedrock, openrouter]
+// Even though request was just "claude-3-5-sonnet" without provider prefix!
+```
+
+<Note>
+This cross-provider logic powers Bifrost's intelligent routing capabilities. See [Provider Routing](/providers/provider-routing#the-model-catalog) for detailed examples of how this enables features like weighted routing via proxy providers.
+</Note>
+
+#### Check Model Allowance for Provider
+Validate if a model is allowed for a specific provider based on an allowed models list. This method is used internally by governance and load balancing plugins.
+
+```go
+// Empty allowedModels - uses catalog to determine support
+isAllowed := modelCatalog.IsModelAllowedForProvider(
+    schemas.OpenRouter,
+    "gpt-4o",
+    []string{}, // empty = check catalog
+)
+// Returns: true (catalog knows OpenRouter supports openai/gpt-4o)
+
+// Explicit allowedModels with provider prefix
+isAllowed := modelCatalog.IsModelAllowedForProvider(
+    schemas.OpenRouter,
+    "gpt-4o",
+    []string{"openai/gpt-4o", "anthropic/claude-3-5-sonnet"},
+)
+// Returns: true (strips "openai/" prefix and matches "gpt-4o")
+
+// Explicit allowedModels without prefix
+isAllowed := modelCatalog.IsModelAllowedForProvider(
+    schemas.OpenAI,
+    "gpt-4o",
+    []string{"gpt-4o", "gpt-4o-mini"},
+)
+// Returns: true (direct match)
+```
+
+**Behavior**:
+- **Empty `allowedModels`**: Delegates to `GetProvidersForModel` (includes cross-provider logic)
+- **Non-empty `allowedModels`**: Checks for both direct matches and provider-prefixed entries
+  - Direct: `"gpt-4o"` matches `"gpt-4o"`
+  - Prefixed: `"openai/gpt-4o"` matches request for `"gpt-4o"` (prefix stripped)
+
+**Use Cases**:
+- **Governance Routing**: Validate if a model request is allowed for a provider configuration
+- **Load Balancing**: Filter providers based on allowed models before performance scoring
+- **Virtual Key Validation**: Check if a model can be used with a specific virtual key's provider configs
+
+<Tip>
+This method is the central validation point for both governance and load balancing plugins, ensuring consistent model allowance logic across all routing mechanisms. It handles all edge cases including proxy providers (OpenRouter, Vertex) and provider-prefixed model entries.
+</Tip>
 
 #### Dynamically Add Models
 You can dynamically add models to the catalog's pool from a `v1/models` compatible response structure. This is useful for providers that expose a model list endpoint.
@@ -219,6 +300,11 @@ You can dynamically add models to the catalog's pool from a `v1/models` compatib
 modelCatalog.AddModelDataToPool(response)
 ```
 This is automatically done in Bifrost gateway initialization for all providers that are supported by Bifrost.
+
+**When to use**:
+- After fetching models from a provider's `/v1/models` endpoint
+- When a new provider is dynamically added at runtime
+- For testing with custom model lists
 ### Reloading Configuration
 You can reload the pricing configuration at runtime if you need to change the pricing URL or sync interval.
 ```go

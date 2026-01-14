@@ -1,0 +1,1 @@
+- feat: Fixed weighted provider routing to correctly match provider-prefixed models in allowed lists

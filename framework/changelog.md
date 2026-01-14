@@ -1,0 +1,1 @@
+- feat: Improved model matching to support provider-prefixed model names (e.g., "openai/gpt-4")
