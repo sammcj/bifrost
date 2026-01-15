@@ -3556,9 +3556,7 @@ func (p *PluginPipeline) RunPostHooks(ctx *schemas.BifrostContext, resp *schemas
 					ctx.SetValue(schemas.BifrostContextKeySpanID, spanID)
 				}
 			}
-
 			resp, bifrostErr, err = plugin.PostHook(ctx, resp, bifrostErr)
-
 			// End span with appropriate status
 			if err != nil {
 				p.tracer.SetAttribute(handle, "error", err.Error())
