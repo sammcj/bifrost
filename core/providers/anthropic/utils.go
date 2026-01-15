@@ -1,7 +1,6 @@
 package anthropic
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -28,7 +27,7 @@ var (
 	}
 )
 
-func getRequestBodyForResponses(ctx context.Context, request *schemas.BifrostResponsesRequest, providerName schemas.ModelProvider, isStreaming bool) ([]byte, *schemas.BifrostError) {
+func getRequestBodyForResponses(ctx *schemas.BifrostContext, request *schemas.BifrostResponsesRequest, providerName schemas.ModelProvider, isStreaming bool) ([]byte, *schemas.BifrostError) {
 	var jsonBody []byte
 	var err error
 
@@ -54,7 +53,7 @@ func getRequestBodyForResponses(ctx context.Context, request *schemas.BifrostRes
 		}
 	} else {
 		// Convert request to Anthropic format
-		reqBody, err := ToAnthropicResponsesRequest(request)
+		reqBody, err := ToAnthropicResponsesRequest(ctx, request)
 		if err != nil {
 			return nil, providerUtils.NewBifrostOperationError(schemas.ErrRequestBodyConversion, err, providerName)
 		}
@@ -157,6 +156,10 @@ func ConvertToAnthropicDocumentBlock(block schemas.ChatContentBlock) AnthropicCo
 		Source:       &AnthropicSource{},
 	}
 
+	if block.Citations != nil {
+		documentBlock.Citations = &AnthropicCitations{Config: block.Citations}
+	}
+
 	if block.File == nil {
 		return documentBlock
 	}
@@ -223,11 +226,15 @@ func ConvertToAnthropicDocumentBlock(block schemas.ChatContentBlock) AnthropicCo
 }
 
 // ConvertResponsesFileBlockToAnthropic converts a Responses file block directly to Anthropic document format
-func ConvertResponsesFileBlockToAnthropic(fileBlock *schemas.ResponsesInputMessageContentBlockFile, cacheControl *schemas.CacheControl) AnthropicContentBlock {
+func ConvertResponsesFileBlockToAnthropic(fileBlock *schemas.ResponsesInputMessageContentBlockFile, cacheControl *schemas.CacheControl, citations *schemas.Citations) AnthropicContentBlock {
 	documentBlock := AnthropicContentBlock{
 		Type:         AnthropicContentBlockTypeDocument,
 		CacheControl: cacheControl,
 		Source:       &AnthropicSource{},
+	}
+
+	if citations != nil {
+		documentBlock.Citations = &AnthropicCitations{Config: citations}
 	}
 
 	if fileBlock == nil {
@@ -783,4 +790,119 @@ func convertAnthropicOutputFormatToResponsesTextConfig(outputFormat interface{})
 	return &schemas.ResponsesTextConfig{
 		Format: format,
 	}
+}
+
+// sanitizeWebSearchArguments sanitizes WebSearch tool arguments by removing conflicting domain filters.
+// Anthropic only allows one of allowed_domains or blocked_domains, not both.
+// This function handles empty and non-empty arrays:
+// - If one array is empty, delete that one
+// - If both arrays are filled, delete blocked_domains
+// - If both arrays are empty, delete blocked_domains
+func sanitizeWebSearchArguments(argumentsJSON string) string {
+	var toolArgs map[string]interface{}
+	if err := json.Unmarshal([]byte(argumentsJSON), &toolArgs); err != nil {
+		return argumentsJSON // Return original if parse fails
+	}
+
+	allowedVal, hasAllowed := toolArgs["allowed_domains"]
+	blockedVal, hasBlocked := toolArgs["blocked_domains"]
+
+	// Only process if both fields exist
+	if hasAllowed && hasBlocked {
+		// Helper function to check if array is empty
+		isEmptyArray := func(val interface{}) bool {
+			if arr, ok := val.([]interface{}); ok {
+				return len(arr) == 0
+			}
+			return false
+		}
+
+		allowedEmpty := isEmptyArray(allowedVal)
+		blockedEmpty := isEmptyArray(blockedVal)
+
+		var shouldDelete string
+		if allowedEmpty && !blockedEmpty {
+			// Delete allowed_domains if it's empty and blocked is not
+			shouldDelete = "allowed_domains"
+		} else if blockedEmpty && !allowedEmpty {
+			// Delete blocked_domains if it's empty and allowed is not
+			shouldDelete = "blocked_domains"
+		} else {
+			// Both are filled or both are empty: delete blocked_domains
+			shouldDelete = "blocked_domains"
+		}
+
+		delete(toolArgs, shouldDelete)
+
+		// Re-marshal the sanitized arguments
+		if sanitizedBytes, err := json.Marshal(toolArgs); err == nil {
+			return string(sanitizedBytes)
+		}
+	}
+
+	return argumentsJSON
+}
+
+// attachWebSearchSourcesToCall finds a web_search_call by tool_use_id and attaches sources to it.
+// It searches backwards through bifrostMessages to find the matching call and updates its action.
+func attachWebSearchSourcesToCall(bifrostMessages []schemas.ResponsesMessage, toolUseID string, resultBlock AnthropicContentBlock, includeExtendedFields bool) {
+	// Search backwards to find matching web_search_call
+	for i := len(bifrostMessages) - 1; i >= 0; i-- {
+		msg := &bifrostMessages[i]
+		if msg.Type != nil && *msg.Type == schemas.ResponsesMessageTypeWebSearchCall &&
+			msg.ID != nil &&
+			*msg.ID == toolUseID {
+
+			if msg.ResponsesToolMessage == nil {
+				msg.ResponsesToolMessage = &schemas.ResponsesToolMessage{}
+			}
+
+			// Found the matching web_search_call, add sources
+			if resultBlock.Content != nil && len(resultBlock.Content.ContentBlocks) > 0 {
+				sources := extractWebSearchSources(resultBlock.Content.ContentBlocks, includeExtendedFields)
+
+				// Initialize action if needed
+				if msg.ResponsesToolMessage.Action == nil {
+					msg.ResponsesToolMessage.Action = &schemas.ResponsesToolMessageActionStruct{}
+				}
+				if msg.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction == nil {
+					msg.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction = &schemas.ResponsesWebSearchToolCallAction{
+						Type: "search",
+					}
+				}
+				msg.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction.Sources = sources
+			}
+			break
+		}
+	}
+}
+
+// extractWebSearchSources extracts search sources from Anthropic content blocks.
+// When includeExtendedFields is true, it includes EncryptedContent, PageAge, and Title fields.
+func extractWebSearchSources(contentBlocks []AnthropicContentBlock, includeExtendedFields bool) []schemas.ResponsesWebSearchToolCallActionSearchSource {
+	sources := make([]schemas.ResponsesWebSearchToolCallActionSearchSource, 0, len(contentBlocks))
+
+	for _, result := range contentBlocks {
+		if result.Type == AnthropicContentBlockTypeWebSearchResult && result.URL != nil {
+			source := schemas.ResponsesWebSearchToolCallActionSearchSource{
+				Type: "url",
+				URL:  *result.URL,
+			}
+
+			if includeExtendedFields {
+				source.EncryptedContent = result.EncryptedContent
+				source.PageAge = result.PageAge
+
+				if result.Title != nil {
+					source.Title = result.Title
+				} else {
+					source.Title = schemas.Ptr(*result.URL)
+				}
+			}
+
+			sources = append(sources, source)
+		}
+	}
+
+	return sources
 }

@@ -85,6 +85,12 @@ from .utils.common import (
     extract_tool_calls,
     get_api_key,
     mock_tool_response,
+    # Citation utilities
+    CITATION_TEXT_DOCUMENT,
+    CITATION_MULTI_DOCUMENT_SET,
+    assert_valid_anthropic_citation,
+    collect_anthropic_streaming_citations,
+    create_anthropic_document,
 )
 from .utils.config_loader import get_config, get_model
 from .utils.parametrize import (
@@ -1772,6 +1778,1037 @@ This document is used to verify that the AI can read and understand text documen
         document_keywords = ["feature", "line", "format", "list", "document"]
         assert any(word in content for word in document_keywords), \
             f"Response should reference document features. Got: {content}"
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("citations"))
+    def test_33_citations_pdf(self, anthropic_client, test_config, provider, model):
+        """Test Case 33: PDF document with page_location citations"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for citations scenario")
+        
+        print(f"\n=== Testing PDF Citations (page_location) for provider {provider} ===")
+        
+        # Create PDF document using helper
+        document = create_anthropic_document(
+            content=FILE_DATA_BASE64,
+            doc_type="pdf",
+            title="Test PDF Document"
+        )
+        
+        messages = [{
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "What does this PDF document say? Please cite your sources."
+                },
+                document
+            ]
+        }]
+        
+        response = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            max_tokens=500
+        )
+        
+        # Validate basic response
+        assert_valid_chat_response(response)
+        assert len(response.content) > 0
+        
+        # Check for citations using helper
+        has_citations = False
+        citation_count = 0
+        for block in response.content:
+            if hasattr(block, "citations") and block.citations:
+                has_citations = True
+                for citation in block.citations:
+                    citation_count += 1
+                    # Use common validator
+                    assert_valid_anthropic_citation(
+                        citation,
+                        expected_type="page_location",
+                        document_index=0
+                    )
+                    print(f"✓ Citation {citation_count}: pages {citation.start_page_number}-{citation.end_page_number}, "
+                          f"text: '{citation.cited_text[:50]}...'")
+        
+        assert has_citations, "Response should contain citations for PDF document"
+        print(f"✓ PDF citations test passed - Found {citation_count} citations")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("citations"))
+    def test_34_citations_text(self, anthropic_client, test_config, provider, model):
+        """Test Case 34: Plain text document with char_location citations"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for citations scenario")
+        
+        print(f"\n=== Testing Text Citations (char_location) for provider {provider} ===")
+        
+        # Create text document using helper
+        document = create_anthropic_document(
+            content=CITATION_TEXT_DOCUMENT,
+            doc_type="text",
+            title="Theory of Relativity Overview"
+        )
+        
+        messages = [{
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "When was General Relativity published and what does it deal with? Please cite your sources."
+                },
+                document
+            ]
+        }]
+        
+        response = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            max_tokens=500
+        )
+        
+        # Validate basic response
+        assert_valid_chat_response(response)
+        assert len(response.content) > 0
+        
+        # Check for citations using helper
+        has_citations = False
+        citation_count = 0
+        for block in response.content:
+            if hasattr(block, "citations") and block.citations:
+                has_citations = True
+                for citation in block.citations:
+                    citation_count += 1
+                    # Use common validator
+                    assert_valid_anthropic_citation(
+                        citation,
+                        expected_type="char_location",
+                        document_index=0
+                    )
+                    print(f"✓ Citation {citation_count}: chars {citation.start_char_index}-{citation.end_char_index}, "
+                          f"text: '{citation.cited_text[:50]}...'")
+        
+        assert has_citations, "Response should contain citations for text document"
+        print(f"✓ Text citations test passed - Found {citation_count} citations")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("citations"))
+    def test_35_citations_multi_document(self, anthropic_client, test_config, provider, model):
+        """Test Case 35: Multiple documents with citations (document_index validation)"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for citations scenario")
+        
+        print(f"\n=== Testing Multi-Document Citations for provider {provider} ===")
+        
+        # Create multiple documents using helper
+        documents = []
+        for idx, doc_info in enumerate(CITATION_MULTI_DOCUMENT_SET):
+            doc = create_anthropic_document(
+                content=doc_info["content"],
+                doc_type="text",
+                title=doc_info["title"]
+            )
+            documents.append(doc)
+        
+        messages = [{
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Summarize what each document says. Please cite your sources from each document."
+                },
+                *documents
+            ]
+        }]
+        
+        response = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            max_tokens=600
+        )
+        
+        # Validate basic response
+        assert_valid_chat_response(response)
+        assert len(response.content) > 0
+        
+        # Check for citations from multiple documents
+        has_citations = False
+        citations_by_doc = {0: 0, 1: 0}  # Track citations per document
+        total_citations = 0
+        
+        for block in response.content:
+            if hasattr(block, "citations") and block.citations:
+                has_citations = True
+                for citation in block.citations:
+                    total_citations += 1
+                    doc_idx = citation.document_index if hasattr(citation, "document_index") else 0
+                    
+                    # Validate citation
+                    assert_valid_anthropic_citation(
+                        citation,
+                        expected_type="char_location",
+                        document_index=doc_idx
+                    )
+                    
+                    # Track which document this citation is from
+                    if doc_idx in citations_by_doc:
+                        citations_by_doc[doc_idx] += 1
+                    
+                    doc_title = citation.document_title if hasattr(citation, "document_title") else "Unknown"
+                    print(f"✓ Citation from doc[{doc_idx}] ({doc_title}): "
+                          f"chars {citation.start_char_index}-{citation.end_char_index}, "
+                          f"text: '{citation.cited_text[:40]}...'")
+        
+        assert has_citations, "Response should contain citations"
+        
+        # Report statistics
+        print(f"\n✓ Multi-document citations test passed:")
+        print(f"  - Total citations: {total_citations}")
+        for doc_idx, count in citations_by_doc.items():
+            doc_title = CITATION_MULTI_DOCUMENT_SET[doc_idx]["title"]
+            print(f"  - Document {doc_idx} ({doc_title}): {count} citations")
+    
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("citations"))
+    def test_36_citations_streaming(self, anthropic_client, test_config, provider, model):
+        """Test Case 36: Text citations with streaming (citations_delta)"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for citations scenario")
+        
+        print(f"\n=== Testing Streaming Citations (char_location) for provider {provider} ===")
+        
+        # Create text document using helper
+        document = create_anthropic_document(
+            content=CITATION_TEXT_DOCUMENT,
+            doc_type="text",
+            title="Machine Learning Introduction"
+        )
+        
+        messages = [{
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Explain the key concepts from this document. Please cite your sources."
+                },
+                document
+            ]
+        }]
+        
+        stream = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            max_tokens=500,
+            stream=True
+        )
+        
+        # Collect streaming content and citations using helper
+        complete_text, citations, chunk_count = collect_anthropic_streaming_citations(stream)
+        
+        # Validate results
+        assert chunk_count > 0, "Should receive at least one chunk"
+        assert len(complete_text) > 0, "Should receive text content"
+        assert len(citations) > 0, "Should collect at least one citation from stream"
+        
+        # Validate each citation
+        for idx, citation in enumerate(citations, 1):
+            # Use common validator
+            assert_valid_anthropic_citation(
+                citation,
+                expected_type="char_location",
+                document_index=0
+            )
+            print(f"✓ Citation {idx}: chars {citation.start_char_index}-{citation.end_char_index}, "
+                  f"text: '{citation.cited_text[:50]}...'")
+        
+        print(f"✓ Streaming citations test passed - {len(citations)} citations in {chunk_count} chunks")
+    
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("citations"))
+    def test_37_citations_streaming_pdf(self, anthropic_client, test_config, provider, model):
+        """Test Case 37: PDF citations with streaming (page_location + citations_delta)"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for citations scenario")
+        
+        print(f"\n=== Testing Streaming PDF Citations (page_location) for provider {provider} ===")
+        
+        # Create PDF document using helper
+        document = create_anthropic_document(
+            content=FILE_DATA_BASE64,
+            doc_type="pdf",
+            title="Test PDF Document"
+        )
+        
+        messages = [{
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "What does this PDF say? Please cite your sources."
+                },
+                document
+            ]
+        }]
+        
+        stream = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            max_tokens=500,
+            stream=True
+        )
+        
+        # Collect streaming content and citations using helper
+        complete_text, citations, chunk_count = collect_anthropic_streaming_citations(stream)
+        
+        # Validate results
+        assert chunk_count > 0, "Should receive at least one chunk"
+        assert len(complete_text) > 0, "Should receive text content"
+        assert len(citations) > 0, "Should collect at least one citation from stream"
+        
+        # Validate each citation - should be page_location for PDF
+        for idx, citation in enumerate(citations, 1):
+            # Use common validator
+            assert_valid_anthropic_citation(
+                citation,
+                expected_type="page_location",
+                document_index=0
+            )
+            print(f"✓ Citation {idx}: pages {citation.start_page_number}-{citation.end_page_number}, "
+                  f"text: '{citation.cited_text[:50]}...'")
+        
+        print(f"✓ Streaming PDF citations test passed - {len(citations)} citations in {chunk_count} chunks")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("web_search"))
+    def test_38_web_search_non_streaming(self, anthropic_client, test_config, provider, model):
+        """Test Case 38: Web search tool (non-streaming)"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search (Non-Streaming) for provider {provider} ===")
+        
+        # Create web search tool
+        web_search_tool = {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 5
+        }
+        
+        messages = [
+            {
+                "role": "user",
+                "content": "What is a positive news story from today?"
+            }
+        ]
+        
+        response = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=2048
+        )
+        
+        # Validate basic response
+        assert response is not None, "Response should not be None"
+        assert hasattr(response, "content"), "Response should have content"
+        assert len(response.content) > 0, "Content should not be empty"
+        
+        # Check for web search tool use
+        has_web_search = False
+        has_search_results = False
+        has_citations = False
+        search_query = None
+        
+        for block in response.content:
+            if hasattr(block, "type"):
+                # Check for server_tool_use with web_search
+                if block.type == "server_tool_use" and hasattr(block, "name") and block.name == "web_search":
+                    has_web_search = True
+                    if hasattr(block, "input") and "query" in block.input:
+                        search_query = block.input["query"]
+                        print(f"✓ Found web search with query: {search_query}")
+                
+                # Check for web_search_tool_result
+                elif block.type == "web_search_tool_result":
+                    has_search_results = True
+                    if hasattr(block, "content") and block.content:
+                        result_count = len(block.content)
+                        print(f"✓ Found {result_count} search results")
+                        
+                        # Log first few results
+                        for i, result in enumerate(block.content[:3]):
+                            if hasattr(result, "url") and hasattr(result, "title"):
+                                print(f"  Result {i+1}: {result.title}")
+                
+                # Check for text with citations
+                elif block.type == "text":
+                    if hasattr(block, "citations") and block.citations:
+                        has_citations = True
+                        citation_count = len(block.citations)
+                        print(f"✓ Found {citation_count} citations in response")
+                        
+                        # Validate citation structure
+                        for citation in block.citations[:3]:
+                            assert hasattr(citation, "type"), "Citation should have type"
+                            assert hasattr(citation, "url"), "Citation should have URL"
+                            assert hasattr(citation, "title"), "Citation should have title"
+                            assert hasattr(citation, "cited_text"), "Citation should have cited_text"
+                            print(f"  Citation: {citation.title}")
+        
+        # Validate that web search was performed
+        assert has_web_search, "Response should contain web_search tool use"
+        assert has_search_results, "Response should contain web search results"
+        assert search_query is not None, "Web search should have a query"
+        
+        
+        print(f"✓ Web search (non-streaming) test passed!")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("web_search"))
+    def test_39_web_search_streaming(self, anthropic_client, test_config, provider, model):
+        """Test Case 39: Web search tool (streaming)"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search (Streaming) for provider {provider} ===")
+        
+        # Create web search tool with user location
+        web_search_tool = {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 5,
+            "user_location": {
+                "type": "approximate",
+                "city": "New York",
+                "region": "New York",
+                "country": "US",
+                "timezone": "America/New_York"
+            }
+        }
+        
+        messages = [
+            {
+                "role": "user",
+                "content": "what was a positive news story from today??"
+            }
+        ]
+        
+        stream = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=2048,
+            stream=True
+        )
+        
+        # Collect streaming events
+        text_parts = []
+        search_queries = []
+        search_results = []
+        citations = []
+        chunk_count = 0
+        has_server_tool_use = False
+        has_search_tool_result = False
+        has_citation_delta = False
+        
+        for event in stream:
+            chunk_count += 1
+            
+            if hasattr(event, "type"):
+                event_type = event.type
+                
+                # Handle content_block_start for tool use
+                if event_type == "content_block_start":
+                    if hasattr(event, "content_block") and event.content_block:
+                        block = event.content_block
+                        
+                        # Check for server_tool_use
+                        if hasattr(block, "type") and block.type == "server_tool_use":
+                            if hasattr(block, "name") and block.name == "web_search":
+                                has_server_tool_use = True
+                                print(f"✓ Web search tool use started (block id: {block.id if hasattr(block, 'id') else 'unknown'})")
+                        
+                        # Check for web_search_tool_result
+                        elif hasattr(block, "type") and block.type == "web_search_tool_result":
+                            print(f"block: {block}")
+                            has_search_tool_result = True
+                            if hasattr(block, "content") and block.content:
+                                result_count = len(block.content)
+                                print(f"✓ Received {result_count} search results")
+                                
+                                # Collect search results
+                                for result in block.content:
+                                    if hasattr(result, "url") and hasattr(result, "title"):
+                                        search_results.append({
+                                            "url": result.url,
+                                            "title": result.title
+                                        })
+                
+                # Handle content_block_delta for queries and text
+                elif event_type == "content_block_delta":
+                    if hasattr(event, "delta") and event.delta:
+                        delta = event.delta
+                        
+                        # Check for text_delta
+                        if hasattr(delta, "type") and delta.type == "text_delta":
+                            if hasattr(delta, "text"):
+                                text_parts.append(delta.text)
+                        
+                        # Check for citations_delta
+                        elif hasattr(delta, "type") and delta.type == "citations_delta":
+                            has_citation_delta = True
+                            if hasattr(delta, "citation"):
+                                citation = delta.citation
+                                citations.append(citation)
+                                
+                                if hasattr(citation, "title"):
+                                    print(f"  Received citation: {citation.title}")
+            
+            # Safety check
+            if chunk_count > 5000:
+                break
+        
+        # Combine collected content
+        complete_text = "".join(text_parts)
+        
+        # Validate results
+        assert chunk_count > 0, "Should receive at least one chunk"
+        assert has_server_tool_use, "Should detect web search tool use in streaming"
+        assert has_search_tool_result, "Should receive search results in streaming"
+        assert len(search_results) > 0, "Should collect search results from stream"
+        assert len(complete_text) > 0, "Should receive text content about weather"
+        
+        print("✓ Streaming validation:")
+        print(f"  - Chunks received: {chunk_count}")
+        print(f"  - Search results: {len(search_results)}")
+        print(f"  - Citations: {len(citations)}")
+        print(f"  - Text length: {len(complete_text)} characters")
+        print(f"  - First 150 chars: {complete_text[:150]}...")
+        
+        # Log a few search results
+        if len(search_results) > 0:
+            print("✓ Search results:")
+            for i, result in enumerate(search_results[:3]):
+                print(f"  {i+1}. {result['title']}")
+        
+        print("✓ Web search (streaming) test passed!")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("web_search"))
+    def test_40_web_search_allowed_domains(self, anthropic_client, test_config, provider, model):
+        """Test Case 40: Web search with allowed_domains filter"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search with Allowed Domains for provider {provider} ===")
+        
+        # Create web search tool with allowed domains
+        web_search_tool = {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "allowed_domains": ["en.wikipedia.org", "britannica.com"],
+            "max_uses": 5
+        }
+        
+        messages = [
+            {
+                "role": "user",
+                "content": "Who was Albert Einstein? Please search for this information."
+            }
+        ]
+        
+        response = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=2048
+        )
+        
+        # Validate basic response
+        assert response is not None, "Response should not be None"
+        assert hasattr(response, "content"), "Response should have content"
+        assert len(response.content) > 0, "Content should not be empty"
+        
+        # Collect search results
+        search_results = []
+        for block in response.content:
+            if hasattr(block, "type") and block.type == "web_search_tool_result":
+                if hasattr(block, "content") and block.content:
+                    for result in block.content:
+                        if hasattr(result, "url") and hasattr(result, "title"):
+                            search_results.append(result)
+                            print(f"✓ Found result: {result.title} - {result.url}")
+        
+        # Validate domain filtering
+        from .utils.common import validate_domain_filter
+        if len(search_results) > 0:
+            validate_domain_filter(search_results, allowed=["wikipedia.org", "britannica.com"])
+            print(f"✓ All {len(search_results)} results respect allowed_domains filter")
+        
+        print(f"✓ Web search with allowed_domains test passed!")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("web_search"))
+    def test_41_web_search_blocked_domains(self, anthropic_client, test_config, provider, model):
+        """Test Case 41: Web search with blocked_domains filter"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+
+        # skip for openai
+        if provider == "openai":
+            pytest.skip("OpenAI does not support blocked_domains filter")
+        
+        print(f"\n=== Testing Web Search with Blocked Domains for provider {provider} ===")
+        
+        # Create web search tool with blocked domains
+        web_search_tool = {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "blocked_domains": ["reddit.com", "twitter.com", "x.com"],
+            "max_uses": 5
+        }
+        
+        messages = [
+            {
+                "role": "user",
+                "content": "What are recent developments in artificial intelligence?"
+            }
+        ]
+        
+        response = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=2048
+        )
+        
+        # Validate basic response
+        assert response is not None, "Response should not be None"
+        assert hasattr(response, "content"), "Response should have content"
+        
+        # Collect search results
+        search_results = []
+        for block in response.content:
+            if hasattr(block, "type") and block.type == "web_search_tool_result":
+                if hasattr(block, "content") and block.content:
+                    for result in block.content:
+                        if hasattr(result, "url"):
+                            search_results.append(result)
+                            print(f"✓ Found result: {result.url}")
+        
+        # Validate domain filtering
+        from .utils.common import validate_domain_filter
+        if len(search_results) > 0:
+            validate_domain_filter(search_results, blocked=["reddit.com", "twitter.com", "x.com"])
+            print(f"✓ All {len(search_results)} results respect blocked_domains filter")
+        
+        print(f"✓ Web search with blocked_domains test passed!")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("web_search"))
+    def test_42_web_search_multi_turn(self, anthropic_client, test_config, provider, model):
+        """Test Case 42: Web search in multi-turn conversation"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search Multi-Turn Conversation for provider {provider} ===")
+        
+        web_search_tool = {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 5
+        }
+        
+        # First turn: Ask about a topic
+        messages = [
+            {
+                "role": "user",
+                "content": "What is quantum computing?"
+            }
+        ]
+        
+        response1 = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=2048
+        )
+        
+        assert response1 is not None, "First response should not be None"
+        print(f"✓ First turn completed")
+        
+        # Add assistant response to conversation
+        messages.append({
+            "role": "assistant",
+            "content": serialize_anthropic_content(response1.content)
+        })
+        
+        # Second turn: Follow-up question
+        messages.append({
+            "role": "user",
+            "content": "How is it different from classical computing?"
+        })
+        
+        response2 = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=2048
+        )
+        
+        assert response2 is not None, "Second response should not be None"
+        assert hasattr(response2, "content"), "Second response should have content"
+        assert len(response2.content) > 0, "Second response content should not be empty"
+        
+        # Validate that context was maintained
+        has_text_response = False
+        for block in response2.content:
+            if hasattr(block, "type") and block.type == "text":
+                if hasattr(block, "text") and len(block.text) > 0:
+                    has_text_response = True
+                    print(f"✓ Second turn response (first 150 chars): {block.text[:150]}...")
+        
+        assert has_text_response, "Second turn should have text response"
+        print(f"✓ Multi-turn web search conversation test passed!")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("web_search"))
+    def test_43_web_search_citation_validation(self, anthropic_client, test_config, provider, model):
+        """Test Case 43: Validate web search citation structure"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search Citation Validation for provider {provider} ===")
+        
+        web_search_tool = {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 5
+        }
+        
+        messages = [
+            {
+                "role": "user",
+                "content": "What is the capital of France?"
+            }
+        ]
+        
+        response = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=2048
+        )
+        
+        # Find citations in response
+        citations_found = []
+        for block in response.content:
+            if hasattr(block, "type") and block.type == "text":
+                if hasattr(block, "citations") and block.citations:
+                    for citation in block.citations:
+                        citations_found.append(citation)
+        
+        # Validate citation structure
+        from .utils.common import assert_valid_web_search_citation
+        if len(citations_found) > 0:
+            print(f"✓ Found {len(citations_found)} citations")
+            for i, citation in enumerate(citations_found[:3]):
+                assert_valid_web_search_citation(citation, sdk_type="anthropic")
+                print(f"  Citation {i+1}: {citation.title}")
+                print(f"    URL: {citation.url}")
+                print(f"    Cited text (first 50 chars): {citation.cited_text[:50] if citation.cited_text else 'N/A'}...")
+            print(f"✓ All citations have valid structure")
+        else:
+            print(f"⚠ No citations found (may be acceptable)")
+        
+        print(f"✓ Citation validation test passed!")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("web_search"))
+    def test_44_web_search_streaming_event_order(self, anthropic_client, test_config, provider, model):
+        """Test Case 44: Validate web search streaming event sequence"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search Streaming Event Order for provider {provider} ===")
+        
+        web_search_tool = {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 3
+        }
+        
+        messages = [
+            {
+                "role": "user",
+                "content": "What is the Eiffel Tower?"
+            }
+        ]
+        
+        stream = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=2048,
+            stream=True
+        )
+        
+        # Track event sequence
+        event_sequence = []
+        
+        for event in stream:
+            if hasattr(event, "type"):
+                event_type = event.type
+                event_sequence.append(event_type)
+                
+                # Log key events
+                if event_type == "content_block_start":
+                    if hasattr(event, "content_block"):
+                        block_type = getattr(event.content_block, "type", "unknown")
+                        print(f"✓ Event: content_block_start ({block_type})")
+                elif event_type == "content_block_stop":
+                    print(f"✓ Event: content_block_stop")
+                elif event_type == "content_block_delta":
+                    if hasattr(event, "delta") and hasattr(event.delta, "type"):
+                        delta_type = event.delta.type
+                        if delta_type == "input_json_delta":
+                            print(f"✓ Event: content_block_delta (input_json_delta)")
+        
+        # Validate expected event types are present
+        assert "message_start" in event_sequence, "Should have message_start event"
+        assert "content_block_start" in event_sequence, "Should have content_block_start events"
+        assert "content_block_stop" in event_sequence, "Should have content_block_stop events"
+        assert "message_stop" in event_sequence, "Should have message_stop event"
+        
+        print(f"✓ Received {len(event_sequence)} total events")
+        print(f"✓ Event sequence validation passed!")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("web_search"))
+    def test_45_web_search_with_prompt_caching(self, anthropic_client, test_config, provider, model):
+        """Test Case 45: Web search with prompt caching"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search with Prompt Caching for provider {provider} ===")
+        
+        web_search_tool = {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 3
+        }
+        
+        # First request with cache breakpoint
+        messages = [
+            {
+                "role": "user",
+                "content": "What is the current population of Tokyo?"
+            }
+        ]
+        
+        response1 = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=1500
+        )
+        
+        assert response1 is not None, "First response should not be None"
+        
+        # Check if cache was written
+        if hasattr(response1, "usage"):
+            cache_write_tokens = getattr(response1.usage, "cache_creation_input_tokens", 0)
+            print(f"✓ First request - cache_creation_input_tokens: {cache_write_tokens}")
+        
+        # Add assistant response with cache control
+        messages.append({
+            "role": "assistant",
+            "content": serialize_anthropic_content(response1.content)
+        })
+        
+        messages.append({
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "What about its GDP?",
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ]
+        })
+        
+        # Second request should benefit from caching
+        response2 = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=1500
+        )
+        
+        assert response2 is not None, "Second response should not be None"
+        
+        # Check if cache was read
+        if hasattr(response2, "usage"):
+            cache_read_tokens = getattr(response2.usage, "cache_read_input_tokens", 0)
+            print(f"✓ Second request - cache_read_input_tokens: {cache_read_tokens}")
+            
+            if cache_read_tokens > 0:
+                print(f"✓ Successfully read {cache_read_tokens} tokens from cache")
+        
+        print(f"✓ Prompt caching test passed!")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("web_search"))
+    def test_47_web_search_error_handling(self, anthropic_client, test_config, provider, model):
+        """Test Case 47: Web search error code handling"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search Error Handling for provider {provider} ===")
+        
+        web_search_tool = {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 5
+        }
+        
+        # Try with an extremely long query that might trigger query_too_long error
+        very_long_query = "What is " + ("the meaning of life and the universe " * 50)
+        
+        messages = [
+            {
+                "role": "user",
+                "content": very_long_query[:1000]  # Limit to reasonable length
+            }
+        ]
+        
+        try:
+            response = anthropic_client.messages.create(
+                model=format_provider_model(provider, model),
+                messages=messages,
+                tools=[web_search_tool],
+                max_tokens=2048
+            )
+            
+            # Check response structure
+            assert response is not None, "Response should not be None"
+            assert hasattr(response, "content"), "Response should have content"
+            
+            # Look for any error structures in the response
+            has_error = False
+            for block in response.content:
+                if hasattr(block, "type") and block.type == "web_search_tool_result":
+                    if hasattr(block, "content") and isinstance(block.content, dict):
+                        if "error_code" in block.content:
+                            has_error = True
+                            error_code = block.content["error_code"]
+                            print(f"✓ Found error code: {error_code}")
+            
+            if not has_error:
+                print(f"✓ Request handled successfully (no errors triggered)")
+            
+        except Exception as e:
+            # Some errors might be raised as exceptions
+            print(f"✓ Exception caught (expected for error scenarios): {type(e).__name__}")
+        
+        print(f"✓ Error handling test passed!")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("web_search"))
+    def test_48_web_search_no_results_graceful(self, anthropic_client, test_config, provider, model):
+        """Test Case 48: Web search with query that may return no results"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search No Results Handling for provider {provider} ===")
+        
+        web_search_tool = {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 3
+        }
+        
+        # Use a very specific/nonsensical query
+        messages = [
+            {
+                "role": "user",
+                "content": "Find information about xyzabc123nonexistent456topic789"
+            }
+        ]
+        
+        response = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=2048
+        )
+        
+        # Validate graceful handling
+        assert response is not None, "Response should not be None"
+        assert hasattr(response, "content"), "Response should have content"
+        assert len(response.content) > 0, "Content should not be empty"
+        
+        # Check for search attempt
+        has_search_attempt = False
+        has_response_text = False
+        
+        for block in response.content:
+            if hasattr(block, "type"):
+                if block.type == "server_tool_use" and hasattr(block, "name") and block.name == "web_search":
+                    has_search_attempt = True
+                    print(f"✓ Web search was attempted")
+                elif block.type == "text" and hasattr(block, "text"):
+                    has_response_text = True
+                    print(f"✓ Response text present (first 100 chars): {block.text[:100]}...")
+        
+        assert has_search_attempt, "Should attempt web search"
+        assert has_response_text, "Should provide text response even with no/few results"
+        
+        print(f"✓ No results graceful handling test passed!")
+
+    @pytest.mark.parametrize("provider,model", get_cross_provider_params_for_scenario("web_search"))
+    def test_49_web_search_sources_validation(self, anthropic_client, test_config, provider, model):
+        """Test Case 49: Comprehensive web search sources validation"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search Sources Validation for provider {provider} ===")
+        
+        web_search_tool = {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 5
+        }
+        
+        messages = [
+            {
+                "role": "user",
+                "content": "What are the main programming languages used for web development?"
+            }
+        ]
+        
+        response = anthropic_client.messages.create(
+            model=format_provider_model(provider, model),
+            messages=messages,
+            tools=[web_search_tool],
+            max_tokens=2048
+        )
+        
+        # Collect all search sources
+        all_sources = []
+        for block in response.content:
+            if hasattr(block, "type") and block.type == "web_search_tool_result":
+                if hasattr(block, "content") and block.content:
+                    for result in block.content:
+                        if hasattr(result, "type") and result.type == "web_search_result":
+                            all_sources.append(result)
+        
+        # Validate sources using helper
+        from .utils.common import assert_web_search_sources_valid
+        if len(all_sources) > 0:
+            assert_web_search_sources_valid(all_sources)
+            print(f"✓ Found and validated {len(all_sources)} search sources")
+            
+            # Log details of first few sources
+            for i, source in enumerate(all_sources[:3]):
+                print(f"  Source {i+1}:")
+                print(f"    URL: {source.url}")
+                print(f"    Title: {source.title if hasattr(source, 'title') else 'N/A'}")
+                if hasattr(source, "page_age"):
+                    print(f"    Page age: {source.page_age}")
+                if hasattr(source, "encrypted_content"):
+                    print(f"    Encrypted content: Present")
+        else:
+            print(f"⚠ No search sources found (may indicate no search was performed)")
+        
+        print(f"✓ Sources validation test passed!")
 
 
 # Additional helper functions specific to Anthropic

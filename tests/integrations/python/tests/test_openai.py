@@ -145,6 +145,8 @@ from .utils.common import (
     get_provider_voices,
     mock_tool_response,
     skip_if_no_api_key,
+    # Citation utilities
+    assert_valid_openai_annotation,
 )
 from .utils.config_loader import get_config, get_model
 from .utils.parametrize import (
@@ -2831,4 +2833,417 @@ class TestOpenAIIntegration:
         assert response.input_tokens > 100, (
             f"Long text should have >100 tokens, got {response.input_tokens}"
         )
+
+    # =========================================================================
+    # WEB SEARCH TOOL TEST CASES
+    # =========================================================================
+
+    @pytest.mark.parametrize("provider,model,vk_enabled", get_cross_provider_params_with_vk_for_scenario("web_search"))
+    def test_52_web_search_non_streaming(self, provider, model, vk_enabled):
+        """Test Case 52: Web search tool (non-streaming) using Responses API"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search (Non-Streaming) for provider {provider} ===")
+        
+        client = get_provider_openai_client(provider, vk_enabled=vk_enabled)
+        
+        # Use Responses API with web search tool
+        response = client.responses.create(
+            model=format_provider_model(provider, model),
+            tools=[{"type": "web_search"}],
+            input="What is the current weather in New York City today?",
+            max_output_tokens=1200,
+        )
+        
+        # Validate basic response
+        assert response is not None, "Response should not be None"
+        assert hasattr(response, "output"), "Response should have output"
+        assert response.output is not None, "Output should not be None"
+        assert len(response.output) > 0, "Output should not be empty"
+        
+        # Check for web_search_call in output
+        has_web_search_call = False
+        has_message_output = False
+        has_citations = False
+        search_status = None
+        output_text = ""
+        
+        for output_item in response.output:
+            # Check for web_search_call
+            if hasattr(output_item, "type") and output_item.type == "web_search_call":
+                has_web_search_call = True
+                if hasattr(output_item, "status"):
+                    search_status = output_item.status
+                print(f"✓ Found web_search_call with status: {search_status}")
+                
+                # Check for search action details
+                if hasattr(output_item, "action"):
+                    action = output_item.action
+                    if hasattr(action, "query"):
+                        print(f"✓ Search query: {action.query}")
+                    if hasattr(action, "sources") and action.sources:
+                        print(f"✓ Found {len(action.sources)} sources")
+            
+            # Check for message output with content
+            elif hasattr(output_item, "type") and output_item.type == "message":
+                has_message_output = True
+                if hasattr(output_item, "content") and output_item.content:
+                    for content_block in output_item.content:
+                        if hasattr(content_block, "type") and content_block.type == "output_text":
+                            if hasattr(content_block, "text"):
+                                output_text = content_block.text
+                                print(f"✓ Found text output (first 150 chars): {output_text[:150]}...")
+                            
+                            # Check for annotations (citations) from web search
+                            if hasattr(content_block, "annotations") and content_block.annotations:
+                                has_citations = True
+                                citation_count = len(content_block.annotations)
+                                print(f"✓ Found {citation_count} citations")
+                                
+                                # Validate citation structure using helper
+                                for i, annotation in enumerate(content_block.annotations[:3]):
+                                    assert_valid_openai_annotation(annotation, expected_type="url_citation")
+                                    if hasattr(annotation, "url"):
+                                        print(f"  Citation {i+1}: {annotation.url}")
+        
+        # Validate web search was performed
+        assert has_web_search_call, "Response should contain web_search_call"
+        assert search_status == "completed", f"Web search should be completed, got status: {search_status}"
+        assert has_message_output, "Response should contain message output"
+        assert len(output_text) > 0, "Message should have text content"
+        
+        # Validate content mentions weather
+        text_lower = output_text.lower()
+        weather_keywords = ["weather", "temperature", "forecast", "rain", "snow", "wind", "sunny", "cloudy", "degrees", 
+                          "cold", "hot", "warm", "cool", "chilly", "blustery", "storm", "clear", "humid", "dry"]
+        assert any(keyword in text_lower for keyword in weather_keywords), \
+            f"Response should mention weather-related information. Got: {output_text[:300]}..."
+        
+        # Validate usage information
+        if hasattr(response, "usage"):
+            print(f"✓ Token usage - Input: {response.usage.input_tokens}, Output: {response.usage.output_tokens}")
+        
+        print(f"✓ Web search (non-streaming) test passed!")
+
+    @pytest.mark.parametrize("provider,model,vk_enabled", get_cross_provider_params_with_vk_for_scenario("web_search"))
+    def test_53_web_search_streaming(self, provider, model, vk_enabled):
+        """Test Case 53: Web search tool (streaming) using Responses API"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search (Streaming) for provider {provider} ===")
+        
+        client = get_provider_openai_client(provider, vk_enabled=vk_enabled)
+        
+        # Use Responses API with web search tool and user location
+        stream = client.responses.create(
+            model=format_provider_model(provider, model),
+            tools=[{
+                "type": "web_search",
+                "user_location": {
+                    "type": "approximate",
+                    "country": "US",
+                    "city": "New York",
+                    "region": "New York",
+                    "timezone": "America/New_York"
+                }
+            }],
+            input="What's the weather in NYC today?",
+            include=["web_search_call.action.sources"],
+            max_output_tokens=1200,
+            stream=True
+        )
+        
+        # Collect streaming events
+        text_parts = []
+        chunk_count = 0
+        has_web_search_call = False
+        has_message_output = False
+        citations = []
+        search_queries = []
+        
+        for chunk in stream:
+            chunk_count += 1
+            
+            if hasattr(chunk, "type"):
+                chunk_type = chunk.type
+                
+                # Handle output_item.added event
+                if chunk_type == "response.output_item.added":
+                    if hasattr(chunk, "item"):
+                        item = chunk.item
+                        # Check for web_search_call
+                        if hasattr(item, "type") and item.type == "web_search_call":
+                            has_web_search_call = True
+                            print(f"✓ Web search call started (id: {item.id if hasattr(item, 'id') else 'unknown'})")
+                        
+                        # Check for message output
+                        elif hasattr(item, "type") and item.type == "message":
+                            has_message_output = True
+                
+                # Handle output_item.done event for completed items
+                elif chunk_type == "response.output_item.done":
+                    if hasattr(chunk, "item"):
+                        item = chunk.item
+                        
+                        # Check web_search_call completion with action details
+                        if hasattr(item, "type") and item.type == "web_search_call":
+                            if hasattr(item, "action"):
+                                action = item.action
+                                if hasattr(action, "query"):
+                                    search_queries.append(action.query)
+                                    print(f"✓ Search query: {action.query}")
+                                if hasattr(action, "sources") and action.sources:
+                                    print(f"✓ Found {len(action.sources)} sources")
+                
+                # Handle content.text.delta for streaming text
+                elif chunk_type == "response.output_text.delta":
+                    if hasattr(chunk, "delta"):
+                        text_parts.append(chunk.delta)
+                
+                # Handle content.annotation.added for citations
+                elif chunk_type == "response.output_text.annotation.added":
+                    if hasattr(chunk, "annotation"):
+                        annotation = chunk.annotation
+                        citations.append(annotation)
+                        
+                        # Validate citation using helper
+                        assert_valid_openai_annotation(annotation, expected_type="url_citation")
+                        
+                        if hasattr(annotation, "url") and hasattr(annotation, "title"):
+                            print(f"  Citation received: {annotation.title}")
+            
+            # Safety check
+            if chunk_count > 5000:
+                break
+        
+        # Combine collected text
+        complete_text = "".join(text_parts)
+        
+        # Validate results
+        assert chunk_count > 0, "Should receive at least one chunk"
+        assert has_web_search_call, "Should detect web search call in streaming"
+        assert has_message_output, "Should detect message output in streaming"
+        assert len(complete_text) > 0, "Should receive text content"
+        
+        # Validate text mentions weather
+        text_lower = complete_text.lower()
+        weather_keywords = ["weather", "temperature", "forecast", "rain", "snow", "wind", "sunny", "cloudy", "degrees",
+                          "cold", "hot", "warm", "cool", "chilly", "blustery", "storm", "clear", "humid", "dry"]
+        assert any(keyword in text_lower for keyword in weather_keywords), \
+            f"Response should mention weather-related information. Got: {complete_text[:200]}..."
+        
+        print(f"✓ Streaming validation:")
+        print(f"  - Chunks received: {chunk_count}")
+        print(f"  - Search queries: {len(search_queries)}")
+        print(f"  - Citations: {len(citations)}")
+        print(f"  - Text length: {len(complete_text)} characters")
+        print(f"  - First 150 chars: {complete_text[:150]}...")
+        
+        # Validate all citations using helper
+        if len(citations) > 0:
+            for citation in citations:
+                assert_valid_openai_annotation(citation, expected_type="url_citation")
+        
+        print(f"✓ Web search (streaming) test passed!")
+
+    @pytest.mark.parametrize("provider,model,vk_enabled", get_cross_provider_params_with_vk_for_scenario("web_search"))
+    def test_54_web_search_annotation_conversion(self, provider, model, vk_enabled):
+        """Test Case 54: Validate Anthropic citations convert to OpenAI annotations correctly"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search Annotation Conversion for provider {provider} ===")
+        
+        client = get_provider_openai_client(provider, vk_enabled=vk_enabled)
+        
+        response = client.responses.create(
+            model=format_provider_model(provider, model),
+            tools=[{"type": "web_search"}],
+            input="What is the speed of light in a vacuum use web search tool?",
+            include=["web_search_call.action.sources"],
+            max_output_tokens=1500,
+        )
+        
+        # Validate basic response
+        assert response is not None, "Response should not be None"
+        assert hasattr(response, "output"), "Response should have output"
+        
+        # Collect and validate annotations
+        annotations_found = []
+        for output_item in response.output:
+            if hasattr(output_item, "type") and output_item.type == "message":
+                if hasattr(output_item, "content") and output_item.content:
+                    for content_block in output_item.content:
+                        if hasattr(content_block, "type") and content_block.type == "output_text":
+                            if hasattr(content_block, "annotations") and content_block.annotations:
+                                for annotation in content_block.annotations:
+                                    annotations_found.append(annotation)
+        
+        # Validate annotation structure
+        if len(annotations_found) > 0:
+            print(f"✓ Found {len(annotations_found)} annotations")
+            for i, annotation in enumerate(annotations_found[:3]):
+                assert_valid_openai_annotation(annotation, expected_type="url_citation")
+                print(f"  Annotation {i+1}:")
+                print(f"    Type: {annotation.type}")
+                print(f"    URL: {annotation.url if hasattr(annotation, 'url') else 'N/A'}")
+                if hasattr(annotation, "title"):
+                    print(f"    Title: {annotation.title}")
+                # Check for encrypted_index preservation
+                if hasattr(annotation, "encrypted_index"):
+                    print(f"    Encrypted index present: ✓")
+            
+            print(f"✓ All annotations have valid url_citation structure")
+        else:
+            print(f"⚠ No annotations found")
+        
+        print(f"✓ Annotation conversion test passed!")
+
+    @pytest.mark.parametrize("provider,model,vk_enabled", get_cross_provider_params_with_vk_for_scenario("web_search"))
+    def test_55_web_search_user_location(self, provider, model, vk_enabled):
+        """Test Case 55: Web search with user location for localized results"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search with User Location for provider {provider} ===")
+        
+        client = get_provider_openai_client(provider, vk_enabled=vk_enabled)
+        
+        # Test with specific location
+        response = client.responses.create(
+            model=format_provider_model(provider, model),
+            tools=[{
+                "type": "web_search",
+                "user_location": {
+                    "type": "approximate",
+                    "city": "San Francisco",
+                    "region": "California",
+                    "country": "US",
+                    "timezone": "America/Los_Angeles"
+                }
+            }],
+            input="What is the weather like today?",
+            max_output_tokens=1200,
+        )
+        
+        # Validate basic response
+        assert response is not None, "Response should not be None"
+        assert hasattr(response, "output"), "Response should have output"
+        assert len(response.output) > 0, "Output should not be empty"
+        
+        # Check for web_search_call with status
+        has_web_search = False
+        has_message = False
+        
+        for output_item in response.output:
+            if hasattr(output_item, "type"):
+                if output_item.type == "web_search_call":
+                    has_web_search = True
+                    print(f"✓ Web search executed")
+                elif output_item.type == "message":
+                    has_message = True
+        
+        assert has_web_search, "Should perform web search"
+        assert has_message, "Should have message response"
+        
+        print(f"✓ User location test passed!")
+
+    @pytest.mark.parametrize("provider,model,vk_enabled", get_cross_provider_params_with_vk_for_scenario("web_search"))
+    def test_56_web_search_wildcard_domains(self, provider, model, vk_enabled):
+        """Test Case 56: Web search with wildcard domain patterns"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search with Wildcard Domains for provider {provider} ===")
+        
+        client = get_provider_openai_client(provider, vk_enabled=vk_enabled)
+        
+        # Use wildcard domain patterns
+        response = client.responses.create(
+            model=format_provider_model(provider, model),
+            tools=[{
+                "type": "web_search",
+                "allowed_domains": ["wikipedia.org/*", "*.edu"]
+            }],
+            input="What is machine learning use web search tool?",
+            include=["web_search_call.action.sources"],
+            max_output_tokens=1500,
+        )
+        
+        # Validate basic response
+        assert response is not None, "Response should not be None"
+        assert hasattr(response, "output"), "Response should have output"
+        
+        # Collect search sources
+        search_sources = []
+        for output_item in response.output:
+            if hasattr(output_item, "type") and output_item.type == "web_search_call":
+                if hasattr(output_item, "action") and hasattr(output_item.action, "sources"):
+                    if output_item.action.sources:
+                        search_sources.extend(output_item.action.sources)
+        
+        if len(search_sources) > 0:
+            print(f"✓ Found {len(search_sources)} search sources")
+            for i, source in enumerate(search_sources[:3]):
+                if hasattr(source, "url"):
+                    print(f"  Source {i+1}: {source.url}")
+        
+        print(f"✓ Wildcard domains test passed!")
+
+    @pytest.mark.parametrize("provider,model,vk_enabled", get_cross_provider_params_with_vk_for_scenario("web_search"))
+    def test_57_web_search_multi_turn_openai(self, provider, model, vk_enabled):
+        """Test Case 57: Web search in multi-turn conversation (OpenAI SDK)"""
+        if provider == "_no_providers_" or model == "_no_model_":
+            pytest.skip("No providers configured for web_search scenario")
+        
+        print(f"\n=== Testing Web Search Multi-Turn (OpenAI SDK) for provider {provider} ===")
+        
+        client = get_provider_openai_client(provider, vk_enabled=vk_enabled)
+        
+        # First turn
+        input_messages = [
+            {"role": "user", "content": "What is renewable energy use web search tool?"}
+        ]
+        
+        response1 = client.responses.create(
+            model=format_provider_model(provider, model),
+            tools=[{"type": "web_search"}],
+            input=input_messages,
+            max_output_tokens=1500,
+        )
+        
+        assert response1 is not None, "First response should not be None"
+        assert hasattr(response1, "output"), "First response should have output"
+        
+        # Collect first turn output for context
+        print(f"✓ First turn completed with {len(response1.output)} output items")
+
+        # Second turn with follow-up
+        # Add each output item from the first response
+        for output_item in response1.output:
+            input_messages.append(output_item)
+        input_messages.append({"role": "user", "content": "What are the main types of renewable energy?"})
+        
+        response2 = client.responses.create(
+            model=format_provider_model(provider, model),
+            tools=[{"type": "web_search"}],
+            input=input_messages,
+            max_output_tokens=1500,
+        )
+        
+        assert response2 is not None, "Second response should not be None"
+        assert hasattr(response2, "output"), "Second response should have output"
+        assert len(response2.output) > 0, "Second response should have content"
+        
+        # Validate second turn has message response
+        has_message = False
+        for output_item in response2.output:
+            if hasattr(output_item, "type") and output_item.type == "message":
+                has_message = True
+        
+        assert has_message, "Second turn should have message response"
+        print(f"✓ Second turn completed with {len(response2.output)} output items")
+        print(f"✓ Multi-turn conversation test passed!")
 

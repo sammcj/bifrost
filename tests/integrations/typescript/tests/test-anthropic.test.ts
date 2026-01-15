@@ -67,8 +67,14 @@ import {
 } from '../src/utils/config-loader'
 
 import {
+  assertValidAnthropicCitation,
   BASE64_IMAGE,
   CALCULATOR_TOOL,
+  CITATION_MULTI_DOCUMENT_SET,
+  CITATION_TEXT_DOCUMENT,
+  collectAnthropicStreamingCitations,
+  createAnthropicDocument,
+  FILE_DATA_BASE64,
   getApiKey,
   hasApiKey,
   IMAGE_URL,
@@ -79,6 +85,7 @@ import {
   SINGLE_TOOL_CALL_MESSAGES,
   STREAMING_CHAT_MESSAGES,
   WEATHER_TOOL,
+  type AnthropicCitation,
   type ChatMessage,
   type ToolDefinition,
 } from '../src/utils/common'
@@ -1622,6 +1629,565 @@ describe('Anthropic SDK Integration Tests', () => {
         console.log(`✅ Document input (plain text) passed for anthropic/${model}`)
       } catch (error) {
         console.log(`⚠️ Document input (plain text) test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    })
+  })
+
+  // ============================================================================
+  // Citations Tests
+  // ============================================================================
+
+  describe('Citations - PDF Document', () => {
+    it('should return PDF citations with page_location', async () => {
+      if (skipTests) return
+
+      const client = getAnthropicClient()
+      const model = getProviderModel('anthropic', 'file')
+
+      console.log('\n=== Testing PDF Citations (page_location) ===')
+
+      // Create PDF document using helper
+      const document = createAnthropicDocument(
+        FILE_DATA_BASE64,
+        'pdf',
+        'Test PDF Document'
+      )
+
+      try {
+        const response = await client.messages.create({
+          model,
+          max_tokens: 500,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'What does this PDF document say? Please cite your sources.',
+                },
+                document as never,
+              ],
+            },
+          ],
+        } as never)
+
+        expect(response).toBeDefined()
+        expect(response.content).toBeDefined()
+        expect(response.content.length).toBeGreaterThan(0)
+
+        // Check for citations
+        let hasCitations = false
+        let citationCount = 0
+
+        for (const block of response.content) {
+          if ((block as unknown as { citations?: AnthropicCitation[] }).citations) {
+            hasCitations = true
+            const citations = (block as unknown as { citations: AnthropicCitation[] }).citations
+
+            for (const citation of citations) {
+              citationCount++
+              assertValidAnthropicCitation(citation, 'page_location', 0)
+
+              const pageCitation = citation as { start_page_number: number; end_page_number: number; cited_text: string }
+              console.log(
+                `✓ Citation ${citationCount}: pages ${pageCitation.start_page_number}-${pageCitation.end_page_number}, ` +
+                `text: '${pageCitation.cited_text.substring(0, 50)}...'`
+              )
+            }
+          }
+        }
+
+        expect(hasCitations).toBe(true)
+        console.log(`✓ PDF citations test passed - Found ${citationCount} citations`)
+      } catch (error) {
+        console.log(`⚠️ PDF citations test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    })
+  })
+
+  describe('Citations - Text Document', () => {
+    it('should return text citations with char_location', async () => {
+      if (skipTests) return
+
+      const client = getAnthropicClient()
+      const model = getProviderModel('anthropic', 'file')
+
+      console.log('\n=== Testing Text Citations (char_location) ===')
+
+      // Create text document using helper
+      const document = createAnthropicDocument(
+        CITATION_TEXT_DOCUMENT,
+        'text',
+        'Theory of Relativity Overview'
+      )
+
+      try {
+        const response = await client.messages.create({
+          model,
+          max_tokens: 500,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'When was General Relativity published and what does it deal with? Please cite your sources.',
+                },
+                document as never,
+              ],
+            },
+          ],
+        } as never)
+
+        expect(response).toBeDefined()
+        expect(response.content).toBeDefined()
+        expect(response.content.length).toBeGreaterThan(0)
+
+        // Check for citations
+        let hasCitations = false
+        let citationCount = 0
+
+        for (const block of response.content) {
+          if ((block as unknown as { citations?: AnthropicCitation[] }).citations) {
+            hasCitations = true
+            const citations = (block as unknown as { citations: AnthropicCitation[] }).citations
+
+            for (const citation of citations) {
+              citationCount++
+              assertValidAnthropicCitation(citation, 'char_location', 0)
+
+              const charCitation = citation as { start_char_index: number; end_char_index: number; cited_text: string }
+              console.log(
+                `✓ Citation ${citationCount}: chars ${charCitation.start_char_index}-${charCitation.end_char_index}, ` +
+                `text: '${charCitation.cited_text.substring(0, 50)}...'`
+              )
+            }
+          }
+        }
+
+        expect(hasCitations).toBe(true)
+        console.log(`✓ Text citations test passed - Found ${citationCount} citations`)
+      } catch (error) {
+        console.log(`⚠️ Text citations test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    })
+  })
+
+  describe('Citations - Multi Document', () => {
+    it('should return citations from multiple documents with document_index validation', async () => {
+      if (skipTests) return
+
+      const client = getAnthropicClient()
+      const model = getProviderModel('anthropic', 'file')
+
+      console.log('\n=== Testing Multi-Document Citations ===')
+
+      // Create multiple documents using helper
+      const documents = CITATION_MULTI_DOCUMENT_SET.map((docInfo) =>
+        createAnthropicDocument(docInfo.content, 'text', docInfo.title)
+      )
+
+      try {
+        const response = await client.messages.create({
+          model,
+          max_tokens: 600,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Summarize what each document says. Please cite your sources from each document.',
+                },
+                ...(documents as never[]),
+              ],
+            },
+          ],
+        } as never)
+
+        expect(response).toBeDefined()
+        expect(response.content).toBeDefined()
+        expect(response.content.length).toBeGreaterThan(0)
+
+        // Check for citations from multiple documents
+        let hasCitations = false
+        const citationsByDoc: Record<number, number> = { 0: 0, 1: 0 }
+        let totalCitations = 0
+
+        for (const block of response.content) {
+          if ((block as unknown as { citations?: AnthropicCitation[] }).citations) {
+            hasCitations = true
+            const citations = (block as unknown as { citations: AnthropicCitation[] }).citations
+
+            for (const citation of citations) {
+              totalCitations++
+              const docIdx = (citation as { document_index: number }).document_index || 0
+
+              // Validate citation
+              assertValidAnthropicCitation(citation, 'char_location', docIdx)
+
+              // Track which document this citation is from
+              if (docIdx in citationsByDoc) {
+                citationsByDoc[docIdx]++
+              }
+
+              const charCitation = citation as { document_index: number; document_title?: string; start_char_index: number; end_char_index: number; cited_text: string }
+              const docTitle = charCitation.document_title || 'Unknown'
+              console.log(
+                `✓ Citation from doc[${docIdx}] (${docTitle}): ` +
+                `chars ${charCitation.start_char_index}-${charCitation.end_char_index}, ` +
+                `text: '${charCitation.cited_text.substring(0, 40)}...'`
+              )
+            }
+          }
+        }
+
+        expect(hasCitations).toBe(true)
+
+        // Report statistics
+        console.log(`\n✓ Multi-document citations test passed:`)
+        console.log(`  - Total citations: ${totalCitations}`)
+        for (const [docIdx, count] of Object.entries(citationsByDoc)) {
+          const docTitle = CITATION_MULTI_DOCUMENT_SET[Number(docIdx)].title
+          console.log(`  - Document ${docIdx} (${docTitle}): ${count} citations`)
+        }
+      } catch (error) {
+        console.log(`⚠️ Multi-document citations test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    })
+  })
+
+  describe('Citations - Streaming Text', () => {
+    it('should stream text citations with citations_delta', async () => {
+      if (skipTests) return
+
+      const client = getAnthropicClient()
+      const model = getProviderModel('anthropic', 'file')
+
+      console.log('\n=== Testing Streaming Citations (char_location) ===')
+
+      // Create text document using helper
+      const document = createAnthropicDocument(
+        CITATION_TEXT_DOCUMENT,
+        'text',
+        'Machine Learning Introduction'
+      )
+
+      try {
+        const stream = client.messages.stream({
+          model,
+          max_tokens: 500,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Explain the key concepts from this document. Please cite your sources.',
+                },
+                document as never,
+              ],
+            },
+          ],
+        } as never)
+
+        // Collect streaming content and citations using helper
+        const { content, citations, chunkCount } = await collectAnthropicStreamingCitations(stream)
+
+        // Validate results
+        expect(chunkCount).toBeGreaterThan(0)
+        expect(content.length).toBeGreaterThan(0)
+        expect(citations.length).toBeGreaterThan(0)
+
+        // Validate each citation
+        citations.forEach((citation, idx) => {
+          assertValidAnthropicCitation(citation, 'char_location', 0)
+
+          const charCitation = citation as { start_char_index: number; end_char_index: number; cited_text: string }
+          console.log(
+            `✓ Citation ${idx + 1}: chars ${charCitation.start_char_index}-${charCitation.end_char_index}, ` +
+            `text: '${charCitation.cited_text.substring(0, 50)}...'`
+          )
+        })
+
+        console.log(`✓ Streaming citations test passed - ${citations.length} citations in ${chunkCount} chunks`)
+      } catch (error) {
+        console.log(`⚠️ Streaming citations test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    })
+  })
+
+  describe('Citations - Streaming PDF', () => {
+    it('should stream PDF citations with page_location', async () => {
+      if (skipTests) return
+
+      const client = getAnthropicClient()
+      const model = getProviderModel('anthropic', 'file')
+
+      console.log('\n=== Testing Streaming PDF Citations (page_location) ===')
+
+      // Create PDF document using helper
+      const document = createAnthropicDocument(
+        FILE_DATA_BASE64,
+        'pdf',
+        'Test PDF Document'
+      )
+
+      try {
+        const stream = client.messages.stream({
+          model,
+          max_tokens: 500,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'What does this PDF say? Please cite your sources.',
+                },
+                document as never,
+              ],
+            },
+          ],
+        } as never)
+
+        // Collect streaming content and citations using helper
+        const { content, citations, chunkCount } = await collectAnthropicStreamingCitations(stream)
+
+        // Validate results
+        expect(chunkCount).toBeGreaterThan(0)
+        expect(content.length).toBeGreaterThan(0)
+        expect(citations.length).toBeGreaterThan(0)
+
+        // Validate each citation - should be page_location for PDF
+        citations.forEach((citation, idx) => {
+          assertValidAnthropicCitation(citation, 'page_location', 0)
+
+          const pageCitation = citation as { start_page_number: number; end_page_number: number; cited_text: string }
+          console.log(
+            `✓ Citation ${idx + 1}: pages ${pageCitation.start_page_number}-${pageCitation.end_page_number}, ` +
+            `text: '${pageCitation.cited_text.substring(0, 50)}...'`
+          )
+        })
+
+        console.log(`✓ Streaming PDF citations test passed - ${citations.length} citations in ${chunkCount} chunks`)
+      } catch (error) {
+        console.log(`⚠️ Streaming PDF citations test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    })
+  })
+
+  // ============================================================================
+  // Web Search Tests
+  // ============================================================================
+
+  describe('Web Search - Non Streaming', () => {
+    it('should perform web search and return citations', async () => {
+      if (skipTests) return
+
+      const client = getAnthropicClient()
+      const model = getProviderModel('anthropic', 'chat')
+
+      console.log('\n=== Testing Web Search (Non-Streaming) ===')
+
+      // Create web search tool
+      const webSearchTool = {
+        type: 'web_search_20250305',
+        name: 'web_search',
+        max_uses: 5,
+      }
+
+      try {
+        const response = await client.messages.create({
+          model,
+          max_tokens: 2048,
+          messages: [
+            {
+              role: 'user',
+              content: 'What is a positive news story from today?',
+            },
+          ],
+          tools: [webSearchTool] as never[],
+        } as never)
+
+        // Validate basic response
+        expect(response).toBeDefined()
+        expect(response.content).toBeDefined()
+        expect(response.content.length).toBeGreaterThan(0)
+
+        // Check for web search tool use
+        let hasWebSearch = false
+        let hasSearchResults = false
+        let hasCitations = false
+        let searchQuery: string | null = null
+
+        for (const block of response.content) {
+          const blockObj = block as unknown as Record<string, unknown>
+
+          if (blockObj.type === 'server_tool_use' && (blockObj as { name?: string }).name === 'web_search') {
+            hasWebSearch = true
+            const input = (blockObj as { input?: Record<string, unknown> }).input
+            if (input && input.query) {
+              searchQuery = String(input.query)
+              console.log(`✓ Found web search with query: ${searchQuery}`)
+            }
+          } else if (blockObj.type === 'web_search_tool_result') {
+            hasSearchResults = true
+            const content = (blockObj as { content?: unknown[] }).content
+            if (content && Array.isArray(content)) {
+              console.log(`✓ Found ${content.length} search results`)
+
+              // Log first few results
+              content.slice(0, 3).forEach((result, i) => {
+                const resultObj = result as { url?: string; title?: string }
+                if (resultObj.url && resultObj.title) {
+                  console.log(`  Result ${i + 1}: ${resultObj.title}`)
+                }
+              })
+            }
+          } else if (blockObj.type === 'text') {
+            const citations = (blockObj as { citations?: unknown[] }).citations
+            if (citations && citations.length > 0) {
+              hasCitations = true
+              console.log(`✓ Found ${citations.length} citations in response`)
+
+              // Validate citation structure
+              citations.slice(0, 3).forEach((citation) => {
+                const citationObj = citation as Record<string, unknown>
+                expect(citationObj.type).toBeDefined()
+                expect(citationObj.url).toBeDefined()
+                expect(citationObj.title).toBeDefined()
+                expect(citationObj.cited_text).toBeDefined()
+                console.log(`  Citation: ${citationObj.title}`)
+              })
+            }
+          }
+        }
+
+        // Validate that web search was performed
+        expect(hasWebSearch).toBe(true)
+        expect(hasSearchResults).toBe(true)
+        expect(searchQuery).not.toBeNull()
+
+        console.log('✓ Web search (non-streaming) test passed!')
+      } catch (error) {
+        console.log(`⚠️ Web search non-streaming test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    })
+  })
+
+  describe('Web Search - Streaming', () => {
+    it('should stream web search results', async () => {
+      if (skipTests) return
+
+      const client = getAnthropicClient()
+      const model = getProviderModel('anthropic', 'chat')
+
+      console.log('\n=== Testing Web Search (Streaming) ===')
+
+      // Create web search tool with user location
+      const webSearchTool = {
+        type: 'web_search_20250305',
+        name: 'web_search',
+        max_uses: 5,
+        user_location: {
+          type: 'approximate',
+          city: 'New York',
+          region: 'New York',
+          country: 'US',
+          timezone: 'America/New_York',
+        },
+      }
+
+      try {
+        const stream = client.messages.stream({
+          model,
+          max_tokens: 2048,
+          messages: [
+            {
+              role: 'user',
+              content: 'What are the latest advancements in renewable energy?',
+            },
+          ],
+          tools: [webSearchTool] as never[],
+        } as never)
+
+        let hasWebSearch = false
+        let hasSearchResults = false
+        let hasTextContent = false
+        let chunkCount = 0
+        let searchQuery: string | null = null
+        const searchResults: unknown[] = []
+
+        for await (const event of stream) {
+          chunkCount++
+          const eventObj = event as unknown as Record<string, unknown>
+
+          // Check for web search tool use in content block start
+          if (eventObj.type === 'content_block_start') {
+            const contentBlock = eventObj.content_block as Record<string, unknown>
+            if (contentBlock.type === 'server_tool_use' && (contentBlock as { name?: string }).name === 'web_search') {
+              hasWebSearch = true
+              console.log('✓ Web search tool invoked')
+            }
+          }
+
+          // Check for web search input delta
+          if (eventObj.type === 'content_block_delta') {
+            const delta = eventObj.delta as Record<string, unknown>
+            if (delta.type === 'input_json_delta' && delta.partial_json) {
+              try {
+                const parsed = JSON.parse(String(delta.partial_json))
+                if (parsed.query && !searchQuery) {
+                  searchQuery = parsed.query
+                  console.log(`✓ Search query: ${searchQuery}`)
+                }
+              } catch {
+                // Partial JSON may not be complete yet
+              }
+            }
+          }
+
+          // Check for web search results
+          if (eventObj.type === 'content_block_start') {
+            const contentBlock = eventObj.content_block as Record<string, unknown>
+            if (contentBlock.type === 'web_search_tool_result') {
+              hasSearchResults = true
+              const content = (contentBlock as { content?: unknown[] }).content
+              if (content && Array.isArray(content)) {
+                searchResults.push(...content)
+              }
+            }
+          }
+
+          // Check for text content delta
+          if (eventObj.type === 'content_block_delta') {
+            const delta = eventObj.delta as Record<string, unknown>
+            if (delta.type === 'text_delta') {
+              hasTextContent = true
+            }
+          }
+        }
+
+        // Validate results
+        expect(chunkCount).toBeGreaterThan(0)
+        expect(hasWebSearch).toBe(true)
+        expect(hasSearchResults).toBe(true)
+        expect(hasTextContent).toBe(true)
+
+        if (searchResults.length > 0) {
+          console.log(`✓ Received ${searchResults.length} search results`)
+          searchResults.slice(0, 3).forEach((result, i) => {
+            const resultObj = result as { url?: string; title?: string }
+            if (resultObj.url && resultObj.title) {
+              console.log(`  Result ${i + 1}: ${resultObj.title}`)
+            }
+          })
+        }
+
+        console.log(`✓ Web search (streaming) test passed! (${chunkCount} chunks)`)
+      } catch (error) {
+        console.log(`⚠️ Web search streaming test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
     })
   })

@@ -416,12 +416,12 @@ type ResponsesMessageContentBlock struct {
 
 	// Not in OpenAI's schemas, but sent by a few providers (Anthropic, Bedrock are some of them)
 	CacheControl *CacheControl `json:"cache_control,omitempty"`
+	Citations    *Citations    `json:"citations,omitempty"`
 }
 
 type Citations struct {
 	Enabled *bool `json:"enabled,omitempty"`
 }
-
 type ResponsesInputMessageContentBlockImage struct {
 	ImageURL *string `json:"image_url,omitempty"`
 	Detail   *string `json:"detail,omitempty"` // "low" | "high" | "auto"
@@ -459,6 +459,16 @@ type ResponsesOutputMessageContentTextAnnotation struct {
 	Title       *string `json:"title,omitempty"`
 	URL         *string `json:"url,omitempty"`
 	ContainerID *string `json:"container_id,omitempty"`
+
+	// Anthropic specific fields
+	StartCharIndex  *int    `json:"start_char_index,omitempty"`
+	EndCharIndex    *int    `json:"end_char_index,omitempty"`
+	StartPageNumber *int    `json:"start_page_number,omitempty"`
+	EndPageNumber   *int    `json:"end_page_number,omitempty"`
+	StartBlockIndex *int    `json:"start_block_index,omitempty"`
+	EndBlockIndex   *int    `json:"end_block_index,omitempty"`
+	Source          *string `json:"source,omitempty"`
+	EncryptedIndex  *string `json:"encrypted_index,omitempty"`
 }
 
 // ResponsesOutputMessageContentTextLogProb represents log probability information for content.
@@ -514,31 +524,55 @@ func (action ResponsesToolMessageActionStruct) MarshalJSON() ([]byte, error) {
 	if action.ResponsesMCPApprovalRequestAction != nil {
 		return Marshal(action.ResponsesMCPApprovalRequestAction)
 	}
-	return nil, fmt.Errorf("responses tool message action struct is neither a computer tool call action nor a web search tool call action nor a local shell tool call action nor a mcp approval request action")
+	return nil, fmt.Errorf("responses tool message action struct is empty")
 }
 
 func (action *ResponsesToolMessageActionStruct) UnmarshalJSON(data []byte) error {
-	var computerToolCallAction ResponsesComputerToolCallAction
-	if err := Unmarshal(data, &computerToolCallAction); err == nil {
+	// First, peek at the type field to determine which variant to unmarshal
+	var typeStruct struct {
+		Type string `json:"type"`
+	}
+	if err := Unmarshal(data, &typeStruct); err != nil {
+		return fmt.Errorf("failed to peek at type field: %w", err)
+	}
+
+	// Based on the type, unmarshal into the appropriate variant
+	switch typeStruct.Type {
+	case "click", "double_click", "drag", "keypress", "move", "screenshot", "scroll", "type", "wait", "zoom":
+		var computerToolCallAction ResponsesComputerToolCallAction
+		if err := Unmarshal(data, &computerToolCallAction); err != nil {
+			return fmt.Errorf("failed to unmarshal computer tool call action: %w", err)
+		}
 		action.ResponsesComputerToolCallAction = &computerToolCallAction
 		return nil
-	}
-	var webSearchToolCallAction ResponsesWebSearchToolCallAction
-	if err := Unmarshal(data, &webSearchToolCallAction); err == nil {
+
+	case "search", "open_page", "find":
+		var webSearchToolCallAction ResponsesWebSearchToolCallAction
+		if err := Unmarshal(data, &webSearchToolCallAction); err != nil {
+			return fmt.Errorf("failed to unmarshal web search tool call action: %w", err)
+		}
 		action.ResponsesWebSearchToolCallAction = &webSearchToolCallAction
 		return nil
-	}
-	var localShellToolCallAction ResponsesLocalShellToolCallAction
-	if err := Unmarshal(data, &localShellToolCallAction); err == nil {
+
+	case "exec":
+		var localShellToolCallAction ResponsesLocalShellToolCallAction
+		if err := Unmarshal(data, &localShellToolCallAction); err != nil {
+			return fmt.Errorf("failed to unmarshal local shell tool call action: %w", err)
+		}
 		action.ResponsesLocalShellToolCallAction = &localShellToolCallAction
 		return nil
-	}
-	var mcpApprovalRequestAction ResponsesMCPApprovalRequestAction
-	if err := Unmarshal(data, &mcpApprovalRequestAction); err == nil {
+
+	case "mcp_approval_request":
+		var mcpApprovalRequestAction ResponsesMCPApprovalRequestAction
+		if err := Unmarshal(data, &mcpApprovalRequestAction); err != nil {
+			return fmt.Errorf("failed to unmarshal mcp approval request action: %w", err)
+		}
 		action.ResponsesMCPApprovalRequestAction = &mcpApprovalRequestAction
 		return nil
+
+	default:
+		return fmt.Errorf("unknown action type: %s", typeStruct.Type)
 	}
-	return fmt.Errorf("responses tool message action struct is neither a computer tool call action nor a web search tool call action nor a local shell tool call action nor a mcp approval request action")
 }
 
 type ResponsesToolMessageOutputStruct struct {
@@ -658,6 +692,7 @@ type ResponsesWebSearchToolCallAction struct {
 	Type    string                                         `json:"type"`          // "search" | "open_page" | "find"
 	URL     *string                                        `json:"url,omitempty"` // Common URL field (OpenPage, Find)
 	Query   *string                                        `json:"query,omitempty"`
+	Queries []string                                       `json:"queries,omitempty"`
 	Sources []ResponsesWebSearchToolCallActionSearchSource `json:"sources,omitempty"`
 	Pattern *string                                        `json:"pattern,omitempty"`
 }
@@ -666,6 +701,11 @@ type ResponsesWebSearchToolCallAction struct {
 type ResponsesWebSearchToolCallActionSearchSource struct {
 	Type string `json:"type"` // always "url"
 	URL  string `json:"url"`
+
+	// Anthropic specific fields
+	Title            *string `json:"title,omitempty"`
+	EncryptedContent *string `json:"encrypted_content,omitempty"`
+	PageAge          *string `json:"page_age,omitempty"`
 }
 
 // -----------------------------------------------------------------------------
@@ -1061,6 +1101,296 @@ type ResponsesTool struct {
 	*ResponsesToolWebSearchPreview
 }
 
+// MarshalJSON implements custom JSON marshaling for ResponsesTool
+// It merges common fields with the appropriate embedded struct based on type
+func (t ResponsesTool) MarshalJSON() ([]byte, error) {
+	// Start with common fields
+	result := map[string]interface{}{
+		"type": t.Type,
+	}
+
+	if t.Name != nil {
+		result["name"] = t.Name
+	}
+	if t.Description != nil {
+		result["description"] = t.Description
+	}
+	if t.CacheControl != nil {
+		result["cache_control"] = t.CacheControl
+	}
+
+	// Based on type, marshal the appropriate embedded struct
+	switch t.Type {
+	case ResponsesToolTypeFunction:
+		if t.ResponsesToolFunction != nil {
+			bytes, err := Marshal(t.ResponsesToolFunction)
+			if err != nil {
+				return nil, err
+			}
+			var funcFields map[string]interface{}
+			if err := Unmarshal(bytes, &funcFields); err != nil {
+				return nil, err
+			}
+			for k, v := range funcFields {
+				result[k] = v
+			}
+		}
+
+	case ResponsesToolTypeFileSearch:
+		if t.ResponsesToolFileSearch != nil {
+			bytes, err := Marshal(t.ResponsesToolFileSearch)
+			if err != nil {
+				return nil, err
+			}
+			var fileSearchFields map[string]interface{}
+			if err := Unmarshal(bytes, &fileSearchFields); err != nil {
+				return nil, err
+			}
+			for k, v := range fileSearchFields {
+				result[k] = v
+			}
+		}
+
+	case ResponsesToolTypeComputerUsePreview:
+		if t.ResponsesToolComputerUsePreview != nil {
+			bytes, err := Marshal(t.ResponsesToolComputerUsePreview)
+			if err != nil {
+				return nil, err
+			}
+			var computerFields map[string]interface{}
+			if err := Unmarshal(bytes, &computerFields); err != nil {
+				return nil, err
+			}
+			for k, v := range computerFields {
+				result[k] = v
+			}
+		}
+
+	case ResponsesToolTypeWebSearch:
+		if t.ResponsesToolWebSearch != nil {
+			bytes, err := Marshal(t.ResponsesToolWebSearch)
+			if err != nil {
+				return nil, err
+			}
+			var webSearchFields map[string]interface{}
+			if err := Unmarshal(bytes, &webSearchFields); err != nil {
+				return nil, err
+			}
+			for k, v := range webSearchFields {
+				result[k] = v
+			}
+		}
+
+	case ResponsesToolTypeMCP:
+		if t.ResponsesToolMCP != nil {
+			bytes, err := Marshal(t.ResponsesToolMCP)
+			if err != nil {
+				return nil, err
+			}
+			var mcpFields map[string]interface{}
+			if err := Unmarshal(bytes, &mcpFields); err != nil {
+				return nil, err
+			}
+			for k, v := range mcpFields {
+				result[k] = v
+			}
+		}
+
+	case ResponsesToolTypeCodeInterpreter:
+		if t.ResponsesToolCodeInterpreter != nil {
+			bytes, err := Marshal(t.ResponsesToolCodeInterpreter)
+			if err != nil {
+				return nil, err
+			}
+			var codeInterpreterFields map[string]interface{}
+			if err := Unmarshal(bytes, &codeInterpreterFields); err != nil {
+				return nil, err
+			}
+			for k, v := range codeInterpreterFields {
+				result[k] = v
+			}
+		}
+
+	case ResponsesToolTypeImageGeneration:
+		if t.ResponsesToolImageGeneration != nil {
+			bytes, err := Marshal(t.ResponsesToolImageGeneration)
+			if err != nil {
+				return nil, err
+			}
+			var imageGenFields map[string]interface{}
+			if err := Unmarshal(bytes, &imageGenFields); err != nil {
+				return nil, err
+			}
+			for k, v := range imageGenFields {
+				result[k] = v
+			}
+		}
+
+	case ResponsesToolTypeLocalShell:
+		if t.ResponsesToolLocalShell != nil {
+			bytes, err := Marshal(t.ResponsesToolLocalShell)
+			if err != nil {
+				return nil, err
+			}
+			var localShellFields map[string]interface{}
+			if err := Unmarshal(bytes, &localShellFields); err != nil {
+				return nil, err
+			}
+			for k, v := range localShellFields {
+				result[k] = v
+			}
+		}
+
+	case ResponsesToolTypeCustom:
+		if t.ResponsesToolCustom != nil {
+			bytes, err := Marshal(t.ResponsesToolCustom)
+			if err != nil {
+				return nil, err
+			}
+			var customFields map[string]interface{}
+			if err := Unmarshal(bytes, &customFields); err != nil {
+				return nil, err
+			}
+			for k, v := range customFields {
+				result[k] = v
+			}
+		}
+
+	case ResponsesToolTypeWebSearchPreview:
+		if t.ResponsesToolWebSearchPreview != nil {
+			bytes, err := Marshal(t.ResponsesToolWebSearchPreview)
+			if err != nil {
+				return nil, err
+			}
+			var webSearchPreviewFields map[string]interface{}
+			if err := Unmarshal(bytes, &webSearchPreviewFields); err != nil {
+				return nil, err
+			}
+			for k, v := range webSearchPreviewFields {
+				result[k] = v
+			}
+		}
+	}
+
+	return Marshal(result)
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for ResponsesTool
+// It unmarshals common fields first, then the appropriate embedded struct based on type
+func (t *ResponsesTool) UnmarshalJSON(data []byte) error {
+	// First unmarshal into a map to inspect the type
+	var raw map[string]interface{}
+	if err := Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Extract type field
+	typeValue, ok := raw["type"]
+	if !ok {
+		return fmt.Errorf("missing required 'type' field in ResponsesTool")
+	}
+
+	typeStr, ok := typeValue.(string)
+	if !ok {
+		return fmt.Errorf("'type' field must be a string")
+	}
+	t.Type = ResponsesToolType(typeStr)
+
+	// Unmarshal common fields
+	if name, ok := raw["name"].(string); ok {
+		t.Name = &name
+	}
+	if description, ok := raw["description"].(string); ok {
+		t.Description = &description
+	}
+	if cacheControl, ok := raw["cache_control"]; ok {
+		bytes, err := Marshal(cacheControl)
+		if err != nil {
+			return err
+		}
+		var cc CacheControl
+		if err := Unmarshal(bytes, &cc); err != nil {
+			return err
+		}
+		t.CacheControl = &cc
+	}
+
+	// Based on type, unmarshal into the appropriate embedded struct
+	switch t.Type {
+	case ResponsesToolTypeFunction:
+		var funcTool ResponsesToolFunction
+		if err := Unmarshal(data, &funcTool); err != nil {
+			return err
+		}
+		t.ResponsesToolFunction = &funcTool
+
+	case ResponsesToolTypeFileSearch:
+		var fileSearchTool ResponsesToolFileSearch
+		if err := Unmarshal(data, &fileSearchTool); err != nil {
+			return err
+		}
+		t.ResponsesToolFileSearch = &fileSearchTool
+
+	case ResponsesToolTypeComputerUsePreview:
+		var computerTool ResponsesToolComputerUsePreview
+		if err := Unmarshal(data, &computerTool); err != nil {
+			return err
+		}
+		t.ResponsesToolComputerUsePreview = &computerTool
+
+	case ResponsesToolTypeWebSearch:
+		var webSearchTool ResponsesToolWebSearch
+		if err := Unmarshal(data, &webSearchTool); err != nil {
+			return err
+		}
+		t.ResponsesToolWebSearch = &webSearchTool
+
+	case ResponsesToolTypeMCP:
+		var mcpTool ResponsesToolMCP
+		if err := Unmarshal(data, &mcpTool); err != nil {
+			return err
+		}
+		t.ResponsesToolMCP = &mcpTool
+
+	case ResponsesToolTypeCodeInterpreter:
+		var codeInterpreterTool ResponsesToolCodeInterpreter
+		if err := Unmarshal(data, &codeInterpreterTool); err != nil {
+			return err
+		}
+		t.ResponsesToolCodeInterpreter = &codeInterpreterTool
+
+	case ResponsesToolTypeImageGeneration:
+		var imageGenTool ResponsesToolImageGeneration
+		if err := Unmarshal(data, &imageGenTool); err != nil {
+			return err
+		}
+		t.ResponsesToolImageGeneration = &imageGenTool
+
+	case ResponsesToolTypeLocalShell:
+		var localShellTool ResponsesToolLocalShell
+		if err := Unmarshal(data, &localShellTool); err != nil {
+			return err
+		}
+		t.ResponsesToolLocalShell = &localShellTool
+
+	case ResponsesToolTypeCustom:
+		var customTool ResponsesToolCustom
+		if err := Unmarshal(data, &customTool); err != nil {
+			return err
+		}
+		t.ResponsesToolCustom = &customTool
+
+	case ResponsesToolTypeWebSearchPreview:
+		var webSearchPreviewTool ResponsesToolWebSearchPreview
+		if err := Unmarshal(data, &webSearchPreviewTool); err != nil {
+			return err
+		}
+		t.ResponsesToolWebSearchPreview = &webSearchPreviewTool
+	}
+
+	return nil
+}
+
 // ResponsesToolFunction represents a tool function
 type ResponsesToolFunction struct {
 	Parameters *ToolFunctionParameters `json:"parameters,omitempty"` // A JSON schema object describing the parameters
@@ -1218,11 +1548,15 @@ type ResponsesToolWebSearch struct {
 	Filters           *ResponsesToolWebSearchFilters      `json:"filters,omitempty"`             // Filters for the search
 	SearchContextSize *string                             `json:"search_context_size,omitempty"` // "low" | "medium" | "high"
 	UserLocation      *ResponsesToolWebSearchUserLocation `json:"user_location,omitempty"`       // The approximate location of the user
+
+	// Anthropic only
+	MaxUses *int `json:"max_uses,omitempty"` // Maximum number of uses for the search
 }
 
 // ResponsesToolWebSearchFilters represents filters for web search
 type ResponsesToolWebSearchFilters struct {
-	AllowedDomains []string `json:"allowed_domains"` // Allowed domains for the search
+	AllowedDomains []string `json:"allowed_domains,omitempty"` // Allowed domains for the search
+	BlockedDomains []string `json:"blocked_domains,omitempty"` // Blocked domains for the search, only used in anthropic
 }
 
 // ResponsesToolWebSearchUserLocation - The approximate location of the user
@@ -1403,7 +1737,9 @@ const (
 	ResponsesStreamResponseTypeFileSearchCallSearching        ResponsesStreamResponseType = "response.file_search_call.searching"
 	ResponsesStreamResponseTypeFileSearchCallResultsAdded     ResponsesStreamResponseType = "response.file_search_call.results.added"
 	ResponsesStreamResponseTypeFileSearchCallResultsCompleted ResponsesStreamResponseType = "response.file_search_call.results.completed"
+	ResponsesStreamResponseTypeWebSearchCallInProgress        ResponsesStreamResponseType = "response.web_search_call.in_progress"
 	ResponsesStreamResponseTypeWebSearchCallSearching         ResponsesStreamResponseType = "response.web_search_call.searching"
+	ResponsesStreamResponseTypeWebSearchCallCompleted         ResponsesStreamResponseType = "response.web_search_call.completed"
 	ResponsesStreamResponseTypeWebSearchCallResultsAdded      ResponsesStreamResponseType = "response.web_search_call.results.added"
 	ResponsesStreamResponseTypeWebSearchCallResultsCompleted  ResponsesStreamResponseType = "response.web_search_call.results.completed"
 

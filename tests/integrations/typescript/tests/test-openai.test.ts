@@ -72,6 +72,7 @@ import {
 } from '../src/utils/config-loader'
 
 import {
+  assertValidOpenAIAnnotation,
   CALCULATOR_TOOL,
   EMBEDDINGS_MULTIPLE_TEXTS,
   EMBEDDINGS_SIMILAR_TEXTS,
@@ -1769,6 +1770,271 @@ describe('OpenAI SDK Integration Tests', () => {
           console.log(`✅ Input tokens long text passed for ${formatProviderModel(provider, model)} (${response.total_tokens} tokens)`)
         } catch (error) {
           console.log(`⚠️ Input tokens long text test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        }
+      }
+    )
+  })
+
+  // ============================================================================
+  // Web Search Tests (Responses API)
+  // ============================================================================
+
+  describe('Web Search - Annotation Conversion', () => {
+    const testCases = getCrossProviderParamsWithVkForScenario('web_search')
+
+    it.each(testCases)(
+      'should convert citations to annotations - $provider (VK: $vkEnabled)',
+      async ({ provider, model, vkEnabled }: ProviderModelVkParam) => {
+        if (shouldSkipNoProviders({ provider, model, vkEnabled })) {
+          console.log('Skipping: No providers available for web_search')
+          return
+        }
+
+        const client = getProviderOpenAIClient(provider, vkEnabled)
+
+        console.log(`\n=== Testing Web Search Annotation Conversion for provider ${provider} ===`)
+
+        try {
+          const responses = (client as unknown as { responses: { create: (params: unknown) => Promise<unknown> } }).responses
+
+          const response = await responses.create({
+            model: formatProviderModel(provider, model),
+            tools: [{ type: 'web_search' }],
+            input: 'What is quantum computing use web search tool?',
+            max_output_tokens: 1200,
+          }) as { output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string; annotations?: unknown[] }> }> }
+
+          // Validate basic response
+          expect(response).toBeDefined()
+          expect(response.output).toBeDefined()
+          expect(response.output!.length).toBeGreaterThan(0)
+
+          // Check for annotations in message content
+          let hasAnnotations = false
+          const annotations: unknown[] = []
+
+          for (const outputItem of response.output || []) {
+            if (outputItem.type === 'message' && outputItem.content) {
+              for (const contentItem of outputItem.content) {
+                if (contentItem.type === 'text' && contentItem.annotations) {
+                  hasAnnotations = true
+                  annotations.push(...contentItem.annotations)
+                }
+              }
+            }
+          }
+
+          if (hasAnnotations) {
+            console.log(`✓ Found ${annotations.length} annotations`)
+            
+            // Validate annotation structure
+            annotations.slice(0, 3).forEach((annotation) => {
+              assertValidOpenAIAnnotation(annotation, 'url_citation')
+              const annotationObj = annotation as { url?: string; title?: string }
+              if (annotationObj.title) {
+                console.log(`  Annotation: ${annotationObj.title}`)
+              }
+            })
+          } else {
+            console.log('⚠ No annotations found')
+          }
+
+          console.log('✓ Annotation conversion test passed!')
+        } catch (error) {
+          console.log(`⚠️ Web search annotation conversion test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        }
+      }
+    )
+  })
+
+  describe('Web Search - User Location', () => {
+    const testCases = getCrossProviderParamsWithVkForScenario('web_search')
+
+    it.each(testCases)(
+      'should use user location for localized results - $provider (VK: $vkEnabled)',
+      async ({ provider, model, vkEnabled }: ProviderModelVkParam) => {
+        if (shouldSkipNoProviders({ provider, model, vkEnabled })) {
+          console.log('Skipping: No providers available for web_search')
+          return
+        }
+
+        const client = getProviderOpenAIClient(provider, vkEnabled)
+
+        console.log(`\n=== Testing Web Search with User Location for provider ${provider} ===`)
+
+        try {
+          const responses = (client as unknown as { responses: { create: (params: unknown) => Promise<unknown> } }).responses
+
+          const response = await responses.create({
+            model: formatProviderModel(provider, model),
+            tools: [{
+              type: 'web_search',
+              user_location: {
+                type: 'approximate',
+                city: 'San Francisco',
+                region: 'California',
+                country: 'US',
+                timezone: 'America/Los_Angeles',
+              },
+            }],
+            input: 'What is the weather like today?',
+            max_output_tokens: 1200,
+          }) as { output?: Array<{ type?: string }> }
+
+          // Validate basic response
+          expect(response).toBeDefined()
+          expect(response.output).toBeDefined()
+          expect(response.output!.length).toBeGreaterThan(0)
+
+          // Check for web_search_call with status
+          let hasWebSearch = false
+          let hasMessage = false
+
+          for (const outputItem of response.output || []) {
+            if (outputItem.type === 'web_search_call') {
+              hasWebSearch = true
+              console.log('✓ Web search executed')
+            } else if (outputItem.type === 'message') {
+              hasMessage = true
+            }
+          }
+
+          expect(hasWebSearch).toBe(true)
+          expect(hasMessage).toBe(true)
+
+          console.log('✓ User location test passed!')
+        } catch (error) {
+          console.log(`⚠️ Web search user location test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        }
+      }
+    )
+  })
+
+  describe('Web Search - Wildcard Domains', () => {
+    const testCases = getCrossProviderParamsWithVkForScenario('web_search')
+
+    it.each(testCases)(
+      'should filter results with wildcard domain patterns - $provider (VK: $vkEnabled)',
+      async ({ provider, model, vkEnabled }: ProviderModelVkParam) => {
+        if (shouldSkipNoProviders({ provider, model, vkEnabled })) {
+          console.log('Skipping: No providers available for web_search')
+          return
+        }
+
+        const client = getProviderOpenAIClient(provider, vkEnabled)
+
+        console.log(`\n=== Testing Web Search with Wildcard Domains for provider ${provider} ===`)
+
+        try {
+          const responses = (client as unknown as { responses: { create: (params: unknown) => Promise<unknown> } }).responses
+
+          const response = await responses.create({
+            model: formatProviderModel(provider, model),
+            tools: [{
+              type: 'web_search',
+              allowed_domains: ['wikipedia.org/*', '*.edu'],
+            }],
+            input: 'What is machine learning use web search tool?',
+            include: ['web_search_call.action.sources'],
+            max_output_tokens: 1500,
+          }) as { output?: Array<{ type?: string; action?: { sources?: unknown[] } }> }
+
+          // Validate basic response
+          expect(response).toBeDefined()
+          expect(response.output).toBeDefined()
+
+          // Collect search sources
+          const searchSources: unknown[] = []
+          for (const outputItem of response.output || []) {
+            if (outputItem.type === 'web_search_call' && outputItem.action?.sources) {
+              searchSources.push(...outputItem.action.sources)
+            }
+          }
+
+          if (searchSources.length > 0) {
+            console.log(`✓ Found ${searchSources.length} search sources`)
+            searchSources.slice(0, 3).forEach((source, i) => {
+              const sourceObj = source as { url?: string }
+              if (sourceObj.url) {
+                console.log(`  Source ${i + 1}: ${sourceObj.url}`)
+              }
+            })
+          }
+
+          console.log('✓ Wildcard domains test passed!')
+        } catch (error) {
+          console.log(`⚠️ Web search wildcard domains test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        }
+      }
+    )
+  })
+
+  describe('Web Search - Multi Turn', () => {
+    const testCases = getCrossProviderParamsWithVkForScenario('web_search')
+
+    it.each(testCases)(
+      'should handle multi-turn conversation with web search - $provider (VK: $vkEnabled)',
+      async ({ provider, model, vkEnabled }: ProviderModelVkParam) => {
+        if (shouldSkipNoProviders({ provider, model, vkEnabled })) {
+          console.log('Skipping: No providers available for web_search')
+          return
+        }
+
+        const client = getProviderOpenAIClient(provider, vkEnabled)
+
+        console.log(`\n=== Testing Web Search Multi-Turn (OpenAI SDK) for provider ${provider} ===`)
+
+        try {
+          const responses = (client as unknown as { responses: { create: (params: unknown) => Promise<unknown> } }).responses
+
+          // First turn
+          const inputMessages: unknown[] = [
+            { role: 'user', content: 'What is renewable energy use web search tool?' },
+          ]
+
+          const response1 = await responses.create({
+            model: formatProviderModel(provider, model),
+            tools: [{ type: 'web_search' }],
+            input: inputMessages,
+            max_output_tokens: 1500,
+          }) as { output?: unknown[] }
+
+          expect(response1).toBeDefined()
+          expect(response1.output).toBeDefined()
+
+          console.log(`✓ First turn completed with ${response1.output!.length} output items`)
+
+          // Second turn with follow-up
+          // Add each output item from the first response
+          for (const outputItem of response1.output || []) {
+            inputMessages.push(outputItem)
+          }
+          inputMessages.push({ role: 'user', content: 'What are the main types of renewable energy?' })
+
+          const response2 = await responses.create({
+            model: formatProviderModel(provider, model),
+            tools: [{ type: 'web_search' }],
+            input: inputMessages,
+            max_output_tokens: 1500,
+          }) as { output?: Array<{ type?: string }> }
+
+          expect(response2).toBeDefined()
+          expect(response2.output).toBeDefined()
+          expect(response2.output!.length).toBeGreaterThan(0)
+
+          // Validate second turn has message response
+          let hasMessage = false
+          for (const outputItem of response2.output || []) {
+            if (outputItem.type === 'message') {
+              hasMessage = true
+            }
+          }
+
+          expect(hasMessage).toBe(true)
+          console.log(`✓ Second turn completed with ${response2.output!.length} output items`)
+          console.log('✓ Multi-turn conversation test passed!')
+        } catch (error) {
+          console.log(`⚠️ Web search multi-turn test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`)
         }
       }
     )

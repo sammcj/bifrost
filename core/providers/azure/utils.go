@@ -1,7 +1,6 @@
 package azure
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/bytedance/sonic"
@@ -10,7 +9,7 @@ import (
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
-func getRequestBodyForAnthropicResponses(ctx context.Context, request *schemas.BifrostResponsesRequest, deployment string, providerName schemas.ModelProvider, isStreaming bool) ([]byte, *schemas.BifrostError) {
+func getRequestBodyForAnthropicResponses(ctx *schemas.BifrostContext, request *schemas.BifrostResponsesRequest, deployment string, providerName schemas.ModelProvider, isStreaming bool) ([]byte, *schemas.BifrostError) {
 	var jsonBody []byte
 	var err error
 
@@ -39,7 +38,7 @@ func getRequestBodyForAnthropicResponses(ctx context.Context, request *schemas.B
 	} else {
 		// Convert request to Anthropic format
 		request.Model = deployment
-		reqBody, err := anthropic.ToAnthropicResponsesRequest(request)
+		reqBody, err := anthropic.ToAnthropicResponsesRequest(ctx, request)
 		if err != nil {
 			return nil, providerUtils.NewBifrostOperationError(schemas.ErrRequestBodyConversion, err, providerName)
 		}

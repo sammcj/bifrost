@@ -518,7 +518,7 @@ export function assertValidChatResponse(response: unknown): void {
   // OpenAI-style response
   if (obj.choices) {
     expect(Array.isArray(obj.choices)).toBe(true)
-    expect(obj.choices.length).toBeGreaterThan(0)
+    expect((obj.choices as unknown[]).length).toBeGreaterThan(0)
 
     const choice = (obj.choices as Array<Record<string, unknown>>)[0]
     expect(choice.message).toBeDefined()
@@ -946,4 +946,279 @@ export function createBatchInlineRequests(
       max_tokens: 100,
     },
   }))
+}
+
+// ============================================================================
+// Citations Test Data and Utilities
+// ============================================================================
+
+// Test document content for citations
+export const CITATION_TEXT_DOCUMENT = `The Theory of Relativity was developed by Albert Einstein in the early 20th century.
+It consists of two parts: Special Relativity published in 1905, and General Relativity published in 1915.
+
+Special Relativity deals with objects moving at constant velocities and introduced the famous equation E=mc².
+General Relativity extends this to accelerating objects and provides a new understanding of gravity.
+
+Einstein's work revolutionized our understanding of space, time, and gravity, and its predictions have been
+confirmed by numerous experiments and observations over the past century.`
+
+// Multiple documents for testing document_index
+export const CITATION_MULTI_DOCUMENT_SET = [
+  {
+    title: 'Physics Document',
+    content: `Quantum mechanics is a fundamental theory in physics that describes the behavior of matter and energy at the atomic and subatomic level.
+It was developed in the early 20th century by physicists including Max Planck, Albert Einstein, Niels Bohr, and Werner Heisenberg.`,
+  },
+  {
+    title: 'Chemistry Document',
+    content: `The periodic table organizes chemical elements by their atomic number, electron configuration, and recurring chemical properties.
+It was first published by Dmitri Mendeleev in 1869 and has become a fundamental tool in chemistry.`,
+  },
+]
+
+// Citation types
+export interface CharLocationCitation {
+  type: 'char_location'
+  cited_text: string
+  document_index: number
+  document_title?: string
+  start_char_index: number
+  end_char_index: number
+}
+
+export interface PageLocationCitation {
+  type: 'page_location'
+  cited_text: string
+  document_index: number
+  document_title?: string
+  start_page_number: number
+  end_page_number: number
+}
+
+export interface WebSearchCitation {
+  type: 'web_search_result_location'
+  url: string
+  title: string
+  encrypted_index: string
+  cited_text?: string
+}
+
+export type AnthropicCitation = CharLocationCitation | PageLocationCitation | WebSearchCitation
+
+// Document block interface
+export interface AnthropicDocument {
+  type: 'document'
+  title: string
+  source: {
+    type: 'text' | 'base64'
+    media_type: string
+    data: string
+  }
+  citations: {
+    enabled: boolean
+  }
+}
+
+/**
+ * Create a properly formatted document block for Anthropic API with citations.
+ */
+export function createAnthropicDocument(
+  content: string,
+  docType: 'text' | 'pdf' | 'base64',
+  title: string = 'Test Document',
+  citationsEnabled: boolean = true
+): AnthropicDocument {
+  const document: AnthropicDocument = {
+    type: 'document',
+    title,
+    source: {
+      type: docType === 'text' ? 'text' : 'base64',
+      media_type: docType === 'text' ? 'text/plain' : 'application/pdf',
+      data: content,
+    },
+    citations: {
+      enabled: citationsEnabled,
+    },
+  }
+
+  return document
+}
+
+/**
+ * Validate citation indices based on type.
+ */
+export function validateCitationIndices(
+  citation: AnthropicCitation,
+  citationType: 'char_location' | 'page_location' | 'web_search_result_location'
+): void {
+  if (citationType === 'char_location') {
+    const charCitation = citation as CharLocationCitation
+    expect(charCitation.start_char_index).toBeDefined()
+    expect(charCitation.end_char_index).toBeDefined()
+    expect(charCitation.start_char_index).toBeGreaterThanOrEqual(0)
+    expect(charCitation.end_char_index).toBeGreaterThan(charCitation.start_char_index)
+  } else if (citationType === 'page_location') {
+    const pageCitation = citation as PageLocationCitation
+    expect(pageCitation.start_page_number).toBeDefined()
+    expect(pageCitation.end_page_number).toBeDefined()
+    expect(pageCitation.start_page_number).toBeGreaterThanOrEqual(1)
+    expect(pageCitation.end_page_number).toBeGreaterThan(pageCitation.start_page_number)
+  } else if (citationType === 'web_search_result_location') {
+    const webCitation = citation as WebSearchCitation
+    expect(webCitation.url).toBeDefined()
+    expect(webCitation.title).toBeDefined()
+    expect(webCitation.encrypted_index).toBeDefined()
+  }
+}
+
+/**
+ * Assert that an Anthropic citation is valid and matches expected structure.
+ */
+export function assertValidAnthropicCitation(
+  citation: AnthropicCitation,
+  expectedType: 'char_location' | 'page_location' | 'web_search_result_location',
+  documentIndex: number = 0
+): void {
+  // Check basic structure
+  expect(citation.type).toBeDefined()
+  expect(citation.type).toBe(expectedType)
+
+  // Check required fields
+  expect(citation.cited_text).toBeDefined()
+  expect(typeof citation.cited_text).toBe('string')
+  
+  if (expectedType !== 'web_search_result_location') {
+    expect(citation.cited_text?.length ?? 0).toBeGreaterThan(0)
+    
+    // Check document reference
+    expect((citation as CharLocationCitation | PageLocationCitation).document_index).toBeDefined()
+    expect((citation as CharLocationCitation | PageLocationCitation).document_index).toBe(documentIndex)
+  }
+
+  // Validate type-specific indices
+  validateCitationIndices(citation, expectedType)
+}
+
+/**
+ * Collect text content and citations from an Anthropic streaming response.
+ */
+export async function collectAnthropicStreamingCitations(
+  stream: AsyncIterable<unknown>
+): Promise<{ content: string; citations: AnthropicCitation[]; chunkCount: number }> {
+  let content = ''
+  const citations: AnthropicCitation[] = []
+  let chunkCount = 0
+
+  for await (const event of stream) {
+    chunkCount++
+    const eventObj = event as Record<string, unknown>
+
+    if (eventObj.type === 'content_block_delta') {
+      const delta = eventObj.delta as Record<string, unknown>
+      
+      if (delta.type === 'text_delta' && delta.text) {
+        content += String(delta.text)
+      } else if (delta.type === 'citations_delta' && delta.citation) {
+        citations.push(delta.citation as AnthropicCitation)
+      }
+    }
+  }
+
+  return { content, citations, chunkCount }
+}
+
+/**
+ * Validate web search citation structure.
+ */
+export function assertValidWebSearchCitation(
+  citation: unknown,
+  sdkType: 'anthropic' | 'openai' = 'anthropic'
+): void {
+  const citationObj = citation as Record<string, unknown>
+  
+  if (sdkType === 'anthropic') {
+    expect(citationObj.type).toBeDefined()
+    expect(citationObj.type).toBe('web_search_result_location')
+    expect(citationObj.url).toBeDefined()
+    expect(typeof citationObj.url).toBe('string')
+    expect(citationObj.title).toBeDefined()
+    expect(typeof citationObj.title).toBe('string')
+    expect(citationObj.encrypted_index).toBeDefined()
+    
+    if (citationObj.cited_text) {
+      expect(typeof citationObj.cited_text).toBe('string')
+      expect((citationObj.cited_text as string).length).toBeLessThanOrEqual(150)
+    }
+  } else {
+    // OpenAI format (url_citation)
+    expect(citationObj.type).toBeDefined()
+    expect(citationObj.type).toBe('url_citation')
+    expect(citationObj.url).toBeDefined()
+    expect(typeof citationObj.url).toBe('string')
+  }
+}
+
+
+/**
+ * Assert that an OpenAI annotation is valid and matches expected structure.
+ */
+export function assertValidOpenAIAnnotation(
+  annotation: unknown,
+  expectedType: 'file_citation' | 'url_citation' | 'container_file_citation' | 'file_path' | 'char_location' = 'url_citation'
+): void {
+  const annotationObj = annotation as Record<string, unknown>
+  
+  expect(annotationObj.type).toBeDefined()
+  expect(annotationObj.type).toBe(expectedType)
+
+  // Validate based on type
+  if (expectedType === 'file_citation') {
+    if (annotationObj.file_id) {
+      expect(typeof annotationObj.file_id).toBe('string')
+    }
+    if (annotationObj.filename) {
+      expect(typeof annotationObj.filename).toBe('string')
+    }
+    if (annotationObj.index !== undefined) {
+      expect(typeof annotationObj.index).toBe('number')
+      expect(annotationObj.index as number).toBeGreaterThanOrEqual(0)
+    }
+  } else if (expectedType === 'url_citation') {
+    if (annotationObj.url) {
+      expect(typeof annotationObj.url).toBe('string')
+    }
+    if (annotationObj.title) {
+      expect(typeof annotationObj.title).toBe('string')
+    }
+    if (annotationObj.start_index !== undefined && annotationObj.end_index !== undefined) {
+      expect(typeof annotationObj.start_index).toBe('number')
+      expect(typeof annotationObj.end_index).toBe('number')
+      expect(annotationObj.end_index as number).toBeGreaterThan(annotationObj.start_index as number)
+    }
+  } else if (expectedType === 'container_file_citation') {
+    if (annotationObj.container_id) {
+      expect(typeof annotationObj.container_id).toBe('string')
+    }
+    if (annotationObj.file_id) {
+      expect(typeof annotationObj.file_id).toBe('string')
+    }
+    if (annotationObj.filename) {
+      expect(typeof annotationObj.filename).toBe('string')
+    }
+  } else if (expectedType === 'file_path') {
+    if (annotationObj.file_id) {
+      expect(typeof annotationObj.file_id).toBe('string')
+    }
+    if (annotationObj.index !== undefined) {
+      expect(typeof annotationObj.index).toBe('number')
+      expect(annotationObj.index as number).toBeGreaterThanOrEqual(0)
+    }
+  } else if (expectedType === 'char_location') {
+    if (annotationObj.start_char_index !== undefined) {
+      expect(typeof annotationObj.start_char_index).toBe('number')
+    }
+    if (annotationObj.end_char_index !== undefined) {
+      expect(typeof annotationObj.end_char_index).toBe('number')
+    }
+  }
 }

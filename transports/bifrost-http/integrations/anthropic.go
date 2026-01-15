@@ -80,7 +80,7 @@ func createAnthropicMessagesRouteConfig(pathPrefix string) []RouteConfig {
 						return resp.ExtraFields.RawResponse, nil
 					}
 				}
-				return anthropic.ToAnthropicResponsesResponse(resp), nil
+				return anthropic.ToAnthropicResponsesResponse(ctx, resp), nil
 			},
 			ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
 				return anthropic.ToAnthropicChatCompletionError(err)
