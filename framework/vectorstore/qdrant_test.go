@@ -166,12 +166,11 @@ func TestQdrantConfig_Validation(t *testing.T) {
 			errorMsg:    "qdrant host is required",
 		},
 		{
-			name: "missing port",
+			name: "missing port uses default",
 			config: QdrantConfig{
 				Host: *schemas.NewEnvVar("localhost"),
 			},
-			expectError: true,
-			errorMsg:    "qdrant port is required",
+			expectError: false, // Port defaults to 6334 via CoerceInt fallback
 		},
 		{
 			name: "with api key",
