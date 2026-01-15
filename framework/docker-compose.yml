@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: bifrost-postgres
+    container_name: bifrost-postgres-fw
     environment:
       POSTGRES_USER: bifrost
       POSTGRES_PASSWORD: bifrost_password

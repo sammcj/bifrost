@@ -815,7 +815,7 @@ func (a *Accumulator) processAccumulatedResponsesStreamingChunks(requestID strin
 	data.ErrorDetails = respErr
 
 	// Update metadata from the chunk with highest index (contains TokenUsage, Cost, FinishReason)
-	if lastChunk := accumulator.getLastResponsesChunk(); lastChunk != nil {
+	if lastChunk := accumulator.getLastResponsesChunkLocked(); lastChunk != nil {
 		if lastChunk.TokenUsage != nil {
 			data.TokenUsage = lastChunk.TokenUsage
 		}

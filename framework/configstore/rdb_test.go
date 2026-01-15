@@ -119,7 +119,7 @@ func TestUpdateProvidersConfig_UpdateExistingByKeyID(t *testing.T) {
 	result, err := store.GetProvidersConfig(ctx)
 	require.NoError(t, err)
 	assert.Len(t, result["openai"].Keys, 1)
-	assert.Equal(t, "sk-test-key-v2", result["openai"].Keys[0].Value)
+	assert.Equal(t, "sk-test-key-v2", result["openai"].Keys[0].Value.Val)
 }
 
 func TestUpdateProvidersConfig_UpdateExistingByName_FallbackFix(t *testing.T) {
@@ -162,7 +162,7 @@ func TestUpdateProvidersConfig_UpdateExistingByName_FallbackFix(t *testing.T) {
 	result, err := store.GetProvidersConfig(ctx)
 	require.NoError(t, err)
 	assert.Len(t, result["openai"].Keys, 1, "Should have exactly one key, not duplicated")
-	assert.Equal(t, "sk-test-key-v2", result["openai"].Keys[0].Value, "Value should be updated")
+	assert.Equal(t, "sk-test-key-v2", result["openai"].Keys[0].Value.Val, "Value should be updated")
 	assert.Equal(t, "original-uuid", result["openai"].Keys[0].ID, "Original KeyID should be preserved")
 }
 
