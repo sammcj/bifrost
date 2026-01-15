@@ -78,7 +78,7 @@ func (a *Accumulator) processAccumulatedTranscriptionStreamingChunks(requestID s
 	data.TranscriptionOutput = completeMessage
 	data.ErrorDetails = bifrostErr
 	// Update metadata from the chunk with highest index (contains TokenUsage, Cost, CacheDebug)
-	if lastChunk := accumulator.getLastTranscriptionChunk(); lastChunk != nil {
+	if lastChunk := accumulator.getLastTranscriptionChunkLocked(); lastChunk != nil {
 		if lastChunk.TokenUsage != nil {
 			data.TokenUsage = &schemas.BifrostLLMUsage{}
 			if lastChunk.TokenUsage.InputTokens != nil {

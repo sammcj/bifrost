@@ -144,6 +144,12 @@ type StreamAccumulator struct {
 func (sa *StreamAccumulator) getLastChatChunk() *ChatStreamChunk {
 	sa.mu.Lock()
 	defer sa.mu.Unlock()
+	return sa.getLastChatChunkLocked()
+}
+
+// getLastChatChunkLocked returns the chunk with the highest ChunkIndex.
+// MUST be called with sa.mu already held.
+func (sa *StreamAccumulator) getLastChatChunkLocked() *ChatStreamChunk {
 	if sa.MaxChatChunkIndex < 0 {
 		return nil
 	}
@@ -159,6 +165,12 @@ func (sa *StreamAccumulator) getLastChatChunk() *ChatStreamChunk {
 func (sa *StreamAccumulator) getLastResponsesChunk() *ResponsesStreamChunk {
 	sa.mu.Lock()
 	defer sa.mu.Unlock()
+	return sa.getLastResponsesChunkLocked()
+}
+
+// getLastResponsesChunkLocked returns the chunk with the highest ChunkIndex.
+// MUST be called with sa.mu already held.
+func (sa *StreamAccumulator) getLastResponsesChunkLocked() *ResponsesStreamChunk {
 	if sa.MaxResponsesChunkIndex < 0 {
 		return nil
 	}
@@ -174,6 +186,12 @@ func (sa *StreamAccumulator) getLastResponsesChunk() *ResponsesStreamChunk {
 func (sa *StreamAccumulator) getLastTranscriptionChunk() *TranscriptionStreamChunk {
 	sa.mu.Lock()
 	defer sa.mu.Unlock()
+	return sa.getLastTranscriptionChunkLocked()
+}
+
+// getLastTranscriptionChunkLocked returns the chunk with the highest ChunkIndex.
+// MUST be called with sa.mu already held.
+func (sa *StreamAccumulator) getLastTranscriptionChunkLocked() *TranscriptionStreamChunk {
 	if sa.MaxTranscriptionChunkIndex < 0 {
 		return nil
 	}
@@ -189,6 +207,12 @@ func (sa *StreamAccumulator) getLastTranscriptionChunk() *TranscriptionStreamChu
 func (sa *StreamAccumulator) getLastAudioChunk() *AudioStreamChunk {
 	sa.mu.Lock()
 	defer sa.mu.Unlock()
+	return sa.getLastAudioChunkLocked()
+}
+
+// getLastAudioChunkLocked returns the chunk with the highest ChunkIndex.
+// MUST be called with sa.mu already held.
+func (sa *StreamAccumulator) getLastAudioChunkLocked() *AudioStreamChunk {
 	if sa.MaxAudioChunkIndex < 0 {
 		return nil
 	}

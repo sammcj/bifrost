@@ -71,7 +71,7 @@ func (a *Accumulator) processAccumulatedAudioStreamingChunks(requestID string, b
 	data.AudioOutput = completeMessage
 	data.ErrorDetails = bifrostErr
 	// Update metadata from the chunk with highest index (contains TokenUsage, Cost, CacheDebug)
-	if lastChunk := accumulator.getLastAudioChunk(); lastChunk != nil {
+	if lastChunk := accumulator.getLastAudioChunkLocked(); lastChunk != nil {
 		if lastChunk.TokenUsage != nil {
 			data.TokenUsage = &schemas.BifrostLLMUsage{
 				PromptTokens:     lastChunk.TokenUsage.InputTokens,
