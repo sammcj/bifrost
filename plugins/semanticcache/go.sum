@@ -202,8 +202,8 @@ github.com/maximhq/bifrost/core v1.3.9 h1:mlJBEn9fsrJTcEjb88oDTAuAjtlPojALOOFnkr
 github.com/maximhq/bifrost/core v1.3.9/go.mod h1:abKQRnJQPZz8/UMxCcbuNHEyq19Db+IX4KlGJdlLY8E=
 github.com/maximhq/bifrost/framework v1.2.9 h1:8vKP7H3E+rcPzJm5RDGEN2t52rPwozt1BwQCh+1jvWM=
 github.com/maximhq/bifrost/framework v1.2.9/go.mod h1:0czzYwtJbhcRlaEsdtkIfiEY0kzA20/ygZTkWSToKvU=
-github.com/maximhq/bifrost/plugins/mocker v1.4.4 h1:hLmqonf8IFtNBCHQ+R40yCNX5rCTRkqYw0+hU5L5zlg=
-github.com/maximhq/bifrost/plugins/mocker v1.4.4/go.mod h1:U9ytiBZHQDRGn9nOlfjb08wood4AtiqzsD+dmsFugAY=
+github.com/maximhq/bifrost/plugins/mocker v1.4.9 h1:R8bUEu8s1xAQJAJ4t5AvXynHfYOB2bVCiJfxtE5uqQg=
+github.com/maximhq/bifrost/plugins/mocker v1.4.9/go.mod h1:6MtUQnhGO1SyYmbfC9p7oyVx0Q10BZq/Y3uKVUoyAFI=
 github.com/oklog/ulid v1.3.1 h1:EGfNDEx6MqHz8B3uNV6QAib1UR2Lm97sHi3ocA6ESJ4=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
 github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c h1:+mdjkGKdHQG3305AYmdv1U2eRNDiU2ErMBj1gwrq8eQ=
