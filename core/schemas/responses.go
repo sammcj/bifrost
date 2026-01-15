@@ -538,22 +538,6 @@ func (action *ResponsesToolMessageActionStruct) UnmarshalJSON(data []byte) error
 
 	// Based on the type, unmarshal into the appropriate variant
 	switch typeStruct.Type {
-	case "click", "double_click", "drag", "keypress", "move", "screenshot", "scroll", "type", "wait", "zoom":
-		var computerToolCallAction ResponsesComputerToolCallAction
-		if err := Unmarshal(data, &computerToolCallAction); err != nil {
-			return fmt.Errorf("failed to unmarshal computer tool call action: %w", err)
-		}
-		action.ResponsesComputerToolCallAction = &computerToolCallAction
-		return nil
-
-	case "search", "open_page", "find":
-		var webSearchToolCallAction ResponsesWebSearchToolCallAction
-		if err := Unmarshal(data, &webSearchToolCallAction); err != nil {
-			return fmt.Errorf("failed to unmarshal web search tool call action: %w", err)
-		}
-		action.ResponsesWebSearchToolCallAction = &webSearchToolCallAction
-		return nil
-
 	case "exec":
 		var localShellToolCallAction ResponsesLocalShellToolCallAction
 		if err := Unmarshal(data, &localShellToolCallAction); err != nil {
@@ -570,9 +554,32 @@ func (action *ResponsesToolMessageActionStruct) UnmarshalJSON(data []byte) error
 		action.ResponsesMCPApprovalRequestAction = &mcpApprovalRequestAction
 		return nil
 
+	case "search", "open_page", "find":
+		var webSearchToolCallAction ResponsesWebSearchToolCallAction
+		if err := Unmarshal(data, &webSearchToolCallAction); err != nil {
+			return fmt.Errorf("failed to unmarshal web search tool call action: %w", err)
+		}
+		action.ResponsesWebSearchToolCallAction = &webSearchToolCallAction
+		return nil
+
+	case "click", "double_click", "drag", "keypress", "move", "screenshot", "scroll", "type", "wait", "zoom":
+		var computerToolCallAction ResponsesComputerToolCallAction
+		if err := Unmarshal(data, &computerToolCallAction); err != nil {
+			return fmt.Errorf("failed to unmarshal computer tool call action: %w", err)
+		}
+		action.ResponsesComputerToolCallAction = &computerToolCallAction
+		return nil
+
 	default:
-		return fmt.Errorf("unknown action type: %s", typeStruct.Type)
+		// use computer tool, as it can have many possible actions
+		var computerToolCallAction ResponsesComputerToolCallAction
+		if err := Unmarshal(data, &computerToolCallAction); err != nil {
+			return fmt.Errorf("failed to unmarshal computer tool call action: %w", err)
+		}
+		action.ResponsesComputerToolCallAction = &computerToolCallAction
+		return nil
 	}
+	return fmt.Errorf("unknown action type: %s", typeStruct.Type)
 }
 
 type ResponsesToolMessageOutputStruct struct {

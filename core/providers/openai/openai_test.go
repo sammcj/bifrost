@@ -25,7 +25,7 @@ func TestOpenAI(t *testing.T) {
 	testConfig := testutil.ComprehensiveTestConfig{
 		Provider:           schemas.OpenAI,
 		TextModel:          "gpt-3.5-turbo-instruct",
-		ChatModel:          "gpt-4o-mini",
+		ChatModel:          "gpt-4o",
 		PromptCachingModel: "gpt-4.1",
 		Fallbacks: []schemas.Fallback{
 			{Provider: schemas.OpenAI, Model: "gpt-4o"},

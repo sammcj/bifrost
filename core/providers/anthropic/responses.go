@@ -1306,22 +1306,7 @@ func ToAnthropicResponsesStreamResponse(ctx *schemas.BifrostContext, bifrostResp
 						shouldGenerateDeltas = true
 					}
 				}
-			case schemas.ResponsesMessageTypeWebSearchCall:
-				// Extract query from web search action
-				if bifrostResp.Item.ResponsesToolMessage.Action != nil &&
-					bifrostResp.Item.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction != nil &&
-					bifrostResp.Item.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction.Query != nil {
-					// Create input map with query
-					inputMap := map[string]interface{}{
-						"query": *bifrostResp.Item.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction.Query,
-					}
-					if jsonBytes, err := json.Marshal(inputMap); err == nil {
-						argumentsJSON = string(jsonBytes)
-						shouldGenerateDeltas = true
-					}
-				}
 			}
-
 			if shouldGenerateDeltas && argumentsJSON != "" {
 				// Generate synthetic input_json_delta events by chunking the JSON
 				var indexToUse *int
@@ -1518,8 +1503,36 @@ func ToAnthropicResponsesStreamResponse(ctx *schemas.BifrostContext, bifrostResp
 			bifrostResp.Item.Type != nil &&
 			*bifrostResp.Item.Type == schemas.ResponsesMessageTypeWebSearchCall {
 
-			// Web search call complete - emit content_block_stop for query, then web_search_tool_result block
+			// Web search call complete - generate synthetic input_json_delta events, then emit content_block_stop
 			var events []*AnthropicStreamEvent
+
+			// Extract query from web search action for synthetic delta generation
+			var queryJSON string
+			if bifrostResp.Item.ResponsesToolMessage != nil &&
+				bifrostResp.Item.ResponsesToolMessage.Action != nil &&
+				bifrostResp.Item.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction != nil &&
+				bifrostResp.Item.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction.Query != nil {
+
+				// Create input map with query
+				inputMap := map[string]interface{}{
+					"query": *bifrostResp.Item.ResponsesToolMessage.Action.ResponsesWebSearchToolCallAction.Query,
+				}
+				if jsonBytes, err := json.Marshal(inputMap); err == nil {
+					queryJSON = string(jsonBytes)
+				}
+			}
+
+			// Generate synthetic input_json_delta events if we have a query
+			if queryJSON != "" {
+				var indexToUse *int
+				if bifrostResp.OutputIndex != nil {
+					indexToUse = bifrostResp.OutputIndex
+				} else if bifrostResp.ContentIndex != nil {
+					indexToUse = bifrostResp.ContentIndex
+				}
+				deltaEvents := generateSyntheticInputJSONDeltas(queryJSON, indexToUse)
+				events = append(events, deltaEvents...)
+			}
 
 			// 1. Emit content_block_stop for the query block (server_tool_use)
 			stopEvent := &AnthropicStreamEvent{
@@ -1799,11 +1812,11 @@ func (request *AnthropicMessageRequest) ToBifrostResponsesRequest(ctx context.Co
 		for _, tool := range request.Tools {
 			if tool.Type != nil && (*tool.Type == AnthropicToolTypeComputer20250124 || *tool.Type == AnthropicToolTypeComputer20251124) {
 				params.Truncation = schemas.Ptr("auto")
-				break
+			} else if tool.Type != nil && (*tool.Type == AnthropicToolTypeWebSearch20250305) {
+				params.Include = []string{"web_search_call.action.sources"}
 			}
 		}
 
-		params.Include = []string{"web_search_call.action.sources"}
 	}
 
 	bifrostReq.Params = params
