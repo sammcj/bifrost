@@ -284,6 +284,240 @@ func TestBifrostToGeminiToolConversion(t *testing.T) {
 				assert.NotNil(t, dataProp.Items, "empty items object should still be present")
 			},
 		},
+		{
+			name: "ToolWithValidationConstraints",
+			input: &schemas.BifrostChatRequest{
+				Model: "gemini-2.0-flash",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Test validation constraints"),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					Tools: []schemas.ChatTool{
+						{
+							Type: schemas.ChatToolTypeFunction,
+							Function: &schemas.ChatToolFunction{
+								Name:        "validate_input",
+								Description: schemas.Ptr("Validate input with constraints"),
+								Parameters: &schemas.ToolFunctionParameters{
+									Type: "object",
+									Properties: &schemas.OrderedMap{
+										"username": map[string]interface{}{
+											"type":        "string",
+											"description": "Username with length constraints",
+											"minLength":   float64(3),
+											"maxLength":   float64(20),
+											"pattern":     "^[a-zA-Z0-9_]+$",
+										},
+										"age": map[string]interface{}{
+											"type":    "integer",
+											"minimum": float64(0),
+											"maximum": float64(150),
+										},
+										"tags": map[string]interface{}{
+											"type":     "array",
+											"minItems": float64(1),
+											"maxItems": float64(5),
+											"items": map[string]interface{}{
+												"type": "string",
+											},
+										},
+									},
+									Required: []string{"username"},
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *gemini.GeminiGenerationRequest) {
+				require.Len(t, result.Tools, 1)
+				fd := result.Tools[0].FunctionDeclarations[0]
+
+				// Validate string constraints
+				usernameProp := fd.Parameters.Properties["username"]
+				assert.Equal(t, gemini.Type("string"), usernameProp.Type)
+				require.NotNil(t, usernameProp.MinLength, "minLength should be set")
+				assert.Equal(t, int64(3), *usernameProp.MinLength)
+				require.NotNil(t, usernameProp.MaxLength, "maxLength should be set")
+				assert.Equal(t, int64(20), *usernameProp.MaxLength)
+				assert.Equal(t, "^[a-zA-Z0-9_]+$", usernameProp.Pattern)
+
+				// Validate number constraints
+				ageProp := fd.Parameters.Properties["age"]
+				assert.Equal(t, gemini.Type("integer"), ageProp.Type)
+				require.NotNil(t, ageProp.Minimum, "minimum should be set")
+				assert.Equal(t, float64(0), *ageProp.Minimum)
+				require.NotNil(t, ageProp.Maximum, "maximum should be set")
+				assert.Equal(t, float64(150), *ageProp.Maximum)
+
+				// Validate array constraints
+				tagsProp := fd.Parameters.Properties["tags"]
+				assert.Equal(t, gemini.Type("array"), tagsProp.Type)
+				require.NotNil(t, tagsProp.MinItems, "minItems should be set")
+				assert.Equal(t, int64(1), *tagsProp.MinItems)
+				require.NotNil(t, tagsProp.MaxItems, "maxItems should be set")
+				assert.Equal(t, int64(5), *tagsProp.MaxItems)
+			},
+		},
+		{
+			name: "ToolWithAnyOfUnionTypes",
+			input: &schemas.BifrostChatRequest{
+				Model: "gemini-2.0-flash",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Test anyOf union types"),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					Tools: []schemas.ChatTool{
+						{
+							Type: schemas.ChatToolTypeFunction,
+							Function: &schemas.ChatToolFunction{
+								Name:        "process_id",
+								Description: schemas.Ptr("Process ID that can be string or number"),
+								Parameters: &schemas.ToolFunctionParameters{
+									Type: "object",
+									Properties: &schemas.OrderedMap{
+										"id": map[string]interface{}{
+											"anyOf": []interface{}{
+												map[string]interface{}{"type": "string"},
+												map[string]interface{}{"type": "integer"},
+											},
+											"description": "ID that can be string or integer",
+										},
+									},
+									Required: []string{"id"},
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *gemini.GeminiGenerationRequest) {
+				require.Len(t, result.Tools, 1)
+				fd := result.Tools[0].FunctionDeclarations[0]
+
+				// Validate anyOf is preserved
+				idProp := fd.Parameters.Properties["id"]
+				require.NotNil(t, idProp.AnyOf, "anyOf should be set")
+				require.Len(t, idProp.AnyOf, 2, "anyOf should have 2 options")
+				assert.Equal(t, gemini.Type("string"), idProp.AnyOf[0].Type)
+				assert.Equal(t, gemini.Type("integer"), idProp.AnyOf[1].Type)
+			},
+		},
+		{
+			name: "ToolWithTopLevelItems",
+			input: &schemas.BifrostChatRequest{
+				Model: "gemini-2.0-flash",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Test top-level items field"),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					Tools: []schemas.ChatTool{
+						{
+							Type: schemas.ChatToolTypeFunction,
+							Function: &schemas.ChatToolFunction{
+								Name:        "process_list",
+								Description: schemas.Ptr("Process a list of items"),
+								Parameters: &schemas.ToolFunctionParameters{
+									Type: "array",
+									Items: &schemas.OrderedMap{
+										"type":        "string",
+										"description": "Item in the list",
+									},
+									MinItems: schemas.Ptr(int64(1)),
+									MaxItems: schemas.Ptr(int64(10)),
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *gemini.GeminiGenerationRequest) {
+				require.Len(t, result.Tools, 1)
+				fd := result.Tools[0].FunctionDeclarations[0]
+
+				// Validate top-level array schema
+				assert.Equal(t, gemini.Type("array"), fd.Parameters.Type)
+				require.NotNil(t, fd.Parameters.Items, "items should be set on top-level array")
+				assert.Equal(t, gemini.Type("string"), fd.Parameters.Items.Type)
+				require.NotNil(t, fd.Parameters.MinItems, "minItems should be set")
+				assert.Equal(t, int64(1), *fd.Parameters.MinItems)
+				require.NotNil(t, fd.Parameters.MaxItems, "maxItems should be set")
+				assert.Equal(t, int64(10), *fd.Parameters.MaxItems)
+			},
+		},
+		{
+			name: "ToolWithMiscFields",
+			input: &schemas.BifrostChatRequest{
+				Model: "gemini-2.0-flash",
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Test misc fields"),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					Tools: []schemas.ChatTool{
+						{
+							Type: schemas.ChatToolTypeFunction,
+							Function: &schemas.ChatToolFunction{
+								Name:        "config_tool",
+								Description: schemas.Ptr("Tool with misc schema fields"),
+								Parameters: &schemas.ToolFunctionParameters{
+									Type:  "object",
+									Title: schemas.Ptr("ConfigParameters"),
+									Properties: &schemas.OrderedMap{
+										"enabled": map[string]interface{}{
+											"type":     "boolean",
+											"default":  true,
+											"nullable": true,
+											"title":    "Enabled Flag",
+										},
+										"format_type": map[string]interface{}{
+											"type":   "string",
+											"format": "email",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *gemini.GeminiGenerationRequest) {
+				require.Len(t, result.Tools, 1)
+				fd := result.Tools[0].FunctionDeclarations[0]
+
+				// Validate title at top level
+				assert.Equal(t, "ConfigParameters", fd.Parameters.Title)
+
+				// Validate misc fields on properties
+				enabledProp := fd.Parameters.Properties["enabled"]
+				assert.Equal(t, true, enabledProp.Default)
+				require.NotNil(t, enabledProp.Nullable, "nullable should be set")
+				assert.True(t, *enabledProp.Nullable)
+				assert.Equal(t, "Enabled Flag", enabledProp.Title)
+
+				formatTypeProp := fd.Parameters.Properties["format_type"]
+				assert.Equal(t, "email", formatTypeProp.Format)
+			},
+		},
 	}
 
 	for _, tt := range tests {

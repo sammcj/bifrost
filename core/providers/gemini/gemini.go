@@ -86,8 +86,8 @@ func (provider *GeminiProvider) completeRequest(ctx *schemas.BifrostContext, mod
 	req.SetRequestURI(provider.networkConfig.BaseURL + providerUtils.GetPathFromContext(ctx, "/models/"+model+endpoint))
 	req.Header.SetMethod(http.MethodPost)
 	req.Header.SetContentType("application/json")
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 
 	req.SetBody(jsonBody)
@@ -146,8 +146,8 @@ func (provider *GeminiProvider) listModelsByKey(ctx *schemas.BifrostContext, key
 	req.SetRequestURI(provider.networkConfig.BaseURL + providerUtils.GetPathFromContext(ctx, fmt.Sprintf("/models?pageSize=%d", schemas.DefaultPageSize)))
 	req.Header.SetMethod(http.MethodGet)
 	req.Header.SetContentType("application/json")
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 
 	// Make request
@@ -294,8 +294,8 @@ func (provider *GeminiProvider) ChatCompletionStream(ctx *schemas.BifrostContext
 		"Accept":        "text/event-stream",
 		"Cache-Control": "no-cache",
 	}
-	if key.Value != "" {
-		headers["x-goog-api-key"] = key.Value
+	if key.Value.GetValue() != "" {
+		headers["x-goog-api-key"] = key.Value.GetValue()
 	}
 
 	// Use shared Gemini streaming logic
@@ -459,7 +459,7 @@ func HandleGeminiChatCompletionStream(
 					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, bifrostErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
 					return
 				}
-				logger.Warn(fmt.Sprintf("Failed to process chunk: %v", err))
+				logger.Warn("Failed to process chunk: %v", err)
 				continue
 			}
 
@@ -534,7 +534,7 @@ func HandleGeminiChatCompletionStream(
 				return
 			}
 			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-			logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
+			logger.Warn("Error reading stream: %v", err)
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.ChatCompletionStreamRequest, providerName, model, logger)
 		}
 	}()
@@ -625,8 +625,8 @@ func (provider *GeminiProvider) ResponsesStream(ctx *schemas.BifrostContext, pos
 		"Accept":        "text/event-stream",
 		"Cache-Control": "no-cache",
 	}
-	if key.Value != "" {
-		headers["x-goog-api-key"] = key.Value
+	if key.Value.GetValue() != "" {
+		headers["x-goog-api-key"] = key.Value.GetValue()
 	}
 
 	return HandleGeminiResponsesStream(
@@ -804,7 +804,7 @@ func HandleGeminiResponsesStream(
 					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, bifrostErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
 					return
 				}
-				logger.Warn(fmt.Sprintf("Failed to process chunk: %v", err))
+				logger.Warn("Failed to process chunk: %v", err)
 				continue
 			}
 
@@ -885,7 +885,7 @@ func HandleGeminiResponsesStream(
 				return
 			}
 			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-			logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
+			logger.Warn("Error reading stream: %v", err)
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.ResponsesStreamRequest, providerName, model, logger)
 			return
 		}
@@ -963,8 +963,8 @@ func (provider *GeminiProvider) Embedding(ctx *schemas.BifrostContext, key schem
 	req.SetRequestURI(provider.networkConfig.BaseURL + providerUtils.GetPathFromContext(ctx, "/models/"+request.Model+":batchEmbedContents"))
 	req.Header.SetMethod(http.MethodPost)
 	req.Header.SetContentType("application/json")
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 
 	req.SetBody(jsonData)
@@ -1105,8 +1105,8 @@ func (provider *GeminiProvider) SpeechStream(ctx *schemas.BifrostContext, postHo
 	req.Header.SetContentType("application/json")
 
 	// Set headers for streaming
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Cache-Control", "no-cache")
@@ -1225,7 +1225,7 @@ func (provider *GeminiProvider) SpeechStream(ctx *schemas.BifrostContext, postHo
 					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, bifrostErr, responseChan, provider.logger)
 					return
 				}
-				provider.logger.Warn(fmt.Sprintf("Failed to process chunk: %v", err))
+				provider.logger.Warn("Failed to process chunk: %v", err)
 				continue
 			}
 
@@ -1293,7 +1293,7 @@ func (provider *GeminiProvider) SpeechStream(ctx *schemas.BifrostContext, postHo
 				return
 			}
 			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-			provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
+			provider.logger.Warn("Error reading stream: %v", err)
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.SpeechStreamRequest, providerName, request.Model, provider.logger)
 			return
 		}
@@ -1398,8 +1398,8 @@ func (provider *GeminiProvider) TranscriptionStream(ctx *schemas.BifrostContext,
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 
 	// Set headers for streaming
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Cache-Control", "no-cache")
@@ -1494,7 +1494,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx *schemas.BifrostContext,
 			// First, check if this is an error response
 			var errorCheck map[string]interface{}
 			if err := sonic.Unmarshal([]byte(jsonData), &errorCheck); err != nil {
-				provider.logger.Warn(fmt.Sprintf("Failed to parse stream data as JSON: %v", err))
+				provider.logger.Warn("Failed to parse stream data as JSON: %v", err)
 				continue
 			}
 
@@ -1521,7 +1521,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx *schemas.BifrostContext,
 			// Parse Gemini streaming response
 			var geminiResponse GenerateContentResponse
 			if err := sonic.Unmarshal([]byte(jsonData), &geminiResponse); err != nil {
-				provider.logger.Warn(fmt.Sprintf("Failed to parse Gemini stream response: %v", err))
+				provider.logger.Warn("Failed to parse Gemini stream response: %v", err)
 				continue
 			}
 
@@ -1584,7 +1584,7 @@ func (provider *GeminiProvider) TranscriptionStream(ctx *schemas.BifrostContext,
 				return
 			}
 			ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-			provider.logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
+			provider.logger.Warn("Error reading stream: %v", err)
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.TranscriptionStreamRequest, providerName, request.Model, provider.logger)
 			return
 		}
@@ -1711,8 +1711,9 @@ func (provider *GeminiProvider) handleImagenImageGeneration(ctx *schemas.Bifrost
 	req.Header.SetContentType("application/json")
 	req.SetBody(jsonData)
 
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	value := key.Value.GetValue()
+	if value != "" {
+		req.Header.Set("x-goog-api-key", value)
 	}
 
 	// Make request
@@ -1840,8 +1841,8 @@ func (provider *GeminiProvider) BatchCreate(ctx *schemas.BifrostContext, key sch
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 	req.SetRequestURI(url)
 	req.Header.SetMethod(http.MethodPost)
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 	req.Header.SetContentType("application/json")
 	req.SetBody(jsonData)
@@ -1969,8 +1970,8 @@ func (provider *GeminiProvider) batchListByKey(ctx *schemas.BifrostContext, key 
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodGet)
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 	req.Header.SetContentType("application/json")
 
@@ -2145,8 +2146,8 @@ func (provider *GeminiProvider) batchRetrieveByKey(ctx *schemas.BifrostContext, 
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodGet)
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 	req.Header.SetContentType("application/json")
 
@@ -2231,7 +2232,6 @@ func (provider *GeminiProvider) BatchRetrieve(ctx *schemas.BifrostContext, keys 
 			return resp, nil
 		}
 		lastError = err
-		provider.logger.Debug(fmt.Sprintf("BatchRetrieve failed for key %s: %v", key.Name, err.Error.Message))
 	}
 
 	// All keys failed, return the last error
@@ -2261,8 +2261,8 @@ func (provider *GeminiProvider) batchCancelByKey(ctx *schemas.BifrostContext, ke
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodPost)
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 	req.Header.SetContentType("application/json")
 
@@ -2328,7 +2328,7 @@ func (provider *GeminiProvider) BatchCancel(ctx *schemas.BifrostContext, keys []
 			return resp, nil
 		}
 		lastError = err
-		provider.logger.Debug(fmt.Sprintf("BatchCancel failed for key %s: %v", key.Name, err.Error.Message))
+		provider.logger.Debug("BatchCancel failed for key %s: %v", key.Name, err.Error)
 	}
 
 	// All keys failed, return the last error
@@ -2380,8 +2380,8 @@ func (provider *GeminiProvider) batchResultsByKey(ctx *schemas.BifrostContext, k
 	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
 	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodGet)
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 	req.Header.SetContentType("application/json")
 
@@ -2541,7 +2541,7 @@ func (provider *GeminiProvider) BatchResults(ctx *schemas.BifrostContext, keys [
 			return resp, nil
 		}
 		lastError = err
-		provider.logger.Debug(fmt.Sprintf("BatchResults failed for key %s: %v", key.Name, err.Error.Message))
+		provider.logger.Debug("BatchResults failed for key %s: %v", key.Name, err.Error.Message)
 	}
 
 	// All keys failed, return the last error
@@ -2613,8 +2613,8 @@ func (provider *GeminiProvider) FileUpload(ctx *schemas.BifrostContext, key sche
 	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodPost)
 	req.Header.SetContentType(writer.FormDataContentType())
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 	req.SetBody(buf.Bytes())
 
@@ -2712,8 +2712,8 @@ func (provider *GeminiProvider) fileListByKey(ctx *schemas.BifrostContext, key s
 	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodGet)
 	req.Header.SetContentType("application/json")
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 
 	// Make request
@@ -2884,8 +2884,8 @@ func (provider *GeminiProvider) fileRetrieveByKey(ctx *schemas.BifrostContext, k
 	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodGet)
 	req.Header.SetContentType("application/json")
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 
 	// Make request
@@ -2971,7 +2971,7 @@ func (provider *GeminiProvider) FileRetrieve(ctx *schemas.BifrostContext, keys [
 			return resp, nil
 		}
 		lastError = err
-		provider.logger.Debug(fmt.Sprintf("FileRetrieve failed for key %s: %v", key.Name, err.Error.Message))
+		provider.logger.Debug("FileRetrieve failed for key %s: %v", key.Name, err.Error)
 	}
 
 	// All keys failed, return the last error
@@ -2999,8 +2999,8 @@ func (provider *GeminiProvider) fileDeleteByKey(ctx *schemas.BifrostContext, key
 	req.SetRequestURI(requestURL)
 	req.Header.SetMethod(http.MethodDelete)
 	req.Header.SetContentType("application/json")
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 
 	// Make request
@@ -3053,7 +3053,7 @@ func (provider *GeminiProvider) FileDelete(ctx *schemas.BifrostContext, keys []s
 			return resp, nil
 		}
 		lastError = err
-		provider.logger.Debug(fmt.Sprintf("FileDelete failed for key %s: %v", key.Name, err.Error.Message))
+		provider.logger.Debug("FileDelete failed for key %s: %v", key.Name, err.Error)
 	}
 
 	// All keys failed, return the last error
@@ -3126,8 +3126,8 @@ func (provider *GeminiProvider) CountTokens(ctx *schemas.BifrostContext, key sch
 	req.SetRequestURI(provider.networkConfig.BaseURL + providerUtils.GetPathFromContext(ctx, path))
 	req.Header.SetMethod(http.MethodPost)
 	req.Header.SetContentType("application/json")
-	if key.Value != "" {
-		req.Header.Set("x-goog-api-key", key.Value)
+	if key.Value.GetValue() != "" {
+		req.Header.Set("x-goog-api-key", key.Value.GetValue())
 	}
 	req.SetBody(jsonData)
 

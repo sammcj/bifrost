@@ -401,9 +401,6 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 		// Execute the request through Bifrost
 		bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, g.handlerStore.ShouldAllowDirectKeys(), g.handlerStore.GetHeaderFilterConfig())
 
-		// Set send back raw response flag for all integration requests
-		bifrostCtx.SetValue(schemas.BifrostContextKeySendBackRawResponse, true)
-
 		// Set integration type to context
 		bifrostCtx.SetValue(schemas.BifrostContextKeyIntegrationType, string(config.Type))
 

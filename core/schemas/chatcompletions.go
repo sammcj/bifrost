@@ -17,8 +17,8 @@ type BifrostChatRequest struct {
 }
 
 // GetRawRequestBody returns the raw request body
-func (r *BifrostChatRequest) GetRawRequestBody() []byte {
-	return r.RawRequestBody
+func (cr *BifrostChatRequest) GetRawRequestBody() []byte {
+	return cr.RawRequestBody
 }
 
 // BifrostChatResponse represents the complete result from a chat completion request.
@@ -272,6 +272,7 @@ type ChatToolFunction struct {
 }
 
 // ToolFunctionParameters represents the parameters for a function definition.
+// It supports JSON Schema fields used by various providers (OpenAI, Anthropic, Gemini, etc.).
 type ToolFunctionParameters struct {
 	Type                 string                      `json:"type"`                           // Type of the parameters
 	Description          *string                     `json:"description,omitempty"`          // Description of the parameters
@@ -279,6 +280,36 @@ type ToolFunctionParameters struct {
 	Properties           *OrderedMap                 `json:"properties,omitempty"`           // Parameter properties
 	Enum                 []string                    `json:"enum,omitempty"`                 // Enum values for the parameters
 	AdditionalProperties *AdditionalPropertiesStruct `json:"additionalProperties,omitempty"` // Whether to allow additional properties
+
+	// JSON Schema definition fields
+	Defs        *OrderedMap `json:"$defs,omitempty"`       // JSON Schema draft 2019-09+ definitions
+	Definitions *OrderedMap `json:"definitions,omitempty"` // Legacy JSON Schema draft-07 definitions
+	Ref         *string     `json:"$ref,omitempty"`        // Reference to definition
+
+	// Array schema fields
+	Items    *OrderedMap `json:"items,omitempty"`    // Array element schema
+	MinItems *int64      `json:"minItems,omitempty"` // Minimum array length
+	MaxItems *int64      `json:"maxItems,omitempty"` // Maximum array length
+
+	// Composition fields (union types)
+	AnyOf []OrderedMap `json:"anyOf,omitempty"` // Union types (any of these schemas)
+	OneOf []OrderedMap `json:"oneOf,omitempty"` // Exclusive union types (exactly one of these)
+	AllOf []OrderedMap `json:"allOf,omitempty"` // Schema intersection (all of these)
+
+	// String validation fields
+	Format    *string `json:"format,omitempty"`    // String format (email, date, uri, etc.)
+	Pattern   *string `json:"pattern,omitempty"`   // Regex pattern for strings
+	MinLength *int64  `json:"minLength,omitempty"` // Minimum string length
+	MaxLength *int64  `json:"maxLength,omitempty"` // Maximum string length
+
+	// Number validation fields
+	Minimum *float64 `json:"minimum,omitempty"` // Minimum number value
+	Maximum *float64 `json:"maximum,omitempty"` // Maximum number value
+
+	// Misc fields
+	Title    *string     `json:"title,omitempty"`    // Schema title
+	Default  interface{} `json:"default,omitempty"`  // Default value
+	Nullable *bool       `json:"nullable,omitempty"` // Nullable indicator (OpenAPI 3.0 style)
 }
 
 // UnmarshalJSON implements custom JSON unmarshalling for ToolFunctionParameters.

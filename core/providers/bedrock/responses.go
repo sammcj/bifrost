@@ -1258,25 +1258,7 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest(ctx *schemas.Bi
 					bifrostTool.ResponsesToolFunction.Parameters = params
 				} else if paramsMap, ok := tool.ToolSpec.InputSchema.JSON.(map[string]interface{}); ok {
 					// Convert map to ToolFunctionParameters
-					params := &schemas.ToolFunctionParameters{}
-					if typeVal, ok := paramsMap["type"].(string); ok {
-						params.Type = typeVal
-					}
-					// Handle both pointer and non-pointer properties
-					if props, ok := schemas.SafeExtractOrderedMap(paramsMap["properties"]); ok {
-						params.Properties = &props
-					}
-					if required, ok := paramsMap["required"].([]interface{}); ok {
-						reqStrings := make([]string, 0, len(required))
-						for _, r := range required {
-							if rStr, ok := r.(string); ok {
-								reqStrings = append(reqStrings, rStr)
-							}
-						}
-						params.Required = reqStrings
-					} else if required, ok := paramsMap["required"].([]string); ok {
-						params.Required = required
-					}
+					params := convertMapToToolFunctionParameters(paramsMap)
 					bifrostTool.ResponsesToolFunction.Parameters = params
 				}
 

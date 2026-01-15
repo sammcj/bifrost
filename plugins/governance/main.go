@@ -3,14 +3,17 @@ package governance
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bytedance/sonic"
+	"github.com/google/uuid"
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/providers/gemini"
 	"github.com/maximhq/bifrost/core/schemas"
@@ -41,7 +44,8 @@ type InMemoryStore interface {
 
 type BaseGovernancePlugin interface {
 	GetName() string
-	HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error)
+	HTTPTransportPreHook(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error)
+	HTTPTransportPostHook(ctx *schemas.BifrostContext, req *schemas.HTTPRequest, resp *schemas.HTTPResponse) error
 	PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error)
 	PostHook(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)
 	Cleanup() error
@@ -143,10 +147,31 @@ func Init(
 	tracker := NewUsageTracker(ctx, governanceStore, resolver, configStore, logger)
 
 	// 4. Perform startup reset check for any expired limits from downtime
+	// Use distributed lock to prevent race condition when multiple instances boot simultaneously
 	if configStore != nil {
-		if err := tracker.PerformStartupResets(ctx); err != nil {
-			logger.Warn("startup reset failed: %v", err)
-			// Continue initialization even if startup reset fails (non-critical)
+		lockManager := configstore.NewDistributedLockManager(configStore, logger, configstore.WithDefaultTTL(30*time.Second))
+		lock, err := lockManager.NewLock("governance_startup_reset")
+		if err != nil {
+			logger.Warn("failed to create governance startup reset lock: %v", err)
+		} else {
+			// Acquire the lock
+			lockAcquired := true
+			if err := lock.LockWithRetry(ctx, 10); err != nil {
+				logger.Warn("failed to acquire governance startup reset lock, skipping startup reset: %v", err)
+				lockAcquired = false
+			}
+			// Only run startup resets if we successfully acquired the lock
+			if lockAcquired {
+				defer func() {
+					if err := lock.Unlock(ctx); err != nil && !errors.Is(err, configstore.ErrLockNotHeld) {
+						logger.Warn("failed to release governance startup reset lock: %v", err)
+					}
+				}()
+				if err := tracker.PerformStartupResets(ctx); err != nil {
+					logger.Warn("startup reset failed: %v", err)
+					// Continue initialization even if startup reset fails (non-critical)
+				}
+			}
 		}
 	}
 	ctx, cancelFunc := context.WithCancel(ctx)
@@ -203,10 +228,20 @@ func InitFromStore(
 	resolver := NewBudgetResolver(governanceStore, modelCatalog, logger)
 	tracker := NewUsageTracker(ctx, governanceStore, resolver, configStore, logger)
 	// Perform startup reset check for any expired limits from downtime
+	// Use distributed lock to prevent race condition when multiple instances boot simultaneously
 	if configStore != nil {
-		if err := tracker.PerformStartupResets(ctx); err != nil {
-			logger.Warn("startup reset failed: %v", err)
-			// Continue initialization even if startup reset fails (non-critical)
+		lockManager := configstore.NewDistributedLockManager(configStore, logger, configstore.WithDefaultTTL(30*time.Second))
+		lock, err := lockManager.NewLock("governance_startup_reset")
+		if err != nil {
+			logger.Warn("failed to create governance startup reset lock: %v", err)
+		} else if err := lock.Lock(ctx); err != nil {
+			logger.Warn("failed to acquire governance startup reset lock, skipping startup reset: %v", err)
+		} else {
+			defer lock.Unlock(ctx)
+			if err := tracker.PerformStartupResets(ctx); err != nil {
+				logger.Warn("startup reset failed: %v", err)
+				// Continue initialization even if startup reset fails (non-critical)
+			}
 		}
 	}
 	ctx, cancelFunc := context.WithCancel(ctx)
@@ -260,9 +295,9 @@ func parseVirtualKeyFromHTTPRequest(req *schemas.HTTPRequest) *string {
 	return nil
 }
 
-// HTTPTransportIntercept intercepts requests before they are processed (governance decision point)
+// HTTPTransportPreHook intercepts requests before they are processed (governance decision point)
 // It modifies the request in-place and returns nil to continue, or an HTTPResponse to short-circuit.
-func (p *GovernancePlugin) HTTPTransportIntercept(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
+func (p *GovernancePlugin) HTTPTransportPreHook(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
 	virtualKeyValue := parseVirtualKeyFromHTTPRequest(req)
 	if virtualKeyValue == nil {
 		return nil, nil
@@ -301,6 +336,12 @@ func (p *GovernancePlugin) HTTPTransportIntercept(ctx *schemas.BifrostContext, r
 	}
 	req.Body = body
 	return nil, nil
+}
+
+// HTTPTransportPostHook intercepts requests after they are processed (governance decision point)
+// It modifies the response in-place and returns nil to continue
+func (p *GovernancePlugin) HTTPTransportPostHook(ctx *schemas.BifrostContext, req *schemas.HTTPRequest, resp *schemas.HTTPResponse) error {
+	return nil
 }
 
 // loadBalanceProvider loads balances the provider for the request
@@ -717,4 +758,9 @@ func (p *GovernancePlugin) postHookWorker(result *schemas.BifrostResponse, provi
 // GetGovernanceStore returns the governance store
 func (p *GovernancePlugin) GetGovernanceStore() GovernanceStore {
 	return p.store
+}
+
+// GenerateVirtualKey is a helper function
+func GenerateVirtualKey() string {
+	return VirtualKeyPrefix + uuid.NewString()
 }

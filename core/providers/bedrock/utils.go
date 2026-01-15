@@ -815,14 +815,87 @@ func convertToolConfig(model string, params *schemas.ChatParameters) *BedrockToo
 			var schemaObject interface{}
 			if tool.Function.Parameters != nil {
 				// Use the complete parameters object which includes type, properties, required, etc.
-				schemaObject = map[string]interface{}{
+				schemaMap := map[string]interface{}{
 					"type":       tool.Function.Parameters.Type,
 					"properties": tool.Function.Parameters.Properties,
 				}
 				// Add required field if present
 				if len(tool.Function.Parameters.Required) > 0 {
-					schemaObject.(map[string]interface{})["required"] = tool.Function.Parameters.Required
+					schemaMap["required"] = tool.Function.Parameters.Required
 				}
+				// Add description if present
+				if tool.Function.Parameters.Description != nil {
+					schemaMap["description"] = *tool.Function.Parameters.Description
+				}
+				// Add enum if present
+				if len(tool.Function.Parameters.Enum) > 0 {
+					schemaMap["enum"] = tool.Function.Parameters.Enum
+				}
+				// Add additionalProperties if present
+				if tool.Function.Parameters.AdditionalProperties != nil {
+					schemaMap["additionalProperties"] = tool.Function.Parameters.AdditionalProperties
+				}
+				// Add JSON Schema definition fields
+				if tool.Function.Parameters.Defs != nil {
+					schemaMap["$defs"] = tool.Function.Parameters.Defs
+				}
+				if tool.Function.Parameters.Definitions != nil {
+					schemaMap["definitions"] = tool.Function.Parameters.Definitions
+				}
+				if tool.Function.Parameters.Ref != nil {
+					schemaMap["$ref"] = *tool.Function.Parameters.Ref
+				}
+				// Add array schema fields
+				if tool.Function.Parameters.Items != nil {
+					schemaMap["items"] = tool.Function.Parameters.Items
+				}
+				if tool.Function.Parameters.MinItems != nil {
+					schemaMap["minItems"] = *tool.Function.Parameters.MinItems
+				}
+				if tool.Function.Parameters.MaxItems != nil {
+					schemaMap["maxItems"] = *tool.Function.Parameters.MaxItems
+				}
+				// Add composition fields
+				if len(tool.Function.Parameters.AnyOf) > 0 {
+					schemaMap["anyOf"] = tool.Function.Parameters.AnyOf
+				}
+				if len(tool.Function.Parameters.OneOf) > 0 {
+					schemaMap["oneOf"] = tool.Function.Parameters.OneOf
+				}
+				if len(tool.Function.Parameters.AllOf) > 0 {
+					schemaMap["allOf"] = tool.Function.Parameters.AllOf
+				}
+				// Add string validation fields
+				if tool.Function.Parameters.Format != nil {
+					schemaMap["format"] = *tool.Function.Parameters.Format
+				}
+				if tool.Function.Parameters.Pattern != nil {
+					schemaMap["pattern"] = *tool.Function.Parameters.Pattern
+				}
+				if tool.Function.Parameters.MinLength != nil {
+					schemaMap["minLength"] = *tool.Function.Parameters.MinLength
+				}
+				if tool.Function.Parameters.MaxLength != nil {
+					schemaMap["maxLength"] = *tool.Function.Parameters.MaxLength
+				}
+				// Add number validation fields
+				if tool.Function.Parameters.Minimum != nil {
+					schemaMap["minimum"] = *tool.Function.Parameters.Minimum
+				}
+				if tool.Function.Parameters.Maximum != nil {
+					schemaMap["maximum"] = *tool.Function.Parameters.Maximum
+				}
+				// Add misc fields
+				if tool.Function.Parameters.Title != nil {
+					schemaMap["title"] = *tool.Function.Parameters.Title
+				}
+				if tool.Function.Parameters.Default != nil {
+					schemaMap["default"] = tool.Function.Parameters.Default
+				}
+				if tool.Function.Parameters.Nullable != nil {
+					schemaMap["nullable"] = *tool.Function.Parameters.Nullable
+				}
+				schemaObject = schemaMap
 			} else {
 				// Fallback to empty object schema if no parameters
 				schemaObject = map[string]interface{}{
@@ -1030,4 +1103,206 @@ func ToBedrockError(bifrostErr *schemas.BifrostError) *BedrockError {
 	}
 
 	return bedrockErr
+}
+
+// convertMapToToolFunctionParameters converts a map[string]interface{} to ToolFunctionParameters
+// This handles the conversion from flexible parameter formats to Bifrost's structured format
+func convertMapToToolFunctionParameters(paramsMap map[string]interface{}) *schemas.ToolFunctionParameters {
+	if paramsMap == nil {
+		return nil
+	}
+
+	params := &schemas.ToolFunctionParameters{}
+
+	// Extract type
+	if typeVal, ok := paramsMap["type"].(string); ok {
+		params.Type = typeVal
+	}
+
+	// Extract description
+	if descVal, ok := paramsMap["description"].(string); ok {
+		params.Description = &descVal
+	}
+
+	// Extract properties
+	if props, ok := schemas.SafeExtractOrderedMap(paramsMap["properties"]); ok {
+		params.Properties = &props
+	}
+
+	// Extract required
+	if required, ok := paramsMap["required"].([]interface{}); ok {
+		reqStrings := make([]string, 0, len(required))
+		for _, r := range required {
+			if rStr, ok := r.(string); ok {
+				reqStrings = append(reqStrings, rStr)
+			}
+		}
+		params.Required = reqStrings
+	} else if required, ok := paramsMap["required"].([]string); ok {
+		params.Required = required
+	}
+
+	// Extract enum
+	if enumVal, ok := paramsMap["enum"].([]interface{}); ok {
+		enum := make([]string, 0, len(enumVal))
+		for _, v := range enumVal {
+			if s, ok := v.(string); ok {
+				enum = append(enum, s)
+			}
+		}
+		params.Enum = enum
+	}
+
+	// Extract additionalProperties
+	if addPropsVal, ok := paramsMap["additionalProperties"].(bool); ok {
+		params.AdditionalProperties = &schemas.AdditionalPropertiesStruct{
+			AdditionalPropertiesBool: &addPropsVal,
+		}
+	} else if addPropsVal, ok := schemas.SafeExtractOrderedMap(paramsMap["additionalProperties"]); ok {
+		params.AdditionalProperties = &schemas.AdditionalPropertiesStruct{
+			AdditionalPropertiesMap: &addPropsVal,
+		}
+	}
+
+	// Extract $defs (JSON Schema draft 2019-09+)
+	if defsVal, ok := schemas.SafeExtractOrderedMap(paramsMap["$defs"]); ok {
+		params.Defs = &defsVal
+	}
+
+	// Extract definitions (legacy JSON Schema draft-07)
+	if defsVal, ok := schemas.SafeExtractOrderedMap(paramsMap["definitions"]); ok {
+		params.Definitions = &defsVal
+	}
+
+	// Extract $ref
+	if refVal, ok := paramsMap["$ref"].(string); ok {
+		params.Ref = &refVal
+	}
+
+	// Extract items (array element schema)
+	if itemsVal, ok := schemas.SafeExtractOrderedMap(paramsMap["items"]); ok {
+		params.Items = &itemsVal
+	}
+
+	// Extract minItems
+	if minItemsVal, ok := bedrockExtractInt64(paramsMap["minItems"]); ok {
+		params.MinItems = &minItemsVal
+	}
+
+	// Extract maxItems
+	if maxItemsVal, ok := bedrockExtractInt64(paramsMap["maxItems"]); ok {
+		params.MaxItems = &maxItemsVal
+	}
+
+	// Extract anyOf
+	if anyOfVal, ok := paramsMap["anyOf"].([]interface{}); ok {
+		anyOf := make([]schemas.OrderedMap, 0, len(anyOfVal))
+		for _, v := range anyOfVal {
+			if m, ok := schemas.SafeExtractOrderedMap(v); ok {
+				anyOf = append(anyOf, m)
+			}
+		}
+		params.AnyOf = anyOf
+	}
+
+	// Extract oneOf
+	if oneOfVal, ok := paramsMap["oneOf"].([]interface{}); ok {
+		oneOf := make([]schemas.OrderedMap, 0, len(oneOfVal))
+		for _, v := range oneOfVal {
+			if m, ok := schemas.SafeExtractOrderedMap(v); ok {
+				oneOf = append(oneOf, m)
+			}
+		}
+		params.OneOf = oneOf
+	}
+
+	// Extract allOf
+	if allOfVal, ok := paramsMap["allOf"].([]interface{}); ok {
+		allOf := make([]schemas.OrderedMap, 0, len(allOfVal))
+		for _, v := range allOfVal {
+			if m, ok := schemas.SafeExtractOrderedMap(v); ok {
+				allOf = append(allOf, m)
+			}
+		}
+		params.AllOf = allOf
+	}
+
+	// Extract format
+	if formatVal, ok := paramsMap["format"].(string); ok {
+		params.Format = &formatVal
+	}
+
+	// Extract pattern
+	if patternVal, ok := paramsMap["pattern"].(string); ok {
+		params.Pattern = &patternVal
+	}
+
+	// Extract minLength
+	if minLengthVal, ok := bedrockExtractInt64(paramsMap["minLength"]); ok {
+		params.MinLength = &minLengthVal
+	}
+
+	// Extract maxLength
+	if maxLengthVal, ok := bedrockExtractInt64(paramsMap["maxLength"]); ok {
+		params.MaxLength = &maxLengthVal
+	}
+
+	// Extract minimum
+	if minVal, ok := bedrockExtractFloat64(paramsMap["minimum"]); ok {
+		params.Minimum = &minVal
+	}
+
+	// Extract maximum
+	if maxVal, ok := bedrockExtractFloat64(paramsMap["maximum"]); ok {
+		params.Maximum = &maxVal
+	}
+
+	// Extract title
+	if titleVal, ok := paramsMap["title"].(string); ok {
+		params.Title = &titleVal
+	}
+
+	// Extract default
+	if defaultVal, exists := paramsMap["default"]; exists {
+		params.Default = defaultVal
+	}
+
+	// Extract nullable
+	if nullableVal, ok := paramsMap["nullable"].(bool); ok {
+		params.Nullable = &nullableVal
+	}
+
+	return params
+}
+
+// bedrockExtractInt64 extracts an int64 from various numeric types
+func bedrockExtractInt64(v interface{}) (int64, bool) {
+	switch val := v.(type) {
+	case int:
+		return int64(val), true
+	case int64:
+		return val, true
+	case float64:
+		return int64(val), true
+	case float32:
+		return int64(val), true
+	default:
+		return 0, false
+	}
+}
+
+// bedrockExtractFloat64 extracts a float64 from various numeric types
+func bedrockExtractFloat64(v interface{}) (float64, bool) {
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case float32:
+		return float64(val), true
+	case int:
+		return float64(val), true
+	case int64:
+		return float64(val), true
+	default:
+		return 0, false
+	}
 }

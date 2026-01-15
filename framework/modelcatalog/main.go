@@ -21,8 +21,10 @@ const (
 )
 
 type ModelCatalog struct {
-	configStore configstore.ConfigStore
-	logger      schemas.Logger
+	configStore            configstore.ConfigStore
+	distributedLockManager *configstore.DistributedLockManager
+
+	logger schemas.Logger
 
 	// Pricing configuration fields (protected by pricingMu)
 	pricingURL          string
@@ -102,26 +104,42 @@ func Init(ctx context.Context, config *Config, configStore configstore.ConfigSto
 	}
 
 	mc := &ModelCatalog{
-		pricingURL:            pricingURL,
-		pricingSyncInterval:   pricingSyncInterval,
-		configStore:           configStore,
-		logger:                logger,
-		pricingData:           make(map[string]configstoreTables.TableModelPricing),
-		modelPool:             make(map[schemas.ModelProvider][]string),
-		done:                  make(chan struct{}),
-		shouldSyncPricingFunc: shouldSyncPricingFunc,
+		pricingURL:             pricingURL,
+		pricingSyncInterval:    pricingSyncInterval,
+		configStore:            configStore,
+		logger:                 logger,
+		pricingData:            make(map[string]configstoreTables.TableModelPricing),
+		modelPool:              make(map[schemas.ModelProvider][]string),
+		done:                   make(chan struct{}),
+		shouldSyncPricingFunc:  shouldSyncPricingFunc,
+		distributedLockManager: configstore.NewDistributedLockManager(configStore, logger, configstore.WithDefaultTTL(30*time.Second)),
 	}
 
 	logger.Info("initializing pricing manager...")
 	if configStore != nil {
-		// Load initial pricing data
-		if err := mc.loadPricingFromDatabase(ctx); err != nil {
-			return nil, fmt.Errorf("failed to load initial pricing data: %w", err)
-		}
-
-		// For the boot-up we sync pricing data from file to database
-		if err := mc.syncPricing(ctx); err != nil {
-			return nil, fmt.Errorf("failed to sync pricing data: %w", err)
+		if mc.distributedLockManager == nil {
+			if err := mc.loadPricingFromDatabase(ctx); err != nil {
+				return nil, fmt.Errorf("failed to load initial pricing data: %w", err)
+			}
+			if err := mc.syncPricing(ctx); err != nil {
+				return nil, fmt.Errorf("failed to sync pricing data: %w", err)
+			}
+		} else {
+			lock, err := mc.distributedLockManager.NewLock("model_catalog_pricing_sync")
+			if err != nil {
+				return nil, fmt.Errorf("failed to create model catalog pricing sync lock: %w", err)
+			}
+			if err := lock.Lock(ctx); err != nil {
+				return nil, fmt.Errorf("failed to acquire model catalog pricing sync lock: %w", err)
+			}
+			defer lock.Unlock(ctx)
+			// Load initial pricing data
+			if err := mc.loadPricingFromDatabase(ctx); err != nil {
+				return nil, fmt.Errorf("failed to load initial pricing data: %w", err)
+			}
+			if err := mc.syncPricing(ctx); err != nil {
+				return nil, fmt.Errorf("failed to sync pricing data: %w", err)
+			}
 		}
 	} else {
 		// Load pricing data from config memory

@@ -209,7 +209,135 @@ func convertSchemaToFunctionParameters(schema *Schema) schemas.ToolFunctionParam
 		params.Enum = schema.Enum
 	}
 
+	// Array schema fields
+	if schema.Items != nil {
+		itemsMap := convertSchemaToOrderedMap(schema.Items)
+		params.Items = &itemsMap
+	}
+	if schema.MinItems != nil {
+		params.MinItems = schema.MinItems
+	}
+	if schema.MaxItems != nil {
+		params.MaxItems = schema.MaxItems
+	}
+
+	// Composition fields (anyOf)
+	if len(schema.AnyOf) > 0 {
+		anyOf := make([]schemas.OrderedMap, len(schema.AnyOf))
+		for i, s := range schema.AnyOf {
+			anyOf[i] = convertSchemaToOrderedMap(s)
+		}
+		params.AnyOf = anyOf
+	}
+
+	// String validation fields
+	if schema.Format != "" {
+		params.Format = &schema.Format
+	}
+	if schema.Pattern != "" {
+		params.Pattern = &schema.Pattern
+	}
+	if schema.MinLength != nil {
+		params.MinLength = schema.MinLength
+	}
+	if schema.MaxLength != nil {
+		params.MaxLength = schema.MaxLength
+	}
+
+	// Number validation fields
+	if schema.Minimum != nil {
+		params.Minimum = schema.Minimum
+	}
+	if schema.Maximum != nil {
+		params.Maximum = schema.Maximum
+	}
+
+	// Misc fields
+	if schema.Title != "" {
+		params.Title = &schema.Title
+	}
+	if schema.Default != nil {
+		params.Default = schema.Default
+	}
+	if schema.Nullable != nil {
+		params.Nullable = schema.Nullable
+	}
+
 	return params
+}
+
+// convertSchemaToOrderedMap converts a Gemini Schema to an OrderedMap
+func convertSchemaToOrderedMap(schema *Schema) schemas.OrderedMap {
+	if schema == nil {
+		return schemas.OrderedMap{}
+	}
+
+	result := schemas.OrderedMap{}
+
+	if schema.Type != "" {
+		result["type"] = strings.ToLower(string(schema.Type))
+	}
+	if schema.Description != "" {
+		result["description"] = schema.Description
+	}
+	if len(schema.Enum) > 0 {
+		result["enum"] = schema.Enum
+	}
+	if len(schema.Required) > 0 {
+		result["required"] = schema.Required
+	}
+	if len(schema.Properties) > 0 {
+		props := make(map[string]interface{})
+		for k, v := range schema.Properties {
+			props[k] = convertSchemaToOrderedMap(v)
+		}
+		result["properties"] = props
+	}
+	if schema.Items != nil {
+		result["items"] = convertSchemaToOrderedMap(schema.Items)
+	}
+	if len(schema.AnyOf) > 0 {
+		anyOf := make([]interface{}, len(schema.AnyOf))
+		for i, s := range schema.AnyOf {
+			anyOf[i] = convertSchemaToOrderedMap(s)
+		}
+		result["anyOf"] = anyOf
+	}
+	if schema.Format != "" {
+		result["format"] = schema.Format
+	}
+	if schema.Pattern != "" {
+		result["pattern"] = schema.Pattern
+	}
+	if schema.MinLength != nil {
+		result["minLength"] = *schema.MinLength
+	}
+	if schema.MaxLength != nil {
+		result["maxLength"] = *schema.MaxLength
+	}
+	if schema.MinItems != nil {
+		result["minItems"] = *schema.MinItems
+	}
+	if schema.MaxItems != nil {
+		result["maxItems"] = *schema.MaxItems
+	}
+	if schema.Minimum != nil {
+		result["minimum"] = *schema.Minimum
+	}
+	if schema.Maximum != nil {
+		result["maximum"] = *schema.Maximum
+	}
+	if schema.Title != "" {
+		result["title"] = schema.Title
+	}
+	if schema.Default != nil {
+		result["default"] = schema.Default
+	}
+	if schema.Nullable != nil {
+		result["nullable"] = *schema.Nullable
+	}
+
+	return result
 }
 
 func convertSchemaToMap(schema *Schema) schemas.OrderedMap {
@@ -632,6 +760,67 @@ func convertFunctionParametersToSchema(params schemas.ToolFunctionParameters) *S
 		}
 	}
 
+	// Array schema fields
+	if params.Items != nil {
+		schema.Items = convertPropertyToSchema(*params.Items)
+	}
+	if params.MinItems != nil {
+		schema.MinItems = params.MinItems
+	}
+	if params.MaxItems != nil {
+		schema.MaxItems = params.MaxItems
+	}
+
+	// Composition fields (anyOf, oneOf, allOf)
+	if len(params.AnyOf) > 0 {
+		schema.AnyOf = make([]*Schema, len(params.AnyOf))
+		for i, item := range params.AnyOf {
+			schema.AnyOf[i] = convertPropertyToSchema(item)
+		}
+	}
+	// Note: Gemini treats oneOf the same as anyOf, so we map it to AnyOf
+	if len(params.OneOf) > 0 && len(schema.AnyOf) == 0 {
+		schema.AnyOf = make([]*Schema, len(params.OneOf))
+		for i, item := range params.OneOf {
+			schema.AnyOf[i] = convertPropertyToSchema(item)
+		}
+	}
+	// Note: Gemini doesn't have native allOf support, but we can still attempt to pass it through AnyOf
+	// This is a best-effort conversion as allOf semantics differ from anyOf
+
+	// String validation fields
+	if params.Format != nil {
+		schema.Format = *params.Format
+	}
+	if params.Pattern != nil {
+		schema.Pattern = *params.Pattern
+	}
+	if params.MinLength != nil {
+		schema.MinLength = params.MinLength
+	}
+	if params.MaxLength != nil {
+		schema.MaxLength = params.MaxLength
+	}
+
+	// Number validation fields
+	if params.Minimum != nil {
+		schema.Minimum = params.Minimum
+	}
+	if params.Maximum != nil {
+		schema.Maximum = params.Maximum
+	}
+
+	// Misc fields
+	if params.Title != nil {
+		schema.Title = *params.Title
+	}
+	if params.Default != nil {
+		schema.Default = params.Default
+	}
+	if params.Nullable != nil {
+		schema.Nullable = params.Nullable
+	}
+
 	return schema
 }
 
@@ -639,8 +828,15 @@ func convertFunctionParametersToSchema(params schemas.ToolFunctionParameters) *S
 func convertPropertyToSchema(prop interface{}) *Schema {
 	schema := &Schema{}
 
-	// Handle property as map[string]interface{}
-	if propMap, ok := prop.(map[string]interface{}); ok {
+	// Handle property as map[string]interface{} or schemas.OrderedMap
+	var propMap map[string]interface{}
+	switch v := prop.(type) {
+	case map[string]interface{}:
+		propMap = v
+	case schemas.OrderedMap:
+		propMap = map[string]interface{}(v)
+	}
+	if propMap != nil {
 		if propType, exists := propMap["type"]; exists {
 			if typeStr, ok := propType.(string); ok {
 				schema.Type = Type(typeStr)
@@ -696,9 +892,129 @@ func convertPropertyToSchema(prop interface{}) *Schema {
 				schema.Required = reqStrs
 			}
 		}
+
+		// Handle anyOf composition
+		if anyOf, exists := propMap["anyOf"]; exists {
+			if anyOfSlice, ok := anyOf.([]interface{}); ok {
+				schema.AnyOf = make([]*Schema, len(anyOfSlice))
+				for i, item := range anyOfSlice {
+					schema.AnyOf[i] = convertPropertyToSchema(item)
+				}
+			}
+		}
+
+		// Handle oneOf composition (Gemini treats it as anyOf)
+		if oneOf, exists := propMap["oneOf"]; exists {
+			if oneOfSlice, ok := oneOf.([]interface{}); ok && len(schema.AnyOf) == 0 {
+				schema.AnyOf = make([]*Schema, len(oneOfSlice))
+				for i, item := range oneOfSlice {
+					schema.AnyOf[i] = convertPropertyToSchema(item)
+				}
+			}
+		}
+
+		// Handle string validation fields
+		if format, exists := propMap["format"]; exists {
+			if formatStr, ok := format.(string); ok {
+				schema.Format = formatStr
+			}
+		}
+
+		if pattern, exists := propMap["pattern"]; exists {
+			if patternStr, ok := pattern.(string); ok {
+				schema.Pattern = patternStr
+			}
+		}
+
+		if minLength, exists := propMap["minLength"]; exists {
+			if minLengthVal, ok := toInt64(minLength); ok {
+				schema.MinLength = &minLengthVal
+			}
+		}
+
+		if maxLength, exists := propMap["maxLength"]; exists {
+			if maxLengthVal, ok := toInt64(maxLength); ok {
+				schema.MaxLength = &maxLengthVal
+			}
+		}
+
+		// Handle number validation fields
+		if minimum, exists := propMap["minimum"]; exists {
+			if minVal, ok := toFloat64(minimum); ok {
+				schema.Minimum = &minVal
+			}
+		}
+
+		if maximum, exists := propMap["maximum"]; exists {
+			if maxVal, ok := toFloat64(maximum); ok {
+				schema.Maximum = &maxVal
+			}
+		}
+
+		// Handle array validation fields
+		if minItems, exists := propMap["minItems"]; exists {
+			if minItemsVal, ok := toInt64(minItems); ok {
+				schema.MinItems = &minItemsVal
+			}
+		}
+
+		if maxItems, exists := propMap["maxItems"]; exists {
+			if maxItemsVal, ok := toInt64(maxItems); ok {
+				schema.MaxItems = &maxItemsVal
+			}
+		}
+
+		// Handle misc fields
+		if title, exists := propMap["title"]; exists {
+			if titleStr, ok := title.(string); ok {
+				schema.Title = titleStr
+			}
+		}
+
+		if defaultVal, exists := propMap["default"]; exists {
+			schema.Default = defaultVal
+		}
+
+		if nullable, exists := propMap["nullable"]; exists {
+			if nullableBool, ok := nullable.(bool); ok {
+				schema.Nullable = &nullableBool
+			}
+		}
 	}
 
 	return schema
+}
+
+// toInt64 converts various numeric types to int64
+func toInt64(v interface{}) (int64, bool) {
+	switch val := v.(type) {
+	case int:
+		return int64(val), true
+	case int64:
+		return val, true
+	case float64:
+		return int64(val), true
+	case float32:
+		return int64(val), true
+	default:
+		return 0, false
+	}
+}
+
+// toFloat64 converts various numeric types to float64
+func toFloat64(v interface{}) (float64, bool) {
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case float32:
+		return float64(val), true
+	case int:
+		return float64(val), true
+	case int64:
+		return float64(val), true
+	default:
+		return 0, false
+	}
 }
 
 // convertToolChoiceToToolConfig converts Bifrost tool choice to Gemini tool config
@@ -1163,6 +1479,135 @@ func buildJSONSchemaFromMap(schemaMap map[string]interface{}) *schemas.Responses
 		jsonSchema.Name = schemas.Ptr(name)
 	} else if title, ok := normalizedSchemaMap["title"].(string); ok {
 		jsonSchema.Name = schemas.Ptr(title)
+	}
+
+	// Extract $defs (JSON Schema draft 2019-09+)
+	if defs, ok := normalizedSchemaMap["$defs"].(map[string]interface{}); ok {
+		jsonSchema.Defs = &defs
+	}
+
+	// Extract definitions (legacy JSON Schema draft-07)
+	if definitions, ok := normalizedSchemaMap["definitions"].(map[string]interface{}); ok {
+		jsonSchema.Definitions = &definitions
+	}
+
+	// Extract $ref
+	if ref, ok := normalizedSchemaMap["$ref"].(string); ok {
+		jsonSchema.Ref = schemas.Ptr(ref)
+	}
+
+	// Extract items (array element schema)
+	if items, ok := normalizedSchemaMap["items"].(map[string]interface{}); ok {
+		jsonSchema.Items = &items
+	}
+
+	// Extract minItems
+	if minItems, ok := toInt64(normalizedSchemaMap["minItems"]); ok {
+		jsonSchema.MinItems = &minItems
+	}
+
+	// Extract maxItems
+	if maxItems, ok := toInt64(normalizedSchemaMap["maxItems"]); ok {
+		jsonSchema.MaxItems = &maxItems
+	}
+
+	// Extract anyOf
+	if anyOf, ok := normalizedSchemaMap["anyOf"].([]interface{}); ok {
+		anyOfMaps := make([]map[string]any, 0, len(anyOf))
+		for _, item := range anyOf {
+			if m, ok := item.(map[string]interface{}); ok {
+				anyOfMaps = append(anyOfMaps, m)
+			}
+		}
+		if len(anyOfMaps) > 0 {
+			jsonSchema.AnyOf = anyOfMaps
+		}
+	}
+
+	// Extract oneOf
+	if oneOf, ok := normalizedSchemaMap["oneOf"].([]interface{}); ok {
+		oneOfMaps := make([]map[string]any, 0, len(oneOf))
+		for _, item := range oneOf {
+			if m, ok := item.(map[string]interface{}); ok {
+				oneOfMaps = append(oneOfMaps, m)
+			}
+		}
+		if len(oneOfMaps) > 0 {
+			jsonSchema.OneOf = oneOfMaps
+		}
+	}
+
+	// Extract allOf
+	if allOf, ok := normalizedSchemaMap["allOf"].([]interface{}); ok {
+		allOfMaps := make([]map[string]any, 0, len(allOf))
+		for _, item := range allOf {
+			if m, ok := item.(map[string]interface{}); ok {
+				allOfMaps = append(allOfMaps, m)
+			}
+		}
+		if len(allOfMaps) > 0 {
+			jsonSchema.AllOf = allOfMaps
+		}
+	}
+
+	// Extract format
+	if format, ok := normalizedSchemaMap["format"].(string); ok {
+		jsonSchema.Format = schemas.Ptr(format)
+	}
+
+	// Extract pattern
+	if pattern, ok := normalizedSchemaMap["pattern"].(string); ok {
+		jsonSchema.Pattern = schemas.Ptr(pattern)
+	}
+
+	// Extract minLength
+	if minLength, ok := toInt64(normalizedSchemaMap["minLength"]); ok {
+		jsonSchema.MinLength = &minLength
+	}
+
+	// Extract maxLength
+	if maxLength, ok := toInt64(normalizedSchemaMap["maxLength"]); ok {
+		jsonSchema.MaxLength = &maxLength
+	}
+
+	// Extract minimum
+	if minimum, ok := toFloat64(normalizedSchemaMap["minimum"]); ok {
+		jsonSchema.Minimum = &minimum
+	}
+
+	// Extract maximum
+	if maximum, ok := toFloat64(normalizedSchemaMap["maximum"]); ok {
+		jsonSchema.Maximum = &maximum
+	}
+
+	// Extract title (separate from name)
+	if title, ok := normalizedSchemaMap["title"].(string); ok {
+		jsonSchema.Title = schemas.Ptr(title)
+	}
+
+	// Extract default
+	if defaultVal, exists := normalizedSchemaMap["default"]; exists {
+		jsonSchema.Default = defaultVal
+	}
+
+	// Extract nullable
+	if nullable, ok := normalizedSchemaMap["nullable"].(bool); ok {
+		jsonSchema.Nullable = &nullable
+	}
+
+	// Extract enum
+	if enum, ok := normalizedSchemaMap["enum"].([]interface{}); ok {
+		enumStrs := make([]string, 0, len(enum))
+		for _, e := range enum {
+			if str, ok := e.(string); ok {
+				enumStrs = append(enumStrs, str)
+			}
+		}
+		if len(enumStrs) > 0 {
+			jsonSchema.Enum = enumStrs
+		}
+	} else if enumStrs, ok := normalizedSchemaMap["enum"].([]string); ok && len(enumStrs) > 0 {
+		jsonSchema.Enum = enumStrs
 	}
 
 	return jsonSchema
