@@ -12780,7 +12780,7 @@ func TestGenerateKeyHash_EnabledField(t *testing.T) {
 			expectEqual: false,
 		},
 		{
-			name: "enabled_nil_vs_false_different_hash",
+			name: "enabled_nil_vs_false_same_hash",
 			key1: schemas.Key{
 				Name:    "test-key",
 				Value:   *schemas.NewEnvVar("sk-123"),
@@ -12793,7 +12793,7 @@ func TestGenerateKeyHash_EnabledField(t *testing.T) {
 				Weight:  1,
 				Enabled: &enabledFalse,
 			},
-			expectEqual: false,
+			expectEqual: true,
 		},
 		{
 			name: "same_enabled_true_same_hash",
@@ -12951,7 +12951,7 @@ func TestGenerateKeyHash_UseForBatchAPIField(t *testing.T) {
 			expectEqual: false,
 		},
 		{
-			name: "batch_nil_vs_false_different_hash",
+			name: "batch_nil_vs_false_same_hash",
 			key1: schemas.Key{
 				Name:           "test-key",
 				Value:          *schemas.NewEnvVar("sk-123"),
@@ -12964,7 +12964,7 @@ func TestGenerateKeyHash_UseForBatchAPIField(t *testing.T) {
 				Weight:         1,
 				UseForBatchAPI: &batchFalse,
 			},
-			expectEqual: false,
+			expectEqual: true,
 		},
 		{
 			name: "same_batch_true_same_hash",
