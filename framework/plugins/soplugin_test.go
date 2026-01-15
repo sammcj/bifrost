@@ -390,7 +390,12 @@ func buildHelloWorldPlugin(t *testing.T) string {
 
 	// Build the plugin directly with go build
 	pluginPath := filepath.Join(buildDir, "hello-world"+pluginExt)
-	cmd := exec.Command("go", "build", "-buildmode=plugin", "-o", pluginPath, "main.go")
+	args := []string{"build", "-buildmode=plugin", "-o", pluginPath}
+	if raceEnabled {
+		args = append(args, "-race")
+	}
+	args = append(args, "main.go")
+	cmd := exec.Command("go", args...)
 	cmd.Dir = absPluginDir
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=1")
 	output, err := cmd.CombinedOutput()
@@ -567,7 +572,12 @@ func buildHelloWorldPluginForBenchmark(b *testing.B) string {
 	require.NoError(b, err, "Failed to create build directory")
 
 	// Build the plugin directly with go build
-	cmd := exec.Command("go", "build", "-buildmode=plugin", "-o", pluginPath, "main.go")
+	args := []string{"build", "-buildmode=plugin", "-o", pluginPath}
+	if raceEnabled {
+		args = append(args, "-race")
+	}
+	args = append(args, "main.go")
+	cmd := exec.Command("go", args...)
 	cmd.Dir = absPluginDir
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=1")
 	output, err := cmd.CombinedOutput()
