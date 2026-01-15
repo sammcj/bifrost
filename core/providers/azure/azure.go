@@ -104,15 +104,16 @@ func (provider *AzureProvider) getAzureAuthHeaders(ctx *schemas.BifrostContext, 
 		return authHeader, nil
 	}
 
-	if key.Value.GetValue() == "" {
+	value := key.Value.GetValue()
+	if value == "" {
 		return nil, providerUtils.NewBifrostOperationError("API key is empty", errors.New("API key is empty"), schemas.Azure)
 	}
 
 	// API key authentication
 	if isAnthropicModel {
-		authHeader["x-api-key"] = key.Value.GetValue()
+		authHeader["x-api-key"] = value
 	} else {
-		authHeader["api-key"] = key.Value.GetValue()
+		authHeader["api-key"] = value
 	}
 	return authHeader, nil
 }
@@ -185,18 +186,23 @@ func (provider *AzureProvider) completeRequest(
 		req.Header.Set(k, v)
 	}
 
+	endpoint := key.AzureKeyConfig.Endpoint.GetValue()
+	if endpoint == "" {
+		return nil, deployment, 0, providerUtils.NewConfigurationError("endpoint not set", provider.GetProviderKey())
+	}
+
 	if isAnthropicModel {
 		req.Header.Set("anthropic-version", AzureAnthropicAPIVersionDefault)
-		url = fmt.Sprintf("%s/%s", key.AzureKeyConfig.Endpoint.GetValue(), path)
+		url = fmt.Sprintf("%s/%s", endpoint, path)
 	} else {
 		apiVersion := key.AzureKeyConfig.APIVersion
 		if apiVersion == nil {
 			apiVersion = schemas.NewEnvVar(AzureAPIVersionDefault)
 		}
 		if path == "openai/v1/responses" {
-			url = fmt.Sprintf("%s/%s?api-version=preview", key.AzureKeyConfig.Endpoint.GetValue(), path)
+			url = fmt.Sprintf("%s/%s?api-version=preview", endpoint, path)
 		} else {
-			url = fmt.Sprintf("%s/%s?api-version=%s", key.AzureKeyConfig.Endpoint.GetValue(), path, apiVersion.GetValue())
+			url = fmt.Sprintf("%s/%s?api-version=%s", endpoint, path, apiVersion.GetValue())
 		}
 	}
 
@@ -882,7 +888,12 @@ func (provider *AzureProvider) Speech(ctx *schemas.BifrostContext, key schemas.K
 		apiVersion = schemas.NewEnvVar(AzureAPIVersionDefault)
 	}
 
-	url := fmt.Sprintf("%s/openai/deployments/%s/audio/speech?api-version=%s", key.AzureKeyConfig.Endpoint.GetValue(), deployment, apiVersion.GetValue())
+	endpoint := key.AzureKeyConfig.Endpoint.GetValue()
+	if endpoint == "" {
+		return nil, providerUtils.NewConfigurationError("endpoint not set", provider.GetProviderKey())
+	}
+
+	url := fmt.Sprintf("%s/openai/deployments/%s/audio/speech?api-version=%s", endpoint, deployment, apiVersion.GetValue())
 
 	response, err := openai.HandleOpenAISpeechRequest(
 		ctx,

@@ -223,6 +223,7 @@ func (account *ComprehensiveTestAccount) GetKeysForProvider(ctx context.Context,
 				Weight: 1.0,
 				AzureKeyConfig: &schemas.AzureKeyConfig{
 					Endpoint: *schemas.NewEnvVar("env.AZURE_ENDPOINT"),
+					APIVersion: schemas.NewEnvVar("env.AZURE_API_VERSION"),
 					Deployments: map[string]string{
 						"gpt-4o":                 "gpt-4o",
 						"gpt-4o-backup":          "gpt-4o-3",
