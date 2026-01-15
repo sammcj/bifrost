@@ -1297,7 +1297,7 @@ func (provider *VertexProvider) Embedding(ctx *schemas.BifrostContext, key schem
 
 	// Build the native Vertex embedding API endpoint
 	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:predict",
-		key.VertexKeyConfig.Region, key.VertexKeyConfig.ProjectID, key.VertexKeyConfig.Region, deployment)
+		region, projectID, region, deployment)
 
 	// Create HTTP request for streaming
 	req := fasthttp.AcquireRequest()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -584,6 +585,7 @@ func BenchmarkIsRateLimitError(b *testing.B) {
 
 // Mock Account implementation for testing UpdateProvider
 type MockAccount struct {
+	mu      sync.RWMutex
 	configs map[schemas.ModelProvider]*schemas.ProviderConfig
 	keys    map[schemas.ModelProvider][]schemas.Key
 }
@@ -596,6 +598,8 @@ func NewMockAccount() *MockAccount {
 }
 
 func (ma *MockAccount) AddProvider(provider schemas.ModelProvider, concurrency int, bufferSize int) {
+	ma.mu.Lock()
+	defer ma.mu.Unlock()
 	ma.configs[provider] = &schemas.ProviderConfig{
 		NetworkConfig: schemas.NetworkConfig{
 			DefaultRequestTimeoutInSeconds: 30,
@@ -619,6 +623,8 @@ func (ma *MockAccount) AddProvider(provider schemas.ModelProvider, concurrency i
 }
 
 func (ma *MockAccount) UpdateProviderConfig(provider schemas.ModelProvider, concurrency int, bufferSize int) {
+	ma.mu.Lock()
+	defer ma.mu.Unlock()
 	if config, exists := ma.configs[provider]; exists {
 		config.ConcurrencyAndBufferSize.Concurrency = concurrency
 		config.ConcurrencyAndBufferSize.BufferSize = bufferSize
@@ -626,6 +632,8 @@ func (ma *MockAccount) UpdateProviderConfig(provider schemas.ModelProvider, conc
 }
 
 func (ma *MockAccount) GetConfiguredProviders() ([]schemas.ModelProvider, error) {
+	ma.mu.RLock()
+	defer ma.mu.RUnlock()
 	providers := make([]schemas.ModelProvider, 0, len(ma.configs))
 	for provider := range ma.configs {
 		providers = append(providers, provider)
@@ -634,6 +642,8 @@ func (ma *MockAccount) GetConfiguredProviders() ([]schemas.ModelProvider, error)
 }
 
 func (ma *MockAccount) GetConfigForProvider(provider schemas.ModelProvider) (*schemas.ProviderConfig, error) {
+	ma.mu.RLock()
+	defer ma.mu.RUnlock()
 	if config, exists := ma.configs[provider]; exists {
 		// Return a copy to simulate real behavior
 		configCopy := *config
@@ -643,6 +653,8 @@ func (ma *MockAccount) GetConfigForProvider(provider schemas.ModelProvider) (*sc
 }
 
 func (ma *MockAccount) GetKeysForProvider(ctx context.Context, provider schemas.ModelProvider) ([]schemas.Key, error) {
+	ma.mu.RLock()
+	defer ma.mu.RUnlock()
 	if keys, exists := ma.keys[provider]; exists {
 		return keys, nil
 	}

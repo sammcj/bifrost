@@ -805,7 +805,6 @@ func HandleOpenAIChatCompletionStreaming(
 		if ok && isResponsesToChatCompletionsFallbackValue {
 			isResponsesToChatCompletionsFallback = true
 			responsesStreamState = schemas.AcquireChatToResponsesStreamState()
-			defer schemas.ReleaseChatToResponsesStreamState(responsesStreamState)
 		}
 	}
 
@@ -911,6 +910,8 @@ func HandleOpenAIChatCompletionStreaming(
 			} else if ctx.Err() == context.DeadlineExceeded {
 				providerUtils.HandleStreamTimeout(ctx, postHookRunner, responseChan, providerName, request.Model, streamRequestType, logger)
 			}
+			// Release the responses stream state if it was acquired (for ResponsesToChatCompletions fallback)
+			schemas.ReleaseChatToResponsesStreamState(responsesStreamState)
 			close(responseChan)
 		}()
 		defer providerUtils.ReleaseStreamingResponse(resp)
