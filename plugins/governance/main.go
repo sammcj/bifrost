@@ -150,23 +150,27 @@ func Init(
 	// Use distributed lock to prevent race condition when multiple instances boot simultaneously
 	if configStore != nil {
 		lockManager := configstore.NewDistributedLockManager(configStore, logger, configstore.WithDefaultTTL(30*time.Second))
-		lock := lockManager.NewLock("governance_startup_reset")
-		// Acquire the lock
-		lockAcquired := true
-		if err := lock.LockWithRetry(ctx, 10); err != nil {
-			logger.Warn("failed to acquire governance startup reset lock, skipping startup reset: %v", err)
-			lockAcquired = false
-		}
-		// Only run startup resets if we successfully acquired the lock
-		if lockAcquired {
-			defer func() {
-				if err := lock.Unlock(ctx); err != nil && !errors.Is(err, configstore.ErrLockNotHeld) {
-					logger.Warn("failed to release governance startup reset lock: %v", err)
+		lock, err := lockManager.NewLock("governance_startup_reset")
+		if err != nil {
+			logger.Warn("failed to create governance startup reset lock: %v", err)
+		} else {
+			// Acquire the lock
+			lockAcquired := true
+			if err := lock.LockWithRetry(ctx, 10); err != nil {
+				logger.Warn("failed to acquire governance startup reset lock, skipping startup reset: %v", err)
+				lockAcquired = false
+			}
+			// Only run startup resets if we successfully acquired the lock
+			if lockAcquired {
+				defer func() {
+					if err := lock.Unlock(ctx); err != nil && !errors.Is(err, configstore.ErrLockNotHeld) {
+						logger.Warn("failed to release governance startup reset lock: %v", err)
+					}
+				}()
+				if err := tracker.PerformStartupResets(ctx); err != nil {
+					logger.Warn("startup reset failed: %v", err)
+					// Continue initialization even if startup reset fails (non-critical)
 				}
-			}()
-			if err := tracker.PerformStartupResets(ctx); err != nil {
-				logger.Warn("startup reset failed: %v", err)
-				// Continue initialization even if startup reset fails (non-critical)
 			}
 		}
 	}
@@ -227,8 +231,10 @@ func InitFromStore(
 	// Use distributed lock to prevent race condition when multiple instances boot simultaneously
 	if configStore != nil {
 		lockManager := configstore.NewDistributedLockManager(configStore, logger, configstore.WithDefaultTTL(30*time.Second))
-		lock := lockManager.NewLock("governance_startup_reset")
-		if err := lock.Lock(ctx); err != nil {
+		lock, err := lockManager.NewLock("governance_startup_reset")
+		if err != nil {
+			logger.Warn("failed to create governance startup reset lock: %v", err)
+		} else if err := lock.Lock(ctx); err != nil {
 			logger.Warn("failed to acquire governance startup reset lock, skipping startup reset: %v", err)
 		} else {
 			defer lock.Unlock(ctx)

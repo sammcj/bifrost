@@ -24,6 +24,7 @@ var (
 	ErrLockNotAcquired = errors.New("failed to acquire lock")
 	ErrLockNotHeld     = errors.New("lock not held by this holder")
 	ErrLockExpired     = errors.New("lock has expired")
+	ErrEmptyLockKey    = errors.New("empty lock key")
 )
 
 // LockStore defines the storage operations required for distributed locking.
@@ -107,7 +108,11 @@ func NewDistributedLockManager(store LockStore, logger schemas.Logger, opts ...D
 
 // NewLock creates a new DistributedLock for the given key.
 // The lock is not acquired until Lock() or TryLock() is called.
-func (m *DistributedLockManager) NewLock(lockKey string) *DistributedLock {
+// Returns an error if the lock key is empty.
+func (m *DistributedLockManager) NewLock(lockKey string) (*DistributedLock, error) {
+	if lockKey == "" {
+		return nil, ErrEmptyLockKey
+	}
 	return &DistributedLock{
 		store:         m.store,
 		logger:        m.logger,
@@ -116,14 +121,18 @@ func (m *DistributedLockManager) NewLock(lockKey string) *DistributedLock {
 		ttl:           m.defaultTTL,
 		retryInterval: m.retryInterval,
 		maxRetries:    m.maxRetries,
-	}
+	}, nil
 }
 
 // NewLockWithTTL creates a new DistributedLock with a custom TTL.
-func (m *DistributedLockManager) NewLockWithTTL(lockKey string, ttl time.Duration) *DistributedLock {
-	lock := m.NewLock(lockKey)
+// Returns an error if the lock key is empty.
+func (m *DistributedLockManager) NewLockWithTTL(lockKey string, ttl time.Duration) (*DistributedLock, error) {
+	lock, err := m.NewLock(lockKey)
+	if err != nil {
+		return nil, err
+	}
 	lock.ttl = ttl
-	return lock
+	return lock, nil
 }
 
 // CleanupExpiredLocks removes all expired locks from the store.

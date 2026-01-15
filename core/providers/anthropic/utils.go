@@ -784,6 +784,140 @@ func convertAnthropicOutputFormatToResponsesTextConfig(outputFormat interface{})
 			}
 		}
 
+		// Extract description
+		if description, ok := schemaMap["description"].(string); ok {
+			jsonSchema.Description = &description
+		}
+
+		// Extract $defs (JSON Schema draft 2019-09+)
+		if defs, ok := schemaMap["$defs"].(map[string]interface{}); ok {
+			jsonSchema.Defs = &defs
+		}
+
+		// Extract definitions (legacy JSON Schema draft-07)
+		if definitions, ok := schemaMap["definitions"].(map[string]interface{}); ok {
+			jsonSchema.Definitions = &definitions
+		}
+
+		// Extract $ref
+		if ref, ok := schemaMap["$ref"].(string); ok {
+			jsonSchema.Ref = &ref
+		}
+
+		// Extract items (array element schema)
+		if items, ok := schemaMap["items"].(map[string]interface{}); ok {
+			jsonSchema.Items = &items
+		}
+
+		// Extract minItems
+		if minItems, ok := anthropicExtractInt64(schemaMap["minItems"]); ok {
+			jsonSchema.MinItems = &minItems
+		}
+
+		// Extract maxItems
+		if maxItems, ok := anthropicExtractInt64(schemaMap["maxItems"]); ok {
+			jsonSchema.MaxItems = &maxItems
+		}
+
+		// Extract anyOf
+		if anyOf, ok := schemaMap["anyOf"].([]interface{}); ok {
+			anyOfMaps := make([]map[string]any, 0, len(anyOf))
+			for _, item := range anyOf {
+				if m, ok := item.(map[string]interface{}); ok {
+					anyOfMaps = append(anyOfMaps, m)
+				}
+			}
+			if len(anyOfMaps) > 0 {
+				jsonSchema.AnyOf = anyOfMaps
+			}
+		}
+
+		// Extract oneOf
+		if oneOf, ok := schemaMap["oneOf"].([]interface{}); ok {
+			oneOfMaps := make([]map[string]any, 0, len(oneOf))
+			for _, item := range oneOf {
+				if m, ok := item.(map[string]interface{}); ok {
+					oneOfMaps = append(oneOfMaps, m)
+				}
+			}
+			if len(oneOfMaps) > 0 {
+				jsonSchema.OneOf = oneOfMaps
+			}
+		}
+
+		// Extract allOf
+		if allOf, ok := schemaMap["allOf"].([]interface{}); ok {
+			allOfMaps := make([]map[string]any, 0, len(allOf))
+			for _, item := range allOf {
+				if m, ok := item.(map[string]interface{}); ok {
+					allOfMaps = append(allOfMaps, m)
+				}
+			}
+			if len(allOfMaps) > 0 {
+				jsonSchema.AllOf = allOfMaps
+			}
+		}
+
+		// Extract format
+		if formatVal, ok := schemaMap["format"].(string); ok {
+			jsonSchema.Format = &formatVal
+		}
+
+		// Extract pattern
+		if pattern, ok := schemaMap["pattern"].(string); ok {
+			jsonSchema.Pattern = &pattern
+		}
+
+		// Extract minLength
+		if minLength, ok := anthropicExtractInt64(schemaMap["minLength"]); ok {
+			jsonSchema.MinLength = &minLength
+		}
+
+		// Extract maxLength
+		if maxLength, ok := anthropicExtractInt64(schemaMap["maxLength"]); ok {
+			jsonSchema.MaxLength = &maxLength
+		}
+
+		// Extract minimum
+		if minimum, ok := anthropicExtractFloat64(schemaMap["minimum"]); ok {
+			jsonSchema.Minimum = &minimum
+		}
+
+		// Extract maximum
+		if maximum, ok := anthropicExtractFloat64(schemaMap["maximum"]); ok {
+			jsonSchema.Maximum = &maximum
+		}
+
+		// Extract title
+		if title, ok := schemaMap["title"].(string); ok {
+			jsonSchema.Title = &title
+		}
+
+		// Extract default
+		if defaultVal, exists := schemaMap["default"]; exists {
+			jsonSchema.Default = defaultVal
+		}
+
+		// Extract nullable
+		if nullable, ok := schemaMap["nullable"].(bool); ok {
+			jsonSchema.Nullable = &nullable
+		}
+
+		// Extract enum
+		if enum, ok := schemaMap["enum"].([]interface{}); ok {
+			enumStrs := make([]string, 0, len(enum))
+			for _, e := range enum {
+				if str, ok := e.(string); ok {
+					enumStrs = append(enumStrs, str)
+				}
+			}
+			if len(enumStrs) > 0 {
+				jsonSchema.Enum = enumStrs
+			}
+		} else if enumStrs, ok := schemaMap["enum"].([]string); ok && len(enumStrs) > 0 {
+			jsonSchema.Enum = enumStrs
+		}
+
 		format.JSONSchema = jsonSchema
 	}
 
@@ -905,4 +1039,36 @@ func extractWebSearchSources(contentBlocks []AnthropicContentBlock, includeExten
 	}
 
 	return sources
+}
+
+// anthropicExtractInt64 extracts an int64 from various numeric types
+func anthropicExtractInt64(v interface{}) (int64, bool) {
+	switch val := v.(type) {
+	case int:
+		return int64(val), true
+	case int64:
+		return val, true
+	case float64:
+		return int64(val), true
+	case float32:
+		return int64(val), true
+	default:
+		return 0, false
+	}
+}
+
+// anthropicExtractFloat64 extracts a float64 from various numeric types
+func anthropicExtractFloat64(v interface{}) (float64, bool) {
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case float32:
+		return float64(val), true
+	case int:
+		return float64(val), true
+	case int64:
+		return float64(val), true
+	default:
+		return 0, false
+	}
 }

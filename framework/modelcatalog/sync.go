@@ -226,7 +226,11 @@ func (mc *ModelCatalog) syncTick(ctx context.Context) {
 		}
 		return
 	}
-	lock := mc.distributedLockManager.NewLock("model_catalog_pricing_sync")
+	lock, err := mc.distributedLockManager.NewLock("model_catalog_pricing_sync")
+	if err != nil {
+		mc.logger.Error("failed to create model catalog pricing sync lock: %v", err)
+		return
+	}
 	if err := lock.Lock(ctx); err != nil {
 		mc.logger.Error("failed to acquire model catalog pricing sync lock: %v", err)
 		return

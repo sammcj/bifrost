@@ -76,6 +76,14 @@ func setupLockTestStore(t *testing.T) *RDBConfigStore {
 	})
 	require.NoError(t, err, "Failed to create test database")
 
+	// Force single connection to ensure all operations use the same in-memory database.
+	// SQLite in-memory with ":memory:" creates separate DBs per connection, so we must
+	// limit to one connection to preserve distributed lock semantics in concurrent tests.
+	sqlDB, err := db.DB()
+	require.NoError(t, err, "Failed to get underlying sql.DB")
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+
 	err = db.AutoMigrate(&tables.TableDistributedLock{})
 	require.NoError(t, err, "Failed to migrate test database")
 
@@ -461,7 +469,8 @@ func TestDistributedLockManager_NewLock(t *testing.T) {
 	logger := newMockLogger()
 	manager := NewDistributedLockManager(store, logger)
 
-	lock := manager.NewLock("my-lock")
+	lock, err := manager.NewLock("my-lock")
+	require.NoError(t, err)
 
 	assert.NotNil(t, lock)
 	assert.Equal(t, "my-lock", lock.Key())
@@ -475,7 +484,8 @@ func TestDistributedLockManager_NewLockWithTTL(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 
 	customTTL := 5 * time.Minute
-	lock := manager.NewLockWithTTL("my-lock", customTTL)
+	lock, err := manager.NewLockWithTTL("my-lock", customTTL)
+	require.NoError(t, err)
 
 	assert.Equal(t, customTTL, lock.ttl)
 }
@@ -510,7 +520,8 @@ func TestDistributedLock_TryLock_Success(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 
 	acquired, err := lock.TryLock(ctx)
 	require.NoError(t, err)
@@ -523,8 +534,10 @@ func TestDistributedLock_TryLock_AlreadyHeld(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock1 := manager.NewLock("test-lock")
-	lock2 := manager.NewLock("test-lock")
+	lock1, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	lock2, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 
 	// First lock succeeds
 	acquired, err := lock1.TryLock(ctx)
@@ -553,7 +566,8 @@ func TestDistributedLock_TryLock_CleansUpExpired(t *testing.T) {
 	require.NoError(t, err)
 
 	// New lock should be able to acquire after cleanup
-	lock := manager.NewLock("test-lock")
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 	acquired, err := lock.TryLock(ctx)
 	require.NoError(t, err)
 	assert.True(t, acquired, "Should acquire lock after expired cleanup")
@@ -568,9 +582,10 @@ func TestDistributedLock_Lock_Success(t *testing.T) {
 	)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 
-	err := lock.Lock(ctx)
+	err = lock.Lock(ctx)
 	require.NoError(t, err)
 
 	// Verify lock is held
@@ -585,16 +600,18 @@ func TestDistributedLock_Lock_ContextCancelled(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 
 	// First acquire the lock
-	lock1 := manager.NewLock("test-lock")
+	lock1, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 	ctx := context.Background()
-	_, err := lock1.TryLock(ctx)
+	_, err = lock1.TryLock(ctx)
 	require.NoError(t, err)
 
 	// Try to acquire with cancelled context
 	cancelCtx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	lock2 := manager.NewLock("test-lock")
+	lock2, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 	err = lock2.Lock(cancelCtx)
 	assert.ErrorIs(t, err, context.Canceled)
 }
@@ -609,12 +626,14 @@ func TestDistributedLock_Lock_Timeout(t *testing.T) {
 	ctx := context.Background()
 
 	// First lock holds
-	lock1 := manager.NewLock("test-lock")
-	_, err := lock1.TryLock(ctx)
+	lock1, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	_, err = lock1.TryLock(ctx)
 	require.NoError(t, err)
 
 	// Second lock should fail after retries
-	lock2 := manager.NewLock("test-lock")
+	lock2, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 	err = lock2.Lock(ctx)
 	assert.ErrorIs(t, err, ErrLockNotAcquired)
 }
@@ -626,12 +645,14 @@ func TestDistributedLock_LockWithRetry_ExponentialBackoff(t *testing.T) {
 	ctx := context.Background()
 
 	// First lock holds
-	lock1 := manager.NewLock("test-lock")
-	_, err := lock1.TryLock(ctx)
+	lock1, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	_, err = lock1.TryLock(ctx)
 	require.NoError(t, err)
 
 	// Second lock with limited retries
-	lock2 := manager.NewLock("test-lock")
+	lock2, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 	start := time.Now()
 	err = lock2.LockWithRetry(ctx, 2)
 	elapsed := time.Since(start)
@@ -647,8 +668,9 @@ func TestDistributedLock_Unlock_Success(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
-	_, err := lock.TryLock(ctx)
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	_, err = lock.TryLock(ctx)
 	require.NoError(t, err)
 
 	err = lock.Unlock(ctx)
@@ -666,10 +688,11 @@ func TestDistributedLock_Unlock_NotHeld(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 	// Never acquired
 
-	err := lock.Unlock(ctx)
+	err = lock.Unlock(ctx)
 	assert.ErrorIs(t, err, ErrLockNotHeld)
 }
 
@@ -679,8 +702,9 @@ func TestDistributedLock_Unlock_AlreadyReleased(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
-	_, err := lock.TryLock(ctx)
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	_, err = lock.TryLock(ctx)
 	require.NoError(t, err)
 
 	// First unlock succeeds
@@ -698,8 +722,9 @@ func TestDistributedLock_Extend_Success(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger, WithDefaultTTL(10*time.Second))
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
-	_, err := lock.TryLock(ctx)
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	_, err = lock.TryLock(ctx)
 	require.NoError(t, err)
 
 	// Get original expiry
@@ -724,10 +749,11 @@ func TestDistributedLock_Extend_NotHeld(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 	// Never acquired
 
-	err := lock.Extend(ctx)
+	err = lock.Extend(ctx)
 	assert.ErrorIs(t, err, ErrLockNotHeld)
 }
 
@@ -737,8 +763,9 @@ func TestDistributedLock_Extend_StolenLock(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
-	_, err := lock.TryLock(ctx)
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	_, err = lock.TryLock(ctx)
 	require.NoError(t, err)
 
 	// Simulate lock being stolen by another process
@@ -758,8 +785,9 @@ func TestDistributedLock_IsHeld_True(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
-	_, err := lock.TryLock(ctx)
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	_, err = lock.TryLock(ctx)
 	require.NoError(t, err)
 
 	held, err := lock.IsHeld(ctx)
@@ -773,7 +801,8 @@ func TestDistributedLock_IsHeld_NotAcquired(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 	// Never acquired
 
 	held, err := lock.IsHeld(ctx)
@@ -787,8 +816,9 @@ func TestDistributedLock_IsHeld_Expired(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger, WithDefaultTTL(50*time.Millisecond))
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
-	_, err := lock.TryLock(ctx)
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	_, err = lock.TryLock(ctx)
 	require.NoError(t, err)
 
 	// Wait for lock to expire
@@ -805,8 +835,9 @@ func TestDistributedLock_IsHeld_StolenByAnotherHolder(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
-	_, err := lock.TryLock(ctx)
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	_, err = lock.TryLock(ctx)
 	require.NoError(t, err)
 
 	// Simulate lock being stolen by another process
@@ -826,8 +857,9 @@ func TestDistributedLock_IsHeld_DeletedFromDB(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
-	_, err := lock.TryLock(ctx)
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	_, err = lock.TryLock(ctx)
 	require.NoError(t, err)
 
 	// Delete lock directly from database
@@ -861,7 +893,10 @@ func TestDistributedLock_ConcurrentAcquire(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			lock := manager.NewLock("contended-lock")
+			lock, err := manager.NewLock("contended-lock")
+			if err != nil {
+				return
+			}
 			acquired, err := lock.TryLock(ctx)
 			if err == nil && acquired {
 				mu.Lock()
@@ -896,10 +931,13 @@ func TestDistributedLock_ConcurrentLockUnlock(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			lock := manager.NewLock("counter-lock")
+			lock, err := manager.NewLock("counter-lock")
+			if err != nil {
+				return
+			}
 
 			// Each goroutine tries to increment the counter with lock protection
-			err := lock.Lock(ctx)
+			err = lock.Lock(ctx)
 			if err != nil {
 				return
 			}
@@ -929,26 +967,47 @@ func TestDistributedLock_MultipleLocksPerManager(t *testing.T) {
 
 	const numLocks = 10
 	var wg sync.WaitGroup
+	errCh := make(chan error, numLocks*2) // Buffer for potential TryLock and Unlock errors
 
 	for i := 0; i < numLocks; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
 			lockKey := fmt.Sprintf("lock-%d", id)
-			lock := manager.NewLock(lockKey)
+			lock, err := manager.NewLock(lockKey)
+			if err != nil {
+				errCh <- fmt.Errorf("lock %s NewLock error: %w", lockKey, err)
+				return
+			}
 
 			acquired, err := lock.TryLock(ctx)
-			require.NoError(t, err)
-			assert.True(t, acquired, "Lock %s should be acquired", lockKey)
+			if err != nil {
+				errCh <- fmt.Errorf("lock %s TryLock error: %w", lockKey, err)
+				return
+			}
+			if !acquired {
+				errCh <- fmt.Errorf("lock %s should be acquired", lockKey)
+				return
+			}
 
 			time.Sleep(10 * time.Millisecond)
 
-			err = lock.Unlock(ctx)
-			require.NoError(t, err)
+			if err := lock.Unlock(ctx); err != nil {
+				errCh <- fmt.Errorf("lock %s Unlock error: %w", lockKey, err)
+				return
+			}
 		}(i)
 	}
 
 	wg.Wait()
+	close(errCh)
+
+	// Collect and report any errors from goroutines
+	var errs []error
+	for err := range errCh {
+		errs = append(errs, err)
+	}
+	require.Empty(t, errs, "goroutines reported errors: %v", errs)
 }
 
 // =============================================================================
@@ -959,13 +1018,11 @@ func TestDistributedLock_EmptyLockKey(t *testing.T) {
 	store := setupLockTestStore(t)
 	logger := newMockLogger()
 	manager := NewDistributedLockManager(store, logger)
-	ctx := context.Background()
 
-	lock := manager.NewLock("")
+	lock, err := manager.NewLock("")
 
-	acquired, err := lock.TryLock(ctx)
-	require.NoError(t, err)
-	assert.True(t, acquired, "Empty lock key should be allowed")
+	assert.Nil(t, lock, "Empty lock key should return nil lock")
+	assert.ErrorIs(t, err, ErrEmptyLockKey, "Empty lock key should return ErrEmptyLockKey")
 }
 
 func TestDistributedLock_LongLockKey(t *testing.T) {
@@ -980,7 +1037,8 @@ func TestDistributedLock_LongLockKey(t *testing.T) {
 		longKey += "a"
 	}
 
-	lock := manager.NewLock(longKey)
+	lock, err := manager.NewLock(longKey)
+	require.NoError(t, err)
 
 	acquired, err := lock.TryLock(ctx)
 	require.NoError(t, err)
@@ -1004,7 +1062,8 @@ func TestDistributedLock_SpecialCharactersInKey(t *testing.T) {
 	}
 
 	for _, key := range specialKeys {
-		lock := manager.NewLock(key)
+		lock, err := manager.NewLock(key)
+		require.NoError(t, err, "Key: %s", key)
 		acquired, err := lock.TryLock(ctx)
 		require.NoError(t, err, "Key: %s", key)
 		assert.True(t, acquired, "Lock with key %s should be acquired", key)
@@ -1020,7 +1079,8 @@ func TestDistributedLock_ZeroTTL(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger, WithDefaultTTL(0))
 	ctx := context.Background()
 
-	lock := manager.NewLock("zero-ttl-lock")
+	lock, err := manager.NewLock("zero-ttl-lock")
+	require.NoError(t, err)
 
 	// Zero TTL should still work but lock will be immediately expired
 	acquired, err := lock.TryLock(ctx)
@@ -1039,7 +1099,8 @@ func TestDistributedLock_VeryShortTTL(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger, WithDefaultTTL(1*time.Millisecond))
 	ctx := context.Background()
 
-	lock := manager.NewLock("short-ttl-lock")
+	lock, err := manager.NewLock("short-ttl-lock")
+	require.NoError(t, err)
 
 	acquired, err := lock.TryLock(ctx)
 	require.NoError(t, err)
@@ -1049,7 +1110,8 @@ func TestDistributedLock_VeryShortTTL(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Another lock should be able to acquire
-	lock2 := manager.NewLock("short-ttl-lock")
+	lock2, err := manager.NewLock("short-ttl-lock")
+	require.NoError(t, err)
 	acquired, err = lock2.TryLock(ctx)
 	require.NoError(t, err)
 	assert.True(t, acquired, "Should acquire lock after TTL expires")
@@ -1061,7 +1123,8 @@ func TestDistributedLock_ReacquireAfterUnlock(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger)
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 
 	// First acquire
 	acquired, err := lock.TryLock(ctx)
@@ -1074,7 +1137,8 @@ func TestDistributedLock_ReacquireAfterUnlock(t *testing.T) {
 
 	// Same lock instance should NOT be able to reacquire (new holder ID needed)
 	// But a new lock should work
-	lock2 := manager.NewLock("test-lock")
+	lock2, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
 	acquired, err = lock2.TryLock(ctx)
 	require.NoError(t, err)
 	assert.True(t, acquired, "New lock instance should acquire after release")
@@ -1086,8 +1150,9 @@ func TestDistributedLock_ExtendMultipleTimes(t *testing.T) {
 	manager := NewDistributedLockManager(store, logger, WithDefaultTTL(100*time.Millisecond))
 	ctx := context.Background()
 
-	lock := manager.NewLock("test-lock")
-	_, err := lock.TryLock(ctx)
+	lock, err := manager.NewLock("test-lock")
+	require.NoError(t, err)
+	_, err = lock.TryLock(ctx)
 	require.NoError(t, err)
 
 	// Extend multiple times
@@ -1118,6 +1183,7 @@ func TestErrors(t *testing.T) {
 	assert.Equal(t, "failed to acquire lock", ErrLockNotAcquired.Error())
 	assert.Equal(t, "lock not held by this holder", ErrLockNotHeld.Error())
 	assert.Equal(t, "lock has expired", ErrLockExpired.Error())
+	assert.Equal(t, "empty lock key", ErrEmptyLockKey.Error())
 }
 
 // =============================================================================
@@ -1129,7 +1195,8 @@ func TestDistributedLock_Key(t *testing.T) {
 	logger := newMockLogger()
 	manager := NewDistributedLockManager(store, logger)
 
-	lock := manager.NewLock("my-unique-lock")
+	lock, err := manager.NewLock("my-unique-lock")
+	require.NoError(t, err)
 	assert.Equal(t, "my-unique-lock", lock.Key())
 }
 
@@ -1138,8 +1205,10 @@ func TestDistributedLock_HolderID(t *testing.T) {
 	logger := newMockLogger()
 	manager := NewDistributedLockManager(store, logger)
 
-	lock1 := manager.NewLock("lock-1")
-	lock2 := manager.NewLock("lock-2")
+	lock1, err := manager.NewLock("lock-1")
+	require.NoError(t, err)
+	lock2, err := manager.NewLock("lock-2")
+	require.NoError(t, err)
 
 	// Each lock should have a unique holder ID
 	assert.NotEmpty(t, lock1.HolderID())

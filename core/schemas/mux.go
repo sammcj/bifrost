@@ -896,55 +896,55 @@ func (ru *ResponsesResponseUsage) ToBifrostLLMUsage() *BifrostLLMUsage {
 // =============================================================================
 
 // ToResponsesRequest converts a BifrostChatRequest to BifrostResponsesRequest format
-func (bcr *BifrostChatRequest) ToResponsesRequest() *BifrostResponsesRequest {
-	if bcr == nil {
+func (cr *BifrostChatRequest) ToResponsesRequest() *BifrostResponsesRequest {
+	if cr == nil {
 		return &BifrostResponsesRequest{}
 	}
 
 	brr := &BifrostResponsesRequest{
-		Provider:  bcr.Provider,
-		Model:     bcr.Model,
-		Fallbacks: bcr.Fallbacks, // Copy fallbacks as-is
+		Provider:  cr.Provider,
+		Model:     cr.Model,
+		Fallbacks: cr.Fallbacks, // Copy fallbacks as-is
 	}
 
 	// Convert Input messages using existing ChatMessage.ToResponsesMessages()
 	var allResponsesMessages []ResponsesMessage
-	for _, chatMsg := range bcr.Input {
+	for _, chatMsg := range cr.Input {
 		responsesMessages := chatMsg.ToResponsesMessages()
 		allResponsesMessages = append(allResponsesMessages, responsesMessages...)
 	}
 	brr.Input = allResponsesMessages
 
 	// Convert Parameters
-	if bcr.Params != nil {
+	if cr.Params != nil {
 		brr.Params = &ResponsesParameters{
 			// Map common fields
-			ParallelToolCalls: bcr.Params.ParallelToolCalls,
-			PromptCacheKey:    bcr.Params.PromptCacheKey,
-			SafetyIdentifier:  bcr.Params.SafetyIdentifier,
-			ServiceTier:       bcr.Params.ServiceTier,
-			Store:             bcr.Params.Store,
-			Temperature:       bcr.Params.Temperature,
-			TopLogProbs:       bcr.Params.TopLogProbs,
-			TopP:              bcr.Params.TopP,
-			ExtraParams:       bcr.Params.ExtraParams,
+			ParallelToolCalls: cr.Params.ParallelToolCalls,
+			PromptCacheKey:    cr.Params.PromptCacheKey,
+			SafetyIdentifier:  cr.Params.SafetyIdentifier,
+			ServiceTier:       cr.Params.ServiceTier,
+			Store:             cr.Params.Store,
+			Temperature:       cr.Params.Temperature,
+			TopLogProbs:       cr.Params.TopLogProbs,
+			TopP:              cr.Params.TopP,
+			ExtraParams:       cr.Params.ExtraParams,
 
 			// Map specific fields
-			MaxOutputTokens: bcr.Params.MaxCompletionTokens, // max_completion_tokens -> max_output_tokens
-			Metadata:        bcr.Params.Metadata,
+			MaxOutputTokens: cr.Params.MaxCompletionTokens, // max_completion_tokens -> max_output_tokens
+			Metadata:        cr.Params.Metadata,
 		}
 
 		// Convert StreamOptions
-		if bcr.Params.StreamOptions != nil {
+		if cr.Params.StreamOptions != nil {
 			brr.Params.StreamOptions = &ResponsesStreamOptions{
-				IncludeObfuscation: bcr.Params.StreamOptions.IncludeObfuscation,
+				IncludeObfuscation: cr.Params.StreamOptions.IncludeObfuscation,
 			}
 		}
 
 		// Convert Tools using existing ChatTool.ToResponsesTool()
-		if len(bcr.Params.Tools) > 0 {
-			responsesTools := make([]ResponsesTool, 0, len(bcr.Params.Tools))
-			for _, chatTool := range bcr.Params.Tools {
+		if len(cr.Params.Tools) > 0 {
+			responsesTools := make([]ResponsesTool, 0, len(cr.Params.Tools))
+			for _, chatTool := range cr.Params.Tools {
 				responsesTool := chatTool.ToResponsesTool()
 				responsesTools = append(responsesTools, *responsesTool)
 			}
@@ -952,29 +952,29 @@ func (bcr *BifrostChatRequest) ToResponsesRequest() *BifrostResponsesRequest {
 		}
 
 		// Convert ToolChoice using existing ChatToolChoice.ToResponsesToolChoice()
-		if bcr.Params.ToolChoice != nil {
-			responsesToolChoice := bcr.Params.ToolChoice.ToResponsesToolChoice()
+		if cr.Params.ToolChoice != nil {
+			responsesToolChoice := cr.Params.ToolChoice.ToResponsesToolChoice()
 			brr.Params.ToolChoice = responsesToolChoice
 		}
 
 		// Handle Reasoning from reasoning_effort
-		if bcr.Params.Reasoning != nil && (bcr.Params.Reasoning.Effort != nil || bcr.Params.Reasoning.MaxTokens != nil) {
+		if cr.Params.Reasoning != nil && (cr.Params.Reasoning.Effort != nil || cr.Params.Reasoning.MaxTokens != nil) {
 			brr.Params.Reasoning = &ResponsesParametersReasoning{
-				Effort:    bcr.Params.Reasoning.Effort,
-				MaxTokens: bcr.Params.Reasoning.MaxTokens,
+				Effort:    cr.Params.Reasoning.Effort,
+				MaxTokens: cr.Params.Reasoning.MaxTokens,
 			}
 		}
 
 		// Handle Verbosity
-		if bcr.Params.Verbosity != nil {
+		if cr.Params.Verbosity != nil {
 			if brr.Params.Text == nil {
 				brr.Params.Text = &ResponsesTextConfig{}
 			}
-			brr.Params.Text.Verbosity = bcr.Params.Verbosity
+			brr.Params.Text.Verbosity = cr.Params.Verbosity
 		}
 	}
 
-	brr.RawRequestBody = bcr.RawRequestBody
+	brr.RawRequestBody = cr.RawRequestBody
 
 	return brr
 }

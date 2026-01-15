@@ -125,7 +125,10 @@ func Init(ctx context.Context, config *Config, configStore configstore.ConfigSto
 				return nil, fmt.Errorf("failed to sync pricing data: %w", err)
 			}
 		} else {
-			lock := mc.distributedLockManager.NewLock("model_catalog_pricing_sync")
+			lock, err := mc.distributedLockManager.NewLock("model_catalog_pricing_sync")
+			if err != nil {
+				return nil, fmt.Errorf("failed to create model catalog pricing sync lock: %w", err)
+			}
 			if err := lock.Lock(ctx); err != nil {
 				return nil, fmt.Errorf("failed to acquire model catalog pricing sync lock: %w", err)
 			}

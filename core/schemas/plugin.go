@@ -160,10 +160,11 @@ func ReleaseHTTPResponse(resp *HTTPResponse) {
 // PostHooks are executed in the reverse order of PreHooks.
 //
 // Execution order:
-// 1. HTTPTransportIntercept (HTTP transport only, modifies raw headers/body before entering Bifrost core)
+// 1. HTTPTransportPreHook (HTTP transport only, executed in registration order)
 // 2. PreHook (executed in registration order)
 // 3. Provider call
 // 4. PostHook (executed in reverse order of PreHooks)
+// 5. HTTPTransportPostHook (HTTP transport only, executed in reverse order)
 //
 // Common use cases: rate limiting, caching, logging, monitoring, request transformation, governance.
 //
