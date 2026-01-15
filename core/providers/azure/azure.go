@@ -1234,10 +1234,15 @@ func (provider *AzureProvider) ImageGeneration(ctx *schemas.BifrostContext, key 
 		apiVersion = schemas.NewEnvVar(AzureAPIVersionDefault)
 	}
 
+	endpoint := key.AzureKeyConfig.Endpoint.GetValue()
+	if endpoint == "" {
+		return nil, providerUtils.NewConfigurationError("endpoint not set", provider.GetProviderKey())
+	}
+
 	response, err := openai.HandleOpenAIImageGenerationRequest(
 		ctx,
 		provider.client,
-		fmt.Sprintf("%s/openai/deployments/%s/images/generations?api-version=%s", key.AzureKeyConfig.Endpoint, deployment, *apiVersion),
+		fmt.Sprintf("%s/openai/deployments/%s/images/generations?api-version=%s", endpoint, deployment, apiVersion.GetValue()),
 		request,
 		key,
 		provider.networkConfig.ExtraHeaders,
@@ -1245,7 +1250,7 @@ func (provider *AzureProvider) ImageGeneration(ctx *schemas.BifrostContext, key 
 		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.logger,
-	)
+	)	
 	if err != nil {
 		return nil, err
 	}
@@ -1282,6 +1287,11 @@ func (provider *AzureProvider) ImageGenerationStream(
 		apiVersion = schemas.NewEnvVar(AzureAPIVersionDefault)
 	}
 
+	endpoint := key.AzureKeyConfig.Endpoint.GetValue()
+	if endpoint == "" {
+		return nil, providerUtils.NewConfigurationError("endpoint not set", provider.GetProviderKey())
+	}
+
 	postResponseConverter := func(resp *schemas.BifrostImageGenerationStreamResponse) *schemas.BifrostImageGenerationStreamResponse {
 		if resp != nil {
 			resp.ExtraFields.ModelDeployment = deployment
@@ -1289,7 +1299,7 @@ func (provider *AzureProvider) ImageGenerationStream(
 		return resp
 	}
 
-	url := fmt.Sprintf("%s/openai/deployments/%s/images/generations?api-version=%s", key.AzureKeyConfig.Endpoint, deployment, *apiVersion)
+	url := fmt.Sprintf("%s/openai/deployments/%s/images/generations?api-version=%s", endpoint, deployment, apiVersion.GetValue())
 
 	authHeader, err := provider.getAzureAuthHeaders(ctx, key, false)
 	if err != nil {
