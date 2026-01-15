@@ -100,6 +100,7 @@ jobs:
           BEDROCK_API_KEY: ${{ secrets.BEDROCK_API_KEY }}
           AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
           AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
+          AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -178,6 +179,7 @@ jobs:
           BEDROCK_API_KEY: ${{ secrets.BEDROCK_API_KEY }}
           AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
           AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
+          AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -263,6 +265,7 @@ jobs:
           BEDROCK_API_KEY: ${{ secrets.BEDROCK_API_KEY }}
           AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
           AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
+          AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -355,6 +358,7 @@ jobs:
           BEDROCK_API_KEY: ${{ secrets.BEDROCK_API_KEY }}
           AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
           AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
+          AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
