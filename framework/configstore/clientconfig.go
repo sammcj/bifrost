@@ -319,13 +319,9 @@ func GenerateKeyHash(key schemas.Key) (string, error) {
 		}
 		hash.Write(data)
 	}
-	// Hash Enabled (nil = default true, explicit false should be detected)
-	enabled := true
-	if key.Enabled != nil {
-		enabled = *key.Enabled
-	}
-	if !enabled {
-		hash.Write([]byte("enabled:false"))
+	// Hash Enabled (nil = false, only true produces different hash)
+	if key.Enabled != nil && *key.Enabled {
+		hash.Write([]byte("enabled:true"))
 	}
 	// Hash UseForBatchAPI (nil = default false for new keys)
 	useForBatchAPI := false
