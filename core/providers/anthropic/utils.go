@@ -39,6 +39,13 @@ func getRequestBodyForResponses(ctx *schemas.BifrostContext, request *schemas.Bi
 		if err := sonic.Unmarshal(jsonBody, &requestBody); err != nil {
 			return nil, providerUtils.NewBifrostOperationError(schemas.ErrRequestBodyConversion, fmt.Errorf("failed to unmarshal request body: %w", err), providerName)
 		}
+		// update model with provider model
+		if modelVal, exists := requestBody["model"]; exists {
+			if modelStr, ok := modelVal.(string); ok {
+				_, model := schemas.ParseModelString(modelStr, schemas.Anthropic)
+				requestBody["model"] = model
+			}
+		}
 		// Add max_tokens if not present
 		if _, exists := requestBody["max_tokens"]; !exists {
 			requestBody["max_tokens"] = AnthropicDefaultMaxTokens
