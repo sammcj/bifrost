@@ -143,13 +143,17 @@ Run `/model` without arguments to check your current model. The switch is instan
 If you use Claude-specific features like **web search**, **computer use**, or **citations**, ensure the model you switch to also supports these capabilities. Non-Claude models or Claude models on certain providers may not support all features.
 </Warning>
 
-#### Model Selection Guide
+#### Provider Compatibility
 
-| Model | Best For | Cost |
-|-------|----------|------|
-| **Sonnet 4.5** | Daily development, general coding tasks | Medium |
-| **Opus 4.5** | Complex reasoning, architectural decisions, state-of-the-art engineering | High |
-| **Haiku 4.5** | Lightweight agents, high-frequency tasks, quick iterations | Low |
+<Warning>
+**Not all providers work well with Claude Code**. Since Claude Code heavily relies on tool calling for file operations, terminal commands, and code editing, providers must properly support and stream tool call arguments.
+
+**Known Issues:**
+- **OpenRouter**: Does not stream function call arguments properly. Tool calls return with empty `arguments` fields, causing Claude Code to fail when attempting file operations or other tool-based actions.
+- **Some proxy providers**: May not fully implement the Anthropic API streaming specification for tool calls.
+
+If you experience issues with tool calls not executing properly, try switching to a different provider in your Bifrost configuration.
+</Warning>
 
 #### Example: Full Bifrost Setup
 
