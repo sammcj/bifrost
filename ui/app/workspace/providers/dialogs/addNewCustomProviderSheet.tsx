@@ -104,14 +104,14 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 
 	return (
 		<Sheet open={show} onOpenChange={(open) => !open && onClose()}>
-			<SheetContent className="custom-scrollbar dark:bg-card flex flex-col bg-white p-4">
+			<SheetContent className="custom-scrollbar dark:bg-card flex flex-col bg-white p-8">
 				<SheetHeader className="flex flex-col items-start">
 					<SheetTitle>Add Custom Provider</SheetTitle>
 					<SheetDescription>Enter the details of your custom provider.</SheetDescription>
 				</SheetHeader>
 				<Form {...form}>
 					<form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
-						<div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto px-4">
+						<div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto">
 							<FormField
 								control={form.control}
 								name="name"
@@ -190,7 +190,7 @@ export default function AddCustomProviderSheet({ show, onClose, onSave }: Props)
 							{/* Allowed Requests Configuration */}
 							<AllowedRequestsFields control={form.control} providerType={form.watch("baseFormat") as BaseProvider} />
 						</div>
-						<SheetFooter className="mt-4 flex flex-row gap-2 px-4 pt-4">
+						<SheetFooter className="mt-4 flex flex-row gap-2 pt-4">
 							<div className="ml-auto flex flex-row gap-2">
 								<Button type="button" variant="outline" onClick={onClose}>
 									Cancel

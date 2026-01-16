@@ -29,12 +29,12 @@ import { Clipboard, DollarSign, FileText, MoreVertical, Timer, Trash2 } from "lu
 import moment from "moment";
 import { toast } from "sonner";
 import { CodeEditor } from "./codeEditor";
+import ImageView from "./imageView";
 import LogChatMessageView from "./logChatMessageView";
 import LogEntryDetailsView from "./logEntryDetailsView";
 import LogResponsesMessageView from "./logResponsesMessageView";
 import SpeechView from "./speechView";
 import TranscriptionView from "./transcriptionView";
-import ImageView from "./imageView";
 
 interface LogDetailSheetProps {
 	log: LogEntry | null;
@@ -163,11 +163,14 @@ export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDet
 			}
 
 			const requestBodyJson = JSON.stringify(requestBody, null, 2);
-			navigator.clipboard.writeText(requestBodyJson).then(() => {
-				toast.success("Request body copied to clipboard");
-			}).catch((error) => {
-				toast.error("Failed to copy request body");
-			});
+			navigator.clipboard
+				.writeText(requestBodyJson)
+				.then(() => {
+					toast.success("Request body copied to clipboard");
+				})
+				.catch((error) => {
+					toast.error("Failed to copy request body");
+				});
 		} catch (error) {
 			toast.error("Failed to copy request body");
 		}
@@ -178,7 +181,7 @@ export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDet
 
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent className="dark:bg-card flex w-full flex-col gap-4 overflow-x-hidden bg-white p-8" expandable>
+			<SheetContent className="dark:bg-card flex w-full flex-col gap-4 overflow-x-hidden bg-white p-8">
 				<SheetHeader className="flex flex-row items-center px-0">
 					<div className="flex w-full items-center justify-between">
 						<SheetTitle className="flex w-fit items-center gap-2 font-medium">
@@ -228,7 +231,7 @@ export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDet
 						</AlertDialogContent>
 					</AlertDialog>
 				</SheetHeader>
-				<div className="space-y-4 rounded-sm border px-6 py-4">
+				<div className="space-y-4 rounded-sm border px-6 py-4 -mt-4">
 					<div className="space-y-4">
 						<BlockHeader title="Timings" icon={<Timer className="h-5 w-5 text-gray-600" />} />
 						<div className="grid w-full grid-cols-3 items-center justify-between gap-4">
@@ -539,10 +542,7 @@ export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDet
 				)}
 
 				{(log.image_generation_input || log.image_generation_output) && (
-					<ImageView
-						imageInput={log.image_generation_input}
-						imageOutput={log.image_generation_output}
-					/>
+					<ImageView imageInput={log.image_generation_input} imageOutput={log.image_generation_output} />
 				)}
 
 				{/* Show conversation history for chat/text completions */}

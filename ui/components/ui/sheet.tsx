@@ -74,7 +74,7 @@ function SheetContent({
 			target.closest('[class*="MenuPortal"]') ||
 			target.closest('[role="listbox"]') ||
 			target.closest('[role="option"]') ||
-			target.closest('[data-radix-popper-content-wrapper]')
+			target.closest("[data-radix-popper-content-wrapper]")
 		);
 	};
 
@@ -105,7 +105,7 @@ function SheetContent({
 					onPointerDownOutside={handlePointerDownOutside}
 					onInteractOutside={handleInteractOutside}
 					className={cn(
-						"bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col shadow-lg transition-all ease-in-out data-[state=closed]:duration-100 data-[state=open]:duration-100 custom-scrollbar",
+						"bg-background data-[state=open]:animate-in data-[state=closed]:animate-out custom-scrollbar fixed z-50 flex flex-col shadow-lg transition-all ease-in-out data-[state=closed]:duration-100 data-[state=open]:duration-100",
 						side === "right" &&
 							"data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right top-2 right-0 bottom-2 h-auto w-3/4 rounded-l-lg border-l",
 						side === "right" && (!expandable || !expanded) && "sm:max-w-2xl",
@@ -147,11 +147,11 @@ function SheetHeader({
 				</button>
 			)}
 
-			<div className={cn("flex h-full min-w-0 flex-1 flex-row items-center", sheetContext?.expandable ? "ml-1" : "ml-4", className)}>
+			<div className={cn("flex h-full min-w-0 flex-1 flex-row items-center", sheetContext?.expandable && "ml-1", className)}>
 				{children}
 			</div>
 			{showCloseButton && (
-				<SheetPrimitive.Close className="hover:bg-accent shrink-0 cursor-pointer rounded-md p-2 opacity-70 transition-opacity hover:scale-105 hover:opacity-100 ml-1">
+				<SheetPrimitive.Close className="hover:bg-accent ml-1 shrink-0 cursor-pointer rounded-md p-2 opacity-70 transition-opacity hover:scale-105 hover:opacity-100">
 					<XIcon className="size-4" />
 					<span className="sr-only">Close</span>
 				</SheetPrimitive.Close>
