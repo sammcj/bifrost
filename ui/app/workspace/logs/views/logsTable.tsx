@@ -105,9 +105,16 @@ export function LogsDataTable({
 
 	return (
 		<div className="space-y-2">
-			<LogFiltersComponent filters={filters} onFiltersChange={onFiltersChange} liveEnabled={liveEnabled} onLiveToggle={onLiveToggle} fetchLogs={fetchLogs} fetchStats={fetchStats} />
-		<div ref={tableContainerRef} className="h-[calc(100vh-16.5rem)] rounded-sm border">
-			<Table containerClassName="max-h-[calc(100vh-16.5rem)]">
+			<LogFiltersComponent
+				filters={filters}
+				onFiltersChange={onFiltersChange}
+				liveEnabled={liveEnabled}
+				onLiveToggle={onLiveToggle}
+				fetchLogs={fetchLogs}
+				fetchStats={fetchStats}
+			/>
+			<div ref={tableContainerRef} className="h-[calc(100vh-16.5rem)] rounded-sm border">
+				<Table containerClassName="max-h-[calc(100vh-16.5rem)]">
 					<TableHeader className="px-2">
 						{table.getHeaderGroups().map((headerGroup) => (
 							<TableRow key={headerGroup.id}>
@@ -157,7 +164,9 @@ export function LogsDataTable({
 									table.getRowModel().rows.map((row) => (
 										<TableRow key={row.id} className="hover:bg-muted/50 h-12 cursor-pointer">
 											{row.getVisibleCells().map((cell) => (
-												<TableCell onClick={() => onRowClick?.(row.original, cell.column.id)} key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+												<TableCell onClick={() => onRowClick?.(row.original, cell.column.id)} key={cell.id}>
+													{flexRender(cell.column.columnDef.cell, cell.getContext())}
+												</TableCell>
 											))}
 										</TableRow>
 									))
