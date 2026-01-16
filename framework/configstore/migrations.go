@@ -148,6 +148,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddProviderGovernanceColumns(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddAllowedHeadersJSONColumn(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -2419,6 +2422,29 @@ func migrationAddProviderGovernanceColumns(ctx context.Context, db *gorm.DB) err
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while running add provider governance columns migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddAllowedHeadersJSONColumn adds the allowed_headers_json column to the client config table
+func migrationAddAllowedHeadersJSONColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_allowed_headers_json_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			if !migrator.HasColumn(&tables.TableClientConfig{}, "allowed_headers_json") {
+				if err := migrator.AddColumn(&tables.TableClientConfig{}, "allowed_headers_json"); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running db migration: %s", err.Error())
 	}
 	return nil
 }

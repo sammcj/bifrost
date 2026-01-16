@@ -299,6 +299,11 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		restartReasons = append(restartReasons, "Allowed origins")
 	}
 
+	if !slices.Equal(payload.ClientConfig.AllowedHeaders, currentConfig.AllowedHeaders) {
+		updatedConfig.AllowedHeaders = payload.ClientConfig.AllowedHeaders
+		restartReasons = append(restartReasons, "Allowed headers")
+	}
+
 	if payload.ClientConfig.InitialPoolSize != currentConfig.InitialPoolSize {
 		restartReasons = append(restartReasons, "Initial pool size")
 	}

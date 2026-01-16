@@ -45,6 +45,7 @@ type ClientConfig struct {
 	EnforceGovernanceHeader bool                             `json:"enforce_governance_header"`           // Enforce governance on all requests
 	AllowDirectKeys         bool                             `json:"allow_direct_keys"`                   // Allow direct keys to be used for requests
 	AllowedOrigins          []string                         `json:"allowed_origins,omitempty"`           // Additional allowed origins for CORS and WebSocket (localhost is always allowed)
+	AllowedHeaders          []string                         `json:"allowed_headers,omitempty"`           // Additional allowed headers for CORS and WebSocket
 	MaxRequestBodySizeMB    int                              `json:"max_request_body_size_mb"`            // The maximum request body size in MB
 	EnableLiteLLMFallbacks  bool                             `json:"enable_litellm_fallbacks"`            // Enable litellm-specific fallbacks for text completion for Groq
 	MCPAgentDepth           int                              `json:"mcp_agent_depth"`                     // The maximum depth for MCP agent mode tool execution
@@ -157,6 +158,18 @@ func (c *ClientConfig) GenerateClientConfigHash() (string, error) {
 		copy(sortedOrigins, c.AllowedOrigins)
 		sort.Strings(sortedOrigins)
 		data, err := sonic.Marshal(sortedOrigins)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash AllowedHeaders (sorted for deterministic hashing)
+	if len(c.AllowedHeaders) > 0 {
+		sortedHeaders := make([]string, len(c.AllowedHeaders))
+		copy(sortedHeaders, c.AllowedHeaders)
+		sort.Strings(sortedHeaders)
+		data, err := sonic.Marshal(sortedHeaders)
 		if err != nil {
 			return "", err
 		}
