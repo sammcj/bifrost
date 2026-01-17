@@ -143,6 +143,7 @@ func (response *GenerateContentResponse) ToResponsesBifrostResponsesResponse() *
 
 	// Create the BifrostResponse with Responses structure
 	bifrostResp := &schemas.BifrostResponsesResponse{
+		ID:    schemas.Ptr("resp_" + providerUtils.GetRandomString(50)),
 		Model: response.ModelVersion,
 	}
 
@@ -838,9 +839,10 @@ func processGeminiTextPart(part *Part, state *GeminiResponsesStreamState, sequen
 			OutputIndex:    &outputIndex,
 			ItemID:         &itemID,
 			Item: &schemas.ResponsesMessage{
-				ID:   &itemID,
-				Type: schemas.Ptr(schemas.ResponsesMessageTypeMessage),
-				Role: schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
+				ID:     &itemID,
+				Type:   schemas.Ptr(schemas.ResponsesMessageTypeMessage),
+				Status: schemas.Ptr("in_progress"),
+				Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 				Content: &schemas.ResponsesMessageContent{
 					ContentBlocks: []schemas.ResponsesMessageContentBlock{},
 				},
@@ -858,6 +860,10 @@ func processGeminiTextPart(part *Part, state *GeminiResponsesStreamState, sequen
 			Part: &schemas.ResponsesMessageContentBlock{
 				Type: schemas.ResponsesOutputMessageContentTypeText,
 				Text: schemas.Ptr(""),
+				ResponsesOutputMessageContentText: &schemas.ResponsesOutputMessageContentText{
+					LogProbs:    []schemas.ResponsesOutputMessageContentTextLogProb{},
+					Annotations: []schemas.ResponsesOutputMessageContentTextAnnotation{},
+				},
 			},
 		})
 
@@ -883,6 +889,7 @@ func processGeminiTextPart(part *Part, state *GeminiResponsesStreamState, sequen
 			ContentIndex:   &contentIndex,
 			ItemID:         &itemID,
 			Delta:          &text,
+			LogProbs:       []schemas.ResponsesOutputMessageContentTextLogProb{},
 		}
 		if len(part.ThoughtSignature) > 0 {
 			thoughtSig := base64.StdEncoding.EncodeToString(part.ThoughtSignature)
@@ -967,7 +974,12 @@ func processGeminiThoughtPart(part *Part, state *GeminiResponsesStreamState, seq
 		ItemID:         &itemID,
 		Item: &schemas.ResponsesMessage{
 			ID:     &itemID,
+			Type:   schemas.Ptr(schemas.ResponsesMessageTypeReasoning),
+			Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 			Status: &statusCompleted,
+			ResponsesReasoning: &schemas.ResponsesReasoning{
+				Summary: []schemas.ResponsesReasoningSummary{},
+			},
 		},
 	})
 
@@ -1017,7 +1029,13 @@ func processGeminiThoughtSignaturePart(part *Part, state *GeminiResponsesStreamS
 		ItemID:         &itemID,
 		Item: &schemas.ResponsesMessage{
 			ID:     &itemID,
+			Type:   schemas.Ptr(schemas.ResponsesMessageTypeReasoning),
+			Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 			Status: &statusCompleted,
+			ResponsesReasoning: &schemas.ResponsesReasoning{
+				Summary:          []schemas.ResponsesReasoningSummary{},
+				EncryptedContent: &thoughtSig,
+			},
 		},
 	})
 
@@ -1162,9 +1180,24 @@ func processGeminiFunctionResponsePart(part *Part, state *GeminiResponsesStreamS
 		ItemID:         &itemID,
 		Item: &schemas.ResponsesMessage{
 			ID:     &itemID,
+			Type:   schemas.Ptr(schemas.ResponsesMessageTypeFunctionCallOutput),
+			Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 			Status: &status,
+			ResponsesToolMessage: &schemas.ResponsesToolMessage{
+				CallID: &responseID,
+				Output: &schemas.ResponsesToolMessageOutputStruct{
+					ResponsesToolCallOutputStr: &output,
+				},
+			},
 		},
 	})
+	// Add tool name if present
+	if name := strings.TrimSpace(part.FunctionResponse.Name); name != "" {
+		last := responses[len(responses)-1]
+		if last.Item != nil && last.Item.ResponsesToolMessage != nil {
+			last.Item.ResponsesToolMessage.Name = schemas.Ptr(name)
+		}
+	}
 
 	return responses
 }
@@ -1235,7 +1268,12 @@ func processGeminiInlineDataPart(part *Part, state *GeminiResponsesStreamState, 
 		ItemID:         &itemID,
 		Item: &schemas.ResponsesMessage{
 			ID:     &itemID,
+			Type:   schemas.Ptr(schemas.ResponsesMessageTypeMessage),
+			Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 			Status: &statusCompleted,
+			Content: &schemas.ResponsesMessageContent{
+				ContentBlocks: []schemas.ResponsesMessageContentBlock{},
+			},
 		},
 	})
 
@@ -1308,7 +1346,12 @@ func processGeminiFileDataPart(part *Part, state *GeminiResponsesStreamState, se
 		ItemID:         &itemID,
 		Item: &schemas.ResponsesMessage{
 			ID:     &itemID,
+			Type:   schemas.Ptr(schemas.ResponsesMessageTypeMessage),
+			Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 			Status: &statusCompleted,
+			Content: &schemas.ResponsesMessageContent{
+				ContentBlocks: []schemas.ResponsesMessageContentBlock{},
+			},
 		},
 	})
 
@@ -1332,20 +1375,35 @@ func closeGeminiTextItem(state *GeminiResponsesStreamState, sequenceNumber int) 
 		ContentIndex:   &contentIndex,
 		ItemID:         &itemID,
 		Text:           &fullText,
+		LogProbs:       []schemas.ResponsesOutputMessageContentTextLogProb{},
 	})
 
 	// Emit content_part.done
+	part := &schemas.ResponsesMessageContentBlock{
+		Type: schemas.ResponsesOutputMessageContentTypeText,
+		Text: schemas.Ptr(""),
+		ResponsesOutputMessageContentText: &schemas.ResponsesOutputMessageContentText{
+			LogProbs:    []schemas.ResponsesOutputMessageContentTextLogProb{},
+			Annotations: []schemas.ResponsesOutputMessageContentTextAnnotation{},
+		},
+	}
 	responses = append(responses, &schemas.BifrostResponsesStreamResponse{
 		Type:           schemas.ResponsesStreamResponseTypeContentPartDone,
 		SequenceNumber: sequenceNumber + len(responses),
 		OutputIndex:    &outputIndex,
 		ContentIndex:   &contentIndex,
 		ItemID:         &itemID,
+		Part:           part,
 	})
 
 	// Emit output_item.done
 	doneItem := &schemas.ResponsesMessage{
+		Type:   schemas.Ptr(schemas.ResponsesMessageTypeMessage),
+		Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 		Status: schemas.Ptr("completed"),
+		Content: &schemas.ResponsesMessageContent{
+			ContentBlocks: []schemas.ResponsesMessageContentBlock{},
+		},
 	}
 	if itemID != "" {
 		doneItem.ID = &itemID
@@ -1379,6 +1437,12 @@ func closeGeminiOpenItems(state *GeminiResponsesStreamState, usage *GenerateCont
 	// Close any open tool calls
 	for outputIndex := range state.ToolArgumentBuffers {
 		itemID := state.ItemIDs[outputIndex]
+		toolCallID := state.ToolCallIDs[outputIndex]
+		toolName := state.ToolCallNames[outputIndex]
+		toolArgs := state.ToolArgumentBuffers[outputIndex]
+		if strings.TrimSpace(toolName) == "" {
+			toolName = toolCallID
+		}
 
 		// Emit output_item.done for tool call
 		responses = append(responses, &schemas.BifrostResponsesStreamResponse{
@@ -1388,7 +1452,13 @@ func closeGeminiOpenItems(state *GeminiResponsesStreamState, usage *GenerateCont
 			ItemID:         &itemID,
 			Item: &schemas.ResponsesMessage{
 				ID:     &itemID,
+				Type:   schemas.Ptr(schemas.ResponsesMessageTypeFunctionCall),
 				Status: schemas.Ptr("completed"),
+				ResponsesToolMessage: &schemas.ResponsesToolMessage{
+					CallID:    &toolCallID,
+					Name:      &toolName,
+					Arguments: &toolArgs,
+				},
 			},
 		})
 	}
@@ -1830,12 +1900,18 @@ func convertGeminiCandidatesToResponsesOutput(candidates []*Candidate) []schemas
 			case part.Text != "":
 				// Regular text message
 				msg := schemas.ResponsesMessage{
-					Role: schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
+					ID:     schemas.Ptr("msg_" + providerUtils.GetRandomString(50)),
+					Role:   schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
+					Status: schemas.Ptr("completed"),
 					Content: &schemas.ResponsesMessageContent{
 						ContentBlocks: []schemas.ResponsesMessageContentBlock{
 							{
 								Type: schemas.ResponsesOutputMessageContentTypeText,
 								Text: &part.Text,
+								ResponsesOutputMessageContentText: &schemas.ResponsesOutputMessageContentText{
+									LogProbs:    []schemas.ResponsesOutputMessageContentTextLogProb{},
+									Annotations: []schemas.ResponsesOutputMessageContentTextAnnotation{},
+								},
 							},
 						},
 					},
@@ -1876,8 +1952,10 @@ func convertGeminiCandidatesToResponsesOutput(candidates []*Candidate) []schemas
 					Arguments: &argumentsStr,
 				}
 				msg := schemas.ResponsesMessage{
+					ID:                   schemas.Ptr("fc_" + providerUtils.GetRandomString(50)),
 					Role:                 schemas.Ptr(schemas.ResponsesInputMessageRoleAssistant),
 					Type:                 schemas.Ptr(schemas.ResponsesMessageTypeFunctionCall),
+					Status:               schemas.Ptr("completed"),
 					ResponsesToolMessage: toolMsg,
 				}
 				messages = append(messages, msg)
