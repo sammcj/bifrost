@@ -36,6 +36,8 @@ MCPClientConfig:
       type: string
     name:
       type: string
+    is_code_mode_client:
+      type: boolean
     connection_type:
       $ref: '#/MCPConnectionType'
     connection_string:
@@ -56,6 +58,15 @@ MCPClientConfig:
         ["*"] => all tools are included
         [] => no tools are included
         ["tool1", "tool2"] => include only the specified tools
+    tools_to_auto_execute:
+      type: array
+      items:
+        type: string
+      description: |
+        Auto-execute list for tools.
+        ["*"] => all tools are included
+        [] => no tools are included
+        ["tool1", "tool2"] => auto-execute only the specified tools
 
 ChatToolFunction:
   type: object
@@ -68,6 +79,8 @@ ChatToolFunction:
     parameters:
       type: object
       additionalProperties: true
+    strict:
+      type: boolean
 
 MCPClient:
   type: object
@@ -83,22 +96,52 @@ MCPClient:
       $ref: '#/MCPConnectionState'
 
 ExecuteToolRequest:
-  type: object
-  description: MCP tool execution request
-  properties:
-    id:
-      type: string
-    type:
-      type: string
-    function:
-      type: object
-      properties:
-        name:
-          type: string
-        arguments:
-          type: string
+  oneOf:
+    - title: Chat (Default)
+      description: Chat format - uses ChatAssistantMessageToolCall schema
+      $ref: '../../schemas/inference/chat.yaml#/ChatAssistantMessageToolCall'
+    - title: Responses
+      description: Responses format - uses ResponsesToolMessage schema
+      $ref: '#/ResponsesToolMessage'
+  description: |
+    MCP tool execution request. The schema depends on the `format` query parameter:
+    - `format=chat` or empty (default): Use `ChatAssistantMessageToolCall` schema
+    - `format=responses`: Use `ResponsesToolMessage` schema
 
 ExecuteToolResponse:
+  oneOf:
+    - title: Chat (Default)
+      description: Chat format response
+      $ref: '../../schemas/inference/chat.yaml#/ChatMessage'
+    - title: Responses
+      description: Responses format response
+      $ref: '../../schemas/inference/responses.yaml#/ResponsesMessage'
+  description: |
+    MCP tool execution response.
+
+ResponsesToolMessage:
   type: object
-  description: MCP tool execution response
-  additionalProperties: true
+  description: Tool message for Responses API format
+  required:
+    - name
+  properties:
+    call_id:
+      type: string
+      description: Common call ID for tool calls and outputs
+    name:
+      type: string
+      description: Tool function name (required for execution)
+    arguments:
+      type: string
+      description: Tool function arguments as JSON string
+    output:
+      type: object
+      description: Tool execution output
+      additionalProperties: true
+    action:
+      type: object
+      description: Tool action configuration
+      additionalProperties: true
+    error:
+      type: string
+      description: Error message if tool execution failed

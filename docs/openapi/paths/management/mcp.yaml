@@ -5,12 +5,37 @@ execute-tool:
     description: Executes an MCP tool and returns the result.
     tags:
       - MCP
+    parameters:
+      - name: format
+        in: query
+        required: false
+        description: |
+          Format of the tool execution request/response.
+        schema:
+          type: string
+          enum: [chat, responses]
+          default: chat
     requestBody:
       required: true
       content:
         application/json:
           schema:
             $ref: '../../schemas/management/mcp.yaml#/ExecuteToolRequest'
+          examples:
+            chat:
+              summary: Chat format example
+              value:
+                id: "call_123"
+                type: "function"
+                function:
+                  name: "get_weather"
+                  arguments: '{"location": "San Francisco"}'
+            responses:
+              summary: Responses format example
+              value:
+                call_id: "call_123"
+                name: "get_weather"
+                arguments: '{"location": "San Francisco"}'
     responses:
       '200':
         description: Tool executed successfully
@@ -18,6 +43,25 @@ execute-tool:
           application/json:
             schema:
               $ref: '../../schemas/management/mcp.yaml#/ExecuteToolResponse'
+            examples:
+              chat:
+                summary: Chat format response
+                value:
+                  name: "get_weather"
+                  role: "tool"
+                  tool_call_id: "call_123"
+                  content: "The weather in San Francisco is 72°F and sunny."
+              responses:
+                summary: Responses format response
+                value:
+                  id: "msg_123"
+                  type: "function_call_output"
+                  status: "completed"
+                  role: "assistant"
+                  call_id: "call_123"
+                  name: "get_weather"
+                  arguments: '{"location": "San Francisco"}'
+                  content: "The weather in San Francisco is 72°F and sunny."
       '400':
         $ref: '../../openapi.yaml#/components/responses/BadRequest'
       '500':

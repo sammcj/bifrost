@@ -6,6 +6,8 @@ LogEntry:
   properties:
     id:
       type: string
+    parent_request_id:
+      type: string
     provider:
       type: string
     model:
@@ -18,14 +20,12 @@ LogEntry:
     timestamp:
       type: string
       format: date-time
+    number_of_retries:
+      type: integer
+    fallback_index:
+      type: integer
     latency:
       type: number
-    input_tokens:
-      type: integer
-    output_tokens:
-      type: integer
-    total_tokens:
-      type: integer
     cost:
       type: number
     selected_key_id:
@@ -36,18 +36,78 @@ LogEntry:
       type: string
     virtual_key_name:
       type: string
-    request:
-      type: object
-      additionalProperties: true
-    response:
-      type: object
-      additionalProperties: true
-    error:
-      type: object
-      additionalProperties: true
+      nullable: true
+    stream:
+      type: boolean
+    raw_request:
+      type: string
+    raw_response:
+      type: string
     created_at:
       type: string
       format: date-time
+    token_usage:
+      $ref: '../../schemas/inference/usage.yaml#/BifrostLLMUsage'
+    error_details:
+      $ref: '../../schemas/inference/common.yaml#/BifrostError'
+    input_history:
+      type: array
+      items:
+        $ref: '../../schemas/inference/chat.yaml#/ChatMessage'
+    responses_input_history:
+      type: array
+      items:
+        $ref: '../../schemas/inference/responses.yaml#/ResponsesMessage'
+    output_message:
+      $ref: '../../schemas/inference/chat.yaml#/ChatMessage'
+    responses_output:
+      type: array
+      items:
+        $ref: '../../schemas/inference/responses.yaml#/ResponsesMessage'
+    embedding_output:
+      type: array
+      items:
+        type: array
+        items:
+          type: number
+    params:
+      type: object
+      additionalProperties: true
+    tools:
+      type: array
+      items:
+        $ref: '../../schemas/inference/chat.yaml#/ChatTool'
+    tool_calls:
+      type: array
+      items:
+        $ref: '../../schemas/inference/chat.yaml#/ChatAssistantMessageToolCall'
+    speech_input:
+      type: object
+      additionalProperties: true
+    transcription_input:
+      type: object
+      additionalProperties: true
+    image_generation_input:
+      type: object
+      additionalProperties: true
+    speech_output:
+      type: object
+      additionalProperties: true
+    transcription_output:
+      type: object
+      additionalProperties: true
+    image_generation_output:
+      type: object
+      additionalProperties: true
+    cache_debug:
+      type: object
+      additionalProperties: true
+    selected_key:
+      type: object
+      additionalProperties: true
+    virtual_key:
+      type: object
+      additionalProperties: true
 
 SearchFilters:
   type: object
@@ -129,14 +189,6 @@ LogStats:
       type: number
     success_rate:
       type: number
-    provider_breakdown:
-      type: object
-      additionalProperties:
-        type: integer
-    model_breakdown:
-      type: object
-      additionalProperties:
-        type: integer
 
 DroppedRequestsResponse:
   type: object
@@ -153,22 +205,15 @@ FilterDataResponse:
     models:
       type: array
       items:
-        type: object
-        properties:
-          id:
-            type: string
-          name:
-            type: string
+        type: string
     selected_keys:
       type: array
       items:
-        type: object
-        additionalProperties: true
+        $ref: '../../schemas/management/providers.yaml#/Key'
     virtual_keys:
       type: array
       items:
-        type: object
-        additionalProperties: true
+        $ref: '../../schemas/management/governance.yaml#/VirtualKey'
 
 DeleteLogsRequest:
   type: object
@@ -195,9 +240,11 @@ RecalculateCostResponse:
   type: object
   description: Recalculate cost response
   properties:
-    processed:
+    total_matched:
       type: integer
     updated:
+      type: integer
+    skipped:
       type: integer
     remaining:
       type: integer
