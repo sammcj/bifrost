@@ -411,16 +411,9 @@ func HandleProviderAPIError(resp *fasthttp.Response, errorResp any) *schemas.Bif
 	// Try to unmarshal decoded body for RawResponse
 	var rawErrorResponse interface{}
 	if err := sonic.Unmarshal(decodedBody, &rawErrorResponse); err != nil {
-		return &schemas.BifrostError{
-			IsBifrostError: false,
-			StatusCode:     &statusCode,
-			Error: &schemas.ErrorField{
-				Message: string(decodedBody),
-			},
-			ExtraFields: schemas.BifrostErrorExtraFields{
-				RawResponse: string(decodedBody),
-			},
-		}
+		// Store raw body as string for RawResponse when JSON parsing fails
+		// Continue to HTML detection and proper error handling below
+		rawErrorResponse = string(decodedBody)
 	}
 
 	// Check for empty response
