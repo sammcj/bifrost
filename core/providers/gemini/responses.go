@@ -143,8 +143,9 @@ func (response *GenerateContentResponse) ToResponsesBifrostResponsesResponse() *
 
 	// Create the BifrostResponse with Responses structure
 	bifrostResp := &schemas.BifrostResponsesResponse{
-		ID:    schemas.Ptr("resp_" + providerUtils.GetRandomString(50)),
-		Model: response.ModelVersion,
+		ID:        schemas.Ptr("resp_" + providerUtils.GetRandomString(50)),
+		CreatedAt: int(time.Now().Unix()),
+		Model:     response.ModelVersion,
 	}
 
 	// Convert usage information
@@ -2601,8 +2602,8 @@ func convertContentBlockToGeminiPart(block schemas.ResponsesMessageContentBlock)
 					data = *urlInfo.DataURLWithoutPrefix
 				}
 
-				// Decode base64 data
-				decodedData, err := base64.StdEncoding.DecodeString(data)
+				// Decode base64 data (handles both standard and URL-safe base64)
+				decodedData, err := decodeBase64StringToBytes(data)
 				if err != nil {
 					return nil, fmt.Errorf("failed to decode base64 image data: %w", err)
 				}
@@ -2625,8 +2626,8 @@ func convertContentBlockToGeminiPart(block schemas.ResponsesMessageContentBlock)
 
 	case schemas.ResponsesInputMessageContentBlockTypeAudio:
 		if block.Audio != nil {
-			// Decode base64 audio data
-			decodedData, err := base64.StdEncoding.DecodeString(block.Audio.Data)
+			// Decode base64 audio data (handles both standard and URL-safe base64)
+			decodedData, err := decodeBase64StringToBytes(block.Audio.Data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decode base64 audio data: %w", err)
 			}

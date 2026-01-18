@@ -96,7 +96,16 @@ func (resp *BifrostResponsesResponse) WithDefaults() *BifrostResponsesResponse {
 		Model:     resp.Model,
 	}
 
-	// Fields that don't need defaults (just copy as-is)
+	result.Conversation = resp.Conversation
+	result.Include = resp.Include
+	result.Metadata = resp.Metadata
+	result.Prompt = resp.Prompt
+	result.StreamOptions = resp.StreamOptions
+	result.StopReason = resp.StopReason
+	result.ExtraFields = resp.ExtraFields
+	result.SearchResults = resp.SearchResults
+	result.Videos = resp.Videos
+	result.Citations = resp.Citations
 	result.IncompleteDetails = resp.IncompleteDetails
 	result.PreviousResponseID = resp.PreviousResponseID
 	result.PromptCacheKey = resp.PromptCacheKey
@@ -119,6 +128,12 @@ func (resp *BifrostResponsesResponse) WithDefaults() *BifrostResponsesResponse {
 		result.Output = resp.Output
 	} else {
 		result.Output = []ResponsesMessage{}
+	}
+
+	if resp.Reasoning != nil {
+		result.Reasoning = resp.Reasoning
+	} else {
+		result.Reasoning = &ResponsesParametersReasoning{}
 	}
 
 	// Sampling parameters - defaults: standard values
@@ -379,9 +394,9 @@ type ResponsesPrompt struct {
 }
 
 type ResponsesParametersReasoning struct {
-	Effort          *string `json:"effort,omitempty"`           // "none" | "minimal" | "low" | "medium" | "high" (any value other than "none" will enable reasoning)
+	Effort          *string `json:"effort"`                     // "none" | "minimal" | "low" | "medium" | "high" (any value other than "none" will enable reasoning)
 	GenerateSummary *string `json:"generate_summary,omitempty"` // Deprecated: use summary instead
-	Summary         *string `json:"summary,omitempty"`          // "auto" | "concise" | "detailed"
+	Summary         *string `json:"summary"`                    // "auto" | "concise" | "detailed"
 	MaxTokens       *int    `json:"max_tokens,omitempty"`       // Maximum number of tokens to generate for the reasoning output (required for anthropic)
 }
 
