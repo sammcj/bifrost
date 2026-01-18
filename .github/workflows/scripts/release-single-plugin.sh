@@ -78,7 +78,7 @@ if [ -f "go.mod" ]; then
   if go list ./... | grep -q .; then
     # Run E2E tests for governance plugin
     if [ "$PLUGIN_NAME" = "governance" ]; then
-      # echo "🧪 Running governance plugin unit tests with coverage..."
+      echo "🧪 Running governance plugin unit tests with coverage..."
       # go test -coverprofile=coverage.txt -coverpkg=./... ./...
       
       # # Upload unit test coverage to Codecov
