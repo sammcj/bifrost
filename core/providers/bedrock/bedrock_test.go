@@ -873,10 +873,6 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 								{
 									Type: schemas.ResponsesInputMessageContentBlockTypeText,
 									Text: schemas.Ptr("Hello, world!"),
-									ResponsesOutputMessageContentText: &schemas.ResponsesOutputMessageContentText{
-										Annotations: []schemas.ResponsesOutputMessageContentTextAnnotation{},
-										LogProbs:    []schemas.ResponsesOutputMessageContentTextLogProb{},
-									},
 								},
 							},
 						},
@@ -930,10 +926,6 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 								{
 									Type: schemas.ResponsesInputMessageContentBlockTypeText,
 									Text: schemas.Ptr("Hello!"),
-									ResponsesOutputMessageContentText: &schemas.ResponsesOutputMessageContentText{
-										Annotations: []schemas.ResponsesOutputMessageContentTextAnnotation{},
-										LogProbs:    []schemas.ResponsesOutputMessageContentTextLogProb{},
-									},
 								},
 							},
 						},
@@ -975,10 +967,6 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 								{
 									Type: schemas.ResponsesInputMessageContentBlockTypeText,
 									Text: schemas.Ptr("Hello!"),
-									ResponsesOutputMessageContentText: &schemas.ResponsesOutputMessageContentText{
-										Annotations: []schemas.ResponsesOutputMessageContentTextAnnotation{},
-										LogProbs:    []schemas.ResponsesOutputMessageContentTextLogProb{},
-									},
 								},
 							},
 						},
@@ -1025,10 +1013,6 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 								{
 									Type: schemas.ResponsesInputMessageContentBlockTypeText,
 									Text: schemas.Ptr("Hello!"),
-									ResponsesOutputMessageContentText: &schemas.ResponsesOutputMessageContentText{
-										Annotations: []schemas.ResponsesOutputMessageContentTextAnnotation{},
-										LogProbs:    []schemas.ResponsesOutputMessageContentTextLogProb{},
-									},
 								},
 							},
 						},
@@ -1094,10 +1078,6 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 								{
 									Type: schemas.ResponsesInputMessageContentBlockTypeText,
 									Text: schemas.Ptr("What's the weather?"),
-									ResponsesOutputMessageContentText: &schemas.ResponsesOutputMessageContentText{
-										Annotations: []schemas.ResponsesOutputMessageContentTextAnnotation{},
-										LogProbs:    []schemas.ResponsesOutputMessageContentTextLogProb{},
-									},
 								},
 							},
 						},
@@ -1169,10 +1149,6 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 								{
 									Type: schemas.ResponsesInputMessageContentBlockTypeText,
 									Text: schemas.Ptr("Hello!"),
-									ResponsesOutputMessageContentText: &schemas.ResponsesOutputMessageContentText{
-										Annotations: []schemas.ResponsesOutputMessageContentTextAnnotation{},
-										LogProbs:    []schemas.ResponsesOutputMessageContentTextLogProb{},
-									},
 								},
 							},
 						},
