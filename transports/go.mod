@@ -26,8 +26,6 @@ require (
 	gorm.io/gorm v1.31.1
 )
 
-replace github.com/maximhq/bifrost/plugins/litellmcompat => ../plugins/litellmcompat
-
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0 // indirect

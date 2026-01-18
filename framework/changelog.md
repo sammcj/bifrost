@@ -1,2 +1,3 @@
 - fix: properly propagate cost details in responses accumulator
 - feat: added refine model util function to model catalog
+- chore: upgrades to core 1.3.10

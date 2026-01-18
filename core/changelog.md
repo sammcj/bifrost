@@ -1,2 +1,3 @@
 - feat: added retries on network lookup errors
 - fix: properly propagate cost details for openrouter responses
+- fix: removes litellm fallback handling on provider level. moved that logic to plugin
