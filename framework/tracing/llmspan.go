@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/maximhq/bifrost/framework/modelcatalog"
 )
 
 // PopulateRequestAttributes extracts common request attributes from a BifrostRequest.
@@ -1322,22 +1321,4 @@ func extractMessageContent(content *schemas.ChatMessageContent) string {
 	}
 
 	return ""
-}
-
-// ===============================================
-// Cost Calculation
-// ===============================================
-
-// PopulateCostAttribute calculates and adds the cost attribute for a response.
-// The pricingManager is optional; if nil, no cost attribute is added.
-func PopulateCostAttribute(
-	resp *schemas.BifrostResponse,
-	pricingManager *modelcatalog.ModelCatalog,
-	attrs map[string]any,
-) {
-	if pricingManager == nil || resp == nil {
-		return
-	}
-	cost := pricingManager.CalculateCostWithCacheDebug(resp)
-	attrs[schemas.AttrUsageCost] = cost
 }
