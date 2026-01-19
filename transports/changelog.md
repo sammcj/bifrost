@@ -1,2 +1,2 @@
-- fix: fixes tool call-based structured output flow for Bedrock streaming requests
+- fix: fixes tool call-based structured output flow for Bedrock streaming requests (Chat and Responses API)
 - chore: updates test cases to assert content and tool_calls validations

@@ -1220,6 +1220,14 @@ func (provider *BedrockProvider) ResponsesStream(ctx *schemas.BifrostContext, po
 		streamState.Model = &deployment
 		defer releaseBedrockResponsesStreamState(streamState)
 
+		// Check for structured output mode - if set, we need to intercept tool calls
+		// and convert them to content instead of forwarding as tool calls
+		var structuredOutputToolName string
+		if toolName, ok := ctx.Value(schemas.BifrostContextKeyStructuredOutputToolName).(string); ok {
+			structuredOutputToolName = toolName
+		}
+		var isAccumulatingStructuredOutput bool
+
 		// Process AWS Event Stream format using proper decoder
 		startTime := time.Now()
 		lastChunkTime := startTime
@@ -1331,6 +1339,48 @@ func (provider *BedrockProvider) ResponsesStream(ctx *schemas.BifrostContext, po
 						}
 					}
 				}
+
+				// Handle structured output: intercept tool calls for the structured output tool
+				// and convert them to content instead of forwarding as tool calls
+				if structuredOutputToolName != "" {
+					// Check for tool use start event
+					if streamEvent.Start != nil && streamEvent.Start.ToolUse != nil {
+						if streamEvent.Start.ToolUse.Name == structuredOutputToolName {
+							// This is the structured output tool - start accumulating, don't forward
+							isAccumulatingStructuredOutput = true
+							continue
+						}
+					}
+
+					// Check for tool use delta event
+					if streamEvent.Delta != nil && streamEvent.Delta.ToolUse != nil && isAccumulatingStructuredOutput {
+						// Convert tool use delta to text delta
+						content := streamEvent.Delta.ToolUse.Input
+						response := &schemas.BifrostResponsesStreamResponse{
+							Type:           schemas.ResponsesStreamResponseTypeOutputTextDelta,
+							SequenceNumber: chunkIndex,
+							Delta:          &content,
+							ExtraFields: schemas.BifrostResponseExtraFields{
+								RequestType:     schemas.ResponsesStreamRequest,
+								Provider:        providerName,
+								ModelRequested:  request.Model,
+								ModelDeployment: deployment,
+								ChunkIndex:      chunkIndex,
+								Latency:         time.Since(lastChunkTime).Milliseconds(),
+							},
+						}
+						chunkIndex++
+						lastChunkTime = time.Now()
+
+						if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
+							response.ExtraFields.RawResponse = string(message.Payload)
+						}
+
+						providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, response, nil, nil, nil), responseChan)
+						continue
+					}
+				}
+
 				responses, bifrostErr, _ := streamEvent.ToBifrostResponsesStream(chunkIndex, streamState)
 				if bifrostErr != nil {
 					bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{

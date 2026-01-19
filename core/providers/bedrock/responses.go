@@ -1652,6 +1652,12 @@ func ToBedrockResponsesRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.
 						bedrockReq.ToolConfig = &BedrockToolConfig{}
 					}
 					bedrockReq.ToolConfig.Tools = append(bedrockReq.ToolConfig.Tools, *responseFormatTool)
+					// Force the model to use this specific tool (same as ChatCompletion)
+					bedrockReq.ToolConfig.ToolChoice = &BedrockToolChoice{
+						Tool: &BedrockToolChoiceTool{
+							Name: responseFormatTool.ToolSpec.Name,
+						},
+					}
 				}
 			}
 		}
