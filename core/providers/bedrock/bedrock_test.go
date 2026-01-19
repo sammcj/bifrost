@@ -163,6 +163,7 @@ func TestBedrock(t *testing.T) {
 			FileContent:           true,
 			FileBatchInput:        true,
 			CountTokens:           false, // Not supported
+			StructuredOutputs:     true,
 		},
 	}
 
