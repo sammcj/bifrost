@@ -14,6 +14,7 @@ import (
 	"github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/migrator"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Migrate performs the necessary database migrations.
@@ -1529,23 +1530,28 @@ func migrationMoveKeysToProviderConfig(ctx context.Context, db *gorm.DB) error {
 				if err := tx.Table("governance_virtual_key_keys").Find(&oldAssociations).Error; err == nil {
 					// Process each association
 					for _, assoc := range oldAssociations {
-						// Get the key to find its provider
-						var key tables.TableKey
-						if err := tx.First(&key, assoc.KeyID).Error; err != nil {
+						// Get only the key ID and provider - using a minimal struct to avoid
+						// querying columns that may not exist yet (added by later migrations)
+						type KeyMinimal struct {
+							ID       uint
+							Provider string
+						}
+						var keyData KeyMinimal
+						if err := tx.Table("config_keys").Select("id, provider").Where("id = ?", assoc.KeyID).First(&keyData).Error; err != nil {
 							// Key might have been deleted, skip
 							continue
 						}
 
 						// Find existing provider config for this virtual key and provider
 						var providerConfig tables.TableVirtualKeyProviderConfig
-						result := tx.Where("virtual_key_id = ? AND provider = ?", assoc.VirtualKeyID, key.Provider).First(&providerConfig)
+						result := tx.Where("virtual_key_id = ? AND provider = ?", assoc.VirtualKeyID, keyData.Provider).First(&providerConfig)
 
 						if result.Error != nil {
 							if result.Error == gorm.ErrRecordNotFound {
 								// Create a new provider config for this provider
 								providerConfig = tables.TableVirtualKeyProviderConfig{
 									VirtualKeyID:  assoc.VirtualKeyID,
-									Provider:      key.Provider,
+									Provider:      keyData.Provider,
 									Weight:        bifrost.Ptr(1.0),
 									AllowedModels: []string{},
 								}
@@ -1557,9 +1563,14 @@ func migrationMoveKeysToProviderConfig(ctx context.Context, db *gorm.DB) error {
 							}
 						}
 
-						// Use GORM's Association to append the key
-						if err := tx.Model(&providerConfig).Association("Keys").Append(&key); err != nil {
-							return fmt.Errorf("failed to associate key %d with provider config %d: %w", key.ID, providerConfig.ID, err)
+						// Insert directly into the join table using clause.OnConflict for
+						// database-agnostic duplicate handling (works for SQLite and PostgreSQL)
+						joinEntry := tables.TableVirtualKeyProviderConfigKey{
+							TableVirtualKeyProviderConfigID: providerConfig.ID,
+							TableKeyID:                      keyData.ID,
+						}
+						if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&joinEntry).Error; err != nil {
+							return fmt.Errorf("failed to associate key %d with provider config %d: %w", keyData.ID, providerConfig.ID, err)
 						}
 					}
 				}
