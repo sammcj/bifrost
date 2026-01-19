@@ -106,7 +106,6 @@ func (p *LiteLLMCompatPlugin) PostHook(ctx *schemas.BifrostContext, result *sche
 	// Note: tool-call content runs before text-to-chat because text-to-chat may convert
 	// the response type, and tool-call content needs to operate on chat responses
 	if result != nil {
-		result = transformToolCallContentResponse(result)
 		result = transformTextToChatResponse(ctx, result, tc, p.logger)
 	}
 

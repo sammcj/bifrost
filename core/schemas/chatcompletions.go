@@ -889,6 +889,16 @@ type BifrostResponseChoice struct {
 	*ChatStreamResponseChoice
 }
 
+// BifrostFinishReason represents the reason why the model stopped generating.
+type BifrostFinishReason string
+
+// BifrostFinishReason values
+const (
+	BifrostFinishReasonStop      BifrostFinishReason = "stop"
+	BifrostFinishReasonLength    BifrostFinishReason = "length"
+	BifrostFinishReasonToolCalls BifrostFinishReason = "tool_calls"
+)
+
 type BifrostReasoningDetailsType string
 
 const (

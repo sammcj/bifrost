@@ -1,0 +1,1 @@
+- fix: fixes streaming support for bedrock structured output

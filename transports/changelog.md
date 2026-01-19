@@ -1,0 +1,2 @@
+- fix: fixes tool call-based structured output flow for Bedrock streaming requests
+- chore: updates test cases to assert content and tool_calls validations
