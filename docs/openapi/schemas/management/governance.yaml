@@ -17,6 +17,15 @@ Budget:
       format: date-time
     current_usage:
       type: number
+    config_hash:
+      type: string
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
 
 RateLimit:
   type: object
@@ -29,23 +38,34 @@ RateLimit:
       format: int64
     token_reset_duration:
       type: string
-    request_max_limit:
-      type: integer
-      format: int64
-    request_reset_duration:
-      type: string
-    token_last_reset:
-      type: string
-      format: date-time
-    request_last_reset:
-      type: string
-      format: date-time
     token_current_usage:
       type: integer
       format: int64
+    token_last_reset:
+      type: string
+      format: date-time
+    request_max_limit:
+      type: integer
+      format: int64
+      nullable: true
+    request_reset_duration:
+      type: string
+      nullable: true
     request_current_usage:
       type: integer
       format: int64
+    request_last_reset:
+      type: string
+      format: date-time
+    config_hash:
+      type: string
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
 
 CreateBudgetRequest:
   type: object
@@ -104,6 +124,8 @@ VirtualKeyProviderConfig:
   properties:
     id:
       type: integer
+    virtual_key_id:
+      type: string
     provider:
       type: string
     weight:
@@ -112,14 +134,18 @@ VirtualKeyProviderConfig:
       type: array
       items:
         type: string
+    budget_id:
+      type: string
+    rate_limit_id:
+      type: string
     budget:
       $ref: '#/Budget'
     rate_limit:
       $ref: '#/RateLimit'
-    key_ids:
+    keys:
       type: array
       items:
-        type: string
+        $ref: '#/TableKey'
 
 VirtualKeyMCPConfig:
   type: object
@@ -146,14 +172,8 @@ VirtualKey:
       type: string
     description:
       type: string
-    team_id:
-      type: string
-    customer_id:
-      type: string
-    budget:
-      $ref: '#/Budget'
-    rate_limit:
-      $ref: '#/RateLimit'
+    is_active:
+      type: boolean
     provider_configs:
       type: array
       items:
@@ -162,14 +182,6 @@ VirtualKey:
       type: array
       items:
         $ref: '#/VirtualKeyMCPConfig'
-    is_active:
-      type: boolean
-    created_at:
-      type: string
-      format: date-time
-    updated_at:
-      type: string
-      format: date-time
 
 CreateVirtualKeyRequest:
   type: object
@@ -309,8 +321,28 @@ Team:
       type: string
     customer_id:
       type: string
+    budget_id:
+      type: string
+    customer:
+      $ref: '#/Customer'
     budget:
       $ref: '#/Budget'
+    virtual_keys:
+      type: array
+      items:
+        $ref: '#/VirtualKey'
+    profile:
+      type: object
+      additionalProperties: true
+    config:
+      type: object
+      additionalProperties: true
+    claims:
+      type: object
+      additionalProperties: true
+    config_hash:
+      type: string
+      nullable: true
     created_at:
       type: string
       format: date-time
@@ -370,8 +402,20 @@ Customer:
       type: string
     name:
       type: string
+    budget_id:
+      type: string
     budget:
       $ref: '#/Budget'
+    teams:
+      type: array
+      items:
+        $ref: '#/Team'
+    virtual_keys:
+      type: array
+      items:
+        $ref: '#/VirtualKey'
+    config_hash:
+      type: string
     created_at:
       type: string
       format: date-time
@@ -410,6 +454,28 @@ ListCustomersResponse:
     count:
       type: integer
 
+ListBudgetsResponse:
+  type: object
+  description: List budgets response
+  properties:
+    budgets:
+      type: array
+      items:
+        $ref: '#/Budget'
+    count:
+      type: integer
+
+ListRateLimitsResponse:
+  type: object
+  description: List rate limits response
+  properties:
+    rate_limits:
+      type: array
+      items:
+        $ref: '#/RateLimit'
+    count:
+      type: integer
+
 CustomerResponse:
   type: object
   description: Customer operation response
@@ -418,3 +484,89 @@ CustomerResponse:
       type: string
     customer:
       $ref: '#/Customer'
+
+TableKey:
+  type: object
+  description: Table key configuration
+  properties:
+    id:
+      type: integer
+    name:
+      type: string
+    provider_id:
+      type: integer
+    provider:
+      type: string
+    key_id:
+      type: string
+    value:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+    models:
+      type: array
+      items:
+        type: string
+    weight:
+      type: number
+      nullable: true
+    enabled:
+      type: boolean
+      default: true
+      nullable: true
+    use_for_batch_api:
+      type: boolean
+      default: false
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    config_hash:
+      type: string
+      nullable: true
+    # Azure config fields
+    azure_endpoint:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    azure_api_version:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    azure_client_id:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    azure_client_secret:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    azure_tenant_id:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    # Vertex config fields
+    vertex_project_id:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    vertex_project_number:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    vertex_region:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    vertex_auth_credentials:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    # Bedrock config fields
+    bedrock_access_key:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    bedrock_secret_key:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    bedrock_session_token:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    bedrock_region:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
+    bedrock_arn:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+      nullable: true
