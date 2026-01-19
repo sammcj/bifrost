@@ -360,6 +360,7 @@
         "tab": "Changelogs",
         "icon": "bolt",
         "pages": [
+          "changelogs/v1.4.1",
           "changelogs/v1.4.0",
           "changelogs/v1.4.0-prerelease10",
           "changelogs/v1.4.0-prerelease9",
@@ -446,6 +447,7 @@
               "changelogs/v1.3.3",
               "changelogs/v1.3.2",
               "changelogs/v1.3.1",
+              "changelogs/v1.3.0",
               "changelogs/v1.3.0-prerelease7",
               "changelogs/v1.3.0-prerelease6",
               "changelogs/v1.3.0-prerelease5",
@@ -453,7 +455,6 @@
               "changelogs/v1.3.0-prerelease3",
               "changelogs/v1.3.0-prerelease2",
               "changelogs/v1.3.0-prerelease1",
-              "changelogs/v1.3.0",
               "changelogs/v1.2.24",
               "changelogs/v1.2.23"
             ]
