@@ -257,6 +257,13 @@
                   }
                 ]
               },
+              {
+                "group": "Enterprise Observability",
+                "icon": "binoculars",
+                "pages": [
+                  "enterprise/datadog-connector"
+                ]
+              },
               "enterprise/mcp-with-fa",
               "enterprise/vault-support",
               "enterprise/invpc-deployments",
@@ -530,6 +537,10 @@
     {
       "source": "/enterprise/users",
       "destination": "/enterprise/setting-up-okta"
+    },
+    {
+      "source": "/enterprise/data-connectors/datadog",
+      "destination": "/enterprise/datadog-connector"
     }
   ],
   "footer": {
