@@ -20,8 +20,12 @@ type EnvVar struct {
 // NewEnvVar creates a new EnvValue from a string.
 func NewEnvVar(value string) *EnvVar {
 	// Cleanup string if required
-	// The string may have "\"env.TEST\"", "env.TEST" or "env.TEST\"", we need to clean it up to "env.TEST"
-	val := strings.Trim(value, "\"")
+	// Use strconv.Unquote to properly handle JSON string escape sequences
+	// This converts "\"{\\\"key\\\":\\\"value\\\"}\"" to "{\"key\":\"value\"}"
+	val := value
+	if unquoted, err := strconv.Unquote(value); err == nil {
+		val = unquoted
+	}
 	// Here we will need to check if the incoming data is a valid JSON object
 	// If it's a valid JSON object and follows the EnvVar schema, then we will unmarshal it into an EnvVar object
 	if sonic.Valid([]byte(value)) {
@@ -55,7 +59,7 @@ func NewEnvVar(value string) *EnvVar {
 		}
 	}
 	return &EnvVar{
-		Val:     value,
+		Val:     val,
 		FromEnv: false,
 		EnvVar:  "",
 	}
@@ -134,8 +138,11 @@ func (e *EnvVar) UnmarshalJSON(data []byte) error {
 	// if it has env. then we will process it and set the FromEnv to true
 	val := string(data)
 	// Cleanup string if required
-	// The string may have "\"env.TEST\"", "env.TEST" or "env.TEST\"", we need to clean it up to "env.TEST"
-	val = strings.Trim(val, "\"")
+	// Use strconv.Unquote to properly handle JSON string escape sequences
+	// This converts "\"{\\\"key\\\":\\\"value\\\"}\"" to "{\"key\":\"value\"}"
+	if unquoted, err := strconv.Unquote(val); err == nil {
+		val = unquoted
+	}
 	// Here we will need to check if the incoming data is a valid JSON object
 	// If it's a valid JSON object and follows the EnvVar schema, then we will unmarshal it into an EnvVar object
 	if sonic.Valid(data) {
