@@ -513,6 +513,10 @@
     {
       "source": "/features/mcp/filtering",
       "destination": "/mcp/filtering"
+    },
+    {
+      "source": "/features/enterprise/governance",
+      "destination": "https://docs.getbifrost.ai/enterprise/setting-up-okta"
     }
   ],
   "footer": {

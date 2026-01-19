@@ -1399,6 +1399,492 @@ func collectCountTokensResponseMetrics(response *schemas.BifrostCountTokensRespo
 	result.MetricsCollected["request_type"] = response.ExtraFields.RequestType
 }
 
+// =============================================================================
+// BATCH API VALIDATION FUNCTIONS
+// =============================================================================
+
+// ValidateBatchCreateResponse performs comprehensive validation for batch create responses
+func ValidateBatchCreateResponse(t *testing.T, response *schemas.BifrostBatchCreateResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
+	result := ValidationResult{
+		Passed:           true,
+		Errors:           make([]string, 0),
+		Warnings:         make([]string, 0),
+		MetricsCollected: make(map[string]interface{}),
+	}
+
+	if err != nil {
+		result.Passed = false
+		parsed := ParseBifrostError(err)
+		result.Errors = append(result.Errors, fmt.Sprintf("Got error when expecting success: %s", FormatErrorConcise(parsed)))
+		LogError(t, err, scenarioName)
+		return result
+	}
+
+	if response == nil {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Response is nil")
+		return result
+	}
+
+	// Validate batch ID is present
+	if response.ID == "" {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Batch ID is empty")
+	}
+
+	// Validate latency if expected
+	if expectations.ShouldHaveLatency {
+		if response.ExtraFields.Latency <= 0 {
+			result.Passed = false
+			result.Errors = append(result.Errors, "Expected latency information but not present or invalid")
+		} else {
+			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
+		}
+	}
+
+	// Collect metrics
+	result.MetricsCollected["batch_id"] = response.ID
+	result.MetricsCollected["status"] = response.Status
+	result.MetricsCollected["has_endpoint"] = response.Endpoint != ""
+
+	logValidationResults(t, result, scenarioName)
+	return result
+}
+
+// ValidateBatchListResponse performs comprehensive validation for batch list responses
+func ValidateBatchListResponse(t *testing.T, response *schemas.BifrostBatchListResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
+	result := ValidationResult{
+		Passed:           true,
+		Errors:           make([]string, 0),
+		Warnings:         make([]string, 0),
+		MetricsCollected: make(map[string]interface{}),
+	}
+
+	if err != nil {
+		result.Passed = false
+		parsed := ParseBifrostError(err)
+		result.Errors = append(result.Errors, fmt.Sprintf("Got error when expecting success: %s", FormatErrorConcise(parsed)))
+		LogError(t, err, scenarioName)
+		return result
+	}
+
+	if response == nil {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Response is nil")
+		return result
+	}
+
+	// Validate latency if expected
+	if expectations.ShouldHaveLatency {
+		if response.ExtraFields.Latency <= 0 {
+			result.Passed = false
+			result.Errors = append(result.Errors, "Expected latency information but not present or invalid")
+		} else {
+			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
+		}
+	}
+
+	// Collect metrics
+	result.MetricsCollected["batch_count"] = len(response.Data)
+	result.MetricsCollected["has_more"] = response.HasMore
+
+	logValidationResults(t, result, scenarioName)
+	return result
+}
+
+// ValidateBatchRetrieveResponse performs comprehensive validation for batch retrieve responses
+func ValidateBatchRetrieveResponse(t *testing.T, response *schemas.BifrostBatchRetrieveResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
+	result := ValidationResult{
+		Passed:           true,
+		Errors:           make([]string, 0),
+		Warnings:         make([]string, 0),
+		MetricsCollected: make(map[string]interface{}),
+	}
+
+	if err != nil {
+		result.Passed = false
+		parsed := ParseBifrostError(err)
+		result.Errors = append(result.Errors, fmt.Sprintf("Got error when expecting success: %s", FormatErrorConcise(parsed)))
+		LogError(t, err, scenarioName)
+		return result
+	}
+
+	if response == nil {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Response is nil")
+		return result
+	}
+
+	// Validate batch ID is present
+	if response.ID == "" {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Batch ID is empty")
+	}
+
+	// Validate latency if expected
+	if expectations.ShouldHaveLatency {
+		if response.ExtraFields.Latency <= 0 {
+			result.Passed = false
+			result.Errors = append(result.Errors, "Expected latency information but not present or invalid")
+		} else {
+			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
+		}
+	}
+
+	// Collect metrics
+	result.MetricsCollected["batch_id"] = response.ID
+	result.MetricsCollected["status"] = response.Status
+	result.MetricsCollected["has_request_counts"] = response.RequestCounts.Total > 0
+
+	logValidationResults(t, result, scenarioName)
+	return result
+}
+
+// ValidateBatchCancelResponse performs comprehensive validation for batch cancel responses
+func ValidateBatchCancelResponse(t *testing.T, response *schemas.BifrostBatchCancelResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
+	result := ValidationResult{
+		Passed:           true,
+		Errors:           make([]string, 0),
+		Warnings:         make([]string, 0),
+		MetricsCollected: make(map[string]interface{}),
+	}
+
+	if err != nil {
+		result.Passed = false
+		parsed := ParseBifrostError(err)
+		result.Errors = append(result.Errors, fmt.Sprintf("Got error when expecting success: %s", FormatErrorConcise(parsed)))
+		LogError(t, err, scenarioName)
+		return result
+	}
+
+	if response == nil {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Response is nil")
+		return result
+	}
+
+	// Validate batch ID is present
+	if response.ID == "" {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Batch ID is empty")
+	}
+
+	// Validate latency if expected
+	if expectations.ShouldHaveLatency {
+		if response.ExtraFields.Latency <= 0 {
+			result.Passed = false
+			result.Errors = append(result.Errors, "Expected latency information but not present or invalid")
+		} else {
+			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
+		}
+	}
+
+	// Collect metrics
+	result.MetricsCollected["batch_id"] = response.ID
+	result.MetricsCollected["status"] = response.Status
+
+	logValidationResults(t, result, scenarioName)
+	return result
+}
+
+// ValidateBatchResultsResponse performs comprehensive validation for batch results responses
+func ValidateBatchResultsResponse(t *testing.T, response *schemas.BifrostBatchResultsResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
+	result := ValidationResult{
+		Passed:           true,
+		Errors:           make([]string, 0),
+		Warnings:         make([]string, 0),
+		MetricsCollected: make(map[string]interface{}),
+	}
+
+	if err != nil {
+		result.Passed = false
+		parsed := ParseBifrostError(err)
+		result.Errors = append(result.Errors, fmt.Sprintf("Got error when expecting success: %s", FormatErrorConcise(parsed)))
+		LogError(t, err, scenarioName)
+		return result
+	}
+
+	if response == nil {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Response is nil")
+		return result
+	}
+
+	// Validate batch ID is present
+	if response.BatchID == "" {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Batch ID is empty")
+	}
+
+	// Validate latency if expected
+	if expectations.ShouldHaveLatency {
+		if response.ExtraFields.Latency <= 0 {
+			result.Passed = false
+			result.Errors = append(result.Errors, "Expected latency information but not present or invalid")
+		} else {
+			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
+		}
+	}
+
+	// Collect metrics
+	result.MetricsCollected["batch_id"] = response.BatchID
+	result.MetricsCollected["results_count"] = len(response.Results)
+	result.MetricsCollected["has_more"] = response.HasMore
+
+	logValidationResults(t, result, scenarioName)
+	return result
+}
+
+// =============================================================================
+// FILE API VALIDATION FUNCTIONS
+// =============================================================================
+
+// ValidateFileUploadResponse performs comprehensive validation for file upload responses
+func ValidateFileUploadResponse(t *testing.T, response *schemas.BifrostFileUploadResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
+	result := ValidationResult{
+		Passed:           true,
+		Errors:           make([]string, 0),
+		Warnings:         make([]string, 0),
+		MetricsCollected: make(map[string]interface{}),
+	}
+
+	if err != nil {
+		result.Passed = false
+		parsed := ParseBifrostError(err)
+		result.Errors = append(result.Errors, fmt.Sprintf("Got error when expecting success: %s", FormatErrorConcise(parsed)))
+		LogError(t, err, scenarioName)
+		return result
+	}
+
+	if response == nil {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Response is nil")
+		return result
+	}
+
+	// Validate file ID is present
+	if response.ID == "" {
+		result.Passed = false
+		result.Errors = append(result.Errors, "File ID is empty")
+	}
+
+	// Validate latency if expected
+	if expectations.ShouldHaveLatency {
+		if response.ExtraFields.Latency <= 0 {
+			result.Passed = false
+			result.Errors = append(result.Errors, "Expected latency information but not present or invalid")
+		} else {
+			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
+		}
+	}
+
+	// Collect metrics
+	result.MetricsCollected["file_id"] = response.ID
+	result.MetricsCollected["filename"] = response.Filename
+	result.MetricsCollected["bytes"] = response.Bytes
+	result.MetricsCollected["purpose"] = response.Purpose
+
+	logValidationResults(t, result, scenarioName)
+	return result
+}
+
+// ValidateFileListResponse performs comprehensive validation for file list responses
+func ValidateFileListResponse(t *testing.T, response *schemas.BifrostFileListResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
+	result := ValidationResult{
+		Passed:           true,
+		Errors:           make([]string, 0),
+		Warnings:         make([]string, 0),
+		MetricsCollected: make(map[string]interface{}),
+	}
+
+	if err != nil {
+		result.Passed = false
+		parsed := ParseBifrostError(err)
+		result.Errors = append(result.Errors, fmt.Sprintf("Got error when expecting success: %s", FormatErrorConcise(parsed)))
+		LogError(t, err, scenarioName)
+		return result
+	}
+
+	if response == nil {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Response is nil")
+		return result
+	}
+
+	// Validate latency if expected
+	if expectations.ShouldHaveLatency {
+		if response.ExtraFields.Latency <= 0 {
+			result.Passed = false
+			result.Errors = append(result.Errors, "Expected latency information but not present or invalid")
+		} else {
+			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
+		}
+	}
+
+	// Collect metrics
+	result.MetricsCollected["file_count"] = len(response.Data)
+	result.MetricsCollected["has_more"] = response.HasMore
+
+	logValidationResults(t, result, scenarioName)
+	return result
+}
+
+// ValidateFileRetrieveResponse performs comprehensive validation for file retrieve responses
+func ValidateFileRetrieveResponse(t *testing.T, response *schemas.BifrostFileRetrieveResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
+	result := ValidationResult{
+		Passed:           true,
+		Errors:           make([]string, 0),
+		Warnings:         make([]string, 0),
+		MetricsCollected: make(map[string]interface{}),
+	}
+
+	if err != nil {
+		result.Passed = false
+		parsed := ParseBifrostError(err)
+		result.Errors = append(result.Errors, fmt.Sprintf("Got error when expecting success: %s", FormatErrorConcise(parsed)))
+		LogError(t, err, scenarioName)
+		return result
+	}
+
+	if response == nil {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Response is nil")
+		return result
+	}
+
+	// Validate file ID is present
+	if response.ID == "" {
+		result.Passed = false
+		result.Errors = append(result.Errors, "File ID is empty")
+	}
+
+	// Validate latency if expected
+	if expectations.ShouldHaveLatency {
+		if response.ExtraFields.Latency <= 0 {
+			result.Passed = false
+			result.Errors = append(result.Errors, "Expected latency information but not present or invalid")
+		} else {
+			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
+		}
+	}
+
+	// Collect metrics
+	result.MetricsCollected["file_id"] = response.ID
+	result.MetricsCollected["filename"] = response.Filename
+	result.MetricsCollected["bytes"] = response.Bytes
+	result.MetricsCollected["status"] = response.Status
+
+	logValidationResults(t, result, scenarioName)
+	return result
+}
+
+// ValidateFileDeleteResponse performs comprehensive validation for file delete responses
+func ValidateFileDeleteResponse(t *testing.T, response *schemas.BifrostFileDeleteResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
+	result := ValidationResult{
+		Passed:           true,
+		Errors:           make([]string, 0),
+		Warnings:         make([]string, 0),
+		MetricsCollected: make(map[string]interface{}),
+	}
+
+	if err != nil {
+		result.Passed = false
+		parsed := ParseBifrostError(err)
+		result.Errors = append(result.Errors, fmt.Sprintf("Got error when expecting success: %s", FormatErrorConcise(parsed)))
+		LogError(t, err, scenarioName)
+		return result
+	}
+
+	if response == nil {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Response is nil")
+		return result
+	}
+
+	// Validate file ID is present
+	if response.ID == "" {
+		result.Passed = false
+		result.Errors = append(result.Errors, "File ID is empty")
+	}
+
+	// Validate deleted flag
+	if !response.Deleted {
+		result.Passed = false
+		result.Errors = append(result.Errors, "File was not marked as deleted")
+	}
+
+	// Validate latency if expected
+	if expectations.ShouldHaveLatency {
+		if response.ExtraFields.Latency <= 0 {
+			result.Passed = false
+			result.Errors = append(result.Errors, "Expected latency information but not present or invalid")
+		} else {
+			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
+		}
+	}
+
+	// Collect metrics
+	result.MetricsCollected["file_id"] = response.ID
+	result.MetricsCollected["deleted"] = response.Deleted
+
+	logValidationResults(t, result, scenarioName)
+	return result
+}
+
+// ValidateFileContentResponse performs comprehensive validation for file content responses
+func ValidateFileContentResponse(t *testing.T, response *schemas.BifrostFileContentResponse, err *schemas.BifrostError, expectations ResponseExpectations, scenarioName string) ValidationResult {
+	result := ValidationResult{
+		Passed:           true,
+		Errors:           make([]string, 0),
+		Warnings:         make([]string, 0),
+		MetricsCollected: make(map[string]interface{}),
+	}
+
+	if err != nil {
+		result.Passed = false
+		parsed := ParseBifrostError(err)
+		result.Errors = append(result.Errors, fmt.Sprintf("Got error when expecting success: %s", FormatErrorConcise(parsed)))
+		LogError(t, err, scenarioName)
+		return result
+	}
+
+	if response == nil {
+		result.Passed = false
+		result.Errors = append(result.Errors, "Response is nil")
+		return result
+	}
+
+	// Validate file ID is present
+	if response.FileID == "" {
+		result.Passed = false
+		result.Errors = append(result.Errors, "File ID is empty")
+	}
+
+	// Validate content is present
+	if len(response.Content) == 0 {
+		result.Passed = false
+		result.Errors = append(result.Errors, "File content is empty")
+	}
+
+	// Validate latency if expected
+	if expectations.ShouldHaveLatency {
+		if response.ExtraFields.Latency <= 0 {
+			result.Passed = false
+			result.Errors = append(result.Errors, "Expected latency information but not present or invalid")
+		} else {
+			result.MetricsCollected["latency_ms"] = response.ExtraFields.Latency
+		}
+	}
+
+	// Collect metrics
+	result.MetricsCollected["file_id"] = response.FileID
+	result.MetricsCollected["content_length"] = len(response.Content)
+	result.MetricsCollected["content_type"] = response.ContentType
+
+	logValidationResults(t, result, scenarioName)
+	return result
+}
+
 // extractChatToolCallNames extracts tool call function names from chat response for error messages
 func extractChatToolCallNames(response *schemas.BifrostChatResponse) []string {
 	var toolNames []string
