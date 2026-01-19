@@ -515,8 +515,20 @@
       "destination": "/mcp/filtering"
     },
     {
-      "source": "/features/enterprise/governance",
-      "destination": "https://docs.getbifrost.ai/enterprise/setting-up-okta"
+      "source": "/enterprise/governance",
+      "destination": "/enterprise/advanced-governance"
+    },
+    {
+      "source": "/features/enterprise/scim",
+      "destination": "/enterprise/setting-up-okta"
+    },
+    {
+      "source": "/enterprise/intelligent-load-balancing",
+      "destination": "/enterprise/adaptive-load-balancing"
+    },
+    {
+      "source": "/enterprise/users",
+      "destination": "/enterprise/setting-up-okta"
     }
   ],
   "footer": {
