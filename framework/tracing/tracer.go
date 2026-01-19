@@ -15,16 +15,19 @@ import (
 // framework's TraceStore implementation.
 // It also embeds a streaming.Accumulator for centralized streaming chunk accumulation.
 type Tracer struct {
-	store       *TraceStore
-	accumulator *streaming.Accumulator
+	store          *TraceStore
+	accumulator    *streaming.Accumulator
+	pricingManager *modelcatalog.ModelCatalog
 }
 
 // NewTracer creates a new Tracer wrapping the given TraceStore.
 // The accumulator is embedded for centralized streaming chunk accumulation.
+// The pricingManager is used for cost calculation in span attributes.
 func NewTracer(store *TraceStore, pricingManager *modelcatalog.ModelCatalog, logger schemas.Logger) *Tracer {
 	return &Tracer{
-		store:       store,
-		accumulator: streaming.NewAccumulator(pricingManager, logger),
+		store:          store,
+		accumulator:    streaming.NewAccumulator(pricingManager, logger),
+		pricingManager: pricingManager,
 	}
 }
 
@@ -179,6 +182,11 @@ func (t *Tracer) PopulateLLMResponseAttributes(handle schemas.SpanHandle, resp *
 	}
 	for k, v := range PopulateErrorAttributes(err) {
 		span.SetAttribute(k, v)
+	}
+	// Populate cost attribute using pricing manager
+	if t.pricingManager != nil && resp != nil {
+		cost := t.pricingManager.CalculateCostWithCacheDebug(resp)
+		span.SetAttribute(schemas.AttrUsageCost, cost)
 	}
 }
 
