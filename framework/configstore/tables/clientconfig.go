@@ -13,6 +13,7 @@ type TableClientConfig struct {
 	DropExcessRequests      bool   `gorm:"default:false" json:"drop_excess_requests"`
 	PrometheusLabelsJSON    string `gorm:"type:text" json:"-"` // JSON serialized []string
 	AllowedOriginsJSON      string `gorm:"type:text" json:"-"` // JSON serialized []string
+	AllowedHeadersJSON      string `gorm:"type:text" json:"-"` // JSON serialized []string
 	HeaderFilterConfigJSON  string `gorm:"type:text" json:"-"` // JSON serialized GlobalHeaderFilterConfig
 	InitialPoolSize         int    `gorm:"default:300" json:"initial_pool_size"`
 	EnableLogging           bool   `gorm:"" json:"enable_logging"`
@@ -39,6 +40,7 @@ type TableClientConfig struct {
 	// Virtual fields for runtime use (not stored in DB)
 	PrometheusLabels   []string                  `gorm:"-" json:"prometheus_labels"`
 	AllowedOrigins     []string                  `gorm:"-" json:"allowed_origins,omitempty"`
+	AllowedHeaders     []string                  `gorm:"-" json:"allowed_headers,omitempty"`
 	HeaderFilterConfig *GlobalHeaderFilterConfig `gorm:"-" json:"header_filter_config,omitempty"`
 }
 
@@ -66,6 +68,16 @@ func (cc *TableClientConfig) BeforeSave(tx *gorm.DB) error {
 		cc.AllowedOriginsJSON = "[]"
 	}
 
+	if cc.AllowedHeaders != nil {
+		data, err := json.Marshal(cc.AllowedHeaders)
+		if err != nil {
+			return err
+		}
+		cc.AllowedHeadersJSON = string(data)
+	} else {
+		cc.AllowedHeadersJSON = "[]"
+	}
+
 	if cc.HeaderFilterConfig != nil {
 		data, err := json.Marshal(cc.HeaderFilterConfig)
 		if err != nil {
@@ -89,6 +101,12 @@ func (cc *TableClientConfig) AfterFind(tx *gorm.DB) error {
 
 	if cc.AllowedOriginsJSON != "" {
 		if err := json.Unmarshal([]byte(cc.AllowedOriginsJSON), &cc.AllowedOrigins); err != nil {
+			return err
+		}
+	}
+
+	if cc.AllowedHeadersJSON != "" {
+		if err := json.Unmarshal([]byte(cc.AllowedHeadersJSON), &cc.AllowedHeaders); err != nil {
 			return err
 		}
 	}

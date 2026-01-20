@@ -28,6 +28,7 @@ const defaultConfig: CoreConfig = {
 	enforce_governance_header: false,
 	allow_direct_keys: false,
 	allowed_origins: [],
+	allowed_headers: [],
 	max_request_body_size_mb: 100,
 	enable_litellm_fallbacks: false,
 	log_retention_days: 365,
@@ -42,13 +43,14 @@ export default function SecurityView() {
 	const config = bifrostConfig?.client_config;
 	const [updateCoreConfig, { isLoading }] = useUpdateCoreConfigMutation();
 	const [localConfig, setLocalConfig] = useState<CoreConfig>(defaultConfig);
-	const [needsRestart, setNeedsRestart] = useState<boolean>(false);
 	const hideAuthDashboard = IS_ENTERPRISE;
 
 	const [localValues, setLocalValues] = useState<{
 		allowed_origins: string;
+		allowed_headers: string;
 	}>({
 		allowed_origins: "",
+		allowed_headers: "",
 	});
 
 	const [authConfig, setAuthConfig] = useState<AuthConfig>({
@@ -63,6 +65,7 @@ export default function SecurityView() {
 			setLocalConfig(config);
 			setLocalValues({
 				allowed_origins: config?.allowed_origins?.join(", ") || "",
+				allowed_headers: config?.allowed_headers?.join(", ") || "",
 			});
 		}
 		if (bifrostConfig?.auth_config) {
@@ -75,27 +78,45 @@ export default function SecurityView() {
 		const localOrigins = localConfig.allowed_origins?.slice().sort().join(",");
 		const serverOrigins = config.allowed_origins?.slice().sort().join(",");
 		const originsChanged = localOrigins !== serverOrigins;
-
+	
+		const localHeaders = localConfig.allowed_headers?.slice().sort().join(",");
+		const serverHeaders = config.allowed_headers?.slice().sort().join(",");
+		const headersChanged = localHeaders !== serverHeaders;
+	
 		const authChanged =
 			authConfig.is_enabled !== bifrostConfig?.auth_config?.is_enabled ||
 			authConfig.admin_username !== bifrostConfig?.auth_config?.admin_username ||
 			authConfig.admin_password !== bifrostConfig?.auth_config?.admin_password ||
 			authConfig.disable_auth_on_inference !== bifrostConfig?.auth_config?.disable_auth_on_inference;
-
+	
 		const enforceVirtualKeyChanged = localConfig.enforce_governance_header !== config.enforce_governance_header;
 		const allowDirectKeysChanged = localConfig.allow_direct_keys !== config.allow_direct_keys;
-
-		return originsChanged || authChanged || enforceVirtualKeyChanged || allowDirectKeysChanged;
+	
+		return originsChanged || headersChanged || authChanged || enforceVirtualKeyChanged || allowDirectKeysChanged;
 	}, [config, localConfig, authConfig, bifrostConfig]);
 
+	const needsRestart = useMemo(() => {
+		if (!config) return false;
+		
+		const localOrigins = localConfig.allowed_origins?.slice().sort().join(",");
+		const serverOrigins = config.allowed_origins?.slice().sort().join(",");
+		const originsChanged = localOrigins !== serverOrigins;
+	
+		const localHeaders = localConfig.allowed_headers?.slice().sort().join(",");
+		const serverHeaders = config.allowed_headers?.slice().sort().join(",");
+		const headersChanged = localHeaders !== serverHeaders;
+	
+		return originsChanged || headersChanged;
+	}, [config, localConfig]);
+
 	const handleAllowedOriginsChange = useCallback((value: string) => {
-		const nextOrigins = parseArrayFromText(value);
 		setLocalValues((prev) => ({ ...prev, allowed_origins: value }));
 		setLocalConfig((prev) => ({ ...prev, allowed_origins: parseArrayFromText(value) }));
-		const currentOrigins = config?.allowed_origins ?? [];
-		const requiresRestart =
-			nextOrigins.length !== currentOrigins.length || nextOrigins.some((origin, index) => origin !== currentOrigins[index]);
-		setNeedsRestart(requiresRestart);
+	}, []);
+
+	const handleAllowedHeadersChange = useCallback((value: string) => {
+		setLocalValues((prev) => ({ ...prev, allowed_headers: value }));
+		setLocalConfig((prev) => ({ ...prev, allowed_headers: parseArrayFromText(value) }));
 	}, []);
 
 	const handleConfigChange = useCallback((field: keyof CoreConfig, value: boolean) => {
@@ -142,7 +163,6 @@ export default function SecurityView() {
 						: { ...authConfig, is_enabled: false },
 			}).unwrap();
 			toast.success("Security settings updated successfully.");
-			setNeedsRestart(false);
 		} catch (error) {
 			toast.error(getErrorMessage(error));
 		}
@@ -277,6 +297,7 @@ export default function SecurityView() {
 					/>
 				</div>
 				{/* Allowed Origins */}
+				{needsRestart && <RestartWarning />}
 				<div>
 					<div className="space-y-2 rounded-lg border p-4">
 						<div className="space-y-0.5">
@@ -297,7 +318,26 @@ export default function SecurityView() {
 							onChange={(e) => handleAllowedOriginsChange(e.target.value)}
 						/>
 					</div>
-					{needsRestart && <RestartWarning />}
+				</div>
+				{/* Allowed Headers */}
+				<div>
+					<div className="space-y-2 rounded-lg border p-4">
+						<div className="space-y-0.5">
+							<label htmlFor="allowed-headers" className="text-sm font-medium">
+								Allowed Headers
+							</label>
+							<p className="text-muted-foreground text-sm">
+								Comma-separated list of allowed headers for CORS.
+							</p>
+						</div>
+						<Textarea
+							id="allowed-headers"
+							className="h-24"
+							placeholder="X-Stainless-Timeout"
+							value={localValues.allowed_headers}
+							onChange={(e) => handleAllowedHeadersChange(e.target.value)}
+						/>
+					</div>
 				</div>
 			</div>
 		</div>

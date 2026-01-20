@@ -360,6 +360,7 @@ export interface CoreConfig {
 	enforce_governance_header: boolean;
 	allow_direct_keys: boolean;
 	allowed_origins: string[];
+	allowed_headers: string[];
 	max_request_body_size_mb: number;
 	enable_litellm_fallbacks: boolean;
 	mcp_agent_depth: number;

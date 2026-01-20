@@ -252,6 +252,7 @@ var DefaultClientConfig = configstore.ClientConfig{
 	EnforceGovernanceHeader: false,
 	AllowDirectKeys:         false,
 	AllowedOrigins:          []string{"*"},
+	AllowedHeaders:          []string{},
 	MaxRequestBodySizeMB:    100,
 	MCPAgentDepth:           10,
 	MCPToolExecutionTimeout: 30,
