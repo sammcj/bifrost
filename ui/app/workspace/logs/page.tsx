@@ -15,7 +15,7 @@ import {
 	useDeleteLogsMutation,
 	useLazyGetLogsHistogramQuery,
 	useLazyGetLogsQuery,
-	useLazyGetLogsStatsQuery
+	useLazyGetLogsStatsQuery,
 } from "@/lib/store";
 import type {
 	ChatMessage,
@@ -25,7 +25,7 @@ import type {
 	LogFilters,
 	LogsHistogramResponse,
 	LogStats,
-	Pagination
+	Pagination,
 } from "@/lib/types/logs";
 import { dateUtils } from "@/lib/types/logs";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
@@ -63,7 +63,7 @@ export default function LogsPage() {
 
 	const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
 	const [isChartOpen, setIsChartOpen] = useState(true);
-	
+
 	// Debouncing for streaming updates (client-side)
 	const streamingUpdateTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -323,7 +323,13 @@ export default function LogsPage() {
 
 					// Update histogram for completed requests
 					setHistogram((prevHistogram) => {
-						if (!prevHistogram || !prevHistogram.bucket_size_seconds) return prevHistogram;
+						if (
+							!prevHistogram ||
+							typeof prevHistogram.bucket_size_seconds !== 'number' ||
+							prevHistogram.bucket_size_seconds <= 0
+						) {
+							return prevHistogram
+						}
 
 						const logTime = new Date(log.timestamp).getTime();
 						const bucketSizeMs = prevHistogram.bucket_size_seconds * 1000;
