@@ -522,7 +522,22 @@ func (g *GenericRouter) handleNonStreamingRequest(ctx *fasthttp.RequestCtx, conf
 
 	switch {
 	case bifrostReq.ListModelsRequest != nil:
-		listModelsResponse, bifrostErr := g.client.ListModelsRequest(bifrostCtx, bifrostReq.ListModelsRequest)
+		// Get provider from header - if not set or "all", list from all providers
+		// Otherwise, list models from the specified provider
+		listModelsProvider := strings.ToLower(string(ctx.Request.Header.Peek("x-bf-list-models-provider")))
+
+		var listModelsResponse *schemas.BifrostListModelsResponse
+		var bifrostErr *schemas.BifrostError
+
+		if listModelsProvider == "" || listModelsProvider == "all" {
+			// No specific provider requested - list from all providers
+			listModelsResponse, bifrostErr = g.client.ListAllModels(bifrostCtx, bifrostReq.ListModelsRequest)
+		} else {
+			// Specific provider requested - override the provider in the request
+			bifrostReq.ListModelsRequest.Provider = schemas.ModelProvider(listModelsProvider)
+			listModelsResponse, bifrostErr = g.client.ListModelsRequest(bifrostCtx, bifrostReq.ListModelsRequest)
+		}
+
 		if bifrostErr != nil {
 			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
 			return

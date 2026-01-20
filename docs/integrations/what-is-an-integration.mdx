@@ -175,6 +175,106 @@ response = requests.post(
 
 ---
 
+## Listing Models
+
+All integrations support listing available models through their respective list models endpoints (e.g., `/openai/v1/models`, `/anthropic/v1/models`). By default, list models requests return models from **all configured providers** in Bifrost.
+
+### Filtering by Provider
+
+You can control which provider's models to list using the `x-bf-list-models-provider` header:
+
+<Tabs>
+<Tab title="Python">
+
+```python
+import openai
+
+client = openai.OpenAI(
+    base_url="http://localhost:8080/openai",
+    api_key="dummy-key"
+)
+
+# List models from all providers (default behavior)
+all_models = client.models.list()
+
+# List models from a specific provider only
+openai_models = client.models.list(
+    extra_headers={
+        "x-bf-list-models-provider": "openai"
+    }
+)
+
+anthropic_models = client.models.list(
+    extra_headers={
+        "x-bf-list-models-provider": "anthropic"
+    }
+)
+```
+
+</Tab>
+<Tab title="JavaScript">
+
+```javascript
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+  baseURL: "http://localhost:8080/openai",
+  apiKey: "dummy-key",
+});
+
+// List models from all providers (default behavior)
+const allModels = await openai.models.list();
+
+// List models from a specific provider only
+const openaiModels = await openai.models.list({
+  headers: {
+    "x-bf-list-models-provider": "openai",
+  },
+});
+
+const anthropicModels = await openai.models.list({
+  headers: {
+    "x-bf-list-models-provider": "anthropic",
+  },
+});
+```
+
+</Tab>
+<Tab title="cURL">
+
+```bash
+# List models from all providers (default)
+curl http://localhost:8080/openai/v1/models
+
+# List models from specific provider
+curl http://localhost:8080/openai/v1/models \
+  -H "x-bf-list-models-provider: openai"
+
+# Explicitly request all providers
+curl http://localhost:8080/openai/v1/models \
+  -H "x-bf-list-models-provider: all"
+```
+
+</Tab>
+</Tabs>
+
+### Header Behavior
+
+| Header Value | Behavior |
+|--------------|----------|
+| Not set (default) | Lists models from **all configured providers** |
+| `all` | Lists models from **all configured providers** |
+| `openai` | Lists models from **OpenAI provider only** |
+| `anthropic` | Lists models from **Anthropic provider only** |
+| `vertex` | Lists models from **Vertex AI provider only** |
+| Any valid provider | Lists models from that specific provider |
+
+### Response Fields
+
+When listing models from all providers, some provider-specific fields may be empty or contain default values if the information is not available from all providers. This is normal behavior as different providers expose different model metadata.
+
+---
+
 
 ## Migration Strategies
 
