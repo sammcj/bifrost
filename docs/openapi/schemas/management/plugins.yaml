@@ -18,6 +18,9 @@ Plugin:
   type: object
   description: Plugin configuration
   properties:
+    id:
+      type: integer
+      description: Plugin ID (auto-generated)
     name:
       type: string
     enabled:
@@ -29,8 +32,17 @@ Plugin:
       type: boolean
     path:
       type: string
-    status:
-      $ref: '#/PluginStatus'
+    created_at:
+      type: string
+      format: date-time
+    version:
+      type: integer
+      format: int16
+    updated_at:
+      type: string
+      format: date-time
+    config_hash:
+      type: string
 
 ListPluginsResponse:
   type: object

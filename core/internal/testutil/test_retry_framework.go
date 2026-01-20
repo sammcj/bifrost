@@ -176,6 +176,66 @@ type ListModelsRetryCondition interface {
 	GetConditionName() string
 }
 
+// BatchCreateRetryCondition defines an interface for checking if a batch create test operation should be retried
+type BatchCreateRetryCondition interface {
+	ShouldRetry(response *schemas.BifrostBatchCreateResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string)
+	GetConditionName() string
+}
+
+// BatchListRetryCondition defines an interface for checking if a batch list test operation should be retried
+type BatchListRetryCondition interface {
+	ShouldRetry(response *schemas.BifrostBatchListResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string)
+	GetConditionName() string
+}
+
+// BatchRetrieveRetryCondition defines an interface for checking if a batch retrieve test operation should be retried
+type BatchRetrieveRetryCondition interface {
+	ShouldRetry(response *schemas.BifrostBatchRetrieveResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string)
+	GetConditionName() string
+}
+
+// BatchCancelRetryCondition defines an interface for checking if a batch cancel test operation should be retried
+type BatchCancelRetryCondition interface {
+	ShouldRetry(response *schemas.BifrostBatchCancelResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string)
+	GetConditionName() string
+}
+
+// BatchResultsRetryCondition defines an interface for checking if a batch results test operation should be retried
+type BatchResultsRetryCondition interface {
+	ShouldRetry(response *schemas.BifrostBatchResultsResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string)
+	GetConditionName() string
+}
+
+// FileUploadRetryCondition defines an interface for checking if a file upload test operation should be retried
+type FileUploadRetryCondition interface {
+	ShouldRetry(response *schemas.BifrostFileUploadResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string)
+	GetConditionName() string
+}
+
+// FileListRetryCondition defines an interface for checking if a file list test operation should be retried
+type FileListRetryCondition interface {
+	ShouldRetry(response *schemas.BifrostFileListResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string)
+	GetConditionName() string
+}
+
+// FileRetrieveRetryCondition defines an interface for checking if a file retrieve test operation should be retried
+type FileRetrieveRetryCondition interface {
+	ShouldRetry(response *schemas.BifrostFileRetrieveResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string)
+	GetConditionName() string
+}
+
+// FileDeleteRetryCondition defines an interface for checking if a file delete test operation should be retried
+type FileDeleteRetryCondition interface {
+	ShouldRetry(response *schemas.BifrostFileDeleteResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string)
+	GetConditionName() string
+}
+
+// FileContentRetryCondition defines an interface for checking if a file content test operation should be retried
+type FileContentRetryCondition interface {
+	ShouldRetry(response *schemas.BifrostFileContentResponse, err *schemas.BifrostError, context TestRetryContext) (bool, string)
+	GetConditionName() string
+}
+
 // TestRetryContext provides context information for retry decisions
 type TestRetryContext struct {
 	ScenarioName     string                 // Name of the test scenario
@@ -280,6 +340,106 @@ type ListModelsRetryConfig struct {
 	BaseDelay   time.Duration                                    // Base delay between retries
 	MaxDelay    time.Duration                                    // Maximum delay between retries
 	Conditions  []ListModelsRetryCondition                       // Conditions that trigger retries
+	OnRetry     func(attempt int, reason string, t *testing.T)   // Called before each retry
+	OnFinalFail func(attempts int, finalErr error, t *testing.T) // Called on final failure
+}
+
+// BatchCreateRetryConfig configures retry behavior for batch create test scenarios
+type BatchCreateRetryConfig struct {
+	MaxAttempts int                                              // Maximum retry attempts (including initial attempt)
+	BaseDelay   time.Duration                                    // Base delay between retries
+	MaxDelay    time.Duration                                    // Maximum delay between retries
+	Conditions  []BatchCreateRetryCondition                      // Conditions that trigger retries
+	OnRetry     func(attempt int, reason string, t *testing.T)   // Called before each retry
+	OnFinalFail func(attempts int, finalErr error, t *testing.T) // Called on final failure
+}
+
+// BatchListRetryConfig configures retry behavior for batch list test scenarios
+type BatchListRetryConfig struct {
+	MaxAttempts int                                              // Maximum retry attempts (including initial attempt)
+	BaseDelay   time.Duration                                    // Base delay between retries
+	MaxDelay    time.Duration                                    // Maximum delay between retries
+	Conditions  []BatchListRetryCondition                        // Conditions that trigger retries
+	OnRetry     func(attempt int, reason string, t *testing.T)   // Called before each retry
+	OnFinalFail func(attempts int, finalErr error, t *testing.T) // Called on final failure
+}
+
+// BatchRetrieveRetryConfig configures retry behavior for batch retrieve test scenarios
+type BatchRetrieveRetryConfig struct {
+	MaxAttempts int                                              // Maximum retry attempts (including initial attempt)
+	BaseDelay   time.Duration                                    // Base delay between retries
+	MaxDelay    time.Duration                                    // Maximum delay between retries
+	Conditions  []BatchRetrieveRetryCondition                    // Conditions that trigger retries
+	OnRetry     func(attempt int, reason string, t *testing.T)   // Called before each retry
+	OnFinalFail func(attempts int, finalErr error, t *testing.T) // Called on final failure
+}
+
+// BatchCancelRetryConfig configures retry behavior for batch cancel test scenarios
+type BatchCancelRetryConfig struct {
+	MaxAttempts int                                              // Maximum retry attempts (including initial attempt)
+	BaseDelay   time.Duration                                    // Base delay between retries
+	MaxDelay    time.Duration                                    // Maximum delay between retries
+	Conditions  []BatchCancelRetryCondition                      // Conditions that trigger retries
+	OnRetry     func(attempt int, reason string, t *testing.T)   // Called before each retry
+	OnFinalFail func(attempts int, finalErr error, t *testing.T) // Called on final failure
+}
+
+// BatchResultsRetryConfig configures retry behavior for batch results test scenarios
+type BatchResultsRetryConfig struct {
+	MaxAttempts int                                              // Maximum retry attempts (including initial attempt)
+	BaseDelay   time.Duration                                    // Base delay between retries
+	MaxDelay    time.Duration                                    // Maximum delay between retries
+	Conditions  []BatchResultsRetryCondition                     // Conditions that trigger retries
+	OnRetry     func(attempt int, reason string, t *testing.T)   // Called before each retry
+	OnFinalFail func(attempts int, finalErr error, t *testing.T) // Called on final failure
+}
+
+// FileUploadRetryConfig configures retry behavior for file upload test scenarios
+type FileUploadRetryConfig struct {
+	MaxAttempts int                                              // Maximum retry attempts (including initial attempt)
+	BaseDelay   time.Duration                                    // Base delay between retries
+	MaxDelay    time.Duration                                    // Maximum delay between retries
+	Conditions  []FileUploadRetryCondition                       // Conditions that trigger retries
+	OnRetry     func(attempt int, reason string, t *testing.T)   // Called before each retry
+	OnFinalFail func(attempts int, finalErr error, t *testing.T) // Called on final failure
+}
+
+// FileListRetryConfig configures retry behavior for file list test scenarios
+type FileListRetryConfig struct {
+	MaxAttempts int                                              // Maximum retry attempts (including initial attempt)
+	BaseDelay   time.Duration                                    // Base delay between retries
+	MaxDelay    time.Duration                                    // Maximum delay between retries
+	Conditions  []FileListRetryCondition                         // Conditions that trigger retries
+	OnRetry     func(attempt int, reason string, t *testing.T)   // Called before each retry
+	OnFinalFail func(attempts int, finalErr error, t *testing.T) // Called on final failure
+}
+
+// FileRetrieveRetryConfig configures retry behavior for file retrieve test scenarios
+type FileRetrieveRetryConfig struct {
+	MaxAttempts int                                              // Maximum retry attempts (including initial attempt)
+	BaseDelay   time.Duration                                    // Base delay between retries
+	MaxDelay    time.Duration                                    // Maximum delay between retries
+	Conditions  []FileRetrieveRetryCondition                     // Conditions that trigger retries
+	OnRetry     func(attempt int, reason string, t *testing.T)   // Called before each retry
+	OnFinalFail func(attempts int, finalErr error, t *testing.T) // Called on final failure
+}
+
+// FileDeleteRetryConfig configures retry behavior for file delete test scenarios
+type FileDeleteRetryConfig struct {
+	MaxAttempts int                                              // Maximum retry attempts (including initial attempt)
+	BaseDelay   time.Duration                                    // Base delay between retries
+	MaxDelay    time.Duration                                    // Maximum delay between retries
+	Conditions  []FileDeleteRetryCondition                       // Conditions that trigger retries
+	OnRetry     func(attempt int, reason string, t *testing.T)   // Called before each retry
+	OnFinalFail func(attempts int, finalErr error, t *testing.T) // Called on final failure
+}
+
+// FileContentRetryConfig configures retry behavior for file content test scenarios
+type FileContentRetryConfig struct {
+	MaxAttempts int                                              // Maximum retry attempts (including initial attempt)
+	BaseDelay   time.Duration                                    // Base delay between retries
+	MaxDelay    time.Duration                                    // Maximum delay between retries
+	Conditions  []FileContentRetryCondition                      // Conditions that trigger retries
 	OnRetry     func(attempt int, reason string, t *testing.T)   // Called before each retry
 	OnFinalFail func(attempts int, finalErr error, t *testing.T) // Called on final failure
 }
@@ -2404,6 +2564,982 @@ func checkListModelsRetryConditions(response *schemas.BifrostListModelsResponse,
 	}
 
 	return false, ""
+}
+
+// =============================================================================
+// BATCH API RETRY FUNCTIONS
+// =============================================================================
+
+// WithBatchCreateTestRetry wraps a batch create test operation with retry logic
+func WithBatchCreateTestRetry(
+	t *testing.T,
+	config BatchCreateRetryConfig,
+	context TestRetryContext,
+	expectations ResponseExpectations,
+	scenarioName string,
+	operation func() (*schemas.BifrostBatchCreateResponse, *schemas.BifrostError),
+) (*schemas.BifrostBatchCreateResponse, *schemas.BifrostError) {
+
+	var lastResponse *schemas.BifrostBatchCreateResponse
+	var lastError *schemas.BifrostError
+
+	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+		context.AttemptNumber = attempt
+
+		// Execute the operation
+		response, err := operation()
+		lastResponse = response
+		lastError = err
+
+		// ALWAYS retry on ANY error condition
+		shouldRetry := false
+		var retryReason string
+
+		// Check for errors first
+		if err != nil {
+			shouldRetry = true
+			if isTimeoutError(err) {
+				retryReason = fmt.Sprintf("timeout error detected: %s", GetErrorMessage(err))
+			} else {
+				parsed := ParseBifrostError(err)
+				retryReason = fmt.Sprintf("❌ error occurred: %s", FormatErrorConcise(parsed))
+			}
+		}
+
+		// Check for nil response
+		if response == nil {
+			shouldRetry = true
+			if retryReason != "" {
+				retryReason += " and ❌ response is nil"
+			} else {
+				retryReason = "❌ response is nil"
+			}
+		}
+
+		// If we have a response, validate it
+		if response != nil {
+			validationResult := ValidateBatchCreateResponse(t, response, err, expectations, scenarioName)
+
+			// If validation passes and no errors, we're done!
+			if validationResult.Passed && err == nil {
+				return response, err
+			}
+
+			// ALWAYS retry on validation failures
+			if !validationResult.Passed {
+				shouldRetry = true
+				if retryReason != "" {
+					retryReason += fmt.Sprintf(" | ❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				} else {
+					retryReason = fmt.Sprintf("❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				}
+			}
+		}
+
+		// Retry if needed and attempts remaining
+		if shouldRetry && attempt < config.MaxAttempts {
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, retryReason, t)
+			}
+
+			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+			time.Sleep(delay)
+			continue
+		}
+
+		if !shouldRetry {
+			return response, err
+		}
+
+		break
+	}
+
+	if config.OnFinalFail != nil {
+		var errorMsg string
+		if lastError != nil {
+			if lastError.Error != nil {
+				errorMsg = lastError.Error.Message
+			} else {
+				errorMsg = "unknown error"
+			}
+		} else if lastResponse == nil {
+			errorMsg = "response is nil"
+		} else {
+			validationResult := ValidateBatchCreateResponse(t, lastResponse, nil, expectations, scenarioName)
+			errorMsg = strings.Join(validationResult.Errors, "; ")
+		}
+		config.OnFinalFail(config.MaxAttempts, fmt.Errorf("final error: %s", errorMsg), t)
+	}
+
+	return lastResponse, lastError
+}
+
+// WithBatchListTestRetry wraps a batch list test operation with retry logic
+func WithBatchListTestRetry(
+	t *testing.T,
+	config BatchListRetryConfig,
+	context TestRetryContext,
+	expectations ResponseExpectations,
+	scenarioName string,
+	operation func() (*schemas.BifrostBatchListResponse, *schemas.BifrostError),
+) (*schemas.BifrostBatchListResponse, *schemas.BifrostError) {
+
+	var lastResponse *schemas.BifrostBatchListResponse
+	var lastError *schemas.BifrostError
+
+	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+		context.AttemptNumber = attempt
+
+		response, err := operation()
+		lastResponse = response
+		lastError = err
+
+		shouldRetry := false
+		var retryReason string
+
+		if err != nil {
+			shouldRetry = true
+			if isTimeoutError(err) {
+				retryReason = fmt.Sprintf("timeout error detected: %s", GetErrorMessage(err))
+			} else {
+				parsed := ParseBifrostError(err)
+				retryReason = fmt.Sprintf("❌ error occurred: %s", FormatErrorConcise(parsed))
+			}
+		}
+
+		if response == nil {
+			shouldRetry = true
+			if retryReason != "" {
+				retryReason += " and ❌ response is nil"
+			} else {
+				retryReason = "❌ response is nil"
+			}
+		}
+
+		if response != nil {
+			validationResult := ValidateBatchListResponse(t, response, err, expectations, scenarioName)
+
+			if validationResult.Passed && err == nil {
+				return response, err
+			}
+
+			if !validationResult.Passed {
+				shouldRetry = true
+				if retryReason != "" {
+					retryReason += fmt.Sprintf(" | ❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				} else {
+					retryReason = fmt.Sprintf("❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				}
+			}
+		}
+
+		if shouldRetry && attempt < config.MaxAttempts {
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, retryReason, t)
+			}
+
+			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+			time.Sleep(delay)
+			continue
+		}
+
+		if !shouldRetry {
+			return response, err
+		}
+
+		break
+	}
+
+	if config.OnFinalFail != nil {
+		var errorMsg string
+		if lastError != nil {
+			if lastError.Error != nil {
+				errorMsg = lastError.Error.Message
+			} else {
+				errorMsg = "unknown error"
+			}
+		} else if lastResponse == nil {
+			errorMsg = "response is nil"
+		} else {
+			validationResult := ValidateBatchListResponse(t, lastResponse, nil, expectations, scenarioName)
+			errorMsg = strings.Join(validationResult.Errors, "; ")
+		}
+		config.OnFinalFail(config.MaxAttempts, fmt.Errorf("final error: %s", errorMsg), t)
+	}
+
+	return lastResponse, lastError
+}
+
+// WithBatchRetrieveTestRetry wraps a batch retrieve test operation with retry logic
+func WithBatchRetrieveTestRetry(
+	t *testing.T,
+	config BatchRetrieveRetryConfig,
+	context TestRetryContext,
+	expectations ResponseExpectations,
+	scenarioName string,
+	operation func() (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError),
+) (*schemas.BifrostBatchRetrieveResponse, *schemas.BifrostError) {
+
+	var lastResponse *schemas.BifrostBatchRetrieveResponse
+	var lastError *schemas.BifrostError
+
+	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+		context.AttemptNumber = attempt
+
+		response, err := operation()
+		lastResponse = response
+		lastError = err
+
+		shouldRetry := false
+		var retryReason string
+
+		if err != nil {
+			shouldRetry = true
+			if isTimeoutError(err) {
+				retryReason = fmt.Sprintf("timeout error detected: %s", GetErrorMessage(err))
+			} else {
+				parsed := ParseBifrostError(err)
+				retryReason = fmt.Sprintf("❌ error occurred: %s", FormatErrorConcise(parsed))
+			}
+		}
+
+		if response == nil {
+			shouldRetry = true
+			if retryReason != "" {
+				retryReason += " and ❌ response is nil"
+			} else {
+				retryReason = "❌ response is nil"
+			}
+		}
+
+		if response != nil {
+			validationResult := ValidateBatchRetrieveResponse(t, response, err, expectations, scenarioName)
+
+			if validationResult.Passed && err == nil {
+				return response, err
+			}
+
+			if !validationResult.Passed {
+				shouldRetry = true
+				if retryReason != "" {
+					retryReason += fmt.Sprintf(" | ❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				} else {
+					retryReason = fmt.Sprintf("❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				}
+			}
+		}
+
+		if shouldRetry && attempt < config.MaxAttempts {
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, retryReason, t)
+			}
+
+			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+			time.Sleep(delay)
+			continue
+		}
+
+		if !shouldRetry {
+			return response, err
+		}
+
+		break
+	}
+
+	if config.OnFinalFail != nil {
+		var errorMsg string
+		if lastError != nil {
+			if lastError.Error != nil {
+				errorMsg = lastError.Error.Message
+			} else {
+				errorMsg = "unknown error"
+			}
+		} else if lastResponse == nil {
+			errorMsg = "response is nil"
+		} else {
+			validationResult := ValidateBatchRetrieveResponse(t, lastResponse, nil, expectations, scenarioName)
+			errorMsg = strings.Join(validationResult.Errors, "; ")
+		}
+		config.OnFinalFail(config.MaxAttempts, fmt.Errorf("final error: %s", errorMsg), t)
+	}
+
+	return lastResponse, lastError
+}
+
+// WithBatchCancelTestRetry wraps a batch cancel test operation with retry logic
+func WithBatchCancelTestRetry(
+	t *testing.T,
+	config BatchCancelRetryConfig,
+	context TestRetryContext,
+	expectations ResponseExpectations,
+	scenarioName string,
+	operation func() (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError),
+) (*schemas.BifrostBatchCancelResponse, *schemas.BifrostError) {
+
+	var lastResponse *schemas.BifrostBatchCancelResponse
+	var lastError *schemas.BifrostError
+
+	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+		context.AttemptNumber = attempt
+
+		response, err := operation()
+		lastResponse = response
+		lastError = err
+
+		shouldRetry := false
+		var retryReason string
+
+		if err != nil {
+			shouldRetry = true
+			if isTimeoutError(err) {
+				retryReason = fmt.Sprintf("timeout error detected: %s", GetErrorMessage(err))
+			} else {
+				parsed := ParseBifrostError(err)
+				retryReason = fmt.Sprintf("❌ error occurred: %s", FormatErrorConcise(parsed))
+			}
+		}
+
+		if response == nil {
+			shouldRetry = true
+			if retryReason != "" {
+				retryReason += " and ❌ response is nil"
+			} else {
+				retryReason = "❌ response is nil"
+			}
+		}
+
+		if response != nil {
+			validationResult := ValidateBatchCancelResponse(t, response, err, expectations, scenarioName)
+
+			if validationResult.Passed && err == nil {
+				return response, err
+			}
+
+			if !validationResult.Passed {
+				shouldRetry = true
+				if retryReason != "" {
+					retryReason += fmt.Sprintf(" | ❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				} else {
+					retryReason = fmt.Sprintf("❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				}
+			}
+		}
+
+		if shouldRetry && attempt < config.MaxAttempts {
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, retryReason, t)
+			}
+
+			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+			time.Sleep(delay)
+			continue
+		}
+
+		if !shouldRetry {
+			return response, err
+		}
+
+		break
+	}
+
+	if config.OnFinalFail != nil {
+		var errorMsg string
+		if lastError != nil {
+			if lastError.Error != nil {
+				errorMsg = lastError.Error.Message
+			} else {
+				errorMsg = "unknown error"
+			}
+		} else if lastResponse == nil {
+			errorMsg = "response is nil"
+		} else {
+			validationResult := ValidateBatchCancelResponse(t, lastResponse, nil, expectations, scenarioName)
+			errorMsg = strings.Join(validationResult.Errors, "; ")
+		}
+		config.OnFinalFail(config.MaxAttempts, fmt.Errorf("final error: %s", errorMsg), t)
+	}
+
+	return lastResponse, lastError
+}
+
+// WithBatchResultsTestRetry wraps a batch results test operation with retry logic
+func WithBatchResultsTestRetry(
+	t *testing.T,
+	config BatchResultsRetryConfig,
+	context TestRetryContext,
+	expectations ResponseExpectations,
+	scenarioName string,
+	operation func() (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError),
+) (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
+
+	var lastResponse *schemas.BifrostBatchResultsResponse
+	var lastError *schemas.BifrostError
+
+	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+		context.AttemptNumber = attempt
+
+		response, err := operation()
+		lastResponse = response
+		lastError = err
+
+		shouldRetry := false
+		var retryReason string
+
+		if err != nil {
+			shouldRetry = true
+			if isTimeoutError(err) {
+				retryReason = fmt.Sprintf("timeout error detected: %s", GetErrorMessage(err))
+			} else {
+				parsed := ParseBifrostError(err)
+				retryReason = fmt.Sprintf("❌ error occurred: %s", FormatErrorConcise(parsed))
+			}
+		}
+
+		if response == nil {
+			shouldRetry = true
+			if retryReason != "" {
+				retryReason += " and ❌ response is nil"
+			} else {
+				retryReason = "❌ response is nil"
+			}
+		}
+
+		if response != nil {
+			validationResult := ValidateBatchResultsResponse(t, response, err, expectations, scenarioName)
+
+			if validationResult.Passed && err == nil {
+				return response, err
+			}
+
+			if !validationResult.Passed {
+				shouldRetry = true
+				if retryReason != "" {
+					retryReason += fmt.Sprintf(" | ❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				} else {
+					retryReason = fmt.Sprintf("❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				}
+			}
+		}
+
+		if shouldRetry && attempt < config.MaxAttempts {
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, retryReason, t)
+			}
+
+			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+			time.Sleep(delay)
+			continue
+		}
+
+		if !shouldRetry {
+			return response, err
+		}
+
+		break
+	}
+
+	if config.OnFinalFail != nil {
+		var errorMsg string
+		if lastError != nil {
+			if lastError.Error != nil {
+				errorMsg = lastError.Error.Message
+			} else {
+				errorMsg = "unknown error"
+			}
+		} else if lastResponse == nil {
+			errorMsg = "response is nil"
+		} else {
+			validationResult := ValidateBatchResultsResponse(t, lastResponse, nil, expectations, scenarioName)
+			errorMsg = strings.Join(validationResult.Errors, "; ")
+		}
+		config.OnFinalFail(config.MaxAttempts, fmt.Errorf("final error: %s", errorMsg), t)
+	}
+
+	return lastResponse, lastError
+}
+
+// =============================================================================
+// FILE API RETRY FUNCTIONS
+// =============================================================================
+
+// WithFileUploadTestRetry wraps a file upload test operation with retry logic
+func WithFileUploadTestRetry(
+	t *testing.T,
+	config FileUploadRetryConfig,
+	context TestRetryContext,
+	expectations ResponseExpectations,
+	scenarioName string,
+	operation func() (*schemas.BifrostFileUploadResponse, *schemas.BifrostError),
+) (*schemas.BifrostFileUploadResponse, *schemas.BifrostError) {
+
+	var lastResponse *schemas.BifrostFileUploadResponse
+	var lastError *schemas.BifrostError
+
+	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+		context.AttemptNumber = attempt
+
+		response, err := operation()
+		lastResponse = response
+		lastError = err
+
+		shouldRetry := false
+		var retryReason string
+
+		if err != nil {
+			shouldRetry = true
+			if isTimeoutError(err) {
+				retryReason = fmt.Sprintf("timeout error detected: %s", GetErrorMessage(err))
+			} else {
+				parsed := ParseBifrostError(err)
+				retryReason = fmt.Sprintf("❌ error occurred: %s", FormatErrorConcise(parsed))
+			}
+		}
+
+		if response == nil {
+			shouldRetry = true
+			if retryReason != "" {
+				retryReason += " and ❌ response is nil"
+			} else {
+				retryReason = "❌ response is nil"
+			}
+		}
+
+		if response != nil {
+			validationResult := ValidateFileUploadResponse(t, response, err, expectations, scenarioName)
+
+			if validationResult.Passed && err == nil {
+				return response, err
+			}
+
+			if !validationResult.Passed {
+				shouldRetry = true
+				if retryReason != "" {
+					retryReason += fmt.Sprintf(" | ❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				} else {
+					retryReason = fmt.Sprintf("❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				}
+			}
+		}
+
+		if shouldRetry && attempt < config.MaxAttempts {
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, retryReason, t)
+			}
+
+			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+			time.Sleep(delay)
+			continue
+		}
+
+		if !shouldRetry {
+			return response, err
+		}
+
+		break
+	}
+
+	if config.OnFinalFail != nil {
+		var errorMsg string
+		if lastError != nil {
+			if lastError.Error != nil {
+				errorMsg = lastError.Error.Message
+			} else {
+				errorMsg = "unknown error"
+			}
+		} else if lastResponse == nil {
+			errorMsg = "response is nil"
+		} else {
+			validationResult := ValidateFileUploadResponse(t, lastResponse, nil, expectations, scenarioName)
+			errorMsg = strings.Join(validationResult.Errors, "; ")
+		}
+		config.OnFinalFail(config.MaxAttempts, fmt.Errorf("final error: %s", errorMsg), t)
+	}
+
+	return lastResponse, lastError
+}
+
+// WithFileListTestRetry wraps a file list test operation with retry logic
+func WithFileListTestRetry(
+	t *testing.T,
+	config FileListRetryConfig,
+	context TestRetryContext,
+	expectations ResponseExpectations,
+	scenarioName string,
+	operation func() (*schemas.BifrostFileListResponse, *schemas.BifrostError),
+) (*schemas.BifrostFileListResponse, *schemas.BifrostError) {
+
+	var lastResponse *schemas.BifrostFileListResponse
+	var lastError *schemas.BifrostError
+
+	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+		context.AttemptNumber = attempt
+
+		response, err := operation()
+		lastResponse = response
+		lastError = err
+
+		shouldRetry := false
+		var retryReason string
+
+		if err != nil {
+			shouldRetry = true
+			if isTimeoutError(err) {
+				retryReason = fmt.Sprintf("timeout error detected: %s", GetErrorMessage(err))
+			} else {
+				parsed := ParseBifrostError(err)
+				retryReason = fmt.Sprintf("❌ error occurred: %s", FormatErrorConcise(parsed))
+			}
+		}
+
+		if response == nil {
+			shouldRetry = true
+			if retryReason != "" {
+				retryReason += " and ❌ response is nil"
+			} else {
+				retryReason = "❌ response is nil"
+			}
+		}
+
+		if response != nil {
+			validationResult := ValidateFileListResponse(t, response, err, expectations, scenarioName)
+
+			if validationResult.Passed && err == nil {
+				return response, err
+			}
+
+			if !validationResult.Passed {
+				shouldRetry = true
+				if retryReason != "" {
+					retryReason += fmt.Sprintf(" | ❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				} else {
+					retryReason = fmt.Sprintf("❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				}
+			}
+		}
+
+		if shouldRetry && attempt < config.MaxAttempts {
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, retryReason, t)
+			}
+
+			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+			time.Sleep(delay)
+			continue
+		}
+
+		if !shouldRetry {
+			return response, err
+		}
+
+		break
+	}
+
+	if config.OnFinalFail != nil {
+		var errorMsg string
+		if lastError != nil {
+			if lastError.Error != nil {
+				errorMsg = lastError.Error.Message
+			} else {
+				errorMsg = "unknown error"
+			}
+		} else if lastResponse == nil {
+			errorMsg = "response is nil"
+		} else {
+			validationResult := ValidateFileListResponse(t, lastResponse, nil, expectations, scenarioName)
+			errorMsg = strings.Join(validationResult.Errors, "; ")
+		}
+		config.OnFinalFail(config.MaxAttempts, fmt.Errorf("final error: %s", errorMsg), t)
+	}
+
+	return lastResponse, lastError
+}
+
+// WithFileRetrieveTestRetry wraps a file retrieve test operation with retry logic
+func WithFileRetrieveTestRetry(
+	t *testing.T,
+	config FileRetrieveRetryConfig,
+	context TestRetryContext,
+	expectations ResponseExpectations,
+	scenarioName string,
+	operation func() (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError),
+) (*schemas.BifrostFileRetrieveResponse, *schemas.BifrostError) {
+
+	var lastResponse *schemas.BifrostFileRetrieveResponse
+	var lastError *schemas.BifrostError
+
+	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+		context.AttemptNumber = attempt
+
+		response, err := operation()
+		lastResponse = response
+		lastError = err
+
+		shouldRetry := false
+		var retryReason string
+
+		if err != nil {
+			shouldRetry = true
+			if isTimeoutError(err) {
+				retryReason = fmt.Sprintf("timeout error detected: %s", GetErrorMessage(err))
+			} else {
+				parsed := ParseBifrostError(err)
+				retryReason = fmt.Sprintf("❌ error occurred: %s", FormatErrorConcise(parsed))
+			}
+		}
+
+		if response == nil {
+			shouldRetry = true
+			if retryReason != "" {
+				retryReason += " and ❌ response is nil"
+			} else {
+				retryReason = "❌ response is nil"
+			}
+		}
+
+		if response != nil {
+			validationResult := ValidateFileRetrieveResponse(t, response, err, expectations, scenarioName)
+
+			if validationResult.Passed && err == nil {
+				return response, err
+			}
+
+			if !validationResult.Passed {
+				shouldRetry = true
+				if retryReason != "" {
+					retryReason += fmt.Sprintf(" | ❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				} else {
+					retryReason = fmt.Sprintf("❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				}
+			}
+		}
+
+		if shouldRetry && attempt < config.MaxAttempts {
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, retryReason, t)
+			}
+
+			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+			time.Sleep(delay)
+			continue
+		}
+
+		if !shouldRetry {
+			return response, err
+		}
+
+		break
+	}
+
+	if config.OnFinalFail != nil {
+		var errorMsg string
+		if lastError != nil {
+			if lastError.Error != nil {
+				errorMsg = lastError.Error.Message
+			} else {
+				errorMsg = "unknown error"
+			}
+		} else if lastResponse == nil {
+			errorMsg = "response is nil"
+		} else {
+			validationResult := ValidateFileRetrieveResponse(t, lastResponse, nil, expectations, scenarioName)
+			errorMsg = strings.Join(validationResult.Errors, "; ")
+		}
+		config.OnFinalFail(config.MaxAttempts, fmt.Errorf("final error: %s", errorMsg), t)
+	}
+
+	return lastResponse, lastError
+}
+
+// WithFileDeleteTestRetry wraps a file delete test operation with retry logic
+func WithFileDeleteTestRetry(
+	t *testing.T,
+	config FileDeleteRetryConfig,
+	context TestRetryContext,
+	expectations ResponseExpectations,
+	scenarioName string,
+	operation func() (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError),
+) (*schemas.BifrostFileDeleteResponse, *schemas.BifrostError) {
+
+	var lastResponse *schemas.BifrostFileDeleteResponse
+	var lastError *schemas.BifrostError
+
+	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+		context.AttemptNumber = attempt
+
+		response, err := operation()
+		lastResponse = response
+		lastError = err
+
+		shouldRetry := false
+		var retryReason string
+
+		if err != nil {
+			shouldRetry = true
+			if isTimeoutError(err) {
+				retryReason = fmt.Sprintf("timeout error detected: %s", GetErrorMessage(err))
+			} else {
+				parsed := ParseBifrostError(err)
+				retryReason = fmt.Sprintf("❌ error occurred: %s", FormatErrorConcise(parsed))
+			}
+		}
+
+		if response == nil {
+			shouldRetry = true
+			if retryReason != "" {
+				retryReason += " and ❌ response is nil"
+			} else {
+				retryReason = "❌ response is nil"
+			}
+		}
+
+		if response != nil {
+			validationResult := ValidateFileDeleteResponse(t, response, err, expectations, scenarioName)
+
+			if validationResult.Passed && err == nil {
+				return response, err
+			}
+
+			if !validationResult.Passed {
+				shouldRetry = true
+				if retryReason != "" {
+					retryReason += fmt.Sprintf(" | ❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				} else {
+					retryReason = fmt.Sprintf("❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				}
+			}
+		}
+
+		if shouldRetry && attempt < config.MaxAttempts {
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, retryReason, t)
+			}
+
+			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+			time.Sleep(delay)
+			continue
+		}
+
+		if !shouldRetry {
+			return response, err
+		}
+
+		break
+	}
+
+	if config.OnFinalFail != nil {
+		var errorMsg string
+		if lastError != nil {
+			if lastError.Error != nil {
+				errorMsg = lastError.Error.Message
+			} else {
+				errorMsg = "unknown error"
+			}
+		} else if lastResponse == nil {
+			errorMsg = "response is nil"
+		} else {
+			validationResult := ValidateFileDeleteResponse(t, lastResponse, nil, expectations, scenarioName)
+			errorMsg = strings.Join(validationResult.Errors, "; ")
+		}
+		config.OnFinalFail(config.MaxAttempts, fmt.Errorf("final error: %s", errorMsg), t)
+	}
+
+	return lastResponse, lastError
+}
+
+// WithFileContentTestRetry wraps a file content test operation with retry logic
+func WithFileContentTestRetry(
+	t *testing.T,
+	config FileContentRetryConfig,
+	context TestRetryContext,
+	expectations ResponseExpectations,
+	scenarioName string,
+	operation func() (*schemas.BifrostFileContentResponse, *schemas.BifrostError),
+) (*schemas.BifrostFileContentResponse, *schemas.BifrostError) {
+
+	var lastResponse *schemas.BifrostFileContentResponse
+	var lastError *schemas.BifrostError
+
+	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+		context.AttemptNumber = attempt
+
+		response, err := operation()
+		lastResponse = response
+		lastError = err
+
+		shouldRetry := false
+		var retryReason string
+
+		if err != nil {
+			shouldRetry = true
+			if isTimeoutError(err) {
+				retryReason = fmt.Sprintf("timeout error detected: %s", GetErrorMessage(err))
+			} else {
+				parsed := ParseBifrostError(err)
+				retryReason = fmt.Sprintf("❌ error occurred: %s", FormatErrorConcise(parsed))
+			}
+		}
+
+		if response == nil {
+			shouldRetry = true
+			if retryReason != "" {
+				retryReason += " and ❌ response is nil"
+			} else {
+				retryReason = "❌ response is nil"
+			}
+		}
+
+		if response != nil {
+			validationResult := ValidateFileContentResponse(t, response, err, expectations, scenarioName)
+
+			if validationResult.Passed && err == nil {
+				return response, err
+			}
+
+			if !validationResult.Passed {
+				shouldRetry = true
+				if retryReason != "" {
+					retryReason += fmt.Sprintf(" | ❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				} else {
+					retryReason = fmt.Sprintf("❌ validation failure: %s", strings.Join(validationResult.Errors, "; "))
+				}
+			}
+		}
+
+		if shouldRetry && attempt < config.MaxAttempts {
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, retryReason, t)
+			}
+
+			delay := calculateRetryDelay(attempt-1, config.BaseDelay, config.MaxDelay)
+			time.Sleep(delay)
+			continue
+		}
+
+		if !shouldRetry {
+			return response, err
+		}
+
+		break
+	}
+
+	if config.OnFinalFail != nil {
+		var errorMsg string
+		if lastError != nil {
+			if lastError.Error != nil {
+				errorMsg = lastError.Error.Message
+			} else {
+				errorMsg = "unknown error"
+			}
+		} else if lastResponse == nil {
+			errorMsg = "response is nil"
+		} else {
+			validationResult := ValidateFileContentResponse(t, lastResponse, nil, expectations, scenarioName)
+			errorMsg = strings.Join(validationResult.Errors, "; ")
+		}
+		config.OnFinalFail(config.MaxAttempts, fmt.Errorf("final error: %s", errorMsg), t)
+	}
+
+	return lastResponse, lastError
 }
 
 // SpeechStreamValidationResult represents the result of speech streaming validation

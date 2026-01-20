@@ -41,7 +41,7 @@ providers:
         content:
           application/json:
             schema:
-              $ref: '../../schemas/management/common.yaml#/ErrorResponse'
+              $ref: '../../schemas/inference/common.yaml#/BifrostError'
       '500':
         $ref: '../../openapi.yaml#/components/responses/InternalError'
 
@@ -73,7 +73,7 @@ providers-by-name:
         content:
           application/json:
             schema:
-              $ref: '../../schemas/management/common.yaml#/ErrorResponse'
+              $ref: '../../schemas/inference/common.yaml#/BifrostError'
       '500':
         $ref: '../../openapi.yaml#/components/responses/InternalError'
 
@@ -137,7 +137,7 @@ providers-by-name:
         content:
           application/json:
             schema:
-              $ref: '../../schemas/management/common.yaml#/ErrorResponse'
+              $ref: '../../schemas/inference/common.yaml#/BifrostError'
       '500':
         $ref: '../../openapi.yaml#/components/responses/InternalError'
 

@@ -1,16 +1,9 @@
 # Config API schemas
 
 Version:
-  type: object
+  type: string
   description: Version information
-  properties:
-    version:
-      type: string
-      example: "1.0.0"
-    commit:
-      type: string
-    build_time:
-      type: string
+  example: "1.0.0"
 
 ClientConfig:
   type: object
@@ -58,11 +51,23 @@ ClientConfig:
       description: Number of days to retain logs
     header_filter_config:
       $ref: '#/HeaderFilterConfig'
+    mcp_agent_depth:
+      type: integer
+      description: Depth of MCP agent
+    mcp_tool_execution_timeout:
+      type: integer
+      description: Timeout for MCP tool execution in seconds
+    mcp_code_mode_binding_level:
+      type: string
+      description: Binding level for MCP code mode
 
 FrameworkConfig:
   type: object
   description: Framework configuration
   properties:
+    id:
+      type: integer
+      description: Unique identifier for the framework config
     pricing_url:
       type: string
       description: URL for pricing data
@@ -119,6 +124,12 @@ ProxyConfig:
     timeout:
       type: integer
     skip_tls_verify:
+      type: boolean
+    enable_for_scim:
+      type: boolean
+    enable_for_inference:
+      type: boolean
+    enable_for_api:
       type: boolean
 
 RestartRequiredConfig:

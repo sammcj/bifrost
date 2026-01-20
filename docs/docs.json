@@ -195,6 +195,7 @@
             "pages": [
               "features/drop-in-replacement",
               "features/fallbacks",
+              "features/litellm-compat",
               "features/keys-management",
               {
                 "group": "Governance",
@@ -254,6 +255,13 @@
                       "enterprise/setting-up-entra"
                     ]
                   }
+                ]
+              },
+              {
+                "group": "Enterprise Observability",
+                "icon": "binoculars",
+                "pages": [
+                  "enterprise/datadog-connector"
                 ]
               },
               "enterprise/mcp-with-fa",
@@ -359,6 +367,8 @@
         "tab": "Changelogs",
         "icon": "bolt",
         "pages": [
+          "changelogs/v1.4.1",
+          "changelogs/v1.4.0",
           "changelogs/v1.4.0-prerelease10",
           "changelogs/v1.4.0-prerelease9",
           "changelogs/v1.4.0-prerelease8",
@@ -444,6 +454,7 @@
               "changelogs/v1.3.3",
               "changelogs/v1.3.2",
               "changelogs/v1.3.1",
+              "changelogs/v1.3.0",
               "changelogs/v1.3.0-prerelease7",
               "changelogs/v1.3.0-prerelease6",
               "changelogs/v1.3.0-prerelease5",
@@ -451,7 +462,6 @@
               "changelogs/v1.3.0-prerelease3",
               "changelogs/v1.3.0-prerelease2",
               "changelogs/v1.3.0-prerelease1",
-              "changelogs/v1.3.0",
               "changelogs/v1.2.24",
               "changelogs/v1.2.23"
             ]
@@ -511,6 +521,26 @@
     {
       "source": "/features/mcp/filtering",
       "destination": "/mcp/filtering"
+    },
+    {
+      "source": "/enterprise/governance",
+      "destination": "/enterprise/advanced-governance"
+    },
+    {
+      "source": "/features/enterprise/scim",
+      "destination": "/enterprise/setting-up-okta"
+    },
+    {
+      "source": "/enterprise/intelligent-load-balancing",
+      "destination": "/enterprise/adaptive-load-balancing"
+    },
+    {
+      "source": "/enterprise/users",
+      "destination": "/enterprise/setting-up-okta"
+    },
+    {
+      "source": "/enterprise/data-connectors/datadog",
+      "destination": "/enterprise/datadog-connector"
     }
   ],
   "footer": {

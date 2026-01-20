@@ -7,6 +7,13 @@ virtual-keys:
     description: Returns a list of all virtual keys with their configurations.
     tags:
       - Governance
+    parameters:
+      - name: from_memory
+        in: query
+        description: If true, returns virtual keys from in-memory cache instead of database
+        schema:
+          type: boolean
+          default: false
     responses:
       '200':
         description: Successful response
@@ -55,6 +62,12 @@ virtual-keys-by-id:
         description: Virtual key ID
         schema:
           type: string
+      - name: from_memory
+        in: query
+        description: If true, returns virtual key from in-memory cache instead of database
+        schema:
+          type: boolean
+          default: false
     responses:
       '200':
         description: Successful response
@@ -70,7 +83,7 @@ virtual-keys-by-id:
         content:
           application/json:
             schema:
-              $ref: '../../schemas/management/common.yaml#/ErrorResponse'
+              $ref: '../../schemas/inference/common.yaml#/BifrostError'
       '500':
         $ref: '../../openapi.yaml#/components/responses/InternalError'
 
@@ -107,7 +120,7 @@ virtual-keys-by-id:
         content:
           application/json:
             schema:
-              $ref: '../../schemas/management/common.yaml#/ErrorResponse'
+              $ref: '../../schemas/inference/common.yaml#/BifrostError'
       '500':
         $ref: '../../openapi.yaml#/components/responses/InternalError'
 
@@ -136,7 +149,7 @@ virtual-keys-by-id:
         content:
           application/json:
             schema:
-              $ref: '../../schemas/management/common.yaml#/ErrorResponse'
+              $ref: '../../schemas/inference/common.yaml#/BifrostError'
       '500':
         $ref: '../../openapi.yaml#/components/responses/InternalError'
 
@@ -155,6 +168,12 @@ teams:
         description: Filter teams by customer ID
         schema:
           type: string
+      - name: from_memory
+        in: query
+        description: If true, returns teams from in-memory cache instead of database
+        schema:
+          type: boolean
+          default: false
     responses:
       '200':
         description: Successful response
@@ -203,6 +222,12 @@ teams-by-id:
         description: Team ID
         schema:
           type: string
+      - name: from_memory
+        in: query
+        description: If true, returns team from in-memory cache instead of database
+        schema:
+          type: boolean
+          default: false
     responses:
       '200':
         description: Successful response
@@ -218,7 +243,7 @@ teams-by-id:
         content:
           application/json:
             schema:
-              $ref: '../../schemas/management/common.yaml#/ErrorResponse'
+              $ref: '../../schemas/inference/common.yaml#/BifrostError'
       '500':
         $ref: '../../openapi.yaml#/components/responses/InternalError'
 
@@ -297,6 +322,13 @@ customers:
     description: Returns a list of all customers.
     tags:
       - Governance
+    parameters:
+      - name: from_memory
+        in: query
+        description: If true, returns customers from in-memory cache instead of database
+        schema:
+          type: boolean
+          default: false
     responses:
       '200':
         description: Successful response
@@ -345,6 +377,12 @@ customers-by-id:
         description: Customer ID
         schema:
           type: string
+      - name: from_memory
+        in: query
+        description: If true, returns customer from in-memory cache instead of database
+        schema:
+          type: boolean
+          default: false
     responses:
       '200':
         description: Successful response
@@ -427,5 +465,55 @@ customers-by-id:
           application/json:
             schema:
               $ref: '../../schemas/management/common.yaml#/ErrorResponse'
+      '500':
+        $ref: '../../openapi.yaml#/components/responses/InternalError'
+
+# Budgets and Rate Limits GET operations
+
+budgets:
+  get:
+    operationId: listBudgets
+    summary: List budgets
+    description: Returns a list of all budgets. Use the `from_memory` query parameter to get data from in-memory cache.
+    tags:
+      - Governance
+    parameters:
+      - name: from_memory
+        in: query
+        description: If true, returns budgets from in-memory cache instead of database
+        schema:
+          type: boolean
+          default: false
+    responses:
+      '200':
+        description: Successful response
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/management/governance.yaml#/ListBudgetsResponse'
+      '500':
+        $ref: '../../openapi.yaml#/components/responses/InternalError'
+
+rate-limits:
+  get:
+    operationId: listRateLimits
+    summary: List rate limits
+    description: Returns a list of all rate limits. Use the `from_memory` query parameter to get data from in-memory cache.
+    tags:
+      - Governance
+    parameters:
+      - name: from_memory
+        in: query
+        description: If true, returns rate limits from in-memory cache instead of database
+        schema:
+          type: boolean
+          default: false
+    responses:
+      '200':
+        description: Successful response
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/management/governance.yaml#/ListRateLimitsResponse'
       '500':
         $ref: '../../openapi.yaml#/components/responses/InternalError'

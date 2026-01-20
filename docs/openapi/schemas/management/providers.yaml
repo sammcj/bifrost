@@ -64,26 +64,32 @@ AzureKeyConfig:
   description: Azure-specific key configuration
   properties:
     endpoint:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
     deployments:
       type: object
       additionalProperties:
         type: string
     api_version:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+    client_id:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+    client_secret:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
+    tenant_id:
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
 
 VertexKeyConfig:
   type: object
   description: Vertex-specific key configuration
   properties:
     project_id:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
     project_number:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
     region:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
     auth_credentials:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
     deployments:
       type: object
       additionalProperties:
@@ -94,15 +100,15 @@ BedrockKeyConfig:
   description: AWS Bedrock-specific key configuration
   properties:
     access_key:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
     secret_key:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
     session_token:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
     region:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
     arn:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
     deployments:
       type: object
       additionalProperties:
@@ -142,7 +148,7 @@ Key:
       type: string
       description: Name of the key
     value:
-      type: string
+      $ref: '../../schemas/management/common.yaml#/EnvVar'
       description: API key value (redacted in responses)
     models:
       type: array
@@ -194,6 +200,10 @@ AllowedRequests:
     transcription:
       type: boolean
     transcription_stream:
+      type: boolean
+    image_generation:
+      type: boolean
+    image_generation_stream:
       type: boolean
     batch_create:
       type: boolean
@@ -255,6 +265,9 @@ ProviderResponse:
       $ref: '#/CustomProviderConfig'
     status:
       $ref: '#/ProviderStatus'
+    config_hash:
+      type: string
+      description: Hash of config.json version, used for change detection
 
 ListProvidersResponse:
   type: object

@@ -147,6 +147,24 @@ func testStructuredOutputChatWithValue(t *testing.T, client *bifrost.Bifrost, ct
 		content := GetChatContent(chatResponse)
 		t.Logf("📝 Structured output response: %s", content)
 
+		// Assert content is non-empty
+		if content == "" {
+			t.Fatalf("❌ Content should not be empty for structured output")
+		}
+
+		// For Bedrock: verify no tool calls leaked through (response_format was properly converted)
+		if testConfig.Provider == schemas.Bedrock {
+			if len(chatResponse.Choices) > 0 {
+				choice := chatResponse.Choices[0]
+				if choice.ChatNonStreamResponseChoice != nil && choice.Message != nil && choice.Message.ChatAssistantMessage != nil {
+					if len(choice.Message.ChatAssistantMessage.ToolCalls) > 0 {
+						t.Fatalf("❌ Bedrock: structured output should not contain tool calls, got %d tool calls", len(choice.Message.ChatAssistantMessage.ToolCalls))
+					}
+				}
+			}
+			t.Logf("✅ Bedrock: no tool calls in response (response_format properly converted)")
+		}
+
 		// Parse and validate the JSON
 		var result map[string]interface{}
 		if err := json.Unmarshal([]byte(content), &result); err != nil {
@@ -270,6 +288,7 @@ func RunStructuredOutputChatStreamTest(t *testing.T, client *bifrost.Bifrost, ct
 
 		var fullContent strings.Builder
 		var responseCount int
+		var toolCallCount int // Track tool calls for Bedrock assertion
 
 		streamCtx, cancel := context.WithTimeout(ctx, 200*time.Second)
 		defer cancel()
@@ -294,6 +313,10 @@ func RunStructuredOutputChatStreamTest(t *testing.T, client *bifrost.Bifrost, ct
 						if choice.Delta != nil && choice.Delta.Content != nil {
 							fullContent.WriteString(*choice.Delta.Content)
 						}
+						// Track tool calls for Bedrock assertion
+						if choice.Delta != nil && len(choice.Delta.ToolCalls) > 0 {
+							toolCallCount += len(choice.Delta.ToolCalls)
+						}
 					}
 				}
 
@@ -313,6 +336,19 @@ func RunStructuredOutputChatStreamTest(t *testing.T, client *bifrost.Bifrost, ct
 
 		finalContent := strings.TrimSpace(fullContent.String())
 		t.Logf("📝 Assembled structured output (%d chars): %s", len(finalContent), finalContent)
+
+		// Assert content is non-empty
+		if finalContent == "" {
+			t.Fatalf("❌ Content should not be empty for structured output")
+		}
+
+		// For Bedrock: verify no tool calls leaked through (response_format was properly converted)
+		if testConfig.Provider == schemas.Bedrock {
+			if toolCallCount > 0 {
+				t.Fatalf("❌ Bedrock: structured output streaming should not contain tool calls, got %d tool call deltas", toolCallCount)
+			}
+			t.Logf("✅ Bedrock: no tool calls in streaming response (response_format properly converted)")
+		}
 
 		// Validate the assembled content is valid JSON matching our schema
 		var result map[string]interface{}
@@ -447,6 +483,21 @@ func RunStructuredOutputResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx
 			content := GetResponsesContent(responsesResponse)
 			t.Logf("📝 Structured output response: %s", content)
 
+			// Assert content is non-empty
+			if content == "" {
+				t.Fatalf("❌ Content should not be empty for structured output")
+			}
+
+			// For Bedrock: verify no function_call items leaked through (response_format was properly converted)
+			if testConfig.Provider == schemas.Bedrock {
+				for _, outputItem := range responsesResponse.Output {
+					if outputItem.Type != nil && *outputItem.Type == schemas.ResponsesMessageTypeFunctionCall {
+						t.Fatalf("❌ Bedrock: structured output should not contain function_call items")
+					}
+				}
+				t.Logf("✅ Bedrock: no function_call items in response (response_format properly converted)")
+			}
+
 			// Parse and validate the JSON
 			var result map[string]interface{}
 			if err := json.Unmarshal([]byte(content), &result); err != nil {
@@ -568,6 +619,7 @@ func RunStructuredOutputResponsesStreamTest(t *testing.T, client *bifrost.Bifros
 			func(responseChannel chan *schemas.BifrostStream) ResponsesStreamValidationResult {
 				var fullContent strings.Builder
 				var responseCount int
+				var functionCallEventCount int // Track function call events for Bedrock assertion
 
 				streamCtx, cancel := context.WithTimeout(ctx, 200*time.Second)
 				defer cancel()
@@ -599,6 +651,12 @@ func RunStructuredOutputResponsesStreamTest(t *testing.T, client *bifrost.Bifros
 						if response.BifrostResponsesStreamResponse != nil {
 							streamResp := response.BifrostResponsesStreamResponse
 
+							// Track function call events for Bedrock assertion
+							if streamResp.Type == schemas.ResponsesStreamResponseTypeFunctionCallArgumentsDelta ||
+								streamResp.Type == schemas.ResponsesStreamResponseTypeFunctionCallArgumentsDone {
+								functionCallEventCount++
+							}
+
 							switch streamResp.Type {
 							case schemas.ResponsesStreamResponseTypeOutputTextDelta:
 								if streamResp.Delta != nil {
@@ -610,6 +668,10 @@ func RunStructuredOutputResponsesStreamTest(t *testing.T, client *bifrost.Bifros
 									if streamResp.Item.Content.ContentStr != nil {
 										fullContent.WriteString(*streamResp.Item.Content.ContentStr)
 									}
+								}
+								// Track function call output items for Bedrock assertion
+								if streamResp.Item != nil && streamResp.Item.Type != nil && *streamResp.Item.Type == schemas.ResponsesMessageTypeFunctionCall {
+									functionCallEventCount++
 								}
 
 							case schemas.ResponsesStreamResponseTypeContentPartAdded:
@@ -645,6 +707,27 @@ func RunStructuredOutputResponsesStreamTest(t *testing.T, client *bifrost.Bifros
 			streamComplete:
 				finalContent := strings.TrimSpace(fullContent.String())
 				t.Logf("📝 Assembled structured output (%d chars): %s", len(finalContent), finalContent)
+
+				// Assert content is non-empty
+				if finalContent == "" {
+					return ResponsesStreamValidationResult{
+						Passed:       false,
+						Errors:       []string{"❌ Content should not be empty for structured output"},
+						ReceivedData: responseCount > 0,
+					}
+				}
+
+				// For Bedrock: verify no function_call events leaked through (response_format was properly converted)
+				if testConfig.Provider == schemas.Bedrock {
+					if functionCallEventCount > 0 {
+						return ResponsesStreamValidationResult{
+							Passed:       false,
+							Errors:       []string{fmt.Sprintf("❌ Bedrock: structured output streaming should not contain function_call events, got %d", functionCallEventCount)},
+							ReceivedData: responseCount > 0,
+						}
+					}
+					t.Logf("✅ Bedrock: no function_call events in streaming response (response_format properly converted)")
+				}
 
 				// Validate the assembled content is valid JSON matching our schema
 				var result map[string]interface{}
