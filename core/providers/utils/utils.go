@@ -236,16 +236,11 @@ func filterHeaders(headers map[string][]string) map[string][]string {
 // SetExtraHeaders sets additional headers from NetworkConfig to the fasthttp request.
 // This allows users to configure custom headers for their provider requests.
 // Header keys are canonicalized using textproto.CanonicalMIMEHeaderKey to avoid duplicates.
-// The Authorization header is excluded for security reasons.
 // It accepts a list of headers (all canonicalized) to skip for security reasons.
 // Headers are only set if they don't already exist on the request to avoid overwriting important headers.
 func SetExtraHeaders(ctx context.Context, req *fasthttp.Request, extraHeaders map[string]string, skipHeaders []string) {
 	for key, value := range extraHeaders {
 		canonicalKey := textproto.CanonicalMIMEHeaderKey(key)
-		// Skip Authorization header for security reasons
-		if key == "Authorization" {
-			continue
-		}
 		if skipHeaders != nil {
 			if slices.Contains(skipHeaders, key) {
 				continue
@@ -345,10 +340,6 @@ func CheckContextAndGetRequestBody(ctx context.Context, request RequestBodyGette
 func SetExtraHeadersHTTP(ctx context.Context, req *http.Request, extraHeaders map[string]string, skipHeaders []string) {
 	for key, value := range extraHeaders {
 		canonicalKey := textproto.CanonicalMIMEHeaderKey(key)
-		// Skip Authorization header for security reasons
-		if key == "Authorization" {
-			continue
-		}
 		if skipHeaders != nil {
 			if slices.Contains(skipHeaders, key) {
 				continue

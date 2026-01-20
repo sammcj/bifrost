@@ -35,7 +35,6 @@ const defaultConfig: CoreConfig = {
 // Security headers that cannot be configured in allowlist/denylist
 // These headers are always blocked for security reasons regardless of configuration
 const SECURITY_HEADERS = [
-	"authorization",
 	"proxy-authorization",
 	"cookie",
 	"host",
@@ -347,7 +346,7 @@ export default function ClientSettingsView() {
 						<AccordionContent>
 							<p className="text-sm">Some headers are always blocked for security reasons regardless of configuration. These headers cannot be added to the allowlist or denylist:</p>
 							<p className="text-muted-foreground mt-1 font-mono text-xs">
-								authorization, proxy-authorization, cookie, host, content-length, connection, transfer-encoding, x-api-key, x-goog-api-key,
+								proxy-authorization, cookie, host, content-length, connection, transfer-encoding, x-api-key, x-goog-api-key,
 								x-bf-api-key, x-bf-vk
 							</p>
 						</AccordionContent>

@@ -1,0 +1,3 @@
+- fix: allow setting authorization header through extra headers and in allow list and deny list
+- feat: configure custom CORS headers, allowing clients to specify additional headers that should be allowed in cross-origin requests.
+- feat: support for listing models from specific provider or all providers via a header flag x-bf-list-models-provider from integrations.

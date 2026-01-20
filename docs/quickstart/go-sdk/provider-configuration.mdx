@@ -275,7 +275,6 @@ Bifrost maintains a security denylist of headers that are never forwarded to pro
 
 ```go
 denylist := map[string]bool{
-    "authorization":       true,
     "proxy-authorization": true,
     "cookie":              true,
     "host":                true,

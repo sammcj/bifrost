@@ -100,7 +100,6 @@ func ConvertToBifrostContext(ctx *fasthttp.RequestCtx, allowDirectKeys bool, hea
 	// Security denylist of header names that should never be accepted (case-insensitive)
 	// This denylist is always enforced regardless of user configuration
 	securityDenylist := map[string]bool{
-		"authorization":       true,
 		"proxy-authorization": true,
 		"cookie":              true,
 		"host":                true,
