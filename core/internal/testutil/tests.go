@@ -81,6 +81,11 @@ func RunAllComprehensiveTests(t *testing.T, client *bifrost.Bifrost, ctx context
 		RunStructuredOutputChatStreamTest,
 		RunStructuredOutputResponsesTest,
 		RunStructuredOutputResponsesStreamTest,
+		RunContainerCreateTest,
+		RunContainerListTest,
+		RunContainerRetrieveTest,
+		RunContainerDeleteTest,
+		RunContainerUnsupportedTest,
 	}
 
 	// Execute all test scenarios
@@ -145,6 +150,11 @@ func printTestSummary(t *testing.T, testConfig ComprehensiveTestConfig) {
 		{"StructuredOutputChatStream", testConfig.Scenarios.StructuredOutputs && testConfig.Scenarios.CompletionStream},
 		{"StructuredOutputResponses", testConfig.Scenarios.StructuredOutputs},
 		{"StructuredOutputResponsesStream", testConfig.Scenarios.StructuredOutputs && testConfig.Scenarios.CompletionStream},
+		{"ContainerCreate", testConfig.Scenarios.ContainerCreate},
+		{"ContainerList", testConfig.Scenarios.ContainerList},
+		{"ContainerRetrieve", testConfig.Scenarios.ContainerRetrieve},
+		{"ContainerDelete", testConfig.Scenarios.ContainerDelete},
+		{"ContainerUnsupported", !testConfig.Scenarios.ContainerCreate && !testConfig.Scenarios.ContainerList && !testConfig.Scenarios.ContainerRetrieve && !testConfig.Scenarios.ContainerDelete},
 	}
 
 	supported := 0

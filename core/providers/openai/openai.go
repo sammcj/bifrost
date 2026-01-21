@@ -3970,3 +3970,454 @@ func (provider *OpenAIProvider) BatchResults(ctx *schemas.BifrostContext, keys [
 
 	return nil, lastErr
 }
+
+// ContainerCreate creates a new container via OpenAI's API.
+func (provider *OpenAIProvider) ContainerCreate(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostContainerCreateRequest) (*schemas.BifrostContainerCreateResponse, *schemas.BifrostError) {
+	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ContainerCreateRequest); err != nil {
+		return nil, err
+	}
+
+	providerName := provider.GetProviderKey()
+
+	if request == nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: nil", nil, providerName)
+	}
+
+	if request.Name == "" {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: name is required", nil, providerName)
+	}
+
+	// Build request body
+	reqBody := map[string]interface{}{
+		"name": request.Name,
+	}
+
+	if request.ExpiresAfter != nil {
+		reqBody["expires_after"] = map[string]interface{}{
+			"anchor":  request.ExpiresAfter.Anchor,
+			"minutes": request.ExpiresAfter.Minutes,
+		}
+	}
+
+	if len(request.FileIDs) > 0 {
+		reqBody["file_ids"] = request.FileIDs
+	}
+
+	if request.MemoryLimit != "" {
+		reqBody["memory_limit"] = request.MemoryLimit
+	}
+
+	if len(request.Metadata) > 0 {
+		reqBody["metadata"] = request.Metadata
+	}
+
+	// Merge ExtraParams into reqBody (do not overwrite mandatory keys)
+	for k, v := range request.ExtraParams {
+		if _, exists := reqBody[k]; !exists {
+			reqBody[k] = v
+		}
+	}
+
+	jsonBody, err := sonic.Marshal(reqBody)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRequestMarshal, err, providerName)
+	}
+
+	// Create request
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+	req.SetRequestURI(provider.buildRequestURL(ctx, "/v1/containers", schemas.ContainerCreateRequest))
+	req.Header.SetMethod(http.MethodPost)
+	req.Header.SetContentType("application/json")
+	req.SetBody(jsonBody)
+
+	if key.Value.GetValue() != "" {
+		req.Header.Set("Authorization", "Bearer "+key.Value.GetValue())
+	}
+
+	// Make request
+	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	// Handle error response
+	if resp.StatusCode() != fasthttp.StatusOK && resp.StatusCode() != fasthttp.StatusCreated {
+		return nil, ParseOpenAIError(resp, schemas.ContainerCreateRequest, providerName, "")
+	}
+
+	// Parse response
+	responseBody := append([]byte(nil), resp.Body()...)
+
+	var containerResp struct {
+		ID           string                         `json:"id"`
+		Object       string                         `json:"object"`
+		Name         string                         `json:"name"`
+		CreatedAt    int64                          `json:"created_at"`
+		Status       schemas.ContainerStatus        `json:"status"`
+		ExpiresAfter *schemas.ContainerExpiresAfter `json:"expires_after"`
+		LastActiveAt *int64                         `json:"last_active_at"`
+		MemoryLimit  string                         `json:"memory_limit"`
+		Metadata     map[string]string              `json:"metadata"`
+	}
+
+	rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, &containerResp, jsonBody, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	response := &schemas.BifrostContainerCreateResponse{
+		ID:           containerResp.ID,
+		Object:       containerResp.Object,
+		Name:         containerResp.Name,
+		CreatedAt:    containerResp.CreatedAt,
+		Status:       containerResp.Status,
+		ExpiresAfter: containerResp.ExpiresAfter,
+		LastActiveAt: containerResp.LastActiveAt,
+		MemoryLimit:  containerResp.MemoryLimit,
+		Metadata:     containerResp.Metadata,
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			Provider:    providerName,
+			RequestType: schemas.ContainerCreateRequest,
+			Latency:     latency.Milliseconds(),
+		},
+	}
+
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		response.ExtraFields.RawRequest = rawRequest
+	}
+	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
+		response.ExtraFields.RawResponse = rawResponse
+	}
+
+	return response, nil
+}
+
+// ContainerList lists containers via OpenAI's API.
+func (provider *OpenAIProvider) ContainerList(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostContainerListRequest) (*schemas.BifrostContainerListResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
+
+	if request == nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: nil", nil, providerName)
+	}
+	if len(keys) == 0 {
+		if provider.customProviderConfig != nil && provider.customProviderConfig.IsKeyLess {
+			keys = []schemas.Key{{}}
+		} else {
+			return nil, providerUtils.NewBifrostOperationError("no keys supplied", nil, providerName)
+		}
+	}
+
+	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ContainerListRequest); err != nil {
+		return nil, err
+	}
+
+	var lastErr *schemas.BifrostError
+	for _, key := range keys {
+		// Build query string
+		queryParams := url.Values{}
+		if request.Limit > 0 {
+			queryParams.Set("limit", fmt.Sprintf("%d", request.Limit))
+		}
+		if request.After != nil {
+			queryParams.Set("after", *request.After)
+		}
+		if request.Order != nil {
+			queryParams.Set("order", *request.Order)
+		}
+
+		requestURL := provider.buildRequestURL(ctx, "/v1/containers", schemas.ContainerListRequest)
+		if len(queryParams) > 0 {
+			requestURL += "?" + queryParams.Encode()
+		}
+
+		// Create request
+		req := fasthttp.AcquireRequest()
+		resp := fasthttp.AcquireResponse()
+
+		providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+		req.SetRequestURI(requestURL)
+		req.Header.SetMethod(http.MethodGet)
+		req.Header.SetContentType("application/json")
+
+		if key.Value.GetValue() != "" {
+			req.Header.Set("Authorization", "Bearer "+key.Value.GetValue())
+		}
+
+		// Make request
+		latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+		if bifrostErr != nil {
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			lastErr = bifrostErr
+			continue
+		}
+
+		// Handle error response
+		if resp.StatusCode() != fasthttp.StatusOK {
+			lastErr = ParseOpenAIError(resp, schemas.ContainerListRequest, providerName, "")
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+
+		// Parse response
+		responseBody := append([]byte(nil), resp.Body()...)
+
+		var listResp struct {
+			Object  string                    `json:"object"`
+			Data    []schemas.ContainerObject `json:"data"`
+			FirstID *string                   `json:"first_id"`
+			LastID  *string                   `json:"last_id"`
+			HasMore bool                      `json:"has_more"`
+		}
+
+		rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, &listResp, nil, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
+		if bifrostErr != nil {
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			lastErr = bifrostErr
+			continue
+		}
+
+		response := &schemas.BifrostContainerListResponse{
+			Object:  listResp.Object,
+			Data:    listResp.Data,
+			FirstID: listResp.FirstID,
+			LastID:  listResp.LastID,
+			HasMore: listResp.HasMore,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				Provider:    providerName,
+				RequestType: schemas.ContainerListRequest,
+				Latency:     latency.Milliseconds(),
+			},
+		}
+
+		if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+			response.ExtraFields.RawRequest = rawRequest
+		}
+		if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
+			response.ExtraFields.RawResponse = rawResponse
+		}
+
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(resp)
+		return response, nil
+	}
+
+	return nil, lastErr
+}
+
+// ContainerRetrieve retrieves a specific container via OpenAI's API.
+func (provider *OpenAIProvider) ContainerRetrieve(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostContainerRetrieveRequest) (*schemas.BifrostContainerRetrieveResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
+
+	if request == nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: nil", nil, providerName)
+	}
+	if len(keys) == 0 {
+		if provider.customProviderConfig != nil && provider.customProviderConfig.IsKeyLess {
+			keys = []schemas.Key{{}}
+		} else {
+			return nil, providerUtils.NewBifrostOperationError("no keys supplied", nil, providerName)
+		}
+	}
+	if request.ContainerID == "" {
+		return nil, providerUtils.NewBifrostOperationError("container_id is required", nil, providerName)
+	}
+
+	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ContainerRetrieveRequest); err != nil {
+		return nil, err
+	}
+
+	var lastErr *schemas.BifrostError
+	for _, key := range keys {
+		// Create request
+		req := fasthttp.AcquireRequest()
+		resp := fasthttp.AcquireResponse()
+
+		providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+		req.SetRequestURI(provider.buildRequestURL(ctx, "/v1/containers/"+request.ContainerID, schemas.ContainerRetrieveRequest))
+		req.Header.SetMethod(http.MethodGet)
+		req.Header.SetContentType("application/json")
+
+		if key.Value.GetValue() != "" {
+			req.Header.Set("Authorization", "Bearer "+key.Value.GetValue())
+		}
+
+		// Make request
+		latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+		if bifrostErr != nil {
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			lastErr = bifrostErr
+			continue
+		}
+
+		// Handle error response
+		if resp.StatusCode() != fasthttp.StatusOK {
+			lastErr = ParseOpenAIError(resp, schemas.ContainerRetrieveRequest, providerName, "")
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+
+		// Parse response
+		responseBody := append([]byte(nil), resp.Body()...)
+
+		var containerResp struct {
+			ID           string                         `json:"id"`
+			Object       string                         `json:"object"`
+			Name         string                         `json:"name"`
+			CreatedAt    int64                          `json:"created_at"`
+			Status       schemas.ContainerStatus        `json:"status"`
+			ExpiresAfter *schemas.ContainerExpiresAfter `json:"expires_after"`
+			LastActiveAt *int64                         `json:"last_active_at"`
+			MemoryLimit  string                         `json:"memory_limit"`
+			Metadata     map[string]string              `json:"metadata"`
+		}
+
+		rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, &containerResp, nil, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
+		if bifrostErr != nil {
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			lastErr = bifrostErr
+			continue
+		}
+
+		response := &schemas.BifrostContainerRetrieveResponse{
+			ID:           containerResp.ID,
+			Object:       containerResp.Object,
+			Name:         containerResp.Name,
+			CreatedAt:    containerResp.CreatedAt,
+			Status:       containerResp.Status,
+			ExpiresAfter: containerResp.ExpiresAfter,
+			LastActiveAt: containerResp.LastActiveAt,
+			MemoryLimit:  containerResp.MemoryLimit,
+			Metadata:     containerResp.Metadata,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				Provider:    providerName,
+				RequestType: schemas.ContainerRetrieveRequest,
+				Latency:     latency.Milliseconds(),
+			},
+		}
+
+		if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+			response.ExtraFields.RawRequest = rawRequest
+		}
+		if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
+			response.ExtraFields.RawResponse = rawResponse
+		}
+
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(resp)
+		return response, nil
+	}
+
+	return nil, lastErr
+}
+
+// ContainerDelete deletes a container via OpenAI's API.
+func (provider *OpenAIProvider) ContainerDelete(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostContainerDeleteRequest) (*schemas.BifrostContainerDeleteResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
+
+	if request == nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: nil", nil, providerName)
+	}
+	if len(keys) == 0 {
+		if provider.customProviderConfig != nil && provider.customProviderConfig.IsKeyLess {
+			keys = []schemas.Key{{}}
+		} else {
+			return nil, providerUtils.NewBifrostOperationError("no keys supplied", nil, providerName)
+		}
+	}
+	if request.ContainerID == "" {
+		return nil, providerUtils.NewBifrostOperationError("container_id is required", nil, providerName)
+	}
+
+	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ContainerDeleteRequest); err != nil {
+		return nil, err
+	}
+
+	var lastErr *schemas.BifrostError
+	for _, key := range keys {
+		// Create request
+		req := fasthttp.AcquireRequest()
+		resp := fasthttp.AcquireResponse()
+
+		providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+		req.SetRequestURI(provider.buildRequestURL(ctx, "/v1/containers/"+request.ContainerID, schemas.ContainerDeleteRequest))
+		req.Header.SetMethod(http.MethodDelete)
+		req.Header.SetContentType("application/json")
+
+		if key.Value.GetValue() != "" {
+			req.Header.Set("Authorization", "Bearer "+key.Value.GetValue())
+		}
+
+		// Make request
+		latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+		if bifrostErr != nil {
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			lastErr = bifrostErr
+			continue
+		}
+
+		// Handle error response
+		if resp.StatusCode() != fasthttp.StatusOK {
+			lastErr = ParseOpenAIError(resp, schemas.ContainerDeleteRequest, providerName, "")
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+
+		// Parse response
+		responseBody := append([]byte(nil), resp.Body()...)
+
+		var deleteResp struct {
+			ID      string `json:"id"`
+			Object  string `json:"object"`
+			Deleted bool   `json:"deleted"`
+		}
+
+		rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, &deleteResp, nil, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
+		if bifrostErr != nil {
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			lastErr = bifrostErr
+			continue
+		}
+
+		response := &schemas.BifrostContainerDeleteResponse{
+			ID:      deleteResp.ID,
+			Object:  deleteResp.Object,
+			Deleted: deleteResp.Deleted,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				Provider:    providerName,
+				RequestType: schemas.ContainerDeleteRequest,
+				Latency:     latency.Milliseconds(),
+			},
+		}
+
+		if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+			response.ExtraFields.RawRequest = rawRequest
+		}
+		if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
+			response.ExtraFields.RawResponse = rawResponse
+		}
+
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(resp)
+		return response, nil
+	}
+
+	return nil, lastErr
+}

@@ -1523,6 +1523,162 @@ func (bifrost *Bifrost) FileContentRequest(ctx *schemas.BifrostContext, req *sch
 	return response.FileContentResponse, nil
 }
 
+// ContainerCreateRequest creates a new container.
+func (bifrost *Bifrost) ContainerCreateRequest(ctx *schemas.BifrostContext, req *schemas.BifrostContainerCreateRequest) (*schemas.BifrostContainerCreateResponse, *schemas.BifrostError) {
+	if req == nil {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: &schemas.ErrorField{
+				Message: "container create request is nil",
+			},
+		}
+	}
+	if req.Provider == "" {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: &schemas.ErrorField{
+				Message: "provider is required for container create request",
+			},
+		}
+	}
+	if req.Name == "" {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: &schemas.ErrorField{
+				Message: "name is required for container create request",
+			},
+		}
+	}
+	if ctx == nil {
+		ctx = bifrost.ctx
+	}
+
+	bifrostReq := bifrost.getBifrostRequest()
+	bifrostReq.RequestType = schemas.ContainerCreateRequest
+	bifrostReq.ContainerCreateRequest = req
+
+	response, err := bifrost.handleRequest(ctx, bifrostReq)
+	if err != nil {
+		return nil, err
+	}
+	return response.ContainerCreateResponse, nil
+}
+
+// ContainerListRequest lists containers.
+func (bifrost *Bifrost) ContainerListRequest(ctx *schemas.BifrostContext, req *schemas.BifrostContainerListRequest) (*schemas.BifrostContainerListResponse, *schemas.BifrostError) {
+	if req == nil {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: &schemas.ErrorField{
+				Message: "container list request is nil",
+			},
+		}
+	}
+	if req.Provider == "" {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: &schemas.ErrorField{
+				Message: "provider is required for container list request",
+			},
+		}
+	}
+	if ctx == nil {
+		ctx = bifrost.ctx
+	}
+
+	bifrostReq := bifrost.getBifrostRequest()
+	bifrostReq.RequestType = schemas.ContainerListRequest
+	bifrostReq.ContainerListRequest = req
+
+	response, err := bifrost.handleRequest(ctx, bifrostReq)
+	if err != nil {
+		return nil, err
+	}
+	return response.ContainerListResponse, nil
+}
+
+// ContainerRetrieveRequest retrieves a specific container.
+func (bifrost *Bifrost) ContainerRetrieveRequest(ctx *schemas.BifrostContext, req *schemas.BifrostContainerRetrieveRequest) (*schemas.BifrostContainerRetrieveResponse, *schemas.BifrostError) {
+	if req == nil {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: &schemas.ErrorField{
+				Message: "container retrieve request is nil",
+			},
+		}
+	}
+	if req.Provider == "" {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: &schemas.ErrorField{
+				Message: "provider is required for container retrieve request",
+			},
+		}
+	}
+	if req.ContainerID == "" {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: &schemas.ErrorField{
+				Message: "container_id is required for container retrieve request",
+			},
+		}
+	}
+	if ctx == nil {
+		ctx = bifrost.ctx
+	}
+
+	bifrostReq := bifrost.getBifrostRequest()
+	bifrostReq.RequestType = schemas.ContainerRetrieveRequest
+	bifrostReq.ContainerRetrieveRequest = req
+
+	response, err := bifrost.handleRequest(ctx, bifrostReq)
+	if err != nil {
+		return nil, err
+	}
+	return response.ContainerRetrieveResponse, nil
+}
+
+// ContainerDeleteRequest deletes a container.
+func (bifrost *Bifrost) ContainerDeleteRequest(ctx *schemas.BifrostContext, req *schemas.BifrostContainerDeleteRequest) (*schemas.BifrostContainerDeleteResponse, *schemas.BifrostError) {
+	if req == nil {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: &schemas.ErrorField{
+				Message: "container delete request is nil",
+			},
+		}
+	}
+	if req.Provider == "" {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: &schemas.ErrorField{
+				Message: "provider is required for container delete request",
+			},
+		}
+	}
+	if req.ContainerID == "" {
+		return nil, &schemas.BifrostError{
+			IsBifrostError: false,
+			Error: &schemas.ErrorField{
+				Message: "container_id is required for container delete request",
+			},
+		}
+	}
+	if ctx == nil {
+		ctx = bifrost.ctx
+	}
+
+	bifrostReq := bifrost.getBifrostRequest()
+	bifrostReq.RequestType = schemas.ContainerDeleteRequest
+	bifrostReq.ContainerDeleteRequest = req
+
+	response, err := bifrost.handleRequest(ctx, bifrostReq)
+	if err != nil {
+		return nil, err
+	}
+	return response.ContainerDeleteResponse, nil
+}
+
 // RemovePlugin removes a plugin from the server.
 func (bifrost *Bifrost) RemovePlugin(name string) error {
 
@@ -3423,6 +3579,30 @@ func (bifrost *Bifrost) handleProviderRequest(provider schemas.Provider, req *Ch
 			return nil, bifrostError
 		}
 		response.BatchResultsResponse = batchResultsResponse
+	case schemas.ContainerCreateRequest:
+		containerCreateResponse, bifrostError := provider.ContainerCreate(req.Context, key, req.BifrostRequest.ContainerCreateRequest)
+		if bifrostError != nil {
+			return nil, bifrostError
+		}
+		response.ContainerCreateResponse = containerCreateResponse
+	case schemas.ContainerListRequest:
+		containerListResponse, bifrostError := provider.ContainerList(req.Context, keys, req.BifrostRequest.ContainerListRequest)
+		if bifrostError != nil {
+			return nil, bifrostError
+		}
+		response.ContainerListResponse = containerListResponse
+	case schemas.ContainerRetrieveRequest:
+		containerRetrieveResponse, bifrostError := provider.ContainerRetrieve(req.Context, keys, req.BifrostRequest.ContainerRetrieveRequest)
+		if bifrostError != nil {
+			return nil, bifrostError
+		}
+		response.ContainerRetrieveResponse = containerRetrieveResponse
+	case schemas.ContainerDeleteRequest:
+		containerDeleteResponse, bifrostError := provider.ContainerDelete(req.Context, keys, req.BifrostRequest.ContainerDeleteRequest)
+		if bifrostError != nil {
+			return nil, bifrostError
+		}
+		response.ContainerDeleteResponse = containerDeleteResponse
 	default:
 		_, model, _ := req.BifrostRequest.GetRequestFields()
 		return nil, &schemas.BifrostError{
@@ -3779,6 +3959,10 @@ func resetBifrostRequest(req *schemas.BifrostRequest) {
 	req.BatchRetrieveRequest = nil
 	req.BatchCancelRequest = nil
 	req.BatchResultsRequest = nil
+	req.ContainerCreateRequest = nil
+	req.ContainerListRequest = nil
+	req.ContainerRetrieveRequest = nil
+	req.ContainerDeleteRequest = nil
 }
 
 // getBifrostRequest gets a BifrostRequest from the pool

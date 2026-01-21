@@ -61,6 +61,10 @@ type TestScenarios struct {
 	ChatAudio             bool // Chat completion with audio input/output functionality
 	StructuredOutputs     bool // Structured outputs (JSON schema) functionality
 	WebSearchTool         bool // Web search tool functionality
+	ContainerCreate       bool // Container API create functionality
+	ContainerList         bool // Container API list functionality
+	ContainerRetrieve     bool // Container API retrieve functionality
+	ContainerDelete       bool // Container API delete functionality
 }
 
 // ComprehensiveTestConfig extends TestConfig with additional scenarios
@@ -710,8 +714,12 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 			FileList:              true, // OpenAI supports file API
 			FileRetrieve:          true, // OpenAI supports file API
 			FileDelete:            true, // OpenAI supports file API
-			FileContent:           true, // OpenAI supports file API
-			ChatAudio:             true, // OpenAI supports chat audio
+			FileContent:           true,  // OpenAI supports file API
+			ChatAudio:             true,  // OpenAI supports chat audio
+			ContainerCreate:       true,  // OpenAI supports container API
+			ContainerList:         true,  // OpenAI supports container API
+			ContainerRetrieve:     true,  // OpenAI supports container API
+			ContainerDelete:       true,  // OpenAI supports container API
 		},
 		Fallbacks: []schemas.Fallback{
 			{Provider: schemas.Anthropic, Model: "claude-3-7-sonnet-20250219"},

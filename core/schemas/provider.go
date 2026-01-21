@@ -191,6 +191,10 @@ type AllowedRequests struct {
 	FileRetrieve          bool `json:"file_retrieve"`
 	FileDelete            bool `json:"file_delete"`
 	FileContent           bool `json:"file_content"`
+	ContainerCreate       bool `json:"container_create"`
+	ContainerList         bool `json:"container_list"`
+	ContainerRetrieve     bool `json:"container_retrieve"`
+	ContainerDelete       bool `json:"container_delete"`
 }
 
 // IsOperationAllowed checks if a specific operation is allowed
@@ -250,6 +254,14 @@ func (ar *AllowedRequests) IsOperationAllowed(operation RequestType) bool {
 		return ar.FileDelete
 	case FileContentRequest:
 		return ar.FileContent
+	case ContainerCreateRequest:
+		return ar.ContainerCreate
+	case ContainerListRequest:
+		return ar.ContainerList
+	case ContainerRetrieveRequest:
+		return ar.ContainerRetrieve
+	case ContainerDeleteRequest:
+		return ar.ContainerDelete
 	default:
 		return false // Default to not allowed for unknown operations
 	}
@@ -376,4 +388,12 @@ type Provider interface {
 	FileDelete(ctx *BifrostContext, keys []Key, request *BifrostFileDeleteRequest) (*BifrostFileDeleteResponse, *BifrostError)
 	// FileContent downloads file content from the provider
 	FileContent(ctx *BifrostContext, keys []Key, request *BifrostFileContentRequest) (*BifrostFileContentResponse, *BifrostError)
+	// ContainerCreate creates a new container
+	ContainerCreate(ctx *BifrostContext, key Key, request *BifrostContainerCreateRequest) (*BifrostContainerCreateResponse, *BifrostError)
+	// ContainerList lists containers
+	ContainerList(ctx *BifrostContext, keys []Key, request *BifrostContainerListRequest) (*BifrostContainerListResponse, *BifrostError)
+	// ContainerRetrieve retrieves a specific container
+	ContainerRetrieve(ctx *BifrostContext, keys []Key, request *BifrostContainerRetrieveRequest) (*BifrostContainerRetrieveResponse, *BifrostError)
+	// ContainerDelete deletes a container
+	ContainerDelete(ctx *BifrostContext, keys []Key, request *BifrostContainerDeleteRequest) (*BifrostContainerDeleteResponse, *BifrostError)
 }
