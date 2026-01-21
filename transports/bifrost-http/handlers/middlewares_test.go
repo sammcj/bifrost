@@ -828,6 +828,258 @@ func TestFasthttpToHTTPRequest(t *testing.T) {
 	}
 }
 
+// TestCorsMiddleware_DefaultHeaders tests that default CORS headers are set
+func TestCorsMiddleware_DefaultHeaders(t *testing.T) {
+	SetLogger(&mockLogger{})
+
+	config := &lib.Config{
+		ClientConfig: configstore.ClientConfig{
+			AllowedOrigins: []string{"https://example.com"},
+			AllowedHeaders: []string{}, // No custom headers
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.Set("Origin", "https://example.com")
+
+	nextCalled := false
+	next := func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	}
+
+	middleware := CorsMiddleware(config)
+	handler := middleware(next)
+	handler(ctx)
+
+	// Check default headers are set
+	expectedHeaders := "Content-Type, Authorization, X-Requested-With, X-Stainless-Timeout"
+	actualHeaders := string(ctx.Response.Header.Peek("Access-Control-Allow-Headers"))
+	if actualHeaders != expectedHeaders {
+		t.Errorf("Expected Access-Control-Allow-Headers to be %s, got %s", expectedHeaders, actualHeaders)
+	}
+
+	if !nextCalled {
+		t.Error("Next handler was not called")
+	}
+}
+
+// TestCorsMiddleware_CustomHeaders tests that custom allowed headers are appended to defaults
+func TestCorsMiddleware_CustomHeaders(t *testing.T) {
+	SetLogger(&mockLogger{})
+
+	config := &lib.Config{
+		ClientConfig: configstore.ClientConfig{
+			AllowedOrigins: []string{"https://example.com"},
+			AllowedHeaders: []string{"X-Custom-Header", "X-Another-Header"},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.Set("Origin", "https://example.com")
+
+	nextCalled := false
+	next := func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	}
+
+	middleware := CorsMiddleware(config)
+	handler := middleware(next)
+	handler(ctx)
+
+	// Check that custom headers are included along with defaults
+	actualHeaders := string(ctx.Response.Header.Peek("Access-Control-Allow-Headers"))
+	expectedHeaders := []string{
+		"Content-Type",
+		"Authorization",
+		"X-Requested-With",
+		"X-Stainless-Timeout",
+		"X-Custom-Header",
+		"X-Another-Header",
+	}
+
+	for _, header := range expectedHeaders {
+		if !containsHeader(actualHeaders, header) {
+			t.Errorf("Expected Access-Control-Allow-Headers to contain %s, got %s", header, actualHeaders)
+		}
+	}
+
+	if !nextCalled {
+		t.Error("Next handler was not called")
+	}
+}
+
+// TestCorsMiddleware_DuplicateHeaders tests that duplicate headers are not added twice
+func TestCorsMiddleware_DuplicateHeaders(t *testing.T) {
+	SetLogger(&mockLogger{})
+
+	config := &lib.Config{
+		ClientConfig: configstore.ClientConfig{
+			AllowedOrigins: []string{"https://example.com"},
+			// Include a header that's already in defaults
+			AllowedHeaders: []string{"Content-Type", "X-Custom-Header"},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.Set("Origin", "https://example.com")
+
+	nextCalled := false
+	next := func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	}
+
+	middleware := CorsMiddleware(config)
+	handler := middleware(next)
+	handler(ctx)
+
+	// Check headers - Content-Type should not be duplicated
+	actualHeaders := string(ctx.Response.Header.Peek("Access-Control-Allow-Headers"))
+
+	// Count occurrences of "Content-Type"
+	count := countHeaderOccurrences(actualHeaders, "Content-Type")
+	if count != 1 {
+		t.Errorf("Expected Content-Type to appear once, but appeared %d times in: %s", count, actualHeaders)
+	}
+
+	// Custom header should be present
+	if !containsHeader(actualHeaders, "X-Custom-Header") {
+		t.Errorf("Expected Access-Control-Allow-Headers to contain X-Custom-Header, got %s", actualHeaders)
+	}
+
+	if !nextCalled {
+		t.Error("Next handler was not called")
+	}
+}
+
+// TestCorsMiddleware_CustomHeadersWithLocalhost tests custom headers work with localhost origins
+func TestCorsMiddleware_CustomHeadersWithLocalhost(t *testing.T) {
+	SetLogger(&mockLogger{})
+
+	config := &lib.Config{
+		ClientConfig: configstore.ClientConfig{
+			AllowedOrigins: []string{},
+			AllowedHeaders: []string{"X-Development-Header"},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.Set("Origin", "http://localhost:3000")
+
+	nextCalled := false
+	next := func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	}
+
+	middleware := CorsMiddleware(config)
+	handler := middleware(next)
+	handler(ctx)
+
+	// Check that custom header is included for localhost
+	actualHeaders := string(ctx.Response.Header.Peek("Access-Control-Allow-Headers"))
+	if !containsHeader(actualHeaders, "X-Development-Header") {
+		t.Errorf("Expected Access-Control-Allow-Headers to contain X-Development-Header for localhost, got %s", actualHeaders)
+	}
+
+	if !nextCalled {
+		t.Error("Next handler was not called")
+	}
+}
+
+// TestCorsMiddleware_CustomHeadersNotSetForNonAllowedOrigin tests that CORS headers (including custom) are not set for non-allowed origins
+func TestCorsMiddleware_CustomHeadersNotSetForNonAllowedOrigin(t *testing.T) {
+	SetLogger(&mockLogger{})
+
+	config := &lib.Config{
+		ClientConfig: configstore.ClientConfig{
+			AllowedOrigins: []string{"https://allowed.com"},
+			AllowedHeaders: []string{"X-Custom-Header"},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.Set("Origin", "https://malicious.com")
+
+	nextCalled := false
+	next := func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	}
+
+	middleware := CorsMiddleware(config)
+	handler := middleware(next)
+	handler(ctx)
+
+	// Check CORS headers are NOT set (including Allow-Headers)
+	if len(ctx.Response.Header.Peek("Access-Control-Allow-Headers")) != 0 {
+		t.Error("Access-Control-Allow-Headers header should not be set for non-allowed origin")
+	}
+
+	// Check next handler was still called for non-OPTIONS requests
+	if !nextCalled {
+		t.Error("Next handler was not called")
+	}
+}
+
+// Helper function to check if a header is present in the comma-separated list
+func containsHeader(headerList, header string) bool {
+	headers := splitHeaders(headerList)
+	for _, h := range headers {
+		if h == header {
+			return true
+		}
+	}
+	return false
+}
+
+// Helper function to split and trim headers
+func splitHeaders(headerList string) []string {
+	// Simple split by comma and trim spaces
+	var headers []string
+	start := 0
+	for i := 0; i < len(headerList); i++ {
+		if headerList[i] == ',' {
+			header := headerList[start:i]
+			// Trim spaces
+			for len(header) > 0 && header[0] == ' ' {
+				header = header[1:]
+			}
+			for len(header) > 0 && header[len(header)-1] == ' ' {
+				header = header[:len(header)-1]
+			}
+			if header != "" {
+				headers = append(headers, header)
+			}
+			start = i + 1
+		}
+	}
+	// Add last header
+	if start < len(headerList) {
+		header := headerList[start:]
+		// Trim spaces
+		for len(header) > 0 && header[0] == ' ' {
+			header = header[1:]
+		}
+		for len(header) > 0 && header[len(header)-1] == ' ' {
+			header = header[:len(header)-1]
+		}
+		if header != "" {
+			headers = append(headers, header)
+		}
+	}
+	return headers
+}
+
+// Helper function to count occurrences of a header
+func countHeaderOccurrences(headerList, header string) int {
+	headers := splitHeaders(headerList)
+	count := 0
+	for _, h := range headers {
+		if h == header {
+			count++
+		}
+	}
+	return count
+}
+
 // TestFasthttpToHTTPRequest_PathParams tests that path parameters are extracted correctly
 func TestFasthttpToHTTPRequest_PathParams(t *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
