@@ -172,7 +172,11 @@ export type RequestType =
 	| "file_list"
 	| "file_retrieve"
 	| "file_delete"
-	| "file_content";
+	| "file_content"
+	| "container_create"
+	| "container_list"
+	| "container_retrieve"
+	| "container_delete";
 
 // AllowedRequests matching Go's schemas.AllowedRequests
 export interface AllowedRequests {

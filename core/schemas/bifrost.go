@@ -111,6 +111,10 @@ const (
 	FileRetrieveRequest          RequestType = "file_retrieve"
 	FileDeleteRequest            RequestType = "file_delete"
 	FileContentRequest           RequestType = "file_content"
+	ContainerCreateRequest       RequestType = "container_create"
+	ContainerListRequest         RequestType = "container_list"
+	ContainerRetrieveRequest     RequestType = "container_retrieve"
+	ContainerDeleteRequest       RequestType = "container_delete"
 	CountTokensRequest           RequestType = "count_tokens"
 	UnknownRequest               RequestType = "unknown"
 )
@@ -195,11 +199,15 @@ type BifrostRequest struct {
 	FileRetrieveRequest    *BifrostFileRetrieveRequest
 	FileDeleteRequest      *BifrostFileDeleteRequest
 	FileContentRequest     *BifrostFileContentRequest
-	BatchCreateRequest     *BifrostBatchCreateRequest
-	BatchListRequest       *BifrostBatchListRequest
-	BatchRetrieveRequest   *BifrostBatchRetrieveRequest
-	BatchCancelRequest     *BifrostBatchCancelRequest
-	BatchResultsRequest    *BifrostBatchResultsRequest
+	BatchCreateRequest        *BifrostBatchCreateRequest
+	BatchListRequest          *BifrostBatchListRequest
+	BatchRetrieveRequest      *BifrostBatchRetrieveRequest
+	BatchCancelRequest        *BifrostBatchCancelRequest
+	BatchResultsRequest       *BifrostBatchResultsRequest
+	ContainerCreateRequest    *BifrostContainerCreateRequest
+	ContainerListRequest      *BifrostContainerListRequest
+	ContainerRetrieveRequest  *BifrostContainerRetrieveRequest
+	ContainerDeleteRequest    *BifrostContainerDeleteRequest
 }
 
 // GetRequestFields returns the provider, model, and fallbacks from the request.
@@ -271,6 +279,14 @@ func (br *BifrostRequest) GetRequestFields() (provider ModelProvider, model stri
 			return br.BatchResultsRequest.Provider, *br.BatchResultsRequest.Model, nil
 		}
 		return br.BatchResultsRequest.Provider, "", nil
+	case br.ContainerCreateRequest != nil:
+		return br.ContainerCreateRequest.Provider, "", nil
+	case br.ContainerListRequest != nil:
+		return br.ContainerListRequest.Provider, "", nil
+	case br.ContainerRetrieveRequest != nil:
+		return br.ContainerRetrieveRequest.Provider, "", nil
+	case br.ContainerDeleteRequest != nil:
+		return br.ContainerDeleteRequest.Provider, "", nil
 	}
 	return "", "", nil
 }
@@ -385,6 +401,10 @@ type BifrostResponse struct {
 	BatchRetrieveResponse         *BifrostBatchRetrieveResponse
 	BatchCancelResponse           *BifrostBatchCancelResponse
 	BatchResultsResponse          *BifrostBatchResultsResponse
+	ContainerCreateResponse       *BifrostContainerCreateResponse
+	ContainerListResponse         *BifrostContainerListResponse
+	ContainerRetrieveResponse     *BifrostContainerRetrieveResponse
+	ContainerDeleteResponse       *BifrostContainerDeleteResponse
 }
 
 func (r *BifrostResponse) GetExtraFields() *BifrostResponseExtraFields {
@@ -433,6 +453,14 @@ func (r *BifrostResponse) GetExtraFields() *BifrostResponseExtraFields {
 		return &r.BatchCancelResponse.ExtraFields
 	case r.BatchResultsResponse != nil:
 		return &r.BatchResultsResponse.ExtraFields
+	case r.ContainerCreateResponse != nil:
+		return &r.ContainerCreateResponse.ExtraFields
+	case r.ContainerListResponse != nil:
+		return &r.ContainerListResponse.ExtraFields
+	case r.ContainerRetrieveResponse != nil:
+		return &r.ContainerRetrieveResponse.ExtraFields
+	case r.ContainerDeleteResponse != nil:
+		return &r.ContainerDeleteResponse.ExtraFields
 	}
 
 	return &BifrostResponseExtraFields{}

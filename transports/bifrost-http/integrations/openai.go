@@ -1357,12 +1357,242 @@ func parseOpenAIFileUploadMultipartRequest(ctx *fasthttp.RequestCtx, req interfa
 	return nil
 }
 
+// CreateOpenAIContainerRouteConfigs creates route configurations for OpenAI Containers API endpoints.
+func CreateOpenAIContainerRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) []RouteConfig {
+	var routes []RouteConfig
+
+	// Create container endpoint - POST /v1/containers
+	for _, path := range []string{
+		"/v1/containers",
+		"/containers",
+	} {
+		routes = append(routes, RouteConfig{
+			Type:   RouteConfigTypeOpenAI,
+			Path:   pathPrefix + path,
+			Method: "POST",
+			GetRequestTypeInstance: func() interface{} {
+				return &schemas.BifrostContainerCreateRequest{}
+			},
+			ContainerRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerRequest, error) {
+				if createReq, ok := req.(*schemas.BifrostContainerCreateRequest); ok {
+					return &ContainerRequest{
+						Type:          schemas.ContainerCreateRequest,
+						CreateRequest: createReq,
+					}, nil
+				}
+				return nil, errors.New("invalid container create request type")
+			},
+			ContainerCreateResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerCreateResponse) (interface{}, error) {
+				return resp, nil
+			},
+			ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
+				return err
+			},
+			PreCallback: func(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.BifrostContext, req interface{}) error {
+				if createReq, ok := req.(*schemas.BifrostContainerCreateRequest); ok {
+					if createReq.Provider == "" {
+						createReq.Provider = schemas.OpenAI
+					}
+				}
+				return AzureEndpointPreHook(handlerStore)(ctx, bifrostCtx, req)
+			},
+		})
+	}
+
+	// List containers endpoint - GET /v1/containers
+	for _, path := range []string{
+		"/v1/containers",
+		"/containers",
+	} {
+		routes = append(routes, RouteConfig{
+			Type:   RouteConfigTypeOpenAI,
+			Path:   pathPrefix + path,
+			Method: "GET",
+			GetRequestTypeInstance: func() interface{} {
+				return &schemas.BifrostContainerListRequest{}
+			},
+			ContainerRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerRequest, error) {
+				if listReq, ok := req.(*schemas.BifrostContainerListRequest); ok {
+					if listReq.Provider == "" {
+						listReq.Provider = schemas.OpenAI
+					}
+					return &ContainerRequest{
+						Type:        schemas.ContainerListRequest,
+						ListRequest: listReq,
+					}, nil
+				}
+				return nil, errors.New("invalid container list request type")
+			},
+			ContainerListResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerListResponse) (interface{}, error) {
+				return resp, nil
+			},
+			ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
+				return err
+			},
+			PreCallback: extractContainerListQueryParams(handlerStore),
+		})
+	}
+
+	// Retrieve container endpoint - GET /v1/containers/{container_id}
+	for _, path := range []string{
+		"/v1/containers/{container_id}",
+		"/containers/{container_id}",
+	} {
+		routes = append(routes, RouteConfig{
+			Type:   RouteConfigTypeOpenAI,
+			Path:   pathPrefix + path,
+			Method: "GET",
+			GetRequestTypeInstance: func() interface{} {
+				return &schemas.BifrostContainerRetrieveRequest{}
+			},
+			ContainerRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerRequest, error) {
+				if retrieveReq, ok := req.(*schemas.BifrostContainerRetrieveRequest); ok {
+					if retrieveReq.Provider == "" {
+						retrieveReq.Provider = schemas.OpenAI
+					}
+					return &ContainerRequest{
+						Type:            schemas.ContainerRetrieveRequest,
+						RetrieveRequest: retrieveReq,
+					}, nil
+				}
+				return nil, errors.New("invalid container retrieve request type")
+			},
+			ContainerRetrieveResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerRetrieveResponse) (interface{}, error) {
+				return resp, nil
+			},
+			ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
+				return err
+			},
+			PreCallback: extractContainerIDFromPath(handlerStore),
+		})
+	}
+
+	// Delete container endpoint - DELETE /v1/containers/{container_id}
+	for _, path := range []string{
+		"/v1/containers/{container_id}",
+		"/containers/{container_id}",
+	} {
+		routes = append(routes, RouteConfig{
+			Type:   RouteConfigTypeOpenAI,
+			Path:   pathPrefix + path,
+			Method: "DELETE",
+			GetRequestTypeInstance: func() interface{} {
+				return &schemas.BifrostContainerDeleteRequest{}
+			},
+			ContainerRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerRequest, error) {
+				if deleteReq, ok := req.(*schemas.BifrostContainerDeleteRequest); ok {
+					if deleteReq.Provider == "" {
+						deleteReq.Provider = schemas.OpenAI
+					}
+					return &ContainerRequest{
+						Type:          schemas.ContainerDeleteRequest,
+						DeleteRequest: deleteReq,
+					}, nil
+				}
+				return nil, errors.New("invalid container delete request type")
+			},
+			ContainerDeleteResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerDeleteResponse) (interface{}, error) {
+				return resp, nil
+			},
+			ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
+				return err
+			},
+			PreCallback: extractContainerIDFromPath(handlerStore),
+		})
+	}
+
+	return routes
+}
+
+// extractContainerListQueryParams extracts query parameters for container list requests
+func extractContainerListQueryParams(handlerStore lib.HandlerStore) PreRequestCallback {
+	azureHook := AzureEndpointPreHook(handlerStore)
+
+	return func(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.BifrostContext, req interface{}) error {
+		if azureHook != nil {
+			if err := azureHook(ctx, bifrostCtx, req); err != nil {
+				return err
+			}
+		}
+
+		if listReq, ok := req.(*schemas.BifrostContainerListRequest); ok {
+			// Extract provider from query
+			if provider := string(ctx.QueryArgs().Peek("provider")); provider != "" {
+				listReq.Provider = schemas.ModelProvider(provider)
+			}
+			if listReq.Provider == "" {
+				listReq.Provider = schemas.OpenAI
+			}
+
+			// Extract limit
+			if limitStr := string(ctx.QueryArgs().Peek("limit")); limitStr != "" {
+				if limit, err := strconv.Atoi(limitStr); err == nil {
+					listReq.Limit = limit
+				}
+			}
+
+			// Extract after cursor
+			if after := string(ctx.QueryArgs().Peek("after")); after != "" {
+				listReq.After = &after
+			}
+
+			// Extract order
+			if order := string(ctx.QueryArgs().Peek("order")); order != "" {
+				listReq.Order = &order
+			}
+		}
+
+		return nil
+	}
+}
+
+// extractContainerIDFromPath extracts container_id from path parameters and provider from query params
+func extractContainerIDFromPath(handlerStore lib.HandlerStore) PreRequestCallback {
+	azureHook := AzureEndpointPreHook(handlerStore)
+
+	return func(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.BifrostContext, req interface{}) error {
+		if azureHook != nil {
+			if err := azureHook(ctx, bifrostCtx, req); err != nil {
+				return err
+			}
+		}
+
+		containerID := ctx.UserValue("container_id")
+		if containerID == nil {
+			return errors.New("container_id is required")
+		}
+
+		containerIDStr, ok := containerID.(string)
+		if !ok || containerIDStr == "" {
+			return errors.New("container_id must be a non-empty string")
+		}
+
+		// Extract provider from query
+		provider := schemas.ModelProvider(string(ctx.QueryArgs().Peek("provider")))
+		if provider == "" {
+			provider = schemas.OpenAI
+		}
+
+		switch r := req.(type) {
+		case *schemas.BifrostContainerRetrieveRequest:
+			r.ContainerID = containerIDStr
+			r.Provider = provider
+		case *schemas.BifrostContainerDeleteRequest:
+			r.ContainerID = containerIDStr
+			r.Provider = provider
+		}
+
+		return nil
+	}
+}
+
 // NewOpenAIRouter creates a new OpenAIRouter with the given bifrost client.
 func NewOpenAIRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore, logger schemas.Logger) *OpenAIRouter {
 	routes := CreateOpenAIRouteConfigs("/openai", handlerStore)
 	routes = append(routes, CreateOpenAIListModelsRouteConfigs("/openai", handlerStore)...)
 	routes = append(routes, CreateOpenAIBatchRouteConfigs("/openai", handlerStore)...)
 	routes = append(routes, CreateOpenAIFileRouteConfigs("/openai", handlerStore)...)
+	routes = append(routes, CreateOpenAIContainerRouteConfigs("/openai", handlerStore)...)
 
 	return &OpenAIRouter{
 		GenericRouter: NewGenericRouter(client, handlerStore, routes, logger),

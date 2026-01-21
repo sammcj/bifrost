@@ -1,0 +1,133 @@
+containers:
+  post:
+    operationId: createContainer
+    summary: Create a container
+    description: |
+      Creates a new container for storing files and data.
+    tags:
+      - Containers
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../../schemas/inference/containers.yaml#/ContainerCreateRequest'
+    responses:
+      '200':
+        description: Successful response
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/inference/containers.yaml#/ContainerCreateResponse'
+      '400':
+        $ref: '../../openapi.yaml#/components/responses/BadRequest'
+      '500':
+        $ref: '../../openapi.yaml#/components/responses/InternalError'
+  get:
+    operationId: listContainers
+    summary: List containers
+    description: |
+      Lists containers for a provider.
+    tags:
+      - Containers
+    parameters:
+      - name: provider
+        in: query
+        required: true
+        description: Provider to list containers for
+        schema:
+          $ref: '../../schemas/inference/common.yaml#/ModelProvider'
+      - name: limit
+        in: query
+        description: Maximum number of containers to return (1-100, default 20)
+        schema:
+          type: integer
+          minimum: 1
+          limit: 200
+          maximum: 100
+      - name: after
+        in: query
+        description: Cursor for pagination
+        schema:
+          type: string
+      - name: order
+        in: query
+        description: Sort order (asc/desc)
+        schema:
+          type: string
+          enum: [asc, desc]
+    responses:
+      '200':
+        description: Successful response
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/inference/containers.yaml#/ContainerListResponse'
+      '400':
+        $ref: '../../openapi.yaml#/components/responses/BadRequest'
+      '500':
+        $ref: '../../openapi.yaml#/components/responses/InternalError'
+
+containers-by-id:
+  get:
+    operationId: retrieveContainer
+    summary: Retrieve a container
+    description: |
+      Retrieves a specific container by ID.
+    tags:
+      - Containers
+    parameters:
+      - name: container_id
+        in: path
+        required: true
+        description: The ID of the container to retrieve
+        schema:
+          type: string
+      - name: provider
+        in: query
+        required: true
+        description: The provider of the container
+        schema:
+          $ref: '../../schemas/inference/common.yaml#/ModelProvider'
+    responses:
+      '200':
+        description: Successful response
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/inference/containers.yaml#/ContainerRetrieveResponse'
+      '400':
+        $ref: '../../openapi.yaml#/components/responses/BadRequest'
+      '500':
+        $ref: '../../openapi.yaml#/components/responses/InternalError'
+  delete:
+    operationId: deleteContainer
+    summary: Delete a container
+    description: |
+      Deletes a container.
+    tags:
+      - Containers
+    parameters:
+      - name: container_id
+        in: path
+        required: true
+        description: The ID of the container to delete
+        schema:
+          type: string
+      - name: provider
+        in: query
+        required: true
+        description: The provider of the container
+        schema:
+          $ref: '../../schemas/inference/common.yaml#/ModelProvider'
+    responses:
+      '200':
+        description: Successful response
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/inference/containers.yaml#/ContainerDeleteResponse'
+      '400':
+        $ref: '../../openapi.yaml#/components/responses/BadRequest'
+      '500':
+        $ref: '../../openapi.yaml#/components/responses/InternalError'
