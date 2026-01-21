@@ -79,7 +79,7 @@ export default function DashboardPage() {
 	const [loadingModels, setLoadingModels] = useState(true);
 
 	// RTK Query lazy hooks
-	const [triggerHistogram] = useLazyGetLogsHistogramQuery();
+	const [triggerHistogram] = useLazyGetLogsHistogramQuery({});
 	const [triggerTokens] = useLazyGetLogsTokenHistogramQuery();
 	const [triggerCost] = useLazyGetLogsCostHistogramQuery();
 	const [triggerModels] = useLazyGetLogsModelHistogramQuery();
@@ -135,12 +135,12 @@ export default function DashboardPage() {
 
 		const fetchFilters = { filters };
 
-		// Fetch all in parallel
+		// Fetch all in parallel, forcing fresh data (preferCacheValue: false bypasses RTK Query cache)
 		const [histogramResult, tokenResult, costResult, modelResult] = await Promise.all([
-			triggerHistogram(fetchFilters),
-			triggerTokens(fetchFilters),
-			triggerCost(fetchFilters),
-			triggerModels(fetchFilters),
+			triggerHistogram(fetchFilters, false),
+			triggerTokens(fetchFilters, false),
+			triggerCost(fetchFilters, false),
+			triggerModels(fetchFilters, false),
 		]);
 
 		if (histogramResult.data) {

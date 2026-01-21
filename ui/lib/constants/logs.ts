@@ -43,6 +43,17 @@ export const RequestTypes = [
 	"image_generation",
 	"image_generation_stream",
 	"count_tokens",
+	// Container operations
+	"container_create",
+	"container_list",
+	"container_retrieve",
+	"container_delete",
+	// Container file operations
+	"container_file_create",
+	"container_file_list",
+	"container_file_retrieve",
+	"container_file_content",
+	"container_file_delete",
 ] as const;
 
 export const ProviderLabels: Record<ProviderName, string> = {
@@ -112,13 +123,18 @@ export const RequestTypeLabels = {
 	chat_completion_stream: "Chat Stream",
 	responses: "Responses",
 	responses_stream: "Responses Stream",
+
 	embedding: "Embedding",
+
 	speech: "Speech",
 	speech_stream: "Speech Stream",
+
 	transcription: "Transcription",
 	transcription_stream: "Transcription Stream",
+
 	image_generation: "Image Generation",
 	image_generation_stream: "Image Generation Stream",
+
 	count_tokens: "Count Tokens",
 
 	batch_create: "Batch Create",
@@ -132,6 +148,19 @@ export const RequestTypeLabels = {
 	file_retrieve: "File Retrieve",
 	file_delete: "File Delete",
 	file_content: "File Content",
+
+	// Container operations
+	container_create: "Container Create",
+	container_list: "Container List",
+	container_retrieve: "Container Retrieve",
+	container_delete: "Container Delete",
+
+	// Container file operations
+	container_file_create: "Container File Create",
+	container_file_list: "Container File List",
+	container_file_retrieve: "Container File Retrieve",
+	container_file_content: "Container File Content",
+	container_file_delete: "Container File Delete",
 } as const;
 
 export const RequestTypeColors = {
@@ -150,18 +179,38 @@ export const RequestTypeColors = {
 	// Request Types
 	text_completion: "bg-green-100 text-green-800",
 	text_completion_stream: "bg-amber-100 text-amber-800",
+
 	chat_completion: "bg-blue-100 text-blue-800",
 	chat_completion_stream: "bg-yellow-100 text-yellow-800",
+
 	responses: "bg-teal-100 text-teal-800",
 	responses_stream: "bg-violet-100 text-violet-800",
+
 	embedding: "bg-red-100 text-red-800",
+
 	speech: "bg-purple-100 text-purple-800",
 	speech_stream: "bg-pink-100 text-pink-800",
+
 	transcription: "bg-orange-100 text-orange-800",
 	transcription_stream: "bg-lime-100 text-lime-800",
+
 	image_generation: "bg-indigo-100 text-indigo-800",
 	image_generation_stream: "bg-sky-100 text-sky-800",
+
 	count_tokens: "bg-cyan-100 text-cyan-800",
+
+	// Container operations
+	container_create: "bg-emerald-100 text-emerald-800",
+	container_list: "bg-teal-100 text-teal-800",
+	container_retrieve: "bg-cyan-100 text-cyan-800",
+	container_delete: "bg-rose-100 text-rose-800",
+
+	// Container file operations
+	container_file_create: "bg-emerald-100 text-emerald-800",
+	container_file_list: "bg-teal-100 text-teal-800",
+	container_file_retrieve: "bg-cyan-100 text-cyan-800",
+	container_file_content: "bg-sky-100 text-sky-800",
+	container_file_delete: "bg-rose-100 text-rose-800",
 
 	batch_create: "bg-green-100 text-green-800",
 	batch_list: "bg-blue-100 text-blue-800",

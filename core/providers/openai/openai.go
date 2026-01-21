@@ -4099,6 +4099,7 @@ func (provider *OpenAIProvider) ContainerCreate(ctx *schemas.BifrostContext, key
 }
 
 // ContainerList lists containers via OpenAI's API.
+// Uses SerialListHelper for multi-key pagination - exhausts all pages from one key before moving to next.
 func (provider *OpenAIProvider) ContainerList(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostContainerListRequest) (*schemas.BifrostContainerListResponse, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
 
@@ -4109,7 +4110,7 @@ func (provider *OpenAIProvider) ContainerList(ctx *schemas.BifrostContext, keys 
 		if provider.customProviderConfig != nil && provider.customProviderConfig.IsKeyLess {
 			keys = []schemas.Key{{}}
 		} else {
-			return nil, providerUtils.NewBifrostOperationError("no keys supplied", nil, providerName)
+			return nil, providerUtils.NewBifrostOperationError("provider config not found", nil, providerName)
 		}
 	}
 
@@ -4117,101 +4118,126 @@ func (provider *OpenAIProvider) ContainerList(ctx *schemas.BifrostContext, keys 
 		return nil, err
 	}
 
-	var lastErr *schemas.BifrostError
-	for _, key := range keys {
-		// Build query string
-		queryParams := url.Values{}
-		if request.Limit > 0 {
-			queryParams.Set("limit", fmt.Sprintf("%d", request.Limit))
-		}
-		if request.After != nil {
-			queryParams.Set("after", *request.After)
-		}
-		if request.Order != nil {
-			queryParams.Set("order", *request.Order)
-		}
+	sendBackRawRequest := providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest)
+	sendBackRawResponse := providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse)
 
-		requestURL := provider.buildRequestURL(ctx, "/v1/containers", schemas.ContainerListRequest)
-		if len(queryParams) > 0 {
-			requestURL += "?" + queryParams.Encode()
-		}
+	// Initialize serial pagination helper for multi-key support
+	helper, err := providerUtils.NewSerialListHelper(keys, request.After, provider.logger)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid pagination cursor", err, providerName)
+	}
 
-		// Create request
-		req := fasthttp.AcquireRequest()
-		resp := fasthttp.AcquireResponse()
-
-		providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
-
-		req.SetRequestURI(requestURL)
-		req.Header.SetMethod(http.MethodGet)
-		req.Header.SetContentType("application/json")
-
-		if key.Value.GetValue() != "" {
-			req.Header.Set("Authorization", "Bearer "+key.Value.GetValue())
-		}
-
-		// Make request
-		latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
-		if bifrostErr != nil {
-			fasthttp.ReleaseRequest(req)
-			fasthttp.ReleaseResponse(resp)
-			lastErr = bifrostErr
-			continue
-		}
-
-		// Handle error response
-		if resp.StatusCode() != fasthttp.StatusOK {
-			lastErr = ParseOpenAIError(resp, schemas.ContainerListRequest, providerName, "")
-			fasthttp.ReleaseRequest(req)
-			fasthttp.ReleaseResponse(resp)
-			continue
-		}
-
-		// Parse response
-		responseBody := append([]byte(nil), resp.Body()...)
-
-		var listResp struct {
-			Object  string                    `json:"object"`
-			Data    []schemas.ContainerObject `json:"data"`
-			FirstID *string                   `json:"first_id"`
-			LastID  *string                   `json:"last_id"`
-			HasMore bool                      `json:"has_more"`
-		}
-
-		rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, &listResp, nil, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
-		if bifrostErr != nil {
-			fasthttp.ReleaseRequest(req)
-			fasthttp.ReleaseResponse(resp)
-			lastErr = bifrostErr
-			continue
-		}
-
-		response := &schemas.BifrostContainerListResponse{
-			Object:  listResp.Object,
-			Data:    listResp.Data,
-			FirstID: listResp.FirstID,
-			LastID:  listResp.LastID,
-			HasMore: listResp.HasMore,
+	// Get current key to query
+	key, nativeCursor, ok := helper.GetCurrentKey()
+	if !ok {
+		// All keys exhausted
+		return &schemas.BifrostContainerListResponse{
+			Object:  "list",
+			Data:    []schemas.ContainerObject{},
+			HasMore: false,
 			ExtraFields: schemas.BifrostResponseExtraFields{
 				Provider:    providerName,
 				RequestType: schemas.ContainerListRequest,
-				Latency:     latency.Milliseconds(),
 			},
-		}
-
-		if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
-			response.ExtraFields.RawRequest = rawRequest
-		}
-		if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
-			response.ExtraFields.RawResponse = rawResponse
-		}
-
-		fasthttp.ReleaseRequest(req)
-		fasthttp.ReleaseResponse(resp)
-		return response, nil
+		}, nil
 	}
 
-	return nil, lastErr
+	// Build query string
+	queryParams := url.Values{}
+	if request.Limit > 0 {
+		queryParams.Set("limit", fmt.Sprintf("%d", request.Limit))
+	}
+	// Use native cursor from helper instead of request.After
+	if nativeCursor != "" {
+		queryParams.Set("after", nativeCursor)
+	}
+	if request.Order != nil {
+		queryParams.Set("order", *request.Order)
+	}
+
+	requestURL := provider.buildRequestURL(ctx, "/v1/containers", schemas.ContainerListRequest)
+	if len(queryParams) > 0 {
+		requestURL += "?" + queryParams.Encode()
+	}
+
+	// Create request
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+	req.SetRequestURI(requestURL)
+	req.Header.SetMethod(http.MethodGet)
+	req.Header.SetContentType("application/json")
+
+	if key.Value.GetValue() != "" {
+		req.Header.Set("Authorization", "Bearer "+key.Value.GetValue())
+	}
+
+	// Make request
+	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	// Handle error response
+	if resp.StatusCode() != fasthttp.StatusOK {
+		return nil, ParseOpenAIError(resp, schemas.ContainerListRequest, providerName, "")
+	}
+
+	// Parse response
+	responseBody := append([]byte(nil), resp.Body()...)
+
+	var listResp struct {
+		Object  string                    `json:"object"`
+		Data    []schemas.ContainerObject `json:"data"`
+		FirstID *string                   `json:"first_id"`
+		LastID  *string                   `json:"last_id"`
+		HasMore bool                      `json:"has_more"`
+	}
+
+	rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, &listResp, nil, sendBackRawRequest, sendBackRawResponse)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	// Track last container ID for pagination cursor
+	var lastContainerID string
+	for _, container := range listResp.Data {
+		lastContainerID = container.ID
+	}
+
+	// Build cursor for next request (handles cross-key pagination)
+	nextCursor, hasMore := helper.BuildNextCursor(listResp.HasMore, lastContainerID)
+
+	response := &schemas.BifrostContainerListResponse{
+		Object:  listResp.Object,
+		Data:    listResp.Data,
+		FirstID: listResp.FirstID,
+		LastID:  listResp.LastID,
+		HasMore: hasMore,
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			Provider:    providerName,
+			RequestType: schemas.ContainerListRequest,
+			Latency:     latency.Milliseconds(),
+		},
+	}
+
+	// Set encoded cursor for next page
+	if nextCursor != "" {
+		response.After = &nextCursor
+	}
+
+	if sendBackRawRequest {
+		response.ExtraFields.RawRequest = rawRequest
+	}
+	if sendBackRawResponse {
+		response.ExtraFields.RawResponse = rawResponse
+	}
+
+	return response, nil
 }
 
 // ContainerRetrieve retrieves a specific container via OpenAI's API.
@@ -4225,7 +4251,7 @@ func (provider *OpenAIProvider) ContainerRetrieve(ctx *schemas.BifrostContext, k
 		if provider.customProviderConfig != nil && provider.customProviderConfig.IsKeyLess {
 			keys = []schemas.Key{{}}
 		} else {
-			return nil, providerUtils.NewBifrostOperationError("no keys supplied", nil, providerName)
+			return nil, providerUtils.NewBifrostOperationError("provider config not found", nil, providerName)
 		}
 	}
 	if request.ContainerID == "" {
@@ -4335,7 +4361,7 @@ func (provider *OpenAIProvider) ContainerDelete(ctx *schemas.BifrostContext, key
 		if provider.customProviderConfig != nil && provider.customProviderConfig.IsKeyLess {
 			keys = []schemas.Key{{}}
 		} else {
-			return nil, providerUtils.NewBifrostOperationError("no keys supplied", nil, providerName)
+			return nil, providerUtils.NewBifrostOperationError("provider config not found", nil, providerName)
 		}
 	}
 	if request.ContainerID == "" {
@@ -4417,6 +4443,602 @@ func (provider *OpenAIProvider) ContainerDelete(ctx *schemas.BifrostContext, key
 		fasthttp.ReleaseRequest(req)
 		fasthttp.ReleaseResponse(resp)
 		return response, nil
+	}
+
+	return nil, lastErr
+}
+
+// =============================================================================
+// CONTAINER FILES API
+// =============================================================================
+
+// ContainerFileCreate creates a file in a container via OpenAI's API.
+func (provider *OpenAIProvider) ContainerFileCreate(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostContainerFileCreateRequest) (*schemas.BifrostContainerFileCreateResponse, *schemas.BifrostError) {
+	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ContainerFileCreateRequest); err != nil {
+		return nil, err
+	}
+
+	providerName := provider.GetProviderKey()
+
+	if request == nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: nil", nil, providerName)
+	}
+
+	if request.ContainerID == "" {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: container_id is required", nil, providerName)
+	}
+
+	// Create request
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+	endpoint := fmt.Sprintf("/v1/containers/%s/files", request.ContainerID)
+	req.SetRequestURI(provider.buildRequestURL(ctx, endpoint, schemas.ContainerFileCreateRequest))
+	req.Header.SetMethod(http.MethodPost)
+
+	// Handle file upload (multipart only)
+	if len(request.File) == 0 {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: file is required", nil, providerName)
+	}
+
+	// Multipart file upload
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	// Add file
+	part, err := writer.CreateFormFile("file", "file")
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError("failed to create multipart form", err, providerName)
+	}
+	if _, err = part.Write(request.File); err != nil {
+		return nil, providerUtils.NewBifrostOperationError("failed to write file to multipart form", err, providerName)
+	}
+	if err := writer.Close(); err != nil {
+		return nil, providerUtils.NewBifrostOperationError("failed to close multipart form", err, providerName)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.SetBody(body.Bytes())
+
+	if key.Value.GetValue() != "" {
+		req.Header.Set("Authorization", "Bearer "+key.Value.GetValue())
+	}
+
+	// Make request
+	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	// Handle error response
+	if resp.StatusCode() >= 400 {
+		return nil, ParseOpenAIError(resp, schemas.ContainerFileCreateRequest, providerName, "")
+	}
+
+	// Decode response body (handles content-encoding like gzip)
+	responseBody, err := providerUtils.CheckAndDecodeBody(resp)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
+	}
+	sendBackRawRequest := providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest)
+	sendBackRawResponse := providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse)
+
+	var fileResp struct {
+		ID          string `json:"id"`
+		Object      string `json:"object"`
+		Bytes       int64  `json:"bytes"`
+		CreatedAt   int64  `json:"created_at"`
+		ContainerID string `json:"container_id"`
+		Path        string `json:"path"`
+		Source      string `json:"source"`
+	}
+
+	_, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, &fileResp, nil, false, sendBackRawResponse)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	containerFileCreateResponse := &schemas.BifrostContainerFileCreateResponse{
+		ID:          fileResp.ID,
+		Object:      fileResp.Object,
+		Bytes:       fileResp.Bytes,
+		CreatedAt:   fileResp.CreatedAt,
+		ContainerID: fileResp.ContainerID,
+		Path:        fileResp.Path,
+		Source:      fileResp.Source,
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			Provider:    providerName,
+			RequestType: schemas.ContainerFileCreateRequest,
+			Latency:     latency.Milliseconds(),
+		},
+	}
+
+	// We don't capture payload for security reasons
+	if sendBackRawRequest {
+		containerFileCreateResponse.ExtraFields.RawRequest = "<REDACTED>"
+	}
+	if sendBackRawResponse {
+		containerFileCreateResponse.ExtraFields.RawResponse = rawResponse
+	}
+
+	return containerFileCreateResponse, nil
+}
+
+// ContainerFileList lists files in a container via OpenAI's API.
+// Uses SerialListHelper for multi-key pagination - exhausts all pages from one key before moving to next.
+func (provider *OpenAIProvider) ContainerFileList(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostContainerFileListRequest) (*schemas.BifrostContainerFileListResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
+
+	if request == nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: nil", nil, providerName)
+	}
+
+	if request.ContainerID == "" {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: container_id is required", nil, providerName)
+	}
+
+	if len(keys) == 0 {
+		if provider.customProviderConfig != nil && provider.customProviderConfig.IsKeyLess {
+			keys = []schemas.Key{{}}
+		} else {
+			return nil, providerUtils.NewBifrostOperationError("no keys provided", nil, providerName)
+		}
+	}
+
+	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ContainerFileListRequest); err != nil {
+		return nil, err
+	}
+
+	sendBackRawRequest := providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest)
+	sendBackRawResponse := providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse)
+
+	// Initialize serial pagination helper for multi-key support
+	helper, err := providerUtils.NewSerialListHelper(keys, request.After, provider.logger)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid pagination cursor", err, providerName)
+	}
+
+	// Get current key to query
+	key, nativeCursor, ok := helper.GetCurrentKey()
+	if !ok {
+		// All keys exhausted
+		return &schemas.BifrostContainerFileListResponse{
+			Object:  "list",
+			Data:    []schemas.ContainerFileObject{},
+			HasMore: false,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				Provider:    providerName,
+				RequestType: schemas.ContainerFileListRequest,
+			},
+		}, nil
+	}
+
+	// Build URL with query parameters
+	endpoint := fmt.Sprintf("/v1/containers/%s/files", request.ContainerID)
+	requestURL := provider.buildRequestURL(ctx, endpoint, schemas.ContainerFileListRequest)
+
+	// Add query parameters
+	queryParams := url.Values{}
+	if request.Limit > 0 {
+		queryParams.Set("limit", fmt.Sprintf("%d", request.Limit))
+	}
+	// Use native cursor from helper instead of request.After
+	if nativeCursor != "" {
+		queryParams.Set("after", nativeCursor)
+	}
+	if request.Order != nil {
+		queryParams.Set("order", *request.Order)
+	}
+	if len(queryParams) > 0 {
+		requestURL = requestURL + "?" + queryParams.Encode()
+	}
+
+	// Create request
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+	req.SetRequestURI(requestURL)
+	req.Header.SetMethod(http.MethodGet)
+
+	if key.Value.GetValue() != "" {
+		req.Header.Set("Authorization", "Bearer "+key.Value.GetValue())
+	}
+
+	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	if resp.StatusCode() >= 400 {
+		return nil, ParseOpenAIError(resp, schemas.ContainerFileListRequest, providerName, "")
+	}
+
+	// Decode response body (handles content-encoding like gzip)
+	responseBody, err := providerUtils.CheckAndDecodeBody(resp)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
+	}
+
+	var listResp struct {
+		Object  string                        `json:"object"`
+		Data    []schemas.ContainerFileObject `json:"data"`
+		FirstID *string                       `json:"first_id"`
+		LastID  *string                       `json:"last_id"`
+		HasMore bool                          `json:"has_more"`
+	}
+
+	rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, &listResp, nil, sendBackRawRequest, sendBackRawResponse)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	// Track last file ID for pagination cursor
+	var lastFileID string
+	for _, file := range listResp.Data {
+		lastFileID = file.ID
+	}
+
+	// Build cursor for next request (handles cross-key pagination)
+	nextCursor, hasMore := helper.BuildNextCursor(listResp.HasMore, lastFileID)
+
+	containerFileListResponse := &schemas.BifrostContainerFileListResponse{
+		Object:  listResp.Object,
+		Data:    listResp.Data,
+		FirstID: listResp.FirstID,
+		LastID:  listResp.LastID,
+		HasMore: hasMore,
+		ExtraFields: schemas.BifrostResponseExtraFields{
+			Provider:    providerName,
+			RequestType: schemas.ContainerFileListRequest,
+			Latency:     latency.Milliseconds(),
+		},
+	}
+
+	// Set encoded cursor for next page
+	if nextCursor != "" {
+		containerFileListResponse.After = &nextCursor
+	}
+
+	if sendBackRawRequest {
+		containerFileListResponse.ExtraFields.RawRequest = rawRequest
+	}
+	if sendBackRawResponse {
+		containerFileListResponse.ExtraFields.RawResponse = rawResponse
+	}
+
+	return containerFileListResponse, nil
+}
+
+// ContainerFileRetrieve retrieves a file from a container via OpenAI's API.
+func (provider *OpenAIProvider) ContainerFileRetrieve(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostContainerFileRetrieveRequest) (*schemas.BifrostContainerFileRetrieveResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
+
+	if len(keys) == 0 {
+		if provider.customProviderConfig != nil && provider.customProviderConfig.IsKeyLess {
+			keys = []schemas.Key{{}}
+		} else {
+			return nil, providerUtils.NewBifrostOperationError("no keys provided", nil, providerName)
+		}
+	}
+
+	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ContainerFileRetrieveRequest); err != nil {
+		return nil, err
+	}
+
+	if request == nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: nil", nil, providerName)
+	}
+
+	if request.ContainerID == "" {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: container_id is required", nil, providerName)
+	}
+
+	if request.FileID == "" {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: file_id is required", nil, providerName)
+	}
+
+	var lastErr *schemas.BifrostError
+	for _, key := range keys {
+		req := fasthttp.AcquireRequest()
+		resp := fasthttp.AcquireResponse()
+
+		providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+		endpoint := fmt.Sprintf("/v1/containers/%s/files/%s", request.ContainerID, request.FileID)
+		req.SetRequestURI(provider.buildRequestURL(ctx, endpoint, schemas.ContainerFileRetrieveRequest))
+		req.Header.SetMethod(http.MethodGet)
+
+		if key.Value.GetValue() != "" {
+			req.Header.Set("Authorization", "Bearer "+key.Value.GetValue())
+		}
+
+		latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+		if bifrostErr != nil {
+			lastErr = bifrostErr
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+
+		if resp.StatusCode() >= 400 {
+			lastErr = ParseOpenAIError(resp, schemas.ContainerFileRetrieveRequest, providerName, "")
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+
+		// Decode response body (handles content-encoding like gzip)
+		responseBody, err := providerUtils.CheckAndDecodeBody(resp)
+		if err != nil {
+			lastErr = providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+		sendBackRawRequest := providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest)
+		sendBackRawResponse := providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse)
+
+		var fileResp struct {
+			ID          string `json:"id"`
+			Object      string `json:"object"`
+			Bytes       int64  `json:"bytes"`
+			CreatedAt   int64  `json:"created_at"`
+			ContainerID string `json:"container_id"`
+			Path        string `json:"path"`
+			Source      string `json:"source"`
+		}
+
+		rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, &fileResp, nil, sendBackRawRequest, sendBackRawResponse)
+		if bifrostErr != nil {
+			lastErr = bifrostErr
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+
+		containerFileRetrieveResponse := &schemas.BifrostContainerFileRetrieveResponse{
+			ID:          fileResp.ID,
+			Object:      fileResp.Object,
+			Bytes:       fileResp.Bytes,
+			CreatedAt:   fileResp.CreatedAt,
+			ContainerID: fileResp.ContainerID,
+			Path:        fileResp.Path,
+			Source:      fileResp.Source,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				Provider:    providerName,
+				RequestType: schemas.ContainerFileRetrieveRequest,
+				Latency:     latency.Milliseconds(),
+			},
+		}
+
+		if sendBackRawRequest {
+			containerFileRetrieveResponse.ExtraFields.RawRequest = rawRequest
+		}
+		if sendBackRawResponse {
+			containerFileRetrieveResponse.ExtraFields.RawResponse = rawResponse
+		}
+
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(resp)
+		return containerFileRetrieveResponse, nil
+	}
+
+	return nil, lastErr
+}
+
+// ContainerFileContent retrieves the content of a file from a container via OpenAI's API.
+func (provider *OpenAIProvider) ContainerFileContent(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostContainerFileContentRequest) (*schemas.BifrostContainerFileContentResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
+
+	if len(keys) == 0 {
+		if provider.customProviderConfig != nil && provider.customProviderConfig.IsKeyLess {
+			keys = []schemas.Key{{}}
+		} else {
+			return nil, providerUtils.NewBifrostOperationError("no keys provided", nil, providerName)
+		}
+	}
+
+	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ContainerFileContentRequest); err != nil {
+		return nil, err
+	}
+
+	if request == nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: nil", nil, providerName)
+	}
+
+	if request.ContainerID == "" {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: container_id is required", nil, providerName)
+	}
+
+	if request.FileID == "" {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: file_id is required", nil, providerName)
+	}
+
+	var lastErr *schemas.BifrostError
+	for _, key := range keys {
+		req := fasthttp.AcquireRequest()
+		resp := fasthttp.AcquireResponse()
+
+		providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+		endpoint := fmt.Sprintf("/v1/containers/%s/files/%s/content", request.ContainerID, request.FileID)
+		req.SetRequestURI(provider.buildRequestURL(ctx, endpoint, schemas.ContainerFileContentRequest))
+		req.Header.SetMethod(http.MethodGet)
+
+		if key.Value.GetValue() != "" {
+			req.Header.Set("Authorization", "Bearer "+key.Value.GetValue())
+		}
+
+		latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+		if bifrostErr != nil {
+			lastErr = bifrostErr
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+
+		if resp.StatusCode() >= 400 {
+			lastErr = ParseOpenAIError(resp, schemas.ContainerFileContentRequest, providerName, "")
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+
+		// Get content type from response header
+		contentType := string(resp.Header.ContentType())
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+
+		// Decode response body (handles content-encoding like gzip)
+		body, err := providerUtils.CheckAndDecodeBody(resp)
+		if err != nil {
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			lastErr = providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
+			continue
+		}
+		content := append([]byte(nil), body...)
+
+		containerFileContentResponse := &schemas.BifrostContainerFileContentResponse{
+			Content:     content,
+			ContentType: contentType,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				Provider:    providerName,
+				RequestType: schemas.ContainerFileContentRequest,
+				Latency:     latency.Milliseconds(),
+			},
+		}
+
+		if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+			containerFileContentResponse.ExtraFields.RawRequest = map[string]string{
+				"container_id": request.ContainerID,
+				"file_id":      request.FileID,
+			}
+		}
+		if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
+			containerFileContentResponse.ExtraFields.RawResponse = "<REDACTED>"
+		}
+
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(resp)
+		return containerFileContentResponse, nil
+	}
+
+	return nil, lastErr
+}
+
+// ContainerFileDelete deletes a file from a container via OpenAI's API.
+func (provider *OpenAIProvider) ContainerFileDelete(ctx *schemas.BifrostContext, keys []schemas.Key, request *schemas.BifrostContainerFileDeleteRequest) (*schemas.BifrostContainerFileDeleteResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
+
+	if len(keys) == 0 {
+		if provider.customProviderConfig != nil && provider.customProviderConfig.IsKeyLess {
+			keys = []schemas.Key{{}}
+		} else {
+			return nil, providerUtils.NewBifrostOperationError("no keys provided", nil, providerName)
+		}
+	}
+
+	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ContainerFileDeleteRequest); err != nil {
+		return nil, err
+	}
+
+	if request == nil {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: nil", nil, providerName)
+	}
+
+	if request.ContainerID == "" {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: container_id is required", nil, providerName)
+	}
+
+	if request.FileID == "" {
+		return nil, providerUtils.NewBifrostOperationError("invalid request: file_id is required", nil, providerName)
+	}
+
+	var lastErr *schemas.BifrostError
+	for _, key := range keys {
+		req := fasthttp.AcquireRequest()
+		resp := fasthttp.AcquireResponse()
+
+		providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+		endpoint := fmt.Sprintf("/v1/containers/%s/files/%s", request.ContainerID, request.FileID)
+		req.SetRequestURI(provider.buildRequestURL(ctx, endpoint, schemas.ContainerFileDeleteRequest))
+		req.Header.SetMethod(http.MethodDelete)
+
+		if key.Value.GetValue() != "" {
+			req.Header.Set("Authorization", "Bearer "+key.Value.GetValue())
+		}
+
+		latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+		if bifrostErr != nil {
+			lastErr = bifrostErr
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+
+		if resp.StatusCode() >= 400 {
+			lastErr = ParseOpenAIError(resp, schemas.ContainerFileDeleteRequest, providerName, "")
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+
+		// Decode response body (handles content-encoding like gzip)
+		responseBody, err := providerUtils.CheckAndDecodeBody(resp)
+		if err != nil {
+			lastErr = providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName)
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+		sendBackRawRequest := providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest)
+		sendBackRawResponse := providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse)
+
+		var deleteResp struct {
+			ID      string `json:"id"`
+			Object  string `json:"object"`
+			Deleted bool   `json:"deleted"`
+		}
+
+		rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(responseBody, &deleteResp, nil, sendBackRawRequest, sendBackRawResponse)
+		if bifrostErr != nil {
+			lastErr = bifrostErr
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
+			continue
+		}
+
+		containerFileDeleteResponse := &schemas.BifrostContainerFileDeleteResponse{
+			ID:      deleteResp.ID,
+			Object:  deleteResp.Object,
+			Deleted: deleteResp.Deleted,
+			ExtraFields: schemas.BifrostResponseExtraFields{
+				Provider:    providerName,
+				RequestType: schemas.ContainerFileDeleteRequest,
+				Latency:     latency.Milliseconds(),
+			},
+		}
+
+		if sendBackRawRequest {
+			containerFileDeleteResponse.ExtraFields.RawRequest = rawRequest
+		}
+		if sendBackRawResponse {
+			containerFileDeleteResponse.ExtraFields.RawResponse = rawResponse
+		}
+
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(resp)
+		return containerFileDeleteResponse, nil
 	}
 
 	return nil, lastErr

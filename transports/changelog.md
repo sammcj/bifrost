@@ -1,4 +1,7 @@
 - fix: allow setting authorization header through extra headers and in allow list and deny list
+- feat: add volume graph for logging page
+- feat: add new dashboard page for graphical representation of request volume, cost usage, token usage, and model usage
+- feat: add container and container file support for OpenAI
 - feat: configure custom CORS headers, allowing clients to specify additional headers that should be allowed in cross-origin requests.
 - feat: support for listing models from specific provider or all providers via a header flag x-bf-list-models-provider from integrations.
 - feat: added context aware default provider fallback in integrations

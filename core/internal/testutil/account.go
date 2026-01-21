@@ -65,6 +65,11 @@ type TestScenarios struct {
 	ContainerList         bool // Container API list functionality
 	ContainerRetrieve     bool // Container API retrieve functionality
 	ContainerDelete       bool // Container API delete functionality
+	ContainerFileCreate   bool // Container File API create functionality
+	ContainerFileList     bool // Container File API list functionality
+	ContainerFileRetrieve bool // Container File API retrieve functionality
+	ContainerFileContent  bool // Container File API content functionality
+	ContainerFileDelete   bool // Container File API delete functionality
 }
 
 // ComprehensiveTestConfig extends TestConfig with additional scenarios
@@ -720,6 +725,11 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 			ContainerList:         true,  // OpenAI supports container API
 			ContainerRetrieve:     true,  // OpenAI supports container API
 			ContainerDelete:       true,  // OpenAI supports container API
+			ContainerFileCreate:   true,  // OpenAI supports container file API
+			ContainerFileList:     true,  // OpenAI supports container file API
+			ContainerFileRetrieve: true,  // OpenAI supports container file API
+			ContainerFileContent:  true,  // OpenAI supports container file API
+			ContainerFileDelete:   true,  // OpenAI supports container file API
 		},
 		Fallbacks: []schemas.Fallback{
 			{Provider: schemas.Anthropic, Model: "claude-3-7-sonnet-20250219"},
