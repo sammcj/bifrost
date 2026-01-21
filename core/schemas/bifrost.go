@@ -115,6 +115,11 @@ const (
 	ContainerListRequest         RequestType = "container_list"
 	ContainerRetrieveRequest     RequestType = "container_retrieve"
 	ContainerDeleteRequest       RequestType = "container_delete"
+	ContainerFileCreateRequest   RequestType = "container_file_create"
+	ContainerFileListRequest     RequestType = "container_file_list"
+	ContainerFileRetrieveRequest RequestType = "container_file_retrieve"
+	ContainerFileContentRequest  RequestType = "container_file_content"
+	ContainerFileDeleteRequest   RequestType = "container_file_delete"
 	CountTokensRequest           RequestType = "count_tokens"
 	UnknownRequest               RequestType = "unknown"
 )
@@ -158,6 +163,7 @@ const (
 	BifrostContextKeyGovernancePluginName                BifrostContextKey = "governance-plugin-name"                           // string (name of the governance plugin that processed the request - set by bifrost)
 	BifrostContextKeyIsEnterprise                        BifrostContextKey = "is-enterprise"                                    // bool (set by bifrost - DO NOT SET THIS MANUALLY))
 	BifrostContextKeyAvailableProviders                  BifrostContextKey = "available-providers"                              // []ModelProvider (set by bifrost - DO NOT SET THIS MANUALLY))
+	BifrostContextKeyRawRequestResponseForLogging        BifrostContextKey = "bifrost-raw-request-response-for-logging"         // bool (set by bifrost - DO NOT SET THIS MANUALLY))
 )
 
 // NOTE: for custom plugin implementation dealing with streaming short circuit,
@@ -186,29 +192,34 @@ type Fallback struct {
 type BifrostRequest struct {
 	RequestType RequestType
 
-	ListModelsRequest      *BifrostListModelsRequest
-	TextCompletionRequest  *BifrostTextCompletionRequest
-	ChatRequest            *BifrostChatRequest
-	ResponsesRequest       *BifrostResponsesRequest
-	CountTokensRequest     *BifrostResponsesRequest
-	EmbeddingRequest       *BifrostEmbeddingRequest
-	SpeechRequest          *BifrostSpeechRequest
-	TranscriptionRequest   *BifrostTranscriptionRequest
-	ImageGenerationRequest *BifrostImageGenerationRequest
-	FileUploadRequest      *BifrostFileUploadRequest
-	FileListRequest        *BifrostFileListRequest
-	FileRetrieveRequest    *BifrostFileRetrieveRequest
-	FileDeleteRequest      *BifrostFileDeleteRequest
-	FileContentRequest     *BifrostFileContentRequest
-	BatchCreateRequest        *BifrostBatchCreateRequest
-	BatchListRequest          *BifrostBatchListRequest
-	BatchRetrieveRequest      *BifrostBatchRetrieveRequest
-	BatchCancelRequest        *BifrostBatchCancelRequest
-	BatchResultsRequest       *BifrostBatchResultsRequest
-	ContainerCreateRequest    *BifrostContainerCreateRequest
-	ContainerListRequest      *BifrostContainerListRequest
-	ContainerRetrieveRequest  *BifrostContainerRetrieveRequest
-	ContainerDeleteRequest    *BifrostContainerDeleteRequest
+	ListModelsRequest            *BifrostListModelsRequest
+	TextCompletionRequest        *BifrostTextCompletionRequest
+	ChatRequest                  *BifrostChatRequest
+	ResponsesRequest             *BifrostResponsesRequest
+	CountTokensRequest           *BifrostResponsesRequest
+	EmbeddingRequest             *BifrostEmbeddingRequest
+	SpeechRequest                *BifrostSpeechRequest
+	TranscriptionRequest         *BifrostTranscriptionRequest
+	ImageGenerationRequest       *BifrostImageGenerationRequest
+	FileUploadRequest            *BifrostFileUploadRequest
+	FileListRequest              *BifrostFileListRequest
+	FileRetrieveRequest          *BifrostFileRetrieveRequest
+	FileDeleteRequest            *BifrostFileDeleteRequest
+	FileContentRequest           *BifrostFileContentRequest
+	BatchCreateRequest           *BifrostBatchCreateRequest
+	BatchListRequest             *BifrostBatchListRequest
+	BatchRetrieveRequest         *BifrostBatchRetrieveRequest
+	BatchCancelRequest           *BifrostBatchCancelRequest
+	BatchResultsRequest          *BifrostBatchResultsRequest
+	ContainerCreateRequest       *BifrostContainerCreateRequest
+	ContainerListRequest         *BifrostContainerListRequest
+	ContainerRetrieveRequest     *BifrostContainerRetrieveRequest
+	ContainerDeleteRequest       *BifrostContainerDeleteRequest
+	ContainerFileCreateRequest   *BifrostContainerFileCreateRequest
+	ContainerFileListRequest     *BifrostContainerFileListRequest
+	ContainerFileRetrieveRequest *BifrostContainerFileRetrieveRequest
+	ContainerFileContentRequest  *BifrostContainerFileContentRequest
+	ContainerFileDeleteRequest   *BifrostContainerFileDeleteRequest
 }
 
 // GetRequestFields returns the provider, model, and fallbacks from the request.
@@ -288,6 +299,16 @@ func (br *BifrostRequest) GetRequestFields() (provider ModelProvider, model stri
 		return br.ContainerRetrieveRequest.Provider, "", nil
 	case br.ContainerDeleteRequest != nil:
 		return br.ContainerDeleteRequest.Provider, "", nil
+	case br.ContainerFileCreateRequest != nil:
+		return br.ContainerFileCreateRequest.Provider, "", nil
+	case br.ContainerFileListRequest != nil:
+		return br.ContainerFileListRequest.Provider, "", nil
+	case br.ContainerFileRetrieveRequest != nil:
+		return br.ContainerFileRetrieveRequest.Provider, "", nil
+	case br.ContainerFileContentRequest != nil:
+		return br.ContainerFileContentRequest.Provider, "", nil
+	case br.ContainerFileDeleteRequest != nil:
+		return br.ContainerFileDeleteRequest.Provider, "", nil
 	}
 	return "", "", nil
 }
@@ -406,6 +427,11 @@ type BifrostResponse struct {
 	ContainerListResponse         *BifrostContainerListResponse
 	ContainerRetrieveResponse     *BifrostContainerRetrieveResponse
 	ContainerDeleteResponse       *BifrostContainerDeleteResponse
+	ContainerFileCreateResponse   *BifrostContainerFileCreateResponse
+	ContainerFileListResponse     *BifrostContainerFileListResponse
+	ContainerFileRetrieveResponse *BifrostContainerFileRetrieveResponse
+	ContainerFileContentResponse  *BifrostContainerFileContentResponse
+	ContainerFileDeleteResponse   *BifrostContainerFileDeleteResponse
 }
 
 func (r *BifrostResponse) GetExtraFields() *BifrostResponseExtraFields {
@@ -462,6 +488,16 @@ func (r *BifrostResponse) GetExtraFields() *BifrostResponseExtraFields {
 		return &r.ContainerRetrieveResponse.ExtraFields
 	case r.ContainerDeleteResponse != nil:
 		return &r.ContainerDeleteResponse.ExtraFields
+	case r.ContainerFileCreateResponse != nil:
+		return &r.ContainerFileCreateResponse.ExtraFields
+	case r.ContainerFileListResponse != nil:
+		return &r.ContainerFileListResponse.ExtraFields
+	case r.ContainerFileRetrieveResponse != nil:
+		return &r.ContainerFileRetrieveResponse.ExtraFields
+	case r.ContainerFileContentResponse != nil:
+		return &r.ContainerFileContentResponse.ExtraFields
+	case r.ContainerFileDeleteResponse != nil:
+		return &r.ContainerFileDeleteResponse.ExtraFields
 	}
 
 	return &BifrostResponseExtraFields{}

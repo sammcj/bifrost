@@ -176,7 +176,12 @@ export type RequestType =
 	| "container_create"
 	| "container_list"
 	| "container_retrieve"
-	| "container_delete";
+	| "container_delete"
+	| "container_file_create"
+	| "container_file_list"
+	| "container_file_retrieve"
+	| "container_file_content"
+	| "container_file_delete";
 
 // AllowedRequests matching Go's schemas.AllowedRequests
 export interface AllowedRequests {
@@ -192,7 +197,7 @@ export interface AllowedRequests {
 	transcription: boolean;
 	transcription_stream: boolean;
 	image_generation: boolean;
-	image_generation_stream: boolean; 
+	image_generation_stream: boolean;
 	count_tokens: boolean;
 	list_models: boolean;
 }

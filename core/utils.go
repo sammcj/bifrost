@@ -244,7 +244,11 @@ func isFileRequestType(reqType schemas.RequestType) bool {
 
 // isContainerRequestType returns true if the given request type is a container API operation.
 func isContainerRequestType(reqType schemas.RequestType) bool {
-	return reqType == schemas.ContainerCreateRequest || reqType == schemas.ContainerListRequest || reqType == schemas.ContainerRetrieveRequest || reqType == schemas.ContainerDeleteRequest
+	return reqType == schemas.ContainerCreateRequest || reqType == schemas.ContainerListRequest ||
+		reqType == schemas.ContainerRetrieveRequest || reqType == schemas.ContainerDeleteRequest ||
+		reqType == schemas.ContainerFileCreateRequest || reqType == schemas.ContainerFileListRequest ||
+		reqType == schemas.ContainerFileRetrieveRequest || reqType == schemas.ContainerFileContentRequest ||
+		reqType == schemas.ContainerFileDeleteRequest
 }
 
 // IsFinalChunk returns true if the given context is a final chunk.

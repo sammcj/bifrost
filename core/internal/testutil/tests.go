@@ -86,6 +86,12 @@ func RunAllComprehensiveTests(t *testing.T, client *bifrost.Bifrost, ctx context
 		RunContainerRetrieveTest,
 		RunContainerDeleteTest,
 		RunContainerUnsupportedTest,
+		RunContainerFileCreateTest,
+		RunContainerFileListTest,
+		RunContainerFileRetrieveTest,
+		RunContainerFileContentTest,
+		RunContainerFileDeleteTest,
+		RunContainerFileUnsupportedTest,
 	}
 
 	// Execute all test scenarios
@@ -155,6 +161,12 @@ func printTestSummary(t *testing.T, testConfig ComprehensiveTestConfig) {
 		{"ContainerRetrieve", testConfig.Scenarios.ContainerRetrieve},
 		{"ContainerDelete", testConfig.Scenarios.ContainerDelete},
 		{"ContainerUnsupported", !testConfig.Scenarios.ContainerCreate && !testConfig.Scenarios.ContainerList && !testConfig.Scenarios.ContainerRetrieve && !testConfig.Scenarios.ContainerDelete},
+		{"ContainerFileCreate", testConfig.Scenarios.ContainerFileCreate},
+		{"ContainerFileList", testConfig.Scenarios.ContainerFileList},
+		{"ContainerFileRetrieve", testConfig.Scenarios.ContainerFileRetrieve},
+		{"ContainerFileContent", testConfig.Scenarios.ContainerFileContent},
+		{"ContainerFileDelete", testConfig.Scenarios.ContainerFileDelete},
+		{"ContainerFileUnsupported", !testConfig.Scenarios.ContainerFileCreate && !testConfig.Scenarios.ContainerFileList && !testConfig.Scenarios.ContainerFileRetrieve && !testConfig.Scenarios.ContainerFileContent && !testConfig.Scenarios.ContainerFileDelete},
 	}
 
 	supported := 0

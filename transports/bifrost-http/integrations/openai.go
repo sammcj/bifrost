@@ -1374,6 +1374,7 @@ func CreateOpenAIContainerRouteConfigs(pathPrefix string, handlerStore lib.Handl
 				return &schemas.BifrostContainerCreateRequest{}
 			},
 			ContainerRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerRequest, error) {
+				enableRawRequestResponseForContainer(ctx)
 				if createReq, ok := req.(*schemas.BifrostContainerCreateRequest); ok {
 					return &ContainerRequest{
 						Type:          schemas.ContainerCreateRequest,
@@ -1412,6 +1413,7 @@ func CreateOpenAIContainerRouteConfigs(pathPrefix string, handlerStore lib.Handl
 				return &schemas.BifrostContainerListRequest{}
 			},
 			ContainerRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerRequest, error) {
+				enableRawRequestResponseForContainer(ctx)
 				if listReq, ok := req.(*schemas.BifrostContainerListRequest); ok {
 					if listReq.Provider == "" {
 						listReq.Provider = schemas.OpenAI
@@ -1446,6 +1448,7 @@ func CreateOpenAIContainerRouteConfigs(pathPrefix string, handlerStore lib.Handl
 				return &schemas.BifrostContainerRetrieveRequest{}
 			},
 			ContainerRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerRequest, error) {
+				enableRawRequestResponseForContainer(ctx)
 				if retrieveReq, ok := req.(*schemas.BifrostContainerRetrieveRequest); ok {
 					if retrieveReq.Provider == "" {
 						retrieveReq.Provider = schemas.OpenAI
@@ -1480,6 +1483,7 @@ func CreateOpenAIContainerRouteConfigs(pathPrefix string, handlerStore lib.Handl
 				return &schemas.BifrostContainerDeleteRequest{}
 			},
 			ContainerRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerRequest, error) {
+				enableRawRequestResponseForContainer(ctx)
 				if deleteReq, ok := req.(*schemas.BifrostContainerDeleteRequest); ok {
 					if deleteReq.Provider == "" {
 						deleteReq.Provider = schemas.OpenAI
@@ -1514,7 +1518,6 @@ func extractContainerListQueryParams(handlerStore lib.HandlerStore) PreRequestCa
 				return err
 			}
 		}
-
 		if listReq, ok := req.(*schemas.BifrostContainerListRequest); ok {
 			// Extract provider from query
 			if provider := string(ctx.QueryArgs().Peek("provider")); provider != "" {
@@ -1586,6 +1589,325 @@ func extractContainerIDFromPath(handlerStore lib.HandlerStore) PreRequestCallbac
 	}
 }
 
+// =============================================================================
+// CONTAINER FILES API ROUTES
+// =============================================================================
+
+// CreateOpenAIContainerFileRouteConfigs creates route configurations for OpenAI Container Files API endpoints.
+func CreateOpenAIContainerFileRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) []RouteConfig {
+	var routes []RouteConfig
+
+	// Create container file endpoint - POST /v1/containers/{container_id}/files
+	for _, path := range []string{
+		"/v1/containers/{container_id}/files",
+		"/containers/{container_id}/files",
+	} {
+		routes = append(routes, RouteConfig{
+			Type:   RouteConfigTypeOpenAI,
+			Path:   pathPrefix + path,
+			Method: "POST",
+			GetRequestTypeInstance: func() interface{} {
+				return &schemas.BifrostContainerFileCreateRequest{}
+			},
+			RequestParser: parseContainerFileCreateMultipartRequest,
+			ContainerFileRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerFileRequest, error) {
+				enableRawRequestResponseForContainer(ctx)
+				if createReq, ok := req.(*schemas.BifrostContainerFileCreateRequest); ok {
+					return &ContainerFileRequest{
+						Type:          schemas.ContainerFileCreateRequest,
+						CreateRequest: createReq,
+					}, nil
+				}
+				return nil, errors.New("invalid container file create request type")
+			},
+			ContainerFileCreateResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerFileCreateResponse) (interface{}, error) {
+				return resp, nil
+			},
+			ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
+				return err
+			},
+			PreCallback: extractContainerFileCreateParams(handlerStore),
+		})
+	}
+
+	// List container files endpoint - GET /v1/containers/{container_id}/files
+	for _, path := range []string{
+		"/v1/containers/{container_id}/files",
+		"/containers/{container_id}/files",
+	} {
+		routes = append(routes, RouteConfig{
+			Type:   RouteConfigTypeOpenAI,
+			Path:   pathPrefix + path,
+			Method: "GET",
+			GetRequestTypeInstance: func() interface{} {
+				return &schemas.BifrostContainerFileListRequest{}
+			},
+			ContainerFileRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerFileRequest, error) {
+				enableRawRequestResponseForContainer(ctx)
+				if listReq, ok := req.(*schemas.BifrostContainerFileListRequest); ok {
+					return &ContainerFileRequest{
+						Type:        schemas.ContainerFileListRequest,
+						ListRequest: listReq,
+					}, nil
+				}
+				return nil, errors.New("invalid container file list request type")
+			},
+			ContainerFileListResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerFileListResponse) (interface{}, error) {
+				return resp, nil
+			},
+			ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
+				return err
+			},
+			PreCallback: extractContainerFileListQueryParams(handlerStore),
+		})
+	}
+
+	// Retrieve container file endpoint - GET /v1/containers/{container_id}/files/{file_id}
+	for _, path := range []string{
+		"/v1/containers/{container_id}/files/{file_id}",
+		"/containers/{container_id}/files/{file_id}",
+	} {
+		routes = append(routes, RouteConfig{
+			Type:   RouteConfigTypeOpenAI,
+			Path:   pathPrefix + path,
+			Method: "GET",
+			GetRequestTypeInstance: func() interface{} {
+				return &schemas.BifrostContainerFileRetrieveRequest{}
+			},
+			ContainerFileRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerFileRequest, error) {
+				enableRawRequestResponseForContainer(ctx)
+				if retrieveReq, ok := req.(*schemas.BifrostContainerFileRetrieveRequest); ok {
+					return &ContainerFileRequest{
+						Type:            schemas.ContainerFileRetrieveRequest,
+						RetrieveRequest: retrieveReq,
+					}, nil
+				}
+				return nil, errors.New("invalid container file retrieve request type")
+			},
+			ContainerFileRetrieveResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerFileRetrieveResponse) (interface{}, error) {
+				return resp, nil
+			},
+			ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
+				return err
+			},
+			PreCallback: extractContainerAndFileIDFromPath(handlerStore),
+		})
+	}
+
+	// Retrieve container file content endpoint - GET /v1/containers/{container_id}/files/{file_id}/content
+	for _, path := range []string{
+		"/v1/containers/{container_id}/files/{file_id}/content",
+		"/containers/{container_id}/files/{file_id}/content",
+	} {
+		routes = append(routes, RouteConfig{
+			Type:   RouteConfigTypeOpenAI,
+			Path:   pathPrefix + path,
+			Method: "GET",
+			GetRequestTypeInstance: func() interface{} {
+				return &schemas.BifrostContainerFileContentRequest{}
+			},
+			ContainerFileRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerFileRequest, error) {
+				enableRawRequestResponseForContainer(ctx)
+				if contentReq, ok := req.(*schemas.BifrostContainerFileContentRequest); ok {
+					return &ContainerFileRequest{
+						Type:           schemas.ContainerFileContentRequest,
+						ContentRequest: contentReq,
+					}, nil
+				}
+				return nil, errors.New("invalid container file content request type")
+			},
+			ContainerFileContentResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerFileContentResponse) (interface{}, error) {
+				return resp.Content, nil
+			},
+			ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
+				return err
+			},
+			PreCallback: extractContainerAndFileIDFromPath(handlerStore),
+		})
+	}
+
+	// Delete container file endpoint - DELETE /v1/containers/{container_id}/files/{file_id}
+	for _, path := range []string{
+		"/v1/containers/{container_id}/files/{file_id}",
+		"/containers/{container_id}/files/{file_id}",
+	} {
+		routes = append(routes, RouteConfig{
+			Type:   RouteConfigTypeOpenAI,
+			Path:   pathPrefix + path,
+			Method: "DELETE",
+			GetRequestTypeInstance: func() interface{} {
+				return &schemas.BifrostContainerFileDeleteRequest{}
+			},
+			ContainerFileRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*ContainerFileRequest, error) {
+				enableRawRequestResponseForContainer(ctx)
+				if deleteReq, ok := req.(*schemas.BifrostContainerFileDeleteRequest); ok {
+					return &ContainerFileRequest{
+						Type:          schemas.ContainerFileDeleteRequest,
+						DeleteRequest: deleteReq,
+					}, nil
+				}
+				return nil, errors.New("invalid container file delete request type")
+			},
+			ContainerFileDeleteResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerFileDeleteResponse) (interface{}, error) {
+				return resp, nil
+			},
+			ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
+				return err
+			},
+			PreCallback: extractContainerAndFileIDFromPath(handlerStore),
+		})
+	}
+
+	return routes
+}
+
+// extractContainerFileCreateParams extracts container_id from path and provider from query for file create
+func extractContainerFileCreateParams(handlerStore lib.HandlerStore) PreRequestCallback {
+	azureHook := AzureEndpointPreHook(handlerStore)
+
+	return func(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.BifrostContext, req interface{}) error {
+		if azureHook != nil {
+			if err := azureHook(ctx, bifrostCtx, req); err != nil {
+				return err
+			}
+		}
+
+		containerID := ctx.UserValue("container_id")
+		if containerID == nil {
+			return errors.New("container_id is required")
+		}
+
+		containerIDStr, ok := containerID.(string)
+		if !ok || containerIDStr == "" {
+			return errors.New("container_id must be a non-empty string")
+		}
+
+		provider := schemas.ModelProvider(string(ctx.QueryArgs().Peek("provider")))
+		if provider == "" {
+			provider = schemas.OpenAI
+		}
+
+		if createReq, ok := req.(*schemas.BifrostContainerFileCreateRequest); ok {
+			createReq.ContainerID = containerIDStr
+			if createReq.Provider == "" {
+				createReq.Provider = provider
+			}
+		}
+
+		return nil
+	}
+}
+
+// extractContainerFileListQueryParams extracts query parameters for container file list requests
+func extractContainerFileListQueryParams(handlerStore lib.HandlerStore) PreRequestCallback {
+	azureHook := AzureEndpointPreHook(handlerStore)
+
+	return func(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.BifrostContext, req interface{}) error {
+		if azureHook != nil {
+			if err := azureHook(ctx, bifrostCtx, req); err != nil {
+				return err
+			}
+		}
+
+		containerID := ctx.UserValue("container_id")
+		if containerID == nil {
+			return errors.New("container_id is required")
+		}
+
+		containerIDStr, ok := containerID.(string)
+		if !ok || containerIDStr == "" {
+			return errors.New("container_id must be a non-empty string")
+		}
+
+		if listReq, ok := req.(*schemas.BifrostContainerFileListRequest); ok {
+			listReq.ContainerID = containerIDStr
+
+			// Extract provider from query
+			if provider := string(ctx.QueryArgs().Peek("provider")); provider != "" {
+				listReq.Provider = schemas.ModelProvider(provider)
+			}
+			if listReq.Provider == "" {
+				listReq.Provider = schemas.OpenAI
+			}
+
+			// Extract limit
+			if limitStr := string(ctx.QueryArgs().Peek("limit")); limitStr != "" {
+				if limit, err := strconv.Atoi(limitStr); err == nil {
+					listReq.Limit = limit
+				}
+			}
+
+			// Extract after cursor
+			if after := string(ctx.QueryArgs().Peek("after")); after != "" {
+				listReq.After = &after
+			}
+
+			// Extract order
+			if order := string(ctx.QueryArgs().Peek("order")); order != "" {
+				listReq.Order = &order
+			}
+		}
+
+		return nil
+	}
+}
+
+// extractContainerAndFileIDFromPath extracts container_id and file_id from path parameters and provider from query params
+func extractContainerAndFileIDFromPath(handlerStore lib.HandlerStore) PreRequestCallback {
+	azureHook := AzureEndpointPreHook(handlerStore)
+
+	return func(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.BifrostContext, req interface{}) error {
+		if azureHook != nil {
+			if err := azureHook(ctx, bifrostCtx, req); err != nil {
+				return err
+			}
+		}
+
+		containerID := ctx.UserValue("container_id")
+		if containerID == nil {
+			return errors.New("container_id is required")
+		}
+
+		containerIDStr, ok := containerID.(string)
+		if !ok || containerIDStr == "" {
+			return errors.New("container_id must be a non-empty string")
+		}
+
+		fileID := ctx.UserValue("file_id")
+		if fileID == nil {
+			return errors.New("file_id is required")
+		}
+
+		fileIDStr, ok := fileID.(string)
+		if !ok || fileIDStr == "" {
+			return errors.New("file_id must be a non-empty string")
+		}
+
+		// Extract provider from query
+		provider := schemas.ModelProvider(string(ctx.QueryArgs().Peek("provider")))
+		if provider == "" {
+			provider = schemas.OpenAI
+		}
+
+		switch r := req.(type) {
+		case *schemas.BifrostContainerFileRetrieveRequest:
+			r.ContainerID = containerIDStr
+			r.FileID = fileIDStr
+			r.Provider = provider
+		case *schemas.BifrostContainerFileContentRequest:
+			r.ContainerID = containerIDStr
+			r.FileID = fileIDStr
+			r.Provider = provider
+		case *schemas.BifrostContainerFileDeleteRequest:
+			r.ContainerID = containerIDStr
+			r.FileID = fileIDStr
+			r.Provider = provider
+		}
+
+		return nil
+	}
+}
+
 // NewOpenAIRouter creates a new OpenAIRouter with the given bifrost client.
 func NewOpenAIRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore, logger schemas.Logger) *OpenAIRouter {
 	routes := CreateOpenAIRouteConfigs("/openai", handlerStore)
@@ -1593,6 +1915,7 @@ func NewOpenAIRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore, log
 	routes = append(routes, CreateOpenAIBatchRouteConfigs("/openai", handlerStore)...)
 	routes = append(routes, CreateOpenAIFileRouteConfigs("/openai", handlerStore)...)
 	routes = append(routes, CreateOpenAIContainerRouteConfigs("/openai", handlerStore)...)
+	routes = append(routes, CreateOpenAIContainerFileRouteConfigs("/openai", handlerStore)...)
 
 	return &OpenAIRouter{
 		GenericRouter: NewGenericRouter(client, handlerStore, routes, logger),
@@ -1661,6 +1984,71 @@ func parseTranscriptionMultipartRequest(ctx *fasthttp.RequestCtx, req interface{
 			return errors.New("invalid stream value")
 		}
 		transcriptionReq.Stream = &stream
+	}
+
+	return nil
+}
+
+// enableRawRequestResponseForContainer sets context flags to always capture raw request/response
+// for container operations. Container operations don't have model-specific content, so raw
+// data is useful for debugging and should be enabled by default.
+func enableRawRequestResponseForContainer(bifrostCtx *schemas.BifrostContext) {
+	bifrostCtx.SetValue(schemas.BifrostContextKeySendBackRawRequest, true)
+	bifrostCtx.SetValue(schemas.BifrostContextKeySendBackRawResponse, true)
+	bifrostCtx.SetValue(schemas.BifrostContextKeyRawRequestResponseForLogging, true)
+}
+
+// parseContainerFileCreateMultipartRequest is a RequestParser that handles multipart/form-data for container file create requests
+func parseContainerFileCreateMultipartRequest(ctx *fasthttp.RequestCtx, req interface{}) error {
+	createReq, ok := req.(*schemas.BifrostContainerFileCreateRequest)
+	if !ok {
+		return errors.New("invalid request type for container file create")
+	}
+
+	contentType := string(ctx.Request.Header.ContentType())
+	if !strings.HasPrefix(contentType, "multipart/form-data") {
+		return nil // Let JSON parsing handle it
+	}
+
+	// Parse multipart form
+	form, err := ctx.MultipartForm()
+	if err != nil {
+		return err
+	}
+
+	// Extract file (optional for multipart - could be file_id instead)
+	if fileHeaders := form.File["file"]; len(fileHeaders) > 0 {
+		fileHeader := fileHeaders[0]
+		file, err := fileHeader.Open()
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		fileData, err := io.ReadAll(file)
+		if err != nil {
+			return err
+		}
+		createReq.File = fileData
+	}
+
+	// Extract optional file_id
+	if fileIDValues := form.Value["file_id"]; len(fileIDValues) > 0 && fileIDValues[0] != "" {
+		fileID := fileIDValues[0]
+		createReq.FileID = &fileID
+	}
+
+	// Extract optional file_path
+	if filePathValues := form.Value["file_path"]; len(filePathValues) > 0 && filePathValues[0] != "" {
+		filePath := filePathValues[0]
+		createReq.Path = &filePath
+	}
+
+	// Extract optional provider
+	if providerValues := form.Value["provider"]; len(providerValues) > 0 {
+		if providerValue := strings.TrimSpace(providerValues[0]); providerValue != "" {
+			createReq.Provider = schemas.ModelProvider(providerValue)
+		}
 	}
 
 	return nil

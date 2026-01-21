@@ -1,4 +1,5 @@
 - feat: added support for addWatermark parameter in Gemini Image Gen
+- feat: adds containers and container files APIs for OpenAI
 - fix: allow setting authorization header through extra headers and in allow list and deny list
 - feat: added context aware default provider fallback in integrations
 - feat: added image generation support for bedrock
