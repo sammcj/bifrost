@@ -3,14 +3,15 @@ module github.com/maximhq/bifrost/plugins/maxim
 go 1.25.5
 
 require (
-	github.com/maximhq/bifrost/core v1.3.11
-	github.com/maximhq/bifrost/framework v1.2.12
+	github.com/maximhq/bifrost/core v1.3.12
+	github.com/maximhq/bifrost/framework v1.2.13
 	github.com/maximhq/maxim-go v0.1.14
 )
 
 require github.com/google/uuid v1.6.0
 
 require (
+	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1 // indirect
