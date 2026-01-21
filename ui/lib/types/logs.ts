@@ -357,6 +357,62 @@ export interface LogStats {
 	total_cost: number;
 }
 
+export interface HistogramBucket {
+	timestamp: string;
+	count: number;
+	success: number;
+	error: number;
+}
+
+export interface LogsHistogramResponse {
+	buckets: HistogramBucket[];
+	bucket_size_seconds: number;
+}
+
+// Token histogram types
+export interface TokenHistogramBucket {
+	timestamp: string;
+	prompt_tokens: number;
+	completion_tokens: number;
+	total_tokens: number;
+}
+
+export interface TokenHistogramResponse {
+	buckets: TokenHistogramBucket[];
+	bucket_size_seconds: number;
+}
+
+// Cost histogram types
+export interface CostHistogramBucket {
+	timestamp: string;
+	total_cost: number;
+	by_model: Record<string, number>;
+}
+
+export interface CostHistogramResponse {
+	buckets: CostHistogramBucket[];
+	bucket_size_seconds: number;
+	models: string[];
+}
+
+// Model usage histogram types
+export interface ModelUsageStats {
+	total: number;
+	success: number;
+	error: number;
+}
+
+export interface ModelHistogramBucket {
+	timestamp: string;
+	by_model: Record<string, ModelUsageStats>;
+}
+
+export interface ModelHistogramResponse {
+	buckets: ModelHistogramBucket[];
+	bucket_size_seconds: number;
+	models: string[];
+}
+
 export interface LogsResponse {
 	logs: LogEntry[];
 	pagination: Pagination;
