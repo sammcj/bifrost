@@ -598,10 +598,15 @@ func NewMockAccount() *MockAccount {
 }
 
 func (ma *MockAccount) AddProvider(provider schemas.ModelProvider, concurrency int, bufferSize int) {
+	ma.AddProviderWithBaseURL(provider, concurrency, bufferSize, "")
+}
+
+func (ma *MockAccount) AddProviderWithBaseURL(provider schemas.ModelProvider, concurrency int, bufferSize int, baseURL string) {
 	ma.mu.Lock()
 	defer ma.mu.Unlock()
 	ma.configs[provider] = &schemas.ProviderConfig{
 		NetworkConfig: schemas.NetworkConfig{
+			BaseURL:                        baseURL,
 			DefaultRequestTimeoutInSeconds: 30,
 			MaxRetries:                     3,
 			RetryBackoffInitial:            500 * time.Millisecond,
@@ -752,28 +757,30 @@ func TestUpdateProvider(t *testing.T) {
 		}
 
 		// Verify provider doesn't exist initially
-		if bifrost.getProviderByKey(schemas.Anthropic) != nil {
+		// Note: Use Ollama (not in dynamicallyConfigurableProviders) to test truly inactive provider
+		if bifrost.getProviderByKey(schemas.Ollama) != nil {
 			t.Fatal("Provider should not exist initially")
 		}
 
 		// Add provider to account after bifrost initialization
-		account.AddProvider(schemas.Anthropic, 3, 500)
+		// Note: Ollama requires a BaseURL
+		account.AddProviderWithBaseURL(schemas.Ollama, 3, 500, "http://localhost:11434")
 
 		// Update should succeed and initialize the provider
-		err = bifrost.UpdateProvider(schemas.Anthropic)
+		err = bifrost.UpdateProvider(schemas.Ollama)
 		if err != nil {
 			t.Fatalf("UpdateProvider should succeed for inactive provider: %v", err)
 		}
 
 		// Verify provider now exists
-		provider := bifrost.getProviderByKey(schemas.Anthropic)
+		provider := bifrost.getProviderByKey(schemas.Ollama)
 		if provider == nil {
 			t.Fatal("Provider should exist after update")
 		}
 
-		if provider.GetProviderKey() != schemas.Anthropic {
+		if provider.GetProviderKey() != schemas.Ollama {
 			t.Errorf("Provider has wrong key: got %s, want %s",
-				provider.GetProviderKey(), schemas.Anthropic)
+				provider.GetProviderKey(), schemas.Ollama)
 		}
 	})
 
