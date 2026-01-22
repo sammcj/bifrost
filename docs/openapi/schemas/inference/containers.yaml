@@ -185,3 +185,160 @@ ContainerDeleteResponse:
       description: Whether the container was successfully deleted
     extra_fields:
       $ref: './common.yaml#/BifrostResponseExtraFields'
+
+# =============================================================================
+# CONTAINER FILES SCHEMAS
+# =============================================================================
+
+ContainerFileObject:
+  type: object
+  description: A file object within a container
+  properties:
+    id:
+      type: string
+      description: The unique identifier for the file
+    object:
+      type: string
+      description: The object type (always "container.file")
+    container_id:
+      type: string
+      description: The ID of the container this file belongs to
+    path:
+      type: string
+      description: The path of the file within the container
+    bytes:
+      type: integer
+      format: int64
+      description: The size of the file in bytes
+    created_at:
+      type: integer
+      format: int64
+      description: Unix timestamp of when the file was created
+    source:
+      type: string
+      description: The source of the file (e.g., "user_upload", "copied")
+
+ContainerFileCreateMultipartRequest:
+  type: object
+  description: Request to create a file in a container via multipart upload
+  properties:
+    file:
+      type: string
+      format: binary
+      description: The file content to upload
+    file_path:
+      type: string
+      description: Optional path for the file within the container
+
+ContainerFileCreateJsonRequest:
+  type: object
+  description: Request to create a file in a container by referencing an existing file
+  required:
+    - file_id
+  properties:
+    file_id:
+      type: string
+      description: The ID of an existing file to copy into the container
+    file_path:
+      type: string
+      description: Optional path for the file within the container
+
+ContainerFileCreateResponse:
+  type: object
+  description: Response from creating a file in a container
+  properties:
+    id:
+      type: string
+      description: The unique identifier for the created file
+    object:
+      type: string
+      description: The object type (always "container.file")
+    container_id:
+      type: string
+      description: The ID of the container this file belongs to
+    path:
+      type: string
+      description: The path of the file within the container
+    bytes:
+      type: integer
+      format: int64
+      description: The size of the file in bytes
+    created_at:
+      type: integer
+      format: int64
+      description: Unix timestamp of when the file was created
+    source:
+      type: string
+      description: The source of the file
+    extra_fields:
+      $ref: './common.yaml#/BifrostResponseExtraFields'
+
+ContainerFileListResponse:
+  type: object
+  description: Response containing a list of files in a container
+  properties:
+    object:
+      type: string
+      description: The object type (always "list")
+    data:
+      type: array
+      items:
+        $ref: '#/ContainerFileObject'
+      description: List of file objects
+    first_id:
+      type: string
+      description: ID of the first file in the list
+    last_id:
+      type: string
+      description: ID of the last file in the list
+    has_more:
+      type: boolean
+      description: Whether there are more files to fetch
+    extra_fields:
+      $ref: './common.yaml#/BifrostResponseExtraFields'
+
+ContainerFileRetrieveResponse:
+  type: object
+  description: Response from retrieving a file from a container
+  properties:
+    id:
+      type: string
+      description: The unique identifier for the file
+    object:
+      type: string
+      description: The object type (always "container.file")
+    container_id:
+      type: string
+      description: The ID of the container this file belongs to
+    path:
+      type: string
+      description: The path of the file within the container
+    bytes:
+      type: integer
+      format: int64
+      description: The size of the file in bytes
+    created_at:
+      type: integer
+      format: int64
+      description: Unix timestamp of when the file was created
+    source:
+      type: string
+      description: The source of the file
+    extra_fields:
+      $ref: './common.yaml#/BifrostResponseExtraFields'
+
+ContainerFileDeleteResponse:
+  type: object
+  description: Response from deleting a file from a container
+  properties:
+    id:
+      type: string
+      description: The ID of the deleted file
+    object:
+      type: string
+      description: The object type (always "container.file.deleted")
+    deleted:
+      type: boolean
+      description: Whether the file was successfully deleted
+    extra_fields:
+      $ref: './common.yaml#/BifrostResponseExtraFields'
