@@ -4,35 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getErrorMessage, useGetCoreConfigQuery, useUpdateCoreConfigMutation } from "@/lib/store";
-import { CoreConfig } from "@/lib/types/config";
+import { CoreConfig, DefaultCoreConfig } from "@/lib/types/config";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-
-const defaultConfig: CoreConfig = {
-	drop_excess_requests: false,
-	initial_pool_size: 1000,
-	prometheus_labels: [],
-	enable_logging: true,
-	enable_governance: true,
-	enforce_governance_header: false,
-	allow_direct_keys: false,
-	allowed_origins: [],
-	max_request_body_size_mb: 100,
-	enable_litellm_fallbacks: false,
-	disable_content_logging: false,
-	log_retention_days: 365,
-	mcp_agent_depth: 10,
-	mcp_tool_execution_timeout: 30,
-	mcp_code_mode_binding_level: "server",
-};
 
 export default function MCPView() {
 	const hasSettingsUpdateAccess = useRbac(RbacResource.Settings, RbacOperation.Update);
 	const { data: bifrostConfig } = useGetCoreConfigQuery({ fromDB: true });
 	const config = bifrostConfig?.client_config;
 	const [updateCoreConfig, { isLoading }] = useUpdateCoreConfigMutation();
-	const [localConfig, setLocalConfig] = useState<CoreConfig>(defaultConfig);
+	const [localConfig, setLocalConfig] = useState<CoreConfig>(DefaultCoreConfig);
 
 	const [localValues, setLocalValues] = useState<{
 		mcp_agent_depth: string;
