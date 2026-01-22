@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main"]
     paths:
+      - ".github/workflows/openapi-bundle.yml"
       - "docs/openapi/**"
       - "!docs/openapi/openapi.json"
   pull_request:
@@ -29,6 +30,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Install dependencies
         run: pip install pyyaml
 
@@ -36,20 +42,14 @@ jobs:
         working-directory: ./docs/openapi
         run: python bundle.py
 
-      - name: Check for changes
-        id: changes
+      - name: Commit and push changes
         run: |
-          if git diff --quiet docs/openapi/openapi.json; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
+          CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+          if [ "$CURRENT_BRANCH" = "HEAD" ]; then
+            # In detached HEAD state (common in CI), use GITHUB_REF_NAME or default to main
+            CURRENT_BRANCH="${GITHUB_REF_NAME:-main}"
           fi
 
-      - name: Commit and push changes
-        if: steps.changes.outputs.changed == 'true' && github.event_name == 'push'
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
           git add docs/openapi/openapi.json
           git commit -m "chore: regenerate openapi.json --skip-pipeline"
-          git push
+          git push origin "$CURRENT_BRANCH"
