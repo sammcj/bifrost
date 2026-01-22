@@ -2445,6 +2445,10 @@ func reconstructSchemaFromJSONSchema(jsonSchema *schemas.ResponsesTextConfigForm
 		// New format: Schema is spread across individual fields
 		schema = make(map[string]interface{})
 
+		if jsonSchema.Defs != nil {
+			schema["$defs"] = *jsonSchema.Defs
+		}
+
 		if jsonSchema.Type != nil {
 			schema["type"] = *jsonSchema.Type
 		}
@@ -2467,6 +2471,10 @@ func reconstructSchemaFromJSONSchema(jsonSchema *schemas.ResponsesTextConfigForm
 
 		if jsonSchema.Name != nil {
 			schema["title"] = *jsonSchema.Name
+		}
+
+		if len(jsonSchema.PropertyOrdering) > 0 {
+			schema["propertyOrdering"] = jsonSchema.PropertyOrdering
 		}
 
 		// Return nil if no fields were populated
