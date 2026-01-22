@@ -378,6 +378,25 @@ export interface CoreConfig {
 	header_filter_config?: GlobalHeaderFilterConfig;
 }
 
+export const DefaultCoreConfig: CoreConfig = {
+	drop_excess_requests: false,
+	initial_pool_size: 1000,
+	prometheus_labels: [],
+	enable_logging: true,
+	disable_content_logging: false,
+	log_retention_days: 365,
+	enable_governance: true,
+	enforce_governance_header: false,
+	allow_direct_keys: false,
+	allowed_origins: [],
+	max_request_body_size_mb: 100,
+	enable_litellm_fallbacks: false,
+	mcp_agent_depth: 10,
+	mcp_tool_execution_timeout: 30,
+	mcp_code_mode_binding_level: "server",
+	allowed_headers: [],
+};
+
 // Semantic cache configuration types
 export interface CacheConfig {
 	provider: ModelProviderName;
