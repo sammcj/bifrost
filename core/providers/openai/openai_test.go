@@ -81,6 +81,15 @@ func TestOpenAI(t *testing.T) {
 			CountTokens:           true,
 			ChatAudio:             true,
 			StructuredOutputs:     true, // Structured outputs with nullable enum support
+			ContainerCreate:       true,
+			ContainerList:         true,
+			ContainerRetrieve:     true,
+			ContainerDelete:       true,
+			ContainerFileCreate:   true,
+			ContainerFileList:     true,
+			ContainerFileRetrieve: true,
+			ContainerFileContent:  true,
+			ContainerFileDelete:   true,
 		},
 	}
 

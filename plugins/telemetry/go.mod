@@ -3,13 +3,14 @@ module github.com/maximhq/bifrost/plugins/telemetry
 go 1.25.5
 
 require (
-	github.com/maximhq/bifrost/core v1.3.11
-	github.com/maximhq/bifrost/framework v1.2.12
+	github.com/maximhq/bifrost/core v1.3.12
+	github.com/maximhq/bifrost/framework v1.2.14
 	github.com/prometheus/client_golang v1.23.0
 	github.com/valyala/fasthttp v1.68.0
 )
 
 require (
+	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1 // indirect

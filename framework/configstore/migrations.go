@@ -166,6 +166,18 @@ func migrationInit(ctx context.Context, db *gorm.DB) error {
 					return err
 				}
 			}
+			// TableBudget and TableRateLimit must be created before TableProvider
+			// because TableProvider has FK references to them
+			if !migrator.HasTable(&tables.TableBudget{}) {
+				if err := migrator.CreateTable(&tables.TableBudget{}); err != nil {
+					return err
+				}
+			}
+			if !migrator.HasTable(&tables.TableRateLimit{}) {
+				if err := migrator.CreateTable(&tables.TableRateLimit{}); err != nil {
+					return err
+				}
+			}
 			if !migrator.HasTable(&tables.TableProvider{}) {
 				if err := migrator.CreateTable(&tables.TableProvider{}); err != nil {
 					return err
@@ -207,16 +219,6 @@ func migrationInit(ctx context.Context, db *gorm.DB) error {
 			}
 			if !migrator.HasTable(&tables.TableLogStoreConfig{}) {
 				if err := migrator.CreateTable(&tables.TableLogStoreConfig{}); err != nil {
-					return err
-				}
-			}
-			if !migrator.HasTable(&tables.TableBudget{}) {
-				if err := migrator.CreateTable(&tables.TableBudget{}); err != nil {
-					return err
-				}
-			}
-			if !migrator.HasTable(&tables.TableRateLimit{}) {
-				if err := migrator.CreateTable(&tables.TableRateLimit{}); err != nil {
 					return err
 				}
 			}

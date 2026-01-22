@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	schemas "github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/core/schemas"
 )
 
 // Define a set of retryable status codes
@@ -45,6 +45,28 @@ var rateLimitPatterns = []string{
 	"api rate limit",
 	"usage limit",
 	"concurrent requests limit",
+}
+
+// dynamicallyConfigurableProviders is the list of providers that can be dynamically configured.
+// Excluding providers that require extra configuration. (like Ollama and SGL)
+var dynamicallyConfigurableProviders = []schemas.ModelProvider{
+	schemas.Anthropic,
+	schemas.Azure,
+	schemas.Bedrock,
+	schemas.Cerebras,
+	schemas.Cohere,
+	schemas.Elevenlabs,
+	schemas.Gemini,
+	schemas.Groq,
+	schemas.HuggingFace,
+	schemas.Mistral,
+	schemas.Nebius,
+	schemas.OpenAI,
+	schemas.OpenRouter,
+	schemas.Parasail,
+	schemas.Perplexity,
+	schemas.Vertex,
+	schemas.XAI,
 }
 
 // isModelRequired returns true if the request type requires a model
@@ -218,6 +240,15 @@ func isBatchRequestType(reqType schemas.RequestType) bool {
 // isFileRequestType returns true if the given request type is a file API operation.
 func isFileRequestType(reqType schemas.RequestType) bool {
 	return reqType == schemas.FileUploadRequest || reqType == schemas.FileListRequest || reqType == schemas.FileRetrieveRequest || reqType == schemas.FileDeleteRequest || reqType == schemas.FileContentRequest
+}
+
+// isContainerRequestType returns true if the given request type is a container API operation.
+func isContainerRequestType(reqType schemas.RequestType) bool {
+	return reqType == schemas.ContainerCreateRequest || reqType == schemas.ContainerListRequest ||
+		reqType == schemas.ContainerRetrieveRequest || reqType == schemas.ContainerDeleteRequest ||
+		reqType == schemas.ContainerFileCreateRequest || reqType == schemas.ContainerFileListRequest ||
+		reqType == schemas.ContainerFileRetrieveRequest || reqType == schemas.ContainerFileContentRequest ||
+		reqType == schemas.ContainerFileDeleteRequest
 }
 
 // IsFinalChunk returns true if the given context is a final chunk.

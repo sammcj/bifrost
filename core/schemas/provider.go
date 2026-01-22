@@ -191,6 +191,15 @@ type AllowedRequests struct {
 	FileRetrieve          bool `json:"file_retrieve"`
 	FileDelete            bool `json:"file_delete"`
 	FileContent           bool `json:"file_content"`
+	ContainerCreate       bool `json:"container_create"`
+	ContainerList         bool `json:"container_list"`
+	ContainerRetrieve     bool `json:"container_retrieve"`
+	ContainerDelete       bool `json:"container_delete"`
+	ContainerFileCreate   bool `json:"container_file_create"`
+	ContainerFileList     bool `json:"container_file_list"`
+	ContainerFileRetrieve bool `json:"container_file_retrieve"`
+	ContainerFileContent  bool `json:"container_file_content"`
+	ContainerFileDelete   bool `json:"container_file_delete"`
 }
 
 // IsOperationAllowed checks if a specific operation is allowed
@@ -250,6 +259,24 @@ func (ar *AllowedRequests) IsOperationAllowed(operation RequestType) bool {
 		return ar.FileDelete
 	case FileContentRequest:
 		return ar.FileContent
+	case ContainerCreateRequest:
+		return ar.ContainerCreate
+	case ContainerListRequest:
+		return ar.ContainerList
+	case ContainerRetrieveRequest:
+		return ar.ContainerRetrieve
+	case ContainerDeleteRequest:
+		return ar.ContainerDelete
+	case ContainerFileCreateRequest:
+		return ar.ContainerFileCreate
+	case ContainerFileListRequest:
+		return ar.ContainerFileList
+	case ContainerFileRetrieveRequest:
+		return ar.ContainerFileRetrieve
+	case ContainerFileContentRequest:
+		return ar.ContainerFileContent
+	case ContainerFileDeleteRequest:
+		return ar.ContainerFileDelete
 	default:
 		return false // Default to not allowed for unknown operations
 	}
@@ -376,4 +403,22 @@ type Provider interface {
 	FileDelete(ctx *BifrostContext, keys []Key, request *BifrostFileDeleteRequest) (*BifrostFileDeleteResponse, *BifrostError)
 	// FileContent downloads file content from the provider
 	FileContent(ctx *BifrostContext, keys []Key, request *BifrostFileContentRequest) (*BifrostFileContentResponse, *BifrostError)
+	// ContainerCreate creates a new container
+	ContainerCreate(ctx *BifrostContext, key Key, request *BifrostContainerCreateRequest) (*BifrostContainerCreateResponse, *BifrostError)
+	// ContainerList lists containers
+	ContainerList(ctx *BifrostContext, keys []Key, request *BifrostContainerListRequest) (*BifrostContainerListResponse, *BifrostError)
+	// ContainerRetrieve retrieves a specific container
+	ContainerRetrieve(ctx *BifrostContext, keys []Key, request *BifrostContainerRetrieveRequest) (*BifrostContainerRetrieveResponse, *BifrostError)
+	// ContainerDelete deletes a container
+	ContainerDelete(ctx *BifrostContext, keys []Key, request *BifrostContainerDeleteRequest) (*BifrostContainerDeleteResponse, *BifrostError)
+	// ContainerFileCreate creates a file in a container
+	ContainerFileCreate(ctx *BifrostContext, key Key, request *BifrostContainerFileCreateRequest) (*BifrostContainerFileCreateResponse, *BifrostError)
+	// ContainerFileList lists files in a container
+	ContainerFileList(ctx *BifrostContext, keys []Key, request *BifrostContainerFileListRequest) (*BifrostContainerFileListResponse, *BifrostError)
+	// ContainerFileRetrieve retrieves a file from a container
+	ContainerFileRetrieve(ctx *BifrostContext, keys []Key, request *BifrostContainerFileRetrieveRequest) (*BifrostContainerFileRetrieveResponse, *BifrostError)
+	// ContainerFileContent retrieves the content of a file from a container
+	ContainerFileContent(ctx *BifrostContext, keys []Key, request *BifrostContainerFileContentRequest) (*BifrostContainerFileContentResponse, *BifrostError)
+	// ContainerFileDelete deletes a file from a container
+	ContainerFileDelete(ctx *BifrostContext, keys []Key, request *BifrostContainerFileDeleteRequest) (*BifrostContainerFileDeleteResponse, *BifrostError)
 }

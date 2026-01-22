@@ -6,31 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getErrorMessage, useGetCoreConfigQuery, useGetDroppedRequestsQuery, useUpdateCoreConfigMutation } from "@/lib/store";
-import { CoreConfig, DefaultGlobalHeaderFilterConfig, GlobalHeaderFilterConfig } from "@/lib/types/config";
+import { CoreConfig, DefaultCoreConfig, DefaultGlobalHeaderFilterConfig, GlobalHeaderFilterConfig } from "@/lib/types/config";
 import { cn } from "@/lib/utils";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { Info, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-
-const defaultConfig: CoreConfig = {
-	drop_excess_requests: false,
-	initial_pool_size: 1000,
-	prometheus_labels: [],
-	enable_logging: true,
-	disable_content_logging: false,
-	enable_governance: true,
-	enforce_governance_header: false,
-	allow_direct_keys: false,
-	allowed_origins: [],
-	max_request_body_size_mb: 100,
-	enable_litellm_fallbacks: false,
-	log_retention_days: 365,
-	mcp_agent_depth: 10,
-	mcp_tool_execution_timeout: 30,
-	mcp_code_mode_binding_level: "server",
-	header_filter_config: DefaultGlobalHeaderFilterConfig,
-};
 
 // Security headers that cannot be configured in allowlist/denylist
 // These headers are always blocked for security reasons regardless of configuration
@@ -73,7 +54,7 @@ export default function ClientSettingsView() {
 	const { data: bifrostConfig } = useGetCoreConfigQuery({ fromDB: true });
 	const config = bifrostConfig?.client_config;
 	const [updateCoreConfig, { isLoading }] = useUpdateCoreConfigMutation();
-	const [localConfig, setLocalConfig] = useState<CoreConfig>(defaultConfig);
+	const [localConfig, setLocalConfig] = useState<CoreConfig>(DefaultCoreConfig);
 
 	useEffect(() => {
 		if (droppedRequestsData) {
@@ -262,7 +243,17 @@ export default function ClientSettingsView() {
 						<label htmlFor="enable-litellm-fallbacks" className="text-sm font-medium">
 							Enable LiteLLM Fallbacks
 						</label>
-						<p className="text-muted-foreground text-sm">Enable litellm-specific fallbacks. <a className="text-primary underline cursor-pointer" href="https://docs.getbifrost.ai/features/litellm-compat" target="_blank" rel="noopener noreferrer">Learn more</a></p>
+						<p className="text-muted-foreground text-sm">
+							Enable litellm-specific fallbacks.{" "}
+							<a
+								className="text-primary cursor-pointer underline"
+								href="https://docs.getbifrost.ai/features/litellm-compat"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								Learn more
+							</a>
+						</p>
 					</div>
 					<Switch
 						id="enable-litellm-fallbacks"
@@ -301,7 +292,8 @@ export default function ClientSettingsView() {
 									</li>
 									<li>
 										<span className="font-medium">Direct headers:</span> Any header explicitly added to the allowlist can be forwarded
-										directly without the prefix (e.g., <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">anthropic-beta</code>).
+										directly without the prefix (e.g.,{" "}
+										<code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">anthropic-beta</code>).
 									</li>
 								</ul>
 							</div>
@@ -309,10 +301,13 @@ export default function ClientSettingsView() {
 								<p className="mb-2 font-medium">How allowlist and denylist work:</p>
 								<ul className="text-muted-foreground list-inside list-disc space-y-1 text-sm">
 									<li>
-										<span className="font-medium">Allowlist empty:</span> Only <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">x-bf-eh-*</code> prefixed headers are forwarded (default behavior)
+										<span className="font-medium">Allowlist empty:</span> Only{" "}
+										<code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">x-bf-eh-*</code> prefixed headers are forwarded
+										(default behavior)
 									</li>
 									<li>
-										<span className="font-medium">Allowlist configured:</span> Prefixed headers filtered by allowlist, plus any direct header in the allowlist is forwarded
+										<span className="font-medium">Allowlist configured:</span> Prefixed headers filtered by allowlist, plus any direct
+										header in the allowlist is forwarded
 									</li>
 									<li>
 										<span className="font-medium">Denylist:</span> Headers in the denylist are always blocked from forwarding
@@ -344,10 +339,13 @@ export default function ClientSettingsView() {
 							</span>
 						</AccordionTrigger>
 						<AccordionContent>
-							<p className="text-sm">Some headers are always blocked for security reasons regardless of configuration. These headers cannot be added to the allowlist or denylist:</p>
+							<p className="text-sm">
+								Some headers are always blocked for security reasons regardless of configuration. These headers cannot be added to the
+								allowlist or denylist:
+							</p>
 							<p className="text-muted-foreground mt-1 font-mono text-xs">
-								proxy-authorization, cookie, host, content-length, connection, transfer-encoding, x-api-key, x-goog-api-key,
-								x-bf-api-key, x-bf-vk
+								proxy-authorization, cookie, host, content-length, connection, transfer-encoding, x-api-key, x-goog-api-key, x-bf-api-key,
+								x-bf-vk
 							</p>
 						</AccordionContent>
 					</AccordionItem>
@@ -358,8 +356,8 @@ export default function ClientSettingsView() {
 					<div className="space-y-1">
 						<h4 className="text-sm font-medium">Allowlist</h4>
 						<p className="text-muted-foreground text-xs">
-							Headers to allow. Enter names without the <code className="bg-muted rounded px-1 font-mono">x-bf-eh-</code> prefix.
-							Any header in this list can also be sent directly without the prefix.
+							Headers to allow. Enter names without the <code className="bg-muted rounded px-1 font-mono">x-bf-eh-</code> prefix. Any header
+							in this list can also be sent directly without the prefix.
 						</p>
 					</div>
 
@@ -370,7 +368,8 @@ export default function ClientSettingsView() {
 									placeholder="e.g. custom-id, anthropic-beta"
 									className={cn(
 										"font-mono lowercase",
-										isSecurityHeader(header) && "border-destructive focus:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50"
+										isSecurityHeader(header) &&
+											"border-destructive focus:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50",
 									)}
 									value={header}
 									onChange={(e) => handleAllowlistChange(index, e.target.value)}
@@ -400,8 +399,8 @@ export default function ClientSettingsView() {
 					<div className="space-y-1">
 						<h4 className="text-sm font-medium">Denylist</h4>
 						<p className="text-muted-foreground text-xs">
-							Headers to block. Enter names without the <code className="bg-muted rounded px-1 font-mono">x-bf-eh-</code> prefix.
-							Applies to both prefixed and direct header forwarding.
+							Headers to block. Enter names without the <code className="bg-muted rounded px-1 font-mono">x-bf-eh-</code> prefix. Applies to
+							both prefixed and direct header forwarding.
 						</p>
 					</div>
 
@@ -412,7 +411,8 @@ export default function ClientSettingsView() {
 									placeholder="e.g. x-internal-id"
 									className={cn(
 										"font-mono lowercase",
-										isSecurityHeader(header) && "border-destructive focus:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50"
+										isSecurityHeader(header) &&
+											"border-destructive focus:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50",
 									)}
 									value={header}
 									onChange={(e) => handleDenylistChange(index, e.target.value)}

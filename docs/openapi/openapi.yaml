@@ -76,6 +76,8 @@ tags:
     description: Batch processing operations
   - name: Files
     description: File management operations
+  - name: Containers
+    description: Container management operations
   # Provider Integrations
   - name: OpenAI Integration
     description: OpenAI-compatible API endpoints (/openai/*)
@@ -149,6 +151,16 @@ paths:
     $ref: './paths/inference/files.yaml#/files-by-id'
   /v1/files/{file_id}/content:
     $ref: './paths/inference/files.yaml#/files-content'
+  /v1/containers:
+    $ref: './paths/inference/containers.yaml#/containers'
+  /v1/containers/{container_id}:
+    $ref: './paths/inference/containers.yaml#/containers-by-id'
+  /v1/containers/{container_id}/files:
+    $ref: './paths/inference/containers.yaml#/container-files'
+  /v1/containers/{container_id}/files/{file_id}:
+    $ref: './paths/inference/containers.yaml#/container-files-by-id'
+  /v1/containers/{container_id}/files/{file_id}/content:
+    $ref: './paths/inference/containers.yaml#/container-files-content'
 
   # ==================== OpenAI Integration ====================
   # Chat Completions
@@ -214,6 +226,18 @@ paths:
     $ref: './paths/integrations/openai/files.yaml#/files-by-id'
   /openai/v1/files/{file_id}/content:
     $ref: './paths/integrations/openai/files.yaml#/files-content'
+
+  # Containers API
+  /openai/v1/containers:
+    $ref: './paths/integrations/openai/containers.yaml#/containers'
+  /openai/v1/containers/{container_id}:
+    $ref: './paths/integrations/openai/containers.yaml#/containers-by-id'
+  /openai/v1/containers/{container_id}/files:
+    $ref: './paths/integrations/openai/containers.yaml#/container-files'
+  /openai/v1/containers/{container_id}/files/{file_id}:
+    $ref: './paths/integrations/openai/containers.yaml#/container-files-by-id'
+  /openai/v1/containers/{container_id}/files/{file_id}/content:
+    $ref: './paths/integrations/openai/containers.yaml#/container-files-content'
 
   # ==================== Anthropic Integration ====================
   # Messages API

@@ -111,6 +111,15 @@ const (
 	FileRetrieveRequest          RequestType = "file_retrieve"
 	FileDeleteRequest            RequestType = "file_delete"
 	FileContentRequest           RequestType = "file_content"
+	ContainerCreateRequest       RequestType = "container_create"
+	ContainerListRequest         RequestType = "container_list"
+	ContainerRetrieveRequest     RequestType = "container_retrieve"
+	ContainerDeleteRequest       RequestType = "container_delete"
+	ContainerFileCreateRequest   RequestType = "container_file_create"
+	ContainerFileListRequest     RequestType = "container_file_list"
+	ContainerFileRetrieveRequest RequestType = "container_file_retrieve"
+	ContainerFileContentRequest  RequestType = "container_file_content"
+	ContainerFileDeleteRequest   RequestType = "container_file_delete"
 	CountTokensRequest           RequestType = "count_tokens"
 	UnknownRequest               RequestType = "unknown"
 )
@@ -153,6 +162,8 @@ const (
 	BifrostContextKeySkipDBUpdate                        BifrostContextKey = "bifrost-skip-db-update"                           // bool (set by bifrost - DO NOT SET THIS MANUALLY))
 	BifrostContextKeyGovernancePluginName                BifrostContextKey = "governance-plugin-name"                           // string (name of the governance plugin that processed the request - set by bifrost)
 	BifrostContextKeyIsEnterprise                        BifrostContextKey = "is-enterprise"                                    // bool (set by bifrost - DO NOT SET THIS MANUALLY))
+	BifrostContextKeyAvailableProviders                  BifrostContextKey = "available-providers"                              // []ModelProvider (set by bifrost - DO NOT SET THIS MANUALLY))
+	BifrostContextKeyRawRequestResponseForLogging        BifrostContextKey = "bifrost-raw-request-response-for-logging"         // bool (set by bifrost - DO NOT SET THIS MANUALLY))
 )
 
 // NOTE: for custom plugin implementation dealing with streaming short circuit,
@@ -181,25 +192,34 @@ type Fallback struct {
 type BifrostRequest struct {
 	RequestType RequestType
 
-	ListModelsRequest      *BifrostListModelsRequest
-	TextCompletionRequest  *BifrostTextCompletionRequest
-	ChatRequest            *BifrostChatRequest
-	ResponsesRequest       *BifrostResponsesRequest
-	CountTokensRequest     *BifrostResponsesRequest
-	EmbeddingRequest       *BifrostEmbeddingRequest
-	SpeechRequest          *BifrostSpeechRequest
-	TranscriptionRequest   *BifrostTranscriptionRequest
-	ImageGenerationRequest *BifrostImageGenerationRequest
-	FileUploadRequest      *BifrostFileUploadRequest
-	FileListRequest        *BifrostFileListRequest
-	FileRetrieveRequest    *BifrostFileRetrieveRequest
-	FileDeleteRequest      *BifrostFileDeleteRequest
-	FileContentRequest     *BifrostFileContentRequest
-	BatchCreateRequest     *BifrostBatchCreateRequest
-	BatchListRequest       *BifrostBatchListRequest
-	BatchRetrieveRequest   *BifrostBatchRetrieveRequest
-	BatchCancelRequest     *BifrostBatchCancelRequest
-	BatchResultsRequest    *BifrostBatchResultsRequest
+	ListModelsRequest            *BifrostListModelsRequest
+	TextCompletionRequest        *BifrostTextCompletionRequest
+	ChatRequest                  *BifrostChatRequest
+	ResponsesRequest             *BifrostResponsesRequest
+	CountTokensRequest           *BifrostResponsesRequest
+	EmbeddingRequest             *BifrostEmbeddingRequest
+	SpeechRequest                *BifrostSpeechRequest
+	TranscriptionRequest         *BifrostTranscriptionRequest
+	ImageGenerationRequest       *BifrostImageGenerationRequest
+	FileUploadRequest            *BifrostFileUploadRequest
+	FileListRequest              *BifrostFileListRequest
+	FileRetrieveRequest          *BifrostFileRetrieveRequest
+	FileDeleteRequest            *BifrostFileDeleteRequest
+	FileContentRequest           *BifrostFileContentRequest
+	BatchCreateRequest           *BifrostBatchCreateRequest
+	BatchListRequest             *BifrostBatchListRequest
+	BatchRetrieveRequest         *BifrostBatchRetrieveRequest
+	BatchCancelRequest           *BifrostBatchCancelRequest
+	BatchResultsRequest          *BifrostBatchResultsRequest
+	ContainerCreateRequest       *BifrostContainerCreateRequest
+	ContainerListRequest         *BifrostContainerListRequest
+	ContainerRetrieveRequest     *BifrostContainerRetrieveRequest
+	ContainerDeleteRequest       *BifrostContainerDeleteRequest
+	ContainerFileCreateRequest   *BifrostContainerFileCreateRequest
+	ContainerFileListRequest     *BifrostContainerFileListRequest
+	ContainerFileRetrieveRequest *BifrostContainerFileRetrieveRequest
+	ContainerFileContentRequest  *BifrostContainerFileContentRequest
+	ContainerFileDeleteRequest   *BifrostContainerFileDeleteRequest
 }
 
 // GetRequestFields returns the provider, model, and fallbacks from the request.
@@ -271,6 +291,24 @@ func (br *BifrostRequest) GetRequestFields() (provider ModelProvider, model stri
 			return br.BatchResultsRequest.Provider, *br.BatchResultsRequest.Model, nil
 		}
 		return br.BatchResultsRequest.Provider, "", nil
+	case br.ContainerCreateRequest != nil:
+		return br.ContainerCreateRequest.Provider, "", nil
+	case br.ContainerListRequest != nil:
+		return br.ContainerListRequest.Provider, "", nil
+	case br.ContainerRetrieveRequest != nil:
+		return br.ContainerRetrieveRequest.Provider, "", nil
+	case br.ContainerDeleteRequest != nil:
+		return br.ContainerDeleteRequest.Provider, "", nil
+	case br.ContainerFileCreateRequest != nil:
+		return br.ContainerFileCreateRequest.Provider, "", nil
+	case br.ContainerFileListRequest != nil:
+		return br.ContainerFileListRequest.Provider, "", nil
+	case br.ContainerFileRetrieveRequest != nil:
+		return br.ContainerFileRetrieveRequest.Provider, "", nil
+	case br.ContainerFileContentRequest != nil:
+		return br.ContainerFileContentRequest.Provider, "", nil
+	case br.ContainerFileDeleteRequest != nil:
+		return br.ContainerFileDeleteRequest.Provider, "", nil
 	}
 	return "", "", nil
 }
@@ -385,6 +423,15 @@ type BifrostResponse struct {
 	BatchRetrieveResponse         *BifrostBatchRetrieveResponse
 	BatchCancelResponse           *BifrostBatchCancelResponse
 	BatchResultsResponse          *BifrostBatchResultsResponse
+	ContainerCreateResponse       *BifrostContainerCreateResponse
+	ContainerListResponse         *BifrostContainerListResponse
+	ContainerRetrieveResponse     *BifrostContainerRetrieveResponse
+	ContainerDeleteResponse       *BifrostContainerDeleteResponse
+	ContainerFileCreateResponse   *BifrostContainerFileCreateResponse
+	ContainerFileListResponse     *BifrostContainerFileListResponse
+	ContainerFileRetrieveResponse *BifrostContainerFileRetrieveResponse
+	ContainerFileContentResponse  *BifrostContainerFileContentResponse
+	ContainerFileDeleteResponse   *BifrostContainerFileDeleteResponse
 }
 
 func (r *BifrostResponse) GetExtraFields() *BifrostResponseExtraFields {
@@ -433,6 +480,24 @@ func (r *BifrostResponse) GetExtraFields() *BifrostResponseExtraFields {
 		return &r.BatchCancelResponse.ExtraFields
 	case r.BatchResultsResponse != nil:
 		return &r.BatchResultsResponse.ExtraFields
+	case r.ContainerCreateResponse != nil:
+		return &r.ContainerCreateResponse.ExtraFields
+	case r.ContainerListResponse != nil:
+		return &r.ContainerListResponse.ExtraFields
+	case r.ContainerRetrieveResponse != nil:
+		return &r.ContainerRetrieveResponse.ExtraFields
+	case r.ContainerDeleteResponse != nil:
+		return &r.ContainerDeleteResponse.ExtraFields
+	case r.ContainerFileCreateResponse != nil:
+		return &r.ContainerFileCreateResponse.ExtraFields
+	case r.ContainerFileListResponse != nil:
+		return &r.ContainerFileListResponse.ExtraFields
+	case r.ContainerFileRetrieveResponse != nil:
+		return &r.ContainerFileRetrieveResponse.ExtraFields
+	case r.ContainerFileContentResponse != nil:
+		return &r.ContainerFileContentResponse.ExtraFields
+	case r.ContainerFileDeleteResponse != nil:
+		return &r.ContainerFileDeleteResponse.ExtraFields
 	}
 
 	return &BifrostResponseExtraFields{}
@@ -583,10 +648,10 @@ func (e *ErrorField) UnmarshalJSON(data []byte) error {
 
 // BifrostErrorExtraFields contains additional fields in an error response.
 type BifrostErrorExtraFields struct {
-	Provider       ModelProvider     `json:"provider"`
-	ModelRequested string            `json:"model_requested"`
-	RequestType    RequestType       `json:"request_type"`
-	RawRequest     interface{}       `json:"raw_request,omitempty"`
-	RawResponse    interface{}       `json:"raw_response,omitempty"`
-	LiteLLMCompat  bool              `json:"litellm_compat,omitempty"`
+	Provider       ModelProvider `json:"provider"`
+	ModelRequested string        `json:"model_requested"`
+	RequestType    RequestType   `json:"request_type"`
+	RawRequest     interface{}   `json:"raw_request,omitempty"`
+	RawResponse    interface{}   `json:"raw_response,omitempty"`
+	LiteLLMCompat  bool          `json:"litellm_compat,omitempty"`
 }

@@ -97,11 +97,36 @@ type FileRequest struct {
 	ContentRequest  *schemas.BifrostFileContentRequest
 }
 
+// ContainerRequest wraps a Bifrost container request with its type information.
+type ContainerRequest struct {
+	Type            schemas.RequestType
+	CreateRequest   *schemas.BifrostContainerCreateRequest
+	ListRequest     *schemas.BifrostContainerListRequest
+	RetrieveRequest *schemas.BifrostContainerRetrieveRequest
+	DeleteRequest   *schemas.BifrostContainerDeleteRequest
+}
+
+// ContainerFileRequest is a wrapper for Bifrost container file requests.
+type ContainerFileRequest struct {
+	Type            schemas.RequestType
+	CreateRequest   *schemas.BifrostContainerFileCreateRequest
+	ListRequest     *schemas.BifrostContainerFileListRequest
+	RetrieveRequest *schemas.BifrostContainerFileRetrieveRequest
+	ContentRequest  *schemas.BifrostContainerFileContentRequest
+	DeleteRequest   *schemas.BifrostContainerFileDeleteRequest
+}
+
 // BatchRequestConverter is a function that converts integration-specific batch requests to Bifrost format.
 type BatchRequestConverter func(ctx *schemas.BifrostContext, req interface{}) (*BatchRequest, error)
 
 // FileRequestConverter is a function that converts integration-specific file requests to Bifrost format.
 type FileRequestConverter func(ctx *schemas.BifrostContext, req interface{}) (*FileRequest, error)
+
+// ContainerRequestConverter is a function that converts integration-specific container requests to Bifrost format.
+type ContainerRequestConverter func(ctx *schemas.BifrostContext, req interface{}) (*ContainerRequest, error)
+
+// ContainerFileRequestConverter is a function that converts integration-specific container file requests to Bifrost format.
+type ContainerFileRequestConverter func(ctx *schemas.BifrostContext, req interface{}) (*ContainerFileRequest, error)
 
 // RequestConverter is a function that converts integration-specific requests to Bifrost format.
 // It takes the parsed request object and returns a BifrostRequest ready for processing.
@@ -175,6 +200,42 @@ type FileDeleteResponseConverter func(ctx *schemas.BifrostContext, resp *schemas
 // It takes a BifrostFileContentResponse and returns the format expected by the specific integration.
 // Note: This may return binary data or a wrapper object depending on the integration.
 type FileContentResponseConverter func(ctx *schemas.BifrostContext, resp *schemas.BifrostFileContentResponse) (interface{}, error)
+
+// ContainerCreateResponseConverter is a function that converts BifrostContainerCreateResponse to integration-specific format.
+// It takes a BifrostContainerCreateResponse and returns the format expected by the specific integration.
+type ContainerCreateResponseConverter func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerCreateResponse) (interface{}, error)
+
+// ContainerListResponseConverter is a function that converts BifrostContainerListResponse to integration-specific format.
+// It takes a BifrostContainerListResponse and returns the format expected by the specific integration.
+type ContainerListResponseConverter func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerListResponse) (interface{}, error)
+
+// ContainerRetrieveResponseConverter is a function that converts BifrostContainerRetrieveResponse to integration-specific format.
+// It takes a BifrostContainerRetrieveResponse and returns the format expected by the specific integration.
+type ContainerRetrieveResponseConverter func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerRetrieveResponse) (interface{}, error)
+
+// ContainerDeleteResponseConverter is a function that converts BifrostContainerDeleteResponse to integration-specific format.
+// It takes a BifrostContainerDeleteResponse and returns the format expected by the specific integration.
+type ContainerDeleteResponseConverter func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerDeleteResponse) (interface{}, error)
+
+// ContainerFileCreateResponseConverter is a function that converts BifrostContainerFileCreateResponse to integration-specific format.
+// It takes a BifrostContainerFileCreateResponse and returns the format expected by the specific integration.
+type ContainerFileCreateResponseConverter func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerFileCreateResponse) (interface{}, error)
+
+// ContainerFileListResponseConverter is a function that converts BifrostContainerFileListResponse to integration-specific format.
+// It takes a BifrostContainerFileListResponse and returns the format expected by the specific integration.
+type ContainerFileListResponseConverter func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerFileListResponse) (interface{}, error)
+
+// ContainerFileRetrieveResponseConverter is a function that converts BifrostContainerFileRetrieveResponse to integration-specific format.
+// It takes a BifrostContainerFileRetrieveResponse and returns the format expected by the specific integration.
+type ContainerFileRetrieveResponseConverter func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerFileRetrieveResponse) (interface{}, error)
+
+// ContainerFileContentResponseConverter is a function that converts BifrostContainerFileContentResponse to integration-specific format.
+// It takes a BifrostContainerFileContentResponse and returns the format expected by the specific integration.
+type ContainerFileContentResponseConverter func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerFileContentResponse) (interface{}, error)
+
+// ContainerFileDeleteResponseConverter is a function that converts BifrostContainerFileDeleteResponse to integration-specific format.
+// It takes a BifrostContainerFileDeleteResponse and returns the format expected by the specific integration.
+type ContainerFileDeleteResponseConverter func(ctx *schemas.BifrostContext, resp *schemas.BifrostContainerFileDeleteResponse) (interface{}, error)
 
 // CountTokensResponseConverter is a function that converts BifrostCountTokensResponse to integration-specific format.
 // It takes a BifrostCountTokensResponse and returns the format expected by the specific integration.
@@ -275,37 +336,48 @@ const (
 // RouteConfig defines the configuration for a single route in an integration.
 // It specifies the path, method, and handlers for request/response conversion.
 type RouteConfig struct {
-	Type                             RouteConfigType                  // Type of the route
-	Path                             string                           // HTTP path pattern (e.g., "/openai/v1/chat/completions")
-	Method                           string                           // HTTP method (POST, GET, PUT, DELETE)
-	GetRequestTypeInstance           func() interface{}               // Factory function to create request instance (SHOULD NOT BE NIL)
-	RequestParser                    RequestParser                    // Optional: custom request parsing (e.g., multipart/form-data)
-	RequestConverter                 RequestConverter                 // Function to convert request to BifrostRequest (for inference requests)
-	BatchRequestConverter            BatchRequestConverter            // Function to convert request to BatchRequest (for batch operations)
-	FileRequestConverter             FileRequestConverter             // Function to convert request to FileRequest (for file operations)
-	ListModelsResponseConverter      ListModelsResponseConverter      // Function to convert BifrostListModelsResponse to integration format (SHOULD NOT BE NIL)
-	TextResponseConverter            TextResponseConverter            // Function to convert BifrostTextCompletionResponse to integration format (SHOULD NOT BE NIL)
-	ChatResponseConverter            ChatResponseConverter            // Function to convert BifrostChatResponse to integration format (SHOULD NOT BE NIL)
-	ResponsesResponseConverter       ResponsesResponseConverter       // Function to convert BifrostResponsesResponse to integration format (SHOULD NOT BE NIL)
-	EmbeddingResponseConverter       EmbeddingResponseConverter       // Function to convert BifrostEmbeddingResponse to integration format (SHOULD NOT BE NIL)
-	SpeechResponseConverter          SpeechResponseConverter          // Function to convert BifrostSpeechResponse to integration format (SHOULD NOT BE NIL)
-	TranscriptionResponseConverter   TranscriptionResponseConverter   // Function to convert BifrostTranscriptionResponse to integration format (SHOULD NOT BE NIL)
-	ImageGenerationResponseConverter ImageGenerationResponseConverter // Function to convert BifrostImageGenerationResponse to integration format (SHOULD NOT BE NIL)
-	BatchCreateResponseConverter     BatchCreateResponseConverter     // Function to convert BifrostBatchCreateResponse to integration format
-	BatchListResponseConverter       BatchListResponseConverter       // Function to convert BifrostBatchListResponse to integration format
-	BatchRetrieveResponseConverter   BatchRetrieveResponseConverter   // Function to convert BifrostBatchRetrieveResponse to integration format
-	BatchCancelResponseConverter     BatchCancelResponseConverter     // Function to convert BifrostBatchCancelResponse to integration format
-	BatchResultsResponseConverter    BatchResultsResponseConverter    // Function to convert BifrostBatchResultsResponse to integration format
-	FileUploadResponseConverter      FileUploadResponseConverter      // Function to convert BifrostFileUploadResponse to integration format
-	FileListResponseConverter        FileListResponseConverter        // Function to convert BifrostFileListResponse to integration format
-	FileRetrieveResponseConverter    FileRetrieveResponseConverter    // Function to convert BifrostFileRetrieveResponse to integration format
-	FileDeleteResponseConverter      FileDeleteResponseConverter      // Function to convert BifrostFileDeleteResponse to integration format
-	FileContentResponseConverter     FileContentResponseConverter     // Function to convert BifrostFileContentResponse to integration format
-	CountTokensResponseConverter     CountTokensResponseConverter     // Function to convert BifrostCountTokensResponse to integration format
-	ErrorConverter                   ErrorConverter                   // Function to convert BifrostError to integration format (SHOULD NOT BE NIL)
-	StreamConfig                     *StreamConfig                    // Optional: Streaming configuration (if nil, streaming not supported)
-	PreCallback                      PreRequestCallback               // Optional: called after parsing but before Bifrost processing
-	PostCallback                     PostRequestCallback              // Optional: called after request processing
+	Type                               RouteConfigType                    // Type of the route
+	Path                               string                             // HTTP path pattern (e.g., "/openai/v1/chat/completions")
+	Method                             string                             // HTTP method (POST, GET, PUT, DELETE)
+	GetRequestTypeInstance             func() interface{}                 // Factory function to create request instance (SHOULD NOT BE NIL)
+	RequestParser                      RequestParser                      // Optional: custom request parsing (e.g., multipart/form-data)
+	RequestConverter                   RequestConverter                   // Function to convert request to BifrostRequest (for inference requests)
+	BatchRequestConverter              BatchRequestConverter              // Function to convert request to BatchRequest (for batch operations)
+	FileRequestConverter               FileRequestConverter               // Function to convert request to FileRequest (for file operations)
+	ContainerRequestConverter          ContainerRequestConverter          // Function to convert request to ContainerRequest (for container operations)
+	ContainerFileRequestConverter      ContainerFileRequestConverter      // Function to convert request to ContainerFileRequest (for container file operations)
+	ListModelsResponseConverter        ListModelsResponseConverter        // Function to convert BifrostListModelsResponse to integration format (SHOULD NOT BE NIL)
+	TextResponseConverter              TextResponseConverter              // Function to convert BifrostTextCompletionResponse to integration format (SHOULD NOT BE NIL)
+	ChatResponseConverter              ChatResponseConverter              // Function to convert BifrostChatResponse to integration format (SHOULD NOT BE NIL)
+	ResponsesResponseConverter         ResponsesResponseConverter         // Function to convert BifrostResponsesResponse to integration format (SHOULD NOT BE NIL)
+	EmbeddingResponseConverter         EmbeddingResponseConverter         // Function to convert BifrostEmbeddingResponse to integration format (SHOULD NOT BE NIL)
+	SpeechResponseConverter            SpeechResponseConverter            // Function to convert BifrostSpeechResponse to integration format (SHOULD NOT BE NIL)
+	TranscriptionResponseConverter     TranscriptionResponseConverter     // Function to convert BifrostTranscriptionResponse to integration format (SHOULD NOT BE NIL)
+	ImageGenerationResponseConverter   ImageGenerationResponseConverter   // Function to convert BifrostImageGenerationResponse to integration format (SHOULD NOT BE NIL)
+	BatchCreateResponseConverter       BatchCreateResponseConverter       // Function to convert BifrostBatchCreateResponse to integration format
+	BatchListResponseConverter         BatchListResponseConverter         // Function to convert BifrostBatchListResponse to integration format
+	BatchRetrieveResponseConverter     BatchRetrieveResponseConverter     // Function to convert BifrostBatchRetrieveResponse to integration format
+	BatchCancelResponseConverter       BatchCancelResponseConverter       // Function to convert BifrostBatchCancelResponse to integration format
+	BatchResultsResponseConverter      BatchResultsResponseConverter      // Function to convert BifrostBatchResultsResponse to integration format
+	FileUploadResponseConverter        FileUploadResponseConverter        // Function to convert BifrostFileUploadResponse to integration format
+	FileListResponseConverter          FileListResponseConverter          // Function to convert BifrostFileListResponse to integration format
+	FileRetrieveResponseConverter      FileRetrieveResponseConverter      // Function to convert BifrostFileRetrieveResponse to integration format
+	FileDeleteResponseConverter        FileDeleteResponseConverter        // Function to convert BifrostFileDeleteResponse to integration format
+	FileContentResponseConverter       FileContentResponseConverter       // Function to convert BifrostFileContentResponse to integration format
+	ContainerCreateResponseConverter   ContainerCreateResponseConverter   // Function to convert BifrostContainerCreateResponse to integration format
+	ContainerListResponseConverter     ContainerListResponseConverter     // Function to convert BifrostContainerListResponse to integration format
+	ContainerRetrieveResponseConverter ContainerRetrieveResponseConverter // Function to convert BifrostContainerRetrieveResponse to integration format
+	ContainerDeleteResponseConverter       ContainerDeleteResponseConverter       // Function to convert BifrostContainerDeleteResponse to integration format
+	ContainerFileCreateResponseConverter   ContainerFileCreateResponseConverter   // Function to convert BifrostContainerFileCreateResponse to integration format
+	ContainerFileListResponseConverter     ContainerFileListResponseConverter     // Function to convert BifrostContainerFileListResponse to integration format
+	ContainerFileRetrieveResponseConverter ContainerFileRetrieveResponseConverter // Function to convert BifrostContainerFileRetrieveResponse to integration format
+	ContainerFileContentResponseConverter  ContainerFileContentResponseConverter  // Function to convert BifrostContainerFileContentResponse to integration format
+	ContainerFileDeleteResponseConverter   ContainerFileDeleteResponseConverter   // Function to convert BifrostContainerFileDeleteResponse to integration format
+	CountTokensResponseConverter           CountTokensResponseConverter           // Function to convert BifrostCountTokensResponse to integration format
+	ErrorConverter                     ErrorConverter                     // Function to convert BifrostError to integration format (SHOULD NOT BE NIL)
+	StreamConfig                       *StreamConfig                      // Optional: Streaming configuration (if nil, streaming not supported)
+	PreCallback                        PreRequestCallback                 // Optional: called after parsing but before Bifrost processing
+	PostCallback                       PostRequestCallback                // Optional: called after request processing
 }
 
 // GenericRouter provides a reusable router implementation for all integrations.
@@ -347,10 +419,12 @@ func (g *GenericRouter) RegisterRoutes(r *router.Router, middlewares ...schemas.
 			continue
 		}
 
-		// Determine route type: inference, batch, or file
+		// Determine route type: inference, batch, file, container, or container file
 		isBatchRoute := route.BatchRequestConverter != nil
 		isFileRoute := route.FileRequestConverter != nil
-		isInferenceRoute := !isBatchRoute && !isFileRoute
+		isContainerRoute := route.ContainerRequestConverter != nil
+		isContainerFileRoute := route.ContainerFileRequestConverter != nil
+		isInferenceRoute := !isBatchRoute && !isFileRoute && !isContainerRoute && !isContainerFileRoute
 
 		// For inference routes, require RequestConverter
 		if isInferenceRoute && route.RequestConverter == nil {
@@ -403,6 +477,10 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 
 		// Set integration type to context
 		bifrostCtx.SetValue(schemas.BifrostContextKeyIntegrationType, string(config.Type))
+
+		// Set available providers to context
+		availableProviders := g.handlerStore.GetAvailableProviders()
+		bifrostCtx.SetValue(schemas.BifrostContextKeyAvailableProviders, availableProviders)
 
 		// Parse request body based on configuration
 		if method != fasthttp.MethodGet && method != fasthttp.MethodHead {
@@ -471,6 +549,38 @@ func (g *GenericRouter) createHandler(config RouteConfig) fasthttp.RequestHandle
 				return
 			}
 			g.handleFileRequest(ctx, config, req, fileReq, bifrostCtx)
+			return
+		}
+
+		// Handle container requests if ContainerRequestConverter is set
+		if config.ContainerRequestConverter != nil {
+			defer cancel()
+			containerReq, err := config.ContainerRequestConverter(bifrostCtx, req)
+			if err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to convert container request"))
+				return
+			}
+			if containerReq == nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Invalid container request"))
+				return
+			}
+			g.handleContainerRequest(ctx, config, req, containerReq, bifrostCtx)
+			return
+		}
+
+		// Handle container file requests if ContainerFileRequestConverter is set
+		if config.ContainerFileRequestConverter != nil {
+			defer cancel()
+			containerFileReq, err := config.ContainerFileRequestConverter(bifrostCtx, req)
+			if err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to convert container file request"))
+				return
+			}
+			if containerFileReq == nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Invalid container file request"))
+				return
+			}
+			g.handleContainerFileRequest(ctx, config, req, containerFileReq, bifrostCtx)
 			return
 		}
 
@@ -1057,6 +1167,259 @@ func (g *GenericRouter) handleFileRequest(ctx *fasthttp.RequestCtx, config Route
 
 	// If response is nil, PostCallback has set headers/status - return without body
 	if response == nil {
+		return
+	}
+
+	g.sendSuccess(ctx, bifrostCtx, config.ErrorConverter, response)
+}
+
+// handleContainerRequest handles container API requests (create, list, retrieve, delete)
+func (g *GenericRouter) handleContainerRequest(ctx *fasthttp.RequestCtx, config RouteConfig, req interface{}, containerReq *ContainerRequest, bifrostCtx *schemas.BifrostContext) {
+	var response interface{}
+	var err error
+
+	switch containerReq.Type {
+	case schemas.ContainerCreateRequest:
+		if containerReq.CreateRequest == nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Invalid container create request"))
+			return
+		}
+		containerResponse, bifrostErr := g.client.ContainerCreateRequest(bifrostCtx, containerReq.CreateRequest)
+		if bifrostErr != nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
+			return
+		}
+		if config.PostCallback != nil {
+			if err := config.PostCallback(ctx, req, containerResponse); err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to execute post-request callback"))
+				return
+			}
+		}
+		if config.ContainerCreateResponseConverter != nil {
+			response, err = config.ContainerCreateResponseConverter(bifrostCtx, containerResponse)
+		} else {
+			response = containerResponse
+		}
+
+	case schemas.ContainerListRequest:
+		if containerReq.ListRequest == nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Invalid container list request"))
+			return
+		}
+		containerResponse, bifrostErr := g.client.ContainerListRequest(bifrostCtx, containerReq.ListRequest)
+		if bifrostErr != nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
+			return
+		}
+		if config.PostCallback != nil {
+			if err := config.PostCallback(ctx, req, containerResponse); err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to execute post-request callback"))
+				return
+			}
+		}
+		if config.ContainerListResponseConverter != nil {
+			response, err = config.ContainerListResponseConverter(bifrostCtx, containerResponse)
+		} else {
+			response = containerResponse
+		}
+
+	case schemas.ContainerRetrieveRequest:
+		if containerReq.RetrieveRequest == nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Invalid container retrieve request"))
+			return
+		}
+		containerResponse, bifrostErr := g.client.ContainerRetrieveRequest(bifrostCtx, containerReq.RetrieveRequest)
+		if bifrostErr != nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
+			return
+		}
+		if config.PostCallback != nil {
+			if err := config.PostCallback(ctx, req, containerResponse); err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to execute post-request callback"))
+				return
+			}
+		}
+		if config.ContainerRetrieveResponseConverter != nil {
+			response, err = config.ContainerRetrieveResponseConverter(bifrostCtx, containerResponse)
+		} else {
+			response = containerResponse
+		}
+
+	case schemas.ContainerDeleteRequest:
+		if containerReq.DeleteRequest == nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Invalid container delete request"))
+			return
+		}
+		containerResponse, bifrostErr := g.client.ContainerDeleteRequest(bifrostCtx, containerReq.DeleteRequest)
+		if bifrostErr != nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
+			return
+		}
+		if config.PostCallback != nil {
+			if err := config.PostCallback(ctx, req, containerResponse); err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to execute post-request callback"))
+				return
+			}
+		}
+		if config.ContainerDeleteResponseConverter != nil {
+			response, err = config.ContainerDeleteResponseConverter(bifrostCtx, containerResponse)
+		} else {
+			response = containerResponse
+		}
+
+	default:
+		g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Unknown container request type"))
+		return
+	}
+
+	if err != nil {
+		g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to convert container response"))
+		return
+	}
+
+	g.sendSuccess(ctx, bifrostCtx, config.ErrorConverter, response)
+}
+
+// handleContainerFileRequest handles container file API requests (create, list, retrieve, content, delete)
+func (g *GenericRouter) handleContainerFileRequest(ctx *fasthttp.RequestCtx, config RouteConfig, req interface{}, containerFileReq *ContainerFileRequest, bifrostCtx *schemas.BifrostContext) {
+	var response interface{}
+	var err error
+
+	switch containerFileReq.Type {
+	case schemas.ContainerFileCreateRequest:
+		if containerFileReq.CreateRequest == nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Invalid container file create request"))
+			return
+		}
+		containerFileResponse, bifrostErr := g.client.ContainerFileCreateRequest(bifrostCtx, containerFileReq.CreateRequest)
+		if bifrostErr != nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
+			return
+		}
+		if config.PostCallback != nil {
+			if err := config.PostCallback(ctx, req, containerFileResponse); err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to execute post-request callback"))
+				return
+			}
+		}
+		if config.ContainerFileCreateResponseConverter != nil {
+			response, err = config.ContainerFileCreateResponseConverter(bifrostCtx, containerFileResponse)
+		} else {
+			response = containerFileResponse
+		}
+
+	case schemas.ContainerFileListRequest:
+		if containerFileReq.ListRequest == nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Invalid container file list request"))
+			return
+		}
+		containerFileResponse, bifrostErr := g.client.ContainerFileListRequest(bifrostCtx, containerFileReq.ListRequest)
+		if bifrostErr != nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
+			return
+		}
+		if config.PostCallback != nil {
+			if err := config.PostCallback(ctx, req, containerFileResponse); err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to execute post-request callback"))
+				return
+			}
+		}
+		if config.ContainerFileListResponseConverter != nil {
+			response, err = config.ContainerFileListResponseConverter(bifrostCtx, containerFileResponse)
+		} else {
+			response = containerFileResponse
+		}
+
+	case schemas.ContainerFileRetrieveRequest:
+		if containerFileReq.RetrieveRequest == nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Invalid container file retrieve request"))
+			return
+		}
+		containerFileResponse, bifrostErr := g.client.ContainerFileRetrieveRequest(bifrostCtx, containerFileReq.RetrieveRequest)
+		if bifrostErr != nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
+			return
+		}
+		if config.PostCallback != nil {
+			if err := config.PostCallback(ctx, req, containerFileResponse); err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to execute post-request callback"))
+				return
+			}
+		}
+		if config.ContainerFileRetrieveResponseConverter != nil {
+			response, err = config.ContainerFileRetrieveResponseConverter(bifrostCtx, containerFileResponse)
+		} else {
+			response = containerFileResponse
+		}
+
+	case schemas.ContainerFileContentRequest:
+		if containerFileReq.ContentRequest == nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Invalid container file content request"))
+			return
+		}
+		containerFileResponse, bifrostErr := g.client.ContainerFileContentRequest(bifrostCtx, containerFileReq.ContentRequest)
+		if bifrostErr != nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
+			return
+		}
+		if config.PostCallback != nil {
+			if err := config.PostCallback(ctx, req, containerFileResponse); err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to execute post-request callback"))
+				return
+			}
+		}
+		// For content requests, handle binary response specially if converter is set
+		if config.ContainerFileContentResponseConverter != nil {
+			response, err = config.ContainerFileContentResponseConverter(bifrostCtx, containerFileResponse)
+			if err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to convert container file content response"))
+				return
+			}
+			// Check if response is raw bytes - write directly without JSON encoding
+			if rawBytes, ok := response.([]byte); ok {
+				ctx.Response.Header.Set("Content-Type", containerFileResponse.ContentType)
+				ctx.Response.Header.Set("Content-Length", strconv.Itoa(len(rawBytes)))
+				ctx.Response.SetBody(rawBytes)
+			} else {
+				g.sendSuccess(ctx, bifrostCtx, config.ErrorConverter, response)
+			}
+		} else {
+			// Return raw binary content
+			ctx.Response.Header.Set("Content-Type", containerFileResponse.ContentType)
+			ctx.Response.Header.Set("Content-Length", strconv.Itoa(len(containerFileResponse.Content)))
+			ctx.Response.SetBody(containerFileResponse.Content)
+		}
+		return
+
+	case schemas.ContainerFileDeleteRequest:
+		if containerFileReq.DeleteRequest == nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Invalid container file delete request"))
+			return
+		}
+		containerFileResponse, bifrostErr := g.client.ContainerFileDeleteRequest(bifrostCtx, containerFileReq.DeleteRequest)
+		if bifrostErr != nil {
+			g.sendError(ctx, bifrostCtx, config.ErrorConverter, bifrostErr)
+			return
+		}
+		if config.PostCallback != nil {
+			if err := config.PostCallback(ctx, req, containerFileResponse); err != nil {
+				g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to execute post-request callback"))
+				return
+			}
+		}
+		if config.ContainerFileDeleteResponseConverter != nil {
+			response, err = config.ContainerFileDeleteResponseConverter(bifrostCtx, containerFileResponse)
+		} else {
+			response = containerFileResponse
+		}
+
+	default:
+		g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(nil, "Unknown container file request type"))
+		return
+	}
+
+	if err != nil {
+		g.sendError(ctx, bifrostCtx, config.ErrorConverter, newBifrostError(err, "failed to convert container file response"))
 		return
 	}
 

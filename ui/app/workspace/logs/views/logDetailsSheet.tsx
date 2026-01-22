@@ -43,8 +43,20 @@ interface LogDetailSheetProps {
 	handleDelete: (log: LogEntry) => void;
 }
 
+// Helper to detect container operations (for hiding irrelevant fields like Model/Tokens)
+const isContainerOperation = (object: string) => {
+	const containerTypes = [
+		'container_create', 'container_list', 'container_retrieve', 'container_delete',
+		'container_file_create', 'container_file_list', 'container_file_retrieve',
+		'container_file_content', 'container_file_delete'
+	]
+	return containerTypes.includes(object?.toLowerCase())
+}
+
 export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDetailSheetProps) {
 	if (!log) return null;
+
+	const isContainer = isContainerOperation(log.object)
 
 	// Taking out tool call
 	let toolsParameter = null;
@@ -268,7 +280,7 @@ export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDet
 									</Badge>
 								}
 							/>
-							<LogEntryDetailsView className="w-full" label="Model" value={log.model} />
+							{!isContainer && <LogEntryDetailsView className="w-full" label="Model" value={log.model} />}
 							<LogEntryDetailsView
 								className="w-full"
 								label="Type"
@@ -309,14 +321,14 @@ export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDet
 									.map(([key, value]) => <LogEntryDetailsView key={key} className="w-full" label={key} value={value} />)}
 						</div>
 					</div>
-					{log.status === "success" && (
+					{log.status === "success" && !isContainer && (
 						<>
 							<DottedSeparator />
 							<div className="space-y-4">
 								<BlockHeader title="Tokens" icon={<DollarSign className="h-5 w-5 text-gray-600" />} />
 								<div className="grid w-full grid-cols-3 items-center justify-between gap-4">
-									<LogEntryDetailsView className="w-full" label="Prompt Tokens" value={log.token_usage?.prompt_tokens || "-"} />
-									<LogEntryDetailsView className="w-full" label="Completion Tokens" value={log.token_usage?.completion_tokens || "-"} />
+									<LogEntryDetailsView className="w-full" label="Input Tokens" value={log.token_usage?.prompt_tokens || "-"} />
+									<LogEntryDetailsView className="w-full" label="Output Tokens" value={log.token_usage?.completion_tokens || "-"} />
 									<LogEntryDetailsView className="w-full" label="Total Tokens" value={log.token_usage?.total_tokens || "-"} />
 									{log.token_usage?.prompt_tokens_details && (
 										<>

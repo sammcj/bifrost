@@ -11,7 +11,6 @@ import (
 
 	"github.com/maximhq/bifrost/core/schemas"
 
-	"github.com/maximhq/bifrost/core/providers/utils"
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 )
 
@@ -1611,6 +1610,18 @@ func ToAnthropicResponsesStreamResponse(ctx *schemas.BifrostContext, bifrostResp
 			}
 
 			return events
+		} else if bifrostResp.Item != nil &&
+			bifrostResp.Item.Type != nil &&
+			(*bifrostResp.Item.Type == schemas.ResponsesMessageTypeFunctionCall ||
+				*bifrostResp.Item.Type == schemas.ResponsesMessageTypeMCPCall) {
+
+			// Function call or MCP call complete - just emit content_block_stop
+			streamResp.Type = AnthropicStreamEventTypeContentBlockStop
+			if bifrostResp.ContentIndex != nil {
+				streamResp.Index = bifrostResp.ContentIndex
+			} else if bifrostResp.OutputIndex != nil {
+				streamResp.Index = bifrostResp.OutputIndex
+			}
 		} else {
 			// For text blocks and other content blocks, emit content_block_stop
 			streamResp.Type = AnthropicStreamEventTypeContentBlockStop
@@ -1755,8 +1766,8 @@ func ToAnthropicResponsesStreamResponse(ctx *schemas.BifrostContext, bifrostResp
 }
 
 // ToBifrostResponsesRequest converts an Anthropic message request to Bifrost format
-func (request *AnthropicMessageRequest) ToBifrostResponsesRequest(ctx context.Context) *schemas.BifrostResponsesRequest {
-	provider, model := schemas.ParseModelString(request.Model, schemas.Anthropic)
+func (request *AnthropicMessageRequest) ToBifrostResponsesRequest(ctx *schemas.BifrostContext) *schemas.BifrostResponsesRequest {
+	provider, model := schemas.ParseModelString(request.Model, providerUtils.CheckAndSetDefaultProvider(ctx, schemas.Anthropic))
 
 	bifrostReq := &schemas.BifrostResponsesRequest{
 		Provider:  provider,
@@ -2795,7 +2806,7 @@ func convertAnthropicContentBlocksToResponsesMessagesGrouped(contentBlocks []Ant
 					},
 				}
 				if isOutputMessage {
-					bifrostMsg.ID = schemas.Ptr("msg_" + utils.GetRandomString(50))
+					bifrostMsg.ID = schemas.Ptr("msg_" + providerUtils.GetRandomString(50))
 				}
 				bifrostMessages = append(bifrostMessages, bifrostMsg)
 			}
@@ -2803,7 +2814,7 @@ func convertAnthropicContentBlocksToResponsesMessagesGrouped(contentBlocks []Ant
 		case AnthropicContentBlockTypeThinking:
 			if block.Thinking != nil {
 				bifrostMsg := schemas.ResponsesMessage{
-					ID:   schemas.Ptr("rs_" + utils.GetRandomString(50)),
+					ID:   schemas.Ptr("rs_" + providerUtils.GetRandomString(50)),
 					Type: schemas.Ptr(schemas.ResponsesMessageTypeReasoning),
 					Role: role,
 					Content: &schemas.ResponsesMessageContent{
@@ -3067,7 +3078,7 @@ func convertAnthropicContentBlocksToResponsesMessages(contentBlocks []AnthropicC
 					},
 				}
 				if isOutputMessage {
-					bifrostMsg.ID = schemas.Ptr("msg_" + utils.GetRandomString(50))
+					bifrostMsg.ID = schemas.Ptr("msg_" + providerUtils.GetRandomString(50))
 				}
 				bifrostMessages = append(bifrostMessages, bifrostMsg)
 			}

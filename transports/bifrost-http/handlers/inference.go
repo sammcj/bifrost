@@ -188,6 +188,15 @@ var batchCreateParamsKnownFields = map[string]bool{
 	"metadata":          true,
 }
 
+var containerCreateParamsKnownFields = map[string]bool{
+	"provider":      true,
+	"name":          true,
+	"expires_after": true,
+	"file_ids":      true,
+	"memory_limit":  true,
+	"metadata":      true,
+}
+
 type BifrostParams struct {
 	Model        string   `json:"model"`                   // Model to use in "provider/model" format
 	Fallbacks    []string `json:"fallbacks"`               // Fallback providers and models in "provider/model" format
@@ -385,7 +394,26 @@ type BatchListRequest struct {
 	Before   *string `json:"before,omitempty"` // Cursor for pagination
 }
 
+// ContainerCreateRequest is a bifrost container create request
+type ContainerCreateRequest struct {
+	Provider     string                         `json:"provider"`                // Provider name
+	Name         string                         `json:"name"`                    // Name of the container
+	ExpiresAfter *schemas.ContainerExpiresAfter `json:"expires_after,omitempty"` // Expiration configuration
+	FileIDs      []string                       `json:"file_ids,omitempty"`      // IDs of existing files to copy into this container
+	MemoryLimit  string                         `json:"memory_limit,omitempty"`  // Memory limit (e.g., "1g", "4g")
+	Metadata     map[string]string              `json:"metadata,omitempty"`      // User-provided metadata
+}
+
 // Helper functions
+
+// enableRawRequestResponseForContainer sets context flags to always capture raw request/response
+// for container operations. Container operations don't have model-specific content, so raw
+// data is useful for debugging and should be enabled by default.
+func enableRawRequestResponseForContainer(bifrostCtx *schemas.BifrostContext) {
+	bifrostCtx.SetValue(schemas.BifrostContextKeySendBackRawRequest, true)
+	bifrostCtx.SetValue(schemas.BifrostContextKeySendBackRawResponse, true)
+	bifrostCtx.SetValue(schemas.BifrostContextKeyRawRequestResponseForLogging, true)
+}
 
 // parseFallbacks extracts fallbacks from string array and converts to Fallback structs
 func parseFallbacks(fallbackStrings []string) ([]schemas.Fallback, error) {
@@ -468,6 +496,19 @@ func (h *CompletionHandler) RegisterRoutes(r *router.Router, middlewares ...sche
 	r.GET("/v1/files/{file_id}", lib.ChainMiddlewares(h.fileRetrieve, middlewares...))
 	r.DELETE("/v1/files/{file_id}", lib.ChainMiddlewares(h.fileDelete, middlewares...))
 	r.GET("/v1/files/{file_id}/content", lib.ChainMiddlewares(h.fileContent, middlewares...))
+
+	// Container API endpoints
+	r.POST("/v1/containers", lib.ChainMiddlewares(h.containerCreate, middlewares...))
+	r.GET("/v1/containers", lib.ChainMiddlewares(h.containerList, middlewares...))
+	r.GET("/v1/containers/{container_id}", lib.ChainMiddlewares(h.containerRetrieve, middlewares...))
+	r.DELETE("/v1/containers/{container_id}", lib.ChainMiddlewares(h.containerDelete, middlewares...))
+
+	// Container Files API endpoints
+	r.POST("/v1/containers/{container_id}/files", lib.ChainMiddlewares(h.containerFileCreate, middlewares...))
+	r.GET("/v1/containers/{container_id}/files", lib.ChainMiddlewares(h.containerFileList, middlewares...))
+	r.GET("/v1/containers/{container_id}/files/{file_id}", lib.ChainMiddlewares(h.containerFileRetrieve, middlewares...))
+	r.GET("/v1/containers/{container_id}/files/{file_id}/content", lib.ChainMiddlewares(h.containerFileContent, middlewares...))
+	r.DELETE("/v1/containers/{container_id}/files/{file_id}", lib.ChainMiddlewares(h.containerFileDelete, middlewares...))
 }
 
 // listModels handles GET /v1/models - Process list models requests
@@ -1987,4 +2028,479 @@ func (h *CompletionHandler) fileContent(ctx *fasthttp.RequestCtx) {
 	ctx.Response.Header.Set("Content-Type", resp.ContentType)
 	ctx.Response.Header.Set("Content-Length", strconv.Itoa(len(resp.Content)))
 	ctx.Response.SetBody(resp.Content)
+}
+
+// containerCreate handles POST /v1/containers - Create a new container
+func (h *CompletionHandler) containerCreate(ctx *fasthttp.RequestCtx) {
+	var req ContainerCreateRequest
+	if err := sonic.Unmarshal(ctx.PostBody(), &req); err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid request format: %v", err))
+		return
+	}
+
+	// Validate required fields
+	if req.Provider == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "provider is required")
+		return
+	}
+
+	if req.Name == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "name is required")
+		return
+	}
+
+	// Extract extra params
+	extraParams, err := extractExtraParams(ctx.PostBody(), containerCreateParamsKnownFields)
+	if err != nil {
+		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
+	}
+
+	// Build Bifrost container create request
+	bifrostContainerReq := &schemas.BifrostContainerCreateRequest{
+		Provider:     schemas.ModelProvider(req.Provider),
+		Name:         req.Name,
+		ExpiresAfter: req.ExpiresAfter,
+		FileIDs:      req.FileIDs,
+		MemoryLimit:  req.MemoryLimit,
+		Metadata:     req.Metadata,
+		ExtraParams:  extraParams,
+	}
+
+	// Convert context
+	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys(), h.config.GetHeaderFilterConfig())
+	defer cancel()
+	if bifrostCtx == nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")
+		return
+	}
+	enableRawRequestResponseForContainer(bifrostCtx)
+
+	resp, bifrostErr := h.client.ContainerCreateRequest(bifrostCtx, bifrostContainerReq)
+	if bifrostErr != nil {
+		SendBifrostError(ctx, bifrostErr)
+		return
+	}
+
+	SendJSON(ctx, resp)
+}
+
+// containerList handles GET /v1/containers - List containers
+func (h *CompletionHandler) containerList(ctx *fasthttp.RequestCtx) {
+	// Get provider from query parameters
+	provider := string(ctx.QueryArgs().Peek("provider"))
+	if provider == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "provider query parameter is required")
+		return
+	}
+
+	// Parse limit parameter
+	limit := 0
+	if limitStr := ctx.QueryArgs().Peek("limit"); len(limitStr) > 0 {
+		if n, err := strconv.Atoi(string(limitStr)); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	// Parse pagination parameters
+	var after, order *string
+	if afterStr := ctx.QueryArgs().Peek("after"); len(afterStr) > 0 {
+		after = bifrost.Ptr(string(afterStr))
+	}
+	if orderStr := ctx.QueryArgs().Peek("order"); len(orderStr) > 0 {
+		order = bifrost.Ptr(string(orderStr))
+	}
+
+	// Build Bifrost container list request
+	bifrostContainerReq := &schemas.BifrostContainerListRequest{
+		Provider: schemas.ModelProvider(provider),
+		Limit:    limit,
+		After:    after,
+		Order:    order,
+	}
+
+	// Convert context
+	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys(), h.config.GetHeaderFilterConfig())
+	defer cancel()
+	if bifrostCtx == nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")
+		return
+	}
+	enableRawRequestResponseForContainer(bifrostCtx)
+
+	resp, bifrostErr := h.client.ContainerListRequest(bifrostCtx, bifrostContainerReq)
+	if bifrostErr != nil {
+		SendBifrostError(ctx, bifrostErr)
+		return
+	}
+
+	SendJSON(ctx, resp)
+}
+
+// containerRetrieve handles GET /v1/containers/{container_id} - Retrieve a container
+func (h *CompletionHandler) containerRetrieve(ctx *fasthttp.RequestCtx) {
+	// Get container ID from URL parameter
+	containerID, ok := ctx.UserValue("container_id").(string)
+	if !ok || containerID == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "container_id is required")
+		return
+	}
+
+	// Get provider from query parameters
+	provider := string(ctx.QueryArgs().Peek("provider"))
+	if provider == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "provider query parameter is required")
+		return
+	}
+
+	// Build Bifrost container retrieve request
+	bifrostContainerReq := &schemas.BifrostContainerRetrieveRequest{
+		Provider:    schemas.ModelProvider(provider),
+		ContainerID: containerID,
+	}
+
+	// Convert context
+	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys(), h.config.GetHeaderFilterConfig())
+	defer cancel()
+	if bifrostCtx == nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")
+		return
+	}
+	enableRawRequestResponseForContainer(bifrostCtx)
+
+	resp, bifrostErr := h.client.ContainerRetrieveRequest(bifrostCtx, bifrostContainerReq)
+	if bifrostErr != nil {
+		SendBifrostError(ctx, bifrostErr)
+		return
+	}
+
+	SendJSON(ctx, resp)
+}
+
+// containerDelete handles DELETE /v1/containers/{container_id} - Delete a container
+func (h *CompletionHandler) containerDelete(ctx *fasthttp.RequestCtx) {
+	// Get container ID from URL parameter
+	containerID, ok := ctx.UserValue("container_id").(string)
+	if !ok || containerID == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "container_id is required")
+		return
+	}
+
+	// Get provider from query parameters
+	provider := string(ctx.QueryArgs().Peek("provider"))
+	if provider == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "provider query parameter is required")
+		return
+	}
+
+	// Build Bifrost container delete request
+	bifrostContainerReq := &schemas.BifrostContainerDeleteRequest{
+		Provider:    schemas.ModelProvider(provider),
+		ContainerID: containerID,
+	}
+
+	// Convert context
+	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys(), h.config.GetHeaderFilterConfig())
+	defer cancel()
+	if bifrostCtx == nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")
+		return
+	}
+	enableRawRequestResponseForContainer(bifrostCtx)
+
+	resp, bifrostErr := h.client.ContainerDeleteRequest(bifrostCtx, bifrostContainerReq)
+	if bifrostErr != nil {
+		SendBifrostError(ctx, bifrostErr)
+		return
+	}
+
+	SendJSON(ctx, resp)
+}
+
+// =============================================================================
+// CONTAINER FILES HANDLERS
+// =============================================================================
+
+// containerFileCreate handles POST /v1/containers/{container_id}/files - Create a file in a container
+func (h *CompletionHandler) containerFileCreate(ctx *fasthttp.RequestCtx) {
+	// Get container ID from URL parameter
+	containerID, ok := ctx.UserValue("container_id").(string)
+	if !ok || containerID == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "container_id is required")
+		return
+	}
+
+	// Get provider from query parameters
+	provider := string(ctx.QueryArgs().Peek("provider"))
+	if provider == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "provider query parameter is required")
+		return
+	}
+
+	// Build Bifrost container file create request
+	bifrostContainerFileReq := &schemas.BifrostContainerFileCreateRequest{
+		Provider:    schemas.ModelProvider(provider),
+		ContainerID: containerID,
+	}
+
+	// Check if this is a multipart request or JSON request
+	contentType := string(ctx.Request.Header.ContentType())
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		// Handle multipart file upload
+		fileHeader, err := ctx.FormFile("file")
+		if err != nil {
+			SendError(ctx, fasthttp.StatusBadRequest, "file is required for multipart upload")
+			return
+		}
+		file, err := fileHeader.Open()
+		if err != nil {
+			SendError(ctx, fasthttp.StatusInternalServerError, "Failed to open uploaded file")
+			return
+		}
+		defer file.Close()
+
+		fileContent, err := io.ReadAll(file)
+		if err != nil {
+			SendError(ctx, fasthttp.StatusInternalServerError, "Failed to read uploaded file")
+			return
+		}
+		bifrostContainerFileReq.File = fileContent
+		// Extract optional file_path from multipart form
+		if filePath := ctx.FormValue("file_path"); len(filePath) > 0 {
+			bifrostContainerFileReq.Path = bifrost.Ptr(string(filePath))
+		}
+	} else {
+		// Handle JSON request with file_id
+		var reqBody struct {
+			FileID   string `json:"file_id"`
+			FilePath string `json:"file_path,omitempty"`
+		}
+		if err := sonic.Unmarshal(ctx.PostBody(), &reqBody); err != nil {
+			SendError(ctx, fasthttp.StatusBadRequest, "Invalid JSON body")
+			return
+		}
+		if reqBody.FileID == "" {
+			SendError(ctx, fasthttp.StatusBadRequest, "file_id is required in JSON body")
+			return
+		}
+		bifrostContainerFileReq.FileID = bifrost.Ptr(reqBody.FileID)
+		if reqBody.FilePath != "" {
+			bifrostContainerFileReq.Path = bifrost.Ptr(reqBody.FilePath)
+		}
+	}
+
+	// Convert context
+	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys(), h.config.GetHeaderFilterConfig())
+	defer cancel()
+	if bifrostCtx == nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")
+		return
+	}
+	enableRawRequestResponseForContainer(bifrostCtx)
+
+	resp, bifrostErr := h.client.ContainerFileCreateRequest(bifrostCtx, bifrostContainerFileReq)
+	if bifrostErr != nil {
+		SendBifrostError(ctx, bifrostErr)
+		return
+	}
+
+	SendJSON(ctx, resp)
+}
+
+// containerFileList handles GET /v1/containers/{container_id}/files - List files in a container
+func (h *CompletionHandler) containerFileList(ctx *fasthttp.RequestCtx) {
+	// Get container ID from URL parameter
+	containerID, ok := ctx.UserValue("container_id").(string)
+	if !ok || containerID == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "container_id is required")
+		return
+	}
+
+	// Get provider from query parameters
+	provider := string(ctx.QueryArgs().Peek("provider"))
+	if provider == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "provider query parameter is required")
+		return
+	}
+
+	// Build Bifrost container file list request
+	bifrostContainerFileReq := &schemas.BifrostContainerFileListRequest{
+		Provider:    schemas.ModelProvider(provider),
+		ContainerID: containerID,
+	}
+
+	// Parse pagination parameters
+	if limit := ctx.QueryArgs().Peek("limit"); len(limit) > 0 {
+		if limitInt, err := strconv.Atoi(string(limit)); err == nil && limitInt > 0 {
+			bifrostContainerFileReq.Limit = limitInt
+		}
+	}
+	if after := string(ctx.QueryArgs().Peek("after")); after != "" {
+		bifrostContainerFileReq.After = bifrost.Ptr(after)
+	}
+	if order := string(ctx.QueryArgs().Peek("order")); order != "" {
+		bifrostContainerFileReq.Order = bifrost.Ptr(order)
+	}
+
+	// Convert context
+	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys(), h.config.GetHeaderFilterConfig())
+	defer cancel()
+	if bifrostCtx == nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")
+		return
+	}
+	enableRawRequestResponseForContainer(bifrostCtx)
+
+	resp, bifrostErr := h.client.ContainerFileListRequest(bifrostCtx, bifrostContainerFileReq)
+	if bifrostErr != nil {
+		SendBifrostError(ctx, bifrostErr)
+		return
+	}
+
+	SendJSON(ctx, resp)
+}
+
+// containerFileRetrieve handles GET /v1/containers/{container_id}/files/{file_id} - Retrieve a file from a container
+func (h *CompletionHandler) containerFileRetrieve(ctx *fasthttp.RequestCtx) {
+	// Get container ID from URL parameter
+	containerID, ok := ctx.UserValue("container_id").(string)
+	if !ok || containerID == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "container_id is required")
+		return
+	}
+
+	// Get file ID from URL parameter
+	fileID, ok := ctx.UserValue("file_id").(string)
+	if !ok || fileID == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "file_id is required")
+		return
+	}
+
+	// Get provider from query parameters
+	provider := string(ctx.QueryArgs().Peek("provider"))
+	if provider == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "provider query parameter is required")
+		return
+	}
+
+	// Build Bifrost container file retrieve request
+	bifrostContainerFileReq := &schemas.BifrostContainerFileRetrieveRequest{
+		Provider:    schemas.ModelProvider(provider),
+		ContainerID: containerID,
+		FileID:      fileID,
+	}
+
+	// Convert context
+	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys(), h.config.GetHeaderFilterConfig())
+	defer cancel()
+	if bifrostCtx == nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")
+		return
+	}
+	enableRawRequestResponseForContainer(bifrostCtx)
+
+	resp, bifrostErr := h.client.ContainerFileRetrieveRequest(bifrostCtx, bifrostContainerFileReq)
+	if bifrostErr != nil {
+		SendBifrostError(ctx, bifrostErr)
+		return
+	}
+
+	SendJSON(ctx, resp)
+}
+
+// containerFileContent handles GET /v1/containers/{container_id}/files/{file_id}/content - Retrieve file content from a container
+func (h *CompletionHandler) containerFileContent(ctx *fasthttp.RequestCtx) {
+	// Get container ID from URL parameter
+	containerID, ok := ctx.UserValue("container_id").(string)
+	if !ok || containerID == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "container_id is required")
+		return
+	}
+
+	// Get file ID from URL parameter
+	fileID, ok := ctx.UserValue("file_id").(string)
+	if !ok || fileID == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "file_id is required")
+		return
+	}
+
+	// Get provider from query parameters
+	provider := string(ctx.QueryArgs().Peek("provider"))
+	if provider == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "provider query parameter is required")
+		return
+	}
+
+	// Build Bifrost container file content request
+	bifrostContainerFileReq := &schemas.BifrostContainerFileContentRequest{
+		Provider:    schemas.ModelProvider(provider),
+		ContainerID: containerID,
+		FileID:      fileID,
+	}
+
+	// Convert context
+	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys(), h.config.GetHeaderFilterConfig())
+	defer cancel()
+	if bifrostCtx == nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")
+		return
+	}
+	enableRawRequestResponseForContainer(bifrostCtx)
+
+	resp, bifrostErr := h.client.ContainerFileContentRequest(bifrostCtx, bifrostContainerFileReq)
+	if bifrostErr != nil {
+		SendBifrostError(ctx, bifrostErr)
+		return
+	}
+
+	// Send binary content with appropriate content type
+	ctx.SetContentType(resp.ContentType)
+	ctx.SetBody(resp.Content)
+}
+
+// containerFileDelete handles DELETE /v1/containers/{container_id}/files/{file_id} - Delete a file from a container
+func (h *CompletionHandler) containerFileDelete(ctx *fasthttp.RequestCtx) {
+	// Get container ID from URL parameter
+	containerID, ok := ctx.UserValue("container_id").(string)
+	if !ok || containerID == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "container_id is required")
+		return
+	}
+
+	// Get file ID from URL parameter
+	fileID, ok := ctx.UserValue("file_id").(string)
+	if !ok || fileID == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "file_id is required")
+		return
+	}
+
+	// Get provider from query parameters
+	provider := string(ctx.QueryArgs().Peek("provider"))
+	if provider == "" {
+		SendError(ctx, fasthttp.StatusBadRequest, "provider query parameter is required")
+		return
+	}
+
+	// Build Bifrost container file delete request
+	bifrostContainerFileReq := &schemas.BifrostContainerFileDeleteRequest{
+		Provider:    schemas.ModelProvider(provider),
+		ContainerID: containerID,
+		FileID:      fileID,
+	}
+
+	// Convert context
+	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, h.handlerStore.ShouldAllowDirectKeys(), h.config.GetHeaderFilterConfig())
+	defer cancel()
+	if bifrostCtx == nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")
+		return
+	}
+	enableRawRequestResponseForContainer(bifrostCtx)
+
+	resp, bifrostErr := h.client.ContainerFileDeleteRequest(bifrostCtx, bifrostContainerFileReq)
+	if bifrostErr != nil {
+		SendBifrostError(ctx, bifrostErr)
+		return
+	}
+
+	SendJSON(ctx, resp)
 }
