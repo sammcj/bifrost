@@ -364,6 +364,7 @@ export interface CoreConfig {
 	prometheus_labels: string[];
 	enable_logging: boolean;
 	disable_content_logging: boolean;
+	disable_db_pings_in_health: boolean;
 	log_retention_days: number;
 	enable_governance: boolean;
 	enforce_governance_header: boolean;
@@ -384,6 +385,7 @@ export const DefaultCoreConfig: CoreConfig = {
 	prometheus_labels: [],
 	enable_logging: true,
 	disable_content_logging: false,
+	disable_db_pings_in_health: false,
 	log_retention_days: 365,
 	enable_governance: true,
 	enforce_governance_header: false,

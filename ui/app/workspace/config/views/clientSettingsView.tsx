@@ -76,6 +76,7 @@ export default function ClientSettingsView() {
 		return (
 			localConfig.drop_excess_requests !== config.drop_excess_requests ||
 			localConfig.enable_litellm_fallbacks !== config.enable_litellm_fallbacks ||
+			localConfig.disable_db_pings_in_health !== config.disable_db_pings_in_health ||
 			!headerFilterConfigEqual(localConfig.header_filter_config, config.header_filter_config)
 		);
 	}, [config, localConfig]);
@@ -260,6 +261,25 @@ export default function ClientSettingsView() {
 						size="md"
 						checked={localConfig.enable_litellm_fallbacks}
 						onCheckedChange={(checked) => handleConfigChange("enable_litellm_fallbacks", checked)}
+						disabled={!hasSettingsUpdateAccess}
+					/>
+				</div>
+
+				{/* Disable DB Pings in Health */}
+				<div className="flex items-center justify-between space-x-2">
+					<div className="space-y-0.5">
+						<label htmlFor="disable-db-pings-in-health" className="text-sm font-medium">
+							Disable DB Pings in Health Check
+						</label>
+						<p className="text-muted-foreground text-sm">
+							If enabled, the /health endpoint will skip database connectivity checks and return OK immediately.
+						</p>
+					</div>
+					<Switch
+						id="disable-db-pings-in-health"
+						size="md"
+						checked={localConfig.disable_db_pings_in_health}
+						onCheckedChange={(checked) => handleConfigChange("disable_db_pings_in_health", checked)}
 						disabled={!hasSettingsUpdateAccess}
 					/>
 				</div>
