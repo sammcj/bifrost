@@ -406,6 +406,12 @@ func (s *WeaviateStore) Close(ctx context.Context, className string) error {
 	return nil
 }
 
+// RequiresVectors returns true because Weaviate's HNSW index
+// requires vectors for proper object indexing and retrieval.
+func (s *WeaviateStore) RequiresVectors() bool {
+	return true
+}
+
 // newWeaviateStore creates a new Weaviate vector store.
 func newWeaviateStore(ctx context.Context, config *WeaviateConfig, logger schemas.Logger) (*WeaviateStore, error) {
 	// Validate required config

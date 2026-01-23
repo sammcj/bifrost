@@ -409,6 +409,13 @@ func (plugin *Plugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostR
 	if performSemanticSearch && plugin.client != nil {
 		if req.EmbeddingRequest != nil || req.TranscriptionRequest != nil {
 			plugin.logger.Debug(PluginLoggerPrefix + " Skipping semantic search for embedding/transcription input")
+			// For vector stores that require vectors, set a zero vector placeholder
+			// This allows direct hash matching to work without the overhead of generating embeddings
+			if plugin.store.RequiresVectors() && plugin.config.Dimension > 0 {
+				zeroVector := make([]float32, plugin.config.Dimension)
+				ctx.SetValue(requestEmbeddingKey, zeroVector)
+				plugin.logger.Debug(PluginLoggerPrefix + " Using zero vector placeholder for embedding/transcription request storage")
+			}
 			return req, nil, nil
 		}
 
@@ -420,6 +427,27 @@ func (plugin *Plugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostR
 
 		if shortCircuit != nil {
 			return req, shortCircuit, nil
+		}
+	} else if !performSemanticSearch && plugin.store.RequiresVectors() && plugin.client != nil {
+		// Vector store requires vectors but we're in direct-only mode
+		// Generate embeddings for storage purposes (not for searching)
+		if req.EmbeddingRequest != nil || req.TranscriptionRequest != nil {
+			plugin.logger.Debug(PluginLoggerPrefix + " Skipping embedding generation for embedding/transcription input")
+			// For vector stores that require vectors, set a zero vector placeholder
+			// This allows direct hash matching to work without the overhead of generating embeddings
+			if plugin.config.Dimension > 0 {
+				zeroVector := make([]float32, plugin.config.Dimension)
+				ctx.SetValue(requestEmbeddingKey, zeroVector)
+				plugin.logger.Debug(PluginLoggerPrefix + " Using zero vector placeholder for embedding/transcription request storage")
+			}
+			return req, nil, nil
+		}
+
+		plugin.logger.Debug(PluginLoggerPrefix + " Generating embeddings for storage (vector store requires vectors)")
+		err := plugin.generateEmbeddingsForStorage(ctx, req)
+		if err != nil {
+			plugin.logger.Warn(PluginLoggerPrefix + " Failed to generate embeddings for storage: " + err.Error())
+			// Continue without embeddings - caching will fail but request will proceed
 		}
 	}
 
@@ -494,8 +522,15 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, res *schemas.Bifrost
 		if ok {
 			if cacheTypeVal == CacheTypeDirect {
 				// For direct-only caching, skip embedding operations entirely
-				shouldStoreEmbeddings = false
-				plugin.logger.Debug(PluginLoggerPrefix + " Skipping embedding operations for direct-only cache type")
+				// unless the vector store requires vectors for all entries
+				if plugin.store.RequiresVectors() {
+					// Vector stores like Qdrant and Pinecone require vectors for all entries
+					// Keep embeddings enabled for storage, but lookups will still use direct hash matching
+					plugin.logger.Debug(PluginLoggerPrefix + " Vector store requires vectors, keeping embedding generation enabled for storage")
+				} else {
+					shouldStoreEmbeddings = false
+					plugin.logger.Debug(PluginLoggerPrefix + " Skipping embedding operations for direct-only cache type")
+				}
 			} else if cacheTypeVal == CacheTypeSemantic {
 				shouldStoreHash = false
 				plugin.logger.Debug(PluginLoggerPrefix + " Skipping hash operations for semantic cache type")
@@ -516,7 +551,13 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, res *schemas.Bifrost
 	requestType := extraFields.RequestType
 
 	// Get embedding from context if available and needed
-	if shouldStoreEmbeddings && requestType != schemas.EmbeddingRequest && requestType != schemas.TranscriptionRequest {
+	// For embedding/transcription requests, we still need to retrieve the zero vector placeholder
+	// if the vector store requires vectors for all entries
+	isEmbeddingOrTranscription := requestType == schemas.EmbeddingRequest || requestType == schemas.TranscriptionRequest
+	needsEmbedding := shouldStoreEmbeddings && !isEmbeddingOrTranscription
+	needsZeroVector := isEmbeddingOrTranscription && plugin.store.RequiresVectors()
+
+	if needsEmbedding || needsZeroVector {
 		embeddingValue := ctx.Value(requestEmbeddingKey)
 		if embeddingValue != nil {
 			embedding, ok = embeddingValue.([]float32)
@@ -526,7 +567,7 @@ func (plugin *Plugin) PostHook(ctx *schemas.BifrostContext, res *schemas.Bifrost
 			}
 		}
 		// Note: embedding can be nil for direct cache hits or when semantic search is disabled
-		// This is fine - we can still cache using direct hash matching
+		// This is fine - we can still cache using direct hash matching (unless store requires vectors)
 	}
 
 	// Get the provider from context

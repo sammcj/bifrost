@@ -343,6 +343,12 @@ func (s *QdrantStore) Close(ctx context.Context, namespace string) error {
 	return s.client.Close()
 }
 
+// RequiresVectors returns true because Qdrant is a dedicated vector database
+// that requires vectors for all points/entries.
+func (s *QdrantStore) RequiresVectors() bool {
+	return true
+}
+
 // newQdrantStore creates a new Qdrant vector store.
 func newQdrantStore(ctx context.Context, config *QdrantConfig, logger schemas.Logger) (*QdrantStore, error) {
 	if strings.TrimSpace(config.Host.GetValue()) == "" {
@@ -433,7 +439,22 @@ func mapToPayload(m map[string]interface{}) map[string]*qdrant.Value {
 	if m == nil {
 		return make(map[string]*qdrant.Value)
 	}
-	return qdrant.NewValueMap(m)
+	// Convert []string to []interface{} since Qdrant's NewValueMap doesn't handle []string directly
+	converted := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		switch val := v.(type) {
+		case []string:
+			// Convert []string to []interface{}
+			interfaceSlice := make([]interface{}, len(val))
+			for i, s := range val {
+				interfaceSlice[i] = s
+			}
+			converted[k] = interfaceSlice
+		default:
+			converted[k] = v
+		}
+	}
+	return qdrant.NewValueMap(converted)
 }
 
 func filterProperties(props map[string]interface{}, selectFields []string) map[string]interface{} {

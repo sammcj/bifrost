@@ -477,6 +477,10 @@ func TestQdrantStore_DimensionHandling(t *testing.T) {
 }
 
 func TestQdrantStore_ErrorHandling(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration tests in short mode")
+	}
+
 	setup := NewQdrantTestSetup(t)
 	defer setup.Cleanup(t)
 

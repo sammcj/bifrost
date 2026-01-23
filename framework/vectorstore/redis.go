@@ -785,6 +785,11 @@ func (s *RedisStore) Close(ctx context.Context, namespace string) error {
 	return s.client.Close()
 }
 
+// RequiresVectors returns false because Redis can store hash data with or without vectors.
+func (s *RedisStore) RequiresVectors() bool {
+	return false
+}
+
 // escapeSearchValue escapes special characters in search values.
 func escapeSearchValue(value string) string {
 	// Escape special RediSearch characters
