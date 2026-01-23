@@ -8,12 +8,13 @@ import { PerformanceFormFragment } from "../fragments/performanceFormFragment";
 import ModelProviderKeysTableView from "./modelProviderKeysTableView";
 import ProviderGovernanceTable from "./providerGovernanceTable";
 import { keysRequired } from "./utils";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 
 interface Props {
 	provider: ModelProvider;
 }
 
-const availableTabs = (provider: ModelProvider) => {
+const availableTabs = (provider: ModelProvider, hasGovernanceAccess: boolean) => {
 	const availableTabs = [];
 	// Custom Settings tab is available for custom providers
 	if (provider?.custom_provider_config) {
@@ -39,11 +40,13 @@ const availableTabs = (provider: ModelProvider) => {
 		label: "Performance tuning",
 	});
 
-	// Governance tab for budgets and rate limits
-	availableTabs.push({
-		id: "governance",
-		label: "Governance",
-	});
+	// Governance tab for budgets and rate limits (requires Governance permission)
+	if (hasGovernanceAccess) {
+		availableTabs.push({
+			id: "governance",
+			label: "Governance",
+		});
+	}
 
 	return availableTabs;
 };
@@ -52,9 +55,10 @@ export default function ModelProviderConfig({ provider }: Props) {
 	const [selectedTab, setSelectedTab] = useState<string | undefined>(undefined);
 	const [accordionValue, setAccordionValue] = useState<string | undefined>(undefined);
 	const isCustomProvider = !isKnownProvider(provider.name);
+	const hasGovernanceAccess = useRbac(RbacResource.Governance, RbacOperation.View);
 	const tabs = useMemo(() => {
-		return availableTabs(provider);
-	}, [provider.name, provider.custom_provider_config]);
+		return availableTabs(provider, hasGovernanceAccess);
+	}, [provider.name, provider.custom_provider_config, hasGovernanceAccess]);
 
 	const showApiKeys = useMemo(() => {
 		if (provider.custom_provider_config) {
@@ -117,7 +121,7 @@ export default function ModelProviderConfig({ provider }: Props) {
 					<ModelProviderKeysTableView className="mt-4" provider={provider} />
 				</>
 			)}
-			<ProviderGovernanceTable className="mt-4" provider={provider} />
+			{hasGovernanceAccess ? <ProviderGovernanceTable className="mt-4" provider={provider} /> : null}
 		</div>
 	);
 }

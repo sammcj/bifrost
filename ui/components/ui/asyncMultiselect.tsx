@@ -367,13 +367,22 @@ export function AsyncMultiSelect<T>(props: AsyncMultiSelectProps<T>) {
 							}
 							break;
 						case "clear":
-							if (selection) {
+							if (selection && Array.isArray(selection)) {
 								selection = (selection as Option<T>[]).filter((v) => !(v as any)?.isFixed);
 							}
 							break;
 					}
 
-					props.onChange && props.onChange(selection as Option<T>[]);
+					// Normalize selection to array for consistent API
+					// When isSingleSelect is true, react-select returns single object (not array)
+					let normalizedSelection: Option<T>[];
+					if (props.isSingleSelect) {
+						normalizedSelection = selection ? [selection as Option<T>] : [];
+					} else {
+						normalizedSelection = (selection as Option<T>[]) || [];
+					}
+
+					props.onChange && props.onChange(normalizedSelection);
 				}}
 				formatCreateLabel={props.formatCreateLabel}
 				controlShouldRenderValue={props.controlShouldRenderValue ?? true}
