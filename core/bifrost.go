@@ -2404,8 +2404,9 @@ func (bifrost *Bifrost) AddMCPClient(config schemas.MCPClientConfig) error {
 	if bifrost.mcpManager == nil {
 		// Use sync.Once to ensure thread-safe initialization
 		bifrost.mcpInitOnce.Do(func() {
+			// Initialize with empty config - client will be added via AddClient below
 			bifrost.mcpManager = mcp.NewMCPManager(bifrost.ctx, schemas.MCPConfig{
-				ClientConfigs: []schemas.MCPClientConfig{config},
+				ClientConfigs: []schemas.MCPClientConfig{},
 			}, bifrost.logger)
 		})
 	}
