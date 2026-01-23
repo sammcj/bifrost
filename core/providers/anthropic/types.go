@@ -13,8 +13,16 @@ import (
 const (
 	AnthropicDefaultMaxTokens = 4096
 	MinimumReasoningMaxTokens = 1024
+
+	// Beta headers for various Anthropic features
 	// AnthropicFilesAPIBetaHeader is the required beta header for the Files API.
 	AnthropicFilesAPIBetaHeader = "files-api-2025-04-14"
+	// AnthropicStructuredOutputsBetaHeader is required for strict tool validation and output_format.
+	AnthropicStructuredOutputsBetaHeader = "structured-outputs-2025-11-13"
+	// AnthropicAdvancedToolUseBetaHeader is required for defer_loading, input_examples, and allowed_callers.
+	AnthropicAdvancedToolUseBetaHeader = "advanced-tool-use-2025-11-20"
+	// AnthropicMCPClientBetaHeader is required for MCP servers.
+	AnthropicMCPClientBetaHeader = "mcp-client-2025-04-04"
 )
 
 // ==================== REQUEST TYPES ====================
@@ -236,6 +244,7 @@ type AnthropicContentBlock struct {
 	Input            any                       `json:"input,omitempty"`             // For tool_use content
 	ServerName       *string                   `json:"server_name,omitempty"`       // For mcp_tool_use content
 	Content          *AnthropicContent         `json:"content,omitempty"`           // For tool_result content
+	IsError          *bool                     `json:"is_error,omitempty"`          // For tool_result content, indicates error state
 	Source           *AnthropicSource          `json:"source,omitempty"`            // For image/document content
 	CacheControl     *schemas.CacheControl     `json:"cache_control,omitempty"`     // For cache control content
 	Citations        *AnthropicCitations       `json:"citations,omitempty"`         // For document content
@@ -398,13 +407,23 @@ type AnthropicToolWebSearch struct {
 	UserLocation   *AnthropicToolWebSearchUserLocation `json:"user_location,omitempty"`
 }
 
+// AnthropicToolInputExample represents an input example for a tool (beta feature)
+type AnthropicToolInputExample struct {
+	Input       any     `json:"input"`
+	Description *string `json:"description,omitempty"`
+}
+
 // AnthropicTool represents a tool in Anthropic format
 type AnthropicTool struct {
-	Name         string                          `json:"name"`
-	Type         *AnthropicToolType              `json:"type,omitempty"`
-	Description  *string                         `json:"description,omitempty"`
-	InputSchema  *schemas.ToolFunctionParameters `json:"input_schema,omitempty"`
-	CacheControl *schemas.CacheControl           `json:"cache_control,omitempty"`
+	Name          string                          `json:"name"`
+	Type          *AnthropicToolType              `json:"type,omitempty"`
+	Description   *string                         `json:"description,omitempty"`
+	InputSchema   *schemas.ToolFunctionParameters `json:"input_schema,omitempty"`
+	CacheControl  *schemas.CacheControl           `json:"cache_control,omitempty"`
+	DeferLoading  *bool                           `json:"defer_loading,omitempty"`   // Beta: defer loading of tool definition
+	Strict        *bool                           `json:"strict,omitempty"`          // Whether to enforce strict parameter validation
+	AllowedCallers []string                       `json:"allowed_callers,omitempty"` // Beta: which callers can use this tool
+	InputExamples []AnthropicToolInputExample     `json:"input_examples,omitempty"`  // Beta: example inputs for the tool
 
 	*AnthropicToolComputerUse
 	*AnthropicToolWebSearch
@@ -412,7 +431,7 @@ type AnthropicTool struct {
 
 // AnthropicToolChoice represents tool choice in Anthropic format
 type AnthropicToolChoice struct {
-	Type                   string `json:"type"`                                // "auto", "any", "tool"
+	Type                   string `json:"type"`                                // "auto", "any", "tool", "none"
 	Name                   string `json:"name,omitempty"`                      // For type "tool"
 	DisableParallelToolUse *bool  `json:"disable_parallel_tool_use,omitempty"` // Whether to disable parallel tool use
 }

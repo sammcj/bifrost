@@ -19,7 +19,7 @@ import { ModelConfig } from "@/lib/types/governance";
 import { cn } from "@/lib/utils";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, ChevronsUpDown, Gauge, X } from "lucide-react";
+import { Check, ChevronsUpDown, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -194,12 +194,7 @@ export default function ModelLimitSheet({ modelConfig, onSave, onCancel }: Model
 				onEscapeKeyDown={(e) => e.preventDefault()}
 			>
 				<SheetHeader className="flex flex-col items-start p-0">
-					<SheetTitle className="flex items-center gap-2">
-						<div className="bg-muted rounded-lg p-2 dark:bg-zinc-800">
-							<Gauge className="text-muted-foreground h-5 w-5 dark:text-zinc-300" />
-						</div>
-						{isEditing ? "Edit Model Limit" : "Create Model Limit"}
-					</SheetTitle>
+					<SheetTitle className="flex items-center gap-2">{isEditing ? "Edit Model Limit" : "Create Model Limit"}</SheetTitle>
 					<SheetDescription>
 						{isEditing ? "Update budget and rate limit configuration." : "Set up budget and rate limits for a model."}
 					</SheetDescription>
@@ -237,7 +232,7 @@ export default function ModelLimitSheet({ modelConfig, onSave, onCancel }: Model
 														variant="outline"
 														role="combobox"
 														aria-expanded={providerOpen}
-														className={cn("h-10 w-full justify-between font-normal", !field.value && "text-muted-foreground")}
+														className={cn("h-8 w-full justify-between font-normal", !field.value && "text-muted-foreground")}
 													>
 														{field.value ? (
 															<div className="flex items-center gap-2">

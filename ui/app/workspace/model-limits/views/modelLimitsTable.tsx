@@ -16,9 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { resetDurationLabels } from "@/lib/constants/governance";
 import { ProviderIconType, RenderProviderIcon } from "@/lib/constants/icons";
 import { ProviderLabels, ProviderName } from "@/lib/constants/logs";
-import { resetDurationLabels } from "@/lib/constants/governance";
 import { getErrorMessage, useDeleteModelConfigMutation } from "@/lib/store";
 import { ModelConfig } from "@/lib/types/governance";
 import { cn } from "@/lib/utils";
@@ -86,6 +86,7 @@ export default function ModelLimitsTable({ modelConfigs, onRefresh }: ModelLimit
 				{/* Header */}
 				<div className="flex items-start justify-between gap-4">
 					<div className="space-y-1">
+						<h1 className="text-lg font-semibold">Model limits </h1>
 						<p className="text-muted-foreground text-sm">
 							Configure budgets and rate limits at the model level. For provider-specific limits, visit each provider&apos;s settings.
 						</p>
@@ -98,7 +99,7 @@ export default function ModelLimitsTable({ modelConfigs, onRefresh }: ModelLimit
 
 				{/* Table or Empty State */}
 				{modelConfigs?.length === 0 ? (
-					<div className="border-border/60 from-muted/30 to-muted/10 relative overflow-hidden rounded-xl border border-dashed bg-gradient-to-br px-8 py-12">
+					<div className="border-border/60 from-muted/30 to-muted/10 relative overflow-hidden rounded-sm border px-8 py-12">
 						<div className="relative flex flex-col items-center text-center">
 							{/* Icon */}
 							<div className="bg-muted mb-4 rounded-full p-4">
@@ -111,14 +112,8 @@ export default function ModelLimitsTable({ modelConfigs, onRefresh }: ModelLimit
 								Add model-level limits to control spending and request rates across your infrastructure.
 							</p>
 
-							{/* CTA */}
-							<Button onClick={handleAddModelLimit} disabled={!hasCreateAccess} size="lg" className="gap-2">
-								<Plus className="h-4 w-4" />
-								Add Your First Model Limit
-							</Button>
-
 							{/* Feature hints */}
-							<div className="text-muted-foreground mt-8 flex items-center justify-center gap-2 text-xs">
+							<div className="text-muted-foreground flex items-center justify-center gap-2 text-xs">
 								<span>Budget Controls</span>
 								<span>•</span>
 								<span>Token Limits</span>

@@ -67,19 +67,76 @@ func getRequestBodyForResponses(ctx *schemas.BifrostContext, request *schemas.Bi
 		if reqBody == nil {
 			return nil, providerUtils.NewBifrostOperationError("request body is not provided", nil, providerName)
 		}
-
+		addMissingBetaHeadersToContext(ctx, reqBody)
 		if isStreaming {
 			reqBody.Stream = schemas.Ptr(true)
 		}
-
 		// Convert struct to map
 		jsonBody, err = sonic.Marshal(reqBody)
 		if err != nil {
 			return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRequestMarshal, fmt.Errorf("failed to marshal request body: %w", err), providerName)
 		}
 	}
-
 	return jsonBody, nil
+}
+
+// addMissingBetaHeadersToContext analyzes the Anthropic request and adds missing beta headers to the context
+func addMissingBetaHeadersToContext(ctx *schemas.BifrostContext, req *AnthropicMessageRequest) error {
+	headers := []string{}
+	if req.Tools != nil {
+		for _, tool := range req.Tools {
+			// Check for strict (structured-outputs)
+			if tool.Strict != nil && *tool.Strict {
+				headers = appendUniqueHeader(headers, AnthropicStructuredOutputsBetaHeader)
+			}
+			// Check for advanced-tool-use features
+			if tool.DeferLoading != nil && *tool.DeferLoading {
+				headers = appendUniqueHeader(headers, AnthropicAdvancedToolUseBetaHeader)
+			}
+			if len(tool.InputExamples) > 0 {
+				headers = appendUniqueHeader(headers, AnthropicAdvancedToolUseBetaHeader)
+			}
+			if len(tool.AllowedCallers) > 0 {
+				headers = appendUniqueHeader(headers, AnthropicAdvancedToolUseBetaHeader)
+			}
+		}
+	}
+	// Check for MCP servers
+	if len(req.MCPServers) > 0 {
+		headers = appendUniqueHeader(headers, AnthropicMCPClientBetaHeader)
+	}
+	// Check for output format (structured outputs)
+	if req.OutputFormat != nil {
+		headers = appendUniqueHeader(headers, AnthropicStructuredOutputsBetaHeader)
+	}
+	if len(headers) == 0 {
+		return nil
+	}
+	var extraHeaders map[string][]string
+	if ctx.Value(schemas.BifrostContextKeyExtraHeaders) == nil {
+		extraHeaders = map[string][]string{}
+	} else {
+		if ctxExtraHeaders, ok := ctx.Value(schemas.BifrostContextKeyExtraHeaders).(map[string][]string); ok {
+			extraHeaders = ctxExtraHeaders
+		}
+	}
+	if len(extraHeaders["anthropic-beta"]) == 0 {
+		extraHeaders["anthropic-beta"] = headers
+	} else {
+		extraHeaders["anthropic-beta"] = append(extraHeaders["anthropic-beta"], headers...)
+	}
+	ctx.SetValue(schemas.BifrostContextKeyExtraHeaders, extraHeaders)
+	return nil
+}
+
+// appendUniqueHeader adds a header to the slice if not already present
+func appendUniqueHeader(slice []string, item string) []string {
+	for _, s := range slice {
+		if s == item {
+			return slice
+		}
+	}
+	return append(slice, item)
 }
 
 // ConvertAnthropicFinishReasonToBifrost converts provider finish reasons to Bifrost format

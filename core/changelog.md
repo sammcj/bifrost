@@ -1,1 +1,8 @@
 - fix: allow flat $defs and propertyOrdering in jsonschema and forward it to Gemini
+- feat: adds beta feature for Anthropic
+  - deferLoading
+  - strict
+  - allowedCallers
+  - inputExamples
+  - add IsError to tool_result content
+  - add "none" option to ToolChoice.Type
