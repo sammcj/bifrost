@@ -461,7 +461,7 @@ func (provider *AzureProvider) ChatCompletion(ctx *schemas.BifrostContext, key s
 		request,
 		func() (any, error) {
 			if schemas.IsAnthropicModel(deployment) {
-				reqBody, err := anthropic.ToAnthropicChatRequest(request)
+				reqBody, err := anthropic.ToAnthropicChatRequest(ctx, request)
 				if err != nil {
 					return nil, err
 				}
@@ -509,7 +509,7 @@ func (provider *AzureProvider) ChatCompletion(ctx *schemas.BifrostContext, key s
 		if bifrostErr != nil {
 			return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonData, responseBody, provider.sendBackRawRequest, provider.sendBackRawResponse)
 		}
-		response = anthropicResponse.ToBifrostChatResponse()
+		response = anthropicResponse.ToBifrostChatResponse(ctx)
 	} else {
 		rawRequest, rawResponse, bifrostErr = providerUtils.HandleProviderResponse(responseBody, response, jsonData, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 		if bifrostErr != nil {
@@ -568,7 +568,7 @@ func (provider *AzureProvider) ChatCompletionStream(ctx *schemas.BifrostContext,
 			ctx,
 			request,
 			func() (any, error) {
-				reqBody, err := anthropic.ToAnthropicChatRequest(request)
+				reqBody, err := anthropic.ToAnthropicChatRequest(ctx, request)
 				if err != nil {
 					return nil, err
 				}
@@ -700,7 +700,7 @@ func (provider *AzureProvider) Responses(ctx *schemas.BifrostContext, key schema
 		if bifrostErr != nil {
 			return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonData, responseBody, provider.sendBackRawRequest, provider.sendBackRawResponse)
 		}
-		response = anthropicResponse.ToBifrostResponsesResponse()
+		response = anthropicResponse.ToBifrostResponsesResponse(ctx)
 	} else {
 		rawRequest, rawResponse, bifrostErr = providerUtils.HandleProviderResponse(responseBody, response, jsonData, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
 		if bifrostErr != nil {
@@ -1261,7 +1261,7 @@ func (provider *AzureProvider) ImageGeneration(ctx *schemas.BifrostContext, key 
 		providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest),
 		providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse),
 		provider.logger,
-	)	
+	)
 	if err != nil {
 		return nil, err
 	}

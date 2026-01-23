@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bytedance/sonic"
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	"github.com/maximhq/bifrost/core/schemas"
 )
 
 // ToAnthropicChatRequest converts a Bifrost request to Anthropic format
 // This is the reverse of ConvertChatRequestToBifrost for provider-side usage
-func ToAnthropicChatRequest(bifrostReq *schemas.BifrostChatRequest) (*AnthropicMessageRequest, error) {
+func ToAnthropicChatRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.BifrostChatRequest) (*AnthropicMessageRequest, error) {
 	if bifrostReq == nil || bifrostReq.Input == nil {
 		return nil, fmt.Errorf("bifrost request is nil or input is nil")
 	}
@@ -36,7 +37,20 @@ func ToAnthropicChatRequest(bifrostReq *schemas.BifrostChatRequest) (*AnthropicM
 			anthropicReq.TopK = topK
 		}
 		if bifrostReq.Params.ResponseFormat != nil {
-			anthropicReq.OutputFormat = convertChatResponseFormatToAnthropicOutputFormat(bifrostReq.Params.ResponseFormat)
+			// Vertex doesn't support native structured outputs, so convert to tool
+			if bifrostReq.Provider == schemas.Vertex {
+				responseFormatTool := convertChatResponseFormatToTool(ctx, bifrostReq.Params)
+				if responseFormatTool != nil {
+					anthropicReq.Tools = append(anthropicReq.Tools, *responseFormatTool)
+					// Force the model to use this specific tool
+					anthropicReq.ToolChoice = &AnthropicToolChoice{
+						Type: "tool",
+						Name: responseFormatTool.Name,
+					}
+				}
+			} else {
+				anthropicReq.OutputFormat = convertChatResponseFormatToAnthropicOutputFormat(bifrostReq.Params.ResponseFormat)
+			}
 		}
 
 		// Convert tools
@@ -95,7 +109,11 @@ func ToAnthropicChatRequest(bifrostReq *schemas.BifrostChatRequest) (*AnthropicM
 
 				tools = append(tools, anthropicTool)
 			}
-			anthropicReq.Tools = tools
+			if anthropicReq.Tools == nil {
+				anthropicReq.Tools = tools
+			} else {
+				anthropicReq.Tools = append(anthropicReq.Tools, tools...)
+			}
 		}
 
 		// Convert tool choice
@@ -327,7 +345,7 @@ func ToAnthropicChatRequest(bifrostReq *schemas.BifrostChatRequest) (*AnthropicM
 }
 
 // ToBifrostChatResponse converts an Anthropic message response to Bifrost format
-func (response *AnthropicMessageResponse) ToBifrostChatResponse() *schemas.BifrostChatResponse {
+func (response *AnthropicMessageResponse) ToBifrostChatResponse(ctx *schemas.BifrostContext) *schemas.BifrostChatResponse {
 	if response == nil {
 		return nil
 	}
@@ -341,6 +359,14 @@ func (response *AnthropicMessageResponse) ToBifrostChatResponse() *schemas.Bifro
 			Provider:    schemas.Anthropic,
 		},
 		Created: int(time.Now().Unix()),
+	}
+
+	// Check if we have a structured output tool
+	var structuredOutputToolName string
+	if ctx != nil {
+		if toolName, ok := ctx.Value(schemas.BifrostContextKeyStructuredOutputToolName).(string); ok {
+			structuredOutputToolName = toolName
+		}
 	}
 
 	// Collect all content and tool calls into a single message
@@ -363,6 +389,23 @@ func (response *AnthropicMessageResponse) ToBifrostChatResponse() *schemas.Bifro
 				}
 			case AnthropicContentBlockTypeToolUse:
 				if c.ID != nil && c.Name != nil {
+					// Check if this is the structured output tool - if so, convert to text content
+					if structuredOutputToolName != "" && *c.Name == structuredOutputToolName {
+						// This is a structured output tool - convert to text content
+						var jsonStr string
+						if c.Input != nil {
+							if argBytes, err := sonic.Marshal(c.Input); err == nil {
+								jsonStr = string(argBytes)
+							} else {
+								jsonStr = fmt.Sprintf("%v", c.Input)
+							}
+						} else {
+							jsonStr = "{}"
+						}
+						contentStr = &jsonStr
+						continue // Skip adding to toolCalls
+					}
+
 					function := schemas.ChatAssistantMessageToolCallFunction{
 						Name: c.Name,
 					}
@@ -580,7 +623,7 @@ func ToAnthropicChatResponse(bifrostResp *schemas.BifrostChatResponse) *Anthropi
 }
 
 // ToBifrostChatCompletionStream converts an Anthropic stream event to a Bifrost Chat Completion Stream response
-func (chunk *AnthropicStreamEvent) ToBifrostChatCompletionStream() (*schemas.BifrostChatResponse, *schemas.BifrostError, bool) {
+func (chunk *AnthropicStreamEvent) ToBifrostChatCompletionStream(ctx *schemas.BifrostContext, structuredOutputToolName string) (*schemas.BifrostChatResponse, *schemas.BifrostError, bool) {
 	switch chunk.Type {
 	case AnthropicStreamEventTypeMessageStart:
 		return nil, nil, false
@@ -591,6 +634,12 @@ func (chunk *AnthropicStreamEvent) ToBifrostChatCompletionStream() (*schemas.Bif
 	case AnthropicStreamEventTypeContentBlockStart:
 		// Emit tool-call metadata when starting a tool_use content block
 		if chunk.Index != nil && chunk.ContentBlock != nil && chunk.ContentBlock.Type == AnthropicContentBlockTypeToolUse {
+			// Check if this is the structured output tool - if so, skip emitting tool call metadata
+			if structuredOutputToolName != "" && chunk.ContentBlock.Name != nil && *chunk.ContentBlock.Name == structuredOutputToolName {
+				// Skip emitting tool call for structured output - it will be emitted as content later
+				return nil, nil, false
+			}
+
 			// Create streaming response with tool call metadata
 			streamResponse := &schemas.BifrostChatResponse{
 				Object: "chat.completion.chunk",
@@ -647,6 +696,23 @@ func (chunk *AnthropicStreamEvent) ToBifrostChatCompletionStream() (*schemas.Bif
 			case AnthropicStreamDeltaTypeInputJSON:
 				// Handle tool use streaming - accumulate partial JSON
 				if chunk.Delta.PartialJSON != nil {
+					if structuredOutputToolName != "" {
+						// Structured output: stream JSON as content
+						streamResponse := &schemas.BifrostChatResponse{
+							Object: "chat.completion.chunk",
+							Choices: []schemas.BifrostResponseChoice{
+								{
+									Index: 0,
+									ChatStreamResponseChoice: &schemas.ChatStreamResponseChoice{
+										Delta: &schemas.ChatStreamResponseChoiceDelta{
+											Content: chunk.Delta.PartialJSON,
+										},
+									},
+								},
+							},
+						}
+						return streamResponse, nil, false
+					}
 					// Create streaming response for tool input delta
 					streamResponse := &schemas.BifrostChatResponse{
 						Object: "chat.completion.chunk",

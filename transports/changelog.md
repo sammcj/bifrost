@@ -1,0 +1,1 @@
+- fix: implement structured output handling for Anthropic models on Vertex where the beta structured-output header is unsupported

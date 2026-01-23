@@ -103,7 +103,7 @@ func testStructuredOutputChatWithValue(t *testing.T, client *bifrost.Bifrost, ct
 	chatOperation := func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 		// Add Anthropic beta header for structured outputs if model contains "claude"
 		reqCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
-		if strings.Contains(strings.ToLower(testConfig.ChatModel), "claude") {
+		if strings.Contains(strings.ToLower(testConfig.ChatModel), "claude") && testConfig.Provider != schemas.Vertex {
 			extraHeaders := map[string][]string{
 				"anthropic-beta": {"structured-outputs-2025-11-13"},
 			}
@@ -236,7 +236,7 @@ func RunStructuredOutputChatStreamTest(t *testing.T, client *bifrost.Bifrost, ct
 
 		// Add Anthropic beta header for structured outputs if model contains "claude"
 		reqCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
-		if strings.Contains(strings.ToLower(testConfig.ChatModel), "claude") {
+		if strings.Contains(strings.ToLower(testConfig.ChatModel), "claude") && testConfig.Provider != schemas.Vertex {
 			extraHeaders := map[string][]string{
 				"anthropic-beta": {"structured-outputs-2025-11-13"},
 			}
@@ -410,7 +410,7 @@ func RunStructuredOutputResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx
 
 		// Add Anthropic beta header for structured outputs if model contains "claude"
 		reqCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
-		if strings.Contains(strings.ToLower(testConfig.ChatModel), "claude") {
+		if strings.Contains(strings.ToLower(testConfig.ChatModel), "claude") && testConfig.Provider != schemas.Vertex {
 			extraHeaders := map[string][]string{
 				"anthropic-beta": {"structured-outputs-2025-11-13"},
 			}
@@ -564,7 +564,7 @@ func RunStructuredOutputResponsesStreamTest(t *testing.T, client *bifrost.Bifros
 
 		// Add Anthropic beta header for structured outputs if model contains "claude"
 		reqCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
-		if strings.Contains(strings.ToLower(testConfig.ChatModel), "claude") {
+		if strings.Contains(strings.ToLower(testConfig.ChatModel), "claude") && testConfig.Provider != schemas.Vertex {
 			extraHeaders := map[string][]string{
 				"anthropic-beta": {"structured-outputs-2025-11-13"},
 			}
@@ -665,7 +665,15 @@ func RunStructuredOutputResponsesStreamTest(t *testing.T, client *bifrost.Bifros
 
 							case schemas.ResponsesStreamResponseTypeOutputItemAdded:
 								if streamResp.Item != nil && streamResp.Item.Content != nil {
-									if streamResp.Item.Content.ContentStr != nil {
+									// Check ContentBlocks first
+									if len(streamResp.Item.Content.ContentBlocks) > 0 {
+										for _, block := range streamResp.Item.Content.ContentBlocks {
+											if block.Type == schemas.ResponsesOutputMessageContentTypeText && block.Text != nil {
+												fullContent.WriteString(*block.Text)
+											}
+										}
+									} else if streamResp.Item.Content.ContentStr != nil {
+										// Fallback to ContentStr
 										fullContent.WriteString(*streamResp.Item.Content.ContentStr)
 									}
 								}

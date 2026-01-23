@@ -295,7 +295,7 @@ func (provider *VertexProvider) ChatCompletion(ctx *schemas.BifrostContext, key 
 
 			if schemas.IsAnthropicModel(deployment) {
 				// Use centralized Anthropic converter
-				reqBody, err := anthropic.ToAnthropicChatRequest(request)
+				reqBody, err := anthropic.ToAnthropicChatRequest(ctx, request)
 				if err != nil {
 					return nil, err
 				}
@@ -477,7 +477,7 @@ func (provider *VertexProvider) ChatCompletion(ctx *schemas.BifrostContext, key 
 		}
 
 		// Create final response
-		response := anthropicResponse.ToBifrostChatResponse()
+		response := anthropicResponse.ToBifrostChatResponse(ctx)
 
 		response.ExtraFields = schemas.BifrostResponseExtraFields{
 			RequestType:    schemas.ChatCompletionRequest,
@@ -598,7 +598,7 @@ func (provider *VertexProvider) ChatCompletionStream(ctx *schemas.BifrostContext
 			ctx,
 			request,
 			func() (any, error) {
-				reqBody, err := anthropic.ToAnthropicChatRequest(request)
+				reqBody, err := anthropic.ToAnthropicChatRequest(ctx, request)
 				if err != nil {
 					return nil, err
 				}
@@ -910,7 +910,7 @@ func (provider *VertexProvider) Responses(ctx *schemas.BifrostContext, key schem
 		}
 
 		// Create final response
-		response := anthropicResponse.ToBifrostResponsesResponse()
+		response := anthropicResponse.ToBifrostResponsesResponse(ctx)
 
 		response.ExtraFields = schemas.BifrostResponseExtraFields{
 			RequestType:    schemas.ResponsesRequest,
