@@ -251,7 +251,6 @@ func SetExtraHeaders(ctx context.Context, req *fasthttp.Request, extraHeaders ma
 			req.Header.Set(canonicalKey, value)
 		}
 	}
-
 	// Give priority to extra headers in the context
 	if extraHeaders, ok := (ctx).Value(schemas.BifrostContextKeyExtraHeaders).(map[string][]string); ok {
 		for k, values := range filterHeaders(extraHeaders) {

@@ -23,7 +23,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -43,13 +43,14 @@ jobs:
         run: python bundle.py
 
       - name: Commit and push changes
+        if: github.event_name == 'push'
         run: |
-          CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-          if [ "$CURRENT_BRANCH" = "HEAD" ]; then
-            # In detached HEAD state (common in CI), use GITHUB_REF_NAME or default to main
-            CURRENT_BRANCH="${GITHUB_REF_NAME:-main}"
-          fi
+          CURRENT_BRANCH="${GITHUB_REF_NAME:-main}"
 
           git add docs/openapi/openapi.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
           git commit -m "chore: regenerate openapi.json --skip-pipeline"
           git push origin "$CURRENT_BRANCH"

@@ -2893,6 +2893,12 @@ func convertAnthropicContentBlocksToResponsesMessagesGrouped(contentBlocks []Ant
 						}
 						bifrostMsg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks = toolMsgContentBlocks
 					}
+
+					// Handle is_error from Anthropic
+					if block.IsError != nil && *block.IsError {
+						bifrostMsg.ResponsesToolMessage.Error = schemas.Ptr("Tool execution error")
+					}
+
 					bifrostMessages = append(bifrostMessages, bifrostMsg)
 				}
 			}
@@ -3174,6 +3180,12 @@ func convertAnthropicContentBlocksToResponsesMessages(contentBlocks []AnthropicC
 						}
 						bifrostMsg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks = toolMsgContentBlocks
 					}
+
+					// Handle is_error from Anthropic
+					if block.IsError != nil && *block.IsError {
+						bifrostMsg.ResponsesToolMessage.Error = schemas.Ptr("Tool execution error")
+					}
+
 					bifrostMessages = append(bifrostMessages, bifrostMsg)
 				}
 			}
@@ -3491,6 +3503,16 @@ func convertBifrostFunctionCallOutputToAnthropicToolResultBlock(msg *schemas.Res
 			toolResultBlock.Content = convertToolOutputToAnthropicContent(msg.ResponsesToolMessage.Output)
 		}
 
+		// Set is_error if there's an error message
+		if msg.ResponsesToolMessage.Error != nil && *msg.ResponsesToolMessage.Error != "" {
+			toolResultBlock.IsError = schemas.Ptr(true)
+			if toolResultBlock.Content == nil {
+				toolResultBlock.Content = &AnthropicContent{
+					ContentStr: msg.ResponsesToolMessage.Error,
+				}
+			}
+		}
+
 		return &toolResultBlock
 	}
 	return nil
@@ -3510,6 +3532,16 @@ func convertBifrostComputerCallOutputToAnthropicToolResultBlock(msg *schemas.Res
 			toolResultBlock.Content = convertToolOutputToAnthropicContent(msg.ResponsesToolMessage.Output)
 		}
 
+		// Set is_error if there's an error message
+		if msg.ResponsesToolMessage.Error != nil && *msg.ResponsesToolMessage.Error != "" {
+			toolResultBlock.IsError = schemas.Ptr(true)
+			if toolResultBlock.Content == nil {
+				toolResultBlock.Content = &AnthropicContent{
+					ContentStr: msg.ResponsesToolMessage.Error,
+				}
+			}
+		}
+
 		return &toolResultBlock
 	}
 	return nil
@@ -3527,6 +3559,16 @@ func convertBifrostMCPCallOutputToAnthropicToolResultBlock(msg *schemas.Response
 		// Handle output
 		if msg.ResponsesToolMessage.Output != nil {
 			toolResultBlock.Content = convertToolOutputToAnthropicContent(msg.ResponsesToolMessage.Output)
+		}
+
+		// Set is_error if there's an error message
+		if msg.ResponsesToolMessage.Error != nil && *msg.ResponsesToolMessage.Error != "" {
+			toolResultBlock.IsError = schemas.Ptr(true)
+			if toolResultBlock.Content == nil {
+				toolResultBlock.Content = &AnthropicContent{
+					ContentStr: msg.ResponsesToolMessage.Error,
+				}
+			}
 		}
 
 		return &toolResultBlock
@@ -3864,9 +3906,10 @@ func convertAnthropicToolToBifrost(tool *AnthropicTool) *schemas.ResponsesTool {
 		Description: tool.Description,
 	}
 
-	if tool.InputSchema != nil {
+	if tool.InputSchema != nil || tool.Strict != nil {
 		bifrostTool.ResponsesToolFunction = &schemas.ResponsesToolFunction{
 			Parameters: tool.InputSchema,
+			Strict:     tool.Strict,
 		}
 	}
 
@@ -4042,9 +4085,7 @@ func convertBifrostToolToAnthropic(model string, tool *schemas.ResponsesTool) *A
 		}
 	}
 
-	anthropicTool := &AnthropicTool{
-		Type: schemas.Ptr(AnthropicToolTypeCustom),
-	}
+	anthropicTool := &AnthropicTool{}
 
 	if tool.Name != nil {
 		anthropicTool.Name = *tool.Name
@@ -4054,9 +4095,10 @@ func convertBifrostToolToAnthropic(model string, tool *schemas.ResponsesTool) *A
 		anthropicTool.Description = tool.Description
 	}
 
-	// Convert parameters from ToolFunction
+	// Convert parameters and strict from ToolFunction
 	if tool.ResponsesToolFunction != nil {
 		anthropicTool.InputSchema = tool.ResponsesToolFunction.Parameters
+		anthropicTool.Strict = tool.ResponsesToolFunction.Strict
 	}
 
 	if tool.CacheControl != nil {

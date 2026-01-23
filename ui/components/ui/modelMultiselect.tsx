@@ -136,13 +136,13 @@ export function ModelMultiselect({
 			isCreatable={true}
 			dynamicOptionCreation={true}
 			createOptionText="Press enter to add new model"
-			defaultOptions={defaultOptions.length > 0 ? defaultOptions : [] as Option<ModelOption>[]}
+			defaultOptions={defaultOptions.length > 0 ? defaultOptions : ([] as Option<ModelOption>[])}
 			isLoading={isLoading}
 			placeholder={placeholder}
 			disabled={disabled || !provider}
-			className={cn("!min-h-10 w-full", className)}
-			triggerClassName="!shadow-none !border-border !min-h-10 px-1"
-			menuClassName="!z-[100] max-h-[300px] overflow-y-auto w-full cursor-pointer custom-scrollbar"
+			className={cn("!min-h-8.7 w-full", className)}
+			triggerClassName="!shadow-none !border-border !min-h-8.7 px-1"
+			menuClassName="!z-[100] max-h-[300px] overflow-y-auto w-full cursor-pointer custom-scrollbar py-1.5"
 			isClearable={false}
 			closeMenuOnSelect={false}
 			menuPlacement="auto"
