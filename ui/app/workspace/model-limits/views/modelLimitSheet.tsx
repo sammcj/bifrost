@@ -1,25 +1,22 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ModelMultiselect } from "@/components/ui/modelMultiselect";
 import NumberAndSelect from "@/components/ui/numberAndSelect";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DottedSeparator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { resetDurationOptions } from "@/lib/constants/governance";
 import { RenderProviderIcon } from "@/lib/constants/icons";
 import { ProviderLabels, ProviderName } from "@/lib/constants/logs";
-import { getErrorMessage, useCreateModelConfigMutation, useGetProvidersQuery, useUpdateModelConfigMutation } from "@/lib/store";
+import { getErrorMessage, useCreateModelConfigMutation, useGetProvidersQuery, useLazyGetModelsQuery, useUpdateModelConfigMutation } from "@/lib/store";
 import { KnownProvider } from "@/lib/types/config";
 import { ModelConfig } from "@/lib/types/governance";
-import { cn } from "@/lib/utils";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, ChevronsUpDown, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -62,10 +59,31 @@ export default function ModelLimitSheet({ modelConfig, onSave, onCancel }: Model
 	const { data: providersData } = useGetProvidersQuery();
 	const [createModelConfig, { isLoading: isCreating }] = useCreateModelConfigMutation();
 	const [updateModelConfig, { isLoading: isUpdating }] = useUpdateModelConfigMutation();
+	const [getModels] = useLazyGetModelsQuery();
 	const isLoading = isCreating || isUpdating;
 
 	const availableProviders = providersData || [];
-	const [providerOpen, setProviderOpen] = useState(false);
+
+	// Handle provider change - clear model if it doesn't exist for the new provider
+	const handleProviderChange = async (newProvider: string, currentModel: string, onChange: (value: string) => void) => {
+		onChange(newProvider);
+		if (!currentModel) return;
+
+		try {
+			const response = await getModels({
+				provider: newProvider || undefined,
+				query: currentModel,
+				limit: 50,
+			}).unwrap();
+
+			const modelExists = response.models.some((model) => model.name === currentModel);
+			if (!modelExists) {
+				form.setValue("modelName", "", { shouldDirty: true });
+			}
+		} catch {
+			// On error, don't clear the model
+		}
+	};
 
 	const form = useForm<FormData>({
 		resolver: zodResolver(formSchema),
@@ -194,7 +212,7 @@ export default function ModelLimitSheet({ modelConfig, onSave, onCancel }: Model
 				onEscapeKeyDown={(e) => e.preventDefault()}
 			>
 				<SheetHeader className="flex flex-col items-start p-0">
-					<SheetTitle className="flex items-center gap-2">{isEditing ? "Edit Model Limit" : "Create Model Limit"}</SheetTitle>
+					<SheetTitle>{isEditing ? "Edit Model Limit" : "Create Model Limit"}</SheetTitle>
 					<SheetDescription>
 						{isEditing ? "Update budget and rate limit configuration." : "Set up budget and rate limits for a model."}
 					</SheetDescription>
@@ -211,7 +229,14 @@ export default function ModelLimitSheet({ modelConfig, onSave, onCancel }: Model
 									<FormItem>
 										<FormLabel>Model Name</FormLabel>
 										<FormControl>
-											<Input placeholder="e.g., gpt-4, claude-3-opus-20240229" {...field} />
+											<ModelMultiselect
+												provider={form.watch("provider") || undefined}
+												value={field.value}
+												onChange={field.onChange}
+												placeholder="Select a model..."
+												isSingleSelect
+												loadModelsOnEmptyProvider
+											/>
 										</FormControl>
 										<FormMessage />
 									</FormItem>
@@ -223,82 +248,33 @@ export default function ModelLimitSheet({ modelConfig, onSave, onCancel }: Model
 								control={form.control}
 								name="provider"
 								render={({ field }) => (
-									<FormItem className="flex flex-col">
+									<FormItem>
 										<FormLabel>Provider</FormLabel>
-										<Popover open={providerOpen} onOpenChange={setProviderOpen}>
-											<PopoverTrigger asChild>
-												<FormControl>
-													<Button
-														variant="outline"
-														role="combobox"
-														aria-expanded={providerOpen}
-														className={cn("h-8 w-full justify-between font-normal", !field.value && "text-muted-foreground")}
-													>
-														{field.value ? (
-															<div className="flex items-center gap-2">
-																<RenderProviderIcon provider={field.value as KnownProvider} size="sm" className="h-4 w-4" />
-																<span>{ProviderLabels[field.value as ProviderName] || field.value}</span>
-															</div>
-														) : (
-															"All Providers"
-														)}
-														<div className="ml-2 flex shrink-0 items-center gap-1">
-															{field.value ? (
-																<span
-																	role="button"
-																	tabIndex={0}
-																	className="hover:bg-muted rounded-sm p-0.5"
-																	onPointerDown={(e) => {
-																		e.preventDefault();
-																		e.stopPropagation();
-																		field.onChange("");
-																	}}
-																>
-																	<X className="h-4 w-4 opacity-50 hover:opacity-100" />
-																</span>
-															) : null}
-															<ChevronsUpDown className="h-4 w-4 opacity-50" />
-														</div>
-													</Button>
-												</FormControl>
-											</PopoverTrigger>
-											<PopoverContent className="w-[400px] p-0" align="start">
-												<Command>
-													<CommandInput placeholder="Search providers..." />
-													<CommandList>
-														<CommandEmpty>No provider found.</CommandEmpty>
-														<CommandGroup>
-															{availableProviders.map((provider) => {
-																const isSelected = field.value === provider.name;
-																return (
-																	<CommandItem
-																		key={provider.name}
-																		value={provider.name}
-																		onSelect={() => {
-																			field.onChange(isSelected ? "" : provider.name);
-																			setProviderOpen(false);
-																		}}
-																	>
-																		<Check className={cn("mr-2 h-4 w-4", isSelected ? "opacity-100" : "opacity-0")} />
-																		<RenderProviderIcon
-																			provider={provider.custom_provider_config?.base_provider_type || (provider.name as KnownProvider)}
-																			size="sm"
-																			className="mr-2 h-4 w-4"
-																		/>
-																		<span>
-																			{provider.custom_provider_config
-																				? provider.name
-																				: ProviderLabels[provider.name as ProviderName] || provider.name}
-																		</span>
-																	</CommandItem>
-																);
-															})}
-														</CommandGroup>
-													</CommandList>
-												</Command>
-											</PopoverContent>
-										</Popover>
-										<p className="text-muted-foreground text-xs">Leave empty to apply across all providers.</p>
+										<Select
+											value={field.value || "all"}
+											onValueChange={(value) => handleProviderChange(value === "all" ? "" : value, form.getValues("modelName"), field.onChange)}
+										>
+											<FormControl>
+												<SelectTrigger className="w-full">
+													<SelectValue placeholder="All Providers" />
+												</SelectTrigger>
+											</FormControl>
+											<SelectContent>
+												<SelectItem value="all">All Providers</SelectItem>
+												{availableProviders.map((provider) => (
+													<SelectItem key={provider.name} value={provider.name}>
+														<RenderProviderIcon
+															provider={provider.custom_provider_config?.base_provider_type || (provider.name as KnownProvider)}
+															size="sm"
+															className="h-4 w-4"
+														/>
+														{provider.custom_provider_config
+															? provider.name
+															: ProviderLabels[provider.name as ProviderName] || provider.name}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
 										<FormMessage />
 									</FormItem>
 								)}
@@ -426,12 +402,12 @@ export default function ModelLimitSheet({ modelConfig, onSave, onCancel }: Model
 									<Tooltip>
 										<TooltipTrigger asChild>
 											<span className="inline-block">
-												<Button type="submit" disabled={isLoading || !form.formState.isDirty || !form.formState.isValid || !canSubmit}>
+												<Button type="submit" disabled={isLoading || !form.formState.isDirty || !form.formState.isValid || !canSubmit || !form.watch("modelName")}>
 													{isLoading ? "Saving..." : isEditing ? "Save Changes" : "Create Limit"}
 												</Button>
 											</span>
 										</TooltipTrigger>
-										{(isLoading || !form.formState.isDirty || !form.formState.isValid || !canSubmit) && (
+										{(isLoading || !form.formState.isDirty || !form.formState.isValid || !canSubmit || !form.watch("modelName")) && (
 											<TooltipContent>
 												<p>
 													{!canSubmit
@@ -440,7 +416,9 @@ export default function ModelLimitSheet({ modelConfig, onSave, onCancel }: Model
 															? "Saving..."
 															: !form.formState.isDirty
 																? "No changes made"
-																: "Please fix validation errors"}
+																: !form.watch("modelName")
+																	? "Model name is required"
+																	: "Please fix validation errors"}
 												</p>
 											</TooltipContent>
 										)}

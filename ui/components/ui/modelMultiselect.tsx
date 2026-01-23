@@ -4,19 +4,35 @@ import { cn } from "@/components/ui/utils";
 import { useLazyGetModelsQuery } from "@/lib/store/apis/providersApi";
 import { X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { components, MultiValueProps, OptionProps } from "react-select";
+import { components, MultiValueProps, OptionProps, SingleValueProps } from "react-select";
 import { AsyncMultiSelect } from "./asyncMultiselect";
 import { Option } from "./multiselectUtils";
 
-export interface ModelMultiselectProps {
+interface ModelMultiselectPropsBase {
 	provider?: string;
 	keys?: string[];
-	value: string[];
-	onChange: (models: string[]) => void;
 	placeholder?: string;
 	disabled?: boolean;
 	className?: string;
+	/** Load models even when no provider is selected */
+	loadModelsOnEmptyProvider?: boolean;
 }
+
+interface ModelMultiselectPropsSingle extends ModelMultiselectPropsBase {
+	/** Single select mode - value and onChange will be string instead of string[] */
+	isSingleSelect: true;
+	value: string;
+	onChange: (model: string) => void;
+}
+
+interface ModelMultiselectPropsMulti extends ModelMultiselectPropsBase {
+	/** Multi select mode (default) - value and onChange will be string[] */
+	isSingleSelect?: false;
+	value: string[];
+	onChange: (models: string[]) => void;
+}
+
+export type ModelMultiselectProps = ModelMultiselectPropsSingle | ModelMultiselectPropsMulti;
 
 interface ModelOption {
 	label: string;
@@ -24,49 +40,59 @@ interface ModelOption {
 	provider?: string;
 }
 
-export function ModelMultiselect({
-	provider,
-	keys,
-	value,
-	onChange,
-	placeholder = "Select models...",
-	disabled = false,
-	className,
-}: ModelMultiselectProps) {
+export function ModelMultiselect(props: ModelMultiselectProps) {
+	const {
+		provider,
+		keys,
+		value,
+		onChange,
+		placeholder = "Select models...",
+		disabled = false,
+		className,
+		loadModelsOnEmptyProvider = false,
+	} = props;
+	const isSingleSelect = props.isSingleSelect === true;
+
 	const [getModels, { data: modelsData, isLoading }] = useLazyGetModelsQuery();
 	const [inputValue, setInputValue] = useState("");
 	const inputValueRef = useRef("");
 
-	// Convert value array to options
-	const selectedOptions: ModelOption[] = value.map((model) => ({
-		label: model,
-		value: model,
-	}));
+	// Convert value to options (handle both single and multi select)
+	const stringValue = value as string;
+	const arrayValue = value as string[];
+	const selectedOptions: ModelOption[] = isSingleSelect
+		? stringValue
+			? [{ label: stringValue, value: stringValue }]
+			: []
+		: arrayValue.map((model) => ({
+				label: model,
+				value: model,
+			}));
 
 	// Fetch initial models on mount or when provider/keys change
 	useEffect(() => {
-		if (provider) {
+		if (provider || loadModelsOnEmptyProvider) {
 			getModels({
-				provider: provider,
+				provider: provider || undefined,
 				keys: keys && keys.length > 0 ? keys : undefined,
-				limit: 5,
+				limit: loadModelsOnEmptyProvider && !provider ? 20 : 5,
 			});
 		}
-	}, [provider, keys, getModels]);
+	}, [provider, keys, getModels, loadModelsOnEmptyProvider]);
 
-	// Load options function for AsyncMultiSelect - now properly async
+	// Load options function for AsyncMultiSelect
 	const loadOptions = useCallback(
 		(query: string, callback: (options: ModelOption[]) => void) => {
-			if (!provider) {
+			if (!provider && !loadModelsOnEmptyProvider) {
 				callback([]);
 				return;
 			}
 
 			getModels({
 				query: query || undefined,
-				provider: provider,
+				provider: provider || undefined,
 				keys: keys && keys.length > 0 ? keys : undefined,
-				limit: query ? 20 : 5,
+				limit: query ? 50 : loadModelsOnEmptyProvider && !provider ? 20 : 5,
 			})
 				.unwrap()
 				.then((response) => {
@@ -81,34 +107,42 @@ export function ModelMultiselect({
 					callback([]);
 				});
 		},
-		[getModels, provider, keys],
+		[getModels, provider, keys, loadModelsOnEmptyProvider],
 	);
 
 	// Handle selection change
 	const handleChange = useCallback(
 		(options: Option<ModelOption>[]) => {
-			const modelNames = options.map((opt) => opt.value);
-			onChange(modelNames);
+			if (isSingleSelect) {
+				const selected = options[0];
+				(onChange as (model: string) => void)(selected?.value || "");
+			} else {
+				const modelNames = options.map((opt) => opt.value);
+				(onChange as (models: string[]) => void)(modelNames);
+			}
 
 			// Refresh the list with current query to update available options
 			const currentQuery = inputValueRef.current;
-			if (provider) {
+			if (provider || loadModelsOnEmptyProvider) {
 				getModels({
 					query: currentQuery || undefined,
-					provider: provider,
+					provider: provider || undefined,
 					keys: keys && keys.length > 0 ? keys : undefined,
 					limit: currentQuery ? 20 : 5,
 				});
 			}
 		},
-		[onChange, provider, keys, getModels],
+		[onChange, provider, keys, getModels, isSingleSelect, loadModelsOnEmptyProvider],
 	);
 
 	// Handle input change - track in both state and ref
 	// Per react-select docs: ignore input clear on blur, menu close, and set-value (selection)
 	const handleInputChange = useCallback((newValue: string, actionMeta: { action: string }) => {
 		// Don't clear input when selecting an option, blurring, or closing menu
-		if (actionMeta.action === "set-value" || actionMeta.action === "input-blur" || actionMeta.action === "menu-close") {
+		if (actionMeta.action === "set-value") {
+			return;
+		}
+		if (!isSingleSelect && (actionMeta.action === "input-blur" || actionMeta.action === "menu-close")) {
 			return;
 		}
 		setInputValue(newValue);
@@ -126,34 +160,40 @@ export function ModelMultiselect({
 		[modelsData],
 	);
 
+	const shouldBeDisabled = disabled || (!provider && !loadModelsOnEmptyProvider);
+
 	return (
 		<AsyncMultiSelect<ModelOption>
+			isSingleSelect={isSingleSelect}
 			hideSelectedOptions
 			value={selectedOptions}
 			onChange={handleChange}
 			reload={loadOptions}
 			debounce={300}
-			isCreatable={true}
-			dynamicOptionCreation={true}
-			createOptionText="Press enter to add new model"
-			defaultOptions={defaultOptions.length > 0 ? defaultOptions : ([] as Option<ModelOption>[])}
+			isCreatable={!isSingleSelect}
+			dynamicOptionCreation={!isSingleSelect}
+			createOptionText={isSingleSelect ? undefined : "Press enter to add new model"}
+			defaultOptions={defaultOptions.length > 0 ? defaultOptions : [] as Option<ModelOption>[]}
 			isLoading={isLoading}
 			placeholder={placeholder}
-			disabled={disabled || !provider}
-			className={cn("!min-h-8.7 w-full", className)}
-			triggerClassName="!shadow-none !border-border !min-h-8.7 px-1"
-			menuClassName="!z-[100] max-h-[300px] overflow-y-auto w-full cursor-pointer custom-scrollbar py-1.5"
+			disabled={shouldBeDisabled}
+			className={cn("!min-h-10 w-full", className)}
+			triggerClassName="!shadow-none !border-border !min-h-10 px-1"
+			menuClassName="!z-[100] max-h-[300px] overflow-y-auto w-full cursor-pointer custom-scrollbar"
 			isClearable={false}
-			closeMenuOnSelect={false}
+			closeMenuOnSelect={isSingleSelect}
 			menuPlacement="auto"
 			menuListClassName="mx-1"
 			inputValue={inputValue}
 			onInputChange={handleInputChange}
 			noResultsFoundPlaceholder="No models found"
-			emptyResultPlaceholder={provider ? "Start typing to search models..." : "Please select a provider first"}
+			emptyResultPlaceholder={provider || loadModelsOnEmptyProvider ? "Start typing to search models..." : "Please select a provider first"}
 			views={{
-				dropdownIndicator: () => <></>,
-				multiValue: (multiValueProps: MultiValueProps<ModelOption>) => {
+				dropdownIndicator: isSingleSelect ? undefined : () => <></>,
+				singleValue: isSingleSelect ? (singleValueProps: SingleValueProps<ModelOption>) => (
+					<span className="absolute left-1.5 text-sm">{singleValueProps.data.label}</span>
+				) : undefined,
+				multiValue: isSingleSelect ? undefined : (multiValueProps: MultiValueProps<ModelOption>) => {
 					return (
 						<div
 							{...multiValueProps.innerProps}
@@ -182,7 +222,7 @@ export function ModelMultiselect({
 								optionProps.isSelected && "bg-accent dark:!bg-card",
 							)}
 						>
-							<span className="text-content-primary grow truncate text-sm">{optionProps.data.label}</span>
+							<span className="grow truncate text-sm">{optionProps.data.label}</span>
 						</Option>
 					);
 				},

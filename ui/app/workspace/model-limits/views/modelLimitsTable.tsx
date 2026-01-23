@@ -24,7 +24,7 @@ import { ModelConfig } from "@/lib/types/governance";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils/governance";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
-import { Edit, Gauge, Plus, Trash2 } from "lucide-react";
+import { Edit, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import ModelLimitSheet from "./modelLimitSheet";
@@ -82,51 +82,41 @@ export default function ModelLimitsTable({ modelConfigs, onRefresh }: ModelLimit
 				<ModelLimitSheet modelConfig={editingModelConfig} onSave={handleModelLimitSaved} onCancel={() => setShowModelLimitSheet(false)} />
 			)}
 
-			<div className="space-y-6">
-				{/* Header */}
-				<div className="flex items-start justify-between gap-4">
-					<div className="space-y-1">
-						<h1 className="text-lg font-semibold">Model limits </h1>
+			<div className="space-y-4">
+				<div className="flex items-center justify-between">
+					<div>
 						<p className="text-muted-foreground text-sm">
 							Configure budgets and rate limits at the model level. For provider-specific limits, visit each provider&apos;s settings.
 						</p>
 					</div>
-					<Button onClick={handleAddModelLimit} disabled={!hasCreateAccess} className="shrink-0">
-						<Plus className="mr-1.5 h-4 w-4" />
+					<Button onClick={handleAddModelLimit} disabled={!hasCreateAccess}>
+						<Plus className="h-4 w-4" />
 						Add Model Limit
 					</Button>
 				</div>
 
-				{/* Table or Empty State */}
-				{modelConfigs?.length === 0 ? (
-					<div className="border-border/60 from-muted/30 to-muted/10 relative overflow-hidden rounded-sm border px-8 py-12">
-						<div className="relative flex flex-col items-center text-center">
-							{/* Icon */}
-							<div className="bg-muted mb-4 rounded-full p-4">
-								<Gauge className="text-muted-foreground h-8 w-8" />
-							</div>
-
-							{/* Content */}
-							<h3 className="mb-2 text-lg font-semibold">No Model Limits Configured</h3>
-							<p className="text-muted-foreground mb-6 max-w-md text-sm">
-								Add model-level limits to control spending and request rates across your infrastructure.
-							</p>
-
-							{/* Feature hints */}
-							<div className="text-muted-foreground flex items-center justify-center gap-2 text-xs">
-								<span>Budget Controls</span>
-								<span>•</span>
-								<span>Token Limits</span>
-								<span>•</span>
-								<span>Request Throttling</span>
-							</div>
-						</div>
-						{/* Decorative elements */}
-						<div className="bg-primary/5 pointer-events-none absolute -top-8 -right-8 h-32 w-32 rounded-full blur-3xl" />
-						<div className="bg-primary/5 pointer-events-none absolute -bottom-8 -left-8 h-32 w-32 rounded-full blur-3xl" />
-					</div>
-				) : (
-					<div className="rounded-lg border">
+				{/* Table */}
+				<div className="rounded-sm border">
+					{modelConfigs?.length === 0 ? (
+						<Table>
+							<TableHeader>
+								<TableRow className="hover:bg-transparent">
+									<TableHead className="font-medium">Model</TableHead>
+									<TableHead className="font-medium">Provider</TableHead>
+									<TableHead className="font-medium">Budget</TableHead>
+									<TableHead className="font-medium">Rate Limit</TableHead>
+									<TableHead className="w-[100px]"></TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								<TableRow>
+									<TableCell colSpan={5} className="text-muted-foreground py-8 text-center">
+										No model limits found. Create your first model limit to get started.
+									</TableCell>
+								</TableRow>
+							</TableBody>
+						</Table>
+					) : (
 						<Table>
 							<TableHeader>
 								<TableRow className="hover:bg-transparent">
@@ -370,8 +360,8 @@ export default function ModelLimitsTable({ modelConfigs, onRefresh }: ModelLimit
 								})}
 							</TableBody>
 						</Table>
-					</div>
-				)}
+					)}
+				</div>
 			</div>
 		</>
 	);
