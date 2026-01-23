@@ -327,7 +327,7 @@ func (provider *AnthropicProvider) ChatCompletion(ctx *schemas.BifrostContext, k
 	if useRawBody, ok := ctx.Value(schemas.BifrostContextKeyUseRawRequestBody).(bool); ok && useRawBody {
 		jsonData = request.GetRawRequestBody()
 	} else {
-		anthropicReq, convErr := ToAnthropicChatRequest(request)
+		anthropicReq, convErr := ToAnthropicChatRequest(ctx, request)
 		if convErr != nil {
 			return nil, providerUtils.NewBifrostOperationError(schemas.ErrRequestBodyConversion, convErr, provider.GetProviderKey())
 		}
@@ -358,7 +358,7 @@ func (provider *AnthropicProvider) ChatCompletion(ctx *schemas.BifrostContext, k
 		return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonData, responseBody, provider.sendBackRawRequest, provider.sendBackRawResponse)
 	}
 	// Create final response
-	bifrostResponse := response.ToBifrostChatResponse()
+	bifrostResponse := response.ToBifrostChatResponse(ctx)
 
 	// Set ExtraFields
 	bifrostResponse.ExtraFields.Provider = provider.GetProviderKey()
@@ -394,7 +394,7 @@ func (provider *AnthropicProvider) ChatCompletionStream(ctx *schemas.BifrostCont
 	if useRawBody, ok := ctx.Value(schemas.BifrostContextKeyUseRawRequestBody).(bool); ok && useRawBody {
 		jsonData = request.GetRawRequestBody()
 	} else {
-		anthropicReq, convErr := ToAnthropicChatRequest(request)
+		anthropicReq, convErr := ToAnthropicChatRequest(ctx, request)
 		if convErr != nil {
 			return nil, providerUtils.NewBifrostOperationError(schemas.ErrRequestBodyConversion, convErr, provider.GetProviderKey())
 		}
@@ -557,6 +557,13 @@ func HandleAnthropicChatCompletionStreaming(
 		var eventType string
 		var eventData string
 
+		// Check for structured output tool name and track state
+		var structuredOutputToolName string
+		var isAccumulatingStructuredOutput bool
+		if toolName, ok := ctx.Value(schemas.BifrostContextKeyStructuredOutputToolName).(string); ok {
+			structuredOutputToolName = toolName
+		}
+
 		for scanner.Scan() {
 			// If context was cancelled/timed out, let defer handle it
 			if ctx.Err() != nil {
@@ -630,15 +637,83 @@ func HandleAnthropicChatCompletionStreaming(
 					}
 				}
 			}
-			if event.Delta != nil && event.Delta.StopReason != nil {
-				mappedReason := ConvertAnthropicFinishReasonToBifrost(*event.Delta.StopReason)
-				finishReason = &mappedReason
-			}
 			if event.Message != nil {
 				// Handle different event types
 				modelName = event.Message.Model
 			}
-			response, bifrostErr, isLastChunk := event.ToBifrostChatCompletionStream()
+
+			// Extract finish reason from event delta
+			if event.Delta != nil && event.Delta.StopReason != nil {
+				mappedReason := ConvertAnthropicFinishReasonToBifrost(*event.Delta.StopReason)
+				finishReason = &mappedReason
+
+				// Override finish reason for structured output
+				// When structured output is used, tool_use stop reason should appear as "stop" to the client
+				if structuredOutputToolName != "" && *finishReason == string(schemas.BifrostFinishReasonToolCalls) {
+					stopReason := string(schemas.BifrostFinishReasonStop)
+					finishReason = &stopReason
+				}
+			}
+
+			// Handle structured output: intercept tool calls for the structured output tool
+			// and convert them to content instead of forwarding as tool calls
+			if structuredOutputToolName != "" {
+				// Check for tool use start event
+				if event.Type == AnthropicStreamEventTypeContentBlockStart {
+					if event.ContentBlock != nil && event.ContentBlock.Type == AnthropicContentBlockTypeToolUse {
+						if event.ContentBlock.Name != nil && *event.ContentBlock.Name == structuredOutputToolName {
+							isAccumulatingStructuredOutput = true
+							continue
+						}
+					}
+				}
+
+				// Check for tool use delta event
+				if event.Type == AnthropicStreamEventTypeContentBlockDelta && isAccumulatingStructuredOutput {
+					if event.Delta != nil && event.Delta.Type == AnthropicStreamDeltaTypeInputJSON && event.Delta.PartialJSON != nil {
+						// Convert tool use delta to content delta
+						content := *event.Delta.PartialJSON
+						response := &schemas.BifrostChatResponse{
+							ID:     messageID,
+							Object: "chat.completion.chunk",
+							Choices: []schemas.BifrostResponseChoice{
+								{
+									Index: 0,
+									ChatStreamResponseChoice: &schemas.ChatStreamResponseChoice{
+										Delta: &schemas.ChatStreamResponseChoiceDelta{
+											Content: &content,
+										},
+									},
+								},
+							},
+							ExtraFields: schemas.BifrostResponseExtraFields{
+								RequestType:    schemas.ChatCompletionStreamRequest,
+								Provider:       providerName,
+								ModelRequested: modelName,
+								ChunkIndex:     chunkIndex,
+								Latency:        time.Since(lastChunkTime).Milliseconds(),
+							},
+						}
+						lastChunkTime = time.Now()
+						chunkIndex++
+
+						if sendBackRawResponse {
+							response.ExtraFields.RawResponse = eventData
+						}
+
+						providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, response, nil, nil, nil, nil), responseChan)
+						continue
+					}
+				}
+
+				// Check for content block stop
+				if event.Type == AnthropicStreamEventTypeContentBlockStop && isAccumulatingStructuredOutput {
+					isAccumulatingStructuredOutput = false
+					continue
+				}
+			}
+
+			response, bifrostErr, isLastChunk := event.ToBifrostChatCompletionStream(ctx, structuredOutputToolName)
 			if bifrostErr != nil {
 				bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
 					RequestType:    schemas.ChatCompletionStreamRequest,
@@ -745,7 +820,7 @@ func (provider *AnthropicProvider) Responses(ctx *schemas.BifrostContext, key sc
 	}
 
 	// Create final response
-	bifrostResponse := response.ToBifrostResponsesResponse()
+	bifrostResponse := response.ToBifrostResponsesResponse(ctx)
 
 	// Set ExtraFields
 	bifrostResponse.ExtraFields.Provider = provider.GetProviderKey()
@@ -916,6 +991,11 @@ func HandleAnthropicResponsesStream(
 		// Create stream state for stateful conversions
 		streamState := acquireAnthropicResponsesStreamState()
 		defer releaseAnthropicResponsesStreamState(streamState)
+
+		// Set structured output tool name if present
+		if toolName, ok := ctx.Value(schemas.BifrostContextKeyStructuredOutputToolName).(string); ok {
+			streamState.StructuredOutputToolName = toolName
+		}
 
 		// Track SSE event parsing state
 		var eventType string
