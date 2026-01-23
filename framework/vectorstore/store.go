@@ -15,6 +15,7 @@ const (
 	VectorStoreTypeWeaviate VectorStoreType = "weaviate"
 	VectorStoreTypeRedis    VectorStoreType = "redis"
 	VectorStoreTypeQdrant   VectorStoreType = "qdrant"
+	VectorStoreTypePinecone VectorStoreType = "pinecone"
 )
 
 // Query represents a query to the vector store.
@@ -79,16 +80,30 @@ const (
 type VectorStore interface {
 	// Health check
 	Ping(ctx context.Context) error
+	// CreateNamespace creates a new namespace in the vector store.
 	CreateNamespace(ctx context.Context, namespace string, dimension int, properties map[string]VectorStoreProperties) error
+	// DeleteNamespace deletes a namespace from the vector store.
 	DeleteNamespace(ctx context.Context, namespace string) error
+	// GetChunk retrieves a single vector from the vector store.
 	GetChunk(ctx context.Context, namespace string, id string) (SearchResult, error)
+	// GetChunks retrieves multiple vectors from the vector store.
 	GetChunks(ctx context.Context, namespace string, ids []string) ([]SearchResult, error)
+	// GetAll retrieves all vectors from the vector store.
 	GetAll(ctx context.Context, namespace string, queries []Query, selectFields []string, cursor *string, limit int64) ([]SearchResult, *string, error)
+	// GetNearest retrieves the nearest vectors from the vector store.
 	GetNearest(ctx context.Context, namespace string, vector []float32, queries []Query, selectFields []string, threshold float64, limit int64) ([]SearchResult, error)
+	// RequiresVectors returns true if the vector store requires vectors for all entries.
+	// Dedicated vector databases like Qdrant and Pinecone require vectors, while
+	// more flexible stores like Weaviate and Redis can store metadata-only entries.
+	RequiresVectors() bool
+	// Add stores a new vector in the vector store.
 	Add(ctx context.Context, namespace string, id string, embedding []float32, metadata map[string]interface{}) error
+	// Delete removes a vector from the vector store.
 	Delete(ctx context.Context, namespace string, id string) error
-	DeleteAll(ctx context.Context, namespace string, queries []Query) ([]DeleteResult, error)
-	Close(ctx context.Context, namespace string) error
+	// DeleteAll deletes all vectors from the vector store.
+	DeleteAll(ctx context.Context, namespace string, queries []Query) ([]DeleteResult, error)	
+	// Close closes the vector store.
+	Close(ctx context.Context, namespace string) error	
 }
 
 // Config represents the configuration for the vector store.
@@ -137,6 +152,12 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("failed to unmarshal qdrant config: %w", err)
 		}
 		c.Config = qdrantConfig
+	case VectorStoreTypePinecone:
+		var pineconeConfig PineconeConfig
+		if err := json.Unmarshal(temp.Config, &pineconeConfig); err != nil {
+			return fmt.Errorf("failed to unmarshal pinecone config: %w", err)
+		}
+		c.Config = pineconeConfig
 	default:
 		return fmt.Errorf("unknown vector store type: %s", temp.Type)
 	}
@@ -182,6 +203,15 @@ func NewVectorStore(ctx context.Context, config *Config, logger schemas.Logger) 
 			return nil, fmt.Errorf("invalid qdrant config")
 		}
 		return newQdrantStore(ctx, &qdrantConfig, logger)
+	case VectorStoreTypePinecone:
+		if config.Config == nil {
+			return nil, fmt.Errorf("pinecone config is required")
+		}
+		pineconeConfig, ok := config.Config.(PineconeConfig)
+		if !ok {
+			return nil, fmt.Errorf("invalid pinecone config")
+		}
+		return newPineconeStore(ctx, &pineconeConfig, logger)
 	}
 	return nil, fmt.Errorf("invalid vector store type: %s", config.Type)
 }

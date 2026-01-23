@@ -1,0 +1,1 @@
+- feat: adds Pinecone vector db support

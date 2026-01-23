@@ -82,6 +82,31 @@ func (plugin *Plugin) performDirectSearch(ctx *schemas.BifrostContext, req *sche
 	return plugin.buildResponseFromResult(ctx, req, result, CacheTypeDirect, 1.0, 0)
 }
 
+// generateEmbeddingsForStorage generates embeddings and stores them in context for PostHook storage.
+// This is used when the vector store requires vectors but we're in direct-only cache mode.
+// Unlike performSemanticSearch, this function does not perform any search - it only generates
+// and stores embeddings so they can be persisted with the cache entry.
+func (plugin *Plugin) generateEmbeddingsForStorage(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) error {
+	// Extract text and metadata for embedding
+	text, paramsHash, err := plugin.extractTextForEmbedding(req)
+	if err != nil {
+		return fmt.Errorf("failed to extract text for embedding: %w", err)
+	}
+
+	// Generate embedding
+	embedding, inputTokens, err := plugin.generateEmbedding(ctx, text)
+	if err != nil {
+		return fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	// Store embedding and metadata in context for PostHook
+	ctx.SetValue(requestEmbeddingKey, embedding)
+	ctx.SetValue(requestEmbeddingTokensKey, inputTokens)
+	ctx.SetValue(requestParamsHashKey, paramsHash)
+
+	return nil
+}
+
 // performSemanticSearch performs semantic similarity search and returns matching response if found.
 func (plugin *Plugin) performSemanticSearch(ctx *schemas.BifrostContext, req *schemas.BifrostRequest, cacheKey string) (*schemas.PluginShortCircuit, error) {
 	// Extract text and metadata for embedding

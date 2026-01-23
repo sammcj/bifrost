@@ -70,6 +70,47 @@ func getRedisConfigFromEnv() vectorstore.RedisConfig {
 	}
 }
 
+// getQdrantConfigFromEnv retrieves Qdrant configuration from environment variables
+func getQdrantConfigFromEnv() vectorstore.QdrantConfig {
+	host := schemas.NewEnvVar("env.QDRANT_HOST")
+	if host.GetValue() == "" {
+		host = schemas.NewEnvVar("localhost")
+	}
+	port := schemas.NewEnvVar("env.QDRANT_PORT")
+	if port.GetValue() == "" {
+		port = schemas.NewEnvVar("6334")
+	}
+	apiKey := schemas.NewEnvVar("env.QDRANT_API_KEY")
+	useTLS := schemas.NewEnvVar("env.QDRANT_USE_TLS")
+	if useTLS.GetValue() == "" {
+		useTLS = schemas.NewEnvVar("false")
+	}
+
+	return vectorstore.QdrantConfig{
+		Host:   *host,
+		Port:   *port,
+		APIKey: *apiKey,
+		UseTLS: *useTLS,
+	}
+}
+
+// getPineconeConfigFromEnv retrieves Pinecone configuration from environment variables
+func getPineconeConfigFromEnv() vectorstore.PineconeConfig {
+	apiKey := schemas.NewEnvVar("env.PINECONE_API_KEY")
+	if apiKey.GetValue() == "" {
+		apiKey = schemas.NewEnvVar("pclocal") // Pinecone Local doesn't validate API keys
+	}
+	indexHost := schemas.NewEnvVar("env.PINECONE_INDEX_HOST")
+	if indexHost.GetValue() == "" {
+		indexHost = schemas.NewEnvVar("localhost:5081") // Pinecone Local default port
+	}
+
+	return vectorstore.PineconeConfig{
+		APIKey:    *apiKey,
+		IndexHost: *indexHost,
+	}
+}
+
 // BaseAccount implements the schemas.Account interface for testing purposes.
 type BaseAccount struct{}
 
@@ -342,17 +383,36 @@ func NewTestSetup(t *testing.T) *TestSetup {
 
 // NewTestSetupWithConfig creates a new test setup with custom configuration
 func NewTestSetupWithConfig(t *testing.T, config *Config) *TestSetup {
+	return NewTestSetupWithVectorStore(t, config, vectorstore.VectorStoreTypeWeaviate)
+}
+
+// NewTestSetupWithVectorStore creates a new test setup with custom configuration and vector store type
+func NewTestSetupWithVectorStore(t *testing.T, config *Config, storeType vectorstore.VectorStoreType) *TestSetup {
 	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
 	logger := bifrost.NewDefaultLogger(schemas.LogLevelDebug)
 
-	// Keep Weaviate for embeddings, as mocker only affects chat completions
+	// Get the appropriate config for the vector store type
+	var storeConfig interface{}
+	switch storeType {
+	case vectorstore.VectorStoreTypeWeaviate:
+		storeConfig = getWeaviateConfigFromEnv()
+	case vectorstore.VectorStoreTypeRedis:
+		storeConfig = getRedisConfigFromEnv()
+	case vectorstore.VectorStoreTypeQdrant:
+		storeConfig = getQdrantConfigFromEnv()
+	case vectorstore.VectorStoreTypePinecone:
+		storeConfig = getPineconeConfigFromEnv()
+	default:
+		t.Fatalf("Unsupported vector store type: %s", storeType)
+	}
+
 	store, err := vectorstore.NewVectorStore(context.Background(), &vectorstore.Config{
-		Type:    vectorstore.VectorStoreTypeWeaviate,
-		Config:  getWeaviateConfigFromEnv(),
+		Type:    storeType,
+		Config:  storeConfig,
 		Enabled: true,
 	}, logger)
 	if err != nil {
-		t.Skipf("Vector store not available or failed to connect: %v", err)
+		t.Skipf("Vector store %s not available or failed to connect: %v", storeType, err)
 	}
 
 	plugin, err := Init(schemas.NewBifrostContext(context.Background(), schemas.NoDeadline), config, logger, store)
@@ -480,7 +540,7 @@ func AssertNoCacheHit(t *testing.T, response *schemas.BifrostResponse) {
 
 // WaitForCache waits for async cache operations to complete
 func WaitForCache() {
-	time.Sleep(1 * time.Second)
+	time.Sleep(10 * time.Second)
 }
 
 // CreateEmbeddingRequest creates an embedding request for testing

@@ -1,0 +1,2 @@
+- feat: semantic search now support Pinecone DB
+- chore: updated semantic search test cases to consider all dbs

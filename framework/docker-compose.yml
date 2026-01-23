@@ -1,3 +1,13 @@
+# Bifrost Framework Development Services
+#
+# Supported Vector Stores:
+# - Weaviate: Runs locally via this docker-compose (port 9000)
+# - Redis: Runs locally via this docker-compose (port 6379)
+# - Qdrant: Runs locally via this docker-compose (REST: 6333, gRPC: 6334)
+# - Pinecone: Runs locally via Pinecone Local emulator (port 5081)
+#             For production, use cloud service with PINECONE_API_KEY and PINECONE_INDEX_HOST
+#             See: https://docs.pinecone.io/guides/operations/local-development
+#
 services:
   postgres:
     image: postgres:16-alpine
@@ -57,6 +67,44 @@ services:
     networks:
       - bifrost_network
 
+  pinecone:
+    image: ghcr.io/pinecone-io/pinecone-index:latest
+    container_name: bifrost-pinecone
+    environment:
+      PORT: 5081
+      INDEX_TYPE: serverless
+      VECTOR_TYPE: dense
+      DIMENSION: 1536  # Matches text-embedding-3-small dimension
+      METRIC: cosine
+    ports:
+      - "5081:5081"
+    platform: linux/amd64
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5081/describe_index_stats"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - bifrost_network
+
+  qdrant:
+    image: qdrant/qdrant:v1.16.3
+    container_name: bifrost-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - bifrost_network
+
 networks:
   bifrost_network:
     driver: bridge
@@ -67,5 +115,7 @@ volumes:
   weaviate_data:
     driver: local
   redis_data:
+    driver: local
+  qdrant_data:
     driver: local
 
