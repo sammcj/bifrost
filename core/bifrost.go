@@ -4513,9 +4513,8 @@ func WeightedRandomKeySelector(ctx *schemas.BifrostContext, keys []schemas.Key, 
 		totalWeight += int(key.Weight * 100) // Convert float to int for better performance
 	}
 
-	// Use a fast random number generator
-	randomSource := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randomValue := randomSource.Intn(totalWeight)
+	// Use global thread-safe random (Go 1.20+) - no allocation, no syscall
+	randomValue := rand.Intn(totalWeight)
 
 	// Select key based on weight
 	currentWeight := 0
