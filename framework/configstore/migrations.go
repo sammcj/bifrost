@@ -151,6 +151,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddAllowedHeadersJSONColumn(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddDisableDBPingsInHealthColumn(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -2438,6 +2441,28 @@ func migrationAddAllowedHeadersJSONColumn(ctx context.Context, db *gorm.DB) erro
 
 			if !migrator.HasColumn(&tables.TableClientConfig{}, "allowed_headers_json") {
 				if err := migrator.AddColumn(&tables.TableClientConfig{}, "allowed_headers_json"); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	}})
+	err := m.Migrate()
+	if err != nil {
+		return fmt.Errorf("error while running db migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddDisableDBPingsInHealthColumn adds the disable_db_pings_in_health column to the client config table
+func migrationAddDisableDBPingsInHealthColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_disable_db_pings_in_health_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasColumn(&tables.TableClientConfig{}, "disable_db_pings_in_health") {
+				if err := migrator.AddColumn(&tables.TableClientConfig{}, "disable_db_pings_in_health"); err != nil {
 					return err
 				}
 			}

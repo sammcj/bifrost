@@ -54,6 +54,11 @@
           "type": "boolean",
           "description": "Disable logging of sensitive content (inputs, outputs, embeddings, etc.)"
         },
+        "disable_db_pings_in_health": {
+          "type": "boolean",
+          "description": "Disable DB pings in health check",
+          "default": false
+        },
         "log_retention_days": {
           "type": "integer",
           "minimum": 1,
@@ -1214,36 +1219,78 @@
               {
                 "not": {
                   "anyOf": [
-                    { "required": ["azure_key_config"] },
-                    { "required": ["vertex_key_config"] },
-                    { "required": ["bedrock_key_config"] }
+                    {
+                      "required": [
+                        "azure_key_config"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "vertex_key_config"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "bedrock_key_config"
+                      ]
+                    }
                   ]
                 }
               },
               {
-                "required": ["azure_key_config"],
+                "required": [
+                  "azure_key_config"
+                ],
                 "not": {
                   "anyOf": [
-                    { "required": ["vertex_key_config"] },
-                    { "required": ["bedrock_key_config"] }
+                    {
+                      "required": [
+                        "vertex_key_config"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "bedrock_key_config"
+                      ]
+                    }
                   ]
                 }
               },
               {
-                "required": ["vertex_key_config"],
+                "required": [
+                  "vertex_key_config"
+                ],
                 "not": {
                   "anyOf": [
-                    { "required": ["azure_key_config"] },
-                    { "required": ["bedrock_key_config"] }
+                    {
+                      "required": [
+                        "azure_key_config"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "bedrock_key_config"
+                      ]
+                    }
                   ]
                 }
               },
               {
-                "required": ["bedrock_key_config"],
+                "required": [
+                  "bedrock_key_config"
+                ],
                 "not": {
                   "anyOf": [
-                    { "required": ["azure_key_config"] },
-                    { "required": ["vertex_key_config"] }
+                    {
+                      "required": [
+                        "azure_key_config"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "vertex_key_config"
+                      ]
+                    }
                   ]
                 }
               }

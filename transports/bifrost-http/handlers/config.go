@@ -237,7 +237,6 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	currentConfig := h.store.ClientConfig
 	updatedConfig := currentConfig
 
-	shouldReloadTelemetryPlugin := false
 	var restartReasons []string
 
 	if payload.ClientConfig.DropExcessRequests != currentConfig.DropExcessRequests {
@@ -290,7 +289,6 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 
 	if !slices.Equal(payload.ClientConfig.PrometheusLabels, currentConfig.PrometheusLabels) {
 		updatedConfig.PrometheusLabels = payload.ClientConfig.PrometheusLabels
-		shouldReloadTelemetryPlugin = true
 		restartReasons = append(restartReasons, "Prometheus labels")
 	}
 
@@ -318,6 +316,7 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		restartReasons = append(restartReasons, "Content logging")
 	}
 	updatedConfig.DisableContentLogging = payload.ClientConfig.DisableContentLogging
+	updatedConfig.DisableDBPingsInHealth = payload.ClientConfig.DisableDBPingsInHealth
 
 	if payload.ClientConfig.EnableGovernance != currentConfig.EnableGovernance {
 		restartReasons = append(restartReasons, "Governance enabled")
@@ -463,16 +462,6 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		}
 		// Reloading pricing manager
 		h.configManager.ReloadPricingManager(ctx)
-	}
-	if shouldReloadTelemetryPlugin {
-		//TODO: Reload telemetry plugin - solvable problem by having a reference modifier on the metrics handler, but that will lead to loss of data on update
-		// if err := h.configManager.ReloadPlugin(ctx, telemetry.PluginName, map[string]any{
-		// 	"custom_labels": updatedConfig.PrometheusLabels,
-		// }); err != nil {
-		// 	logger.Warn(fmt.Sprintf("failed to reload telemetry plugin: %v", err))
-		// 	SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to reload telemetry plugin: %v", err))
-		// 	return
-		// }
 	}
 	// Checking auth config and trying to update if required
 	if payload.AuthConfig != nil {

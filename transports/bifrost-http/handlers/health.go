@@ -30,6 +30,11 @@ func (h *HealthHandler) RegisterRoutes(r *router.Router, middlewares ...schemas.
 
 // getHealth handles GET /api/health - Get the health status of the server.
 func (h *HealthHandler) getHealth(ctx *fasthttp.RequestCtx) {
+	// If DB pings are disabled, just return OK
+	if h.config.ClientConfig.DisableDBPingsInHealth {
+		SendJSON(ctx, map[string]any{"status": "ok", "components": map[string]any{"db_pings": "disabled"}})
+		return
+	}
 	// Pinging config store
 	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -81,5 +86,5 @@ func (h *HealthHandler) getHealth(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusServiceUnavailable, errors[0])
 		return
 	}
-	SendJSON(ctx, map[string]any{"status": "ok"})
+	SendJSON(ctx, map[string]any{"status": "ok", "components": map[string]any{"db_pings": "ok"}})
 }

@@ -849,7 +849,7 @@ func (s *BifrostHTTPServer) ReloadClientConfigFromConfigStore(ctx context.Contex
 		s.Client.ReloadConfig(schemas.BifrostConfig{
 			Account:            account,
 			InitialPoolSize:    s.Config.ClientConfig.InitialPoolSize,
-			DropExcessRequests: s.Config.ClientConfig.DropExcessRequests,
+			DropExcessRequests: s.Config.ClientConfig.DropExcessRequests,			
 			Plugins:            s.Config.GetLoadedPlugins(),
 			MCPConfig:          s.Config.MCPConfig,
 			Logger:             logger,
