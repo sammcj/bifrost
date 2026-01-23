@@ -2,7 +2,7 @@ apiVersion: v1
 entries:
   bifrost:
   - apiVersion: v2
-    appVersion: 1.5.2
+    appVersion: 1.4.2
     created: "2026-01-23T12:00:00.000000+00:00"
     description: A Helm chart for deploying Bifrost - AI Gateway with unified interface
       for multiple providers
