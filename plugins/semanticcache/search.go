@@ -324,7 +324,7 @@ func (plugin *Plugin) buildStreamingResponseFromResult(ctx *schemas.BifrostConte
 	ctx.SetValue(cacheHitTypeKey, cacheType)
 
 	// Create stream channel
-	streamChan := make(chan *schemas.BifrostStream)
+	streamChan := make(chan *schemas.BifrostStreamChunk)
 
 	go func() {
 		defer close(streamChan)
@@ -378,7 +378,7 @@ func (plugin *Plugin) buildStreamingResponseFromResult(ctx *schemas.BifrostConte
 			extraFields.Provider = provider
 
 			// Send chunk to stream
-			streamChan <- &schemas.BifrostStream{
+			streamChan <- &schemas.BifrostStreamChunk{
 				BifrostTextCompletionResponse:        cachedResponse.TextCompletionResponse,
 				BifrostChatResponse:                  cachedResponse.ChatResponse,
 				BifrostResponsesStreamResponse:       cachedResponse.ResponsesStreamResponse,

@@ -540,9 +540,9 @@ const (
 	RequestTimedOut  = "request_timed_out"
 )
 
-// BifrostStream represents a stream of responses from the Bifrost system.
+// BifrostStreamChunk represents a stream of responses from the Bifrost system.
 // Either BifrostResponse or BifrostError will be non-nil.
-type BifrostStream struct {
+type BifrostStreamChunk struct {
 	*BifrostTextCompletionResponse
 	*BifrostChatResponse
 	*BifrostResponsesStreamResponse
@@ -552,9 +552,9 @@ type BifrostStream struct {
 	*BifrostError
 }
 
-// MarshalJSON implements custom JSON marshaling for BifrostStream.
+// MarshalJSON implements custom JSON marshaling for BifrostStreamChunk.
 // This ensures that only the non-nil embedded struct is marshaled,
-func (bs BifrostStream) MarshalJSON() ([]byte, error) {
+func (bs BifrostStreamChunk) MarshalJSON() ([]byte, error) {
 	if bs.BifrostTextCompletionResponse != nil {
 		return Marshal(bs.BifrostTextCompletionResponse)
 	} else if bs.BifrostChatResponse != nil {

@@ -96,7 +96,14 @@ func TransportInterceptorMiddleware(config *lib.Config) schemas.BifrostHTTPMiddl
 				ctx.SetUserValue(key, value)
 			}
 			next(ctx)
-			// Acquire pooled response for post-hooks
+
+			// Skip HTTPTransportPostHook for streaming responses
+			// Streaming handlers set DeferTraceCompletion and use StreamChunkInterceptor for per-chunk hooks
+			if deferred, ok := ctx.UserValue(schemas.BifrostContextKeyDeferTraceCompletion).(bool); ok && deferred {
+				return
+			}
+
+			// Acquire pooled response for post-hooks (non-streaming only)
 			httpResp := schemas.AcquireHTTPResponse()
 			defer schemas.ReleaseHTTPResponse(httpResp)
 			fasthttpResponseToHTTPResponse(ctx, httpResp)
