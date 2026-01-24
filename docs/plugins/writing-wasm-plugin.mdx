@@ -175,7 +175,8 @@ class StreamChunkInput {
 class StreamChunkOutput {
   context: JSON.Obj = new JSON.Obj()
   chunk: JSON.Raw = new JSON.Raw('null') // BifrostStreamChunk as JSON, or null to skip
-  skip_chunk: bool = false
+  has_chunk: bool = false
+  skip: bool = false
   error: string = ''
 }
 
@@ -196,12 +197,13 @@ export function http_stream_chunk_hook(inputPtr: u32, inputLen: u32): u64 {
   const inputJson = readString(inputPtr, inputLen)
   const input = JSON.parse<StreamChunkInput>(inputJson)
 
-  // For pass-through, return chunk unchanged with skip_chunk: false
-  // To skip a chunk, set skip_chunk: true and chunk: null
+  // For pass-through, return chunk unchanged with skip: false
+  // To skip a chunk, set skip: true and chunk: null
   const output = new StreamChunkOutput()
   output.context = input.context
   output.chunk = input.chunk
-  output.skip_chunk = false
+  output.has_chunk = true
+  output.skip = false
   output.error = ''
 
   return writeString(JSON.stringify(output))
@@ -445,10 +447,11 @@ type HTTPStreamChunkHookInput struct {
 
 // HTTPStreamChunkHookOutput represents the output from http_stream_chunk_hook
 type HTTPStreamChunkHookOutput struct {
-	Context   map[string]interface{} `json:"context"`
-	Chunk     json.RawMessage        `json:"chunk,omitempty"` // BifrostStreamChunk JSON, nil to skip
-	SkipChunk bool                   `json:"skip_chunk"`
-	Error     string                 `json:"error"`
+	Context  map[string]interface{} `json:"context"`
+	Chunk    json.RawMessage        `json:"chunk,omitempty"` // BifrostStreamChunk JSON, nil to skip
+	HasChunk bool                   `json:"has_chunk"`
+	Skip     bool                   `json:"skip"`
+	Error    string                 `json:"error"`
 }
 
 //export http_stream_chunk_hook
@@ -464,9 +467,10 @@ func http_stream_chunk_hook(inputPtr, inputLen uint32) uint64 {
 
 	// Pass through chunk unchanged
 	output := HTTPStreamChunkHookOutput{
-		Context:   input.Context,
-		Chunk:     input.Chunk,
-		SkipChunk: false,
+		Context:  input.Context,
+		Chunk:    input.Chunk,
+		HasChunk: true,
+		Skip:     false,
 	}
 
 	data, _ := json.Marshal(output)
@@ -810,7 +814,8 @@ struct HTTPStreamChunkHookOutput {
     context: HashMap<String, serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     chunk: Option<String>, // base64-encoded chunk, None to skip
-    skip_chunk: bool,
+    has_chunk: bool,
+    skip: bool,
     error: String,
 }
 
@@ -833,7 +838,8 @@ pub extern "C" fn http_stream_chunk_hook(input_ptr: u32, input_len: u32) -> u64 
     let output = HTTPStreamChunkHookOutput {
         context: input.context,
         chunk: Some(input.chunk),
-        skip_chunk: false,
+        has_chunk: true,
+        skip: false,
         error: String::new(),
     };
     
@@ -1104,7 +1110,8 @@ It does NOT include SSE framing (no `data: ` prefix or `\n\n` suffix).
     "model": "gpt-4",
     "choices": [{"index": 0, "delta": {"content": "Hello"}, "finish_reason": null}]
   },
-  "skip_chunk": false,
+  "has_chunk": true,
+  "skip": false,
   "error": ""
 }
 ```
@@ -1114,7 +1121,8 @@ It does NOT include SSE framing (no `data: ` prefix or `\n\n` suffix).
 {
   "context": { "request_id": "abc-123" },
   "chunk": null,
-  "skip_chunk": true,
+  "has_chunk": false,
+  "skip": true,
   "error": ""
 }
 ```
@@ -1130,7 +1138,8 @@ It does NOT include SSE framing (no `data: ` prefix or `\n\n` suffix).
     "model": "gpt-4",
     "choices": [{"index": 0, "delta": {"content": "Modified!"}, "finish_reason": null}]
   },
-  "skip_chunk": false,
+  "has_chunk": true,
+  "skip": false,
   "error": ""
 }
 ```

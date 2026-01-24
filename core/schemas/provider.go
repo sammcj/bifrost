@@ -162,6 +162,23 @@ type ProxyConfig struct {
 	CACertPEM string    `json:"ca_cert_pem"` // PEM-encoded CA certificate to trust for TLS connections through the proxy
 }
 
+// Redacted returns a redacted copy of the proxy configuration.
+func (pc *ProxyConfig) Redacted() *ProxyConfig {
+	// Create redacted config with same structure but redacted values
+	redactedConfig := ProxyConfig{
+		Type:     pc.Type,
+		URL:      pc.URL,
+		Username: pc.Username,
+	}
+	if pc.Password != "" {
+		redactedConfig.Password = "********"
+	}
+	if pc.CACertPEM != "" {
+		redactedConfig.CACertPEM = "********"
+	}
+	return &redactedConfig
+}
+
 // AllowedRequests controls which operations are permitted.
 // A nil *AllowedRequests means "all operations allowed."
 // A non-nil value only allows fields set to true; omitted or false fields are disallowed.
