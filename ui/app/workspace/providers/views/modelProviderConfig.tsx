@@ -41,12 +41,12 @@ const availableTabs = (provider: ModelProvider, hasGovernanceAccess: boolean) =>
 	});
 
 	// Governance tab for budgets and rate limits (requires Governance permission)
-	if (hasGovernanceAccess) {
-		availableTabs.push({
-			id: "governance",
-			label: "Governance",
-		});
-	}
+	// if (hasGovernanceAccess) {
+	// 	availableTabs.push({
+	// 		id: "governance",
+	// 		label: "Governance",
+	// 	});
+	// }
 
 	return availableTabs;
 };
@@ -107,9 +107,9 @@ export default function ModelProviderConfig({ provider }: Props) {
 								<TabsContent value="performance">
 									<PerformanceFormFragment provider={provider} />
 								</TabsContent>
-								<TabsContent value="governance">
+								{/* <TabsContent value="governance">
 									<GovernanceFormFragment provider={provider} />
-								</TabsContent>
+								</TabsContent> */}
 							</Tabs>
 						</div>
 					</AccordionContent>

@@ -223,10 +223,10 @@ const SidebarItemView = ({
 			<SidebarMenuButton
 				tooltip={item.title}
 				className={`relative h-7.5 cursor-pointer rounded-sm border px-3 transition-all duration-200 ${isActive || isAnySubItemActive
-						? "bg-sidebar-accent text-primary border-primary/20"
-						: isAllowed && item.hasAccess
-							? "hover:bg-sidebar-accent hover:text-accent-foreground border-transparent text-slate-500 dark:text-zinc-400"
-							: "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
+					? "bg-sidebar-accent text-primary border-primary/20"
+					: isAllowed && item.hasAccess
+						? "hover:bg-sidebar-accent hover:text-accent-foreground border-transparent text-slate-500 dark:text-zinc-400"
+						: "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
 					} `}
 				onClick={hasSubItems ? handleClick : () => handleNavigation(item.url)}
 			>
@@ -265,10 +265,10 @@ const SidebarItemView = ({
 							<SidebarMenuSubItem key={subItem.title}>
 								<SidebarMenuSubButton
 									className={`h-7 cursor-pointer rounded-sm px-2 transition-all duration-200 ${isSubItemActive
-											? "bg-sidebar-accent text-primary font-medium"
-											: subItem.hasAccess === false
-												? "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
-												: "hover:bg-sidebar-accent hover:text-accent-foreground text-slate-500 dark:text-zinc-400"
+										? "bg-sidebar-accent text-primary font-medium"
+										: subItem.hasAccess === false
+											? "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
+											: "hover:bg-sidebar-accent hover:text-accent-foreground text-slate-500 dark:text-zinc-400"
 										}`}
 									onClick={() => (subItem.hasAccess === false ? undefined : handleSubItemClick(subItem))}
 								>
@@ -429,13 +429,13 @@ export default function AppSidebar() {
 					description: "Manage virtual keys & access",
 					hasAccess: hasVirtualKeysAccess,
 				},
-				{
-					title: "Model Limits",
-					url: "/workspace/model-limits",
-					icon: Gauge,
-					description: "Model-level budgets & rate limits",
-					hasAccess: hasGovernanceAccess,
-				},
+				// {
+				// 	title: "Model Limits",
+				// 	url: "/workspace/model-limits",
+				// 	icon: Gauge,
+				// 	description: "Model-level budgets & rate limits",
+				// 	hasAccess: hasGovernanceAccess,
+				// },
 				{
 					title: "Users & Groups",
 					url: "/workspace/user-groups",

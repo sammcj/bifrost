@@ -760,6 +760,7 @@ func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, 
 			ToolsToExecute:     dbClient.ToolsToExecute,
 			ToolsToAutoExecute: dbClient.ToolsToAutoExecute,
 			Headers:            dbClient.Headers,
+			IsPingAvailable:    dbClient.IsPingAvailable,
 		}
 	}
 	var clientConfig tables.TableClientConfig
@@ -819,6 +820,7 @@ func (s *RDBConfigStore) CreateMCPClientConfig(ctx context.Context, clientConfig
 			ToolsToExecute:     clientConfigCopy.ToolsToExecute,
 			ToolsToAutoExecute: clientConfigCopy.ToolsToAutoExecute,
 			Headers:            clientConfigCopy.Headers,
+			IsPingAvailable:    clientConfigCopy.IsPingAvailable,
 		}
 		if err := tx.WithContext(ctx).Create(&dbClient).Error; err != nil {
 			return s.parseGormError(err)
@@ -851,11 +853,12 @@ func (s *RDBConfigStore) UpdateMCPClientConfig(ctx context.Context, id string, c
 		existingClient.ToolsToExecute = clientConfigCopy.ToolsToExecute
 		existingClient.ToolsToAutoExecute = clientConfigCopy.ToolsToAutoExecute
 		existingClient.Headers = clientConfigCopy.Headers
+		existingClient.IsPingAvailable = clientConfigCopy.IsPingAvailable
 
 		// Use Select to explicitly include IsCodeModeClient even when it's false (zero value)
 		// GORM's Updates() skips zero values by default, so we need to explicitly select fields
 		// Using struct field names - GORM will convert them to column names automatically
-		if err := tx.WithContext(ctx).Select("name", "is_code_mode_client", "tools_to_execute_json", "tools_to_auto_execute_json", "headers_json", "updated_at").Updates(&existingClient).Error; err != nil {
+		if err := tx.WithContext(ctx).Select("name", "is_code_mode_client", "is_ping_available", "tools_to_execute_json", "tools_to_auto_execute_json", "headers_json", "updated_at").Updates(&existingClient).Error; err != nil {
 			return s.parseGormError(err)
 		}
 		return nil

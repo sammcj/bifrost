@@ -189,6 +189,9 @@ func (m *MCPManager) EditClient(id string, updatedConfig schemas.MCPClientConfig
 		return fmt.Errorf("invalid MCP client configuration: %w", err)
 	}
 
+	// Check if is_ping_available changed
+	isPingAvailableChanged := client.ExecutionConfig.IsPingAvailable != updatedConfig.IsPingAvailable
+
 	// Update the client's execution config with new tool filters
 	config := client.ExecutionConfig
 	config.Name = updatedConfig.Name
@@ -196,9 +199,19 @@ func (m *MCPManager) EditClient(id string, updatedConfig schemas.MCPClientConfig
 	config.Headers = updatedConfig.Headers
 	config.ToolsToExecute = updatedConfig.ToolsToExecute
 	config.ToolsToAutoExecute = updatedConfig.ToolsToAutoExecute
+	config.IsPingAvailable = updatedConfig.IsPingAvailable
 
 	// Store the updated config
 	client.ExecutionConfig = config
+
+	// If is_ping_available changed, update the health monitor
+	if isPingAvailableChanged {
+		// Stop and restart the health monitor with the new is_ping_available setting
+		m.healthMonitorManager.StopMonitoring(id)
+		monitor := NewClientHealthMonitor(m, id, DefaultHealthCheckInterval, config.IsPingAvailable)
+		m.healthMonitorManager.StartMonitoring(monitor)
+	}
+
 	return nil
 }
 
@@ -445,7 +458,7 @@ func (m *MCPManager) connectToMCPClient(config schemas.MCPClientConfig) error {
 	}
 
 	// Start health monitoring for the client
-	monitor := NewClientHealthMonitor(m, config.ID, DefaultHealthCheckInterval)
+	monitor := NewClientHealthMonitor(m, config.ID, DefaultHealthCheckInterval, config.IsPingAvailable)
 	m.healthMonitorManager.StartMonitoring(monitor)
 
 	return nil
