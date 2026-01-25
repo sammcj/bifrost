@@ -1201,11 +1201,11 @@ func (h *CompletionHandler) handleStreamingTextCompletion(ctx *fasthttp.RequestC
 	// Use the cancellable context from ConvertToBifrostContext
 	// See router.go for detailed explanation of why we need a cancellable context
 
-	getStream := func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	getStream := func() (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 		return h.client.TextCompletionStreamRequest(bifrostCtx, req)
 	}
 
-	h.handleStreamingResponse(ctx, getStream, cancel)
+	h.handleStreamingResponse(ctx, bifrostCtx, getStream, cancel)
 }
 
 // handleStreamingChatCompletion handles streaming chat completion requests using Server-Sent Events (SSE)
@@ -1213,11 +1213,11 @@ func (h *CompletionHandler) handleStreamingChatCompletion(ctx *fasthttp.RequestC
 	// Use the cancellable context from ConvertToBifrostContext
 	// See router.go for detailed explanation of why we need a cancellable context
 
-	getStream := func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	getStream := func() (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 		return h.client.ChatCompletionStreamRequest(bifrostCtx, req)
 	}
 
-	h.handleStreamingResponse(ctx, getStream, cancel)
+	h.handleStreamingResponse(ctx, bifrostCtx, getStream, cancel)
 }
 
 // handleStreamingResponses handles streaming responses requests using Server-Sent Events (SSE)
@@ -1225,11 +1225,11 @@ func (h *CompletionHandler) handleStreamingResponses(ctx *fasthttp.RequestCtx, r
 	// Use the cancellable context from ConvertToBifrostContext
 	// See router.go for detailed explanation of why we need a cancellable context
 
-	getStream := func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	getStream := func() (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 		return h.client.ResponsesStreamRequest(bifrostCtx, req)
 	}
 
-	h.handleStreamingResponse(ctx, getStream, cancel)
+	h.handleStreamingResponse(ctx, bifrostCtx, getStream, cancel)
 }
 
 // handleStreamingSpeech handles streaming speech requests using Server-Sent Events (SSE)
@@ -1237,11 +1237,11 @@ func (h *CompletionHandler) handleStreamingSpeech(ctx *fasthttp.RequestCtx, req 
 	// Use the cancellable context from ConvertToBifrostContext
 	// See router.go for detailed explanation of why we need a cancellable context
 
-	getStream := func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	getStream := func() (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 		return h.client.SpeechStreamRequest(bifrostCtx, req)
 	}
 
-	h.handleStreamingResponse(ctx, getStream, cancel)
+	h.handleStreamingResponse(ctx, bifrostCtx, getStream, cancel)
 }
 
 // handleStreamingTranscriptionRequest handles streaming transcription requests using Server-Sent Events (SSE)
@@ -1249,18 +1249,18 @@ func (h *CompletionHandler) handleStreamingTranscriptionRequest(ctx *fasthttp.Re
 	// Use the cancellable context from ConvertToBifrostContext
 	// See router.go for detailed explanation of why we need a cancellable context
 
-	getStream := func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	getStream := func() (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 		return h.client.TranscriptionStreamRequest(bifrostCtx, req)
 	}
 
-	h.handleStreamingResponse(ctx, getStream, cancel)
+	h.handleStreamingResponse(ctx, bifrostCtx, getStream, cancel)
 }
 
 // handleStreamingResponse is a generic function to handle streaming responses using Server-Sent Events (SSE)
 // The cancel function is called ONLY when client disconnects are detected via write errors.
 // Bifrost handles cleanup internally for normal completion and errors, so we only cancel
 // upstream streams when write errors indicate the client has disconnected.
-func (h *CompletionHandler) handleStreamingResponse(ctx *fasthttp.RequestCtx, getStream func() (chan *schemas.BifrostStream, *schemas.BifrostError), cancel context.CancelFunc) {
+func (h *CompletionHandler) handleStreamingResponse(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.BifrostContext, getStream func() (chan *schemas.BifrostStreamChunk, *schemas.BifrostError), cancel context.CancelFunc) {
 	// Set SSE headers
 	ctx.SetContentType("text/event-stream")
 	ctx.Response.Header.Set("Cache-Control", "no-cache")
@@ -1282,11 +1282,17 @@ func (h *CompletionHandler) handleStreamingResponse(ctx *fasthttp.RequestCtx, ge
 	// Get the trace completer function for use in the streaming callback
 	traceCompleter, _ := ctx.UserValue(schemas.BifrostContextKeyTraceCompleter).(func())
 
+	// Get stream chunk interceptor for plugin hooks
+	interceptor := h.config.GetStreamChunkInterceptor()
+	var httpReq *schemas.HTTPRequest	
+	if interceptor != nil {
+		httpReq = lib.BuildHTTPRequestFromFastHTTP(ctx)
+	}
 	var includeEventType bool
-
 	// Use streaming response writer
 	ctx.Response.SetBodyStreamWriter(func(w *bufio.Writer) {
 		defer func() {
+			schemas.ReleaseHTTPRequest(httpReq)
 			w.Flush()
 			// Complete the trace after streaming finishes
 			// This ensures all spans (including llm.call) are properly ended before the trace is sent to OTEL
@@ -1315,6 +1321,35 @@ func (h *CompletionHandler) handleStreamingResponse(ctx *fasthttp.RequestCtx, ge
 				skipDoneMarker = true
 			}
 
+			// Allow plugins to modify/filter the chunk via StreamChunkInterceptor
+			if interceptor != nil {
+				var err error
+				chunk, err = interceptor.InterceptChunk(bifrostCtx, httpReq, chunk)
+				if err != nil {
+					if chunk == nil {
+						errorJSON, marshalErr := sonic.Marshal(map[string]string{"error": err.Error()})
+						if marshalErr != nil {
+							cancel() // Client disconnected or payload invalid
+							return
+						}
+						// Return error event and stopping the streaming
+						if _, err := fmt.Fprintf(w, "event: error\ndata: %s\n\n", errorJSON); err != nil {
+							cancel() // Client disconnected (write error), cancel upstream stream
+							return
+						}
+						_ = w.Flush()
+						cancel()
+						return
+					}
+					// Else add warn log and continue
+					logger.Warn("%v", err)
+				}
+				if chunk == nil {
+					// Skip chunk if plugin wants to skip it
+					continue
+				}
+			}
+
 			// Convert response to JSON
 			chunkJSON, err := sonic.Marshal(chunk)
 			if err != nil {
@@ -1333,14 +1368,12 @@ func (h *CompletionHandler) handleStreamingResponse(ctx *fasthttp.RequestCtx, ge
 				} else if chunk.BifrostError != nil {
 					eventType = string(schemas.ResponsesStreamResponseTypeError)
 				}
-
 				if eventType != "" {
 					if _, err := fmt.Fprintf(w, "event: %s\n", eventType); err != nil {
 						cancel() // Client disconnected (write error), cancel upstream stream
 						return
 					}
 				}
-
 				if _, err := fmt.Fprintf(w, "data: %s\n\n", chunkJSON); err != nil {
 					cancel() // Client disconnected (write error), cancel upstream stream
 					return
@@ -1531,11 +1564,11 @@ func (h *CompletionHandler) handleStreamingImageGeneration(ctx *fasthttp.Request
 	// See router.go for detailed explanation of why we need a cancellable context
 	// Pass the context directly instead of copying to avoid copying lock values
 
-	getStream := func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	getStream := func() (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 		return h.client.ImageGenerationStreamRequest(bifrostCtx, req)
 	}
 
-	h.handleStreamingResponse(ctx, getStream, cancel)
+	h.handleStreamingResponse(ctx, bifrostCtx, getStream, cancel)
 }
 
 // batchCreate handles POST /v1/batches - Create a new batch job

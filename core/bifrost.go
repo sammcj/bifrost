@@ -46,7 +46,7 @@ type ChannelMessage struct {
 	schemas.BifrostRequest
 	Context        *schemas.BifrostContext
 	Response       chan *schemas.BifrostResponse
-	ResponseStream chan chan *schemas.BifrostStream
+	ResponseStream chan chan *schemas.BifrostStreamChunk
 	Err            chan schemas.BifrostError
 }
 
@@ -174,7 +174,7 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 	}
 	bifrost.responseStreamPool = sync.Pool{
 		New: func() interface{} {
-			return make(chan chan *schemas.BifrostStream, 1)
+			return make(chan chan *schemas.BifrostStreamChunk, 1)
 		},
 	}
 	bifrost.pluginPipelinePool = sync.Pool{
@@ -196,7 +196,7 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 		bifrost.channelMessagePool.Put(&ChannelMessage{})
 		bifrost.responseChannelPool.Put(make(chan *schemas.BifrostResponse, 1))
 		bifrost.errorChannelPool.Put(make(chan schemas.BifrostError, 1))
-		bifrost.responseStreamPool.Put(make(chan chan *schemas.BifrostStream, 1))
+		bifrost.responseStreamPool.Put(make(chan chan *schemas.BifrostStreamChunk, 1))
 		bifrost.pluginPipelinePool.Put(&PluginPipeline{
 			preHookErrors:  make([]error, 0),
 			postHookErrors: make([]error, 0),
@@ -557,7 +557,7 @@ func (bifrost *Bifrost) TextCompletionRequest(ctx *schemas.BifrostContext, req *
 }
 
 // TextCompletionStreamRequest sends a streaming text completion request to the specified provider.
-func (bifrost *Bifrost) TextCompletionStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostTextCompletionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (bifrost *Bifrost) TextCompletionStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostTextCompletionRequest) (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 	if req == nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -652,7 +652,7 @@ func (bifrost *Bifrost) ChatCompletionRequest(ctx *schemas.BifrostContext, req *
 }
 
 // ChatCompletionStreamRequest sends a chat completion stream request to the specified provider.
-func (bifrost *Bifrost) ChatCompletionStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostChatRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (bifrost *Bifrost) ChatCompletionStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostChatRequest) (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 	if req == nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -748,7 +748,7 @@ func (bifrost *Bifrost) ResponsesRequest(ctx *schemas.BifrostContext, req *schem
 }
 
 // ResponsesStreamRequest sends a responses stream request to the specified provider.
-func (bifrost *Bifrost) ResponsesStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (bifrost *Bifrost) ResponsesStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostResponsesRequest) (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 	if req == nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -899,7 +899,7 @@ func (bifrost *Bifrost) SpeechRequest(ctx *schemas.BifrostContext, req *schemas.
 }
 
 // SpeechStreamRequest sends a speech stream request to the specified provider.
-func (bifrost *Bifrost) SpeechStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (bifrost *Bifrost) SpeechStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 	if req == nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -972,7 +972,7 @@ func (bifrost *Bifrost) TranscriptionRequest(ctx *schemas.BifrostContext, req *s
 }
 
 // TranscriptionStreamRequest sends a transcription stream request to the specified provider.
-func (bifrost *Bifrost) TranscriptionStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (bifrost *Bifrost) TranscriptionStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostTranscriptionRequest) (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 	if req == nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -1060,7 +1060,7 @@ func (bifrost *Bifrost) ImageGenerationRequest(ctx *schemas.BifrostContext,
 
 // ImageGenerationStreamRequest sends an image generation stream request to the specified provider.
 func (bifrost *Bifrost) ImageGenerationStreamRequest(ctx *schemas.BifrostContext,
-	req *schemas.BifrostImageGenerationRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+	req *schemas.BifrostImageGenerationRequest) (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 	if req == nil {
 		return nil, &schemas.BifrostError{
 			IsBifrostError: false,
@@ -2952,7 +2952,7 @@ func (bifrost *Bifrost) handleRequest(ctx *schemas.BifrostContext, req *schemas.
 // It handles plugin hooks, request validation, response processing, and fallback providers.
 // If the primary provider fails, it will try each fallback provider in order until one succeeds.
 // It is the wrapper for all streaming public API methods.
-func (bifrost *Bifrost) handleStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (bifrost *Bifrost) handleStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 	defer bifrost.releaseBifrostRequest(req)
 
 	provider, model, fallbacks := req.GetRequestFields()
@@ -3205,7 +3205,7 @@ func (bifrost *Bifrost) tryRequest(ctx *schemas.BifrostContext, req *schemas.Bif
 
 // tryStreamRequest is a generic function that handles common request processing logic
 // It consolidates queue setup, plugin pipeline execution, enqueue logic, and response handling
-func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 	provider, model, _ := req.GetRequestFields()
 	queue, err := bifrost.getProviderQueue(provider)
 	if err != nil {
@@ -3249,7 +3249,7 @@ func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schem
 		}
 		// Handle short-circuit with stream
 		if shortCircuit.Stream != nil {
-			outputStream := make(chan *schemas.BifrostStream)
+			outputStream := make(chan *schemas.BifrostStreamChunk)
 
 			// Create a post hook runner cause pipeline object is put back in the pool on defer
 			pipelinePostHookRunner := func(ctx *schemas.BifrostContext, result *schemas.BifrostResponse, err *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError) {
@@ -3287,7 +3287,7 @@ func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schem
 					// Run post hooks on the stream message
 					processedResponse, processedError := pipelinePostHookRunner(ctx, bifrostResponse, streamMsg.BifrostError)
 
-					streamResponse := &schemas.BifrostStream{}
+					streamResponse := &schemas.BifrostStreamChunk{}
 					if processedResponse != nil {
 						streamResponse.BifrostTextCompletionResponse = processedResponse.TextCompletionResponse
 						streamResponse.BifrostChatResponse = processedResponse.ChatResponse
@@ -3476,7 +3476,7 @@ func executeRequestWithRetries[T any](
 		result, bifrostError = requestHandler()
 
 		// Check if result is a streaming channel - if so, defer span completion
-		if _, isStreamChan := any(result).(chan *schemas.BifrostStream); isStreamChan {
+		if _, isStreamChan := any(result).(chan *schemas.BifrostStreamChunk); isStreamChan {
 			// For streaming requests, store the span handle in TraceStore keyed by trace ID
 			// This allows the provider's streaming goroutine to retrieve it later
 			if traceID, ok := ctx.Value(schemas.BifrostContextKeyTraceID).(string); ok && traceID != "" {
@@ -3556,7 +3556,7 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 		_, model, _ := req.BifrostRequest.GetRequestFields()
 
 		var result *schemas.BifrostResponse
-		var stream chan *schemas.BifrostStream
+		var stream chan *schemas.BifrostStreamChunk
 		var bifrostError *schemas.BifrostError
 		var err error
 
@@ -3657,7 +3657,7 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 
 		// Execute request with retries
 		if IsStreamRequestType(req.RequestType) {
-			stream, bifrostError = executeRequestWithRetries(req.Context, config, func() (chan *schemas.BifrostStream, *schemas.BifrostError) {
+			stream, bifrostError = executeRequestWithRetries(req.Context, config, func() (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 				return bifrost.handleProviderStreamRequest(provider, req, key, postHookRunner)
 			}, req.RequestType, provider.GetProviderKey(), model, &req.BifrostRequest)
 		} else {
@@ -3910,7 +3910,7 @@ func (bifrost *Bifrost) handleProviderRequest(provider schemas.Provider, req *Ch
 }
 
 // handleProviderStreamRequest handles the stream request to the provider based on the request type
-func (bifrost *Bifrost) handleProviderStreamRequest(provider schemas.Provider, req *ChannelMessage, key schemas.Key, postHookRunner schemas.PostHookRunner) (chan *schemas.BifrostStream, *schemas.BifrostError) {
+func (bifrost *Bifrost) handleProviderStreamRequest(provider schemas.Provider, req *ChannelMessage, key schemas.Key, postHookRunner schemas.PostHookRunner) (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 	switch req.RequestType {
 	case schemas.TextCompletionStreamRequest:
 		return provider.TextCompletionStream(req.Context, postHookRunner, key, req.BifrostRequest.TextCompletionRequest)
@@ -4189,7 +4189,7 @@ func (bifrost *Bifrost) getChannelMessage(req schemas.BifrostRequest) *ChannelMe
 
 	// Conditionally allocate ResponseStream for streaming requests only
 	if IsStreamRequestType(req.RequestType) {
-		responseStreamChan := bifrost.responseStreamPool.Get().(chan chan *schemas.BifrostStream)
+		responseStreamChan := bifrost.responseStreamPool.Get().(chan chan *schemas.BifrostStreamChunk)
 		// Clear any previous values to avoid leaking between requests
 		select {
 		case <-responseStreamChan:

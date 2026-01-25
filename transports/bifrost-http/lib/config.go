@@ -33,6 +33,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// StreamChunkInterceptor intercepts streaming chunks before they're sent to clients.
+// Implementations can modify, filter, or observe chunks in real-time.
+// This interface enables proper dependency injection for streaming handlers.
+type StreamChunkInterceptor interface {
+	// InterceptChunk processes a chunk before it's written to the client.
+	// Returns the (potentially modified) chunk, or nil to skip the chunk entirely.
+	InterceptChunk(ctx *schemas.BifrostContext, req *schemas.HTTPRequest, chunk *schemas.BifrostStreamChunk) (*schemas.BifrostStreamChunk, error)
+}
+
 // HandlerStore provides access to runtime configuration values for handlers.
 // This interface allows handlers to access only the configuration they need
 // without depending on the entire ConfigStore, improving testability and decoupling.
@@ -43,6 +52,9 @@ type HandlerStore interface {
 	GetHeaderFilterConfig() *configstoreTables.GlobalHeaderFilterConfig
 	// GetAvailableProviders returns the list of available providers
 	GetAvailableProviders() []schemas.ModelProvider
+	// GetStreamChunkInterceptor returns the interceptor for streaming chunks.
+	// Returns nil if no plugins are loaded or streaming interception is not needed.
+	GetStreamChunkInterceptor() StreamChunkInterceptor
 }
 
 // Retry backoff constants for validation
@@ -2029,6 +2041,37 @@ func (c *Config) GetLoadedPlugins() []schemas.Plugin {
 		return *plugins
 	}
 	return nil
+}
+
+// pluginChunkInterceptor implements StreamChunkInterceptor by calling plugin hooks
+type pluginChunkInterceptor struct {
+	plugins []schemas.Plugin
+}
+
+// InterceptChunk processes a chunk through all plugin HTTPTransportStreamChunkHook methods.
+// Plugins are called in reverse order (same as PostHook) so modifications chain correctly.
+func (i *pluginChunkInterceptor) InterceptChunk(ctx *schemas.BifrostContext, req *schemas.HTTPRequest, stream *schemas.BifrostStreamChunk) (*schemas.BifrostStreamChunk, error) {
+	for j := len(i.plugins) - 1; j >= 0; j-- {
+		modified, err := i.plugins[j].HTTPTransportStreamChunkHook(ctx, req, stream)
+		if err != nil {			
+			return modified, fmt.Errorf("failed to intercept chunk with plugin %s: %w", i.plugins[j].GetName(), err)
+		}
+		if modified == nil {
+			return nil, nil // Plugin wants to skip this chunk
+		}
+		stream = modified
+	}
+	return stream, nil	
+}
+
+// GetStreamChunkInterceptor returns the chunk interceptor for streaming responses.
+// Returns nil if no plugins are loaded.
+func (c *Config) GetStreamChunkInterceptor() StreamChunkInterceptor {
+	plugins := c.GetLoadedPlugins()
+	if len(plugins) == 0 {
+		return nil
+	}
+	return &pluginChunkInterceptor{plugins: plugins}
 }
 
 // AddLoadedPlugin adds a plugin to the loaded plugins list.

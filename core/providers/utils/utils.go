@@ -916,7 +916,7 @@ func ShouldSendBackRawResponse(ctx context.Context, defaultSendBackRawResponse b
 }
 
 // SendCreatedEventResponsesChunk sends a ResponsesStreamResponseTypeCreated event.
-func SendCreatedEventResponsesChunk(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream) {
+func SendCreatedEventResponsesChunk(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStreamChunk) {
 	firstChunk := &schemas.BifrostResponsesStreamResponse{
 		Type:           schemas.ResponsesStreamResponseTypeCreated,
 		SequenceNumber: 0,
@@ -937,7 +937,7 @@ func SendCreatedEventResponsesChunk(ctx *schemas.BifrostContext, postHookRunner 
 }
 
 // SendInProgressEventResponsesChunk sends a ResponsesStreamResponseTypeInProgress event
-func SendInProgressEventResponsesChunk(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStream) {
+func SendInProgressEventResponsesChunk(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, provider schemas.ModelProvider, model string, startTime time.Time, responseChan chan *schemas.BifrostStreamChunk) {
 	chunk := &schemas.BifrostResponsesStreamResponse{
 		Type:           schemas.ResponsesStreamResponseTypeInProgress,
 		SequenceNumber: 1,
@@ -966,7 +966,7 @@ func ProcessAndSendResponse(
 	ctx *schemas.BifrostContext,
 	postHookRunner schemas.PostHookRunner,
 	response *schemas.BifrostResponse,
-	responseChan chan *schemas.BifrostStream,
+	responseChan chan *schemas.BifrostStreamChunk,
 ) {
 	// Accumulate chunk for tracing (common for all providers)
 	if tracer, ok := ctx.Value(schemas.BifrostContextKeyTracer).(schemas.Tracer); ok && tracer != nil {
@@ -988,7 +988,7 @@ func ProcessAndSendResponse(
 		return
 	}
 
-	streamResponse := &schemas.BifrostStream{}
+	streamResponse := &schemas.BifrostStreamChunk{}
 	if processedResponse != nil {
 		streamResponse.BifrostTextCompletionResponse = processedResponse.TextCompletionResponse
 		streamResponse.BifrostChatResponse = processedResponse.ChatResponse
@@ -1024,7 +1024,7 @@ func ProcessAndSendBifrostError(
 	ctx *schemas.BifrostContext,
 	postHookRunner schemas.PostHookRunner,
 	bifrostErr *schemas.BifrostError,
-	responseChan chan *schemas.BifrostStream,
+	responseChan chan *schemas.BifrostStreamChunk,
 	logger schemas.Logger,
 ) {
 	// Run post hooks first so span reflects post-processed data
@@ -1040,7 +1040,7 @@ func ProcessAndSendBifrostError(
 		return
 	}
 
-	streamResponse := &schemas.BifrostStream{}
+	streamResponse := &schemas.BifrostStreamChunk{}
 	if processedResponse != nil {
 		streamResponse.BifrostTextCompletionResponse = processedResponse.TextCompletionResponse
 		streamResponse.BifrostChatResponse = processedResponse.ChatResponse
@@ -1101,7 +1101,7 @@ func SetupStreamCancellation(ctx context.Context, bodyStream io.Reader, logger s
 func HandleStreamCancellation(
 	ctx *schemas.BifrostContext,
 	postHookRunner schemas.PostHookRunner,
-	responseChan chan *schemas.BifrostStream,
+	responseChan chan *schemas.BifrostStreamChunk,
 	provider schemas.ModelProvider,
 	model string,
 	requestType schemas.RequestType,
@@ -1142,7 +1142,7 @@ func HandleStreamCancellation(
 func HandleStreamTimeout(
 	ctx *schemas.BifrostContext,
 	postHookRunner schemas.PostHookRunner,
-	responseChan chan *schemas.BifrostStream,
+	responseChan chan *schemas.BifrostStreamChunk,
 	provider schemas.ModelProvider,
 	model string,
 	requestType schemas.RequestType,
@@ -1180,7 +1180,7 @@ func ProcessAndSendError(
 	ctx *schemas.BifrostContext,
 	postHookRunner schemas.PostHookRunner,
 	err error,
-	responseChan chan *schemas.BifrostStream,
+	responseChan chan *schemas.BifrostStreamChunk,
 	requestType schemas.RequestType,
 	providerName schemas.ModelProvider,
 	model string,
@@ -1206,7 +1206,7 @@ func ProcessAndSendError(
 		return
 	}
 
-	streamResponse := &schemas.BifrostStream{}
+	streamResponse := &schemas.BifrostStreamChunk{}
 	if processedResponse != nil {
 		streamResponse.BifrostTextCompletionResponse = processedResponse.TextCompletionResponse
 		streamResponse.BifrostChatResponse = processedResponse.ChatResponse

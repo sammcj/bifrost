@@ -70,17 +70,32 @@ Bifrost supports different authentication methods depending on the type of reque
 
 ### API Calls
 
-When authentication is enabled, API calls can use:
+When authentication is enabled, API calls and inference calls can use:
 
-- **Basic Authentication**: For inference calls, you can use HTTP Basic Auth with your username and password
-- **Bearer Token**: For admin API calls, use the Bearer token obtained from the login session
+- **Basic Authentication**: Username and Password in Basic auth
+- **Bearer Token**: base64 string of username:password as bearer token
 
-### Example: Using Basic Auth for API Calls
+### Example: Using Basic Auth for Inference Calls
 
 ```bash
 # Using curl with Basic Auth
 curl -X POST http://localhost:8080/v1/chat/completions \
   -u "your-username:your-password" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "openai/gpt-4o",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+### Example: Using Bearer Auth for Inference call
+```bash
+# First, encode your credentials as base64
+# echo -n "your-username:your-password" | base64
+
+# Using curl with Bearer Token
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer $(echo -n 'your-username:your-password' | base64)" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "openai/gpt-4o",
