@@ -24,6 +24,7 @@ import (
 	"github.com/maximhq/bifrost/framework/configstore"
 	configstoreTables "github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/encrypt"
+	"github.com/maximhq/bifrost/framework/envutils"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/framework/modelcatalog"
 	plugins "github.com/maximhq/bifrost/framework/plugins"
@@ -1081,12 +1082,27 @@ func mergeGovernanceConfig(ctx context.Context, config *Config, configData *Conf
 				if existingVirtualKey.ConfigHash != fileVKHash {
 					logger.Debug("config hash mismatch for virtual key %s, syncing from config file", newVirtualKey.ID)
 					configData.Governance.VirtualKeys[i].ConfigHash = fileVKHash
-					if configData.Governance.VirtualKeys[i].Value != "" {
-						// We print the warning and generate our own virtual key value
-						// This used to work till v1.3.x - but we don't want to break existing configs
-						logger.Warn("virtual key %s has a value in the config file, but it is not used in the UI. Please remove the value from the config file.", newVirtualKey.ID)
+					// This is added for backward compatibility with existing configs
+					if configData.Governance.VirtualKeys[i].Value == "" && existingVirtualKey.Value != "" {
+						configData.Governance.VirtualKeys[i].Value = existingVirtualKey.Value
 					}
-					configData.Governance.VirtualKeys[i].Value = existingVirtualKey.Value
+					// Process environment variable for virtual key value
+					if strings.HasPrefix(configData.Governance.VirtualKeys[i].Value, "env.") {
+						// Resolving the environment variable value
+						envValue, err := envutils.ProcessEnvValue(configData.Governance.VirtualKeys[i].Value)
+						if err != nil {
+							logger.Warn("failed to process environment variable for virtual key %s: %v", newVirtualKey.ID, err)
+							continue
+						}
+						configData.Governance.VirtualKeys[i].Value = envValue
+					}
+					// If the virtual key value is not a valid virtual key, we will generate a new one
+					if !strings.HasPrefix(configData.Governance.VirtualKeys[i].Value, governance.VirtualKeyPrefix) {
+						if configData.Governance.VirtualKeys[i].Value != "" {
+							logger.Warn("virtual key %s has a value in the config file that does not have %s prefix. We are generating a new one for you.", newVirtualKey.ID, governance.VirtualKeyPrefix)
+						}
+						configData.Governance.VirtualKeys[i].Value = governance.GenerateVirtualKey()
+					}
 					virtualKeysToUpdate = append(virtualKeysToUpdate, configData.Governance.VirtualKeys[i])
 					governanceConfig.VirtualKeys[j] = configData.Governance.VirtualKeys[i]
 				} else {
@@ -1099,12 +1115,21 @@ func mergeGovernanceConfig(ctx context.Context, config *Config, configData *Conf
 			configData.Governance.VirtualKeys[i].ConfigHash = fileVKHash
 			// if the virtual key value is env.VIRTUAL_KEY_VALUE, then we will need to resolve the environment variable
 			// Process environment variable for virtual key value
-			if configData.Governance.VirtualKeys[i].Value != "" {
-				// We print the warning and generate our own virtual key value
-				// This used to work till v1.3.x - but we don't want to break existing configs
-				logger.Warn("virtual key %s has a value in the config file, but it is not used in the UI. Please remove the value from the config file.", newVirtualKey.ID)
+			if strings.HasPrefix(configData.Governance.VirtualKeys[i].Value, "env.") {
+				// Resolving the environment variable value
+				envValue, err := envutils.ProcessEnvValue(configData.Governance.VirtualKeys[i].Value)
+				if err != nil {
+					logger.Warn("failed to process environment variable for virtual key %s: %v", newVirtualKey.ID, err)
+					continue
+				}
+				configData.Governance.VirtualKeys[i].Value = envValue
 			}
-			configData.Governance.VirtualKeys[i].Value = governance.GenerateVirtualKey()
+			if !strings.HasPrefix(configData.Governance.VirtualKeys[i].Value, governance.VirtualKeyPrefix) {
+				if configData.Governance.VirtualKeys[i].Value != "" {
+					logger.Warn("virtual key %s has a value in the config file that does not have %s prefix. We are generating a new one for you.", newVirtualKey.ID, governance.VirtualKeyPrefix)
+				}
+				configData.Governance.VirtualKeys[i].Value = governance.GenerateVirtualKey()
+			}
 			virtualKeysToAdd = append(virtualKeysToAdd, configData.Governance.VirtualKeys[i])
 		}
 	}

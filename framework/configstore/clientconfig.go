@@ -496,7 +496,7 @@ func GenerateVirtualKeyHash(vk tables.TableVirtualKey) (string, error) {
 	hash.Write([]byte(vk.Name))
 	// Hash Description
 	hash.Write([]byte(vk.Description))
-	// Note: Value is intentionally NOT hashed - it's a generated secret that shouldn't affect config sync
+	hash.Write([]byte(vk.Value))
 	// Hash IsActive
 	if vk.IsActive {
 		hash.Write([]byte("isActive:true"))
