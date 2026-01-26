@@ -1754,6 +1754,7 @@ func (provider *AnthropicProvider) FileUpload(ctx *schemas.BifrostContext, key s
 		req.Header.Set("x-api-key", key.Value.GetValue())
 	}
 	req.Header.Set("anthropic-version", provider.apiVersion)
+	appendBetaHeader(req, AnthropicFilesAPIBetaHeader)
 	req.SetBody(buf.Bytes())
 
 	// Make request
@@ -1847,6 +1848,7 @@ func (provider *AnthropicProvider) FileList(ctx *schemas.BifrostContext, keys []
 		req.Header.Set("x-api-key", key.Value.GetValue())
 	}
 	req.Header.Set("anthropic-version", provider.apiVersion)
+	appendBetaHeader(req, AnthropicFilesAPIBetaHeader)
 
 	// Make request
 	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
@@ -1944,6 +1946,7 @@ func (provider *AnthropicProvider) FileRetrieve(ctx *schemas.BifrostContext, key
 			req.Header.Set("x-api-key", key.Value.GetValue())
 		}
 		req.Header.Set("anthropic-version", provider.apiVersion)
+		appendBetaHeader(req, AnthropicFilesAPIBetaHeader)
 
 		// Make request
 		latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
@@ -2020,6 +2023,7 @@ func (provider *AnthropicProvider) FileDelete(ctx *schemas.BifrostContext, keys 
 			req.Header.Set("x-api-key", key.Value.GetValue())
 		}
 		req.Header.Set("anthropic-version", provider.apiVersion)
+		appendBetaHeader(req, AnthropicFilesAPIBetaHeader)
 
 		// Make request
 		latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
@@ -2128,6 +2132,7 @@ func (provider *AnthropicProvider) FileContent(ctx *schemas.BifrostContext, keys
 			req.Header.Set("x-api-key", key.Value.GetValue())
 		}
 		req.Header.Set("anthropic-version", provider.apiVersion)
+		appendBetaHeader(req, AnthropicFilesAPIBetaHeader)
 		// Make request
 		latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
 		if bifrostErr != nil {
