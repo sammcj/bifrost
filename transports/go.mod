@@ -10,15 +10,15 @@ require (
 	github.com/google/pprof v0.0.0-20251213031049-b05bdaca462f
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.43.2
-	github.com/maximhq/bifrost/core v1.3.12
-	github.com/maximhq/bifrost/framework v1.2.14
-	github.com/maximhq/bifrost/plugins/governance v1.4.15
-	github.com/maximhq/bifrost/plugins/litellmcompat v0.0.4
-	github.com/maximhq/bifrost/plugins/logging v1.4.14
-	github.com/maximhq/bifrost/plugins/maxim v1.5.13
-	github.com/maximhq/bifrost/plugins/otel v1.1.14
-	github.com/maximhq/bifrost/plugins/semanticcache v1.4.14
-	github.com/maximhq/bifrost/plugins/telemetry v1.4.15
+	github.com/maximhq/bifrost/core v1.3.14
+	github.com/maximhq/bifrost/framework v1.2.16
+	github.com/maximhq/bifrost/plugins/governance v1.4.17
+	github.com/maximhq/bifrost/plugins/litellmcompat v0.0.6
+	github.com/maximhq/bifrost/plugins/logging v1.4.16
+	github.com/maximhq/bifrost/plugins/maxim v1.5.15
+	github.com/maximhq/bifrost/plugins/otel v1.1.16
+	github.com/maximhq/bifrost/plugins/semanticcache v1.4.15
+	github.com/maximhq/bifrost/plugins/telemetry v1.4.17
 	github.com/prometheus/client_golang v1.23.0
 	github.com/stretchr/testify v1.11.1
 	github.com/valyala/fasthttp v1.68.0
@@ -34,6 +34,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.0 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.6 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.6 // indirect
@@ -106,10 +107,12 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-sqlite3 v1.14.32 // indirect
-	github.com/maximhq/bifrost/plugins/mocker v1.4.14 // indirect
+	github.com/maximhq/bifrost/plugins/mocker v1.4.16 // indirect
 	github.com/maximhq/maxim-go v0.1.14 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/oapi-codegen/runtime v1.1.1 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
+	github.com/pinecone-io/go-pinecone/v5 v5.3.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
