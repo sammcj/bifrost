@@ -22,8 +22,16 @@ type chunkTiming struct {
 // detectBatchedStream checks if chunks arrived in a batched manner rather than streaming individually
 // Returns true if streaming appears batched, with an error message
 func detectBatchedStream(chunkTimings []chunkTiming, minChunks int) (bool, string) {
-	if len(chunkTimings) < minChunks {
+	// Require at least 20 chunks to detect batching
+	// Small responses legitimately have few chunks that may arrive quickly
+	if len(chunkTimings) < 20 {
 		return false, "" // Not enough data to determine
+	}
+
+	// Check if first-to-second chunk has reasonable delay (TTFT indicator)
+	// True streaming usually has >1ms between first and second chunk
+	if len(chunkTimings) >= 2 && chunkTimings[1].timeSincePrev > 1*time.Millisecond {
+		return false, "" // First chunk delay indicates real streaming
 	}
 
 	var nearInstantCount int
