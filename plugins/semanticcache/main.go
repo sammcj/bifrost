@@ -676,6 +676,11 @@ func (plugin *Plugin) Cleanup() error {
 	// Clean up old stream accumulators first
 	plugin.cleanupOldStreamAccumulators()
 
+	// Shutdown the internal Bifrost client used for embeddings
+	if plugin.client != nil {
+		plugin.client.Shutdown()
+	}
+
 	// Only clean up cache entries if configured to do so
 	if !plugin.config.CleanUpOnShutdown {
 		plugin.logger.Debug(PluginLoggerPrefix + " Cleanup on shutdown is disabled, skipping cache cleanup")

@@ -1,3 +1,4 @@
+- fix: fixes race condition in shutdown core
 - feat: add is_ping_available configuration for MCP health checks
 - fix: allow flat $defs and propertyOrdering in jsonschema and forward it to Gemini
 - feat: adds beta feature for Anthropic

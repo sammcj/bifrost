@@ -79,31 +79,34 @@ type Bifrost struct {
 // to prevent "send on closed channel" panics during provider removal/update.
 // Producers must check the closing flag or select on the done channel before sending.
 type ProviderQueue struct {
-	queue   chan *ChannelMessage // the actual request queue channel
-	done    chan struct{}        // closed to signal shutdown to producers
-	mu      sync.RWMutex         // protects closing state
+	queue      chan *ChannelMessage // the actual request queue channel
+	done       chan struct{}        // closed to signal shutdown to producers
+	closing    uint32               // atomic: 0 = open, 1 = closing
 	signalOnce sync.Once
 	closeOnce  sync.Once
-	closing bool                 // set true before closing queue to signal producers
 }
 
-// signalClosing signals the closing of the provider queue
+// signalClosing signals the closing of the provider queue.
+// This is lock-free: uses atomic store and sync.Once to safely signal shutdown.
 func (pq *ProviderQueue) signalClosing() {
 	pq.signalOnce.Do(func() {
-		pq.mu.Lock()
-		pq.closing = true
+		atomic.StoreUint32(&pq.closing, 1)
 		close(pq.done)
-		pq.mu.Unlock()
 	})
 }
 
-// closeQueue closes the provider queue
+// closeQueue closes the provider queue.
+// Protected by sync.Once to prevent double-close.
 func (pq *ProviderQueue) closeQueue() {
 	pq.closeOnce.Do(func() {
-		pq.mu.Lock()
 		close(pq.queue)
-		pq.mu.Unlock()
 	})
+}
+
+// isClosing returns true if the provider queue is closing.
+// Uses atomic load for lock-free checking.
+func (pq *ProviderQueue) isClosing() bool {
+	return atomic.LoadUint32(&pq.closing) == 1
 }
 
 // PluginPipeline encapsulates the execution of plugin PreHooks and PostHooks, tracks how many plugins ran, and manages short-circuiting and error aggregation.
@@ -3252,11 +3255,9 @@ func (bifrost *Bifrost) tryRequest(ctx *schemas.BifrostContext, req *schemas.Bif
 	msg := bifrost.getChannelMessage(*preReq)
 	msg.Context = ctx
 
-	// Check if provider is closing before attempting to send
+	// Check if provider is closing before attempting to send (lock-free atomic check)
 	// This prevents "send on closed channel" panics during provider removal/update
-	pq.mu.RLock()
-	if pq.closing {
-		pq.mu.RUnlock()
+	if pq.isClosing() {
 		bifrost.releaseChannelMessage(msg)
 		bifrostErr := newBifrostErrorFromMsg("provider is shutting down")
 		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -3270,10 +3271,8 @@ func (bifrost *Bifrost) tryRequest(ctx *schemas.BifrostContext, req *schemas.Bif
 	// Use select with done channel to detect shutdown during send
 	select {
 	case pq.queue <- msg:
-		pq.mu.RUnlock()
 		// Message was sent successfully
 	case <-pq.done:
-		pq.mu.RUnlock()
 		bifrost.releaseChannelMessage(msg)
 		bifrostErr := newBifrostErrorFromMsg("provider is shutting down")
 		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -3283,7 +3282,6 @@ func (bifrost *Bifrost) tryRequest(ctx *schemas.BifrostContext, req *schemas.Bif
 		}
 		return nil, bifrostErr
 	case <-ctx.Done():
-		pq.mu.RUnlock()
 		bifrost.releaseChannelMessage(msg)
 		bifrostErr := newBifrostErrorFromMsg("request cancelled while waiting for queue space")
 		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -3293,7 +3291,6 @@ func (bifrost *Bifrost) tryRequest(ctx *schemas.BifrostContext, req *schemas.Bif
 		}
 		return nil, bifrostErr
 	default:
-		pq.mu.RUnlock()
 		if bifrost.dropExcessRequests.Load() {
 			bifrost.releaseChannelMessage(msg)
 			bifrost.logger.Warn("request dropped: queue is full, please increase the queue size or set dropExcessRequests to false")
@@ -3305,10 +3302,8 @@ func (bifrost *Bifrost) tryRequest(ctx *schemas.BifrostContext, req *schemas.Bif
 			}
 			return nil, bifrostErr
 		}
-		// Re-check closing flag before blocking send
-		pq.mu.RLock()
-		if pq.closing {
-			pq.mu.RUnlock()
+		// Re-check closing flag before blocking send (lock-free atomic check)
+		if pq.isClosing() {
 			bifrost.releaseChannelMessage(msg)
 			bifrostErr := newBifrostErrorFromMsg("provider is shutting down")
 			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -3320,10 +3315,8 @@ func (bifrost *Bifrost) tryRequest(ctx *schemas.BifrostContext, req *schemas.Bif
 		}
 		select {
 		case pq.queue <- msg:
-			pq.mu.RUnlock()
 			// Message was sent successfully
 		case <-pq.done:
-			pq.mu.RUnlock()
 			bifrost.releaseChannelMessage(msg)
 			bifrostErr := newBifrostErrorFromMsg("provider is shutting down")
 			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -3333,7 +3326,6 @@ func (bifrost *Bifrost) tryRequest(ctx *schemas.BifrostContext, req *schemas.Bif
 			}
 			return nil, bifrostErr
 		case <-ctx.Done():
-			pq.mu.RUnlock()
 			bifrost.releaseChannelMessage(msg)
 			bifrostErr := newBifrostErrorFromMsg("request cancelled while waiting for queue space")
 			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -3515,11 +3507,9 @@ func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schem
 	msg := bifrost.getChannelMessage(*preReq)
 	msg.Context = ctx
 
-	// Check if provider is closing before attempting to send
+	// Check if provider is closing before attempting to send (lock-free atomic check)
 	// This prevents "send on closed channel" panics during provider removal/update
-	pq.mu.RLock()
-	if pq.closing {
-		pq.mu.RUnlock()
+	if pq.isClosing() {
 		bifrost.releaseChannelMessage(msg)
 		bifrostErr := newBifrostErrorFromMsg("provider is shutting down")
 		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -3533,10 +3523,8 @@ func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schem
 	// Use select with done channel to detect shutdown during send
 	select {
 	case pq.queue <- msg:
-		pq.mu.RUnlock()
 		// Message was sent successfully
 	case <-pq.done:
-		pq.mu.RUnlock()
 		bifrost.releaseChannelMessage(msg)
 		bifrostErr := newBifrostErrorFromMsg("provider is shutting down")
 		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -3546,7 +3534,6 @@ func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schem
 		}
 		return nil, bifrostErr
 	case <-ctx.Done():
-		pq.mu.RUnlock()
 		bifrost.releaseChannelMessage(msg)
 		bifrostErr := newBifrostErrorFromMsg("request cancelled while waiting for queue space")
 		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -3556,7 +3543,6 @@ func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schem
 		}
 		return nil, bifrostErr
 	default:
-		pq.mu.RUnlock()
 		if bifrost.dropExcessRequests.Load() {
 			bifrost.releaseChannelMessage(msg)
 			bifrost.logger.Warn("request dropped: queue is full, please increase the queue size or set dropExcessRequests to false")
@@ -3568,10 +3554,8 @@ func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schem
 			}
 			return nil, bifrostErr
 		}
-		// Re-check closing flag before blocking send
-		pq.mu.RLock()
-		if pq.closing {
-			pq.mu.RUnlock()
+		// Re-check closing flag before blocking send (lock-free atomic check)
+		if pq.isClosing() {
 			bifrost.releaseChannelMessage(msg)
 			bifrostErr := newBifrostErrorFromMsg("provider is shutting down")
 			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -3583,10 +3567,8 @@ func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schem
 		}
 		select {
 		case pq.queue <- msg:
-			pq.mu.RUnlock()
 			// Message was sent successfully
 		case <-pq.done:
-			pq.mu.RUnlock()
 			bifrost.releaseChannelMessage(msg)
 			bifrostErr := newBifrostErrorFromMsg("provider is shutting down")
 			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -3596,7 +3578,6 @@ func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schem
 			}
 			return nil, bifrostErr
 		case <-ctx.Done():
-			pq.mu.RUnlock()
 			bifrost.releaseChannelMessage(msg)
 			bifrostErr := newBifrostErrorFromMsg("request cancelled while waiting for queue space")
 			bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
@@ -4772,24 +4753,19 @@ func WeightedRandomKeySelector(ctx *schemas.BifrostContext, keys []schemas.Key, 
 // It closes all request channels and waits for workers to exit.
 func (bifrost *Bifrost) Shutdown() {
 	bifrost.logger.Info("closing all request channels...")
-	// Check if the context is done
-	if bifrost.ctx.Err() != nil {
-		bifrost.logger.Warn("context already done, skipping cancel")
-		return
-	} else if bifrost.cancel != nil {
+	// Cancel the context if not already done
+	if bifrost.ctx.Err() == nil && bifrost.cancel != nil {
 		bifrost.cancel()
 	}
-	// Close all provider queues to signal workers to stop
+	// ALWAYS close all provider queues to signal workers to stop,
+	// even if context was already cancelled. This prevents goroutine leaks.
 	// Use the ProviderQueue lifecycle: signal closing, then close the queue
 	bifrost.requestQueues.Range(func(key, value interface{}) bool {
 		pq := value.(*ProviderQueue)
-		// Signal closing to producers
-		pq.mu.Lock()
-		pq.closing = true
-		close(pq.done)
-		pq.mu.Unlock()
-		// Close the queue to signal workers
-		close(pq.queue)
+		// Signal closing to producers (uses sync.Once internally)
+		pq.signalClosing()
+		// Close the queue to signal workers (uses sync.Once internally)
+		pq.closeQueue()
 		return true
 	})
 
