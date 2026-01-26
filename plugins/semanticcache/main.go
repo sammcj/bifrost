@@ -448,11 +448,12 @@ func (plugin *Plugin) PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostR
 			return req, nil, nil
 		}
 
-		plugin.logger.Debug(PluginLoggerPrefix + " Generating embeddings for storage (vector store requires vectors)")
-		err := plugin.generateEmbeddingsForStorage(ctx, req)
-		if err != nil {
-			plugin.logger.Warn(PluginLoggerPrefix + " Failed to generate embeddings for storage: " + err.Error())
-			// Continue without embeddings - caching will fail but request will proceed
+		// Use zero vector for direct-only cache type to prevent semantic search matches
+		// This preserves cache type isolation - direct-only entries won't be found by semantic search
+		if plugin.config.Dimension > 0 {
+			zeroVector := make([]float32, plugin.config.Dimension)
+			ctx.SetValue(requestEmbeddingKey, zeroVector)
+			plugin.logger.Debug(PluginLoggerPrefix + " Using zero vector for direct-only cache storage (preserves isolation)")
 		}
 	}
 

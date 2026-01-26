@@ -111,7 +111,7 @@ if [ -f "go.mod" ]; then
       # cd "$PLUGIN_DIR"
     else
       echo "🧪 Running plugin tests with coverage..."
-      go test -timeout 20m -coverprofile=coverage.txt -coverpkg=./... ./...
+      go test -v -timeout 20m -coverprofile=coverage.txt -coverpkg=./... ./...
       
       # Upload coverage to Codecov
       if [ -n "${CODECOV_TOKEN:-}" ]; then
