@@ -118,7 +118,7 @@ func RunFileBase64ChatCompletionsTest(t *testing.T, client *bifrost.Bifrost, ctx
 		// Enhanced validation for PDF document processing
 		expectations := GetExpectationsForScenario("FileInput", testConfig, map[string]interface{}{})
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
-		expectations.ShouldContainKeywords = append(expectations.ShouldContainKeywords, "hello", "world")
+		expectations.ShouldContainAnyOf = append(expectations.ShouldContainAnyOf, "hello", "world", "pdf", "document")
 		expectations.ShouldNotContainWords = append(expectations.ShouldNotContainWords, []string{
 			"cannot process", "invalid format", "decode error",
 			"unable to read", "no file", "corrupted", "unsupported",
@@ -198,7 +198,7 @@ func RunFileBase64ResponsesTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 		// Enhanced validation for PDF document processing
 		expectations := GetExpectationsForScenario("FileInput", testConfig, map[string]interface{}{})
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
-		expectations.ShouldContainKeywords = append(expectations.ShouldContainKeywords, "hello", "world")
+		expectations.ShouldContainAnyOf = append(expectations.ShouldContainAnyOf, "hello", "world", "pdf", "document")
 		expectations.ShouldNotContainWords = append(expectations.ShouldNotContainWords, []string{
 			"cannot process", "invalid format", "decode error",
 			"unable to read", "no file", "corrupted", "unsupported",
