@@ -2572,6 +2572,7 @@ func (c *Config) EditMCPClient(ctx context.Context, id string, updatedConfig sch
 	// Update the in-memory config with the processed values
 	c.MCPConfig.ClientConfigs[configIndex].Name = processedConfig.Name
 	c.MCPConfig.ClientConfigs[configIndex].IsCodeModeClient = processedConfig.IsCodeModeClient
+	c.MCPConfig.ClientConfigs[configIndex].IsPingAvailable = processedConfig.IsPingAvailable
 	c.MCPConfig.ClientConfigs[configIndex].Headers = processedConfig.Headers
 	c.MCPConfig.ClientConfigs[configIndex].ToolsToExecute = processedConfig.ToolsToExecute
 	c.MCPConfig.ClientConfigs[configIndex].ToolsToAutoExecute = processedConfig.ToolsToAutoExecute
@@ -2607,6 +2608,7 @@ func (c *Config) RedactMCPClientConfig(config schemas.MCPClientConfig) schemas.M
 		ID:                 config.ID,
 		Name:               config.Name,
 		IsCodeModeClient:   config.IsCodeModeClient,
+		IsPingAvailable:    config.IsPingAvailable,
 		ConnectionType:     config.ConnectionType,
 		ConnectionString:   config.ConnectionString,
 		StdioConfig:        config.StdioConfig,
