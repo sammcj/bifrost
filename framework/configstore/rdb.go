@@ -531,11 +531,6 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 	}
 	// Create keys for this provider
 	for _, key := range configCopy.Keys {
-		// Generate key hash
-		keyHash, err := GenerateKeyHash(key)
-		if err != nil {
-			return fmt.Errorf("failed to generate key hash: %w", err)
-		}
 		dbKey := tables.TableKey{
 			Provider:         dbProvider.Name,
 			ProviderID:       dbProvider.ID,
@@ -549,7 +544,7 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 			AzureKeyConfig:   key.AzureKeyConfig,
 			VertexKeyConfig:  key.VertexKeyConfig,
 			BedrockKeyConfig: key.BedrockKeyConfig,
-			ConfigHash:       keyHash,
+			ConfigHash:       key.ConfigHash,
 		}
 		// Handle Azure config
 		if key.AzureKeyConfig != nil {
@@ -725,6 +720,18 @@ func (s *RDBConfigStore) GetProviders(ctx context.Context) ([]tables.TableProvid
 		return nil, err
 	}
 	return providers, nil
+}
+
+// GetProvider retrieves a provider by name from the database with governance relationships.
+func (s *RDBConfigStore) GetProvider(ctx context.Context, provider schemas.ModelProvider) (*tables.TableProvider, error) {
+	var providerInfo tables.TableProvider
+	if err := s.db.WithContext(ctx).Preload("Budget").Preload("RateLimit").Where("name = ?", string(provider)).First(&providerInfo).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &providerInfo, nil
 }
 
 // GetProviderByName retrieves a provider by name from the database with governance relationships.

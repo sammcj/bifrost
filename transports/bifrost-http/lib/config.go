@@ -2053,7 +2053,7 @@ type pluginChunkInterceptor struct {
 func (i *pluginChunkInterceptor) InterceptChunk(ctx *schemas.BifrostContext, req *schemas.HTTPRequest, stream *schemas.BifrostStreamChunk) (*schemas.BifrostStreamChunk, error) {
 	for j := len(i.plugins) - 1; j >= 0; j-- {
 		modified, err := i.plugins[j].HTTPTransportStreamChunkHook(ctx, req, stream)
-		if err != nil {			
+		if err != nil {
 			return modified, fmt.Errorf("failed to intercept chunk with plugin %s: %w", i.plugins[j].GetName(), err)
 		}
 		if modified == nil {
@@ -2061,7 +2061,7 @@ func (i *pluginChunkInterceptor) InterceptChunk(ctx *schemas.BifrostContext, req
 		}
 		stream = modified
 	}
-	return stream, nil	
+	return stream, nil
 }
 
 // GetStreamChunkInterceptor returns the chunk interceptor for streaming responses.
@@ -2140,99 +2140,7 @@ func (c *Config) GetProviderConfigRedacted(provider schemas.ModelProvider) (*con
 		return nil, ErrNotFound
 	}
 
-	// Create redacted config with same structure but redacted values
-	redactedConfig := configstore.ProviderConfig{
-		NetworkConfig:            config.NetworkConfig,
-		ConcurrencyAndBufferSize: config.ConcurrencyAndBufferSize,
-		ProxyConfig:              config.ProxyConfig,
-		SendBackRawRequest:       config.SendBackRawRequest,
-		SendBackRawResponse:      config.SendBackRawResponse,
-		CustomProviderConfig:     config.CustomProviderConfig,
-		ConfigHash:               config.ConfigHash,
-	}
-
-	// Create redacted keys
-	redactedConfig.Keys = make([]schemas.Key, len(config.Keys))
-	for i, key := range config.Keys {
-		models := key.Models
-		if models == nil {
-			models = []string{} // Ensure models is never nil in JSON response
-		}
-		redactedConfig.Keys[i] = schemas.Key{
-			ID:         key.ID,
-			Name:       key.Name,
-			Models:     models,
-			Weight:     key.Weight,
-			ConfigHash: key.ConfigHash,
-		}
-		if key.Enabled != nil {
-			enabled := *key.Enabled
-			redactedConfig.Keys[i].Enabled = &enabled
-		}
-		redactedConfig.Keys[i].Value = *key.Value.Redacted()
-		// Add back use for batch api
-		if key.UseForBatchAPI != nil {
-			redactedConfig.Keys[i].UseForBatchAPI = key.UseForBatchAPI
-		} else {
-			redactedConfig.Keys[i].UseForBatchAPI = bifrost.Ptr(false)
-		}
-
-		// Redact Azure key config if present
-		if key.AzureKeyConfig != nil {
-			azureConfig := &schemas.AzureKeyConfig{
-				Deployments: key.AzureKeyConfig.Deployments,
-			}
-			azureConfig.Endpoint = *key.AzureKeyConfig.Endpoint.Redacted()
-			azureConfig.APIVersion = key.AzureKeyConfig.APIVersion
-			if key.AzureKeyConfig.ClientID != nil {
-				azureConfig.ClientID = key.AzureKeyConfig.ClientID.Redacted()
-			}
-			if key.AzureKeyConfig.ClientSecret != nil {
-				azureConfig.ClientSecret = key.AzureKeyConfig.ClientSecret.Redacted()
-			}
-			if key.AzureKeyConfig.TenantID != nil {
-				azureConfig.TenantID = key.AzureKeyConfig.TenantID.Redacted()
-			}
-			redactedConfig.Keys[i].AzureKeyConfig = azureConfig
-		}
-
-		// Redact Vertex key config if present
-		if key.VertexKeyConfig != nil {
-			vertexConfig := &schemas.VertexKeyConfig{
-				Deployments: key.VertexKeyConfig.Deployments,
-			}
-			vertexConfig.ProjectID = *key.VertexKeyConfig.ProjectID.Redacted()
-			vertexConfig.ProjectNumber = *key.VertexKeyConfig.ProjectNumber.Redacted()
-			vertexConfig.Region = *key.VertexKeyConfig.Region.Redacted()
-			vertexConfig.AuthCredentials = *key.VertexKeyConfig.AuthCredentials.Redacted()
-			redactedConfig.Keys[i].VertexKeyConfig = vertexConfig
-		}
-
-		// Redact Bedrock key config if present
-		if key.BedrockKeyConfig != nil {
-			bedrockConfig := &schemas.BedrockKeyConfig{
-				Deployments: key.BedrockKeyConfig.Deployments,
-			}
-			bedrockConfig.AccessKey = *key.BedrockKeyConfig.AccessKey.Redacted()
-			bedrockConfig.SecretKey = *key.BedrockKeyConfig.SecretKey.Redacted()
-			if key.BedrockKeyConfig.SessionToken != nil {
-				bedrockConfig.SessionToken = key.BedrockKeyConfig.SessionToken.Redacted()
-			}
-			if key.BedrockKeyConfig.Region != nil {
-				bedrockConfig.Region = key.BedrockKeyConfig.Region.Redacted()
-			}
-			if key.BedrockKeyConfig.ARN != nil {
-				bedrockConfig.ARN = key.BedrockKeyConfig.ARN.Redacted()
-			}
-			// Add back s3 config
-			if key.BedrockKeyConfig.BatchS3Config != nil {
-				bedrockConfig.BatchS3Config = key.BedrockKeyConfig.BatchS3Config
-			}
-			redactedConfig.Keys[i].BedrockKeyConfig = bedrockConfig
-		}
-	}
-
-	return &redactedConfig, nil
+	return config.Redacted(), nil
 }
 
 // GetAllProviders returns all configured provider names.
@@ -2267,14 +2175,19 @@ func (c *Config) AddProvider(ctx context.Context, provider schemas.ModelProvider
 	if err := ValidateCustomProvider(config, provider); err != nil {
 		return err
 	}
-	// Process environment variables in keys (including key-level configs)
 	for i, key := range config.Keys {
 		if key.ID == "" {
 			config.Keys[i].ID = uuid.NewString()
 		}
 	}
 	// First add the provider to the store
-	if c.ConfigStore != nil {
+	skipDBUpdate := false
+	if ctx.Value(schemas.BifrostContextKeySkipDBUpdate) != nil {
+		if skip, ok := ctx.Value(schemas.BifrostContextKeySkipDBUpdate).(bool); ok {
+			skipDBUpdate = skip
+		}
+	}
+	if c.ConfigStore != nil && !skipDBUpdate {
 		if err := c.ConfigStore.AddProvider(ctx, provider, config); err != nil {
 			if errors.Is(err, configstore.ErrNotFound) {
 				return ErrNotFound
@@ -2319,20 +2232,21 @@ func (c *Config) UpdateProviderConfig(ctx context.Context, provider schemas.Mode
 	// and must be retained so that on server restart, the hash comparison works correctly
 	// and user's key value changes are preserved (not overwritten by config.json)
 	config.ConfigHash = existingConfig.ConfigHash
-	// Process environment variables in keys (including key-level configs)
+	// Update in-memory configuration first (so client can read updated config)
+	c.Providers[provider] = config
 	for i, key := range config.Keys {
 		if key.ID == "" {
 			config.Keys[i].ID = uuid.NewString()
 		}
 	}
-	// Update in-memory configuration first (so client can read updated config)
-	c.Providers[provider] = config
+	skipDBUpdate := false
 	if ctx.Value(schemas.BifrostContextKeySkipDBUpdate) != nil {
-		if skipDBUpdate, ok := ctx.Value(schemas.BifrostContextKeySkipDBUpdate).(bool); ok && skipDBUpdate {
-			goto updateClientProvider
+		if skip, ok := ctx.Value(schemas.BifrostContextKeySkipDBUpdate).(bool); ok {
+			skipDBUpdate = skip
 		}
 	}
-	if c.ConfigStore != nil {
+	if c.ConfigStore != nil && !skipDBUpdate {
+		// Process environment variables in keys (including key-level configs)
 		// Update provider in database within a transaction
 		dbErr := c.ConfigStore.ExecuteTransaction(ctx, func(tx *gorm.DB) error {
 			if err := c.ConfigStore.UpdateProvider(ctx, provider, config, tx); err != nil {
@@ -2349,7 +2263,6 @@ func (c *Config) UpdateProviderConfig(ctx context.Context, provider schemas.Mode
 			return dbErr
 		}
 	}
-updateClientProvider:
 	// Release lock before calling client.UpdateProvider to avoid deadlock
 	// client.UpdateProvider will call GetConfigForProvider which needs RLock
 	c.Mu.Unlock()
@@ -2382,12 +2295,17 @@ func (c *Config) RemoveProvider(ctx context.Context, provider schemas.ModelProvi
 		return ErrNotFound
 	}
 	delete(c.Providers, provider)
-	if c.ConfigStore != nil {
+	skipDBUpdate := false
+	if ctx.Value(schemas.BifrostContextKeySkipDBUpdate) != nil {
+		if skip, ok := ctx.Value(schemas.BifrostContextKeySkipDBUpdate).(bool); ok {
+			skipDBUpdate = skip
+		}
+	}
+	if c.ConfigStore != nil && !skipDBUpdate {
 		if err := c.ConfigStore.DeleteProvider(ctx, provider); err != nil {
 			return fmt.Errorf("failed to update provider config in store: %w", err)
 		}
 	}
-
 	logger.Info("Removed provider: %s", provider)
 	return nil
 }
