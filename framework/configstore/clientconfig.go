@@ -456,8 +456,7 @@ func GenerateKeyHash(key schemas.Key) (string, error) {
 
 // VirtualKeyHashInput represents the fields used for virtual key hash generation.
 // This struct is used to create a consistent hash from TableVirtualKey,
-// excluding dynamic fields like ID, timestamps, relationship objects, and Value.
-// Note: Value is intentionally excluded as it's a generated secret that shouldn't affect config sync.
+// excluding dynamic fields like ID, timestamps, and relationship objects.
 type VirtualKeyHashInput struct {
 	Name        string
 	Description string
@@ -496,6 +495,7 @@ func GenerateVirtualKeyHash(vk tables.TableVirtualKey) (string, error) {
 	hash.Write([]byte(vk.Name))
 	// Hash Description
 	hash.Write([]byte(vk.Description))
+	// Hash Value
 	hash.Write([]byte(vk.Value))
 	// Hash IsActive
 	if vk.IsActive {

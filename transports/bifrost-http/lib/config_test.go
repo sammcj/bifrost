@@ -6133,12 +6133,12 @@ func TestGenerateVirtualKeyHash(t *testing.T) {
 		t.Error("Expected different hash for virtual keys with different Name")
 	}
 
-	// Different value should produce SAME hash (Value is intentionally excluded - it's a generated secret)
+	// Different value should produce different hash
 	vk4 := tables.TableVirtualKey{
 		ID:          "vk-1",
 		Name:        "test-vk",
 		Description: "Test virtual key",
-		Value:       "vk_different", // Different value - should NOT affect hash
+		Value:       "vk_different", // Different value
 		IsActive:    true,
 		TeamID:      &teamID,
 		BudgetID:    &budgetID,
@@ -6149,8 +6149,8 @@ func TestGenerateVirtualKeyHash(t *testing.T) {
 		t.Fatalf("Failed to generate hash: %v", err)
 	}
 
-	if hash1 != hash4 {
-		t.Error("Expected same hash for virtual keys with different Value (Value is excluded from hash)")
+	if hash1 == hash4 {
+		t.Error("Expected different hash for virtual keys with different Value")
 	}
 
 	// Different IsActive should produce different hash
