@@ -30,12 +30,12 @@ func detectBatchedStream(chunkTimings []chunkTiming, minChunks int) (bool, strin
 
 	// Check if first-to-second chunk has reasonable delay (TTFT indicator)
 	// True streaming usually has >1ms between first and second chunk
-	if len(chunkTimings) >= 2 && chunkTimings[1].timeSincePrev > 1*time.Millisecond {
+	if len(chunkTimings) >= 2 && chunkTimings[1].timeSincePrev > 50*time.Microsecond {
 		return false, "" // First chunk delay indicates real streaming
 	}
 
 	var nearInstantCount int
-	threshold := 1 * time.Millisecond
+	threshold := 50 * time.Microsecond
 
 	// Start from index 1 (skip first chunk - no previous reference)
 	for i := 1; i < len(chunkTimings); i++ {
