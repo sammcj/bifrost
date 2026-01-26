@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/bytedance/sonic"
+	"github.com/valyala/fasthttp"
+
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	"github.com/maximhq/bifrost/core/schemas"
 )
@@ -137,6 +139,22 @@ func appendUniqueHeader(slice []string, item string) []string {
 		}
 	}
 	return append(slice, item)
+}
+
+// appendBetaHeader appends a beta header to the request, preserving any existing beta headers
+func appendBetaHeader(req *fasthttp.Request, betaHeader string) {
+	existing := string(req.Header.Peek("anthropic-beta"))
+	if existing == "" {
+		req.Header.Set("anthropic-beta", betaHeader)
+		return
+	}
+	// Check if header already present
+	for _, h := range strings.Split(existing, ",") {
+		if strings.TrimSpace(h) == betaHeader {
+			return
+		}
+	}
+	req.Header.Set("anthropic-beta", existing+","+betaHeader)
 }
 
 // convertChatResponseFormatToTool converts a response_format config to an Anthropic tool for structured output
