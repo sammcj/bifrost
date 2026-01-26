@@ -7,6 +7,5 @@
   - inputExamples
   - add IsError to tool_result content
   - add "none" option to ToolChoice.Type
-
 - fix: implement structured output handling for Anthropic models on Vertex where the beta structured-output header is unsupported
 - fix: duplicate error when adding first MCP server

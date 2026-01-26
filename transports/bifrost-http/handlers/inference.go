@@ -624,7 +624,7 @@ func (h *CompletionHandler) textCompletion(ctx *fasthttp.RequestCtx) {
 	}
 	extraParams, err := extractExtraParams(ctx.PostBody(), textParamsKnownFields)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
+		logger.Warn("Failed to extract extra params: %v", err)
 	} else {
 		req.TextCompletionParameters.ExtraParams = extraParams
 	}
@@ -698,7 +698,7 @@ func (h *CompletionHandler) chatCompletion(ctx *fasthttp.RequestCtx) {
 
 	extraParams, err := extractExtraParams(ctx.PostBody(), chatParamsKnownFields)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
+		logger.Warn("Failed to extract extra params: %v", err)
 	} else {
 		// Handle max_tokens -> max_completion_tokens mapping after extracting extra params
 		// If max_completion_tokens is nil and max_tokens is present in extra params, map it
@@ -788,7 +788,7 @@ func (h *CompletionHandler) responses(ctx *fasthttp.RequestCtx) {
 
 	extraParams, err := extractExtraParams(ctx.PostBody(), responsesParamsKnownFields)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
+		logger.Warn("Failed to extract extra params: %v", err)
 	} else {
 		req.ResponsesParameters.ExtraParams = extraParams
 	}
@@ -870,7 +870,7 @@ func (h *CompletionHandler) embeddings(ctx *fasthttp.RequestCtx) {
 
 	extraParams, err := extractExtraParams(ctx.PostBody(), embeddingParamsKnownFields)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
+		logger.Warn("Failed to extract extra params: %v", err)
 	} else {
 		req.EmbeddingParameters.ExtraParams = extraParams
 	}
@@ -946,7 +946,7 @@ func (h *CompletionHandler) speech(ctx *fasthttp.RequestCtx) {
 
 	extraParams, err := extractExtraParams(ctx.PostBody(), speechParamsKnownFields)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
+		logger.Warn("Failed to extract extra params: %v", err)
 	} else {
 		req.SpeechParameters.ExtraParams = extraParams
 	}
@@ -1152,7 +1152,7 @@ func (h *CompletionHandler) countTokens(ctx *fasthttp.RequestCtx) {
 	}
 	extraParams, err := extractExtraParams(ctx.PostBody(), countTokensParamsKnownFields)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
+		logger.Warn("Failed to extract extra params: %v", err)
 	} else {
 		req.ResponsesParameters.ExtraParams = extraParams
 	}
@@ -1353,7 +1353,7 @@ func (h *CompletionHandler) handleStreamingResponse(ctx *fasthttp.RequestCtx, bi
 			// Convert response to JSON
 			chunkJSON, err := sonic.Marshal(chunk)
 			if err != nil {
-				logger.Warn(fmt.Sprintf("Failed to marshal streaming response: %v", err))
+				logger.Warn("Failed to marshal streaming response: %v", err)
 				continue
 			}
 
@@ -1396,7 +1396,7 @@ func (h *CompletionHandler) handleStreamingResponse(ctx *fasthttp.RequestCtx, bi
 		if !includeEventType && !skipDoneMarker {
 			// Send the [DONE] marker to indicate the end of the stream (only for non-responses/image-gen APIs)
 			if _, err := fmt.Fprint(w, "data: [DONE]\n\n"); err != nil {
-				logger.Warn(fmt.Sprintf("Failed to write SSE [DONE] marker: %v", err))
+				logger.Warn("Failed to write SSE [DONE] marker: %v", err)
 				cancel() // Client disconnected (write error), cancel upstream stream
 				return
 			}
@@ -1512,7 +1512,7 @@ func (h *CompletionHandler) imageGeneration(ctx *fasthttp.RequestCtx) {
 
 	extraParams, err := extractExtraParams(ctx.PostBody(), imageParamsKnownFields)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
+		logger.Warn("Failed to extract extra params: %v", err)
 		// Continue without extra params
 	} else {
 		req.ImageGenerationParameters.ExtraParams = extraParams
@@ -1595,7 +1595,7 @@ func (h *CompletionHandler) batchCreate(ctx *fasthttp.RequestCtx) {
 	// Extract extra params
 	extraParams, err := extractExtraParams(ctx.PostBody(), batchCreateParamsKnownFields)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
+		logger.Warn("Failed to extract extra params: %v", err)
 	}
 
 	var model *string
@@ -2085,7 +2085,7 @@ func (h *CompletionHandler) containerCreate(ctx *fasthttp.RequestCtx) {
 	// Extract extra params
 	extraParams, err := extractExtraParams(ctx.PostBody(), containerCreateParamsKnownFields)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to extract extra params: %v", err))
+		logger.Warn("Failed to extract extra params: %v", err)
 	}
 
 	// Build Bifrost container create request

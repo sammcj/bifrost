@@ -1240,7 +1240,7 @@ func (provider *GeminiProvider) SpeechStream(ctx *schemas.BifrostContext, postHo
 							// Decode base64-encoded audio data
 							decodedData, err := decodeBase64StringToBytes(part.InlineData.Data)
 							if err != nil {
-								provider.logger.Warn(fmt.Sprintf("Failed to decode base64 audio data: %v", err))
+								provider.logger.Warn("Failed to decode base64 audio data: %v", err)
 								continue
 							}
 							buf = append(buf, decodedData...)
