@@ -257,11 +257,11 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 
 		config, err := bifrost.account.GetConfigForProvider(providerKey)
 		if err != nil {
-			bifrost.logger.Warn(fmt.Sprintf("failed to get config for provider, skipping init: %v", err))
+			bifrost.logger.Warn("failed to get config for provider, skipping init: %v", err)
 			continue
 		}
 		if config == nil {
-			bifrost.logger.Warn(fmt.Sprintf("config is nil for provider %s, skipping init", providerKey))
+			bifrost.logger.Warn("config is nil for provider %s, skipping init", providerKey)
 			continue
 		}
 
@@ -272,7 +272,7 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 		providerMutex.Unlock()
 
 		if err != nil {
-			bifrost.logger.Warn(fmt.Sprintf("failed to prepare provider %s: %v", providerKey, err))
+			bifrost.logger.Warn("failed to prepare provider %s: %v", providerKey, err)
 		}
 	}
 
@@ -466,14 +466,14 @@ func (bifrost *Bifrost) ListAllModels(ctx *schemas.BifrostContext, request *sche
 				// check for context cancellation
 				select {
 				case <-ctx.Done():
-					bifrost.logger.Warn(fmt.Sprintf("context cancelled for provider %s", providerKey))
+					bifrost.logger.Warn("context cancelled for provider %s", providerKey)
 					return
 				default:
 				}
 
 				iterations++
 				if iterations > schemas.MaxPaginationRequests {
-					bifrost.logger.Warn(fmt.Sprintf("reached maximum pagination requests (%d) for provider %s, please increase the page size", schemas.MaxPaginationRequests, providerKey))
+					bifrost.logger.Warn("reached maximum pagination requests (%d) for provider %s, please increase the page size", schemas.MaxPaginationRequests, providerKey)
 					break
 				}
 
@@ -483,7 +483,7 @@ func (bifrost *Bifrost) ListAllModels(ctx *schemas.BifrostContext, request *sche
 					if !strings.Contains(bifrostErr.Error.Message, "no keys found") &&
 						!strings.Contains(bifrostErr.Error.Message, "not supported") {
 						providerErr = bifrostErr
-						bifrost.logger.Warn(fmt.Sprintf("failed to list models for provider %s: %s", providerKey, GetErrorMessage(bifrostErr)))
+						bifrost.logger.Warn("failed to list models for provider %s: %s", providerKey, GetErrorMessage(bifrostErr))
 					}
 					break
 				}
@@ -2876,7 +2876,7 @@ func (bifrost *Bifrost) prepareFallbackRequest(req *schemas.BifrostRequest, fall
 	// Check if we have config for this fallback provider
 	_, err := bifrost.account.GetConfigForProvider(fallback.Provider)
 	if err != nil {
-		bifrost.logger.Warn(fmt.Sprintf("config not found for provider %s, skipping fallback: %v", fallback.Provider, err))
+		bifrost.logger.Warn("config not found for provider %s, skipping fallback: %v", fallback.Provider, err)
 		return nil
 	}
 
@@ -4804,7 +4804,7 @@ func (bifrost *Bifrost) Shutdown() {
 	if bifrost.mcpManager != nil {
 		err := bifrost.mcpManager.Cleanup()
 		if err != nil {
-			bifrost.logger.Warn(fmt.Sprintf("Error cleaning up MCP manager: %s", err.Error()))
+			bifrost.logger.Warn("Error cleaning up MCP manager: %s", err.Error())
 		}
 	}
 
@@ -4817,7 +4817,7 @@ func (bifrost *Bifrost) Shutdown() {
 	for _, plugin := range *bifrost.plugins.Load() {
 		err := plugin.Cleanup()
 		if err != nil {
-			bifrost.logger.Warn(fmt.Sprintf("Error cleaning up plugin: %s", err.Error()))
+			bifrost.logger.Warn("Error cleaning up plugin: %s", err.Error())
 		}
 	}
 	bifrost.logger.Info("all request channels closed")

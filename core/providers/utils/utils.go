@@ -167,7 +167,7 @@ func ConfigureProxy(client *fasthttp.Client, proxyConfig *schemas.ProxyConfig, l
 		// Use environment variables for proxy configuration
 		dialFunc = fasthttpproxy.FasthttpProxyHTTPDialer()
 	default:
-		logger.Warn(fmt.Sprintf("Invalid proxy configuration: unsupported proxy type: %s", proxyConfig.Type))
+		logger.Warn("Invalid proxy configuration: unsupported proxy type: %s", proxyConfig.Type)
 		return client
 	}
 
@@ -179,7 +179,7 @@ func ConfigureProxy(client *fasthttp.Client, proxyConfig *schemas.ProxyConfig, l
 	if proxyConfig.CACertPEM != "" {
 		tlsConfig, err := createTLSConfigWithCA(proxyConfig.CACertPEM)
 		if err != nil {
-			logger.Warn(fmt.Sprintf("Failed to configure custom CA certificate: %v", err))
+			logger.Warn("Failed to configure custom CA certificate: %v", err)
 		} else {
 			client.TLSConfig = tlsConfig
 		}
@@ -480,7 +480,7 @@ func EnrichError(
 	if ShouldSendBackRawRequest(ctx, sendBackRawRequest) && len(requestBody) > 0 {
 		var rawRequest interface{}
 		if err := sonic.Unmarshal(requestBody, &rawRequest); err != nil {
-			logger.Warn(fmt.Sprintf("Failed to parse raw request for error: %v", err))
+			logger.Warn("Failed to parse raw request for error: %v", err)
 			return bifrostErr
 		}
 		bifrostErr.ExtraFields.RawRequest = rawRequest
@@ -493,7 +493,7 @@ func EnrichError(
 			// We have a responseBody to set
 			var rawResponse interface{}
 			if err := sonic.Unmarshal(responseBody, &rawResponse); err != nil {
-				logger.Warn(fmt.Sprintf("Failed to parse raw response for error: %v", err))
+				logger.Warn("Failed to parse raw response for error: %v", err)
 				return bifrostErr
 			}
 			bifrostErr.ExtraFields.RawResponse = rawResponse
@@ -622,7 +622,7 @@ func HandleProviderResponse[T any](responseBody []byte, response *T, requestBody
 func ParseAndSetRawRequest(extraFields *schemas.BifrostResponseExtraFields, jsonBody []byte) {
 	var rawRequest interface{}
 	if err := sonic.Unmarshal(jsonBody, &rawRequest); err != nil {
-		logger.Warn(fmt.Sprintf("Failed to parse raw request: %v", err))
+		logger.Warn("Failed to parse raw request: %v", err)
 	} else {
 		extraFields.RawRequest = rawRequest
 	}

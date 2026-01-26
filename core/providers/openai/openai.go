@@ -2714,7 +2714,7 @@ func HandleOpenAIImageGenerationStreaming(
 			// Parse minimally to extract usage and check for errors
 			var response OpenAIImageStreamResponse
 			if err := sonic.Unmarshal([]byte(jsonData), &response); err != nil {
-				logger.Warn(fmt.Sprintf("Failed to parse stream response: %v", err))
+				logger.Warn("Failed to parse stream response: %v", err)
 				continue
 			}
 
@@ -2794,7 +2794,7 @@ func HandleOpenAIImageGenerationStreaming(
 						imageIndex = minIndex
 						// Mark this image as completed
 						delete(incompleteImages, imageIndex)
-						logger.Warn(fmt.Sprintf("Completed event missing PartialImageIndex, using oldest incomplete image index %d", imageIndex))
+						logger.Warn("Completed event missing PartialImageIndex, using oldest incomplete image index %d", imageIndex)
 					}
 				} else {
 					// For partial chunks without PartialImageIndex, allocate a new unique index
@@ -2894,7 +2894,7 @@ func HandleOpenAIImageGenerationStreaming(
 		}
 
 		if err := scanner.Err(); err != nil {
-			logger.Warn(fmt.Sprintf("Error reading stream: %v", err))
+			logger.Warn("Error reading stream: %v", err)
 			providerUtils.ProcessAndSendError(ctx, postHookRunner, err, responseChan, schemas.ImageGenerationStreamRequest, providerName, request.Model, logger)
 		}
 	}()

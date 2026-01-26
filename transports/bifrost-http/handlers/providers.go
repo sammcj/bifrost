@@ -252,15 +252,15 @@ func (h *ProviderHandler) addProvider(ctx *fasthttp.RequestCtx) {
 	}
 	// Add provider to store (env vars will be processed by store)
 	if err := h.inMemoryStore.AddProvider(ctx, payload.Provider, config); err != nil {
-		logger.Warn(fmt.Sprintf("Failed to add provider %s: %v", payload.Provider, err))
+		logger.Warn("Failed to add provider %s: %v", payload.Provider, err)
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to add provider: %v", err))
 		return
 	}
-	logger.Info(fmt.Sprintf("Provider %s added successfully", payload.Provider))
+	logger.Info("Provider %s added successfully", payload.Provider)
 	// Get redacted config for response
 	redactedConfig, err := h.inMemoryStore.GetProviderConfigRedacted(payload.Provider)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to get redacted config for provider %s: %v", payload.Provider, err))
+		logger.Warn("Failed to get redacted config for provider %s: %v", payload.Provider, err)
 		// Fall back to the raw config (no keys)
 		response := h.getProviderResponseFromConfig(payload.Provider, configstore.ProviderConfig{
 			NetworkConfig:            config.NetworkConfig,
@@ -278,7 +278,7 @@ func (h *ProviderHandler) addProvider(ctx *fasthttp.RequestCtx) {
 		(payload.CustomProviderConfig.AllowedRequests != nil && payload.CustomProviderConfig.AllowedRequests.ListModels) {
 		go func() {
 			if _, err := h.modelsManager.ReloadProvider(context.Background(), payload.Provider); err != nil {
-				logger.Warn(fmt.Sprintf("Failed to refetch models for provider %s: %v", payload.Provider, err))
+				logger.Warn("Failed to refetch models for provider %s: %v", payload.Provider, err)
 			}
 		}()
 	}
@@ -318,7 +318,7 @@ func (h *ProviderHandler) updateProvider(ctx *fasthttp.RequestCtx) {
 	oldConfigRaw, err := h.inMemoryStore.GetProviderConfigRaw(provider)
 	if err != nil {
 		if !errors.Is(err, lib.ErrNotFound) {
-			logger.Warn(fmt.Sprintf("Failed to get old config for provider %s: %v", provider, err))
+			logger.Warn("Failed to get old config for provider %s: %v", provider, err)
 			SendError(ctx, fasthttp.StatusInternalServerError, err.Error())
 			return
 		}
@@ -331,7 +331,7 @@ func (h *ProviderHandler) updateProvider(ctx *fasthttp.RequestCtx) {
 	oldConfigRedacted, err := h.inMemoryStore.GetProviderConfigRedacted(provider)
 	if err != nil {
 		if !errors.Is(err, lib.ErrNotFound) {
-			logger.Warn(fmt.Sprintf("Failed to get old redacted config for provider %s: %v", provider, err))
+			logger.Warn("Failed to get old redacted config for provider %s: %v", provider, err)
 			SendError(ctx, fasthttp.StatusInternalServerError, err.Error())
 			return
 		}
@@ -427,13 +427,13 @@ func (h *ProviderHandler) updateProvider(ctx *fasthttp.RequestCtx) {
 	// Add provider to store if it doesn't exist
 	if _, err := h.inMemoryStore.GetProviderConfigRaw(provider); err != nil {
 		if !errors.Is(err, lib.ErrNotFound) {
-			logger.Warn(fmt.Sprintf("Failed to get provider %s: %v", provider, err))
+			logger.Warn("Failed to get provider %s: %v", provider, err)
 			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to get provider: %v", err))
 			return
 		}
 		// Adding the provider to store
 		if err := h.inMemoryStore.AddProvider(ctx, provider, config); err != nil {
-			logger.Warn(fmt.Sprintf("Failed to add provider %s: %v", provider, err))
+			logger.Warn("Failed to add provider %s: %v", provider, err)
 			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to add provider: %v", err))
 			return
 		}
@@ -449,7 +449,7 @@ func (h *ProviderHandler) updateProvider(ctx *fasthttp.RequestCtx) {
 	// Get redacted config for response
 	redactedConfig, err := h.inMemoryStore.GetProviderConfigRedacted(provider)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to get redacted config for provider %s: %v", provider, err))
+		logger.Warn("Failed to get redacted config for provider %s: %v", provider, err)
 		// Fall back to sanitized config (no keys)
 		response := h.getProviderResponseFromConfig(provider, configstore.ProviderConfig{
 			NetworkConfig:            config.NetworkConfig,
@@ -465,7 +465,7 @@ func (h *ProviderHandler) updateProvider(ctx *fasthttp.RequestCtx) {
 	// Refetch models if any key is added or removed
 	go func() {
 		if _, err := h.modelsManager.ReloadProvider(context.Background(), provider); err != nil {
-			logger.Warn(fmt.Sprintf("Failed to refetch models for provider %s: %v", provider, err))
+			logger.Warn("Failed to refetch models for provider %s: %v", provider, err)
 		}
 	}()
 	response := h.getProviderResponseFromConfig(provider, *redactedConfig, ProviderStatusActive)
@@ -488,7 +488,7 @@ func (h *ProviderHandler) deleteProvider(ctx *fasthttp.RequestCtx) {
 
 	// Remove provider from store
 	if err := h.inMemoryStore.RemoveProvider(ctx, provider); err != nil {
-		logger.Warn(fmt.Sprintf("Failed to remove provider %s: %v", provider, err))
+		logger.Warn("Failed to remove provider %s: %v", provider, err)
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to remove provider: %v", err))
 		return
 	}
@@ -496,7 +496,7 @@ func (h *ProviderHandler) deleteProvider(ctx *fasthttp.RequestCtx) {
 	logger.Info(fmt.Sprintf("Provider %s removed successfully", provider))
 
 	if err := h.modelsManager.RemoveProvider(ctx, provider); err != nil {
-		logger.Warn(fmt.Sprintf("Failed to delete models for provider %s: %v", provider, err))
+		logger.Warn("Failed to delete models for provider %s: %v", provider, err)
 	}
 
 	response := ProviderResponse{
@@ -641,7 +641,7 @@ func (h *ProviderHandler) filterModelsByKeys(provider schemas.ModelProvider, mod
 	// Get provider config to access keys
 	config, err := h.inMemoryStore.GetProviderConfigRaw(provider)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to get config for provider %s: %v", provider, err))
+		logger.Warn("Failed to get config for provider %s: %v", provider, err)
 		return models
 	}
 	// Build a set of allowed models from the specified keys
