@@ -439,7 +439,10 @@
         "type": {
           "type": "string",
           "enum": [
-            "weaviate"
+            "weaviate",
+            "redis",
+            "qdrant",
+            "pinecone"
           ],
           "description": "Vector store type"
         },
@@ -455,6 +458,42 @@
               },
               "then": {
                 "$ref": "#/$defs/weaviate_config"
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "redis"
+                  }
+                }
+              },
+              "then": {
+                "$ref": "#/$defs/redis_config"
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "qdrant"
+                  }
+                }
+              },
+              "then": {
+                "$ref": "#/$defs/qdrant_config"
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "pinecone"
+                  }
+                }
+              },
+              "then": {
+                "$ref": "#/$defs/pinecone_config"
               }
             }
           ]
@@ -1901,6 +1940,126 @@
       "required": [
         "scheme",
         "host"
+      ],
+      "additionalProperties": false
+    },
+    "redis_config": {
+      "type": "object",
+      "description": "Redis configuration for vector store",
+      "properties": {
+        "addr": {
+          "type": "string",
+          "description": "Redis server address (host:port) - REQUIRED (can use env. prefix)"
+        },
+        "username": {
+          "type": "string",
+          "description": "Username for Redis AUTH (optional, can use env. prefix)"
+        },
+        "password": {
+          "type": "string",
+          "description": "Password for Redis AUTH (optional, can use env. prefix)"
+        },
+        "db": {
+          "type": "integer",
+          "description": "Redis database number (default: 0)",
+          "default": 0
+        },
+        "pool_size": {
+          "type": "integer",
+          "description": "Maximum number of socket connections (optional)"
+        },
+        "max_active_conns": {
+          "type": "integer",
+          "description": "Maximum number of active connections (optional)"
+        },
+        "min_idle_conns": {
+          "type": "integer",
+          "description": "Minimum number of idle connections (optional)"
+        },
+        "max_idle_conns": {
+          "type": "integer",
+          "description": "Maximum number of idle connections (optional)"
+        },
+        "conn_max_lifetime": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
+          "description": "Connection maximum lifetime (e.g., '30m')"
+        },
+        "conn_max_idle_time": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
+          "description": "Connection maximum idle time (e.g., '5m')"
+        },
+        "dial_timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
+          "description": "Timeout for socket connection (e.g., '5s')"
+        },
+        "read_timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
+          "description": "Timeout for socket reads (e.g., '3s')"
+        },
+        "write_timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
+          "description": "Timeout for socket writes (e.g., '3s')"
+        },
+        "context_timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
+          "description": "Timeout for Redis operations (e.g., '10s')"
+        }
+      },
+      "required": [
+        "addr"
+      ],
+      "additionalProperties": false
+    },
+    "qdrant_config": {
+      "type": "object",
+      "description": "Qdrant configuration for vector store",
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Qdrant server host - REQUIRED (can use env. prefix)"
+        },
+        "port": {
+          "type": "integer",
+          "description": "Qdrant server port (default: 6334 for gRPC)",
+          "default": 6334
+        },
+        "api_key": {
+          "type": "string",
+          "description": "API key for authentication (optional, can use env. prefix)"
+        },
+        "use_tls": {
+          "type": "boolean",
+          "description": "Use TLS for connection (optional)",
+          "default": false
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "additionalProperties": false
+    },
+    "pinecone_config": {
+      "type": "object",
+      "description": "Pinecone configuration for vector store",
+      "properties": {
+        "api_key": {
+          "type": "string",
+          "description": "Pinecone API key - REQUIRED (can use env. prefix)"
+        },
+        "index_host": {
+          "type": "string",
+          "description": "Index host URL from Pinecone console - REQUIRED (e.g., your-index.svc.environment.pinecone.io)"
+        }
+      },
+      "required": [
+        "api_key",
+        "index_host"
       ],
       "additionalProperties": false
     },

@@ -209,20 +209,25 @@ if [ "$SERVICES_READY" = false ]; then
   exit 1
 fi
 
+# Cache PostgreSQL container ID before the loop to avoid repeated lookups
+POSTGRES_CONTAINER_ID=$(docker compose -f "$CONFIGS_DIR/docker-compose.yml" ps -q postgres)
+
 for config in "${CONFIGS_TO_TEST[@]}"; do
   echo "  🔍 Testing with config: $config"
   config_path="$CONFIGS_DIR/$config"
 
-  # Clean up databases before each config test for a clean slate
-  echo "    🧹 Resetting PostgreSQL database..."
-  # Note: DROP DATABASE cannot run inside a transaction, so we use separate -c flags
-  # First terminate any active connections, then drop and recreate the database
-  # PGPASSWORD is required for psql authentication (matches POSTGRES_PASSWORD in docker-compose.yml)
-  docker exec -e PGPASSWORD=bifrost_password "$(docker compose -f "$CONFIGS_DIR/docker-compose.yml" ps -q postgres)" \
-    psql -U bifrost -d postgres \
-    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'bifrost' AND pid <> pg_backend_pid();" \
-    -c "DROP DATABASE IF EXISTS bifrost;" \
-    -c "CREATE DATABASE bifrost;"
+  # Only reset PostgreSQL for configs that actually use it (contain 'postgres' in name)
+  if [[ "$config" == *"postgres"* ]]; then
+    echo "    🧹 Resetting PostgreSQL database..."
+    # Note: DROP DATABASE cannot run inside a transaction, so we use separate -c flags
+    # First terminate any active connections, then drop and recreate the database
+    # PGPASSWORD is required for psql authentication (matches POSTGRES_PASSWORD in docker-compose.yml)
+    docker exec -e PGPASSWORD=bifrost_password "$POSTGRES_CONTAINER_ID" \
+      psql -U bifrost -d postgres \
+      -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'bifrost' AND pid <> pg_backend_pid();" \
+      -c "DROP DATABASE IF EXISTS bifrost;" \
+      -c "CREATE DATABASE bifrost;"
+  fi
 
   echo "    🧹 Cleaning up SQLite database files for config: $config..."
   find "$config_path" -type f \( -name "*.db" -o -name "*.db-shm" -o -name "*.db-wal" \) -delete 2>/dev/null || true
@@ -242,14 +247,15 @@ for config in "${CONFIGS_TO_TEST[@]}"; do
 
   # Wait for server to be ready by looking for the startup message
   echo "    ⏳ Waiting for server to start..."
-  MAX_WAIT=30
-  ELAPSED=0
+  MAX_WAIT_MS=30000
+  ELAPSED_MS=0
+  POLL_INTERVAL_MS=200
   SERVER_READY=false
 
-  while [ $ELAPSED -lt $MAX_WAIT ]; do
+  while [ $ELAPSED_MS -lt $MAX_WAIT_MS ]; do
     if grep -q "successfully started bifrost, serving UI on http://localhost:18080" "$SERVER_LOG" 2>/dev/null; then
       SERVER_READY=true
-      echo "    ✅ Server started successfully with config: $config"
+      echo "    ✅ Server started successfully with config: $config (${ELAPSED_MS}ms)"
       break
     fi
 
@@ -260,12 +266,12 @@ for config in "${CONFIGS_TO_TEST[@]}"; do
       exit 1
     fi
 
-    sleep 1
-    ELAPSED=$((ELAPSED + 1))
+    sleep 0.2
+    ELAPSED_MS=$((ELAPSED_MS + POLL_INTERVAL_MS))
   done
 
   if [ "$SERVER_READY" = false ]; then
-    echo "    ❌ Server failed to start within ${MAX_WAIT}s with config: $config"
+    echo "    ❌ Server failed to start within $((MAX_WAIT_MS / 1000))s with config: $config"
     kill $SERVER_PID 2>/dev/null || true
     wait $SERVER_PID 2>/dev/null || true
     rm -f "$SERVER_LOG"
@@ -303,9 +309,6 @@ for config in "${CONFIGS_TO_TEST[@]}"; do
 
   # Clean up log file
   rm -f "$SERVER_LOG"
-
-  # Clean up any lingering processes
-  sleep 1
 done
 
 cd ..
