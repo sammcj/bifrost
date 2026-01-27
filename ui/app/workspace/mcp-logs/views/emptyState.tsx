@@ -74,11 +74,11 @@ function CodeBlock({ code, language, onLanguageChange, showLanguageSelect = fals
 }
 
 interface MCPEmptyStateProps {
-	isSocketConnected: boolean;
 	error?: string | null;
+	statusIndicator?: React.ReactNode;
 }
 
-export function MCPEmptyState({ isSocketConnected, error }: MCPEmptyStateProps) {
+export function MCPEmptyState({ error, statusIndicator }: MCPEmptyStateProps) {
 	const [language, setLanguage] = useState<Language>("python");
 
 	// Generate examples dynamically using the port utility
@@ -265,17 +265,7 @@ if (response.choices[0].message.tool_calls) {
 						<h3 className="text-lg font-semibold">Get Started with MCP Tool Execution</h3>
 						<p className="text-muted-foreground text-sm">Execute your first MCP tool call to see logs appear</p>
 					</div>
-					<div className="ml-auto">
-						{isSocketConnected && (
-							<div className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 sm:px-4 sm:text-sm">
-								<span className="relative mr-2 flex h-2 w-2 sm:mr-3">
-									<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75"></span>
-									<span className="relative inline-flex h-2 w-2 rounded-full bg-green-600"></span>
-								</span>
-								<span>Listening for tool executions...</span>
-							</div>
-						)}
-					</div>
+					<div className="ml-auto">{statusIndicator}</div>
 				</div>
 
 				<Tabs defaultValue="manual" className="w-full rounded-lg border">
@@ -285,7 +275,7 @@ if (response.choices[0].message.tool_calls) {
 					</TabsList>
 
 					<TabsContent value="manual" className="px-4">
-						<div className="mb-3 text-sm text-muted-foreground">
+						<div className="text-muted-foreground mb-3 text-sm">
 							<p>Full control over tool approval. You explicitly execute each tool call via the API.</p>
 						</div>
 						<CodeBlock
@@ -297,7 +287,7 @@ if (response.choices[0].message.tool_calls) {
 					</TabsContent>
 
 					<TabsContent value="agent" className="px-4">
-						<div className="mb-3 text-sm text-muted-foreground">
+						<div className="text-muted-foreground mb-3 text-sm">
 							<p>Autonomous execution for pre-approved tools. Configure auto-executable tools in MCP Gateway settings.</p>
 						</div>
 						<CodeBlock
@@ -309,20 +299,24 @@ if (response.choices[0].message.tool_calls) {
 					</TabsContent>
 				</Tabs>
 
-				<div className="rounded-lg border bg-muted/50 p-4">
+				<div className="bg-muted/50 rounded-lg border p-4">
 					<h4 className="mb-2 text-sm font-semibold">Prerequisites</h4>
-					<ul className="space-y-1 text-sm text-muted-foreground">
+					<ul className="text-muted-foreground space-y-1 text-sm">
 						<li className="flex items-start gap-2">
 							<span className="text-primary">1.</span>
 							<span>Configure MCP servers in the MCP Gateway (e.g., filesystem, web_search)</span>
 						</li>
 						<li className="flex items-start gap-2">
 							<span className="text-primary">2.</span>
-							<span>Set <code className="bg-muted px-1 rounded">tools_to_execute</code> to whitelist available tools</span>
+							<span>
+								Set <code className="bg-muted rounded px-1">tools_to_execute</code> to whitelist available tools
+							</span>
 						</li>
 						<li className="flex items-start gap-2">
 							<span className="text-primary">3.</span>
-							<span>For Agent Mode: Configure <code className="bg-muted px-1 rounded">tools_to_auto_execute</code> for autonomous execution</span>
+							<span>
+								For Agent Mode: Configure <code className="bg-muted rounded px-1">tools_to_auto_execute</code> for autonomous execution
+							</span>
 						</li>
 					</ul>
 				</div>

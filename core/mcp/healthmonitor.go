@@ -94,18 +94,9 @@ func (chm *ClientHealthMonitor) Stop() {
 		return // Not monitoring
 	}
 
-	// Acquire read lock before reading clientMap to avoid race condition
-	chm.manager.mu.RLock()
-	clientState, exists := chm.manager.clientMap[chm.clientID]
-	chm.manager.mu.RUnlock()
-
-	// Determine display name for logging: use clientState.ExecutionConfig.Name if available, otherwise fall back to clientID
-	displayName := chm.clientID
-	if exists {
-		displayName = clientState.ExecutionConfig.Name
-	}
-
-	// Always perform cleanup even when client is missing
+	// Always perform cleanup - do not access manager.clientMap here to avoid
+	// deadlock when Stop() is called from removeClientUnsafe() which already
+	// holds the manager's write lock
 	chm.isMonitoring = false
 	if chm.ticker != nil {
 		chm.ticker.Stop()
@@ -114,12 +105,7 @@ func (chm *ClientHealthMonitor) Stop() {
 		chm.cancel()
 	}
 
-	if !exists {
-		logger.Error("%s Health monitor failed to stop for client %s, client not found in manager", MCPLogPrefix, displayName)
-		return
-	}
-
-	logger.Debug("%s Health monitor stopped for client %s", MCPLogPrefix, displayName)
+	logger.Debug("%s Health monitor stopped for client %s", MCPLogPrefix, chm.clientID)
 }
 
 // monitorLoop runs the health check loop

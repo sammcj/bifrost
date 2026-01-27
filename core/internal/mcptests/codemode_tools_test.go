@@ -183,7 +183,7 @@ func TestCodeMode_CallingMultipleServers(t *testing.T) {
 
 	config := GetTestConfig(t)
 	if config.HTTPServerURL == "" {
-		t.Skip("MCP_HTTP_SERVER_URL not set")
+		t.Skip("MCP_HTTP_URL not set")
 	}
 
 	// Setup code mode client

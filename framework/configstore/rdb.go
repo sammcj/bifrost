@@ -765,6 +765,11 @@ func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, 
 			// This will never happen, but just in case.
 			clientConfigs := make([]*schemas.MCPClientConfig, len(dbMCPClients))
 			for i, dbClient := range dbMCPClients {
+				// Dereference IsPingAvailable pointer, defaulting to true if nil
+				isPingAvailable := true
+				if dbClient.IsPingAvailable != nil {
+					isPingAvailable = *dbClient.IsPingAvailable
+				}
 				clientConfigs[i] = &schemas.MCPClientConfig{
 					ID:                 dbClient.ClientID,
 					Name:               dbClient.Name,
@@ -777,7 +782,7 @@ func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, 
 					ToolsToExecute:     dbClient.ToolsToExecute,
 					ToolsToAutoExecute: dbClient.ToolsToAutoExecute,
 					Headers:            dbClient.Headers,
-					IsPingAvailable:    dbClient.IsPingAvailable,
+					IsPingAvailable:    isPingAvailable,
 					ToolSyncInterval:   time.Duration(dbClient.ToolSyncInterval) * time.Minute,
 					ToolPricing:        dbClient.ToolPricing,
 				}
@@ -799,6 +804,11 @@ func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, 
 	}
 	clientConfigs := make([]*schemas.MCPClientConfig, len(dbMCPClients))
 	for i, dbClient := range dbMCPClients {
+		// Dereference IsPingAvailable pointer, defaulting to true if nil
+		isPingAvailable := true
+		if dbClient.IsPingAvailable != nil {
+			isPingAvailable = *dbClient.IsPingAvailable
+		}
 		clientConfigs[i] = &schemas.MCPClientConfig{
 			ID:                 dbClient.ClientID,
 			Name:               dbClient.Name,
@@ -811,7 +821,7 @@ func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, 
 			ToolsToExecute:     dbClient.ToolsToExecute,
 			ToolsToAutoExecute: dbClient.ToolsToAutoExecute,
 			Headers:            dbClient.Headers,
-			IsPingAvailable:    dbClient.IsPingAvailable,
+			IsPingAvailable:    isPingAvailable,
 			ToolSyncInterval:   time.Duration(dbClient.ToolSyncInterval) * time.Minute,
 			ToolPricing:        dbClient.ToolPricing,
 		}
@@ -868,7 +878,7 @@ func (s *RDBConfigStore) CreateMCPClientConfig(ctx context.Context, clientConfig
 			ToolsToExecute:     clientConfigCopy.ToolsToExecute,
 			ToolsToAutoExecute: clientConfigCopy.ToolsToAutoExecute,
 			Headers:            clientConfigCopy.Headers,
-			IsPingAvailable:    clientConfigCopy.IsPingAvailable,
+			IsPingAvailable:    &clientConfigCopy.IsPingAvailable,
 			ToolSyncInterval:   int(clientConfigCopy.ToolSyncInterval.Minutes()),
 		}
 		if err := tx.WithContext(ctx).Create(&dbClient).Error; err != nil {
@@ -913,13 +923,18 @@ func (s *RDBConfigStore) UpdateMCPClientConfig(ctx context.Context, id string, c
 		if err != nil {
 			return fmt.Errorf("failed to marshal tools_to_auto_execute: %w", err)
 		}
-		if clientConfigCopy.Headers == nil {
-			clientConfigCopy.Headers = map[string]schemas.EnvVar{}
+		// Serialize headers to map[string]string matching BeforeSave logic
+		headersToSerialize := make(map[string]string)
+		if clientConfigCopy.Headers != nil {
+			for key, value := range clientConfigCopy.Headers {
+				if value.IsFromEnv() {
+					headersToSerialize[key] = value.EnvVar
+				} else {
+					headersToSerialize[key] = value.GetValue()
+				}
+			}
 		}
-		if clientConfigCopy.IsPingAvailable {
-			clientConfigCopy.IsPingAvailable = true
-		}
-		headersJSON, err := json.Marshal(clientConfigCopy.Headers)
+		headersJSON, err := json.Marshal(headersToSerialize)
 		if err != nil {
 			return fmt.Errorf("failed to marshal headers: %w", err)
 		}
@@ -941,9 +956,14 @@ func (s *RDBConfigStore) UpdateMCPClientConfig(ctx context.Context, id string, c
 			"tools_to_auto_execute_json": string(toolsToAutoExecuteJSON),
 			"headers_json":               string(headersJSON),
 			"tool_pricing_json":          string(toolPricingJSON),
-			"is_ping_available":          clientConfigCopy.IsPingAvailable,
 			"tool_sync_interval":         clientConfigCopy.ToolSyncInterval,
 			"updated_at":                 time.Now(),
+		}
+
+		// Only update is_ping_available if explicitly provided (non-nil)
+		// This preserves the existing DB value when the request omits the field
+		if clientConfigCopy.IsPingAvailable != nil {
+			updates["is_ping_available"] = *clientConfigCopy.IsPingAvailable
 		}
 
 		if err := tx.WithContext(ctx).Model(&existingClient).Updates(updates).Error; err != nil {

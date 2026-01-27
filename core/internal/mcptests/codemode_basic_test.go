@@ -53,7 +53,7 @@ func TestCodeMode_MultiServer_BasicCalls(t *testing.T) {
 			config := client.ExecutionConfig
 			config.IsCodeModeClient = true
 			config.ToolsToExecute = []string{"*"}
-			err = manager.EditClient(config.ID, config)
+			err = manager.UpdateClient(config.ID, config)
 			require.NoError(t, err)
 			t.Logf("Updated InProcess client to CodeMode: ID=%s, Name=%s", config.ID, config.Name)
 			break
@@ -482,12 +482,13 @@ return results;
 
 	// Assertions - verify filtering behavior
 	// allowed_temp: Should succeed (is a string or has no error field)
+	var hasToolError bool
 	allowedTemp := returnObj["allowed_temp"]
 	assert.NotNil(t, allowedTemp, "allowed_temp should exist")
 	// Check if it's an error object
 	if tempObj, ok := allowedTemp.(map[string]interface{}); ok {
-		_, hasError := tempObj["error"]
-		assert.False(t, hasError, "allowed_temp should not have error")
+		_, hasToolError = tempObj["error"]
+		assert.False(t, hasToolError, "allowed_temp should not have error")
 	} else {
 		// It's a string response - that's fine, means it succeeded
 		assert.True(t, true, "allowed_temp returned string response (success)")
@@ -496,8 +497,8 @@ return results;
 	// blocked_echo: Should fail
 	blockedEcho, ok := returnObj["blocked_echo"].(map[string]interface{})
 	assert.True(t, ok, "blocked_echo should be object")
-	_, hasError = blockedEcho["error"]
-	assert.True(t, hasError, "blocked_echo should have error")
+	_, hasToolError = blockedEcho["error"]
+	assert.True(t, hasToolError, "blocked_echo should have error")
 
 	// allowed_uuid: Should succeed
 	allowedUUID, ok := returnObj["allowed_uuid"]
@@ -507,8 +508,8 @@ return results;
 	// blocked_inprocess: Should fail
 	blockedInprocess, ok := returnObj["blocked_inprocess"].(map[string]interface{})
 	assert.True(t, ok, "blocked_inprocess should be object")
-	_, hasError = blockedInprocess["error"]
-	assert.True(t, hasError, "blocked_inprocess should have error")
+	_, hasToolError = blockedInprocess["error"]
+	assert.True(t, hasToolError, "blocked_inprocess should have error")
 }
 
 // TestCodeMode_Filtering_ClientFiltering tests client-level filtering

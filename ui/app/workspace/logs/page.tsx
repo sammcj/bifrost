@@ -178,8 +178,8 @@ export default function LogsPage() {
 	// Helper to update filters in URL
 	const setFilters = useCallback(
 		(newFilters: LogFilters) => {
-			// Mark time range as user-modified if start_time or end_time is being set
-			if (newFilters.start_time !== undefined || newFilters.end_time !== undefined) {
+			// Mark time range as user-modified only if start_time or end_time actually changed
+			if (newFilters.start_time !== filters.start_time || newFilters.end_time !== filters.end_time) {
 				userModifiedTimeRange.current = true;
 			}
 

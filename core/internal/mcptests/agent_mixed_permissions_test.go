@@ -245,7 +245,7 @@ func TestAgent_MixedPermissions_PartialExecution(t *testing.T) {
 	for i := range clients {
 		if clients[i].ExecutionConfig.ID == "go-test-server" {
 			clients[i].ExecutionConfig.ToolsToAutoExecute = []string{"*"}
-			require.NoError(t, manager.EditClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig))
+			require.NoError(t, manager.UpdateClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig))
 		}
 	}
 
@@ -333,7 +333,7 @@ func TestAgent_MixedPermissions_MultipleSTDIOSamePermissions(t *testing.T) {
 	for i := range clients {
 		if clients[i].ExecutionConfig.ConnectionType == schemas.MCPConnectionTypeSTDIO {
 			clients[i].ExecutionConfig.ToolsToAutoExecute = []string{"*"}
-			require.NoError(t, manager.EditClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig))
+			require.NoError(t, manager.UpdateClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig))
 		}
 	}
 
@@ -469,7 +469,7 @@ func TestAgent_MixedPermissions_SpecificToolNames(t *testing.T) {
 	for i := range clients {
 		if clients[i].ExecutionConfig.ID == "go-test-server" {
 			clients[i].ExecutionConfig.ToolsToAutoExecute = []string{"uuid_generate"}
-			require.NoError(t, manager.EditClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig))
+			require.NoError(t, manager.UpdateClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig))
 		}
 	}
 

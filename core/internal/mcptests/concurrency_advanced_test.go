@@ -257,7 +257,7 @@ func TestConcurrent_EditClientDuringExecution_Advanced(t *testing.T) {
 				if client.ExecutionConfig.ID == "bifrostInternal" {
 					// Modify ToolsToExecute
 					client.ExecutionConfig.ToolsToExecute = []string{"echo"}
-					err := manager.EditClient(client.ExecutionConfig.ID, client.ExecutionConfig)
+					err := manager.UpdateClient(client.ExecutionConfig.ID, client.ExecutionConfig)
 					if err != nil {
 						errors <- fmt.Errorf("edit %d failed: %v", id, err)
 					}

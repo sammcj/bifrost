@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	bifrost "github.com/maximhq/bifrost/core"
@@ -15,6 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var initMCPServerPathsOnce sync.Once
 
 // =============================================================================
 // SETUP HELPERS FOR CODE MODE WITH STDIO SERVERS
@@ -36,8 +39,10 @@ func toCamelCase(s string) string {
 func setupCodeModeWithSTDIOServers(t *testing.T, serverNames ...string) (*mcp.MCPManager, *bifrost.Bifrost) {
 	t.Helper()
 
-	// Initialize MCP server paths
-	InitMCPServerPaths(t)
+	// Initialize MCP server paths (guarded against concurrent execution)
+	initMCPServerPathsOnce.Do(func() {
+		InitMCPServerPaths(t)
+	})
 
 	bifrostRoot := GetBifrostRoot(t)
 	var clientConfigs []schemas.MCPClientConfig
@@ -436,12 +441,15 @@ return {echo: echo, temp: temp}`,
 				}
 			} else {
 				// Should fail - either bifrost error or error in result
+				errorFound := false
 				if bifrostErr != nil {
 					assert.Contains(t, bifrostErr.Error.Message, tc.expectedError)
+					errorFound = true
 				} else if result != nil && result.Content != nil && result.Content.ContentStr != nil {
 					_, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
 					if hasError {
 						assert.Contains(t, errorMsg, tc.expectedError)
+						errorFound = true
 					} else {
 						// Check if return value contains error
 						returnValue, _, _ := ParseCodeModeResponse(t, *result.Content.ContentStr)
@@ -450,10 +458,14 @@ return {echo: echo, temp: temp}`,
 								if errorField, ok := returnObj["error"]; ok {
 									errorStr := fmt.Sprintf("%v", errorField)
 									assert.Contains(t, errorStr, tc.expectedError)
+									errorFound = true
 								}
 							}
 						}
 					}
+				}
+				if !errorFound {
+					t.Errorf("expected error containing %q for blocked tool, but no error was observed", tc.expectedError)
 				}
 			}
 		})

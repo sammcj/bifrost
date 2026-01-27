@@ -436,7 +436,7 @@ func TestCodeModeAgent_FilteringInCode(t *testing.T) {
 
 	// Code should execute but calculator call should fail
 	// The agent should make a follow-up call with the error
-	assert.GreaterOrEqual(t, mockLLM.chatCallCount, 0, "agent should handle tool filtering")
+	assert.GreaterOrEqual(t, mockLLM.chatCallCount, 1, "agent should handle tool filtering")
 
 	t.Logf("Filtering in code mode validated")
 }
@@ -796,7 +796,7 @@ func TestCodeModeAgent_Timeout(t *testing.T) {
 	require.NotNil(t, result)
 
 	// Agent should handle timeout gracefully
-	assert.GreaterOrEqual(t, mockLLM.chatCallCount, 0, "agent should handle timeout gracefully")
+	assert.GreaterOrEqual(t, mockLLM.chatCallCount, 1, "agent should handle timeout gracefully")
 
 	t.Logf("Timeout handled gracefully")
 }
@@ -984,7 +984,7 @@ func TestCodeModeAgent_ErrorInCode(t *testing.T) {
 	require.NotNil(t, result)
 
 	// Agent should handle error gracefully and may make a follow-up call to summarize
-	assert.GreaterOrEqual(t, mockLLM.chatCallCount, 0, "agent should handle error gracefully")
+	assert.GreaterOrEqual(t, mockLLM.chatCallCount, 1, "agent should handle error gracefully")
 
 	t.Logf("Error in code handled gracefully")
 }
@@ -1049,7 +1049,7 @@ func TestCodeModeAgent_ToolErrorInCode(t *testing.T) {
 	require.NotNil(t, result)
 
 	// Agent should handle tool error appropriately and may make a follow-up call
-	assert.GreaterOrEqual(t, mockLLM.chatCallCount, 0, "agent should handle tool error gracefully")
+	assert.GreaterOrEqual(t, mockLLM.chatCallCount, 1, "agent should handle tool error gracefully")
 
 	t.Logf("Tool error from code handled")
 }

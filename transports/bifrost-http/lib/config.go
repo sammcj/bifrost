@@ -1502,23 +1502,6 @@ func convertSchemasMCPClientConfigToTable(clientConfig *schemas.MCPClientConfig)
 	}
 }
 
-// convertTablesMCPClientToSchemas converts tables.TableMCPClient to schemas.MCPClientConfig
-func convertTablesMCPClientToSchemas(mcpClient configstoreTables.TableMCPClient) schemas.MCPClientConfig {
-	return schemas.MCPClientConfig{
-		ID:                 mcpClient.ClientID,
-		Name:               mcpClient.Name,
-		IsCodeModeClient:   mcpClient.IsCodeModeClient,
-		ConnectionType:     schemas.MCPConnectionType(mcpClient.ConnectionType),
-		ConnectionString:   mcpClient.ConnectionString,
-		StdioConfig:        mcpClient.StdioConfig,
-		ToolsToExecute:     mcpClient.ToolsToExecute,
-		ToolsToAutoExecute: mcpClient.ToolsToAutoExecute,
-		Headers:            mcpClient.Headers,
-		AuthType:           schemas.MCPAuthType(mcpClient.AuthType),
-		OauthConfigID:      mcpClient.OauthConfigID,
-	}
-}
-
 // buildMCPPricingDataFromStore builds MCP pricing data from the config store
 func buildMCPPricingDataFromStore(ctx context.Context, configStore configstore.ConfigStore) mcpcatalog.MCPPricingData {
 	mcpPricingData := mcpcatalog.MCPPricingData{}
@@ -2861,25 +2844,10 @@ func (c *Config) RemoveMCPClient(ctx context.Context, id string) error {
 		}
 	}
 	// Find and remove client from in-memory config
-	var removedClientConfig *schemas.MCPClientConfig
 	for i, clientConfig := range c.MCPConfig.ClientConfigs {
 		if clientConfig.ID == id {
-			removedClientConfig = clientConfig
 			c.MCPConfig.ClientConfigs = append(c.MCPConfig.ClientConfigs[:i], c.MCPConfig.ClientConfigs[i+1:]...)
 			break
-		}
-	}
-	if c.ConfigStore != nil {
-		if err := c.ConfigStore.DeleteMCPClientConfig(ctx, id); err != nil {
-			return fmt.Errorf("failed to delete MCP client config from store: %w", err)
-		}
-
-		// Delete pricing data from catalog for the removed client
-		if c.MCPCatalog != nil && removedClientConfig != nil {
-			for toolName := range removedClientConfig.ToolPricing {
-				c.MCPCatalog.DeletePricingData(removedClientConfig.Name, toolName)
-			}
-			logger.Debug("removed MCP catalog pricing for client: %s (%d tools)", removedClientConfig.Name, len(removedClientConfig.ToolPricing))
 		}
 	}
 	return nil
@@ -2920,7 +2888,7 @@ func (c *Config) UpdateMCPClient(ctx context.Context, id string, updatedConfig *
 	if clients, err := c.client.GetMCPClients(); err == nil && len(clients) > 0 {
 		for _, client := range clients {
 			if client.Config.ID == id {
-				if err := c.client.EditMCPClient(id, updatedConfig); err != nil {
+				if err := c.client.UpdateMCPClient(id, updatedConfig); err != nil {
 					// Rollback in-memory changes
 					c.MCPConfig.ClientConfigs[configIndex] = oldConfig
 					return fmt.Errorf("failed to edit MCP client: %w", err)

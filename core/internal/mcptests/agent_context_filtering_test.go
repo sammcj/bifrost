@@ -307,7 +307,7 @@ func TestAgent_ContextToolFilter_WildcardOverride(t *testing.T) {
 		if clients[i].ExecutionConfig.ID == "bifrostInternal" {
 			clients[i].ExecutionConfig.ToolsToExecute = []string{"echo"}
 			clients[i].ExecutionConfig.ToolsToAutoExecute = []string{"echo"}
-			require.NoError(t, manager.EditClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig))
+			require.NoError(t, manager.UpdateClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig))
 			break
 		}
 	}

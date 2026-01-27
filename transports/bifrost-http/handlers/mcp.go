@@ -284,6 +284,11 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 
 	}
 	// Convert to schemas.MCPClientConfig for runtime bifrost client (without tool_pricing)
+	// Dereference IsPingAvailable pointer, defaulting to true if nil (new clients default to ping available)
+	isPingAvailable := true
+	if req.IsPingAvailable != nil {
+		isPingAvailable = *req.IsPingAvailable
+	}
 	schemasConfig := &schemas.MCPClientConfig{
 		ID:                 req.ClientID,
 		Name:               req.Name,
@@ -296,7 +301,7 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 		Headers:            req.Headers,
 		AuthType:           schemas.MCPAuthType(req.AuthType),
 		OauthConfigID:      req.OauthConfigID,
-		IsPingAvailable:    req.IsPingAvailable,
+		IsPingAvailable:    isPingAvailable,
 		ToolSyncInterval:   toolSyncInterval,
 		ToolPricing:        req.ToolPricing,
 	}
@@ -396,6 +401,11 @@ func (h *MCPHandler) updateMCPClient(ctx *fasthttp.RequestCtx) {
 
 	}
 	// Convert to schemas.MCPClientConfig for runtime bifrost client (without tool_pricing)
+	// Dereference IsPingAvailable pointer, defaulting to true if nil
+	isPingAvailable := true
+	if req.IsPingAvailable != nil {
+		isPingAvailable = *req.IsPingAvailable
+	}
 	schemasConfig := &schemas.MCPClientConfig{
 		ID:                 req.ClientID,
 		Name:               req.Name,
@@ -408,7 +418,7 @@ func (h *MCPHandler) updateMCPClient(ctx *fasthttp.RequestCtx) {
 		Headers:            req.Headers,
 		AuthType:           schemas.MCPAuthType(req.AuthType),
 		OauthConfigID:      req.OauthConfigID,
-		IsPingAvailable:    req.IsPingAvailable,
+		IsPingAvailable:    isPingAvailable,
 		ToolSyncInterval:   toolSyncInterval,
 		ToolPricing:        req.ToolPricing,
 	}
@@ -667,6 +677,12 @@ func mergeMCPRedactedValues(incoming *configstoreTables.TableMCPClient, oldRaw, 
 			// New header or changed header
 			merged.Headers[key] = incomingValue
 		}
+	}
+
+	// Preserve IsPingAvailable if not explicitly set in incoming request
+	// This prevents the zero-value (false) from overwriting the existing DB value
+	if incoming.IsPingAvailable == nil {
+		merged.IsPingAvailable = bifrost.Ptr(oldRaw.IsPingAvailable)
 	}
 
 	return merged

@@ -183,7 +183,7 @@ func TestEditClient(t *testing.T) {
 	updatedConfig.Name = "UpdatedName"
 	updatedConfig.ToolsToExecute = []string{"calculator", "echo"}
 
-	err := manager.EditClient(clientID, &updatedConfig)
+	err := manager.UpdateClient(clientID, &updatedConfig)
 	require.NoError(t, err, "should edit client")
 
 	// Verify changes
@@ -199,7 +199,7 @@ func TestEditClientInvalidID(t *testing.T) {
 
 	// Try to edit non-existent client
 	clientConfig := GetSampleHTTPClientConfig("http://example.com")
-	err := manager.EditClient("non-existent-id", &clientConfig)
+	err := manager.UpdateClient("non-existent-id", &clientConfig)
 	assert.Error(t, err, "should error when editing non-existent client")
 }
 
@@ -225,7 +225,7 @@ func TestEditClientInvalidConfig(t *testing.T) {
 		// Missing ConnectionString
 	}
 
-	err := manager.EditClient(clientID, &invalidConfig)
+	err := manager.UpdateClient(clientID, &invalidConfig)
 	// Should return error or leave client unchanged
 	if err == nil {
 		clients = manager.GetClients()
@@ -257,7 +257,7 @@ func TestEditClientChangeConnectionType(t *testing.T) {
 	updatedConfig := clientConfig
 	updatedConfig.ConnectionType = schemas.MCPConnectionTypeSSE
 
-	err := manager.EditClient(clientID, &updatedConfig)
+	err := manager.UpdateClient(clientID, &updatedConfig)
 	assert.Error(t, err, "should not allow connection type change")
 	clients = manager.GetClients()
 	if len(clients) > 0 {

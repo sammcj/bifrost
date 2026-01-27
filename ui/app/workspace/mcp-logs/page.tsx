@@ -12,10 +12,10 @@ import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { AlertCircle, CheckCircle, Clock, DollarSign, Hash } from "lucide-react";
 import { parseAsArrayOf, parseAsBoolean, parseAsInteger, parseAsString, useQueryStates } from "nuqs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MCPLogsDataTable } from "./views/mcpLogsTable";
 import { createMCPColumns } from "./views/columns";
-import { MCPLogDetailSheet } from "./views/mcpLogDetailsSheet";
 import { MCPEmptyState } from "./views/emptyState";
+import { MCPLogDetailSheet } from "./views/mcpLogDetailsSheet";
+import { MCPLogsDataTable } from "./views/mcpLogsTable";
 
 export default function MCPLogsPage() {
 	const [logs, setLogs] = useState<MCPToolLogEntry[]>([]);
@@ -453,7 +453,20 @@ export default function MCPLogsPage() {
 			{initialLoading ? (
 				<FullPageLoader />
 			) : showEmptyState ? (
-				<MCPEmptyState isSocketConnected={isSocketConnected} error={error} />
+				<MCPEmptyState
+					error={error}
+					statusIndicator={
+						isSocketConnected && (
+							<div className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 sm:px-4 sm:text-sm">
+								<span className="relative mr-2 flex h-2 w-2 sm:mr-3">
+									<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75"></span>
+									<span className="relative inline-flex h-2 w-2 rounded-full bg-green-600"></span>
+								</span>
+								<span>Listening for tool executions...</span>
+							</div>
+						)
+					}
+				/>
 			) : (
 				<div className="mx-auto max-w-7xl space-y-6">
 					<div className="space-y-6">

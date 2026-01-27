@@ -3,7 +3,7 @@ package mcptests
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/maximhq/bifrost/core/schemas"
@@ -591,18 +591,69 @@ func extractReturnValue(formattedResponse string) (interface{}, error) {
 	// Return value: {...} OR Return value: [...]
 	//
 	// We need to extract the JSON after "Return value:"
-	// Match both objects {...} and arrays [...]
-	re := regexp.MustCompile(`Return value:\s*([\{\[][\s\S]*?[\}\]])\s*(?:\n\s*\n|$)`)
-	matches := re.FindStringSubmatch(formattedResponse)
-	if len(matches) < 2 {
+	idx := strings.Index(formattedResponse, "Return value:")
+	if idx == -1 {
 		return nil, fmt.Errorf("could not find 'Return value:' in response")
 	}
+	rest := strings.TrimSpace(formattedResponse[idx+len("Return value:"):])
+	if len(rest) == 0 {
+		return nil, fmt.Errorf("empty return value")
+	}
 
-	jsonStr := matches[1]
+	// Use balanced bracket matching to handle nested JSON
+	jsonStr := extractBalancedJSON(rest)
 	var result interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
 		return nil, fmt.Errorf("failed to parse return value JSON: %w", err)
 	}
 
 	return result, nil
+}
+
+// extractBalancedJSON extracts a complete JSON object or array from the start of the string,
+// correctly handling nested structures.
+func extractBalancedJSON(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	open := s[0]
+	var close byte
+	switch open {
+	case '{':
+		close = '}'
+	case '[':
+		close = ']'
+	default:
+		return s
+	}
+	depth := 0
+	inString := false
+	escaped := false
+	for i := 0; i < len(s); i++ {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if s[i] == '\\' && inString {
+			escaped = true
+			continue
+		}
+		if s[i] == '"' {
+			inString = !inString
+			continue
+		}
+		if inString {
+			continue
+		}
+		if s[i] == open {
+			depth++
+		}
+		if s[i] == close {
+			depth--
+			if depth == 0 {
+				return s[:i+1]
+			}
+		}
+	}
+	return s
 }

@@ -248,8 +248,8 @@ func registerMemoryIntensiveTool(s *server.MCPServer) {
 			return mcp.NewToolResultError("Size limited to 100MB for safety"), nil
 		}
 
-		// Allocate memory
-		sizeBytes := args.SizeMB * 1024 * 1024
+		// Allocate memory (use int64 to prevent overflow)
+		sizeBytes := int64(args.SizeMB) * 1024 * 1024
 		data := make([]byte, sizeBytes)
 
 		// Fill with pattern to ensure allocation

@@ -19,7 +19,7 @@ PluginStatus:
       description: Plugin types indicating which interfaces the plugin implements
       items:
         type: string
-        enum: [llm, mcp, http]
+        enum: [llm, mcp, http, observability]
   example:
     name: my_custom_plugin
     status: active

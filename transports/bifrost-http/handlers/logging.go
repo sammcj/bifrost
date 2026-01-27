@@ -830,10 +830,10 @@ func parseMCPFiltersAndPagination(ctx *fasthttp.RequestCtx) (*logstore.MCPToolLo
 	// Sort parameters
 	pagination.SortBy = "timestamp" // Default sort field
 	if sortBy := string(ctx.QueryArgs().Peek("sort_by")); sortBy != "" {
-		if sortBy == "timestamp" || sortBy == "latency" {
+		if sortBy == "timestamp" || sortBy == "latency" || sortBy == "cost" {
 			pagination.SortBy = sortBy
 		} else {
-			return nil, nil, fmt.Errorf("invalid sort_by: must be 'timestamp' or 'latency'")
+			return nil, nil, fmt.Errorf("invalid sort_by: must be 'timestamp', 'latency' or 'cost'")
 		}
 	}
 

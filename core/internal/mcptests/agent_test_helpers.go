@@ -2,6 +2,7 @@ package mcptests
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -113,7 +114,7 @@ func SetupAgentTest(t *testing.T, config AgentTestConfig) (*mcp.MCPManager, *Dyn
 				for i := range clients {
 					if clients[i].ExecutionConfig.ConnectionType == schemas.MCPConnectionTypeSTDIO {
 						clients[i].ExecutionConfig.ToolsToAutoExecute = []string{"*"}
-						require.NoError(t, manager.EditClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig))
+						require.NoError(t, manager.UpdateClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig))
 					}
 				}
 				break
@@ -170,6 +171,8 @@ func SetupAgentTestWithClients(t *testing.T, config AgentTestConfig, customClien
 			require.NoError(t, RegisterGetTimeTool(manager))
 		case "read_file":
 			require.NoError(t, RegisterReadFileTool(manager))
+		case "get_temperature":
+			require.NoError(t, RegisterGetTemperatureTool(manager))
 		default:
 			t.Fatalf("Unknown InProcess tool: %s", toolName)
 		}
@@ -457,7 +460,7 @@ func AssertAgentSuccess(t *testing.T, response *schemas.BifrostChatResponse, bif
 	t.Helper()
 
 	if bifrostErr != nil && bifrostErr.Error != nil {
-		fmt.Println("bifrostErr", bifrostErr.Error.Message)
+		t.Logf("bifrostErr: %s", bifrostErr.Error.Message)
 	}
 	assert.Nil(t, bifrostErr, "Should not return error")
 	require.NotNil(t, response, "Response should not be nil")
@@ -492,13 +495,16 @@ func AssertRequestIDPropagated(t *testing.T, ctx *schemas.BifrostContext) {
 
 // CreateToolCall is a convenience function for creating tool calls in tests
 func CreateToolCall(id, toolName string, args map[string]interface{}) schemas.ChatAssistantMessageToolCall {
-	argsJSON := MustMarshalJSON(&testing.T{}, args)
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal tool call args: %v", err))
+	}
 	return schemas.ChatAssistantMessageToolCall{
 		ID:   schemas.Ptr(id),
 		Type: schemas.Ptr("function"),
 		Function: schemas.ChatAssistantMessageToolCallFunction{
 			Name:      schemas.Ptr(toolName),
-			Arguments: argsJSON,
+			Arguments: string(argsJSON),
 		},
 	}
 }
@@ -732,7 +738,7 @@ func AssertAgentStoppedAtTurnResponses(t *testing.T, mocker *DynamicLLMMocker, e
 }
 
 // AssertAgentFinalResponseResponses verifies the final response (Responses API)
-func AssertAgentFinalResponseResponses(t *testing.T, result *schemas.BifrostResponsesResponse, expectedFinishReason string, mustContainInContent string) {
+func AssertAgentFinalResponseResponses(t *testing.T, result *schemas.BifrostResponsesResponse, mustContainInContent string) {
 	t.Helper()
 	require.NotEmpty(t, result.Output, "Should have output in response")
 

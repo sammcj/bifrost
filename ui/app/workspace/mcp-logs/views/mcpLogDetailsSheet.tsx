@@ -21,7 +21,7 @@ import { Status, StatusColors, Statuses } from "@/lib/constants/logs";
 import type { MCPToolLogEntry } from "@/lib/types/logs";
 import { MoreVertical, Trash2 } from "lucide-react";
 import moment from "moment";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 interface MCPLogDetailSheetProps {
@@ -58,6 +58,8 @@ const getValidatedStatus = (status: string): Status => {
 };
 
 export function MCPLogDetailSheet({ log, open, onOpenChange, handleDelete }: MCPLogDetailSheetProps) {
+	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
 	if (!log) return null;
 
 	return (
@@ -72,7 +74,7 @@ export function MCPLogDetailSheet({ log, open, onOpenChange, handleDelete }: MCP
 							</Badge>
 						</SheetTitle>
 					</div>
-					<AlertDialog>
+					<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
 								<Button variant="ghost" size="icon">
@@ -96,9 +98,11 @@ export function MCPLogDetailSheet({ log, open, onOpenChange, handleDelete }: MCP
 							<AlertDialogFooter>
 								<AlertDialogCancel>Cancel</AlertDialogCancel>
 								<AlertDialogAction
-									onClick={async () => {
+									onClick={async (e) => {
+										e.preventDefault();
 										try {
 											await handleDelete(log);
+											setDeleteDialogOpen(false);
 											onOpenChange(false);
 										} catch (err) {
 											const errorMessage = err instanceof Error ? err.message : "Failed to delete log";

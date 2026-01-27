@@ -431,7 +431,7 @@ func TestCodeModeFiles_ListInCode(t *testing.T) {
 		Type: schemas.Ptr("function"),
 		Function: schemas.ChatAssistantMessageToolCallFunction{
 			Name:      schemas.Ptr("executeToolCode"),
-			Arguments: `{"code": "` + code + `"}`,
+			Arguments: fmt.Sprintf(`{"code": %s}`, mustJSONString(code)),
 		},
 	}
 
@@ -485,7 +485,7 @@ func TestCodeModeFiles_ReadInCode(t *testing.T) {
 		Type: schemas.Ptr("function"),
 		Function: schemas.ChatAssistantMessageToolCallFunction{
 			Name:      schemas.Ptr("executeToolCode"),
-			Arguments: fmt.Sprintf(`{"code": %s}`, fmt.Sprintf(`"%s"`, strings.ReplaceAll(code, `"`, `\"`))),
+			Arguments: fmt.Sprintf(`{"code": %s}`, mustJSONString(code)),
 		},
 	}
 
@@ -667,7 +667,7 @@ func TestCodeModeFiles_FullWorkflow(t *testing.T) {
 		Type: schemas.Ptr("function"),
 		Function: schemas.ChatAssistantMessageToolCallFunction{
 			Name:      schemas.Ptr("executeToolCode"),
-			Arguments: fmt.Sprintf(`{"code": %s}`, fmt.Sprintf(`"%s"`, strings.ReplaceAll(code, `"`, `\"`))),
+			Arguments: fmt.Sprintf(`{"code": %s}`, mustJSONString(code)),
 		},
 	}
 

@@ -69,7 +69,7 @@ MCPClientCreateRequestBase:
       description: Display name for the MCP client
     is_code_mode_client:
       type: boolean
-<<<<<<< HEAD
+
     is_ping_available:
       type: boolean
       default: true
@@ -77,9 +77,6 @@ MCPClientCreateRequestBase:
         Whether the MCP server supports ping for health checks.
         If true, uses lightweight ping method for health checks.
         If false, uses listTools method for health checks instead.
-=======
-      description: Whether this client is available in code mode
->>>>>>> 4e846193 (feat: plugin schema extensions for mcp plugins)
     connection_type:
       $ref: '#/MCPConnectionType'
     auth_type:

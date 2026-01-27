@@ -98,11 +98,28 @@ func PreMCPHook(ctx *schemas.BifrostContext, req *schemas.BifrostMCPRequest) (*s
 				fmt.Printf("[MCP-Only Plugin] Blocked tool call: %s\n", toolName)
 				// Return a short-circuit response to prevent the call
 				errorMsg := fmt.Sprintf("%s: %s", pluginConfig.CustomErrorMessage, toolName)
+				// Get the tool call ID to link the response back to the original call
+				toolCallID := req.ChatAssistantMessageToolCall.ID
 				return req, &schemas.MCPPluginShortCircuit{
 					Response: &schemas.BifrostMCPResponse{
+						// Chat API format - tool result message
+						ChatMessage: &schemas.ChatMessage{
+							Role: schemas.ChatMessageRoleTool,
+							ChatToolMessage: &schemas.ChatToolMessage{
+								ToolCallID: toolCallID,
+							},
+							Content: &schemas.ChatMessageContent{
+								ContentStr: &errorMsg,
+							},
+						},
+						// Responses API format - function_call_output
 						ResponsesMessage: &schemas.ResponsesMessage{
+							Type: schemas.Ptr(schemas.ResponsesMessageTypeFunctionCallOutput),
 							ResponsesToolMessage: &schemas.ResponsesToolMessage{
-								Error: &errorMsg,
+								CallID: toolCallID,
+								Output: &schemas.ResponsesToolMessageOutputStruct{
+									ResponsesToolCallOutputStr: &errorMsg,
+								},
 							},
 						},
 					},

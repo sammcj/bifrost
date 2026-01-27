@@ -129,6 +129,12 @@ MCPToolLogEntry:
     server_label:
       type: string
       description: Label of the MCP server that provided the tool
+    virtual_key_id:
+      type: string
+      description: ID of the virtual key used for this tool execution
+    virtual_key_name:
+      type: string
+      description: Name of the virtual key used for this tool execution
     arguments:
       type: object
       additionalProperties: true
@@ -138,9 +144,7 @@ MCPToolLogEntry:
       additionalProperties: true
       description: Tool execution result
     error_details:
-      type: object
-      additionalProperties: true
-      description: Error details if execution failed
+      $ref: '../../schemas/inference/common.yaml#/BifrostError'
     latency:
       type: number
       description: Execution time in milliseconds

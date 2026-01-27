@@ -525,6 +525,10 @@ func categorizeGoroutine(g *GoroutineGroup) {
 	perRequestPatterns := []string{
 		"PreLLMHook",
 		"PostLLMHook",
+		"PreMCPHook",
+		"PostMCPHook",
+		"HTTPTransportPreHook",
+		"HTTPTransportPostHook",
 		"completeAndFlushTrace",
 		"ProcessAndSend",
 		"handleProvider",

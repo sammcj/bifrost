@@ -130,12 +130,18 @@ func TestReadToolFile_InvalidToolNames(t *testing.T) {
 
 	for _, tc := range invalidNameTests {
 		t.Run(tc.name, func(t *testing.T) {
+			argsMap := map[string]string{"fileName": tc.fileName}
+			argsJSON, err := json.Marshal(argsMap)
+			if err != nil {
+				t.Fatalf("failed to marshal arguments: %v", err)
+			}
+
 			toolCall := schemas.ChatAssistantMessageToolCall{
 				ID:   schemas.Ptr("call-" + tc.name),
 				Type: schemas.Ptr("function"),
 				Function: schemas.ChatAssistantMessageToolCallFunction{
 					Name:      schemas.Ptr("readToolFile"),
-					Arguments: `{"fileName": "` + tc.fileName + `"}`,
+					Arguments: string(argsJSON),
 				},
 			}
 
@@ -222,20 +228,49 @@ func TestExecuteToolCode_CodeInjectionAttempts(t *testing.T) {
 			result, bifrostErr := bifrost.ExecuteChatMCPTool(ctx, &toolCall)
 
 			if tc.shouldFail {
-				// Should return error or error in result
-				if bifrostErr == nil && result != nil && result.Content != nil && result.Content.ContentStr != nil {
+				// Determine if execution actually failed
+				executionFailed := false
+				var failureReason string
+
+				if bifrostErr != nil {
+					executionFailed = true
+					failureReason = fmt.Sprintf("bifrostErr: %v", bifrostErr)
+				} else if result != nil && result.Content != nil && result.Content.ContentStr != nil {
 					returnValue, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
 					if hasError {
-						t.Logf("Code execution failed as expected with error: %s", errorMsg)
+						executionFailed = true
+						failureReason = fmt.Sprintf("ParseCodeModeResponse error: %s", errorMsg)
 					} else if returnValue != nil {
-						// Check if return value contains error field
 						if returnObj, ok := returnValue.(map[string]interface{}); ok {
 							if errorField, ok := returnObj["error"]; ok {
-								t.Logf("Code execution failed as expected with error: %v", errorField)
+								executionFailed = true
+								failureReason = fmt.Sprintf("return value error field: %v", errorField)
 							}
 						}
 					}
 				}
+
+				if !executionFailed {
+					t.Errorf("%s (%s): expected execution to fail but it succeeded", tc.name, tc.description)
+					return
+				}
+				t.Logf("%s: execution failed as expected - %s", tc.name, failureReason)
+			} else {
+				// shouldFail == false: assert execution succeeded without errors
+				if bifrostErr != nil {
+					t.Errorf("%s (%s): unexpected bifrostErr: %v", tc.name, tc.description, bifrostErr)
+					return
+				}
+				if result == nil || result.Content == nil || result.Content.ContentStr == nil {
+					t.Errorf("%s (%s): expected result with content but got nil", tc.name, tc.description)
+					return
+				}
+				_, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
+				if hasError {
+					t.Errorf("%s (%s): unexpected error in response: %s", tc.name, tc.description, errorMsg)
+					return
+				}
+				t.Logf("%s: execution succeeded as expected", tc.name)
 			}
 		})
 	}

@@ -733,14 +733,25 @@ test-governance: install-gotestsum $(if $(DEBUG),install-delve) ## Run governanc
 
 setup-mcp-tests: ## Build all MCP test servers in examples/mcps/
 	@echo "$(GREEN)Building MCP test servers...$(NC)"
-	@for mcp_dir in examples/mcps/*/; do \
+	@FAILED=0; \
+	for mcp_dir in examples/mcps/*/; do \
 		if [ -d "$$mcp_dir" ] && [ -f "$$mcp_dir/go.mod" ]; then \
 			mcp_name=$$(basename $$mcp_dir); \
 			echo "$(CYAN)Building $$mcp_name...$(NC)"; \
 			mkdir -p "$$mcp_dir/bin"; \
-			cd "$$mcp_dir" && GOWORK=off go build -o bin/$$mcp_name . && cd - > /dev/null && echo "$(GREEN)  ✓ $$mcp_name$(NC)"; \
+			if cd "$$mcp_dir" && GOWORK=off go build -o bin/$$mcp_name . && cd - > /dev/null; then \
+				echo "$(GREEN)  ✓ $$mcp_name$(NC)"; \
+			else \
+				echo "$(RED)  ✗ $$mcp_name failed$(NC)"; \
+				FAILED=1; \
+				cd - > /dev/null 2>&1 || true; \
+			fi; \
 		fi; \
-	done
+	done; \
+	if [ $$FAILED -eq 1 ]; then \
+		echo "$(RED)Some MCP test servers failed to build$(NC)"; \
+		exit 1; \
+	fi
 	@echo ""
 	@echo "$(GREEN)✓ All MCP test servers built$(NC)"
 
@@ -774,14 +785,16 @@ test-mcp: install-gotestsum ## Run MCP tests by file type (Usage: make test-mcp 
 		TEST_PATTERN=$$(grep -h "^func Test" $$TEST_FILE 2>/dev/null | sed 's/func \(Test[^(]*\).*/\1/' | paste -sd '|' - || echo "^Test"); \
 		if [ -n "$(TESTCASE)" ]; then \
 			echo "$(CYAN)Running $(TYPE) test: $(TESTCASE)...$(NC)"; \
-			REPORT_FILE="$(TEST_REPORTS_DIR)/mcp-$(TYPE)-$(TESTCASE).xml"; \
+			SAFE_TESTCASE=$$(echo "$(TESTCASE)" | sed 's|/|_|g'); \
+			REPORT_FILE="$(TEST_REPORTS_DIR)/mcp-$(TYPE)-$$SAFE_TESTCASE.xml"; \
 			cd core/internal/mcptests && GOWORK=off gotestsum \
 				--format=$(GOTESTSUM_FORMAT) \
 				--junitfile=../../../$$REPORT_FILE \
 				-- -v -run "^$(TESTCASE)$$" . || TEST_FAILED=1; \
 		elif [ -n "$(PATTERN)" ]; then \
 			echo "$(CYAN)Running $(TYPE) tests matching '$(PATTERN)'...$(NC)"; \
-			REPORT_FILE="$(TEST_REPORTS_DIR)/mcp-$(TYPE)-$(PATTERN).xml"; \
+			SAFE_PATTERN=$$(echo "$(PATTERN)" | sed 's|/|_|g'); \
+			REPORT_FILE="$(TEST_REPORTS_DIR)/mcp-$(TYPE)-$$SAFE_PATTERN.xml"; \
 			cd core/internal/mcptests && GOWORK=off gotestsum \
 				--format=$(GOTESTSUM_FORMAT) \
 				--junitfile=../../../$$REPORT_FILE \

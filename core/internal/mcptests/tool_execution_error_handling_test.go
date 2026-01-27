@@ -330,7 +330,7 @@ func TestToolExecution_ToolNotInExecuteList(t *testing.T) {
 	for i := range clients {
 		if clients[i].ExecutionConfig.ID == "bifrostInternal" {
 			clients[i].ExecutionConfig.ToolsToExecute = []string{"bifrostInternal-echo"}
-			err := manager.EditClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig)
+			err := manager.UpdateClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig)
 			require.NoError(t, err)
 			break
 		}

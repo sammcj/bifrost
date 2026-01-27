@@ -191,21 +191,19 @@ func (m *MCPManager) removeClientUnsafe(id string) error {
 	if !ok {
 		return fmt.Errorf("client %s not found", id)
 	}
-
 	logger.Info("%s Disconnecting MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
-
 	// Stop health monitoring for this client
 	m.healthMonitorManager.StopMonitoring(id)
-
+	logger.Debug("%s Stopped health monitoring for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
 	// Stop tool syncing for this client
 	m.toolSyncManager.StopSyncing(id)
-
+	logger.Debug("%s Stopped tool syncing for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
 	// Cancel SSE context if present (required for proper SSE cleanup)
 	if client.CancelFunc != nil {
 		client.CancelFunc()
 		client.CancelFunc = nil
 	}
-
+	logger.Debug("%s Cancelled SSE context for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
 	// Close the client transport connection
 	// This handles cleanup for all transport types (HTTP, STDIO, SSE)
 	if client.Conn != nil {
@@ -214,7 +212,7 @@ func (m *MCPManager) removeClientUnsafe(id string) error {
 		}
 		client.Conn = nil
 	}
-
+	logger.Debug("%s Closed client transport connection for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
 	// Clear client tool map
 	client.ToolMap = make(map[string]schemas.ChatTool)
 
@@ -222,7 +220,7 @@ func (m *MCPManager) removeClientUnsafe(id string) error {
 	return nil
 }
 
-// EditClient updates an existing MCP client's configuration and refreshes its tool list.
+// UpdateClient updates an existing MCP client's configuration and refreshes its tool list.
 // It updates the client's execution config with new settings and retrieves updated tools
 // from the MCP server if the client is connected.
 // This method does not refresh the client's tool list.
@@ -234,7 +232,7 @@ func (m *MCPManager) removeClientUnsafe(id string) error {
 //
 // Returns:
 //   - error: Any error that occurred during client update or tool retrieval
-func (m *MCPManager) EditClient(id string, updatedConfig *schemas.MCPClientConfig) error {
+func (m *MCPManager) UpdateClient(id string, updatedConfig *schemas.MCPClientConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -74,7 +74,7 @@ func TestAgent_Adapter_ResponsesFormat_BasicLoop(t *testing.T) {
 
 	// Verify completion
 	AssertAgentCompletedInTurnsResponses(t, mocker, 2)
-	AssertAgentFinalResponseResponses(t, result, "stop", "done")
+	AssertAgentFinalResponseResponses(t, result, "done")
 
 	t.Logf("✓ Responses API adapter handles basic agent loop correctly")
 }
@@ -378,7 +378,7 @@ func TestAgent_Adapter_ResponsesFormat_DeepChain(t *testing.T) {
 	require.NotNil(t, result)
 
 	AssertAgentCompletedInTurnsResponses(t, mocker, 5)
-	AssertAgentFinalResponseResponses(t, result, "stop", "complete")
+	AssertAgentFinalResponseResponses(t, result, "complete")
 
 	t.Logf("✓ Adapter handles multi-turn execution in Responses format")
 }
@@ -536,7 +536,7 @@ func TestAgent_Adapter_ChatAndResponsesParity(t *testing.T) {
 
 	// Both should have final text response
 	AssertAgentFinalResponse(t, chatResult, "stop", "Done")
-	AssertAgentFinalResponseResponses(t, responsesResult, "stop", "Done")
+	AssertAgentFinalResponseResponses(t, responsesResult, "Done")
 
 	t.Logf("✓ Chat and Responses APIs maintain feature parity in agent mode")
 }

@@ -15,11 +15,9 @@ interface MCPLogFiltersProps {
 	onFiltersChange: (filters: MCPToolLogFilters) => void;
 	liveEnabled: boolean;
 	onLiveToggle: (enabled: boolean) => void;
-	fetchLogs: () => Promise<void>;
-	fetchStats: () => Promise<void>;
 }
 
-export function MCPLogFilters({ filters, onFiltersChange, liveEnabled, onLiveToggle, fetchLogs, fetchStats }: MCPLogFiltersProps) {
+export function MCPLogFilters({ filters, onFiltersChange, liveEnabled, onLiveToggle }: MCPLogFiltersProps) {
 	const [openFiltersPopover, setOpenFiltersPopover] = useState(false);
 	const [localSearch, setLocalSearch] = useState(filters.content_search || "");
 	const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);

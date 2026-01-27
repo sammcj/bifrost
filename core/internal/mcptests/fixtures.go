@@ -798,7 +798,7 @@ func SetInternalClientAutoExecute(manager *mcp.MCPManager, toolNames []string) e
 	internalClient.ExecutionConfig.ToolsToAutoExecute = toolNames
 
 	// Apply the updated config
-	return manager.EditClient(internalClient.ExecutionConfig.ID, internalClient.ExecutionConfig)
+	return manager.UpdateClient(internalClient.ExecutionConfig.ID, internalClient.ExecutionConfig)
 }
 
 // SetInternalClientAsCodeMode configures the internal Bifrost client as a CodeMode client
@@ -824,7 +824,7 @@ func SetInternalClientAsCodeMode(manager *mcp.MCPManager, toolsToExecute []strin
 	internalClient.ExecutionConfig.ToolsToExecute = toolsToExecute
 
 	// Apply the updated config
-	return manager.EditClient(internalClient.ExecutionConfig.ID, internalClient.ExecutionConfig)
+	return manager.UpdateClient(internalClient.ExecutionConfig.ID, internalClient.ExecutionConfig)
 }
 
 // =============================================================================
@@ -2121,7 +2121,7 @@ func SetupManagerWithAutoExecuteTools(t *testing.T, tools []string, autoExecuteT
 	for i := range clients {
 		if clients[i].ExecutionConfig.ID == "bifrostInternal" {
 			clients[i].ExecutionConfig.ToolsToAutoExecute = autoExecuteTools
-			err := manager.EditClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig)
+			err := manager.UpdateClient(clients[i].ExecutionConfig.ID, clients[i].ExecutionConfig)
 			require.NoError(t, err)
 			break
 		}
