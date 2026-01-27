@@ -7,9 +7,10 @@ import { getErrorMessage, useGetMCPClientsQuery } from "@/lib/store";
 import { useEffect } from "react";
 
 export default function MCPServersPage() {
-	const { data: mcpClients, error, isLoading } = useGetMCPClientsQuery();
+	const { data: mcpClients, error, isLoading, refetch } = useGetMCPClientsQuery();
 
 	const { toast } = useToast();
+
 
 	useEffect(() => {
 		if (error) {
@@ -27,7 +28,7 @@ export default function MCPServersPage() {
 
 	return (
 		<div className="mx-auto w-full max-w-7xl">
-			<MCPClientsTable mcpClients={mcpClients || []} />
+			<MCPClientsTable mcpClients={mcpClients || []} refetch={refetch} />
 		</div>
 	);
 }

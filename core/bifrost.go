@@ -2180,10 +2180,10 @@ func (bifrost *Bifrost) UpdateProvider(providerKey schemas.ModelProvider) error 
 
 	// Step 1: Create new ProviderQueue with updated buffer size
 	newPq := &ProviderQueue{
-		queue: make(chan *ChannelMessage, providerConfig.ConcurrencyAndBufferSize.BufferSize),
-		done:  make(chan struct{}),
+		queue:      make(chan *ChannelMessage, providerConfig.ConcurrencyAndBufferSize.BufferSize),
+		done:       make(chan struct{}),
 		signalOnce: sync.Once{},
-		closeOnce: sync.Once{},
+		closeOnce:  sync.Once{},
 	}
 
 	// Step 2: Atomically replace the queue FIRST (new producers immediately get the new queue)
@@ -2695,10 +2695,10 @@ func (bifrost *Bifrost) createBaseProvider(providerKey schemas.ModelProvider, co
 func (bifrost *Bifrost) prepareProvider(providerKey schemas.ModelProvider, config *schemas.ProviderConfig) error {
 	// Create ProviderQueue with lifecycle management
 	pq := &ProviderQueue{
-		queue: make(chan *ChannelMessage, config.ConcurrencyAndBufferSize.BufferSize),
-		done:  make(chan struct{}),
+		queue:      make(chan *ChannelMessage, config.ConcurrencyAndBufferSize.BufferSize),
+		done:       make(chan struct{}),
 		signalOnce: sync.Once{},
-		closeOnce: sync.Once{},
+		closeOnce:  sync.Once{},
 	}
 
 	bifrost.requestQueues.Store(providerKey, pq)

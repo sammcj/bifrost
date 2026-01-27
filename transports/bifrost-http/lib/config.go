@@ -2418,63 +2418,12 @@ func (c *Config) AddMCPClient(ctx context.Context, clientConfig schemas.MCPClien
 	if c.MCPConfig == nil {
 		c.MCPConfig = &schemas.MCPConfig{}
 	}
-	// Generate a unique ID for the client if not provided
-	if clientConfig.ID == "" {
-		clientConfig.ID = uuid.NewString()
-	}
 	// Track new environment variables
 	c.MCPConfig.ClientConfigs = append(c.MCPConfig.ClientConfigs, clientConfig)
 	// Config with processed env vars
 	if err := c.client.AddMCPClient(c.MCPConfig.ClientConfigs[len(c.MCPConfig.ClientConfigs)-1]); err != nil {
 		c.MCPConfig.ClientConfigs = c.MCPConfig.ClientConfigs[:len(c.MCPConfig.ClientConfigs)-1]
 		return fmt.Errorf("failed to connect MCP client: %w", err)
-	}
-	// Updating in config store
-	if c.ConfigStore != nil {
-		if err := c.ConfigStore.CreateMCPClientConfig(ctx, clientConfig); err != nil {
-			return fmt.Errorf("failed to create MCP client config in store: %w", err)
-		}
-	}
-	return nil
-}
-
-// RemoveMCPClient removes an MCP client from the configuration.
-// This method is called when an MCP client is removed via the HTTP API.
-//
-// The method:
-//   - Validates that the MCP client exists
-//   - Removes the MCP client from the configuration
-//   - Removes the MCP client from the Bifrost client
-func (c *Config) RemoveMCPClient(ctx context.Context, id string) error {
-	if c.client == nil {
-		return fmt.Errorf("bifrost client not set")
-	}
-	c.muMCP.Lock()
-	defer c.muMCP.Unlock()
-	if c.MCPConfig == nil {
-		return fmt.Errorf("no MCP config found")
-	}
-	// Check if client is registered in Bifrost (can be not registered if client initialization failed)
-	if clients, err := c.client.GetMCPClients(); err == nil && len(clients) > 0 {
-		for _, client := range clients {
-			if client.Config.ID == id {
-				if err := c.client.RemoveMCPClient(id); err != nil {
-					return fmt.Errorf("failed to remove MCP client: %w", err)
-				}
-				break
-			}
-		}
-	}
-	for i, clientConfig := range c.MCPConfig.ClientConfigs {
-		if clientConfig.ID == id {
-			c.MCPConfig.ClientConfigs = append(c.MCPConfig.ClientConfigs[:i], c.MCPConfig.ClientConfigs[i+1:]...)
-			break
-		}
-	}
-	if c.ConfigStore != nil {
-		if err := c.ConfigStore.DeleteMCPClientConfig(ctx, id); err != nil {
-			return fmt.Errorf("failed to delete MCP client config from store: %w", err)
-		}
 	}
 	return nil
 }
@@ -2534,10 +2483,40 @@ func (c *Config) EditMCPClient(ctx context.Context, id string, updatedConfig sch
 			}
 		}
 	}
-	// Persist changes to config store
-	if c.ConfigStore != nil {
-		if err := c.ConfigStore.UpdateMCPClientConfig(ctx, id, updatedConfig); err != nil {
-			return fmt.Errorf("failed to update MCP client config in store: %w", err)
+	return nil
+}
+
+// RemoveMCPClient removes an MCP client from the configuration.
+// This method is called when an MCP client is removed via the HTTP API.
+//
+// The method:
+//   - Validates that the MCP client exists
+//   - Removes the MCP client from the configuration
+//   - Removes the MCP client from the Bifrost client
+func (c *Config) RemoveMCPClient(ctx context.Context, id string) error {
+	if c.client == nil {
+		return fmt.Errorf("bifrost client not set")
+	}
+	c.muMCP.Lock()
+	defer c.muMCP.Unlock()
+	if c.MCPConfig == nil {
+		return fmt.Errorf("no MCP config found")
+	}
+	// Check if client is registered in Bifrost (can be not registered if client initialization failed)
+	if clients, err := c.client.GetMCPClients(); err == nil && len(clients) > 0 {
+		for _, client := range clients {
+			if client.Config.ID == id {
+				if err := c.client.RemoveMCPClient(id); err != nil {
+					return fmt.Errorf("failed to remove MCP client: %w", err)
+				}
+				break
+			}
+		}
+	}
+	for i, clientConfig := range c.MCPConfig.ClientConfigs {
+		if clientConfig.ID == id {
+			c.MCPConfig.ClientConfigs = append(c.MCPConfig.ClientConfigs[:i], c.MCPConfig.ClientConfigs[i+1:]...)
+			break
 		}
 	}
 	return nil

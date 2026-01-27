@@ -18,18 +18,19 @@ import { CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { MCP_STATUS_COLORS } from "@/lib/constants/config";
-import { getErrorMessage, useDeleteMCPClientMutation, useGetMCPClientsQuery, useReconnectMCPClientMutation } from "@/lib/store";
+import { getErrorMessage, useDeleteMCPClientMutation, useReconnectMCPClientMutation } from "@/lib/store";
 import { MCPClient } from "@/lib/types/mcp";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { Loader2, Plus, RefreshCcw, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import MCPClientSheet from "./mcpClientSheet";
 
 interface MCPClientsTableProps {
 	mcpClients: MCPClient[];
+	refetch?: () => void;
 }
 
-export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
+export default function MCPClientsTable({ mcpClients, refetch }: MCPClientsTableProps) {
 	const [formOpen, setFormOpen] = useState(false);
 	const hasCreateMCPClientAccess = useRbac(RbacResource.MCPGateway, RbacOperation.Create);
 	const hasUpdateMCPClientAccess = useRbac(RbacResource.MCPGateway, RbacOperation.Update);
@@ -40,20 +41,9 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 
 	const [reconnectingClients, setReconnectingClients] = useState<string[]>([]);
 
-	// RTK Query hooks
-	const { data: clientsData, refetch } = useGetMCPClientsQuery();
+	// RTK Query mutations
 	const [reconnectMCPClient] = useReconnectMCPClientMutation();
 	const [deleteMCPClient] = useDeleteMCPClientMutation();
-
-	const clients = clientsData || mcpClients;
-
-	const loadClients = async () => {
-		refetch();
-	};
-
-	useEffect(() => {
-		loadClients();
-	}, []);
 
 	const handleCreate = () => {
 		setFormOpen(true);
@@ -65,7 +55,9 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 			await reconnectMCPClient(client.config.id).unwrap();
 			setReconnectingClients((prev) => prev.filter((id) => id !== client.config.id));
 			toast({ title: "Reconnected", description: `Client ${client.config.name} reconnected successfully.` });
-			loadClients();
+			if (refetch) {
+				await refetch();
+			}
 		} catch (error) {
 			setReconnectingClients((prev) => prev.filter((id) => id !== client.config.id));
 			toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
@@ -76,15 +68,19 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 		try {
 			await deleteMCPClient(client.config.id).unwrap();
 			toast({ title: "Deleted", description: `Client ${client.config.name} removed successfully.` });
-			loadClients();
+			if (refetch) {
+				await refetch();
+			}
 		} catch (error) {
 			toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
 		}
 	};
 
-	const handleSaved = () => {
+	const handleSaved = async () => {
 		setFormOpen(false);
-		loadClients();
+		if (refetch) {
+			await refetch();
+		}
 	};
 
 	const getConnectionDisplay = (client: MCPClient) => {
@@ -122,10 +118,12 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 		setSelectedMCPClient(null);
 	};
 
-	const handleEditTools = () => {
+	const handleEditTools = async () => {
 		setShowDetailSheet(false);
 		setSelectedMCPClient(null);
-		loadClients();
+		if (refetch) {
+			await refetch();
+		}
 	};
 
 	return (
@@ -158,14 +156,14 @@ export default function MCPClientsTable({ mcpClients }: MCPClientsTableProps) {
 						</TableRow>
 					</TableHeader>
 					<TableBody>
-						{clients.length === 0 && (
+						{mcpClients.length === 0 && (
 							<TableRow>
 								<TableCell colSpan={8} className="py-6 text-center">
 									No clients found.
 								</TableCell>
 							</TableRow>
 						)}
-						{clients.map((c: MCPClient) => {
+						{mcpClients.map((c: MCPClient) => {
 							const enabledToolsCount =
 								c.state == "connected"
 									? c.config.tools_to_execute?.includes("*")
