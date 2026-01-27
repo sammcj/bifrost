@@ -10,7 +10,7 @@ export const mcpApi = baseApi.injectEndpoints({
 		}),
 
 		// Create new MCP client
-		createMCPClient: builder.mutation<null, CreateMCPClientRequest>({
+		createMCPClient: builder.mutation<any, CreateMCPClientRequest>({
 			query: (data) => ({
 				url: "/mcp/client",
 				method: "POST",
@@ -20,7 +20,7 @@ export const mcpApi = baseApi.injectEndpoints({
 		}),
 
 		// Update existing MCP client
-		updateMCPClient: builder.mutation<null, { id: string; data: UpdateMCPClientRequest }>({
+		updateMCPClient: builder.mutation<any, { id: string; data: UpdateMCPClientRequest }>({
 			query: ({ id, data }) => ({
 				url: `/mcp/client/${id}`,
 				method: "PUT",
@@ -30,7 +30,7 @@ export const mcpApi = baseApi.injectEndpoints({
 		}),
 
 		// Delete MCP client
-		deleteMCPClient: builder.mutation<null, string>({
+		deleteMCPClient: builder.mutation<any, string>({
 			query: (id) => ({
 				url: `/mcp/client/${id}`,
 				method: "DELETE",
@@ -39,7 +39,7 @@ export const mcpApi = baseApi.injectEndpoints({
 		}),
 
 		// Reconnect MCP client
-		reconnectMCPClient: builder.mutation<null, string>({
+		reconnectMCPClient: builder.mutation<any, string>({
 			query: (id) => ({
 				url: `/mcp/client/${id}/reconnect`,
 				method: "POST",

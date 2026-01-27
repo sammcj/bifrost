@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/fasthttp/router"
+	"github.com/google/uuid"
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 	"github.com/maximhq/bifrost/transports/bifrost-http/lib"
@@ -18,6 +19,7 @@ import (
 )
 
 type MCPManager interface {
+	ReconnectMCPClient(ctx context.Context, id string) error
 	AddMCPClient(ctx context.Context, clientConfig schemas.MCPClientConfig) error
 	RemoveMCPClient(ctx context.Context, id string) error
 	EditMCPClient(ctx context.Context, id string, updatedConfig schemas.MCPClientConfig) error
@@ -72,13 +74,11 @@ func (h *MCPHandler) executeChatMCPTool(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid request format: %v", err))
 		return
 	}
-
 	// Validate required fields
 	if req.Function.Name == nil || *req.Function.Name == "" {
 		SendError(ctx, fasthttp.StatusBadRequest, "Tool function name is required")
 		return
 	}
-
 	// Convert context
 	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, false, h.store.GetHeaderFilterConfig())
 	defer cancel() // Ensure cleanup on function exit
@@ -86,14 +86,12 @@ func (h *MCPHandler) executeChatMCPTool(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")
 		return
 	}
-
 	// Execute MCP tool
 	toolMessage, bifrostErr := h.client.ExecuteChatMCPTool(bifrostCtx, req)
 	if bifrostErr != nil {
 		SendBifrostError(ctx, bifrostErr)
 		return
 	}
-
 	// Send successful response
 	SendJSON(ctx, toolMessage)
 }
@@ -105,13 +103,11 @@ func (h *MCPHandler) executeResponsesMCPTool(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid request format: %v", err))
 		return
 	}
-
 	// Validate required fields
 	if req.Name == nil || *req.Name == "" {
 		SendError(ctx, fasthttp.StatusBadRequest, "Tool function name is required")
 		return
 	}
-
 	// Convert context
 	bifrostCtx, cancel := lib.ConvertToBifrostContext(ctx, false, h.store.GetHeaderFilterConfig())
 	defer cancel() // Ensure cleanup on function exit
@@ -119,14 +115,12 @@ func (h *MCPHandler) executeResponsesMCPTool(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusInternalServerError, "Failed to convert context")
 		return
 	}
-
 	// Execute MCP tool
 	toolMessage, bifrostErr := h.client.ExecuteResponsesMCPTool(bifrostCtx, &req)
 	if bifrostErr != nil {
 		SendBifrostError(ctx, bifrostErr)
 		return
 	}
-
 	// Send successful response
 	SendJSON(ctx, toolMessage)
 }
@@ -139,23 +133,19 @@ func (h *MCPHandler) getMCPClients(ctx *fasthttp.RequestCtx) {
 		SendJSON(ctx, []schemas.MCPClient{})
 		return
 	}
-
 	// Get actual connected clients from Bifrost
 	clientsInBifrost, err := h.client.GetMCPClients()
 	if err != nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to get MCP clients from Bifrost: %v", err))
 		return
 	}
-
 	// Create a map of connected clients for quick lookup
 	connectedClientsMap := make(map[string]schemas.MCPClient)
 	for _, client := range clientsInBifrost {
 		connectedClientsMap[client.Config.ID] = client
 	}
-
 	// Build the final client list, including errored clients
 	clients := make([]schemas.MCPClient, 0, len(configsInStore.ClientConfigs))
-
 	for _, configClient := range configsInStore.ClientConfigs {
 		if connectedClient, exists := connectedClientsMap[configClient.ID]; exists {
 			// Sort tools alphabetically by name
@@ -179,7 +169,6 @@ func (h *MCPHandler) getMCPClients(ctx *fasthttp.RequestCtx) {
 			})
 		}
 	}
-
 	SendJSON(ctx, clients)
 }
 
@@ -190,37 +179,10 @@ func (h *MCPHandler) reconnectMCPClient(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid id: %v", err))
 		return
 	}
-
-	// Check if client is registered in Bifrost (can be not registered if client initialization failed)
-	if clients, err := h.client.GetMCPClients(); err == nil && len(clients) > 0 {
-		for _, client := range clients {
-			if client.Config.ID == id {
-				if err := h.client.ReconnectMCPClient(id); err != nil {
-					SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to reconnect MCP client: %v", err))
-					return
-				} else {
-					SendJSON(ctx, map[string]any{
-						"status":  "success",
-						"message": "MCP client reconnected successfully",
-					})
-					return
-				}
-			}
-		}
-	}
-
-	// Config exists in store, but not in Bifrost (can happen if client initialization failed)
-	clientConfig, err := h.store.GetMCPClient(id)
-	if err != nil {
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to get MCP client config: %v", err))
+	if err := h.mcpManager.ReconnectMCPClient(ctx, id); err != nil {
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to reconnect MCP client: %v", err))
 		return
 	}
-
-	if err := h.client.AddMCPClient(*clientConfig); err != nil {
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to add MCP client: %v", err))
-		return
-	}
-
 	SendJSON(ctx, map[string]any{
 		"status":  "success",
 		"message": "MCP client reconnected successfully",
@@ -238,13 +200,11 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid tools_to_execute: %v", err))
 		return
 	}
-
 	// Auto-clear tools_to_auto_execute if tools_to_execute is empty
 	// If no tools are allowed to execute, no tools can be auto-executed
 	if len(req.ToolsToExecute) == 0 {
 		req.ToolsToAutoExecute = []string{}
 	}
-
 	if err := validateToolsToAutoExecute(req.ToolsToAutoExecute, req.ToolsToExecute); err != nil {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid tools_to_auto_execute: %v", err))
 		return
@@ -253,9 +213,20 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid client name: %v", err))
 		return
 	}
+	// Generate a unique ID for the client if not provided
+	if req.ID == "" {
+		req.ID = uuid.NewString()
+	}
 	if err := h.mcpManager.AddMCPClient(ctx, req); err != nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to connect MCP client: %v", err))
 		return
+	}
+	// Creating MCP client config in config store
+	if h.store.ConfigStore != nil {
+		if err := h.store.ConfigStore.CreateMCPClientConfig(ctx, req); err != nil {
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Added to core but failed to create MCP config in database: %v, please restart bifrost to keep core and database in sync", err))
+			return
+		}
 	}
 	SendJSON(ctx, map[string]any{
 		"status":  "success",
@@ -270,42 +241,58 @@ func (h *MCPHandler) editMCPClient(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid id: %v", err))
 		return
 	}
-
 	var req schemas.MCPClientConfig
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid request format: %v", err))
 		return
 	}
-
 	// Validate tools_to_execute
 	if err := validateToolsToExecute(req.ToolsToExecute); err != nil {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid tools_to_execute: %v", err))
 		return
 	}
-
 	// Auto-clear tools_to_auto_execute if tools_to_execute is empty
 	// If no tools are allowed to execute, no tools can be auto-executed
 	if len(req.ToolsToExecute) == 0 {
 		req.ToolsToAutoExecute = []string{}
 	}
-
 	// Validate tools_to_auto_execute
 	if err := validateToolsToAutoExecute(req.ToolsToAutoExecute, req.ToolsToExecute); err != nil {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid tools_to_auto_execute: %v", err))
 		return
 	}
-
 	// Validate client name
 	if err := validateMCPClientName(req.Name); err != nil {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid client name: %v", err))
 		return
 	}
-
-	if err := h.mcpManager.EditMCPClient(ctx, id, req); err != nil {
+	// Get old config to de-redact sensitive fields (before updating)
+	oldConfig, err := h.store.GetMCPClient(id)
+	if err != nil {
+		logger.Warn("Failed to get old MCP client config for de-redaction: %v", err)
+		// Continue anyway, will use req as-is (less likely to happen on edit since client exists)
+		oldConfig = nil
+	}
+	// Get old redacted config for comparison
+	var oldRedactedConfig *schemas.MCPClientConfig
+	if oldConfig != nil {
+		redacted := h.store.RedactMCPClientConfig(*oldConfig)
+		oldRedactedConfig = &redacted
+	}
+	// Merge configs to preserve sensitive fields that weren't changed
+	mergedConfig := mergeMCPClientConfig(oldConfig, oldRedactedConfig, req)
+	// Update in-memory config with merged values
+	if err := h.mcpManager.EditMCPClient(ctx, id, mergedConfig); err != nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to edit MCP client: %v", err))
 		return
 	}
-
+	// Update MCP client config in config store with merged values
+	if h.store.ConfigStore != nil {
+		if err := h.store.ConfigStore.UpdateMCPClientConfig(ctx, id, mergedConfig); err != nil {
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Updated in core but failed to save MCP config in database: %v, please restart bifrost to keep core and database in sync", err))
+			return
+		}
+	}
 	SendJSON(ctx, map[string]any{
 		"status":  "success",
 		"message": "MCP client edited successfully",
@@ -322,6 +309,13 @@ func (h *MCPHandler) removeMCPClient(ctx *fasthttp.RequestCtx) {
 	if err := h.mcpManager.RemoveMCPClient(ctx, id); err != nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to remove MCP client: %v", err))
 		return
+	}
+	// Deleting MCP client config from config store
+	if h.store.ConfigStore != nil {
+		if err := h.store.ConfigStore.DeleteMCPClientConfig(ctx, id); err != nil {
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Removed from core but failed to delete MCP config from database: %v, please restart bifrost to keep core and database in sync", err))
+			return
+		}
 	}
 	SendJSON(ctx, map[string]any{
 		"status":  "success",
@@ -406,6 +400,91 @@ func validateToolsToAutoExecute(toolsToAutoExecute []string, toolsToExecute []st
 	}
 
 	return nil
+}
+
+// mergeMCPClientConfig merges an updated MCP client config with the old config to preserve sensitive fields.
+// This follows the same pattern as provider config merging to handle redacted values correctly.
+//
+// The merge logic:
+//   - If a field in the updated config is redacted and matches the old redacted value, it means the user
+//     didn't actually modify that field, so we preserve the original raw value
+//   - If a field is missing or nil in the updated config, we preserve the old value
+//   - Otherwise, we use the updated value
+//
+// This prevents accidentally overwriting sensitive data (headers) with redacted
+// versions when the user only intended to update other fields like IsCodeModeClient.
+func mergeMCPClientConfig(oldConfig *schemas.MCPClientConfig, oldRedactedConfig *schemas.MCPClientConfig, updatedConfig schemas.MCPClientConfig) schemas.MCPClientConfig {
+	// If old config doesn't exist, return the updated config as-is (new client case)
+	if oldConfig == nil {
+		return updatedConfig
+	}
+
+	// If old redacted config doesn't exist, use old config for comparison
+	if oldRedactedConfig == nil {
+		oldRedactedConfig = oldConfig
+	}
+
+	// Start with the updated config as base
+	merged := updatedConfig
+
+	// Preserve connection_type if not provided in update
+	if merged.ConnectionType == "" && oldConfig.ConnectionType != "" {
+		merged.ConnectionType = oldConfig.ConnectionType
+	}
+
+	// Preserve stdio_config if not provided in update
+	if merged.StdioConfig == nil && oldConfig.StdioConfig != nil {
+		merged.StdioConfig = oldConfig.StdioConfig
+	}
+
+	// Handle connection_string: preserve if nil, or restore original if redacted matches old redacted value
+	if merged.ConnectionString == nil && oldConfig.ConnectionString != nil {
+		merged.ConnectionString = oldConfig.ConnectionString
+	} else if merged.ConnectionString != nil && merged.ConnectionString.IsRedacted() {
+		// If updated connection_string is redacted and matches old redacted value, restore original
+		if oldRedactedConfig.ConnectionString != nil && merged.ConnectionString.Equals(oldRedactedConfig.ConnectionString) {
+			merged.ConnectionString = oldConfig.ConnectionString
+		}
+	}
+
+	// Merge Headers: preserve old headers if new headers are empty or redacted
+	if len(updatedConfig.Headers) == 0 {
+		// If no new headers provided, keep old headers
+		merged.Headers = oldConfig.Headers
+	} else {
+		// Merge individual headers
+		if merged.Headers == nil {
+			merged.Headers = make(map[string]schemas.EnvVar)
+		}
+
+		oldHeaders := oldConfig.Headers
+		if oldHeaders == nil {
+			oldHeaders = make(map[string]schemas.EnvVar)
+		}
+
+		// Process each header in the updated config
+		for headerKey, newHeaderValue := range updatedConfig.Headers {
+			// Check if this header is redacted and matches the old redacted value
+			if newHeaderValue.IsRedacted() {
+				oldRedactedValue, hasOldRedacted := oldRedactedConfig.Headers[headerKey]
+				if hasOldRedacted && newHeaderValue.Equals(&oldRedactedValue) {
+					// User didn't change this header, restore original value
+					if oldValue, hasOld := oldHeaders[headerKey]; hasOld {
+						merged.Headers[headerKey] = oldValue
+					}
+				}
+			}
+		}
+
+		// Preserve any old headers that weren't included in the updated config
+		for headerKey, oldHeaderValue := range oldHeaders {
+			if _, exists := updatedConfig.Headers[headerKey]; !exists {
+				merged.Headers[headerKey] = oldHeaderValue
+			}
+		}
+	}
+
+	return merged
 }
 
 func validateMCPClientName(name string) error {

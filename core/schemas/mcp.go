@@ -84,7 +84,6 @@ func NewMCPClientConfigFromMap(configMap map[string]any) *MCPClientConfig {
 	return &config
 }
 
-
 // HttpHeaders returns the HTTP headers for the MCP client config.
 func (c *MCPClientConfig) HttpHeaders() map[string]string {
 	headers := make(map[string]string)

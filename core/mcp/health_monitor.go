@@ -65,12 +65,24 @@ func (chm *ClientHealthMonitor) Start() {
 		return // Already monitoring
 	}
 
+	// Check client exists FIRST before allocating resources
+	chm.manager.mu.RLock()
+	clientState, exists := chm.manager.clientMap[chm.clientID]
+	chm.manager.mu.RUnlock()
+
+	if !exists {
+		// Use clientID for logging when client is missing
+		logger.Error("%s Health monitor failed to start for client %s, client not found in manager", MCPLogPrefix, chm.clientID)
+		return
+	}
+
+	// Now allocate resources (after validation)
 	chm.isMonitoring = true
 	chm.ctx, chm.cancel = context.WithCancel(context.Background())
 	chm.ticker = time.NewTicker(chm.interval)
 
 	go chm.monitorLoop()
-	logger.Debug(fmt.Sprintf("%s Health monitor started for client %s (interval: %v)", MCPLogPrefix, chm.clientID, chm.interval))
+	logger.Debug("%s Health monitor started for client %s", MCPLogPrefix, clientState.ExecutionConfig.Name)
 }
 
 // Stop stops monitoring the client's health
@@ -82,6 +94,18 @@ func (chm *ClientHealthMonitor) Stop() {
 		return // Not monitoring
 	}
 
+	// Acquire read lock before reading clientMap to avoid race condition
+	chm.manager.mu.RLock()
+	clientState, exists := chm.manager.clientMap[chm.clientID]
+	chm.manager.mu.RUnlock()
+
+	// Determine display name for logging: use clientState.ExecutionConfig.Name if available, otherwise fall back to clientID
+	displayName := chm.clientID
+	if exists {
+		displayName = clientState.ExecutionConfig.Name
+	}
+
+	// Always perform cleanup even when client is missing
 	chm.isMonitoring = false
 	if chm.ticker != nil {
 		chm.ticker.Stop()
@@ -89,7 +113,13 @@ func (chm *ClientHealthMonitor) Stop() {
 	if chm.cancel != nil {
 		chm.cancel()
 	}
-	logger.Debug(fmt.Sprintf("%s Health monitor stopped for client %s", MCPLogPrefix, chm.clientID))
+
+	if !exists {
+		logger.Error("%s Health monitor failed to stop for client %s, client not found in manager", MCPLogPrefix, displayName)
+		return
+	}
+
+	logger.Debug("%s Health monitor stopped for client %s", MCPLogPrefix, displayName)
 }
 
 // monitorLoop runs the health check loop
@@ -175,7 +205,7 @@ func (chm *ClientHealthMonitor) updateClientState(state schemas.MCPConnectionSta
 
 	// Log after releasing the lock
 	if stateChanged {
-		logger.Info(fmt.Sprintf("%s Client %s connection state changed to: %s", MCPLogPrefix, chm.clientID, state))
+		logger.Info(fmt.Sprintf("%s Client %s connection state changed to: %s", MCPLogPrefix, clientState.ExecutionConfig.Name, state))
 	}
 }
 

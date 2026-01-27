@@ -78,6 +78,7 @@ type ServerCallbacks interface {
 	ReloadProvider(ctx context.Context, provider schemas.ModelProvider) (*tables.TableProvider, error)
 	RemoveProvider(ctx context.Context, provider schemas.ModelProvider) error
 	GetGovernanceData() *governance.GovernanceData
+	ReconnectMCPClient(ctx context.Context, id string) error
 	AddMCPClient(ctx context.Context, clientConfig schemas.MCPClientConfig) error
 	RemoveMCPClient(ctx context.Context, id string) error
 	EditMCPClient(ctx context.Context, id string, updatedConfig schemas.MCPClientConfig) error
@@ -502,6 +503,33 @@ func FindPluginByName[T schemas.Plugin](plugins []schemas.Plugin, name string) (
 	}
 	var zero T
 	return zero, fmt.Errorf("plugin %q not found", name)
+}
+
+// ReconnectMCPClient reconnects an MCP client to the in-memory store
+func (s *BifrostHTTPServer) ReconnectMCPClient(ctx context.Context, id string) error {
+	// Check if client is registered in Bifrost (can be not registered if client initialization failed)
+	if clients, err := s.Client.GetMCPClients(); err == nil && len(clients) > 0 {
+		for _, client := range clients {
+			if client.Config.ID == id {
+				if err := s.Client.ReconnectMCPClient(id); err != nil {
+					return err
+				}
+				return nil
+			}
+		}
+	}
+	// Config exists in store, but not in Bifrost (can happen if client initialization failed)
+	clientConfig, err := s.Config.GetMCPClient(id)
+	if err != nil {
+		return err
+	}
+	if err := s.Client.AddMCPClient(*clientConfig); err != nil {
+		return err
+	}
+	if err := s.MCPServerHandler.SyncAllMCPServers(ctx); err != nil {
+		logger.Warn("failed to sync MCP servers after adding client: %v", err)
+	}
+	return nil
 }
 
 // AddMCPClient adds a new MCP client to the in-memory store
