@@ -2,7 +2,6 @@ package bedrock
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -2408,42 +2407,12 @@ func ConvertBifrostMessagesToBedrockMessages(bifrostMessages []schemas.Responses
 				// Convert result content to Bedrock format
 				if msg.ResponsesToolMessage.Output != nil {
 					if msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr != nil {
-						// Try to parse as JSON, otherwise treat as text
-						var parsed interface{}
-						if err := json.Unmarshal([]byte(*msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr), &parsed); err != nil {
-							resultContent = append(resultContent, BedrockContentBlock{
-								Text: msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr,
-							})
-						} else {
-							// Bedrock does not accept primitives or arrays directly in the json field
-							switch v := parsed.(type) {
-							case map[string]any:
-								// Objects are valid as-is
-								resultContent = append(resultContent, BedrockContentBlock{
-									JSON: v,
-								})
-							case []any:
-								// Arrays need to be wrapped
-								resultContent = append(resultContent, BedrockContentBlock{
-									JSON: map[string]any{"results": v},
-								})
-							default:
-								// Primitives (string, number, boolean, null) need to be wrapped
-								resultContent = append(resultContent, BedrockContentBlock{
-									JSON: map[string]any{"value": v},
-								})
-							}
-						}
+						resultContent = append(resultContent, tryParseJSONIntoContentBlock(*msg.ResponsesToolMessage.Output.ResponsesToolCallOutputStr))
 					} else if msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks != nil {
 						// Handle structured output blocks
 						for _, block := range msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks {
-							switch block.Type {
-							case schemas.ResponsesInputMessageContentBlockTypeText:
-								if block.Text != nil {
-									resultContent = append(resultContent, BedrockContentBlock{
-										Text: block.Text,
-									})
-								}
+							if block.Text != nil {
+								resultContent = append(resultContent, tryParseJSONIntoContentBlock(*block.Text))
 							}
 						}
 					}
