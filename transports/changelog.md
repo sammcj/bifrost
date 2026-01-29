@@ -1,1 +1,2 @@
 - feat: added support for image editing and variations
+- fix: encode provider names in API URLs
