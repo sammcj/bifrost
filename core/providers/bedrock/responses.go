@@ -2432,7 +2432,7 @@ func ConvertBifrostMessagesToBedrockMessages(bifrostMessages []schemas.Responses
 						// Handle structured output blocks
 						for _, block := range msg.ResponsesToolMessage.Output.ResponsesFunctionToolCallOutputBlocks {
 							switch block.Type {
-							case schemas.ResponsesOutputMessageContentTypeText:
+							case schemas.ResponsesInputMessageContentBlockTypeText:
 								if block.Text != nil {
 									resultContent = append(resultContent, BedrockContentBlock{
 										Text: block.Text,
