@@ -9924,13 +9924,15 @@ func TestSQLite_VKMCPConfig_MCPClientNameResolution(t *testing.T) {
 
 	// Now create config.json with virtual key using mcp_client_name (not mcp_client_id)
 	// This simulates the real-world scenario where config.json uses human-readable names
+	dbPath := filepath.Join(tempDir, "config.db")
+	cfgPath := filepath.Join(tempDir, "config.json")
 	configJSON := fmt.Sprintf(`{
 		"$schema": "https://www.getbifrost.ai/schema",
 		"config_store": {
 			"enabled": true,
 			"type": "sqlite",
 			"config": {
-				"path": "%s/config.db"
+				"path": %s
 			}
 		},
 		"providers": {
@@ -9988,10 +9990,10 @@ func TestSQLite_VKMCPConfig_MCPClientNameResolution(t *testing.T) {
 				}
 			]
 		}
-	}`, tempDir, keyID)
+	}`, fmt.Sprintf("%q", dbPath), keyID)
 
 	// Write the config file directly
-	err = os.WriteFile(tempDir+"/config.json", []byte(configJSON), 0644)
+	err = os.WriteFile(cfgPath, []byte(configJSON), 0644)
 	if err != nil {
 		t.Fatalf("Failed to write config.json: %v", err)
 	}

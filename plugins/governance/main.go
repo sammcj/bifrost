@@ -649,19 +649,16 @@ func (p *GovernancePlugin) evaluateGovernanceRequest(ctx *schemas.BifrostContext
 func (p *GovernancePlugin) PreLLMHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.LLMPluginShortCircuit, error) {
 	// Extract governance headers and virtual key using utility functions
 	virtualKeyValue := bifrost.GetStringFromContext(ctx, schemas.BifrostContextKeyVirtualKey)
-
+	// Getting provider and mode from the request
 	provider, model, _ := req.GetRequestFields()
-
 	// Create request context for evaluation
 	evaluationRequest := &EvaluationRequest{
 		VirtualKey: virtualKeyValue,
 		Provider:   provider,
 		Model:      model,
 	}
-
 	// Evaluate governance using common function
 	_, bifrostError := p.evaluateGovernanceRequest(ctx, evaluationRequest, req.RequestType)
-
 	// Convert BifrostError to LLMPluginShortCircuit if needed
 	if bifrostError != nil {
 		return req, &schemas.LLMPluginShortCircuit{
