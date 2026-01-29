@@ -9,3 +9,7 @@ type LLMPluginShortCircuit struct {
 	Response *BifrostResponse // If set, short-circuit with this response (skips provider call)
 	Error    *BifrostError    // If set, short-circuit with this error (can set AllowFallbacks field)
 }
+
+// PluginShortCircuit is the legacy name for LLMPluginShortCircuit (v1.3.x compatibility).
+// Deprecated: Use LLMPluginShortCircuit instead.
+type PluginShortCircuit = LLMPluginShortCircuit

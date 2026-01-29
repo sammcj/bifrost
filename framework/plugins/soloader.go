@@ -94,17 +94,27 @@ func (l *SharedObjectPluginLoader) LoadPlugin(path string, config any) (schemas.
 		}
 	}
 
-	// Optional: PreLLMHook
+	// Optional: PreLLMHook (with backward compatibility for legacy PreHook)
 	if sym, err := pluginObj.Lookup("PreLLMHook"); err == nil {
 		if dp.preLLMHook, ok = sym.(func(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.LLMPluginShortCircuit, error)); !ok {
 			return nil, fmt.Errorf("failed to cast PreLLMHook to expected signature")
 		}
+	} else if sym, err := pluginObj.Lookup("PreHook"); err == nil {
+		// Legacy backward compatibility (v1.3.x): treat PreHook as PreLLMHook
+		if dp.preLLMHook, ok = sym.(func(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.LLMPluginShortCircuit, error)); !ok {
+			return nil, fmt.Errorf("failed to cast PreHook to expected signature (legacy backward compatibility)")
+		}
 	}
 
-	// Optional: PostLLMHook
+	// Optional: PostLLMHook (with backward compatibility for legacy PostHook)
 	if sym, err := pluginObj.Lookup("PostLLMHook"); err == nil {
 		if dp.postLLMHook, ok = sym.(func(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)); !ok {
 			return nil, fmt.Errorf("failed to cast PostLLMHook to expected signature")
+		}
+	} else if sym, err := pluginObj.Lookup("PostHook"); err == nil {
+		// Legacy backward compatibility (v1.3.x): treat PostHook as PostLLMHook
+		if dp.postLLMHook, ok = sym.(func(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error)); !ok {
+			return nil, fmt.Errorf("failed to cast PostHook to expected signature (legacy backward compatibility)")
 		}
 	}
 
