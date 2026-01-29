@@ -330,6 +330,7 @@ EXPECTED BEHAVIORS SUMMARY
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9860,6 +9861,288 @@ func TestSQLite_VK_ProviderAndMCPConfigs_Combined(t *testing.T) {
 	}
 
 	t.Log("✓ VK with combined provider and MCP configs created successfully")
+}
+
+// TestSQLite_VKMCPConfig_MCPClientNameResolution tests that mcp_client_name is resolved to MCPClientID
+// when loading virtual keys from config.json. This tests the fix for the foreign key constraint violation
+// that occurred when config.json used mcp_client_name but the database expected mcp_client_id.
+func TestSQLite_VKMCPConfig_MCPClientNameResolution(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+	ctx := context.Background()
+
+	keyID := uuid.NewString()
+	providers := map[string]configstore.ProviderConfig{
+		"openai": {
+			Keys: []schemas.Key{
+				{ID: keyID, Name: "openai-key", Value: *schemas.NewEnvVar("sk-test123"), Weight: 1},
+			},
+		},
+	}
+
+	// First, create config.json with MCP client configs
+	mcpConfig := &schemas.MCPConfig{
+		ClientConfigs: []*schemas.MCPClientConfig{
+			{
+				ID:               "weather-mcp",
+				Name:             "WeatherService",
+				ConnectionType:   schemas.MCPConnectionTypeHTTP,
+				ConnectionString: schemas.NewEnvVar("http://localhost:8080/mcp"),
+			},
+			{
+				ID:               "calendar-mcp",
+				Name:             "CalendarService",
+				ConnectionType:   schemas.MCPConnectionTypeHTTP,
+				ConnectionString: schemas.NewEnvVar("http://localhost:8081/mcp"),
+			},
+		},
+	}
+
+	// Create initial config data with MCP but no virtual keys
+	configData := makeConfigDataWithProvidersAndDir(providers, tempDir)
+	configData.MCP = mcpConfig
+	createConfigFile(t, tempDir, configData)
+
+	// First load to set up MCP clients in DB
+	config1, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("First LoadConfig failed: %v", err)
+	}
+
+	// Verify MCP clients were created
+	weatherClient, err := config1.ConfigStore.GetMCPClientByName(ctx, "WeatherService")
+	if err != nil || weatherClient == nil {
+		t.Fatalf("WeatherService MCP client not found: %v", err)
+	}
+	calendarClient, err := config1.ConfigStore.GetMCPClientByName(ctx, "CalendarService")
+	if err != nil || calendarClient == nil {
+		t.Fatalf("CalendarService MCP client not found: %v", err)
+	}
+	t.Logf("MCP clients created: WeatherService ID=%d, CalendarService ID=%d", weatherClient.ID, calendarClient.ID)
+
+	config1.ConfigStore.Close(ctx)
+
+	// Now create config.json with virtual key using mcp_client_name (not mcp_client_id)
+	// This simulates the real-world scenario where config.json uses human-readable names
+	configJSON := fmt.Sprintf(`{
+		"$schema": "https://www.getbifrost.ai/schema",
+		"config_store": {
+			"enabled": true,
+			"type": "sqlite",
+			"config": {
+				"path": "%s/config.db"
+			}
+		},
+		"providers": {
+			"openai": {
+				"keys": [
+					{
+						"id": "%s",
+						"name": "openai-key",
+						"value": "sk-test123",
+						"weight": 1
+					}
+				]
+			}
+		},
+		"mcp": {
+			"client_configs": [
+				{
+					"id": "weather-mcp",
+					"name": "WeatherService",
+					"connection_type": "http",
+					"http_url": "http://localhost:8080/mcp"
+				},
+				{
+					"id": "calendar-mcp",
+					"name": "CalendarService",
+					"connection_type": "http",
+					"http_url": "http://localhost:8081/mcp"
+				}
+			]
+		},
+		"governance": {
+			"virtual_keys": [
+				{
+					"id": "vk-with-mcp-names",
+					"name": "test-vk-mcp-names",
+					"description": "VK using mcp_client_name instead of mcp_client_id",
+					"value": "vk_test_mcp_names_123",
+					"is_active": true,
+					"mcp_configs": [
+						{
+							"mcp_client_name": "WeatherService",
+							"tools_to_execute": ["get_weather", "get_forecast"]
+						},
+						{
+							"mcp_client_name": "CalendarService",
+							"tools_to_execute": ["*"]
+						}
+					],
+					"provider_configs": [
+						{
+							"provider": "openai",
+							"weight": 1.0
+						}
+					]
+				}
+			]
+		}
+	}`, tempDir, keyID)
+
+	// Write the config file directly
+	err = os.WriteFile(tempDir+"/config.json", []byte(configJSON), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config.json: %v", err)
+	}
+
+	// Load config - this should resolve mcp_client_name to MCPClientID
+	config2, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("LoadConfig with mcp_client_name failed: %v", err)
+	}
+	defer config2.ConfigStore.Close(ctx)
+
+	// Verify VK was created
+	vk, err := config2.ConfigStore.GetVirtualKey(ctx, "vk-with-mcp-names")
+	if err != nil {
+		t.Fatalf("Failed to get VK: %v", err)
+	}
+	if vk == nil {
+		t.Fatal("VK not found in DB")
+	}
+	t.Logf("✓ VK created: %s", vk.ID)
+
+	// Verify MCP configs were created with correct MCPClientIDs
+	mcpConfigs, err := config2.ConfigStore.GetVirtualKeyMCPConfigs(ctx, "vk-with-mcp-names")
+	if err != nil {
+		t.Fatalf("Failed to get MCP configs: %v", err)
+	}
+
+	if len(mcpConfigs) != 2 {
+		t.Fatalf("Expected 2 MCP configs, got %d", len(mcpConfigs))
+	}
+
+	// Build a map of MCPClientID to config for easier verification
+	configByClientID := make(map[uint]tables.TableVirtualKeyMCPConfig)
+	for _, mc := range mcpConfigs {
+		configByClientID[mc.MCPClientID] = mc
+	}
+
+	// Verify WeatherService config
+	weatherConfig, ok := configByClientID[weatherClient.ID]
+	if !ok {
+		t.Errorf("MCP config for WeatherService (ID=%d) not found", weatherClient.ID)
+	} else {
+		if len(weatherConfig.ToolsToExecute) != 2 {
+			t.Errorf("Expected 2 tools for WeatherService, got %d", len(weatherConfig.ToolsToExecute))
+		}
+		t.Logf("✓ WeatherService MCP config: MCPClientID=%d, tools=%v", weatherConfig.MCPClientID, weatherConfig.ToolsToExecute)
+	}
+
+	// Verify CalendarService config
+	calendarConfig, ok := configByClientID[calendarClient.ID]
+	if !ok {
+		t.Errorf("MCP config for CalendarService (ID=%d) not found", calendarClient.ID)
+	} else {
+		if len(calendarConfig.ToolsToExecute) != 1 || calendarConfig.ToolsToExecute[0] != "*" {
+			t.Errorf("Expected tools=[\"*\"] for CalendarService, got %v", calendarConfig.ToolsToExecute)
+		}
+		t.Logf("✓ CalendarService MCP config: MCPClientID=%d, tools=%v", calendarConfig.MCPClientID, calendarConfig.ToolsToExecute)
+	}
+
+	t.Log("✓ mcp_client_name was successfully resolved to MCPClientID")
+}
+
+// TestSQLite_VKMCPConfig_MCPClientNameNotFound tests graceful handling when mcp_client_name doesn't exist
+func TestSQLite_VKMCPConfig_MCPClientNameNotFound(t *testing.T) {
+	initTestLogger()
+	tempDir := createTempDir(t)
+	ctx := context.Background()
+
+	keyID := uuid.NewString()
+
+	// Create config.json with a virtual key that references a non-existent MCP client
+	configJSON := fmt.Sprintf(`{
+		"$schema": "https://www.getbifrost.ai/schema",
+		"config_store": {
+			"enabled": true,
+			"type": "sqlite",
+			"config": {
+				"path": "%s/config.db"
+			}
+		},
+		"providers": {
+			"openai": {
+				"keys": [
+					{
+						"id": "%s",
+						"name": "openai-key",
+						"value": "sk-test123",
+						"weight": 1
+					}
+				]
+			}
+		},
+		"governance": {
+			"virtual_keys": [
+				{
+					"id": "vk-missing-mcp",
+					"name": "test-vk-missing-mcp",
+					"description": "VK referencing non-existent MCP client",
+					"value": "vk_test_missing_123",
+					"is_active": true,
+					"mcp_configs": [
+						{
+							"mcp_client_name": "NonExistentService",
+							"tools_to_execute": ["some_tool"]
+						}
+					],
+					"provider_configs": [
+						{
+							"provider": "openai",
+							"weight": 1.0
+						}
+					]
+				}
+			]
+		}
+	}`, tempDir, keyID)
+
+	// Write the config file
+	err := os.WriteFile(tempDir+"/config.json", []byte(configJSON), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config.json: %v", err)
+	}
+
+	// Load config - should not fail, but should skip the unresolvable MCP config
+	config, err := LoadConfig(ctx, tempDir)
+	if err != nil {
+		t.Fatalf("LoadConfig should not fail when MCP client name is not found: %v", err)
+	}
+	defer config.ConfigStore.Close(ctx)
+
+	// Verify VK was still created
+	vk, err := config.ConfigStore.GetVirtualKey(ctx, "vk-missing-mcp")
+	if err != nil {
+		t.Fatalf("Failed to get VK: %v", err)
+	}
+	if vk == nil {
+		t.Fatal("VK should have been created even with unresolvable MCP config")
+	}
+	t.Logf("✓ VK created despite unresolvable MCP client: %s", vk.ID)
+
+	// Verify MCP configs - should be empty since the client doesn't exist
+	mcpConfigs, err := config.ConfigStore.GetVirtualKeyMCPConfigs(ctx, "vk-missing-mcp")
+	if err != nil {
+		t.Fatalf("Failed to get MCP configs: %v", err)
+	}
+
+	if len(mcpConfigs) != 0 {
+		t.Errorf("Expected 0 MCP configs (unresolvable should be skipped), got %d", len(mcpConfigs))
+	} else {
+		t.Log("✓ Unresolvable MCP config was gracefully skipped")
+	}
 }
 
 // TestGenerateKeyHash_StableOrdering verifies that key hash is stable regardless of Models slice order
