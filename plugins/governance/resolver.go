@@ -83,7 +83,6 @@ func (r *BudgetResolver) EvaluateModelAndProviderRequest(ctx *schemas.BifrostCon
 		Provider: provider,
 		Model:    model,
 	}
-
 	// 1. Check provider-level rate limits FIRST (before model-level checks)
 	if provider != "" {
 		if err, decision := r.store.CheckProviderRateLimit(ctx, request, nil, nil); err != nil {
@@ -92,7 +91,6 @@ func (r *BudgetResolver) EvaluateModelAndProviderRequest(ctx *schemas.BifrostCon
 				Reason:   fmt.Sprintf("Provider-level rate limit check failed: %s", err.Error()),
 			}
 		}
-
 		// 2. Check provider-level budgets FIRST (before model-level checks)
 		if err := r.store.CheckProviderBudget(ctx, request, nil); err != nil {
 			return &EvaluationResult{
@@ -101,7 +99,6 @@ func (r *BudgetResolver) EvaluateModelAndProviderRequest(ctx *schemas.BifrostCon
 			}
 		}
 	}
-
 	// 3. Check model-level rate limits (after provider-level checks)
 	if model != "" {
 		if err, decision := r.store.CheckModelRateLimit(ctx, request, nil, nil); err != nil {
@@ -119,12 +116,22 @@ func (r *BudgetResolver) EvaluateModelAndProviderRequest(ctx *schemas.BifrostCon
 			}
 		}
 	}
-
 	// All provider-level and model-level checks passed
 	return &EvaluationResult{
 		Decision: DecisionAllow,
 		Reason:   "Request allowed by governance policy (provider-level and model-level checks passed)",
 	}
+}
+
+// isModelRequired checks if the requested model is required for this request
+func (r *BudgetResolver) isModelRequired(requestType schemas.RequestType) bool {
+	// Here we will have to check for some requests which do not need model
+	// For example, batches, container, files requests
+	// For these requests, we will only check for provider filtering
+	if requestType == schemas.MCPToolExecutionRequest || requestType == schemas.BatchCreateRequest || requestType == schemas.BatchListRequest || requestType == schemas.BatchRetrieveRequest || requestType == schemas.BatchCancelRequest || requestType == schemas.BatchResultsRequest || requestType == schemas.FileUploadRequest || requestType == schemas.FileListRequest || requestType == schemas.FileRetrieveRequest || requestType == schemas.FileDeleteRequest || requestType == schemas.FileContentRequest || requestType == schemas.ContainerCreateRequest || requestType == schemas.ContainerListRequest || requestType == schemas.ContainerRetrieveRequest || requestType == schemas.ContainerDeleteRequest || requestType == schemas.ContainerFileCreateRequest || requestType == schemas.ContainerFileListRequest || requestType == schemas.ContainerFileRetrieveRequest || requestType == schemas.ContainerFileContentRequest || requestType == schemas.ContainerFileDeleteRequest {
+		return false
+	}
+	return true
 }
 
 // EvaluateVirtualKeyRequest evaluates virtual key-specific checks including validation, filtering, rate limits, and budgets
@@ -137,7 +144,6 @@ func (r *BudgetResolver) EvaluateVirtualKeyRequest(ctx *schemas.BifrostContext, 
 			Reason:   "Virtual key not found",
 		}
 	}
-
 	// Set virtual key id and name in context
 	ctx.SetValue(schemas.BifrostContextKey("bf-governance-virtual-key-id"), vk.ID)
 	ctx.SetValue(schemas.BifrostContextKey("bf-governance-virtual-key-name"), vk.Name)
@@ -153,14 +159,12 @@ func (r *BudgetResolver) EvaluateVirtualKeyRequest(ctx *schemas.BifrostContext, 
 		ctx.SetValue(schemas.BifrostContextKey("bf-governance-customer-id"), vk.Customer.ID)
 		ctx.SetValue(schemas.BifrostContextKey("bf-governance-customer-name"), vk.Customer.Name)
 	}
-
 	if !vk.IsActive {
 		return &EvaluationResult{
 			Decision: DecisionVirtualKeyBlocked,
 			Reason:   "Virtual key is inactive",
 		}
 	}
-
 	// 2. Check provider filtering
 	if requestType != schemas.MCPToolExecutionRequest && !r.isProviderAllowed(vk, provider) {
 		return &EvaluationResult{
@@ -169,9 +173,8 @@ func (r *BudgetResolver) EvaluateVirtualKeyRequest(ctx *schemas.BifrostContext, 
 			VirtualKey: vk,
 		}
 	}
-
 	// 3. Check model filtering
-	if requestType != schemas.MCPToolExecutionRequest && !r.isModelAllowed(vk, provider, model) {
+	if r.isModelRequired(requestType) && !r.isModelAllowed(vk, provider, model) {
 		return &EvaluationResult{
 			Decision:   DecisionModelBlocked,
 			Reason:     fmt.Sprintf("Model '%s' is not allowed for this virtual key", model),

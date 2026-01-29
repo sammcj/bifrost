@@ -1350,7 +1350,6 @@ func createGovernanceConfigInStore(ctx context.Context, config *Config) {
 			}
 
 			// Resolve MCP client names to IDs for config file mcp_configs
-			// This is done outside the transaction setup so we can access the store
 			mcpConfigs = resolveMCPConfigClientIDs(ctx, config.ConfigStore, mcpConfigs, virtualKey.ID)
 
 			for _, mc := range mcpConfigs {
