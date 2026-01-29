@@ -1081,6 +1081,9 @@ func mergeGovernanceConfig(ctx context.Context, config *Config, configData *Conf
 						}
 						configData.Governance.VirtualKeys[i].Value = governance.GenerateVirtualKey()
 					}
+					// Resolve MCP client names to IDs for config file mcp_configs
+					configData.Governance.VirtualKeys[i].MCPConfigs = resolveMCPConfigClientIDs(
+						ctx, config.ConfigStore, configData.Governance.VirtualKeys[i].MCPConfigs, newVirtualKey.ID)
 					virtualKeysToUpdate = append(virtualKeysToUpdate, configData.Governance.VirtualKeys[i])
 					governanceConfig.VirtualKeys[j] = configData.Governance.VirtualKeys[i]
 				} else {
@@ -1108,6 +1111,9 @@ func mergeGovernanceConfig(ctx context.Context, config *Config, configData *Conf
 				}
 				configData.Governance.VirtualKeys[i].Value = governance.GenerateVirtualKey()
 			}
+			// Resolve MCP client names to IDs for config file mcp_configs
+			configData.Governance.VirtualKeys[i].MCPConfigs = resolveMCPConfigClientIDs(
+				ctx, config.ConfigStore, configData.Governance.VirtualKeys[i].MCPConfigs, newVirtualKey.ID)
 			virtualKeysToAdd = append(virtualKeysToAdd, configData.Governance.VirtualKeys[i])
 		}
 	}
@@ -1342,6 +1348,10 @@ func createGovernanceConfigInStore(ctx context.Context, config *Config) {
 					return fmt.Errorf("failed to create provider config for virtual key %s: %w", virtualKey.ID, err)
 				}
 			}
+
+			// Resolve MCP client names to IDs for config file mcp_configs
+			// This is done outside the transaction setup so we can access the store
+			mcpConfigs = resolveMCPConfigClientIDs(ctx, config.ConfigStore, mcpConfigs, virtualKey.ID)
 
 			for _, mc := range mcpConfigs {
 				mc.VirtualKeyID = virtualKey.ID
@@ -1968,6 +1978,58 @@ func initDefaultFrameworkConfig(ctx context.Context, config *Config) error {
 
 	config.MCPCatalog = mcpCatalog
 	return nil
+}
+
+// resolveMCPConfigClientIDs resolves MCPClientName to MCPClientID for each MCP config.
+// This is needed when parsing virtual keys from config.json, which uses "mcp_client_name"
+// instead of "mcp_client_id". The function looks up each MCP client by name and sets the
+// corresponding MCPClientID. Configs with unresolvable names are logged and skipped.
+// Returns the filtered slice containing only configs with valid MCPClientIDs.
+func resolveMCPConfigClientIDs(
+	ctx context.Context,
+	store configstore.ConfigStore,
+	mcpConfigs []configstoreTables.TableVirtualKeyMCPConfig,
+	virtualKeyID string,
+) []configstoreTables.TableVirtualKeyMCPConfig {
+	if store == nil || len(mcpConfigs) == 0 {
+		return mcpConfigs
+	}
+
+	resolvedConfigs := make([]configstoreTables.TableVirtualKeyMCPConfig, 0, len(mcpConfigs))
+
+	for i := range mcpConfigs {
+		mc := &mcpConfigs[i]
+
+		// If MCPClientID is already set (e.g., from database or direct construction), keep it
+		if mc.MCPClientID != 0 {
+			resolvedConfigs = append(resolvedConfigs, *mc)
+			continue
+		}
+
+		// If MCPClientName is set (from config.json parsing), resolve it to MCPClientID
+		if mc.MCPClientName != "" {
+			mcpClient, err := store.GetMCPClientByName(ctx, mc.MCPClientName)
+			if err != nil {
+				logger.Warn("virtual key %s: failed to resolve MCP client '%s': %v (skipping this MCP config)",
+					virtualKeyID, mc.MCPClientName, err)
+				continue
+			}
+			if mcpClient == nil {
+				logger.Warn("virtual key %s: MCP client '%s' not found (skipping this MCP config)",
+					virtualKeyID, mc.MCPClientName)
+				continue
+			}
+			mc.MCPClientID = mcpClient.ID
+			resolvedConfigs = append(resolvedConfigs, *mc)
+			continue
+		}
+
+		// Neither MCPClientID nor MCPClientName is set - skip this config
+		logger.Warn("virtual key %s: MCP config has neither mcp_client_id nor mcp_client_name set (skipping)",
+			virtualKeyID)
+	}
+
+	return resolvedConfigs
 }
 
 // reconcileVirtualKeyAssociations reconciles ProviderConfigs and MCPConfigs associations
