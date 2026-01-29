@@ -74,7 +74,7 @@ export function MCPLogsDataTable({
 	const totalPages = Math.ceil(totalItems / pagination.limit);
 	const startItem = pagination.offset + 1;
 	const endItem = Math.min(pagination.offset + pagination.limit, totalItems);
-	
+
 	// Display values that handle the case when totalItems is 0
 	const startItemDisplay = totalItems === 0 ? 0 : startItem;
 	const endItemDisplay = totalItems === 0 ? 0 : endItem;
@@ -89,7 +89,7 @@ export function MCPLogsDataTable({
 
 	return (
 		<div className="space-y-2">
-			<MCPLogFilters filters={filters} onFiltersChange={onFiltersChange} liveEnabled={liveEnabled} onLiveToggle={onLiveToggle} fetchLogs={fetchLogs} fetchStats={fetchStats} />
+			<MCPLogFilters filters={filters} onFiltersChange={onFiltersChange} liveEnabled={liveEnabled} onLiveToggle={onLiveToggle} />
 			<div className="max-h-[calc(100vh-16.5rem)] rounded-sm border">
 				<Table containerClassName="max-h-[calc(100vh-16.5rem)]">
 					<TableHeader className="px-2">

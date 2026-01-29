@@ -206,18 +206,18 @@ func TransportInterceptor(ctx *schemas.BifrostContext, url string, headers map[s
 	return headers, body, nil
 }
 
-// PreLLMHook is called before the request is sent to the provider
+// PreHook is called before the request is sent to the provider
 // This is where you can modify requests or short-circuit the flow
-func PreLLMHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.LLMPluginShortCircuit, error) {
-	fmt.Println("PreLLMHook called")
+func PreHook(ctx *schemas.BifrostContext, req *schemas.BifrostRequest) (*schemas.BifrostRequest, *schemas.PluginShortCircuit, error) {
+	fmt.Println("PreHook called")
 	// Modify the request or return a short-circuit to skip provider call
 	return req, nil, nil
 }
 
-// PostLLMHook is called after receiving a response from the provider
+// PostHook is called after receiving a response from the provider
 // This is where you can modify responses or handle errors
-func PostLLMHook(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
-	fmt.Println("PostLLMHook called")
+func PostHook(ctx *schemas.BifrostContext, resp *schemas.BifrostResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostResponse, *schemas.BifrostError, error) {
+	fmt.Println("PostHook called")
 	// Modify the response or error before returning to caller
 	return resp, bifrostErr, nil
 }
@@ -547,16 +547,16 @@ HTTPTransportPostHook called
   <Tab title="v1.4.x+ (streaming)">
 ```
 HTTPTransportPreHook called
-PreHook called
-PostHook called
+PreLLMHook called
+PostLLMHook called
 HTTPTransportStreamChunkHook called (per chunk)
 ```
   </Tab>
   <Tab title="v1.3.x">
 ```
 TransportInterceptor called
-PreLLMHook called
-PostLLMHook called
+PreHook called
+PostHook called
 ```
   </Tab>
 </Tabs>
