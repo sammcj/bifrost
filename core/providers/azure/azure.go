@@ -470,7 +470,7 @@ func (provider *AzureProvider) ChatCompletion(ctx *schemas.BifrostContext, key s
 				}
 				return reqBody, nil
 			} else {
-				return openai.ToOpenAIChatRequest(request), nil
+				return openai.ToOpenAIChatRequest(ctx, request), nil
 			}
 		},
 		provider.GetProviderKey())

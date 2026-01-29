@@ -81,6 +81,7 @@ var StandardProviders = []ModelProvider{
 	Elevenlabs,
 	HuggingFace,
 	Nebius,
+	XAI,
 }
 
 // RequestType represents the type of request being made to a provider.
@@ -167,7 +168,8 @@ const (
 	BifrostContextKeyIsEnterprise                        BifrostContextKey = "is-enterprise"                                    // bool (set by bifrost - DO NOT SET THIS MANUALLY))
 	BifrostContextKeyAvailableProviders                  BifrostContextKey = "available-providers"                              // []ModelProvider (set by bifrost - DO NOT SET THIS MANUALLY))
 	BifrostContextKeyRawRequestResponseForLogging        BifrostContextKey = "bifrost-raw-request-response-for-logging"         // bool (set by bifrost - DO NOT SET THIS MANUALLY))
-	BifrostContextKeyRetryDBFetch                       BifrostContextKey = "bifrost-retry-db-fetch"                            // bool (set by bifrost - DO NOT SET THIS MANUALLY))
+	BifrostContextKeyRetryDBFetch                        BifrostContextKey = "bifrost-retry-db-fetch"                           // bool (set by bifrost - DO NOT SET THIS MANUALLY))
+	BifrostContextKeyIsCustomProvider                    BifrostContextKey = "bifrost-is-custom-provider"                       // bool (set by bifrost - DO NOT SET THIS MANUALLY))
 )
 
 // NOTE: for custom plugin implementation dealing with streaming short circuit,

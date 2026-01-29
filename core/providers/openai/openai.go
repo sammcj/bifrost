@@ -692,7 +692,7 @@ func HandleOpenAIChatCompletionRequest(
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToOpenAIChatRequest(request), nil },
+		func() (any, error) { return ToOpenAIChatRequest(ctx, request), nil },
 		providerName)
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -826,7 +826,7 @@ func HandleOpenAIChatCompletionStreaming(
 			if customRequestConverter != nil {
 				return customRequestConverter(request)
 			}
-			reqBody := ToOpenAIChatRequest(request)
+			reqBody := ToOpenAIChatRequest(ctx, request)
 			if reqBody != nil {
 				reqBody.Stream = schemas.Ptr(true)
 				reqBody.StreamOptions = &schemas.ChatStreamOptions{

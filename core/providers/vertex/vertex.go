@@ -329,7 +329,7 @@ func (provider *VertexProvider) ChatCompletion(ctx *schemas.BifrostContext, key 
 				}
 			} else {
 				// Use centralized OpenAI converter for non-Claude models
-				reqBody := openai.ToOpenAIChatRequest(request)
+				reqBody := openai.ToOpenAIChatRequest(ctx, request)
 				if reqBody == nil {
 					return nil, fmt.Errorf("chat completion input is not provided")
 				}
