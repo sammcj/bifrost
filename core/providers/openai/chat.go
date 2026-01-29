@@ -21,7 +21,7 @@ func (request *OpenAIChatRequest) ToBifrostChatRequest(ctx *schemas.BifrostConte
 }
 
 // ToOpenAIChatRequest converts a Bifrost chat completion request to OpenAI format
-func ToOpenAIChatRequest(bifrostReq *schemas.BifrostChatRequest) *OpenAIChatRequest {
+func ToOpenAIChatRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.BifrostChatRequest) *OpenAIChatRequest {
 	if bifrostReq == nil || bifrostReq.Input == nil {
 		return nil
 	}
@@ -65,6 +65,10 @@ func ToOpenAIChatRequest(bifrostReq *schemas.BifrostChatRequest) *OpenAIChatRequ
 		}
 		return openaiReq
 	default:
+		// Check if provider is a custom provider
+		if isCustomProvider, ok := ctx.Value(schemas.BifrostContextKeyIsCustomProvider).(bool); ok && isCustomProvider {
+			return openaiReq
+		}
 		openaiReq.filterOpenAISpecificParameters()
 		return openaiReq
 	}

@@ -1,1 +1,2 @@
 - feat: added support for image editing and variations
+- fix: skip OpenAI parameter filtering for custom providers
