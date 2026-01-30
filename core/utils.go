@@ -96,6 +96,20 @@ func canProviderKeyValueBeEmpty(providerKey schemas.ModelProvider) bool {
 	return providerKey == schemas.Vertex || providerKey == schemas.Bedrock
 }
 
+// hasAzureEntraIDCredentials checks if an Azure key has Entra ID (Service Principal) credentials configured.
+// This allows Azure keys to have an empty API key value when using Entra ID authentication.
+func hasAzureEntraIDCredentials(providerType schemas.ModelProvider, key schemas.Key) bool {
+	if providerType != schemas.Azure || key.AzureKeyConfig == nil {
+		return false
+	}
+	return key.AzureKeyConfig.ClientID != nil &&
+		key.AzureKeyConfig.ClientSecret != nil &&
+		key.AzureKeyConfig.TenantID != nil &&
+		key.AzureKeyConfig.ClientID.GetValue() != "" &&
+		key.AzureKeyConfig.ClientSecret.GetValue() != "" &&
+		key.AzureKeyConfig.TenantID.GetValue() != ""
+}
+
 func isKeySkippingAllowed(providerKey schemas.ModelProvider) bool {
 	return providerKey != schemas.Azure && providerKey != schemas.Bedrock && providerKey != schemas.Vertex
 }

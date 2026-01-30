@@ -41,7 +41,7 @@ export default function MCPLogsPage() {
 	const initialDefaults = useRef(dateUtils.getDefaultTimeRange());
 
 	// Memoize default time range to prevent recalculation on every render
-	// This is crucial to avoid triggering refetches when the sheet opens/closes
+	// This is crucial to avoid triggering re-fetches when the sheet opens/closes
 	const defaultTimeRange = useMemo(() => dateUtils.getDefaultTimeRange(), []);
 
 	// Get fresh default time range for refresh logic
@@ -468,7 +468,7 @@ export default function MCPLogsPage() {
 					}
 				/>
 			) : (
-				<div className="mx-auto max-w-7xl space-y-6">
+				<div className="mx-auto w-full space-y-6">
 					<div className="space-y-6">
 						{/* Quick Stats */}
 						<div className="grid grid-cols-1 gap-4 md:grid-cols-4">
