@@ -64,6 +64,7 @@ type AnthropicMessageRequest struct {
 	MCPServers    []AnthropicMCPServer `json:"mcp_servers,omitempty"` // This feature requires the beta header: "anthropic-beta": "mcp-client-2025-04-04"
 	Thinking      *AnthropicThinking   `json:"thinking,omitempty"`
 	OutputFormat  interface{}          `json:"output_format,omitempty"` // This feature requires the beta header: "anthropic-beta": "structured-outputs-2025-11-13" and currently only supported for Claude Sonnet 4.5 and Claude Opus 4.1
+	ServiceTier   *string             `json:"service_tier,omitempty"`  // "auto" or "standard_only"
 
 	// Extra params for advanced use cases
 	ExtraParams map[string]interface{} `json:"extra_params,omitempty"`
@@ -103,6 +104,7 @@ var anthropicMessageRequestKnownFields = map[string]bool{
 	"mcp_servers":    true,
 	"thinking":       true,
 	"output_format":  true,
+	"service_tier":   true,
 	"extra_params":   true,
 	"fallbacks":      true,
 }
@@ -396,6 +398,7 @@ type AnthropicToolComputerUse struct {
 type AnthropicToolWebSearchUserLocation struct {
 	Type     *string `json:"type,omitempty"` // "approximate"
 	City     *string `json:"city,omitempty"`
+	Region   *string `json:"region,omitempty"`
 	Country  *string `json:"country,omitempty"`
 	Timezone *string `json:"timezone,omitempty"`
 }
@@ -503,6 +506,8 @@ type AnthropicUsage struct {
 	CacheReadInputTokens     int                         `json:"cache_read_input_tokens"`
 	CacheCreation            AnthropicUsageCacheCreation `json:"cache_creation"`
 	OutputTokens             int                         `json:"output_tokens"`
+	ServerToolUse            *int                        `json:"server_tool_use,omitempty"` // Number of server tool use requests (e.g., web search)
+	ServiceTier              *string                     `json:"service_tier,omitempty"`    // "standard", "priority", or "batch"
 }
 
 type AnthropicUsageCacheCreation struct {

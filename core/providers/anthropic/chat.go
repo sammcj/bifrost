@@ -177,6 +177,9 @@ func ToAnthropicChatRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.Bif
 				}
 			}
 		}
+
+		// Convert service tier
+		anthropicReq.ServiceTier = bifrostReq.Params.ServiceTier
 	}
 
 	// Convert messages - group consecutive tool messages into single user messages
@@ -513,6 +516,10 @@ func (response *AnthropicMessageResponse) ToBifrostChatResponse(ctx *schemas.Bif
 			},
 			TotalTokens: response.Usage.InputTokens + response.Usage.OutputTokens,
 		}
+		// Forward service tier from usage to response
+		if response.Usage.ServiceTier != nil {
+			bifrostResponse.ServiceTier = response.Usage.ServiceTier
+		}
 	}
 
 	return bifrostResponse
@@ -544,6 +551,10 @@ func ToAnthropicChatResponse(bifrostResp *schemas.BifrostChatResponse) *Anthropi
 		}
 		if bifrostResp.Usage.CompletionTokensDetails != nil && bifrostResp.Usage.CompletionTokensDetails.CachedTokens > 0 {
 			anthropicResp.Usage.CacheCreationInputTokens = bifrostResp.Usage.CompletionTokensDetails.CachedTokens
+		}
+		// Forward service tier
+		if bifrostResp.ServiceTier != nil {
+			anthropicResp.Usage.ServiceTier = bifrostResp.ServiceTier
 		}
 	}
 

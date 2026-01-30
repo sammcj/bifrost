@@ -508,6 +508,7 @@ func TestConvertChatResponseFormatToAnthropicOutputFormat(t *testing.T) {
 			}(),
 			expected: map[string]interface{}{
 				"type": "json_schema",
+				"name": "TestSchema",
 				"schema": map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
