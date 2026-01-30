@@ -16,7 +16,7 @@ concurrency:
 jobs:
   # Check if pipeline should be skipped based on first line of commit message
   check-skip:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
     outputs:
@@ -39,7 +39,7 @@ jobs:
   publish:
     needs: [check-skip]
     if: needs.check-skip.outputs.should-skip != 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write      
       id-token: write # Required for npm provenance

@@ -14,7 +14,7 @@ permissions:
 jobs:
   # Check if pipeline should be skipped based on first line of commit message
   check-skip:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       should-skip: ${{ steps.check.outputs.should-skip }}
     steps:
@@ -36,7 +36,7 @@ jobs:
     needs: [check-skip]
     if: needs.check-skip.outputs.should-skip != 'true'
     name: Snyk Open Source (deps)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,7 +74,7 @@ jobs:
     needs: [check-skip]
     if: needs.check-skip.outputs.should-skip != 'true'
     name: Snyk Code (SAST)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@v4
