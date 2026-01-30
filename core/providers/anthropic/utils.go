@@ -1036,6 +1036,17 @@ func convertChatResponseFormatToAnthropicOutputFormat(responseFormat *interface{
 		"type": formatType,
 	}
 
+	// Forward name, description, and strict from the json_schema object
+	if name, ok := jsonSchemaObj["name"].(string); ok && name != "" {
+		outputFormat["name"] = name
+	}
+	if description, ok := jsonSchemaObj["description"].(string); ok && description != "" {
+		outputFormat["description"] = description
+	}
+	if strict, ok := jsonSchemaObj["strict"].(bool); ok {
+		outputFormat["strict"] = strict
+	}
+
 	if schema, ok := jsonSchemaObj["schema"].(map[string]interface{}); ok {
 		// Normalize the schema to handle type arrays like ["string", "null"]
 		normalizedSchema := normalizeSchemaForAnthropic(schema)

@@ -2086,6 +2086,9 @@ func ToAnthropicResponsesRequest(ctx *schemas.BifrostContext, bifrostReq *schema
 				}
 			}
 		}
+		// Convert service tier
+		anthropicReq.ServiceTier = bifrostReq.Params.ServiceTier
+
 		if bifrostReq.Params.ExtraParams != nil {
 			topK, ok := schemas.SafeExtractIntPointer(bifrostReq.Params.ExtraParams["top_k"])
 			if ok {
