@@ -21,6 +21,13 @@ func (cr *BifrostChatRequest) GetRawRequestBody() []byte {
 	return cr.RawRequestBody
 }
 
+func (cr *BifrostChatRequest) GetExtraParams() map[string]interface{} {
+	if cr.Params == nil {
+		return make(map[string]interface{}, 0)
+	}
+	return cr.Params.ExtraParams
+}
+
 // BifrostChatResponse represents the complete result from a chat completion request.
 type BifrostChatResponse struct {
 	ID                string                     `json:"id"`
