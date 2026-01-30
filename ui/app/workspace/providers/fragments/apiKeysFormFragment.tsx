@@ -62,6 +62,7 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 
 	// Detect auth type from existing form values when editing
 	useEffect(() => {
+		if (form.formState.isDirty) return
 		if (isAzure) {
 			const clientId = form.getValues('key.azure_key_config.client_id')?.value
 			const clientSecret = form.getValues('key.azure_key_config.client_secret')?.value
@@ -73,6 +74,7 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 	}, [isAzure, form])
 
 	useEffect(() => {
+		if (form.formState.isDirty) return
 		if (isBedrock) {
 			const accessKey = form.getValues('key.bedrock_key_config.access_key')?.value
 			const secretKey = form.getValues('key.bedrock_key_config.secret_key')?.value
@@ -208,7 +210,18 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 					<Separator className="my-6" />
 					<div className="space-y-2">
 						<FormLabel>Authentication Method</FormLabel>
-						<Tabs value={azureAuthType} onValueChange={(v) => setAzureAuthType(v as 'api_key' | 'entra_id')}>
+						<Tabs value={azureAuthType} onValueChange={(v) => {
+							setAzureAuthType(v as 'api_key' | 'entra_id')
+							if (v === 'entra_id') {
+								// Clear API key when switching to Entra ID
+								form.setValue('key.value', undefined)
+							} else {
+								// Clear Entra ID fields when switching to API Key
+								form.setValue('key.azure_key_config.client_id', undefined)
+								form.setValue('key.azure_key_config.client_secret', undefined)
+								form.setValue('key.azure_key_config.tenant_id', undefined)
+							}
+						}}>
 							<TabsList className="grid w-full grid-cols-2">
 								<TabsTrigger value="api_key">API Key</TabsTrigger>
 								<TabsTrigger value="entra_id">Entra ID (Service Principal)</TabsTrigger>
@@ -448,7 +461,15 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 					<Separator className="my-6" />
 					<div className="space-y-2">
 						<FormLabel>Authentication Method</FormLabel>
-						<Tabs value={bedrockAuthType} onValueChange={(v) => setBedrockAuthType(v as 'iam_role' | 'explicit')}>
+						<Tabs value={bedrockAuthType} onValueChange={(v) => {
+							setBedrockAuthType(v as 'iam_role' | 'explicit')
+							if (v === 'iam_role') {
+								// Clear explicit credentials when switching to IAM Role
+								form.setValue('key.bedrock_key_config.access_key', undefined)
+								form.setValue('key.bedrock_key_config.secret_key', undefined)
+								form.setValue('key.bedrock_key_config.session_token', undefined)
+							}
+						}}>
 							<TabsList className="grid w-full grid-cols-2">
 								<TabsTrigger value="iam_role">IAM Role (Inherited)</TabsTrigger>
 								<TabsTrigger value="explicit">Explicit Credentials</TabsTrigger>
