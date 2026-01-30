@@ -102,14 +102,23 @@ func (request *OpenAIChatRequest) filterOpenAISpecificParameters() {
 		}
 	}
 
+	if request.ChatParameters.Prediction != nil {
+		request.ChatParameters.Prediction = nil
+	}
 	if request.ChatParameters.PromptCacheKey != nil {
 		request.ChatParameters.PromptCacheKey = nil
+	}
+	if request.ChatParameters.PromptCacheRetention != nil {
+		request.ChatParameters.PromptCacheRetention = nil
 	}
 	if request.ChatParameters.Verbosity != nil {
 		request.ChatParameters.Verbosity = nil
 	}
 	if request.ChatParameters.Store != nil {
 		request.ChatParameters.Store = nil
+	}
+	if request.ChatParameters.WebSearchOptions != nil {
+		request.ChatParameters.WebSearchOptions = nil
 	}
 }
 
