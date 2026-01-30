@@ -154,6 +154,21 @@ Bifrost integrates with leading guardrail providers to offer comprehensive prote
 - Custom policy templates
 - Integration with existing safety workflows
 
+### Additional Guardrail Providers
+
+Beyond the natively integrated providers above, the following guardrail solutions are available in the ecosystem:
+
+- **Guardrails AI** - Open-source framework with validators for hallucination prevention, content moderation, and PII detection
+- **Lakera (Lakera Guard)** - Enterprise security platform for prompt injection, jailbreak, and data leakage protection
+- **Aporia** - Multi-modal guardrails (audio, vision, text) with 20+ pre-configured policies
+- **Lasso Security** - Real-time GenAI security with contextual data protection and custom policy wizard
+- **PromptArmor** - LLM security and compliance platform
+- **WhyLabs** - LLM security and observability platform with real-time guardrails and monitoring
+- **CalypsoAI** - Model-agnostic AI security platform with customizable scanners
+- **NeuralTrust** - LLM firewall specializing in prompt injection prevention
+- **Vigil** - Open-source prompt-level security tool
+- **Confident AI** - Red-teaming platform with LLM guardrail capabilities (DeepTeam)
+
 ---
 
 ## Guardrail Rules
@@ -389,7 +404,7 @@ request.model.startsWith("gpt-4") && request.messages.exists(m, m.role == "user"
 Rules can be linked to multiple profiles for comprehensive validation:
 
 <Frame>
-  <img src="/media/guardrails/rule-profile-link.png" alt="Rule configuration showing linked profiles" />
+  <img src="/media/guardrails/query-creation.png" alt="Rule configuration showing linked profiles" />
 </Frame>
 
 **Best Practices:**
@@ -405,7 +420,7 @@ Rules can be linked to multiple profiles for comprehensive validation:
 Profiles are reusable configurations for external guardrail providers. Each profile contains provider-specific settings including credentials, endpoints, and detection thresholds.
 
 <Frame>
-  <img src="/media/guardrails/profiles-list.png" alt="Guardrail profiles list showing configured providers" />
+  <img src="/media/guardrails/provider-aws-create.png" alt="Guardrail profiles list showing configured providers" />
 </Frame>
 
 ### Profile Properties
