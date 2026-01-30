@@ -953,6 +953,38 @@ When enabled, the raw provider request appears in `extra_fields.raw_request`:
 You can enable both `send_back_raw_request` and `send_back_raw_response` together to see the complete request-response cycle for debugging purposes.
 </Tip>
 
+### Passthrough Extra Parameters
+
+Enable passthrough mode for extra parameters. When enabled, any parameters in the `extra_params` field (or provider-specific extra parameter fields) will be merged directly into the request sent to the provider, bypassing Bifrost's parameter filtering.
+
+```bash
+curl --location 'http://localhost:8080/v1/chat/completions' \
+--header 'Content-Type: application/json' \
+--header 'x-bf-passthrough-extra-params: true' \
+--data '{
+    "model": "openai/gpt-4o-mini",
+    "messages": [
+        {"role": "user", "content": "Hello!"}
+    ],
+    "extra_params": {
+        "custom_param": "value",
+        "another_param": 123,
+        "nested_param": {
+            "nested_key": "nested_value"
+        }
+    }
+}'
+```
+
+When enabled, the extra parameters are merged into the JSON request body sent to the provider. This allows you to pass provider-specific parameters that Bifrost doesn't natively support.
+
+<Note>
+- This feature only works for JSON requests, not multipart/form-data requests
+- Parameters already handled by Bifrost (like `addWatermark`, `enhancePrompt`) are not duplicated - they appear in their proper location
+- Nested parameters (e.g., `parameters.custom_field`) are merged recursively with existing nested structures
+- See [Supported Headers](../../providers/supported-headers) for a complete list of all Bifrost headers
+</Note>
+
 ## Provider-Specific Authentication
 
 Enterprise cloud providers require additional configuration beyond API keys. Configure Azure, AWS Bedrock, and Google Vertex with platform-specific authentication details.
