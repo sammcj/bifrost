@@ -289,7 +289,9 @@ func (provider *NebiusProvider) ImageGeneration(ctx *schemas.BifrostContext, key
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return provider.ToNebiusImageGenerationRequest(request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return provider.ToNebiusImageGenerationRequest(request)
+		},
 		providerName)
 	if bifrostErr != nil {
 		return nil, bifrostErr

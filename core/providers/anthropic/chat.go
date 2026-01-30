@@ -25,6 +25,7 @@ func ToAnthropicChatRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.Bif
 
 	// Convert parameters
 	if bifrostReq.Params != nil {
+		anthropicReq.ExtraParams = bifrostReq.Params.ExtraParams
 		if bifrostReq.Params.MaxCompletionTokens != nil {
 			anthropicReq.MaxTokens = *bifrostReq.Params.MaxCompletionTokens
 		}
@@ -34,7 +35,9 @@ func ToAnthropicChatRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.Bif
 		anthropicReq.StopSequences = bifrostReq.Params.Stop
 		topK, ok := schemas.SafeExtractIntPointer(bifrostReq.Params.ExtraParams["top_k"])
 		if ok {
+			delete(anthropicReq.ExtraParams, "top_k")
 			anthropicReq.TopK = topK
+
 		}
 		if bifrostReq.Params.ResponseFormat != nil {
 			// Vertex doesn't support native structured outputs, so convert to tool

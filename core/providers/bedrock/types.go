@@ -36,10 +36,16 @@ type BedrockTextCompletionRequest struct {
 	StopSequences []string `json:"stop_sequences,omitempty"` // Stop sequences (Anthropic format)
 
 	// Messages API parameters (Anthropic Claude 3)
-	Messages         []BedrockMessage `json:"messages,omitempty"`
-	System           interface{}      `json:"system,omitempty"`
-	AnthropicVersion string           `json:"anthropic_version,omitempty"`
-	Stream           bool             `json:"-"` // Whether streaming is requested (internal)
+	Messages         []BedrockMessage       `json:"messages,omitempty"`
+	System           interface{}            `json:"system,omitempty"`
+	AnthropicVersion string                 `json:"anthropic_version,omitempty"`
+	Stream           bool                   `json:"-"` // Whether streaming is requested (internal)
+	ExtraParams      map[string]interface{} `json:"-"`
+}
+
+// GetExtraParams implements the RequestBodyWithExtraParams interface
+func (r *BedrockTextCompletionRequest) GetExtraParams() map[string]interface{} {
+	return r.ExtraParams
 }
 
 // IsStreamingRequested implements the StreamingRequest interface
@@ -68,10 +74,15 @@ type BedrockConverseRequest struct {
 	Stream                            bool                             `json:"-"`                                           // Whether streaming is requested (internal, not in JSON)
 
 	// Extra params for advanced use cases
-	ExtraParams map[string]interface{} `json:"extra_params,omitempty"`
+	ExtraParams map[string]interface{} `json:"-"`
 
 	// Bifrost specific field (only parsed when converting from Provider -> Bifrost request)
 	Fallbacks []string `json:"fallbacks,omitempty"`
+}
+
+// GetExtraParams implements the RequestBodyWithExtraParams interface
+func (r *BedrockConverseRequest) GetExtraParams() map[string]interface{} {
+	return r.ExtraParams
 }
 
 // IsStreamingRequested implements the StreamingRequest interface
@@ -558,9 +569,15 @@ type BedrockMetadataEvent struct {
 
 // BedrockTitanEmbeddingRequest represents a Bedrock Titan embedding request
 type BedrockTitanEmbeddingRequest struct {
-	InputText string `json:"inputText"` // Required: Text to embed
+	InputText   string                 `json:"inputText"` // Required: Text to embed
+	ExtraParams map[string]interface{} `json:"-"`
 	// Note: Titan models have fixed dimensions and don't support the dimensions parameter
 	// ExtraParams can be used for any additional model-specific parameters
+}
+
+// GetExtraParams implements the RequestBodyWithExtraParams interface
+func (req *BedrockTitanEmbeddingRequest) GetExtraParams() map[string]interface{} {
+	return req.ExtraParams
 }
 
 // BedrockTitanEmbeddingResponse represents a Bedrock Titan embedding response
@@ -580,6 +597,12 @@ type BedrockImageGenerationRequest struct {
 	TaskType              *string                   `json:"taskType"`              // Should be "TEXT_IMAGE"
 	TextToImageParams     *BedrockTextToImageParams `json:"textToImageParams"`     // Parameters for text-to-image
 	ImageGenerationConfig *ImageGenerationConfig    `json:"imageGenerationConfig"` // Image generation config
+	ExtraParams           map[string]interface{}    `json:"-"`
+}
+
+// GetExtraParams implements the RequestBodyWithExtraParams interface
+func (req *BedrockImageGenerationRequest) GetExtraParams() map[string]interface{} {
+	return req.ExtraParams
 }
 
 type BedrockTextToImageParams struct {
@@ -602,6 +625,12 @@ type BedrockImageVariationRequest struct {
 	TaskType              *string                      `json:"taskType"`              // Should be "IMAGE_VARIATION"
 	ImageVariationParams  *BedrockImageVariationParams `json:"imageVariationParams"`  // Parameters for image variation
 	ImageGenerationConfig *ImageGenerationConfig       `json:"imageGenerationConfig"` // Image generation config (reused)
+	ExtraParams           map[string]interface{}       `json:"-"`
+}
+
+// GetExtraParams implements the RequestBodyWithExtraParams interface
+func (req *BedrockImageVariationRequest) GetExtraParams() map[string]interface{} {
+	return req.ExtraParams
 }
 
 type BedrockImageVariationParams struct {
@@ -618,6 +647,12 @@ type BedrockImageEditRequest struct {
 	OutPaintingParams       *BedrockOutPaintingParams       `json:"outPaintingParams,omitempty"`
 	BackgroundRemovalParams *BedrockBackgroundRemovalParams `json:"backgroundRemovalParams,omitempty"`
 	ImageGenerationConfig   *ImageGenerationConfig          `json:"imageGenerationConfig,omitempty"` // Used by INPAINTING and OUTPAINTING
+	ExtraParams             map[string]interface{}          `json:"-"`
+}
+
+// GetExtraParams implements the RequestBodyWithExtraParams interface
+func (req *BedrockImageEditRequest) GetExtraParams() map[string]interface{} {
+	return req.ExtraParams
 }
 
 type BedrockInPaintingParams struct {

@@ -2090,11 +2090,14 @@ func ToAnthropicResponsesRequest(ctx *schemas.BifrostContext, bifrostReq *schema
 		anthropicReq.ServiceTier = bifrostReq.Params.ServiceTier
 
 		if bifrostReq.Params.ExtraParams != nil {
+			anthropicReq.ExtraParams = bifrostReq.Params.ExtraParams
 			topK, ok := schemas.SafeExtractIntPointer(bifrostReq.Params.ExtraParams["top_k"])
 			if ok {
+				delete(anthropicReq.ExtraParams, "top_k")
 				anthropicReq.TopK = topK
 			}
 			if stop, ok := schemas.SafeExtractStringSlice(bifrostReq.Params.ExtraParams["stop"]); ok {
+				delete(anthropicReq.ExtraParams, "stop")
 				anthropicReq.StopSequences = stop
 			}
 		}

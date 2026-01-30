@@ -403,6 +403,7 @@ func ToGeminiImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerationRe
 	geminiReq := &GeminiGenerationRequest{
 		Model: bifrostReq.Model,
 	}
+	geminiReq.ExtraParams = bifrostReq.Params.ExtraParams
 
 	// Set response modalities to indicate this is an image generation request
 	geminiReq.GenerationConfig.ResponseModalities = []Modality{ModalityImage}
@@ -414,10 +415,12 @@ func ToGeminiImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerationRe
 		if bifrostReq.Params.ExtraParams != nil {
 			// Safety settings - support both camelCase (canonical) and snake_case (legacy) keys
 			if safetySettings, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "safetySettings"); ok {
+				delete(geminiReq.ExtraParams, "safetySettings")
 				if settings, ok := SafeExtractSafetySettings(safetySettings); ok {
 					geminiReq.SafetySettings = settings
 				}
 			} else if safetySettings, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "safety_settings"); ok {
+				delete(geminiReq.ExtraParams, "safety_settings")
 				if settings, ok := SafeExtractSafetySettings(safetySettings); ok {
 					geminiReq.SafetySettings = settings
 				}
@@ -425,8 +428,10 @@ func ToGeminiImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerationRe
 
 			// Cached content - support both camelCase (canonical) and snake_case (legacy) keys
 			if cachedContent, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["cachedContent"]); ok {
+				delete(geminiReq.ExtraParams, "cachedContent")
 				geminiReq.CachedContent = cachedContent
 			} else if cachedContent, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["cached_content"]); ok {
+				delete(geminiReq.ExtraParams, "cached_content")
 				geminiReq.CachedContent = cachedContent
 			}
 
@@ -434,6 +439,7 @@ func ToGeminiImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerationRe
 			if labels, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "labels"); ok {
 				switch m := labels.(type) {
 				case map[string]string:
+					delete(geminiReq.ExtraParams, "labels")
 					geminiReq.Labels = m
 				case map[string]interface{}:
 					out := make(map[string]string, len(m))
@@ -443,6 +449,7 @@ func ToGeminiImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerationRe
 						}
 					}
 					if len(out) > 0 {
+						delete(geminiReq.ExtraParams, "labels")
 						geminiReq.Labels = out
 					}
 				}
@@ -534,34 +541,42 @@ func ToImagenImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerationRe
 
 		// Handle extra parameters for Imagen-specific fields
 		if bifrostReq.Params.ExtraParams != nil {
+			req.ExtraParams = bifrostReq.Params.ExtraParams
 			if addWatermark, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["addWatermark"]); ok {
+				delete(req.ExtraParams, "addWatermark")
 				req.Parameters.AddWatermark = addWatermark
 			}
 			if sampleImageSize, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["sampleImageSize"]); ok {
+				delete(req.ExtraParams, "sampleImageSize")
 				req.Parameters.SampleImageSize = &sampleImageSize
 			}
 
 			if aspectRatio, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["aspectRatio"]); ok {
+				delete(req.ExtraParams, "aspectRatio")
 				req.Parameters.AspectRatio = &aspectRatio
 			}
 
 			if personGeneration, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["personGeneration"]); ok {
+				delete(req.ExtraParams, "personGeneration")
 				req.Parameters.PersonGeneration = &personGeneration
 			}
 
 			// Map language from ExtraParams
 			if language, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["language"]); ok {
+				delete(req.ExtraParams, "language")
 				req.Parameters.Language = &language
 			}
 
 			// Map enhancePrompt from ExtraParams
 			if enhancePrompt, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["enhancePrompt"]); ok {
+				delete(req.ExtraParams, "enhancePrompt")
 				req.Parameters.EnhancePrompt = enhancePrompt
 			}
 
 			// Map safetySettings from ExtraParams
 			if safetySettings, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "safetySettings"); ok {
 				if settings, ok := SafeExtractSafetySettings(safetySettings); ok {
+					delete(req.ExtraParams, "safetySettings")
 					req.Parameters.SafetySettings = settings
 				}
 			}
@@ -769,21 +784,23 @@ func ToGeminiImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) *Gemi
 	geminiReq := &GeminiGenerationRequest{
 		Model: bifrostReq.Model,
 	}
-
 	// Set response modalities to indicate this is an image generation request
 	geminiReq.GenerationConfig.ResponseModalities = []Modality{ModalityImage}
 
 	// Convert parameters to generation config
 	if bifrostReq.Params != nil {
+		geminiReq.ExtraParams = bifrostReq.Params.ExtraParams
 
 		// Handle extra parameters
 		if bifrostReq.Params.ExtraParams != nil {
 			// Safety settings - support both camelCase (canonical) and snake_case (legacy) keys
 			if safetySettings, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "safetySettings"); ok {
+				delete(geminiReq.ExtraParams, "safetySettings")
 				if settings, ok := SafeExtractSafetySettings(safetySettings); ok {
 					geminiReq.SafetySettings = settings
 				}
 			} else if safetySettings, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "safety_settings"); ok {
+				delete(geminiReq.ExtraParams, "safety_settings")
 				if settings, ok := SafeExtractSafetySettings(safetySettings); ok {
 					geminiReq.SafetySettings = settings
 				}
@@ -791,8 +808,10 @@ func ToGeminiImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) *Gemi
 
 			// Cached content - support both camelCase (canonical) and snake_case (legacy) keys
 			if cachedContent, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["cachedContent"]); ok {
+				delete(geminiReq.ExtraParams, "cachedContent")
 				geminiReq.CachedContent = cachedContent
 			} else if cachedContent, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["cached_content"]); ok {
+				delete(geminiReq.ExtraParams, "cached_content")
 				geminiReq.CachedContent = cachedContent
 			}
 
@@ -800,6 +819,7 @@ func ToGeminiImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) *Gemi
 			if labels, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "labels"); ok {
 				switch m := labels.(type) {
 				case map[string]string:
+					delete(geminiReq.ExtraParams, "labels")
 					geminiReq.Labels = m
 				case map[string]interface{}:
 					out := make(map[string]string, len(m))
@@ -809,6 +829,7 @@ func ToGeminiImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) *Gemi
 						}
 					}
 					if len(out) > 0 {
+						delete(geminiReq.ExtraParams, "labels")
 						geminiReq.Labels = out
 					}
 				}
@@ -952,6 +973,10 @@ func ToImagenImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) *Gemi
 		return nil
 	}
 
+	req := &GeminiImagenRequest{
+		Parameters: GeminiImagenParameters{},
+	}
+
 	var refImages []ImagenReferenceImage
 	refID := 1
 
@@ -972,7 +997,7 @@ func ToImagenImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) *Gemi
 		var hasMaskData bool
 		var dilation *float64
 		var maskClasses []int
-
+		req.ExtraParams = bifrostReq.Params.ExtraParams
 		// Check if user provided a mask
 		if len(bifrostReq.Params.Mask) > 0 {
 			hasMaskData = true
@@ -983,6 +1008,7 @@ func ToImagenImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) *Gemi
 		if bifrostReq.Params.ExtraParams != nil {
 			// Allow override or specification of mask mode
 			if v, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["maskMode"]); ok {
+				delete(req.ExtraParams, "maskMode")
 				maskMode = v
 			}
 
@@ -990,12 +1016,14 @@ func ToImagenImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) *Gemi
 			if v, ok := schemas.SafeExtractFloat64Pointer(bifrostReq.Params.ExtraParams["dilation"]); ok {
 				// Validate dilation is in valid range
 				if *v >= 0 && *v <= 1 {
+					delete(req.ExtraParams, "dilation")
 					dilation = v
 				}
 			}
 
 			// Extract maskClasses (for MASK_MODE_SEMANTIC)
 			if v, ok := bifrostReq.Params.ExtraParams["maskClasses"]; ok {
+				delete(req.ExtraParams, "maskClasses")
 				maskClasses = extractIntArray(v)
 			}
 		}
@@ -1023,15 +1051,10 @@ func ToImagenImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) *Gemi
 		}
 	}
 
-	req := &GeminiImagenRequest{
-		Instances: []ImagenInstance{
-			{
-				ReferenceImages: refImages,
-				Prompt:          bifrostReq.Input.Prompt,
-			},
-		},
-		Parameters: GeminiImagenParameters{},
-	}
+	req.Instances = append(req.Instances, ImagenInstance{
+		ReferenceImages: refImages,
+		Prompt:          bifrostReq.Input.Prompt,
+	})
 
 	// Set parameters
 	if bifrostReq.Params != nil {
@@ -1071,34 +1094,44 @@ func ToImagenImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) *Gemi
 			// Only use editMode from ExtraParams if Type was not set
 			if bifrostReq.Params.Type == nil {
 				if v, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["editMode"]); ok {
+					delete(req.ExtraParams, "editMode")
 					req.Parameters.EditMode = &v
 				}
 			}
 			if v, ok := schemas.SafeExtractIntPointer(bifrostReq.Params.ExtraParams["guidanceScale"]); ok {
+				delete(req.ExtraParams, "guidanceScale")
 				req.Parameters.GuidanceScale = v
 			}
 			if v, ok := schemas.SafeExtractIntPointer(bifrostReq.Params.ExtraParams["baseSteps"]); ok {
+				delete(req.ExtraParams, "baseSteps")
 				req.Parameters.BaseSteps = v
 			}
 			if v, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["addWatermark"]); ok {
+				delete(req.ExtraParams, "addWatermark")
 				req.Parameters.AddWatermark = v
 			}
 			if v, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["includeRaiReason"]); ok {
+				delete(req.ExtraParams, "includeRaiReason")
 				req.Parameters.IncludeRaiReason = v
 			}
 			if v, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["includeSafetyAttributes"]); ok {
+				delete(req.ExtraParams, "includeSafetyAttributes")
 				req.Parameters.IncludeSafetyAttributes = v
 			}
 			if v, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["personGeneration"]); ok {
+				delete(req.ExtraParams, "personGeneration")
 				req.Parameters.PersonGeneration = &v
 			}
 			if v, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["language"]); ok {
+				delete(req.ExtraParams, "language")
 				req.Parameters.Language = &v
 			}
 			if v, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["storageUri"]); ok {
+				delete(req.ExtraParams, "storageUri")
 				req.Parameters.StorageUri = &v
 			}
 			if v, ok := SafeExtractSafetySettings(bifrostReq.Params.ExtraParams["safetySettings"]); ok {
+				delete(req.ExtraParams, "safetySettings")
 				req.Parameters.SafetySettings = v
 			}
 		}

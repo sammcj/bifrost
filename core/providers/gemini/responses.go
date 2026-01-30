@@ -83,7 +83,7 @@ func ToGeminiResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *Gemi
 	// Convert parameters to generation config
 	if bifrostReq.Params != nil {
 		geminiReq.GenerationConfig = geminiReq.convertParamsToGenerationConfigResponses(bifrostReq.Params)
-
+		geminiReq.ExtraParams = bifrostReq.Params.ExtraParams
 		// Handle tool-related parameters
 		if len(bifrostReq.Params.Tools) > 0 {
 			geminiReq.Tools = convertResponsesToolsToGemini(bifrostReq.Params.Tools)
@@ -122,11 +122,13 @@ func ToGeminiResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *Gemi
 
 		if bifrostReq.Params.ExtraParams != nil {
 			if safetySettings, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "safety_settings"); ok {
+				delete(geminiReq.ExtraParams, "safety_settings")
 				if settings, ok := SafeExtractSafetySettings(safetySettings); ok {
 					geminiReq.SafetySettings = settings
 				}
 			}
 			if cachedContent, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["cached_content"]); ok {
+				delete(geminiReq.ExtraParams, "cached_content")
 				geminiReq.CachedContent = cachedContent
 			}
 		}
@@ -2560,21 +2562,25 @@ func (r *GeminiGenerationRequest) convertParamsToGenerationConfigResponses(param
 
 	if params.ExtraParams != nil {
 		if topK, ok := params.ExtraParams["top_k"]; ok {
+			delete(params.ExtraParams, "top_k")
 			if val, success := schemas.SafeExtractInt(topK); success {
 				config.TopK = schemas.Ptr(val)
 			}
 		}
 		if frequencyPenalty, ok := params.ExtraParams["frequency_penalty"]; ok {
+			delete(params.ExtraParams, "frequency_penalty")
 			if val, success := schemas.SafeExtractFloat64(frequencyPenalty); success {
 				config.FrequencyPenalty = schemas.Ptr(val)
 			}
 		}
 		if presencePenalty, ok := params.ExtraParams["presence_penalty"]; ok {
+			delete(params.ExtraParams, "presence_penalty")
 			if val, success := schemas.SafeExtractFloat64(presencePenalty); success {
 				config.PresencePenalty = schemas.Ptr(val)
 			}
 		}
 		if stopSequences, ok := params.ExtraParams["stop_sequences"]; ok {
+			delete(params.ExtraParams, "stop_sequences")
 			if val, success := schemas.SafeExtractStringSlice(stopSequences); success {
 				config.StopSequences = val
 			}

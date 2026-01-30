@@ -129,7 +129,9 @@ func (provider *PerplexityProvider) ChatCompletion(ctx *schemas.BifrostContext, 
 	jsonBody, err := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToPerplexityChatCompletionRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToPerplexityChatCompletionRequest(request), nil
+		},
 		provider.GetProviderKey())
 	if err != nil {
 		return nil, err
@@ -176,7 +178,7 @@ func (provider *PerplexityProvider) ChatCompletionStream(ctx *schemas.BifrostCon
 	if key.Value.GetValue() != "" {
 		authHeader = map[string]string{"Authorization": "Bearer " + key.Value.GetValue()}
 	}
-	customRequestConverter := func(request *schemas.BifrostChatRequest) (any, error) {
+	customRequestConverter := func(request *schemas.BifrostChatRequest) (providerUtils.RequestBodyWithExtraParams, error) {
 		reqBody := ToPerplexityChatCompletionRequest(request)
 		reqBody.Stream = schemas.Ptr(true)
 		return reqBody, nil

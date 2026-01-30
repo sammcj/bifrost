@@ -308,7 +308,26 @@ func CheckAndGetRawRequestBody(ctx context.Context, request RequestBodyGetter) (
 	return nil, false
 }
 
-type RequestBodyConverter func() (any, error)
+type RequestBodyWithExtraParams interface {
+	GetExtraParams() map[string]interface{}
+}
+
+type RequestBodyConverter func() (RequestBodyWithExtraParams, error)
+
+// mergeExtraParams merges extraParams into jsonMap, handling nested maps recursively.
+func mergeExtraParams(jsonMap map[string]interface{}, extraParams map[string]interface{}) {
+	for k, v := range extraParams {
+		if existingVal, exists := jsonMap[k]; exists {
+			if existingMap, ok := existingVal.(map[string]interface{}); ok {
+				if newMap, ok := v.(map[string]interface{}); ok {
+					mergeExtraParams(existingMap, newMap)
+					continue
+				}
+			}
+		}
+		jsonMap[k] = v
+	}
+}
 
 // CheckContextAndGetRequestBody checks if the raw request body should be used, and returns it if it exists.
 func CheckContextAndGetRequestBody(ctx context.Context, request RequestBodyGetter, requestConverter RequestBodyConverter, providerType schemas.ModelProvider) ([]byte, *schemas.BifrostError) {
@@ -321,9 +340,29 @@ func CheckContextAndGetRequestBody(ctx context.Context, request RequestBodyGette
 		if convertedBody == nil {
 			return nil, NewBifrostOperationError("request body is not provided", nil, providerType)
 		}
+
 		jsonBody, err := sonic.MarshalIndent(convertedBody, "", "  ")
 		if err != nil {
 			return nil, NewBifrostOperationError(schemas.ErrProviderRequestMarshal, err, providerType)
+		}
+		// Merge ExtraParams into the JSON if passthrough is enabled
+		if ctx.Value(schemas.BifrostContextKeyPassthroughExtraParams) != nil && ctx.Value(schemas.BifrostContextKeyPassthroughExtraParams) == true {
+			extraParams := convertedBody.GetExtraParams()
+			if len(extraParams) > 0 {
+				var jsonMap map[string]interface{}
+				if err := sonic.Unmarshal(jsonBody, &jsonMap); err != nil {
+					return nil, NewBifrostOperationError(schemas.ErrProviderRequestMarshal, err, providerType)
+				}
+
+				// Merge ExtraParams recursively (handles nested maps)
+				mergeExtraParams(jsonMap, extraParams)
+
+				// Re-marshal the merged map
+				jsonBody, err = sonic.MarshalIndent(jsonMap, "", "  ")
+				if err != nil {
+					return nil, NewBifrostOperationError(schemas.ErrProviderRequestMarshal, err, providerType)
+				}
+			}
 		}
 		return jsonBody, nil
 	} else {

@@ -43,6 +43,10 @@ func ToBedrockChatCompletionRequest(ctx *schemas.BifrostContext, bifrostReq *sch
 	// Ensure tool config is present when needed
 	ensureChatToolConfigForConversation(bifrostReq, bedrockReq)
 
+	if bifrostReq.Params != nil {
+		bedrockReq.ExtraParams = bifrostReq.Params.ExtraParams
+	}
+
 	return bedrockReq, nil
 }
 

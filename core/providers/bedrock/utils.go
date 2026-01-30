@@ -200,21 +200,25 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 	}
 	// Add extra parameters
 	if len(bifrostReq.Params.ExtraParams) > 0 {
+		bedrockReq.ExtraParams = bifrostReq.Params.ExtraParams
 		// Handle guardrail configuration
 		if guardrailConfig, exists := bifrostReq.Params.ExtraParams["guardrailConfig"]; exists {
 			if gc, ok := guardrailConfig.(map[string]interface{}); ok {
 				config := &BedrockGuardrailConfig{}
 
 				if identifier, ok := gc["guardrailIdentifier"].(string); ok {
+					delete(gc, "guardrailIdentifier")
 					config.GuardrailIdentifier = identifier
 				}
 				if version, ok := gc["guardrailVersion"].(string); ok {
+					delete(gc, "guardrailVersion")
 					config.GuardrailVersion = version
 				}
 				if trace, ok := gc["trace"].(string); ok {
+					delete(gc, "trace")
 					config.Trace = &trace
 				}
-
+				bedrockReq.ExtraParams["guardrailConfig"] = gc
 				bedrockReq.GuardrailConfig = config
 			}
 		}
@@ -222,6 +226,7 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 		if bifrostReq.Params != nil && bifrostReq.Params.ExtraParams != nil {
 			if requestFields, exists := bifrostReq.Params.ExtraParams["additionalModelRequestFieldPaths"]; exists {
 				if orderedFields, ok := schemas.SafeExtractOrderedMap(requestFields); ok {
+					delete(bedrockReq.ExtraParams, "additionalModelRequestFieldPaths")
 					bedrockReq.AdditionalModelRequestFields = orderedFields
 				}
 			}
@@ -230,6 +235,7 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 			if responseFields, exists := bifrostReq.Params.ExtraParams["additionalModelResponseFieldPaths"]; exists {
 				// Handle both []string and []interface{} types
 				if fields, ok := responseFields.([]string); ok {
+					delete(bedrockReq.ExtraParams, "additionalModelResponseFieldPaths")
 					bedrockReq.AdditionalModelResponseFieldPaths = fields
 				} else if fieldsInterface, ok := responseFields.([]interface{}); ok {
 					stringFields := make([]string, 0, len(fieldsInterface))
@@ -239,6 +245,7 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 						}
 					}
 					if len(stringFields) > 0 {
+						delete(bedrockReq.ExtraParams, "additionalModelResponseFieldPaths")
 						bedrockReq.AdditionalModelResponseFieldPaths = stringFields
 					}
 				}
@@ -246,17 +253,20 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 			// Handle performance configuration
 			if perfConfig, exists := bifrostReq.Params.ExtraParams["performanceConfig"]; exists {
 				if pc, ok := perfConfig.(map[string]interface{}); ok {
-					config := &BedrockPerformanceConfig{}
 
+					config := &BedrockPerformanceConfig{}
 					if latency, ok := pc["latency"].(string); ok {
+						delete(pc, "latency")
 						config.Latency = &latency
 					}
+					bedrockReq.ExtraParams["performanceConfig"] = pc
 					bedrockReq.PerformanceConfig = config
 				}
 			}
 			// Handle prompt variables
 			if promptVars, exists := bifrostReq.Params.ExtraParams["promptVariables"]; exists {
 				if vars, ok := promptVars.(map[string]interface{}); ok {
+					delete(bedrockReq.ExtraParams, "promptVariables")
 					variables := make(map[string]BedrockPromptVariable)
 
 					for key, value := range vars {
@@ -277,6 +287,7 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 			// Handle request metadata
 			if reqMetadata, exists := bifrostReq.Params.ExtraParams["requestMetadata"]; exists {
 				if metadata, ok := schemas.SafeExtractStringMap(reqMetadata); ok {
+					delete(bedrockReq.ExtraParams, "requestMetadata")
 					bedrockReq.RequestMetadata = metadata
 				}
 			}

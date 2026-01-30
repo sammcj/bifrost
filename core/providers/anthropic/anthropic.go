@@ -262,7 +262,9 @@ func (provider *AnthropicProvider) TextCompletion(ctx *schemas.BifrostContext, k
 	jsonData, err := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToAnthropicTextCompletionRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToAnthropicTextCompletionRequest(request), nil
+		},
 		provider.GetProviderKey())
 	if err != nil {
 		return nil, err
