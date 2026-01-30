@@ -350,7 +350,9 @@ func (provider *AzureProvider) TextCompletion(ctx *schemas.BifrostContext, key s
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return openai.ToOpenAITextCompletionRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return openai.ToOpenAITextCompletionRequest(request), nil
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -459,7 +461,7 @@ func (provider *AzureProvider) ChatCompletion(ctx *schemas.BifrostContext, key s
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) {
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
 			if schemas.IsAnthropicModel(deployment) {
 				reqBody, err := anthropic.ToAnthropicChatRequest(ctx, request)
 				if err != nil {
@@ -567,7 +569,7 @@ func (provider *AzureProvider) ChatCompletionStream(ctx *schemas.BifrostContext,
 		jsonData, err := providerUtils.CheckContextAndGetRequestBody(
 			ctx,
 			request,
-			func() (any, error) {
+			func() (providerUtils.RequestBodyWithExtraParams, error) {
 				reqBody, err := anthropic.ToAnthropicChatRequest(ctx, request)
 				if err != nil {
 					return nil, err
@@ -656,7 +658,7 @@ func (provider *AzureProvider) Responses(ctx *schemas.BifrostContext, key schema
 		jsonData, bifrostErr = providerUtils.CheckContextAndGetRequestBody(
 			ctx,
 			request,
-			func() (any, error) {
+			func() (providerUtils.RequestBodyWithExtraParams, error) {
 				reqBody := openai.ToOpenAIResponsesRequest(request)
 				if reqBody != nil {
 					reqBody.Model = deployment
@@ -826,7 +828,9 @@ func (provider *AzureProvider) Embedding(ctx *schemas.BifrostContext, key schema
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return openai.ToOpenAIEmbeddingRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return openai.ToOpenAIEmbeddingRequest(request), nil
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -976,7 +980,7 @@ func (provider *AzureProvider) SpeechStream(ctx *schemas.BifrostContext, postHoo
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) {
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
 			reqBody := openai.ToOpenAISpeechRequest(request)
 			if reqBody != nil {
 				reqBody.StreamFormat = schemas.Ptr("sse")

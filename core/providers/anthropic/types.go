@@ -39,7 +39,13 @@ type AnthropicTextRequest struct {
 	StopSequences     []string `json:"stop_sequences,omitempty"`
 
 	// Bifrost specific field (only parsed when converting from Provider -> Bifrost request)
-	Fallbacks []string `json:"fallbacks,omitempty"`
+	Fallbacks   []string               `json:"fallbacks,omitempty"`
+	ExtraParams map[string]interface{} `json:"-"`
+}
+
+// GetExtraParams implements the RequestBodyWithExtraParams interface
+func (req *AnthropicTextRequest) GetExtraParams() map[string]interface{} {
+	return req.ExtraParams
 }
 
 // IsStreamingRequested implements the StreamingRequest interface
@@ -67,10 +73,15 @@ type AnthropicMessageRequest struct {
 	ServiceTier   *string             `json:"service_tier,omitempty"`  // "auto" or "standard_only"
 
 	// Extra params for advanced use cases
-	ExtraParams map[string]interface{} `json:"extra_params,omitempty"`
+	ExtraParams map[string]interface{} `json:"-"`
 
 	// Bifrost specific field (only parsed when converting from Provider -> Bifrost request)
 	Fallbacks []string `json:"fallbacks,omitempty"`
+}
+
+// GetExtraParams implements the RequestBodyWithExtraParams interface
+func (mr *AnthropicMessageRequest) GetExtraParams() map[string]interface{} {
+	return mr.ExtraParams
 }
 
 type AnthropicMetaData struct {
@@ -418,15 +429,15 @@ type AnthropicToolInputExample struct {
 
 // AnthropicTool represents a tool in Anthropic format
 type AnthropicTool struct {
-	Name          string                          `json:"name"`
-	Type          *AnthropicToolType              `json:"type,omitempty"`
-	Description   *string                         `json:"description,omitempty"`
-	InputSchema   *schemas.ToolFunctionParameters `json:"input_schema,omitempty"`
-	CacheControl  *schemas.CacheControl           `json:"cache_control,omitempty"`
-	DeferLoading  *bool                           `json:"defer_loading,omitempty"`   // Beta: defer loading of tool definition
-	Strict        *bool                           `json:"strict,omitempty"`          // Whether to enforce strict parameter validation
-	AllowedCallers []string                       `json:"allowed_callers,omitempty"` // Beta: which callers can use this tool
-	InputExamples []AnthropicToolInputExample     `json:"input_examples,omitempty"`  // Beta: example inputs for the tool
+	Name           string                          `json:"name"`
+	Type           *AnthropicToolType              `json:"type,omitempty"`
+	Description    *string                         `json:"description,omitempty"`
+	InputSchema    *schemas.ToolFunctionParameters `json:"input_schema,omitempty"`
+	CacheControl   *schemas.CacheControl           `json:"cache_control,omitempty"`
+	DeferLoading   *bool                           `json:"defer_loading,omitempty"`   // Beta: defer loading of tool definition
+	Strict         *bool                           `json:"strict,omitempty"`          // Whether to enforce strict parameter validation
+	AllowedCallers []string                        `json:"allowed_callers,omitempty"` // Beta: which callers can use this tool
+	InputExamples  []AnthropicToolInputExample     `json:"input_examples,omitempty"`  // Beta: example inputs for the tool
 
 	*AnthropicToolComputerUse
 	*AnthropicToolWebSearch

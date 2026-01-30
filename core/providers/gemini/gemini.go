@@ -230,7 +230,9 @@ func (provider *GeminiProvider) ChatCompletion(ctx *schemas.BifrostContext, key 
 	jsonData, err := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToGeminiChatCompletionRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToGeminiChatCompletionRequest(request), nil
+		},
 		provider.GetProviderKey())
 	if err != nil {
 		return nil, err
@@ -277,7 +279,7 @@ func (provider *GeminiProvider) ChatCompletionStream(ctx *schemas.BifrostContext
 	jsonData, err := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) {
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
 			reqBody := ToGeminiChatCompletionRequest(request)
 			if reqBody == nil {
 				return nil, fmt.Errorf("chat completion request is not provided or could not be converted to Gemini format")
@@ -554,7 +556,7 @@ func (provider *GeminiProvider) Responses(ctx *schemas.BifrostContext, key schem
 	jsonData, err := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) {
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
 			reqBody := ToGeminiResponsesRequest(request)
 			if reqBody == nil {
 				return nil, fmt.Errorf("responses input is not provided or could not be converted to Gemini format")
@@ -608,7 +610,7 @@ func (provider *GeminiProvider) ResponsesStream(ctx *schemas.BifrostContext, pos
 	jsonData, err := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) {
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
 			reqBody := ToGeminiResponsesRequest(request)
 			if reqBody == nil {
 				return nil, fmt.Errorf("responses input is not provided or could not be converted to Gemini format")
@@ -944,7 +946,9 @@ func (provider *GeminiProvider) Embedding(ctx *schemas.BifrostContext, key schem
 	jsonData, err := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToGeminiEmbeddingRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToGeminiEmbeddingRequest(request), nil
+		},
 		providerName)
 	if err != nil {
 		return nil, err
@@ -1035,7 +1039,9 @@ func (provider *GeminiProvider) Speech(ctx *schemas.BifrostContext, key schemas.
 	jsonData, err := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToGeminiSpeechRequest(request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToGeminiSpeechRequest(request)
+		},
 		provider.GetProviderKey())
 	if err != nil {
 		return nil, err
@@ -1088,7 +1094,9 @@ func (provider *GeminiProvider) SpeechStream(ctx *schemas.BifrostContext, postHo
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToGeminiSpeechRequest(request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToGeminiSpeechRequest(request)
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -1330,7 +1338,9 @@ func (provider *GeminiProvider) Transcription(ctx *schemas.BifrostContext, key s
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToGeminiTranscriptionRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToGeminiTranscriptionRequest(request), nil
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -1378,7 +1388,9 @@ func (provider *GeminiProvider) TranscriptionStream(ctx *schemas.BifrostContext,
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToGeminiTranscriptionRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToGeminiTranscriptionRequest(request), nil
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -1633,7 +1645,9 @@ func (provider *GeminiProvider) ImageGeneration(ctx *schemas.BifrostContext, key
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToGeminiImageGenerationRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToGeminiImageGenerationRequest(request), nil
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -1691,7 +1705,9 @@ func (provider *GeminiProvider) handleImagenImageGeneration(ctx *schemas.Bifrost
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToImagenImageGenerationRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToImagenImageGenerationRequest(request), nil
+		},
 		providerName)
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -1779,7 +1795,9 @@ func (provider *GeminiProvider) ImageEdit(ctx *schemas.BifrostContext, key schem
 		jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 			ctx,
 			request,
-			func() (any, error) { return ToImagenImageEditRequest(request), nil },
+			func() (providerUtils.RequestBodyWithExtraParams, error) {
+				return ToImagenImageEditRequest(request), nil
+			},
 			providerName)
 		if bifrostErr != nil {
 			return nil, bifrostErr
@@ -1846,7 +1864,9 @@ func (provider *GeminiProvider) ImageEdit(ctx *schemas.BifrostContext, key schem
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToGeminiImageEditRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToGeminiImageEditRequest(request), nil
+		},
 		providerName)
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -3229,7 +3249,9 @@ func (provider *GeminiProvider) CountTokens(ctx *schemas.BifrostContext, key sch
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToGeminiResponsesRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToGeminiResponsesRequest(request), nil
+		},
 		provider.GetProviderKey(),
 	)
 	if bifrostErr != nil {

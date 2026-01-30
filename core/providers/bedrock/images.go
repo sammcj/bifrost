@@ -90,8 +90,10 @@ func ToBedrockImageGenerationRequest(request *schemas.BifrostImageGenerationRequ
 		}
 		if request.Params.ExtraParams != nil {
 			if cfgScale, ok := schemas.SafeExtractFloat64Pointer(request.Params.ExtraParams["cfgScale"]); ok {
+				delete(request.Params.ExtraParams, "cfgScale")
 				bedrockReq.ImageGenerationConfig.CfgScale = cfgScale
 			}
+			bedrockReq.ExtraParams = request.Params.ExtraParams
 		}
 	}
 
@@ -125,6 +127,7 @@ func ToBedrockImageVariationRequest(request *schemas.BifrostImageVariationReques
 	// Additional images from ExtraParams (stored as [][]byte)
 	if request.Params != nil && request.Params.ExtraParams != nil {
 		if additionalImages, ok := request.Params.ExtraParams["images"]; ok {
+			delete(request.Params.ExtraParams, "images")
 			// Handle array of byte arrays (stored by HTTP handler)
 			if imagesArray, ok := additionalImages.([][]byte); ok {
 				for _, imgBytes := range imagesArray {
@@ -138,19 +141,23 @@ func ToBedrockImageVariationRequest(request *schemas.BifrostImageVariationReques
 
 		// Extract optional fields from ExtraParams
 		if prompt, ok := schemas.SafeExtractStringPointer(request.Params.ExtraParams["prompt"]); ok {
+			delete(request.Params.ExtraParams, "prompt")
 			bedrockReq.ImageVariationParams.Text = prompt
 		}
 		if negativeText, ok := schemas.SafeExtractStringPointer(request.Params.ExtraParams["negativeText"]); ok {
+			delete(request.Params.ExtraParams, "negativeText")
 			bedrockReq.ImageVariationParams.NegativeText = negativeText
 		}
 
 		if similarityStrength, ok := schemas.SafeExtractFloat64Pointer(request.Params.ExtraParams["similarityStrength"]); ok {
+			delete(request.Params.ExtraParams, "similarityStrength")
 			// Validate similarityStrength range (0.2 to 1.0)
 			if *similarityStrength < 0.2 || *similarityStrength > 1.0 {
 				return nil, fmt.Errorf("similarityStrength must be between 0.2 and 1.0, got %f", *similarityStrength)
 			}
 			bedrockReq.ImageVariationParams.SimilarityStrength = similarityStrength
 		}
+		bedrockReq.ExtraParams = request.Params.ExtraParams
 	}
 
 	// Map standard params to ImageGenerationConfig
@@ -238,6 +245,7 @@ func ToBedrockImageEditRequest(request *schemas.BifrostImageEditRequest) (*Bedro
 		return nil, fmt.Errorf("unsupported type for Bedrock: %s (must be inpainting, outpainting, or background_removal)", editType)
 	}
 
+	bedrockReq.ExtraParams = request.Params.ExtraParams
 	return bedrockReq, nil
 }
 
@@ -254,9 +262,11 @@ func buildInPaintingParams(imageBase64 string, request *schemas.BifrostImageEdit
 
 	if request.Params.ExtraParams != nil {
 		if maskPrompt, ok := schemas.SafeExtractStringPointer(request.Params.ExtraParams["mask_prompt"]); ok {
+			delete(request.Params.ExtraParams, "mask_prompt")
 			params.MaskPrompt = maskPrompt
 		}
 		if returnMask, ok := schemas.SafeExtractBoolPointer(request.Params.ExtraParams["return_mask"]); ok {
+			delete(request.Params.ExtraParams, "return_mask")
 			params.ReturnMask = returnMask
 		}
 	}
@@ -282,15 +292,18 @@ func buildOutPaintingParams(imageBase64 string, request *schemas.BifrostImageEdi
 
 	if request.Params.ExtraParams != nil {
 		if maskPrompt, ok := schemas.SafeExtractStringPointer(request.Params.ExtraParams["mask_prompt"]); ok {
+			delete(request.Params.ExtraParams, "mask_prompt")
 			params.MaskPrompt = maskPrompt
 		}
 		if returnMask, ok := schemas.SafeExtractBoolPointer(request.Params.ExtraParams["return_mask"]); ok {
+			delete(request.Params.ExtraParams, "return_mask")
 			params.ReturnMask = returnMask
 		}
 		if outPaintingMode, ok := schemas.SafeExtractStringPointer(request.Params.ExtraParams["outpainting_mode"]); ok {
 			// Validate mode
 			mode := strings.ToUpper(*outPaintingMode)
 			if mode == "DEFAULT" || mode == "PRECISE" {
+				delete(request.Params.ExtraParams, "outpainting_mode")
 				params.OutPaintingMode = &mode
 			}
 		}
@@ -337,6 +350,7 @@ func buildImageGenerationConfig(params *schemas.ImageEditParameters) *ImageGener
 
 	if params.ExtraParams != nil {
 		if cfgScale, ok := schemas.SafeExtractFloat64Pointer(params.ExtraParams["cfgScale"]); ok {
+			delete(params.ExtraParams, "cfgScale")
 			config.CfgScale = cfgScale
 		}
 	}

@@ -115,11 +115,12 @@ func ToGeminiTranscriptionRequest(bifrostReq *schemas.BifrostTranscriptionReques
 
 	// Convert parameters to generation config
 	if bifrostReq.Params != nil {
-
+		geminiReq.ExtraParams = bifrostReq.Params.ExtraParams
 		// Handle extra parameters
 		if bifrostReq.Params.ExtraParams != nil {
 			// Safety settings
 			if safetySettings, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "safety_settings"); ok {
+				delete(geminiReq.ExtraParams, "safety_settings")
 				if settings, ok := SafeExtractSafetySettings(safetySettings); ok {
 					geminiReq.SafetySettings = settings
 				}
@@ -127,12 +128,14 @@ func ToGeminiTranscriptionRequest(bifrostReq *schemas.BifrostTranscriptionReques
 
 			// Cached content
 			if cachedContent, ok := schemas.SafeExtractString(bifrostReq.Params.ExtraParams["cached_content"]); ok {
+				delete(geminiReq.ExtraParams, "cached_content")
 				geminiReq.CachedContent = cachedContent
 			}
 
 			// Labels
 			if labels, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "labels"); ok {
 				if labelMap, ok := schemas.SafeExtractStringMap(labels); ok {
+					delete(geminiReq.ExtraParams, "labels")
 					geminiReq.Labels = labelMap
 				}
 			}
