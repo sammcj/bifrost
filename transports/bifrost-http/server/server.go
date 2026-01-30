@@ -719,7 +719,7 @@ func (s *BifrostHTTPServer) RemovePlugin(ctx context.Context, displayName string
 	// Get the actual plugin name from the display name
 	name, ok := s.Config.GetPluginNameByDisplayName(displayName)
 	if !ok {
-		return fmt.Errorf("plugin %s not found", displayName)
+		return dynamicPlugins.ErrPluginNotFound
 	}
 
 	// Check if plugin implements ObservabilityPlugin before removal
