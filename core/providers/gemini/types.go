@@ -89,7 +89,13 @@ type GeminiGenerationRequest struct {
 	Parameters *GeminiImagenParameters `json:"parameters,omitempty"`
 
 	// Bifrost specific field (only parsed when converting from Provider -> Bifrost request)
-	Fallbacks []string `json:"fallbacks,omitempty"`
+	Fallbacks   []string               `json:"fallbacks,omitempty"`
+	ExtraParams map[string]interface{} `json:"-"` // Optional: Extra parameters
+}
+
+// GetExtraParams implements the RequestBodyWithExtraParams interface
+func (r *GeminiGenerationRequest) GetExtraParams() map[string]interface{} {
+	return r.ExtraParams
 }
 
 // ImagenInstance represents a single instance in an Imagen request
@@ -1100,16 +1106,28 @@ func (tc *GenerationConfigThinkingConfig) UnmarshalJSON(data []byte) error {
 }
 
 type GeminiBatchEmbeddingRequest struct {
-	Requests []GeminiEmbeddingRequest `json:"requests,omitempty"`
+	Requests    []GeminiEmbeddingRequest `json:"requests,omitempty"`
+	ExtraParams map[string]interface{}   `json:"-"` // Optional: Extra parameters
+}
+
+// GetExtraParams implements the RequestBodyWithExtraParams interface
+func (r *GeminiBatchEmbeddingRequest) GetExtraParams() map[string]interface{} {
+	return r.ExtraParams
 }
 
 // GeminiEmbeddingRequest represents a single embedding request in a batch.
 type GeminiEmbeddingRequest struct {
-	Content              *Content `json:"content,omitempty"`
-	TaskType             *string  `json:"taskType,omitempty"`
-	Title                *string  `json:"title,omitempty"`
-	OutputDimensionality *int     `json:"outputDimensionality,omitempty"`
-	Model                string   `json:"model,omitempty"`
+	Content              *Content               `json:"content,omitempty"`
+	TaskType             *string                `json:"taskType,omitempty"`
+	Title                *string                `json:"title,omitempty"`
+	OutputDimensionality *int                   `json:"outputDimensionality,omitempty"`
+	Model                string                 `json:"model,omitempty"`
+	ExtraParams          map[string]interface{} `json:"-"` // Optional: Extra parameters
+}
+
+// GetExtraParams implements the RequestBodyWithExtraParams interface
+func (r *GeminiEmbeddingRequest) GetExtraParams() map[string]interface{} {
+	return r.ExtraParams
 }
 
 // Content contains the multi-part content of a message.
@@ -2119,8 +2137,13 @@ type GeminiCountTokensResponse struct {
 }
 
 type GeminiImagenRequest struct {
-	Instances  []ImagenInstance       `json:"instances"`
-	Parameters GeminiImagenParameters `json:"parameters"`
+	Instances   []ImagenInstance       `json:"instances"`
+	Parameters  GeminiImagenParameters `json:"parameters"`
+	ExtraParams map[string]interface{} `json:"-"` // Optional: Extra parameters
+}
+
+func (r *GeminiImagenRequest) GetExtraParams() map[string]interface{} {
+	return r.ExtraParams
 }
 
 type GeminiImagenParameters struct {

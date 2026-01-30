@@ -9,6 +9,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	nebiusProvider "github.com/maximhq/bifrost/core/providers/nebius"
+	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 )
 
@@ -25,7 +26,7 @@ var falAISingleImageEditModels = map[string]bool{
 }
 
 // ToHuggingFaceImageGenerationRequest converts a Bifrost image generation request to provider-specific format
-func ToHuggingFaceImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerationRequest) (any, error) {
+func ToHuggingFaceImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerationRequest) (providerUtils.RequestBodyWithExtraParams, error) {
 	if bifrostReq == nil || bifrostReq.Input == nil {
 		return nil, fmt.Errorf("bifrost request is nil or input is nil")
 	}
@@ -87,18 +88,22 @@ func ToHuggingFaceImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerat
 
 			// Handle extra params for nebius
 			if bifrostReq.Params.ExtraParams != nil {
+				req.ExtraParams = bifrostReq.Params.ExtraParams
 				// Map num_inference_steps
 				if v, ok := schemas.SafeExtractIntPointer(bifrostReq.Params.ExtraParams["num_inference_steps"]); ok {
+					delete(req.ExtraParams, "num_inference_steps")
 					req.NumInferenceSteps = v
 				}
 
 				// Map guidance_scale
 				if v, ok := schemas.SafeExtractIntPointer(bifrostReq.Params.ExtraParams["guidance_scale"]); ok {
+					delete(req.ExtraParams, "guidance_scale")
 					req.GuidanceScale = v
 				}
 
 				// Map loras
 				if lorasValue, exists := bifrostReq.Params.ExtraParams["loras"]; exists && lorasValue != nil {
+					delete(req.ExtraParams, "loras")
 					if lorasArray, ok := lorasValue.([]interface{}); ok {
 						for _, item := range lorasArray {
 							if loraMap, ok := item.(map[string]interface{}); ok {
@@ -116,9 +121,13 @@ func ToHuggingFaceImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerat
 		return req, nil
 
 	case hfInference:
-		return &HuggingFaceHFInferenceImageGenerationRequest{
+		req := &HuggingFaceHFInferenceImageGenerationRequest{
 			Inputs: bifrostReq.Input.Prompt,
-		}, nil
+		}
+		if bifrostReq.Params != nil {
+			req.ExtraParams = bifrostReq.Params.ExtraParams
+		}
+		return req, nil
 
 	case falAI:
 		req := &HuggingFaceFalAIImageGenerationRequest{
@@ -187,23 +196,28 @@ func ToHuggingFaceImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerat
 
 			// Parse fal-ai specific params from ExtraParams
 			if bifrostReq.Params.ExtraParams != nil {
+				req.ExtraParams = bifrostReq.Params.ExtraParams
 				// Map guidance_scale
 				if v, ok := schemas.SafeExtractFloat64Pointer(bifrostReq.Params.ExtraParams["guidance_scale"]); ok {
+					delete(req.ExtraParams, "guidance_scale")
 					req.GuidanceScale = v
 				}
 
 				// Map acceleration
 				if v, ok := schemas.SafeExtractStringPointer(bifrostReq.Params.ExtraParams["acceleration"]); ok {
+					delete(req.ExtraParams, "acceleration")
 					req.Acceleration = v
 				}
 
 				// Map enable_prompt_expansion
 				if v, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["enable_prompt_expansion"]); ok {
+					delete(req.ExtraParams, "enable_prompt_expansion")
 					req.EnablePromptExpansion = v
 				}
 
 				// Map enable_safety_checker
 				if v, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["enable_safety_checker"]); ok {
+					delete(req.ExtraParams, "enable_safety_checker")
 					req.EnableSafetyChecker = v
 				}
 			}
@@ -217,6 +231,7 @@ func ToHuggingFaceImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerat
 		}
 
 		if bifrostReq.Params != nil {
+			req.ExtraParams = bifrostReq.Params.ExtraParams
 			if bifrostReq.Params.ResponseFormat != nil {
 				req.ResponseFormat = bifrostReq.Params.ResponseFormat
 			}
@@ -253,6 +268,7 @@ func ToHuggingFaceImageStreamRequest(bifrostReq *schemas.BifrostImageGenerationR
 	}
 
 	if bifrostReq.Params != nil {
+		req.ExtraParams = bifrostReq.Params.ExtraParams
 		// Map n to num_images for fal-ai
 		if bifrostReq.Params.N != nil {
 			req.NumImages = bifrostReq.Params.N
@@ -305,15 +321,19 @@ func ToHuggingFaceImageStreamRequest(bifrostReq *schemas.BifrostImageGenerationR
 		// Parse fal-ai specific params from ExtraParams
 		if bifrostReq.Params.ExtraParams != nil {
 			if v, ok := schemas.SafeExtractFloat64Pointer(bifrostReq.Params.ExtraParams["guidance_scale"]); ok {
+				delete(req.ExtraParams, "guidance_scale")
 				req.GuidanceScale = v
 			}
 			if v, ok := schemas.SafeExtractStringPointer(bifrostReq.Params.ExtraParams["acceleration"]); ok {
+				delete(req.ExtraParams, "acceleration")
 				req.Acceleration = v
 			}
 			if v, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["enable_prompt_expansion"]); ok {
+				delete(req.ExtraParams, "enable_prompt_expansion")
 				req.EnablePromptExpansion = v
 			}
 			if v, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["enable_safety_checker"]); ok {
+				delete(req.ExtraParams, "enable_safety_checker")
 				req.EnableSafetyChecker = v
 			}
 		}
@@ -476,16 +496,19 @@ func mapFalAIImageEditParams(bifrostReq *schemas.BifrostImageEditRequest, req *H
 	if bifrostReq.Params.ExtraParams != nil {
 		// Map guidance_scale
 		if v, ok := schemas.SafeExtractFloat64Pointer(bifrostReq.Params.ExtraParams["guidance_scale"]); ok {
+			delete(req.ExtraParams, "guidance_scale")
 			req.GuidanceScale = v
 		}
 
 		// Map acceleration
 		if v, ok := schemas.SafeExtractStringPointer(bifrostReq.Params.ExtraParams["acceleration"]); ok {
+			delete(req.ExtraParams, "acceleration")
 			req.Acceleration = v
 		}
 
 		// Map enable_safety_checker
 		if v, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["enable_safety_checker"]); ok {
+			delete(req.ExtraParams, "enable_safety_checker")
 			req.EnableSafetyChecker = v
 		}
 	}
@@ -527,7 +550,9 @@ func ToHuggingFaceImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) 
 	// Check for explicit override in ExtraParams
 	var useMultiImage *bool
 	if bifrostReq.Params != nil && bifrostReq.Params.ExtraParams != nil {
+		req.ExtraParams = bifrostReq.Params.ExtraParams
 		if v, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["use_image_urls"]); ok {
+			delete(req.ExtraParams, "use_image_urls")
 			useMultiImage = v
 		}
 	}
@@ -563,7 +588,6 @@ func ToHuggingFaceImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) 
 
 	// Map common parameters
 	mapFalAIImageEditParams(bifrostReq, req)
-
 	return req, nil
 }
 

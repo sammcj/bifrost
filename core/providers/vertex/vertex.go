@@ -288,11 +288,11 @@ func (provider *VertexProvider) ChatCompletion(ctx *schemas.BifrostContext, key 
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) {
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
 			//TODO: optimize this double Marshal
 			// Format messages for Vertex API
 			var requestBody map[string]interface{}
-
+			var extraParams map[string]interface{}
 			if schemas.IsAnthropicModel(deployment) {
 				// Use centralized Anthropic converter
 				reqBody, err := anthropic.ToAnthropicChatRequest(ctx, request)
@@ -302,6 +302,7 @@ func (provider *VertexProvider) ChatCompletion(ctx *schemas.BifrostContext, key 
 				if reqBody == nil {
 					return nil, fmt.Errorf("chat completion input is not provided")
 				}
+				extraParams = reqBody.GetExtraParams()
 				reqBody.Model = deployment
 				// Convert struct to map for Vertex API
 				reqBytes, err := sonic.Marshal(reqBody)
@@ -316,6 +317,7 @@ func (provider *VertexProvider) ChatCompletion(ctx *schemas.BifrostContext, key 
 				if reqBody == nil {
 					return nil, fmt.Errorf("chat completion input is not provided")
 				}
+				extraParams = reqBody.GetExtraParams()
 				reqBody.Model = deployment
 				// Strip unsupported fields for Vertex Gemini
 				stripVertexGeminiUnsupportedFields(reqBody)
@@ -333,6 +335,7 @@ func (provider *VertexProvider) ChatCompletion(ctx *schemas.BifrostContext, key 
 				if reqBody == nil {
 					return nil, fmt.Errorf("chat completion input is not provided")
 				}
+				extraParams = reqBody.GetExtraParams()
 				reqBody.Model = deployment
 				// Convert struct to map for Vertex API
 				reqBytes, err := sonic.Marshal(reqBody)
@@ -351,7 +354,7 @@ func (provider *VertexProvider) ChatCompletion(ctx *schemas.BifrostContext, key 
 				delete(requestBody, "model")
 			}
 			delete(requestBody, "region")
-			return requestBody, nil
+			return &VertexRequestBody{RequestBody: requestBody, ExtraParams: extraParams}, nil
 		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
@@ -597,11 +600,13 @@ func (provider *VertexProvider) ChatCompletionStream(ctx *schemas.BifrostContext
 		jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 			ctx,
 			request,
-			func() (any, error) {
+			func() (providerUtils.RequestBodyWithExtraParams, error) {
+				var extraParams map[string]interface{}
 				reqBody, err := anthropic.ToAnthropicChatRequest(ctx, request)
 				if err != nil {
 					return nil, err
 				}
+				extraParams = reqBody.GetExtraParams()
 				if reqBody != nil {
 					reqBody.Model = deployment
 					reqBody.Stream = schemas.Ptr(true)
@@ -623,7 +628,7 @@ func (provider *VertexProvider) ChatCompletionStream(ctx *schemas.BifrostContext
 
 				delete(requestBody, "model")
 				delete(requestBody, "region")
-				return requestBody, nil
+				return &VertexRequestBody{RequestBody: requestBody, ExtraParams: extraParams}, nil
 			},
 			provider.GetProviderKey())
 		if bifrostErr != nil {
@@ -680,7 +685,7 @@ func (provider *VertexProvider) ChatCompletionStream(ctx *schemas.BifrostContext
 		jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 			ctx,
 			request,
-			func() (any, error) {
+			func() (providerUtils.RequestBodyWithExtraParams, error) {
 				reqBody := gemini.ToGeminiChatCompletionRequest(request)
 				if reqBody == nil {
 					return nil, fmt.Errorf("chat completion input is not provided")
@@ -939,7 +944,7 @@ func (provider *VertexProvider) Responses(ctx *schemas.BifrostContext, key schem
 		jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 			ctx,
 			request,
-			func() (any, error) {
+			func() (providerUtils.RequestBodyWithExtraParams, error) {
 				reqBody := gemini.ToGeminiResponsesRequest(request)
 				if reqBody == nil {
 					return nil, fmt.Errorf("responses input is not provided")
@@ -1173,7 +1178,7 @@ func (provider *VertexProvider) ResponsesStream(ctx *schemas.BifrostContext, pos
 		jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 			ctx,
 			request,
-			func() (any, error) {
+			func() (providerUtils.RequestBodyWithExtraParams, error) {
 				reqBody := gemini.ToGeminiResponsesRequest(request)
 				if reqBody == nil {
 					return nil, fmt.Errorf("responses input is not provided")
@@ -1284,7 +1289,9 @@ func (provider *VertexProvider) Embedding(ctx *schemas.BifrostContext, key schem
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToVertexEmbeddingRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToVertexEmbeddingRequest(request), nil
+		},
 		providerName)
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -1436,14 +1443,15 @@ func (provider *VertexProvider) ImageGeneration(ctx *schemas.BifrostContext, key
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) {
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
 			var requestBody map[string]interface{}
-
+			var extraParams map[string]interface{}
 			if schemas.IsGeminiModel(deployment) || schemas.IsAllDigitsASCII(deployment) {
 				reqBody := gemini.ToGeminiImageGenerationRequest(request)
 				if reqBody == nil {
 					return nil, fmt.Errorf("image generation input is not provided")
 				}
+				extraParams = reqBody.GetExtraParams()
 				reqBody.Model = deployment
 				// Strip unsupported fields for Vertex Gemini
 				stripVertexGeminiUnsupportedFields(reqBody)
@@ -1460,6 +1468,7 @@ func (provider *VertexProvider) ImageGeneration(ctx *schemas.BifrostContext, key
 				if reqBody == nil {
 					return nil, fmt.Errorf("image generation input is not provided")
 				}
+				extraParams = reqBody.GetExtraParams()
 				// Convert struct to map for Vertex API
 				reqBytes, err := sonic.Marshal(reqBody)
 				if err != nil {
@@ -1471,7 +1480,7 @@ func (provider *VertexProvider) ImageGeneration(ctx *schemas.BifrostContext, key
 			}
 
 			delete(requestBody, "region")
-			return requestBody, nil
+			return &VertexRequestBody{RequestBody: requestBody, ExtraParams: extraParams}, nil
 		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
@@ -1667,11 +1676,12 @@ func (provider *VertexProvider) ImageEdit(ctx *schemas.BifrostContext, key schem
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) {
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
 			var requestBody map[string]interface{}
-
+			var extraParams map[string]interface{}
 			if schemas.IsGeminiModel(deployment) || schemas.IsAllDigitsASCII(deployment) {
 				reqBody := gemini.ToGeminiImageEditRequest(request)
+				extraParams = reqBody.GetExtraParams()
 				if reqBody == nil {
 					return nil, fmt.Errorf("image edit input is not provided")
 				}
@@ -1688,6 +1698,7 @@ func (provider *VertexProvider) ImageEdit(ctx *schemas.BifrostContext, key schem
 				}
 			} else if schemas.IsImagenModel(deployment) {
 				reqBody := gemini.ToImagenImageEditRequest(request)
+				extraParams = reqBody.GetExtraParams()
 				if reqBody == nil {
 					return nil, fmt.Errorf("image edit input is not provided")
 				}
@@ -1702,7 +1713,7 @@ func (provider *VertexProvider) ImageEdit(ctx *schemas.BifrostContext, key schem
 			}
 
 			delete(requestBody, "region")
-			return requestBody, nil
+			return &VertexRequestBody{RequestBody: requestBody, ExtraParams: extraParams}, nil
 		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
@@ -1968,7 +1979,7 @@ func (provider *VertexProvider) CountTokens(ctx *schemas.BifrostContext, key sch
 		jsonBody, bifrostErr = providerUtils.CheckContextAndGetRequestBody(
 			ctx,
 			request,
-			func() (any, error) {
+			func() (providerUtils.RequestBodyWithExtraParams, error) {
 				return anthropic.ToAnthropicResponsesRequest(ctx, request)
 			},
 			providerName,
@@ -2000,7 +2011,9 @@ func (provider *VertexProvider) CountTokens(ctx *schemas.BifrostContext, key sch
 		jsonBody, bifrostErr = providerUtils.CheckContextAndGetRequestBody(
 			ctx,
 			request,
-			func() (any, error) { return gemini.ToGeminiResponsesRequest(request), nil },
+			func() (providerUtils.RequestBodyWithExtraParams, error) {
+				return gemini.ToGeminiResponsesRequest(request), nil
+			},
 			providerName,
 		)
 		if bifrostErr != nil {

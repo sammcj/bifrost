@@ -31,6 +31,9 @@ func ToOpenAIImageGenerationRequest(bifrostReq *schemas.BifrostImageGenerationRe
 	case schemas.OpenAI, schemas.Azure:
 		filterOpenAISpecificParameters(req)
 	}
+	if bifrostReq.Params != nil {
+		req.ExtraParams = bifrostReq.Params.ExtraParams
+	}
 	return req
 }
 
@@ -110,6 +113,10 @@ func ToOpenAIImageEditRequest(bifrostReq *schemas.BifrostImageEditRequest) *Open
 
 	if bifrostReq.Params != nil {
 		req.ImageEditParameters = *bifrostReq.Params
+	}
+
+	if bifrostReq.Params != nil {
+		req.ExtraParams = bifrostReq.Params.ExtraParams
 	}
 
 	return req
@@ -280,6 +287,10 @@ func ToOpenAIImageVariationRequest(bifrostReq *schemas.BifrostImageVariationRequ
 
 	if bifrostReq.Params != nil {
 		req.ImageVariationParameters = *bifrostReq.Params
+	}
+
+	if bifrostReq.Params != nil {
+		req.ExtraParams = bifrostReq.Params.ExtraParams
 	}
 
 	return req

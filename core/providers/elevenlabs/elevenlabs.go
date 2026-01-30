@@ -219,7 +219,9 @@ func (provider *ElevenlabsProvider) Speech(ctx *schemas.BifrostContext, key sche
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToElevenlabsSpeechRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToElevenlabsSpeechRequest(request), nil
+		},
 		providerName)
 
 	if bifrostErr != nil {
@@ -303,15 +305,12 @@ func (provider *ElevenlabsProvider) SpeechStream(ctx *schemas.BifrostContext, po
 
 	providerName := provider.GetProviderKey()
 
-	reqBody := ToElevenlabsSpeechRequest(request)
-	if reqBody == nil {
-		return nil, providerUtils.NewBifrostOperationError("speech input is not provided", nil, providerName)
-	}
-
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToElevenlabsSpeechRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToElevenlabsSpeechRequest(request), nil
+		},
 		providerName)
 
 	if bifrostErr != nil {

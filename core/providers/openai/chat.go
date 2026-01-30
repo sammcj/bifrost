@@ -38,8 +38,8 @@ func ToOpenAIChatRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifros
 		}
 		// Drop user field if it exceeds OpenAI's 64 character limit
 		openaiReq.ChatParameters.User = SanitizeUserField(openaiReq.ChatParameters.User)
+		openaiReq.ExtraParams = bifrostReq.Params.ExtraParams
 	}
-
 	switch bifrostReq.Provider {
 	case schemas.OpenAI:
 		return openaiReq

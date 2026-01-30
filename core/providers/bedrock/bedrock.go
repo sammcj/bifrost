@@ -576,7 +576,9 @@ func (provider *BedrockProvider) TextCompletion(ctx *schemas.BifrostContext, key
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockTextCompletionRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToBedrockTextCompletionRequest(request), nil
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -650,7 +652,9 @@ func (provider *BedrockProvider) TextCompletionStream(ctx *schemas.BifrostContex
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockTextCompletionRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToBedrockTextCompletionRequest(request), nil
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -776,7 +780,9 @@ func (provider *BedrockProvider) ChatCompletion(ctx *schemas.BifrostContext, key
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockChatCompletionRequest(ctx, request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToBedrockChatCompletionRequest(ctx, request)
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -852,7 +858,9 @@ func (provider *BedrockProvider) ChatCompletionStream(ctx *schemas.BifrostContex
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockChatCompletionRequest(ctx, request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToBedrockChatCompletionRequest(ctx, request)
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -1113,7 +1121,9 @@ func (provider *BedrockProvider) Responses(ctx *schemas.BifrostContext, key sche
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockResponsesRequest(ctx, request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToBedrockResponsesRequest(ctx, request)
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -1181,7 +1191,9 @@ func (provider *BedrockProvider) ResponsesStream(ctx *schemas.BifrostContext, po
 	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockResponsesRequest(ctx, request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToBedrockResponsesRequest(ctx, request)
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -1450,7 +1462,9 @@ func (provider *BedrockProvider) Embedding(ctx *schemas.BifrostContext, key sche
 		jsonData, bifrostError = providerUtils.CheckContextAndGetRequestBody(
 			ctx,
 			request,
-			func() (any, error) { return ToBedrockTitanEmbeddingRequest(request) },
+			func() (providerUtils.RequestBodyWithExtraParams, error) {
+				return ToBedrockTitanEmbeddingRequest(request)
+			},
 			provider.GetProviderKey())
 		if bifrostError != nil {
 			return nil, bifrostError
@@ -1462,7 +1476,9 @@ func (provider *BedrockProvider) Embedding(ctx *schemas.BifrostContext, key sche
 		jsonData, bifrostError = providerUtils.CheckContextAndGetRequestBody(
 			ctx,
 			request,
-			func() (any, error) { return ToBedrockCohereEmbeddingRequest(request) },
+			func() (providerUtils.RequestBodyWithExtraParams, error) {
+				return ToBedrockCohereEmbeddingRequest(request)
+			},
 			provider.GetProviderKey())
 		if bifrostError != nil {
 			return nil, bifrostError
@@ -1559,7 +1575,9 @@ func (provider *BedrockProvider) ImageGeneration(ctx *schemas.BifrostContext, ke
 	jsonData, bifrostError = providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockImageGenerationRequest(request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToBedrockImageGenerationRequest(request)
+		},
 		provider.GetProviderKey())
 	if bifrostError != nil {
 		return nil, bifrostError
@@ -1629,7 +1647,7 @@ func (provider *BedrockProvider) ImageEdit(ctx *schemas.BifrostContext, key sche
 	jsonData, bifrostError = providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockImageEditRequest(request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) { return ToBedrockImageEditRequest(request) },
 		provider.GetProviderKey())
 	if bifrostError != nil {
 		return nil, bifrostError
@@ -1700,7 +1718,9 @@ func (provider *BedrockProvider) ImageVariation(ctx *schemas.BifrostContext, key
 	jsonData, bifrostError = providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToBedrockImageVariationRequest(request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToBedrockImageVariationRequest(request)
+		},
 		provider.GetProviderKey())
 	if bifrostError != nil {
 		return nil, bifrostError

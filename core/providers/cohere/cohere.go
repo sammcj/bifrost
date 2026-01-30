@@ -289,7 +289,9 @@ func (provider *CohereProvider) ChatCompletion(ctx *schemas.BifrostContext, key 
 	jsonBody, err := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToCohereChatCompletionRequest(request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToCohereChatCompletionRequest(request)
+		},
 		provider.GetProviderKey())
 	if err != nil {
 		return nil, err
@@ -347,7 +349,7 @@ func (provider *CohereProvider) ChatCompletionStream(ctx *schemas.BifrostContext
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) {
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
 			reqBody, err := ToCohereChatCompletionRequest(request)
 			if err != nil {
 				return nil, err
@@ -542,7 +544,9 @@ func (provider *CohereProvider) Responses(ctx *schemas.BifrostContext, key schem
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToCohereResponsesRequest(request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToCohereResponsesRequest(request)
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -602,7 +606,7 @@ func (provider *CohereProvider) ResponsesStream(ctx *schemas.BifrostContext, pos
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) {
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
 			reqBody, err := ToCohereResponsesRequest(request)
 			if err != nil {
 				return nil, err
@@ -818,7 +822,9 @@ func (provider *CohereProvider) Embedding(ctx *schemas.BifrostContext, key schem
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToCohereEmbeddingRequest(request), nil },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToCohereEmbeddingRequest(request), nil
+		},
 		provider.GetProviderKey())
 	if bifrostErr != nil {
 		return nil, bifrostErr
@@ -970,7 +976,9 @@ func (provider *CohereProvider) CountTokens(ctx *schemas.BifrostContext, key sch
 	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
 		request,
-		func() (any, error) { return ToCohereCountTokensRequest(request) },
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToCohereCountTokensRequest(request)
+		},
 		providerName,
 	)
 	if bifrostErr != nil {
