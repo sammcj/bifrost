@@ -3608,6 +3608,16 @@ func (provider *OpenAIProvider) FileUpload(ctx *schemas.BifrostContext, key sche
 		return nil, providerUtils.NewBifrostOperationError("failed to write purpose field", err, providerName)
 	}
 
+	// Add expires_after fields if provided
+	if request.ExpiresAfter != nil {
+		if err := writer.WriteField("expires_after[anchor]", request.ExpiresAfter.Anchor); err != nil {
+			return nil, providerUtils.NewBifrostOperationError("failed to write expires_after[anchor] field", err, providerName)
+		}
+		if err := writer.WriteField("expires_after[seconds]", fmt.Sprintf("%d", request.ExpiresAfter.Seconds)); err != nil {
+			return nil, providerUtils.NewBifrostOperationError("failed to write expires_after[seconds] field", err, providerName)
+		}
+	}
+
 	// Add file field
 	filename := request.Filename
 	if filename == "" {
@@ -4108,10 +4118,11 @@ func (provider *OpenAIProvider) BatchCreate(ctx *schemas.BifrostContext, key sch
 
 	// Build request body
 	openAIReq := &OpenAIBatchRequest{
-		InputFileID:      inputFileID,
-		Endpoint:         string(request.Endpoint),
-		CompletionWindow: request.CompletionWindow,
-		Metadata:         request.Metadata,
+		InputFileID:        inputFileID,
+		Endpoint:           string(request.Endpoint),
+		CompletionWindow:   request.CompletionWindow,
+		Metadata:           request.Metadata,
+		OutputExpiresAfter: request.OutputExpiresAfter,
 	}
 
 	// Set default completion window if not provided
