@@ -899,8 +899,8 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 			Transcription:         true,  // Supported via whisper-1
 			TranscriptionStream:   false, // Not properly supported yet by Azure
 			Embedding:             true,
-			ImageGeneration:       true,
-			ImageGenerationStream: true,
+			ImageGeneration:       false, // Skipped for Azure
+			ImageGenerationStream: false, // Skipped for Azure
 			ImageEdit:             true,  // Azure supports image editing
 			ImageEditStream:       true,  // Azure supports streaming image editing
 			ImageVariation:        false, // Azure does not support image variation

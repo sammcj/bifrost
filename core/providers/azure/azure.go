@@ -1062,18 +1062,28 @@ func (provider *AzureProvider) SpeechStream(ctx *schemas.BifrostContext, postHoo
 			if n > 0 {
 				accumulated = append(accumulated, readBuffer[:n]...)
 
-				// Process complete SSE events (separated by \n\n)
+				// Process complete SSE events (separated by \r\n\r\n or \n\n)
 				for {
-					// Find the next double-newline separator
-					idx := bytes.Index(accumulated, []byte("\n\n"))
+					// Find the next double-newline separator (try CRLF first, then LF)
+					var idx int
+					var separatorLen int
+					idx = bytes.Index(accumulated, []byte("\r\n\r\n"))
+					if idx != -1 {
+						separatorLen = 4 // \r\n\r\n
+					} else {
+						idx = bytes.Index(accumulated, []byte("\n\n"))
+						if idx != -1 {
+							separatorLen = 2 // \n\n
+						}
+					}
 					if idx == -1 {
 						// No complete event yet, need more data
 						break
 					}
 
-					// Extract the event (everything up to \n\n)
+					// Extract the event (everything up to the separator)
 					event := accumulated[:idx]
-					accumulated = accumulated[idx+2:] // Skip the \n\n
+					accumulated = accumulated[idx+separatorLen:] // Skip the separator
 
 					// Skip empty events and comments
 					if len(event) == 0 || bytes.HasPrefix(event, []byte(":")) {

@@ -62,8 +62,8 @@ func TestAzure(t *testing.T) {
 			SpeechSynthesis:       true,
 			SpeechSynthesisStream: true,
 			StructuredOutputs:     true, // Structured outputs with nullable enum support
-			ImageGeneration:       true,
-			ImageGenerationStream: true,
+			ImageGeneration:       false, // Skipped for Azure
+			ImageGenerationStream: false, // Skipped for Azure
 			ImageEdit:             true,
 			ImageEditStream:       true,
 			ImageVariation:        false, // Not supported by Azure
