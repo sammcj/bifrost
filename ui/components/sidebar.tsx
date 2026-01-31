@@ -21,7 +21,6 @@ import {
 	LayoutGrid,
 	LogOut,
 	Logs,
-	Network,
 	PanelLeftClose,
 	Puzzle,
 	ScrollText,
@@ -424,20 +423,20 @@ export default function AppSidebar() {
 					description: "Configure models",
 					hasAccess: hasModelProvidersAccess,
 				},
-				{
-					title: "Budgets & Limits",
-					url: "/workspace/model-limits",
-					icon: Gauge,
-					description: "Model limits",
-					hasAccess: hasGovernanceAccess,
-				},
-				{
-					title: "Routing Rules",
-					url: "/workspace/routing-rules",
-					icon: Network,
-					description: "Intelligent routing rules",
-					hasAccess: hasRoutingRulesAccess,
-				},
+				// {
+				// 	title: "Budgets & Limits",
+				// 	url: "/workspace/model-limits",
+				// 	icon: Gauge,
+				// 	description: "Model limits",
+				// 	hasAccess: hasGovernanceAccess,
+				// },
+				// {
+				// 	title: "Routing Rules",
+				// 	url: "/workspace/routing-rules",
+				// 	icon: Network,
+				// 	description: "Intelligent routing rules",
+				// 	hasAccess: hasRoutingRulesAccess,
+				// },
 			],
 		},
 		{
@@ -639,14 +638,14 @@ export default function AppSidebar() {
 				},
 				...(IS_ENTERPRISE
 					? [
-						{
-							title: "Proxy",
-							url: "/workspace/config/proxy",
-							icon: Globe,
-							description: "Proxy configuration",
-							hasAccess: hasSettingsAccess,
-						},
-					]
+							{
+								title: "Proxy",
+								url: "/workspace/config/proxy",
+								icon: Globe,
+								description: "Proxy configuration",
+								hasAccess: hasSettingsAccess,
+							},
+						]
 					: []),
 				{
 					title: "API Keys",
