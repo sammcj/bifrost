@@ -299,10 +299,10 @@ func (p *GovernancePlugin) GetName() string {
 // Optimized to skip unnecessary operations: only unmarshals/marshals when needed
 func (p *GovernancePlugin) HTTPTransportPreHook(ctx *schemas.BifrostContext, req *schemas.HTTPRequest) (*schemas.HTTPResponse, error) {
 	virtualKeyValue := parseVirtualKeyFromHTTPRequest(req)
-	hasRoutingRules := p.store.HasRoutingRules(ctx)
+	// hasRoutingRules := p.store.HasRoutingRules(ctx)
 
 	// If no virtual key and no routing rules configured, skip all processing
-	if virtualKeyValue == nil && !hasRoutingRules {
+	if virtualKeyValue == nil { // && !hasRoutingRules {
 		return nil, nil
 	}
 
@@ -347,18 +347,18 @@ func (p *GovernancePlugin) HTTPTransportPreHook(ctx *schemas.BifrostContext, req
 	}
 
 	// Apply routing rules only if we have rules or matched decision
-	var routingDecision *RoutingDecision
-	if hasRoutingRules {
-		var err error
-		payload, routingDecision, err = p.applyRoutingRules(ctx, req, payload, virtualKey)
-		if err != nil {
-			return nil, err
-		}
-		// Mark for marshal if a routing rule matched
-		if routingDecision != nil {
-			needsMarshal = true
-		}
-	}
+	// var routingDecision *RoutingDecision
+	// if hasRoutingRules {
+	// 	var err error
+	// 	payload, routingDecision, err = p.applyRoutingRules(ctx, req, payload, virtualKey)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	// Mark for marshal if a routing rule matched
+	// 	if routingDecision != nil {
+	// 		needsMarshal = true
+	// 	}
+	// }
 
 	// Only marshal if something changed (VK processing or routing decision matched)
 	if needsMarshal {
@@ -726,13 +726,13 @@ func (p *GovernancePlugin) evaluateGovernanceRequest(ctx *schemas.BifrostContext
 	}
 
 	// First evaluate model and provider checks (applies even when virtual keys are disabled or not present)
-	result := p.resolver.EvaluateModelAndProviderRequest(ctx, evaluationRequest.Provider, evaluationRequest.Model)
+	// result := p.resolver.EvaluateModelAndProviderRequest(ctx, evaluationRequest.Provider, evaluationRequest.Model)
 
 	// If model/provider checks passed and virtual key exists, evaluate virtual key checks
 	// This will overwrite the result with virtual key-specific decision
-	if result.Decision == DecisionAllow && evaluationRequest.VirtualKey != "" {
-		result = p.resolver.EvaluateVirtualKeyRequest(ctx, evaluationRequest.VirtualKey, evaluationRequest.Provider, evaluationRequest.Model, requestType)
-	}
+	// if result.Decision == DecisionAllow && evaluationRequest.VirtualKey != "" {
+	result := p.resolver.EvaluateVirtualKeyRequest(ctx, evaluationRequest.VirtualKey, evaluationRequest.Provider, evaluationRequest.Model, requestType)
+	// }
 	// If model/provider checks failed, skip virtual key evaluation and proceed to final decision handling
 
 	// Mark request as rejected in context if not allowed

@@ -1,1 +1,1 @@
-- feat: added routing engine for conditional routing of requests
+- chore: upgrades core to v1.4.0 and framework to v1.2.17
