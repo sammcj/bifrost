@@ -36,8 +36,7 @@ func setupMCPManagerWithRequestIDFunc(t *testing.T, fetchNewRequestIDFunc func(c
 	}
 
 	// Create Starlark CodeMode
-	starlark.SetLogger(logger)
-	codeMode := starlark.NewStarlarkCodeMode(nil)
+	codeMode := starlark.NewStarlarkCodeMode(nil, logger)
 
 	// Create MCP manager - dependencies are injected automatically
 	manager := mcp.NewMCPManager(context.Background(), *mcpConfig, nil, logger, codeMode)

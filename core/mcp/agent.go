@@ -5,9 +5,15 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/bytedance/gopkg/util/logger"
 	"github.com/bytedance/sonic"
 	"github.com/maximhq/bifrost/core/schemas"
 )
+
+
+type AgentModeExecutor struct {
+	logger schemas.Logger
+}
 
 // ExecuteAgentForChatRequest handles the agent mode execution loop for Chat API.
 // It orchestrates iterative tool execution up to the maximum depth, handling
@@ -26,7 +32,7 @@ import (
 // Returns:
 //   - *schemas.BifrostChatResponse: The final response after agent execution
 //   - *schemas.BifrostError: Any error that occurred during agent execution
-func ExecuteAgentForChatRequest(
+func (a *AgentModeExecutor) ExecuteAgentForChatRequest(
 	ctx *schemas.BifrostContext,
 	maxAgentDepth int,
 	originalReq *schemas.BifrostChatRequest,
@@ -34,7 +40,7 @@ func ExecuteAgentForChatRequest(
 	makeReq func(ctx *schemas.BifrostContext, req *schemas.BifrostChatRequest) (*schemas.BifrostChatResponse, *schemas.BifrostError),
 	fetchNewRequestIDFunc func(ctx *schemas.BifrostContext) string,
 	executeToolFunc func(ctx *schemas.BifrostContext, request *schemas.BifrostMCPRequest) (*schemas.BifrostMCPResponse, error),
-	clientManager ClientManager,
+	clientManager ClientManager,	
 ) (*schemas.BifrostChatResponse, *schemas.BifrostError) {
 	// Create adapter for Chat API
 	adapter := &chatAPIAdapter{
@@ -43,7 +49,7 @@ func ExecuteAgentForChatRequest(
 		makeReq:         makeReq,
 	}
 
-	result, err := executeAgent(ctx, maxAgentDepth, adapter, fetchNewRequestIDFunc, executeToolFunc, clientManager)
+	result, err := a.executeAgent(ctx, maxAgentDepth, adapter, fetchNewRequestIDFunc, executeToolFunc, clientManager)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +85,7 @@ func ExecuteAgentForChatRequest(
 // Returns:
 //   - *schemas.BifrostResponsesResponse: The final response after agent execution
 //   - *schemas.BifrostError: Any error that occurred during agent execution
-func ExecuteAgentForResponsesRequest(
+func (a *AgentModeExecutor) ExecuteAgentForResponsesRequest(
 	ctx *schemas.BifrostContext,
 	maxAgentDepth int,
 	originalReq *schemas.BifrostResponsesRequest,
@@ -96,7 +102,7 @@ func ExecuteAgentForResponsesRequest(
 		makeReq:         makeReq,
 	}
 
-	result, err := executeAgent(ctx, maxAgentDepth, adapter, fetchNewRequestIDFunc, executeToolFunc, clientManager)
+	result, err := a.executeAgent(ctx, maxAgentDepth, adapter, fetchNewRequestIDFunc, executeToolFunc, clientManager)
 	if err != nil {
 		return nil, err
 	}
@@ -131,16 +137,14 @@ func ExecuteAgentForResponsesRequest(
 // Returns:
 //   - interface{}: The final response after agent execution (type depends on adapter)
 //   - *schemas.BifrostError: Any error that occurred during agent execution
-func executeAgent(
+func (a *AgentModeExecutor) executeAgent(
 	ctx *schemas.BifrostContext,
 	maxAgentDepth int,
 	adapter agentAPIAdapter,
 	fetchNewRequestIDFunc func(ctx *schemas.BifrostContext) string,
 	executeToolFunc func(ctx *schemas.BifrostContext, request *schemas.BifrostMCPRequest) (*schemas.BifrostMCPResponse, error),
-	clientManager ClientManager,
+	clientManager ClientManager,	
 ) (interface{}, *schemas.BifrostError) {
-	logger.Debug("Entering agent mode - detected tool calls in response")
-
 	// Get initial response from adapter
 	currentResponse := adapter.getInitialResponse()
 
@@ -162,11 +166,8 @@ func executeAgent(
 		depth++
 		toolCalls := adapter.extractToolCalls(currentResponse)
 		if len(toolCalls) == 0 {
-			logger.Debug("No more tool calls found, exiting agent mode")
 			break
 		}
-
-		logger.Debug(fmt.Sprintf("Agent mode depth %d: executing %d tool calls", depth, len(toolCalls)))
 
 		// Separate tools into auto-executable and non-auto-executable groups
 		var autoExecutableTools []schemas.ChatAssistantMessageToolCall
@@ -360,7 +361,6 @@ func executeAgent(
 		currentResponse = response
 	}
 
-	logger.Debug("Agent mode completed after %d iterations", depth)
 	return currentResponse, nil
 }
 

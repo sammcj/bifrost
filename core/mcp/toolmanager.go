@@ -33,6 +33,8 @@ type ToolsManager struct {
 	toolExecutionTimeout atomic.Value
 	maxAgentDepth        atomic.Int32
 	clientManager        ClientManager
+	logger               schemas.Logger
+	agentModeExecutor    *AgentModeExecutor
 
 	// CodeMode implementation for code execution (Starlark by default)
 	codeMode CodeMode
@@ -70,6 +72,7 @@ func NewToolsManager(
 	fetchNewRequestIDFunc func(ctx *schemas.BifrostContext) string,
 	pluginPipelineProvider func() PluginPipeline,
 	releasePluginPipeline func(pipeline PluginPipeline),
+	logger schemas.Logger,
 ) *ToolsManager {
 	return NewToolsManagerWithCodeMode(
 		config,
@@ -78,6 +81,7 @@ func NewToolsManager(
 		pluginPipelineProvider,
 		releasePluginPipeline,
 		nil, // Use default code mode (will be set later via SetCodeMode)
+		logger,
 	)
 }
 
@@ -101,6 +105,7 @@ func NewToolsManagerWithCodeMode(
 	pluginPipelineProvider func() PluginPipeline,
 	releasePluginPipeline func(pipeline PluginPipeline),
 	codeMode CodeMode,
+	logger schemas.Logger,
 ) *ToolsManager {
 	if config == nil {
 		config = &schemas.MCPToolManagerConfig{
@@ -120,19 +125,29 @@ func NewToolsManagerWithCodeMode(
 		config.CodeModeBindingLevel = schemas.CodeModeBindingLevelServer
 	}
 
+	if logger == nil {
+		logger = defaultLogger
+	}
+
+	agentModeExecutor := &AgentModeExecutor{
+		logger: logger,
+	}
+
 	manager := &ToolsManager{
 		clientManager:          clientManager,
 		fetchNewRequestIDFunc:  fetchNewRequestIDFunc,
 		pluginPipelineProvider: pluginPipelineProvider,
 		releasePluginPipeline:  releasePluginPipeline,
 		codeMode:               codeMode,
+		logger:                 logger,
+		agentModeExecutor:      agentModeExecutor,
 	}
 
 	// Initialize atomic values
 	manager.toolExecutionTimeout.Store(config.ToolExecutionTimeout)
 	manager.maxAgentDepth.Store(int32(config.MaxAgentDepth))
 
-	logger.Info("%s tool manager initialized with tool execution timeout: %v, max agent depth: %d, and code mode binding level: %s", MCPLogPrefix, config.ToolExecutionTimeout, config.MaxAgentDepth, config.CodeModeBindingLevel)
+	manager.logger.Info("%s tool manager initialized with tool execution timeout: %v, max agent depth: %d, and code mode binding level: %s", MCPLogPrefix, config.ToolExecutionTimeout, config.MaxAgentDepth, config.CodeModeBindingLevel)
 	return manager
 }
 
@@ -170,7 +185,7 @@ func (m *ToolsManager) GetAvailableTools(ctx context.Context) []schemas.ChatTool
 	for clientName, clientTools := range availableToolsPerClient {
 		client := m.clientManager.GetClientByName(clientName)
 		if client == nil {
-			logger.Warn("%s Client %s not found, skipping", MCPLogPrefix, clientName)
+			m.logger.Warn("%s Client %s not found, skipping", MCPLogPrefix, clientName)
 			continue
 		}
 		if client.ExecutionConfig.IsCodeModeClient {
@@ -538,7 +553,7 @@ func (m *ToolsManager) executeToolInternal(ctx *schemas.BifrostContext, toolCall
 		if toolCtx.Err() == context.DeadlineExceeded {
 			return nil, "", "", fmt.Errorf("MCP tool call timed out after %v: %s", toolExecutionTimeout, toolName)
 		}
-		logger.Error("%s Tool execution failed for %s via client %s: %v", MCPLogPrefix, toolName, client.ExecutionConfig.Name, callErr)
+		m.logger.Error("%s Tool execution failed for %s via client %s: %v", MCPLogPrefix, toolName, client.ExecutionConfig.Name, callErr)
 		return nil, "", "", fmt.Errorf("MCP tool call failed: %v", callErr)
 	}
 
@@ -574,7 +589,7 @@ func (m *ToolsManager) ExecuteAgentForChatRequest(
 	if executeToolFunc == nil {
 		executeToolFunc = m.ExecuteTool
 	}
-	return ExecuteAgentForChatRequest(
+	return m.agentModeExecutor.ExecuteAgentForChatRequest(
 		ctx,
 		int(m.maxAgentDepth.Load()),
 		req,
@@ -611,7 +626,7 @@ func (m *ToolsManager) ExecuteAgentForResponsesRequest(
 	if executeToolFunc == nil {
 		executeToolFunc = m.ExecuteTool
 	}
-	return ExecuteAgentForResponsesRequest(
+	return m.agentModeExecutor.ExecuteAgentForResponsesRequest(
 		ctx,
 		int(m.maxAgentDepth.Load()),
 		req,
@@ -644,7 +659,7 @@ func (m *ToolsManager) UpdateConfig(config *schemas.MCPToolManagerConfig) {
 		})
 	}
 
-	logger.Info("%s tool manager configuration updated with tool execution timeout: %v, max agent depth: %d, and code mode binding level: %s", MCPLogPrefix, config.ToolExecutionTimeout, config.MaxAgentDepth, config.CodeModeBindingLevel)
+	m.logger.Info("%s tool manager configuration updated with tool execution timeout: %v, max agent depth: %d, and code mode binding level: %s", MCPLogPrefix, config.ToolExecutionTimeout, config.MaxAgentDepth, config.CodeModeBindingLevel)
 }
 
 // GetCodeModeBindingLevel returns the current code mode binding level.

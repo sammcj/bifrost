@@ -21,6 +21,7 @@ type ClientToolSyncer struct {
 	clientName string
 	interval   time.Duration
 	timeout    time.Duration
+	logger     schemas.Logger
 	mu         sync.Mutex
 	ticker     *time.Ticker
 	ctx        context.Context
@@ -34,9 +35,14 @@ func NewClientToolSyncer(
 	clientID string,
 	clientName string,
 	interval time.Duration,
+	logger schemas.Logger,
 ) *ClientToolSyncer {
 	if interval <= 0 {
 		interval = DefaultToolSyncInterval
+	}
+
+	if logger == nil {
+		logger = defaultLogger
 	}
 
 	return &ClientToolSyncer{
@@ -45,6 +51,7 @@ func NewClientToolSyncer(
 		clientName: clientName,
 		interval:   interval,
 		timeout:    ToolSyncTimeout,
+		logger:     logger,
 		isSyncing:  false,
 	}
 }
@@ -63,7 +70,7 @@ func (cts *ClientToolSyncer) Start() {
 	cts.ticker = time.NewTicker(cts.interval)
 
 	go cts.syncLoop()
-	logger.Debug("%s Tool syncer started for client %s (interval: %v)", MCPLogPrefix, cts.clientID, cts.interval)
+	cts.logger.Debug("%s Tool syncer started for client %s (interval: %v)", MCPLogPrefix, cts.clientID, cts.interval)
 }
 
 // Stop stops syncing tools
@@ -82,7 +89,7 @@ func (cts *ClientToolSyncer) Stop() {
 	if cts.cancel != nil {
 		cts.cancel()
 	}
-	logger.Debug("%s Tool syncer stopped for client %s", MCPLogPrefix, cts.clientID)
+	cts.logger.Debug("%s Tool syncer stopped for client %s", MCPLogPrefix, cts.clientID)
 }
 
 // syncLoop runs the tool sync loop
@@ -110,7 +117,7 @@ func (cts *ClientToolSyncer) performSync() {
 
 	if clientState.Conn == nil {
 		cts.manager.mu.RUnlock()
-		logger.Debug("%s Skipping tool sync for %s: client not connected", MCPLogPrefix, cts.clientID)
+		cts.logger.Debug("%s Skipping tool sync for %s: client not connected", MCPLogPrefix, cts.clientID)
 		return
 	}
 
@@ -123,10 +130,10 @@ func (cts *ClientToolSyncer) performSync() {
 	ctx, cancel := context.WithTimeout(context.Background(), cts.timeout)
 	defer cancel()
 
-	newTools, newMapping, err := retrieveExternalTools(ctx, conn, clientName)
+	newTools, newMapping, err := retrieveExternalTools(ctx, conn, clientName, cts.logger)
 	if err != nil {
 		// On failure, keep existing tools intact
-		logger.Warn("%s Tool sync failed for %s, keeping existing tools: %v", MCPLogPrefix, cts.clientID, err)
+		cts.logger.Warn("%s Tool sync failed for %s, keeping existing tools: %v", MCPLogPrefix, cts.clientID, err)
 		return
 	}
 
@@ -147,9 +154,9 @@ func (cts *ClientToolSyncer) performSync() {
 	cts.manager.mu.Unlock()
 
 	if oldToolCount != newToolCount {
-		logger.Info("%s Tool sync completed for %s: %d -> %d tools", MCPLogPrefix, cts.clientID, oldToolCount, newToolCount)
+		cts.logger.Info("%s Tool sync completed for %s: %d -> %d tools", MCPLogPrefix, cts.clientID, oldToolCount, newToolCount)
 	} else {
-		logger.Debug("%s Tool sync completed for %s: %d tools (no change)", MCPLogPrefix, cts.clientID, newToolCount)
+		cts.logger.Debug("%s Tool sync completed for %s: %d tools (no change)", MCPLogPrefix, cts.clientID, newToolCount)
 	}
 }
 

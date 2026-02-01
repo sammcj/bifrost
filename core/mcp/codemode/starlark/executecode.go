@@ -112,30 +112,30 @@ func (s *StarlarkCodeMode) handleExecuteToolCode(ctx context.Context, toolCall s
 	if toolCall.Function.Name != nil {
 		toolName = *toolCall.Function.Name
 	}
-	logger.Debug("%s Handling executeToolCode tool call: %s", codemcp.CodeModeLogPrefix, toolName)
+	s.logger.Debug("%s Handling executeToolCode tool call: %s", codemcp.CodeModeLogPrefix, toolName)
 
 	// Parse tool arguments
 	var arguments map[string]interface{}
 	if err := sonic.Unmarshal([]byte(toolCall.Function.Arguments), &arguments); err != nil {
-		logger.Debug("%s Failed to parse tool arguments: %v", codemcp.CodeModeLogPrefix, err)
+		s.logger.Debug("%s Failed to parse tool arguments: %v", codemcp.CodeModeLogPrefix, err)
 		return nil, fmt.Errorf("failed to parse tool arguments: %v", err)
 	}
 
 	code, ok := arguments["code"].(string)
 	if !ok || code == "" {
-		logger.Debug("%s Code parameter missing or empty", codemcp.CodeModeLogPrefix)
+		s.logger.Debug("%s Code parameter missing or empty", codemcp.CodeModeLogPrefix)
 		return nil, fmt.Errorf("code parameter is required and must be a non-empty string")
 	}
 
-	logger.Debug("%s Starting code execution", codemcp.CodeModeLogPrefix)
+	s.logger.Debug("%s Starting code execution", codemcp.CodeModeLogPrefix)
 	result := s.executeCode(ctx, code)
-	logger.Debug("%s Code execution completed. Success: %v, Has errors: %v, Log count: %d", codemcp.CodeModeLogPrefix, result.Errors == nil, result.Errors != nil, len(result.Logs))
+	s.logger.Debug("%s Code execution completed. Success: %v, Has errors: %v, Log count: %d", codemcp.CodeModeLogPrefix, result.Errors == nil, result.Errors != nil, len(result.Logs))
 
 	// Format response text
 	var responseText string
 	var executionSuccess bool = true
 	if result.Errors != nil {
-		logger.Debug("%s Formatting error response. Error kind: %s, Message length: %d, Hints count: %d", codemcp.CodeModeLogPrefix, result.Errors.Kind, len(result.Errors.Message), len(result.Errors.Hints))
+		s.logger.Debug("%s Formatting error response. Error kind: %s, Message length: %d, Hints count: %d", codemcp.CodeModeLogPrefix, result.Errors.Kind, len(result.Errors.Message), len(result.Errors.Hints))
 		logsText := ""
 		if len(result.Logs) > 0 {
 			logsText = fmt.Sprintf("\n\nPrint Output:\n%s\n", strings.Join(result.Logs, "\n"))
@@ -149,15 +149,15 @@ func (s *StarlarkCodeMode) handleExecuteToolCode(ctx context.Context, toolCall s
 			logsText,
 			strings.Join(result.Environment.ServerKeys, ", "),
 		)
-		logger.Debug("%s Error response formatted. Response length: %d chars", codemcp.CodeModeLogPrefix, len(responseText))
+		s.logger.Debug("%s Error response formatted. Response length: %d chars", codemcp.CodeModeLogPrefix, len(responseText))
 	} else {
 		hasLogs := len(result.Logs) > 0
 		hasResult := result.Result != nil
-		logger.Debug("%s Formatting success response. Has logs: %v, Has result: %v", codemcp.CodeModeLogPrefix, hasLogs, hasResult)
+		s.logger.Debug("%s Formatting success response. Has logs: %v, Has result: %v", codemcp.CodeModeLogPrefix, hasLogs, hasResult)
 
 		if !hasLogs && !hasResult {
 			executionSuccess = false
-			logger.Debug("%s Execution completed with no data (no logs, no result), marking as failure", codemcp.CodeModeLogPrefix)
+			s.logger.Debug("%s Execution completed with no data (no logs, no result), marking as failure", codemcp.CodeModeLogPrefix)
 			hints := []string{
 				"Add print() statements throughout your code to debug and see what's happening at each step",
 				"Assign the final value to 'result' variable if you want to return it: result = computed_value",
@@ -171,7 +171,7 @@ func (s *StarlarkCodeMode) handleExecuteToolCode(ctx context.Context, toolCall s
 				strings.Join(hints, "\n"),
 				strings.Join(result.Environment.ServerKeys, ", "),
 			)
-			logger.Debug("%s No-data failure response formatted. Response length: %d chars", codemcp.CodeModeLogPrefix, len(responseText))
+			s.logger.Debug("%s No-data failure response formatted. Response length: %d chars", codemcp.CodeModeLogPrefix, len(responseText))
 		} else {
 			if hasLogs {
 				responseText = fmt.Sprintf("Print output:\n%s\n\nExecution completed successfully.",
@@ -183,20 +183,20 @@ func (s *StarlarkCodeMode) handleExecuteToolCode(ctx context.Context, toolCall s
 				resultJSON, err := sonic.MarshalIndent(result.Result, "", "  ")
 				if err == nil {
 					responseText += fmt.Sprintf("\nReturn value: %s", string(resultJSON))
-					logger.Debug("%s Added return value to response (JSON length: %d chars)", codemcp.CodeModeLogPrefix, len(resultJSON))
+					s.logger.Debug("%s Added return value to response (JSON length: %d chars)", codemcp.CodeModeLogPrefix, len(resultJSON))
 				} else {
-					logger.Debug("%s Failed to marshal result to JSON: %v", codemcp.CodeModeLogPrefix, err)
+					s.logger.Debug("%s Failed to marshal result to JSON: %v", codemcp.CodeModeLogPrefix, err)
 				}
 			}
 
 			responseText += fmt.Sprintf("\n\nEnvironment:\n  Available server keys: %s",
 				strings.Join(result.Environment.ServerKeys, ", "))
 			responseText += "\nNote: This is a Starlark (Python subset) environment. Use MCP tools for external interactions."
-			logger.Debug("%s Success response formatted. Response length: %d chars, Server keys: %v", codemcp.CodeModeLogPrefix, len(responseText), result.Environment.ServerKeys)
+			s.logger.Debug("%s Success response formatted. Response length: %d chars, Server keys: %v", codemcp.CodeModeLogPrefix, len(responseText), result.Environment.ServerKeys)
 		}
 	}
 
-	logger.Debug("%s Returning tool response message. Execution success: %v", codemcp.CodeModeLogPrefix, executionSuccess)
+	s.logger.Debug("%s Returning tool response message. Execution success: %v", codemcp.CodeModeLogPrefix, executionSuccess)
 	return createToolResponseMessage(toolCall, responseText), nil
 }
 
@@ -204,7 +204,7 @@ func (s *StarlarkCodeMode) handleExecuteToolCode(ctx context.Context, toolCall s
 func (s *StarlarkCodeMode) executeCode(ctx context.Context, code string) ExecutionResult {
 	logs := []string{}
 
-	logger.Debug("%s Starting Starlark code execution", codemcp.CodeModeLogPrefix)
+	s.logger.Debug("%s Starting Starlark code execution", codemcp.CodeModeLogPrefix)
 
 	// Step 1: Convert literal \n escape sequences to actual newlines
 	codeWithNewlines := strings.ReplaceAll(code, "\\n", "\n")
@@ -234,17 +234,17 @@ func (s *StarlarkCodeMode) executeCode(ctx context.Context, code string) Executi
 		logs = append(logs, msg)
 	}
 
-	logger.Debug("%s GetToolPerClient returned %d clients", codemcp.CodeModeLogPrefix, len(availableToolsPerClient))
+	s.logger.Debug("%s GetToolPerClient returned %d clients", codemcp.CodeModeLogPrefix, len(availableToolsPerClient))
 
 	for clientName, tools := range availableToolsPerClient {
 		client := s.clientManager.GetClientByName(clientName)
 		if client == nil {
-			logger.Warn("%s Client %s not found, skipping", codemcp.CodeModeLogPrefix, clientName)
+			s.logger.Warn("%s Client %s not found, skipping", codemcp.CodeModeLogPrefix, clientName)
 			continue
 		}
-		logger.Debug("%s [%s] Client found. IsCodeModeClient: %v, ToolCount: %d", codemcp.CodeModeLogPrefix, clientName, client.ExecutionConfig.IsCodeModeClient, len(tools))
+		s.logger.Debug("%s [%s] Client found. IsCodeModeClient: %v, ToolCount: %d", codemcp.CodeModeLogPrefix, clientName, client.ExecutionConfig.IsCodeModeClient, len(tools))
 		if !client.ExecutionConfig.IsCodeModeClient || len(tools) == 0 {
-			logger.Debug("%s [%s] Skipped: IsCodeModeClient=%v, HasTools=%v", codemcp.CodeModeLogPrefix, clientName, client.ExecutionConfig.IsCodeModeClient, len(tools) > 0)
+			s.logger.Debug("%s [%s] Skipped: IsCodeModeClient=%v, HasTools=%v", codemcp.CodeModeLogPrefix, clientName, client.ExecutionConfig.IsCodeModeClient, len(tools) > 0)
 			continue
 		}
 		serverKeys = append(serverKeys, clientName)
@@ -262,7 +262,7 @@ func (s *StarlarkCodeMode) executeCode(ctx context.Context, code string) Executi
 			unprefixedToolName = strings.ReplaceAll(unprefixedToolName, "-", "_")
 			parsedToolName := parseToolName(unprefixedToolName)
 
-			logger.Debug("%s [%s] Binding tool: %s -> %s", codemcp.CodeModeLogPrefix, clientName, originalToolName, parsedToolName)
+			s.logger.Debug("%s [%s] Binding tool: %s -> %s", codemcp.CodeModeLogPrefix, clientName, originalToolName, parsedToolName)
 
 			// Capture variables for closure
 			capturedToolName := originalToolName
@@ -307,13 +307,13 @@ func (s *StarlarkCodeMode) executeCode(ctx context.Context, code string) Executi
 		// Create a struct for this server
 		serverStruct := starlarkstruct.FromStringDict(starlark.String(clientName), structMembers)
 		predeclared[clientName] = serverStruct
-		logger.Debug("%s [%s] Added server struct with %d tools", codemcp.CodeModeLogPrefix, clientName, len(structMembers))
+		s.logger.Debug("%s [%s] Added server struct with %d tools", codemcp.CodeModeLogPrefix, clientName, len(structMembers))
 	}
 
 	if len(serverKeys) > 0 {
-		logger.Debug("%s Bound %d servers with tools: %v", codemcp.CodeModeLogPrefix, len(serverKeys), serverKeys)
+		s.logger.Debug("%s Bound %d servers with tools: %v", codemcp.CodeModeLogPrefix, len(serverKeys), serverKeys)
 	} else {
-		logger.Debug("%s No servers available for code mode execution", codemcp.CodeModeLogPrefix)
+		s.logger.Debug("%s No servers available for code mode execution", codemcp.CodeModeLogPrefix)
 	}
 
 	// Step 4: Create Starlark thread with print function and timeout
@@ -337,7 +337,7 @@ func (s *StarlarkCodeMode) executeCode(ctx context.Context, code string) Executi
 	if err != nil {
 		errorMessage := err.Error()
 		hints := generatePythonErrorHints(errorMessage, serverKeys)
-		logger.Debug("%s Execution failed: %s", codemcp.CodeModeLogPrefix, errorMessage)
+		s.logger.Debug("%s Execution failed: %s", codemcp.CodeModeLogPrefix, errorMessage)
 
 		errorKind := ExecutionErrorTypeRuntime
 		if strings.Contains(errorMessage, "syntax error") {
@@ -364,7 +364,7 @@ func (s *StarlarkCodeMode) executeCode(ctx context.Context, code string) Executi
 		result = starlarkToGo(resultVal)
 	}
 
-	logger.Debug("%s Execution completed successfully", codemcp.CodeModeLogPrefix)
+	s.logger.Debug("%s Execution completed successfully", codemcp.CodeModeLogPrefix)
 	return ExecutionResult{
 		Result: result,
 		Logs:   logs,
@@ -502,7 +502,7 @@ func (s *StarlarkCodeMode) callMCPTool(ctx context.Context, clientName, toolName
 		toolCallReq = *preReq.ChatAssistantMessageToolCall
 		if toolCallReq.Function.Arguments != "" {
 			if err := sonic.Unmarshal([]byte(toolCallReq.Function.Arguments), &args); err != nil {
-				logger.Warn("%s Failed to parse modified tool arguments, using original: %v", codemcp.CodeModeLogPrefix, err)
+				s.logger.Warn("%s Failed to parse modified tool arguments, using original: %v", codemcp.CodeModeLogPrefix, err)
 			}
 		}
 	}
@@ -532,7 +532,7 @@ func (s *StarlarkCodeMode) callMCPTool(ctx context.Context, clientName, toolName
 	var bifrostErr *schemas.BifrostError
 
 	if callErr != nil {
-		logger.Debug("%s Tool call failed: %s.%s - %v", codemcp.CodeModeLogPrefix, clientName, toolName, callErr)
+		s.logger.Debug("%s Tool call failed: %s.%s - %v", codemcp.CodeModeLogPrefix, clientName, toolName, callErr)
 		appendLog(fmt.Sprintf("[TOOL] %s.%s error: %v", clientName, toolName, callErr))
 		bifrostErr = &schemas.BifrostError{
 			IsBifrostError: false,
@@ -545,7 +545,7 @@ func (s *StarlarkCodeMode) callMCPTool(ctx context.Context, clientName, toolName
 
 		if after, ok := strings.CutPrefix(rawResult, "Error: "); ok {
 			errorMsg := after
-			logger.Debug("%s Tool returned error result: %s.%s - %s", codemcp.CodeModeLogPrefix, clientName, toolName, errorMsg)
+			s.logger.Debug("%s Tool returned error result: %s.%s - %s", codemcp.CodeModeLogPrefix, clientName, toolName, errorMsg)
 			appendLog(fmt.Sprintf("[TOOL] %s.%s error result: %s", clientName, toolName, errorMsg))
 			bifrostErr = &schemas.BifrostError{
 				IsBifrostError: false,
@@ -622,7 +622,7 @@ func (s *StarlarkCodeMode) callMCPToolDirect(ctx context.Context, client *schema
 
 	toolResponse, callErr := client.Conn.CallTool(toolCtx, callRequest)
 	if callErr != nil {
-		logger.Debug("%s Tool call failed: %s.%s - %v", codemcp.CodeModeLogPrefix, clientName, logToolName, callErr)
+		s.logger.Debug("%s Tool call failed: %s.%s - %v", codemcp.CodeModeLogPrefix, clientName, logToolName, callErr)
 		appendLog(fmt.Sprintf("[TOOL] %s.%s error: %v", clientName, logToolName, callErr))
 		return nil, fmt.Errorf("tool call failed for %s.%s: %v", clientName, logToolName, callErr)
 	}
@@ -631,7 +631,7 @@ func (s *StarlarkCodeMode) callMCPToolDirect(ctx context.Context, client *schema
 
 	if after, ok := strings.CutPrefix(rawResult, "Error: "); ok {
 		errorMsg := after
-		logger.Debug("%s Tool returned error result: %s.%s - %s", codemcp.CodeModeLogPrefix, clientName, logToolName, errorMsg)
+		s.logger.Debug("%s Tool returned error result: %s.%s - %s", codemcp.CodeModeLogPrefix, clientName, logToolName, errorMsg)
 		appendLog(fmt.Sprintf("[TOOL] %s.%s error result: %s", clientName, logToolName, errorMsg))
 		return nil, fmt.Errorf("%s", errorMsg)
 	}

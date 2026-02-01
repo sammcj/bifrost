@@ -76,7 +76,7 @@ func (s *StarlarkCodeMode) handleGetToolDocs(ctx context.Context, toolCall schem
 	for clientName, tools := range availableToolsPerClient {
 		client := s.clientManager.GetClientByName(clientName)
 		if client == nil {
-			logger.Warn("%s Client %s not found, skipping", codemcp.CodeModeLogPrefix, clientName)
+			s.logger.Warn("%s Client %s not found, skipping", codemcp.CodeModeLogPrefix, clientName)
 			continue
 		}
 		if !client.ExecutionConfig.IsCodeModeClient || len(tools) == 0 {

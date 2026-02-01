@@ -3,7 +3,6 @@ package mcptests
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/maximhq/bifrost/core/schemas"
@@ -79,16 +78,16 @@ func TestCodeMode_MultiServer_BasicCalls(t *testing.T) {
 
 	// Execute code calling tools from 3 different servers
 	code := `
-const temp = await TemperatureMCPServer.get_temperature({location: "Tokyo"});
-const uuid = await GoTestServer.uuid_generate({});
-const echo = await bifrostInternal.echo({message: "multi-server"});
+temp = TemperatureMCPServer.get_temperature(location="Tokyo")
+uuid = GoTestServer.uuid_generate()
+echo = bifrostInternal.echo(message="multi-server")
 
-return {
-    temperature: temp,
-    uuid: uuid,
-    echo: echo,
-    servers_used: 3
-};
+result = {
+    "temperature": temp,
+    "uuid": uuid,
+    "echo": echo,
+    "servers_used": 3
+}
 `
 
 	toolCall := schemas.ChatAssistantMessageToolCall{
@@ -152,24 +151,17 @@ func TestCodeMode_MultiServer_ParallelExecution(t *testing.T) {
 
 	ctx := createTestContext()
 
-	// Execute parallel calls - should complete in ~1s not ~2s
+	// Execute sequential calls (Starlark is synchronous)
 	code := `
-const start = Date.now();
+r1 = TemperatureMCPServer.delay(seconds=1)
+r2 = ParallelTestServer.medium_operation()
+r3 = ParallelTestServer.fast_operation()
+r4 = EdgeCaseServer.return_unicode(type="emoji")
 
-const results = await Promise.all([
-    TemperatureMCPServer.delay({seconds: 1}),
-    ParallelTestServer.medium_operation({}),
-    ParallelTestServer.fast_operation({}),
-    EdgeCaseServer.return_unicode({type: "emoji"})
-]);
-
-const duration = Date.now() - start;
-
-return {
-    results: results,
-    duration_ms: duration,
-    executed_parallel: duration < 1500
-};
+result = {
+    "results": [r1, r2, r3, r4],
+    "count": 4
+}
 `
 
 	toolCall := schemas.ChatAssistantMessageToolCall{
@@ -193,16 +185,14 @@ return {
 	returnObj, ok := returnValue.(map[string]interface{})
 	require.True(t, ok, "result should be an object")
 
-	// Assertions - verify parallel execution
-	assert.True(t, returnObj["executed_parallel"].(bool), "should execute in parallel (< 1500ms)")
-	assert.Less(t, returnObj["duration_ms"].(float64), 1500.0, "duration should be < 1500ms")
-
+	// Assertions - verify execution
 	results, hasResults := returnObj["results"]
 	assert.True(t, hasResults, "should have results array")
 
 	resultsArray, ok := results.([]interface{})
 	require.True(t, ok, "results should be array")
 	assert.Len(t, resultsArray, 4, "should have 4 results")
+	assert.Equal(t, float64(4), returnObj["count"], "should have count of 4")
 }
 
 // TestCodeMode_MultiServer_SequentialChaining tests sequential chaining of tool calls
@@ -237,27 +227,21 @@ func TestCodeMode_MultiServer_SequentialChaining(t *testing.T) {
 
 	// Execute sequential chain of calls
 	code := `
-// Call 1: Get temperature
-const temp = await TemperatureMCPServer.get_temperature({location: "London"});
+# Call 1: Get temperature
+temp = TemperatureMCPServer.get_temperature(location="London")
 
-// Call 2: Transform the response to uppercase
-const transformed = await GoTestServer.string_transform({
-    input: JSON.stringify(temp),
-    operation: "uppercase"
-});
+# Call 2: Transform the response to uppercase
+transformed = GoTestServer.string_transform(input=str(temp), operation="uppercase")
 
-// Call 3: Hash the result
-const hashed = await GoTestServer.hash({
-    input: transformed,
-    algorithm: "sha256"
-});
+# Call 3: Hash the result
+hashed = GoTestServer.hash(input=str(transformed), algorithm="sha256")
 
-return {
-    original: temp,
-    transformed: transformed,
-    hashed: hashed,
-    chain_length: 3
-};
+result = {
+    "original": temp,
+    "transformed": transformed,
+    "hashed": hashed,
+    "chain_length": 3
+}
 `
 
 	toolCall := schemas.ChatAssistantMessageToolCall{
@@ -335,14 +319,17 @@ func TestCodeMode_Filtering_ServerAllowed_ToolBlocked(t *testing.T) {
 
 	ctx := createTestContext()
 
-	// Try to call echo - should fail
+	// Try to call echo - should fail (tool not available)
+	// In Starlark, we check if the attribute exists
 	code := `
-try {
-    const result = await TemperatureMCPServer.echo({text: "should fail"});
-    return {success: true, unexpected: result};
-} catch (e) {
-    return {success: false, error: e.message, expected: true};
-}
+def main():
+    has_echo = hasattr(TemperatureMCPServer, "echo")
+    if has_echo:
+        r = TemperatureMCPServer.echo(text="should fail")
+        return {"success": True, "unexpected": r}
+    else:
+        return {"success": False, "error": "echo not available", "expected": True}
+result = main()
 `
 
 	toolCall := schemas.ChatAssistantMessageToolCall{
@@ -365,14 +352,9 @@ try {
 	returnObj, ok := returnValue.(map[string]interface{})
 	require.True(t, ok)
 
-	// Assertions - echo should have failed
+	// Assertions - echo should have failed (tool not available due to filtering)
 	assert.False(t, returnObj["success"].(bool), "echo call should fail")
 	assert.True(t, returnObj["expected"].(bool), "error was expected")
-	// The error message is "Object has no member 'echo'" because filtered tools are not bound to the JS object
-	errorStr := returnObj["error"].(string)
-	// Check that it's either a "not allowed" message or "no member" message (both indicate filtering worked)
-	isFilteredError := strings.Contains(errorStr, "not allowed") || strings.Contains(errorStr, "no member")
-	assert.True(t, isFilteredError, "error should indicate tool is filtered: %s", errorStr)
 }
 
 // TestCodeMode_Filtering_ContextOverride_AllowTool - REMOVED
@@ -422,42 +404,41 @@ func TestCodeMode_Filtering_MultiServer_MixedFiltering(t *testing.T) {
 
 	// Try each tool
 	code := `
-const results = {
-    allowed_temp: null,
-    blocked_echo: null,
-    allowed_uuid: null,
-    blocked_inprocess: null
-};
+def main():
+    results = {
+        "allowed_temp": None,
+        "blocked_echo": None,
+        "allowed_uuid": None,
+        "blocked_inprocess": None
+    }
 
-// Should succeed - get_temperature is allowed
-try {
-    results.allowed_temp = await TemperatureMCPServer.get_temperature({location: "Tokyo"});
-} catch (e) {
-    results.allowed_temp = {error: e.message};
-}
+    # Should succeed - get_temperature is allowed
+    if hasattr(TemperatureMCPServer, "get_temperature"):
+        results["allowed_temp"] = TemperatureMCPServer.get_temperature(location="Tokyo")
+    else:
+        results["allowed_temp"] = {"error": "get_temperature not available"}
 
-// Should fail - echo is not in ToolsToExecute
-try {
-    results.blocked_echo = await TemperatureMCPServer.echo({text: "test"});
-} catch (e) {
-    results.blocked_echo = {error: e.message};
-}
+    # Should fail - echo is not in ToolsToExecute
+    if hasattr(TemperatureMCPServer, "echo"):
+        results["blocked_echo"] = TemperatureMCPServer.echo(text="test")
+    else:
+        results["blocked_echo"] = {"error": "echo not available"}
 
-// Should succeed - all GoTestServer tools allowed
-try {
-    results.allowed_uuid = await GoTestServer.uuid_generate({});
-} catch (e) {
-    results.allowed_uuid = {error: e.message};
-}
+    # Should succeed - all GoTestServer tools allowed
+    if hasattr(GoTestServer, "uuid_generate"):
+        results["allowed_uuid"] = GoTestServer.uuid_generate()
+    else:
+        results["allowed_uuid"] = {"error": "uuid_generate not available"}
 
-// Should fail - InProcess has no tools allowed
-try {
-    results.blocked_inprocess = await bifrostInternal.echo({message: "test"});
-} catch (e) {
-    results.blocked_inprocess = {error: e.message};
-}
+    # Should fail - InProcess has no tools allowed
+    if hasattr(bifrostInternal, "echo"):
+        results["blocked_inprocess"] = bifrostInternal.echo(message="test")
+    else:
+        results["blocked_inprocess"] = {"error": "echo not available"}
 
-return results;
+    return results
+
+result = main()
 `
 
 	toolCall := schemas.ChatAssistantMessageToolCall{
@@ -546,21 +527,24 @@ func TestCodeMode_Filtering_ClientFiltering(t *testing.T) {
 
 	// Try to call both servers
 	code := `
-const results = {};
+def main():
+    results = {}
 
-try {
-    results.temp = await TemperatureMCPServer.get_temperature({location: "Dubai"});
-} catch (e) {
-    results.temp = {error: e.message};
-}
+    if hasattr(TemperatureMCPServer, "get_temperature"):
+        results["temp"] = TemperatureMCPServer.get_temperature(location="Dubai")
+    else:
+        results["temp"] = {"error": "get_temperature not available"}
 
-try {
-    results.gotest = await GoTestServer.uuid_generate({});
-} catch (e) {
-    results.gotest = {error: e.message};
-}
+    # GoTestServer should not be available (client filtered out)
+    gotest_available = "GoTestServer" in dir()
+    if gotest_available and hasattr(GoTestServer, "uuid_generate"):
+        results["gotest"] = GoTestServer.uuid_generate()
+    else:
+        results["gotest"] = {"error": "GoTestServer not available"}
 
-return results;
+    return results
+
+result = main()
 `
 
 	toolCall := schemas.ChatAssistantMessageToolCall{

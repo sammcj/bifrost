@@ -1478,8 +1478,7 @@ func setupMCPManager(t *testing.T, clientConfigs ...schemas.MCPClientConfig) *mc
 	}
 
 	// Create Starlark CodeMode
-	starlark.SetLogger(logger)
-	codeMode := starlark.NewStarlarkCodeMode(nil)
+	codeMode := starlark.NewStarlarkCodeMode(nil, logger)
 
 	// Create MCP manager - dependencies are injected automatically
 	manager := mcp.NewMCPManager(context.Background(), *mcpConfig, nil, logger, codeMode)
@@ -1881,61 +1880,61 @@ func GenerateInvalidJSON() []string {
 func GenerateValidCode(codeType string) string {
 	switch codeType {
 	case "simple_return":
-		return "return 42"
+		return "result = 42"
 	case "string_return":
-		return `return "Hello, World!"`
+		return `result = "Hello, World!"`
 	case "calculation":
-		return "const x = 10; const y = 20; return x + y"
+		return "x = 10\ny = 20\nresult = x + y"
 	case "object_return":
-		return `return { status: "success", value: 42 }`
+		return `result = {"status": "success", "value": 42}`
 	case "array_return":
-		return `return [1, 2, 3, 4, 5]`
+		return `result = [1, 2, 3, 4, 5]`
 	case "with_console_log":
-		return `console.log("test"); return "done"`
+		return `print("test")\nresult = "done"`
 	case "async_operation":
-		return `const result = await Promise.resolve(42); return result`
+		return `result = 42`
 	default:
-		return "return 'default'"
+		return "result = 'default'"
 	}
 }
 
-// GenerateInvalidCode generates invalid TypeScript/JavaScript code for testing
+// GenerateInvalidCode generates invalid Starlark code for testing
 func GenerateInvalidCode(errorType string) string {
 	switch errorType {
 	case "syntax_error":
-		return "const x = "
+		return "x = "
 	case "missing_semicolon":
-		return "const x = 10 const y = 20"
+		return "x = 10 y = 20"
 	case "unclosed_brace":
-		return "function foo() { return 42"
+		return "def foo():\n    return 42"
 	case "unclosed_bracket":
-		return "const arr = [1, 2, 3"
+		return "arr = [1, 2, 3"
 	case "invalid_keyword":
-		return "const 123invalid = 'value'"
+		return "123invalid = 'value'"
 	case "runtime_error":
-		return "throw new Error('test error')"
+		return "fail('test error')"
 	case "undefined_variable":
-		return "return undefinedVariable"
+		return "result = undefinedVariable"
 	case "null_reference":
-		return "const x = null; return x.property"
+		return "x = None\nresult = x.property"
 	default:
-		return "return invalid syntax {"
+		return "result = invalid syntax {"
 	}
 }
 
 // GeneratePathTraversalAttempts generates various path traversal attack strings
 func GeneratePathTraversalAttempts() []string {
 	return []string{
-		"../../../etc/passwd.d.ts",
-		"servers/../../secrets.d.ts",
-		"servers/../../../etc/passwd.d.ts",
-		"..\\..\\..\\windows\\system32\\config\\sam.d.ts",
-		"servers/test/../../../etc.d.ts",
-		"servers/test/../../other.d.ts",
-		"/etc/passwd.d.ts",
-		"C:\\Windows\\System32\\config\\sam.d.ts",
-		"servers/test\x00hidden/file.d.ts", // Null byte injection
-		"servers/test%00hidden/file.d.ts",  // URL encoded null byte
+		"../../../etc/passwd.pyi",
+		"servers/../../secrets.pyi",
+		"servers/../../../etc/passwd.pyi",
+		"..\\..\\..\\windows\\system32\\config\\sam.pyi",
+		"servers/test/../../../etc.pyi",
+		"servers/test/../../other.pyi",
+		"/etc/passwd.pyi",
+		"C:\\Windows\\System32\\config\\sam.pyi",
+		"servers/test\x00hidden/file.pyi", // Null byte injection
+		"servers/test%00hidden/file.pyi",  // URL encoded null byte
 	}
 }
 

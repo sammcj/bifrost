@@ -27,8 +27,27 @@ import (
 	"github.com/valyala/fasthttp/fasthttpproxy"
 )
 
+// logger is the global logger for the provider utils.
 var logger schemas.Logger
 
+// noopLogger is a no-op implementation of schemas.Logger.
+type noopLogger struct{}
+
+func (noopLogger) Debug(string, ...any)                   {}
+func (noopLogger) Info(string, ...any)                    {}
+func (noopLogger) Warn(string, ...any)                    {}
+func (noopLogger) Error(string, ...any)                   {}
+func (noopLogger) Fatal(string, ...any)                   {}
+func (noopLogger) SetLevel(schemas.LogLevel)              {}
+func (noopLogger) SetOutputType(schemas.LoggerOutputType) {}
+
+
+// Initialize with noop logger
+func init(){
+	logger = &noopLogger{}
+}
+
+// SetLogger sets the logger for the provider utils.
 func SetLogger(l schemas.Logger) {
 	logger = l
 }

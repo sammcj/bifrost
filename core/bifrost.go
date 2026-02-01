@@ -277,7 +277,6 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 				}
 			}
 			// Create Starlark CodeMode for code execution
-			starlark.SetLogger(bifrost.logger)
 			var codeModeConfig *mcp.CodeModeConfig
 			if mcpConfig.ToolManagerConfig != nil {
 				codeModeConfig = &mcp.CodeModeConfig{
@@ -285,7 +284,7 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 					ToolExecutionTimeout: mcpConfig.ToolManagerConfig.ToolExecutionTimeout,
 				}
 			}
-			codeMode := starlark.NewStarlarkCodeMode(codeModeConfig)
+			codeMode := starlark.NewStarlarkCodeMode(codeModeConfig, bifrost.logger)
 			bifrost.McpManager = mcp.NewMCPManager(bifrostCtx, mcpConfig, bifrost.oauth2Provider, bifrost.logger, codeMode)
 			bifrost.logger.Info("MCP integration initialized successfully")
 		})
@@ -2933,8 +2932,7 @@ func (bifrost *Bifrost) AddMCPClient(config *schemas.MCPClientConfig) error {
 				}
 			}
 			// Create Starlark CodeMode for code execution (with default config)
-			starlark.SetLogger(bifrost.logger)
-			codeMode := starlark.NewStarlarkCodeMode(nil)
+			codeMode := starlark.NewStarlarkCodeMode(nil, bifrost.logger)
 			bifrost.McpManager = mcp.NewMCPManager(bifrost.ctx, mcpConfig, bifrost.oauth2Provider, bifrost.logger, codeMode)
 		})
 	}

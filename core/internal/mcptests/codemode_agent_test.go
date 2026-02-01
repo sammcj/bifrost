@@ -38,7 +38,7 @@ func TestCodeModeAgent_Basic(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "const result = await mcpserver.echo({message: 'test'}); return result;"),
+				CreateExecuteToolCodeCall("call-1", "result = mcpserver.echo(message='test')"),
 			}),
 			CreateChatResponseWithText("Execution complete"),
 		},
@@ -106,7 +106,7 @@ func TestCodeModeAgent_NonAutoToolInCode(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "return 'code result';"),
+				CreateExecuteToolCodeCall("call-1", "result = 'code result'"),
 			}),
 			// After code execution, LLM returns non-auto tool
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
@@ -182,10 +182,10 @@ func TestCodeModeAgent_AutoToolInCode(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "await mcpserver.echo({message: 'test'}); return 'done';"),
+				CreateExecuteToolCodeCall("call-1", "mcpserver.echo(message='test')\nresult = 'done'"),
 			}),
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-2", "return 'second iteration';"),
+				CreateExecuteToolCodeCall("call-2", "result = 'second iteration'"),
 			}),
 			CreateChatResponseWithText("All done"),
 		},
@@ -249,7 +249,7 @@ func TestCodeModeAgent_MixedToolsInCode(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "return 'step 1';"),
+				CreateExecuteToolCodeCall("call-1", "result = 'step 1'"),
 			}),
 			// After code, LLM returns mixed tools
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
@@ -330,7 +330,7 @@ func TestCodeModeAgent_NoToolCallsInCode(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "return 'final result';"),
+				CreateExecuteToolCodeCall("call-1", "result = 'final result'"),
 			}),
 			CreateChatResponseWithText("Done, no more tools"),
 		},
@@ -398,7 +398,7 @@ func TestCodeModeAgent_FilteringInCode(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "const result = await mcpserver.calculator({operation: 'add', x: 5, y: 3}); return result;"),
+				CreateExecuteToolCodeCall("call-1", "result = mcpserver.calculator(operation='add', x=5, y=3)"),
 			}),
 			// Agent makes follow-up call with tool execution error
 			CreateChatResponseWithText("Tool was blocked by filtering"),
@@ -464,7 +464,7 @@ func TestCodeModeAgent_AutoExecuteFiltering(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "const result = await mcpserver.echo({message: 'test'}); return result;"),
+				CreateExecuteToolCodeCall("call-1", "result = mcpserver.echo(message='test')"),
 			}),
 			CreateChatResponseWithText("Complete"),
 			CreateChatResponseWithText("Error handled"), // For code execution error follow-up
@@ -542,13 +542,13 @@ func TestCodeModeAgent_MaxDepth(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "await mcpserver.echo({message: 'iter 1'}); return 'done1';"),
+				CreateExecuteToolCodeCall("call-1", "mcpserver.echo(message='iter 1')\nresult = 'done1'"),
 			}),
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-2", "await mcpserver.echo({message: 'iter 2'}); return 'done2';"),
+				CreateExecuteToolCodeCall("call-2", "mcpserver.echo(message='iter 2')\nresult = 'done2'"),
 			}),
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-3", "await mcpserver.echo({message: 'iter 3'}); return 'done3';"),
+				CreateExecuteToolCodeCall("call-3", "mcpserver.echo(message='iter 3')\nresult = 'done3'"),
 			}),
 			CreateChatResponseWithText("Should not reach - max depth hit"),
 		},
@@ -615,10 +615,10 @@ func TestCodeModeAgent_MaxDepth_ChatFormat(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "return 'test1';"),
+				CreateExecuteToolCodeCall("call-1", "result = 'test1'"),
 			}),
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-2", "return 'test2';"),
+				CreateExecuteToolCodeCall("call-2", "result = 'test2'"),
 			}),
 			CreateChatResponseWithText("Done"),
 		},
@@ -759,7 +759,7 @@ func TestCodeModeAgent_Timeout(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "while(true) {}; return 'timeout';"),
+				CreateExecuteToolCodeCall("call-1", "def loop():\n    while True:\n        pass\n    return 'timeout'\nresult = loop()"),
 			}),
 			// Agent makes follow-up call with timeout error
 			CreateChatResponseWithText("Code execution timed out"),
@@ -822,7 +822,7 @@ func TestCodeModeAgent_Timeout_ChatFormat(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "while(true) {}; return 'timeout';"),
+				CreateExecuteToolCodeCall("call-1", "def loop():\n    while True:\n        pass\n    return 'timeout'\nresult = loop()"),
 			}),
 			// Agent makes follow-up call with timeout error
 			CreateChatResponseWithText("Code execution timed out"),
@@ -947,7 +947,7 @@ func TestCodeModeAgent_ErrorInCode(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "throw new Error('intentional error');"),
+				CreateExecuteToolCodeCall("call-1", "fail('intentional error')"),
 			}),
 			// Agent makes follow-up call with error
 			CreateChatResponseWithText("Error occurred during execution"),
@@ -1012,7 +1012,7 @@ func TestCodeModeAgent_ToolErrorInCode(t *testing.T) {
 	mockLLM := &MockLLMCaller{
 		chatResponses: []*schemas.BifrostChatResponse{
 			CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-				CreateExecuteToolCodeCall("call-1", "await mcpserver.calculator({operation: 'invalid', x: 1, y: 2}); return 'done';"),
+				CreateExecuteToolCodeCall("call-1", "mcpserver.calculator(operation='invalid', x=1, y=2)\nresult = 'done'"),
 			}),
 			// Agent makes follow-up call with tool error
 			CreateChatResponseWithText("Tool error occurred"),

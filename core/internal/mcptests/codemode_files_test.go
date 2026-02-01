@@ -52,9 +52,9 @@ func TestListToolFiles_ServerBinding(t *testing.T) {
 	content := *result.Content.ContentStr
 	assert.NotEmpty(t, content)
 
-	// Verify returns servers/<name>.d.ts structure in tree format
+	// Verify returns servers/<name>.pyi structure in tree format
 	assert.Contains(t, content, "servers/", "should contain servers/ directory")
-	assert.Contains(t, content, ".d.ts", "should contain .d.ts files")
+	assert.Contains(t, content, ".pyi", "should contain .pyi files")
 	t.Logf("Tree structure:\n%s", content)
 }
 
@@ -100,9 +100,9 @@ func TestListToolFiles_ToolBinding(t *testing.T) {
 
 	// Verify returns tree structure with servers/<name> entries
 	// The binding level determines the structure
-	// Default is "server" so we expect servers/<name>.d.ts
+	// Default is "server" so we expect servers/<name>.pyi
 	assert.Contains(t, content, "servers/", "should contain servers/ directory")
-	assert.Contains(t, content, ".d.ts", "should contain .d.ts files")
+	assert.Contains(t, content, ".pyi", "should contain .pyi files")
 }
 
 func TestListToolFiles_WithFiltering(t *testing.T) {
@@ -226,7 +226,7 @@ func TestReadToolFile_Basic(t *testing.T) {
 		Type: schemas.Ptr("function"),
 		Function: schemas.ChatAssistantMessageToolCallFunction{
 			Name:      schemas.Ptr("readToolFile"),
-			Arguments: `{"fileName": "servers/TestCodeModeServer.d.ts"}`,
+			Arguments: `{"fileName": "servers/TestCodeModeServer.pyi"}`,
 		},
 	}
 
@@ -234,19 +234,19 @@ func TestReadToolFile_Basic(t *testing.T) {
 	require.Nil(t, bifrostErr)
 	require.NotNil(t, readResult)
 
-	// readToolFile returns text content (TypeScript definitions)
+	// readToolFile returns text content (Python stub definitions)
 	content := *readResult.Content.ContentStr
 	assert.NotEmpty(t, content)
 
-	// Should contain TypeScript declarations
+	// Should contain Python stub declarations
 	assert.True(t,
-		strings.Contains(content, "interface") ||
-			strings.Contains(content, "function") ||
-			strings.Contains(content, "type") ||
-			strings.Contains(content, "declare"),
-		"content should contain TypeScript declarations")
+		strings.Contains(content, "def") ||
+			strings.Contains(content, "class") ||
+			strings.Contains(content, "->") ||
+			strings.Contains(content, ":"),
+		"content should contain Python stub declarations")
 
-	t.Logf("Read %d characters of TypeScript definitions", len(content))
+	t.Logf("Read %d characters of Python stub definitions", len(content))
 }
 
 func TestReadToolFile_WithFiltering(t *testing.T) {
@@ -275,7 +275,7 @@ func TestReadToolFile_WithFiltering(t *testing.T) {
 		Type: schemas.Ptr("function"),
 		Function: schemas.ChatAssistantMessageToolCallFunction{
 			Name:      schemas.Ptr("readToolFile"),
-			Arguments: `{"fileName": "servers/TestCodeModeServer.d.ts"}`,
+			Arguments: `{"fileName": "servers/TestCodeModeServer.pyi"}`,
 		},
 	}
 
@@ -284,7 +284,7 @@ func TestReadToolFile_WithFiltering(t *testing.T) {
 	require.NotNil(t, readResult)
 
 	content := *readResult.Content.ContentStr
-	// Content should show TypeScript definitions, filtering is applied at execution time
+	// Content should show Python stub definitions, filtering is applied at execution time
 	assert.NotEmpty(t, content, "should have readable file content")
 	t.Logf("Read file content length: %d", len(content))
 }
@@ -314,7 +314,7 @@ func TestReadToolFile_NotFound(t *testing.T) {
 		Type: schemas.Ptr("function"),
 		Function: schemas.ChatAssistantMessageToolCallFunction{
 			Name:      schemas.Ptr("readToolFile"),
-			Arguments: `{"fileName": "servers/nonexistent.d.ts"}`,
+			Arguments: `{"fileName": "servers/nonexistent.pyi"}`,
 		},
 	}
 
@@ -365,7 +365,7 @@ func TestReadToolFile_TypescriptDefinitions(t *testing.T) {
 		Type: schemas.Ptr("function"),
 		Function: schemas.ChatAssistantMessageToolCallFunction{
 			Name:      schemas.Ptr("readToolFile"),
-			Arguments: `{"fileName": "servers/TestCodeModeServer.d.ts"}`,
+			Arguments: `{"fileName": "servers/TestCodeModeServer.pyi"}`,
 		},
 	}
 
@@ -376,19 +376,19 @@ func TestReadToolFile_TypescriptDefinitions(t *testing.T) {
 	content := *readResult.Content.ContentStr
 	assert.NotEmpty(t, content)
 
-	// Verify TypeScript interface is well-formed
+	// Verify Python stub is well-formed
 	// Should have function signatures
 	assert.Contains(t, content, "(", "should contain function calls")
 
-	// Check for TypeScript keywords
-	hasTypeScript := strings.Contains(content, "interface") ||
-		strings.Contains(content, "type") ||
-		strings.Contains(content, "function") ||
-		strings.Contains(content, "declare")
+	// Check for Python stub keywords
+	hasPythonStub := strings.Contains(content, "def") ||
+		strings.Contains(content, "class") ||
+		strings.Contains(content, "->") ||
+		strings.Contains(content, ":")
 
-	assert.True(t, hasTypeScript, "should contain TypeScript declarations")
+	assert.True(t, hasPythonStub, "should contain Python stub declarations")
 
-	t.Logf("TypeScript definitions:\n%s", content)
+	t.Logf("Python stub definitions:\n%s", content)
 }
 
 // =============================================================================
@@ -418,13 +418,13 @@ func TestCodeModeFiles_ListInCode(t *testing.T) {
 	// Note: listToolFiles might not be directly callable from code execution context
 	// This tests if the tool is available in the environment
 	code := `
-		// Check if servers are available
-		const servers = Object.keys(this).filter(key => typeof this[key] === 'object');
-		return {
-			availableServers: servers,
-			hasCodeserver: servers.includes('codeserver')
-		};
-	`
+# Check if servers are available - in Starlark, use dir() to list available names
+servers = [name for name in dir() if not name.startswith("_")]
+result = {
+    "availableServers": servers,
+    "hasCodeserver": "codeserver" in servers
+}
+`
 
 	toolCall := schemas.ChatAssistantMessageToolCall{
 		ID:   schemas.Ptr("call-list-in-code"),
@@ -469,16 +469,15 @@ func TestCodeModeFiles_ReadInCode(t *testing.T) {
 
 	// Execute code that explores available server methods
 	code := `
-		// Check what methods are available on the server object
-		const methods = Object.getOwnPropertyNames(TestCodeModeServer).filter(
-			prop => typeof TestCodeModeServer[prop] === 'function'
-		);
-		return {
-			serverMethods: methods,
-			methodCount: methods.length,
-			hasTools: methods.length > 0
-		};
-	`
+# Check what methods are available on the server object in Starlark
+# Use dir() to list attributes and filter for callable methods
+methods = [attr for attr in dir(TestCodeModeServer) if not attr.startswith("_")]
+result = {
+    "serverMethods": methods,
+    "methodCount": len(methods),
+    "hasTools": len(methods) > 0
+}
+`
 
 	toolCall := schemas.ChatAssistantMessageToolCall{
 		ID:   schemas.Ptr("call-read-in-code"),
@@ -639,13 +638,13 @@ func TestCodeModeFiles_FullWorkflow(t *testing.T) {
 	t.Logf("Step 1: Listed available files:\n%s", treeOutput)
 
 	// Step 2: Read a tool file using readToolFile
-	// Extract a filename from the tree output (e.g., "servers/TestCodeModeServer.d.ts")
+	// Extract a filename from the tree output (e.g., "servers/TestCodeModeServer.pyi")
 	readCall := schemas.ChatAssistantMessageToolCall{
 		ID:   schemas.Ptr("call-2-read"),
 		Type: schemas.Ptr("function"),
 		Function: schemas.ChatAssistantMessageToolCallFunction{
 			Name:      schemas.Ptr("readToolFile"),
-			Arguments: `{"fileName": "servers/TestCodeModeServer.d.ts"}`,
+			Arguments: `{"fileName": "servers/TestCodeModeServer.pyi"}`,
 		},
 	}
 
@@ -660,7 +659,8 @@ func TestCodeModeFiles_FullWorkflow(t *testing.T) {
 
 	// Step 3: Execute code that uses the tools
 	// Just verify we can execute code with available servers
-	code := `const servers = Object.keys(this).filter(k => typeof this[k] === 'object'); return {completed: true, servers: servers};`
+	code := `servers = [name for name in dir() if not name.startswith("_")]
+result = {"completed": True, "servers": servers}`
 
 	execCall := schemas.ChatAssistantMessageToolCall{
 		ID:   schemas.Ptr("call-3-execute"),

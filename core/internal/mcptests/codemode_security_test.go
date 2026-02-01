@@ -39,37 +39,37 @@ func TestReadToolFile_PathTraversalAttacks(t *testing.T) {
 	}{
 		{
 			name:         "basic_path_traversal_parent",
-			fileName:     "../../../etc/passwd.d.ts",
+			fileName:     "../../../etc/passwd.pyi",
 			expectError:  true,
 			errorMessage: "No server found matching",
 		},
 		{
 			name:         "path_traversal_in_server_name",
-			fileName:     "servers/../../secrets.d.ts",
+			fileName:     "servers/../../secrets.pyi",
 			expectError:  true,
 			errorMessage: "No server found matching",
 		},
 		{
 			name:         "double_dot_in_tool_name",
-			fileName:     "servers/validserver/../../../etc.d.ts",
+			fileName:     "servers/validserver/../../../etc.pyi",
 			expectError:  true,
 			errorMessage: "No server found matching",
 		},
 		{
 			name:         "encoded_path_traversal",
-			fileName:     "servers/..%2F..%2F..%2Fetc%2Fpasswd.d.ts",
+			fileName:     "servers/..%2F..%2F..%2Fetc%2Fpasswd.pyi",
 			expectError:  true,
 			errorMessage: "No server found matching",
 		},
 		{
 			name:         "path_with_multiple_slashes",
-			fileName:     "servers///..//..//etc//passwd.d.ts",
+			fileName:     "servers///..//..//etc//passwd.pyi",
 			expectError:  true,
 			errorMessage: "No server found matching",
 		},
 		{
 			name:         "absolute_path",
-			fileName:     "/etc/passwd.d.ts",
+			fileName:     "/etc/passwd.pyi",
 			expectError:  true,
 			errorMessage: "No server found matching",
 		},
@@ -121,11 +121,11 @@ func TestReadToolFile_InvalidToolNames(t *testing.T) {
 		name     string
 		fileName string
 	}{
-		{"slash_in_tool_name", "servers/validserver/tool/with/slashes.d.ts"},
-		{"dot_dot_in_tool_name", "servers/validserver/tool..name.d.ts"},
-		{"special_chars", "servers/validserver/tool<>:\"|?*.d.ts"},
-		{"null_byte", "servers/validserver/tool\x00name.d.ts"},
-		{"backslash", "servers/validserver/tool\\name.d.ts"},
+		{"slash_in_tool_name", "servers/validserver/tool/with/slashes.pyi"},
+		{"dot_dot_in_tool_name", "servers/validserver/tool..name.pyi"},
+		{"special_chars", "servers/validserver/tool<>:\"|?*.pyi"},
+		{"null_byte", "servers/validserver/tool\x00name.pyi"},
+		{"backslash", "servers/validserver/tool\\name.pyi"},
 	}
 
 	for _, tc := range invalidNameTests {
@@ -182,34 +182,34 @@ func TestExecuteToolCode_CodeInjectionAttempts(t *testing.T) {
 		description string
 	}{
 		{
-			name:        "process_exit",
-			code:        "process.exit(1); return 'should not reach'",
+			name:        "import_os",
+			code:        "import os\nresult = os.system('ls')",
 			shouldFail:  true,
-			description: "Attempt to exit process",
+			description: "Attempt to import os module",
 		},
 		{
-			name:        "require_fs",
-			code:        "const fs = require('fs'); return fs.readFileSync('/etc/passwd', 'utf8')",
+			name:        "load_module",
+			code:        "load('foo.star', 'bar')\nresult = bar()",
 			shouldFail:  true,
-			description: "Attempt to access filesystem",
+			description: "Attempt to load external module",
 		},
 		{
 			name:        "eval_usage",
-			code:        "eval('return 42'); return 'done'",
-			shouldFail:  false, // May or may not fail depending on sandbox
-			description: "Use of eval",
+			code:        "result = 'done'",
+			shouldFail:  false, // Simple assignment should succeed
+			description: "Simple code execution",
 		},
 		{
 			name:        "infinite_loop",
-			code:        "while(true) { /* infinite loop */ }",
+			code:        "def loop():\n    while True:\n        pass\nloop()",
 			shouldFail:  true,
 			description: "Infinite loop should timeout",
 		},
 		{
 			name:        "prototype_pollution",
-			code:        "Object.prototype.polluted = 'yes'; return 'done'",
-			shouldFail:  false, // Should succeed but be contained
-			description: "Prototype pollution attempt",
+			code:        "result = {'polluted': 'yes'}",
+			shouldFail:  false, // Simple dict creation should succeed
+			description: "Dict creation (Starlark has no prototypes)",
 		},
 	}
 
@@ -436,7 +436,7 @@ func TestExecuteToolCode_UnicodeInCode(t *testing.T) {
 
 	ctx := createTestContext()
 
-	unicodeCode := `return "Hello 🌍"`
+	unicodeCode := `result = "Hello 🌍"`
 	codeJSON, _ := json.Marshal(unicodeCode)
 
 	toolCall := schemas.ChatAssistantMessageToolCall{
@@ -557,19 +557,19 @@ func TestReadToolFile_LineNumberBoundaries(t *testing.T) {
 
 	// Parse the list result to get a real file name
 	content := *listResult.Content.ContentStr
-	if !strings.Contains(content, ".d.ts") {
-		t.Skip("No .d.ts files found")
+	if !strings.Contains(content, ".pyi") {
+		t.Skip("No .pyi files found")
 	}
 
-	// Extract first .d.ts file name
+	// Extract first .pyi file name
 	lines := strings.Split(content, "\n")
 	var firstFile string
 	for _, line := range lines {
-		if strings.Contains(line, ".d.ts") {
+		if strings.Contains(line, ".pyi") {
 			// Extract just the filename
 			parts := strings.Fields(line)
 			for _, part := range parts {
-				if strings.HasSuffix(part, ".d.ts") {
+				if strings.HasSuffix(part, ".pyi") {
 					firstFile = strings.Trim(part, "[]\"',")
 					break
 				}
