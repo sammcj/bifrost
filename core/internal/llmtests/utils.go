@@ -677,3 +677,28 @@ func GetErrorMessage(err *schemas.BifrostError) string {
 
 	return errorString
 }
+
+// ShouldRunParallel checks if a test should run in parallel based on environment
+// variables and provider-specific configuration. It marks the test as parallel
+// if parallel execution is allowed for this scenario.
+//
+// Parameters:
+//   - t: the testing.T instance
+//   - testConfig: the comprehensive test config containing DisableParallelFor settings
+//   - scenario: the test scenario name (e.g., "Transcription", "SpeechSynthesis")
+func ShouldRunParallel(t *testing.T, testConfig ComprehensiveTestConfig, scenario string) {
+	// Check global environment variable first
+	if os.Getenv("SKIP_PARALLEL_TESTS") == "true" {
+		return
+	}
+
+	// Check if this scenario is disabled for this provider
+	for _, disabled := range testConfig.DisableParallelFor {
+		if disabled == scenario {
+			return
+		}
+	}
+
+	// Allow parallel execution
+	t.Parallel()
+}

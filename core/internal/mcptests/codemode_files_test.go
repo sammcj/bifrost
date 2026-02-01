@@ -417,12 +417,17 @@ func TestCodeModeFiles_ListInCode(t *testing.T) {
 	// Execute code that calls listToolFiles
 	// Note: listToolFiles might not be directly callable from code execution context
 	// This tests if the tool is available in the environment
+	// In Starlark, dir() requires an argument - we check TestCodeModeServer which is bound
 	code := `
-# Check if servers are available - in Starlark, use dir() to list available names
-servers = [name for name in dir() if not name.startswith("_")]
+# Check if TestCodeModeServer exists and has methods
+# TestCodeModeServer is the code mode client and should be bound
+server_methods = dir(TestCodeModeServer)
+servers = ["TestCodeModeServer"]
+
 result = {
     "availableServers": servers,
-    "hasCodeserver": "codeserver" in servers
+    "serverMethodCount": len(server_methods),
+    "hasTestCodeModeServer": len(server_methods) > 0
 }
 `
 
@@ -445,10 +450,11 @@ result = {
 	resultObj, ok := returnValue.(map[string]interface{})
 	require.True(t, ok)
 
-	// Verify servers are available in code execution context
+	// Verify TestCodeModeServer is available in code execution context
 	servers := resultObj["availableServers"].([]interface{})
 	t.Logf("Available servers in code: %v", servers)
 	assert.NotEmpty(t, servers)
+	assert.True(t, resultObj["hasTestCodeModeServer"].(bool), "TestCodeModeServer should have methods")
 }
 
 func TestCodeModeFiles_ReadInCode(t *testing.T) {
@@ -659,8 +665,9 @@ func TestCodeModeFiles_FullWorkflow(t *testing.T) {
 
 	// Step 3: Execute code that uses the tools
 	// Just verify we can execute code with available servers
-	code := `servers = [name for name in dir() if not name.startswith("_")]
-result = {"completed": True, "servers": servers}`
+	// In Starlark, dir() requires an argument, so we check a known server
+	code := `server_methods = dir(TestCodeModeServer)
+result = {"completed": True, "servers": ["TestCodeModeServer"], "methodCount": len(server_methods)}`
 
 	execCall := schemas.ChatAssistantMessageToolCall{
 		ID:   schemas.Ptr("call-3-execute"),

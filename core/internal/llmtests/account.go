@@ -106,6 +106,7 @@ type ComprehensiveTestConfig struct {
 	ExternalTTSModel         string                 // External TTS model to use for testing
 	BatchExtraParams         map[string]interface{} // Extra params for batch operations (e.g., role_arn, output_s3_uri for Bedrock)
 	FileExtraParams          map[string]interface{} // Extra params for file operations (e.g., s3_bucket for Bedrock)
+	DisableParallelFor       []string               // Test scenarios to disable parallel execution for (e.g., "Transcription" for rate-limited APIs)
 }
 
 // ComprehensiveTestAccount provides a test implementation of the Account interface for comprehensive testing.
@@ -920,6 +921,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		Fallbacks: []schemas.Fallback{
 			{Provider: schemas.OpenAI, Model: "gpt-4o-mini"},
 		},
+		DisableParallelFor: []string{"Transcription"}, // Azure Whisper has 3 calls/minute quota
 	},
 	{
 		Provider:             schemas.Vertex,

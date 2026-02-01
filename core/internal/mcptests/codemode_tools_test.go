@@ -3,6 +3,7 @@ package mcptests
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,7 +62,7 @@ result = main()`
 	if hasError {
 		resultStr = errorMsg
 	}
-	assert.Contains(t, resultStr, "Error")
+	assert.Contains(t, strings.ToLower(resultStr), "error")
 	t.Logf("Result: %s", resultStr)
 }
 
@@ -112,8 +113,8 @@ result = type(r)`
 	// Should succeed and return the type of the result
 	assert.NotNil(t, returnValue)
 	resultStr := fmt.Sprintf("%v", returnValue)
-	// Should return "object" since youtube_search_you_tube returns an object
-	assert.Contains(t, resultStr, "object")
+	// Should return "dict" since Starlark's type() returns "dict" for dictionaries
+	assert.Contains(t, resultStr, "dict")
 }
 
 // =============================================================================
@@ -388,11 +389,13 @@ func TestCodeMode_ToolNotInExecuteList(t *testing.T) {
 	ctx := createTestContext()
 
 	// Execute code that tries to call filtered-out tool (echo)
-	code := `if hasattr(bifrostInternal, "echo"):
-    r = bifrostInternal.echo(message="blocked")
-    result = {"success": True, "result": r}
-else:
-    result = {"success": False, "error": "echo not available"}`
+	code := `def main():
+    if hasattr(bifrostInternal, "echo"):
+        r = bifrostInternal.echo(message="blocked")
+        return {"success": True, "result": r}
+    else:
+        return {"success": False, "error": "echo not available"}
+result = main()`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -444,11 +447,10 @@ func TestCodeMode_NonAllowedToolExecution(t *testing.T) {
 
 	ctx := createTestContext()
 
-	// Execute code that tries to call it
-	code := `if hasattr(bifrostInternal, "echo"):
-    result = bifrostInternal.echo(message="denied")
-else:
-    result = {"blocked": True, "message": "echo not available"}`
+	// Execute code that tries to access bifrostInternal
+	// When ToolsToExecute = [], the server won't be bound in the environment at all
+	// This should cause a runtime error: "undefined: bifrostInternal"
+	code := `result = bifrostInternal.echo(message="should fail")`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -467,13 +469,13 @@ else:
 	require.Nil(t, bifrostErr)
 	require.NotNil(t, result)
 
-	returnValue, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
-	require.False(t, hasError, "should not have execution error: %s", errorMsg)
+	_, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
 
-	// Should be blocked
-	resultObj, ok := returnValue.(map[string]interface{})
-	require.True(t, ok)
-	assert.True(t, resultObj["blocked"].(bool))
+	// Verify we get an error because bifrostInternal is not defined
+	// When ToolsToExecute = [], the server is not bound in the Starlark environment
+	require.True(t, hasError, "should have execution error because bifrostInternal is not bound when ToolsToExecute is empty")
+	assert.Contains(t, strings.ToLower(errorMsg), "undefined", "error should indicate bifrostInternal is undefined")
+	t.Logf("Expected error (bifrostInternal unbound due to empty ToolsToExecute): %s", errorMsg)
 }
 
 func TestCodeMode_ToolExecutionTimeout(t *testing.T) {
@@ -809,16 +811,13 @@ result = main()`
 	require.Nil(t, bifrostErr)
 	require.NotNil(t, result)
 
-	returnValue, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
-	require.False(t, hasError, "should not have execution error: %s", errorMsg)
+	_, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
 
-	// Verify error is propagated and caught
-	resultObj, ok := returnValue.(map[string]interface{})
-	require.True(t, ok)
-	assert.False(t, resultObj["success"].(bool))
-	assert.True(t, resultObj["caught"].(bool))
-	// Error message might be null in some JS engines, just verify we caught it
-	t.Logf("Caught error: %v", resultObj["error"])
+	// Tool errors must be propagated as runtime errors in Starlark execution
+	// The test fails if the error is caught in code instead of being propagated
+	require.True(t, hasError, "tool errors must propagate as runtime errors, not be caught in code")
+	assert.Contains(t, errorMsg, "intentional error", "error should contain the thrown error message")
+	t.Logf("Tool error propagated as expected: %s", errorMsg)
 }
 
 func TestCodeMode_ToolNotFound(t *testing.T) {
@@ -841,11 +840,10 @@ func TestCodeMode_ToolNotFound(t *testing.T) {
 
 	ctx := createTestContext()
 
-	// Execute code that calls non-existent tool
-	code := `if hasattr(bifrostInternal, "nonexistent_tool"):
-    result = bifrostInternal.nonexistent_tool(param="value")
-else:
-    result = {"error": "nonexistent_tool not found", "notFound": True}`
+	// Execute code that tries to use bifrostInternal which won't be bound
+	// When ToolsToExecute = [], the server won't be bound in the environment at all
+	// This should cause a runtime error: "undefined: bifrostInternal"
+	code := `result = bifrostInternal.nonexistent_tool(param="value")`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -864,15 +862,13 @@ else:
 	require.Nil(t, bifrostErr)
 	require.NotNil(t, result)
 
-	returnValue, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
-	require.False(t, hasError, "should not have execution error: %s", errorMsg)
+	_, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
 
-	// Verify appropriate error
-	resultObj, ok := returnValue.(map[string]interface{})
-	require.True(t, ok)
-	assert.True(t, resultObj["notFound"].(bool))
-	assert.NotEmpty(t, resultObj["error"])
-	t.Logf("Error: %s", resultObj["error"])
+	// Verify we get an error because bifrostInternal is not defined
+	// When ToolsToExecute = [], the server is not bound in the Starlark environment
+	require.True(t, hasError, "should have execution error because bifrostInternal is not bound")
+	assert.Contains(t, errorMsg, "undefined")
+	t.Logf("Expected error: %s", errorMsg)
 }
 
 // =============================================================================

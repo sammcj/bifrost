@@ -146,9 +146,6 @@ type tracerWrapper struct {
 	tracer schemas.Tracer
 }
 
-// Global logger instance which is set in the Init function (thread-safe via atomic.Pointer)
-var logger schemas.Logger
-
 // INITIALIZATION
 
 // Init initializes a new Bifrost instance with the given configuration.
@@ -163,7 +160,6 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 	if config.Logger == nil {
 		config.Logger = NewDefaultLogger(schemas.LogLevelInfo)
 	}
-	logger = config.Logger
 	providerUtils.SetLogger(config.Logger)
 
 	// Initialize tracer (use NoOpTracer if not provided)
@@ -437,7 +433,7 @@ func (bifrost *Bifrost) ListModelsRequest(ctx *schemas.BifrostContext, req *sche
 
 	response, bifrostErr := executeRequestWithRetries(ctx, config, func() (*schemas.BifrostListModelsResponse, *schemas.BifrostError) {
 		return provider.ListModels(ctx, keys, request)
-	}, schemas.ListModelsRequest, req.Provider, "", nil)
+	}, schemas.ListModelsRequest, req.Provider, "", nil, bifrost.logger)
 	if bifrostErr != nil {
 		bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
 			RequestType: schemas.ListModelsRequest,
@@ -3206,7 +3202,7 @@ func (bifrost *Bifrost) getProviderByKey(providerKey schemas.ModelProvider) sche
 	config, err := bifrost.account.GetConfigForProvider(providerKey)
 	if err != nil || config == nil {
 		if slices.Contains(dynamicallyConfigurableProviders, providerKey) {
-			logger.Info(fmt.Sprintf("initializing provider %s with default config", providerKey))
+			bifrost.logger.Info(fmt.Sprintf("initializing provider %s with default config", providerKey))
 			// If no config found, use default config
 			config = &schemas.ProviderConfig{
 				NetworkConfig:            schemas.DefaultNetworkConfig,
@@ -4031,6 +4027,7 @@ func executeRequestWithRetries[T any](
 	providerKey schemas.ModelProvider,
 	model string,
 	req *schemas.BifrostRequest,
+	logger schemas.Logger,
 ) (T, *schemas.BifrostError) {
 	var result T
 	var bifrostError *schemas.BifrostError
@@ -4286,11 +4283,11 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 		if IsStreamRequestType(req.RequestType) {
 			stream, bifrostError = executeRequestWithRetries(req.Context, config, func() (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 				return bifrost.handleProviderStreamRequest(provider, req, key, postHookRunner)
-			}, req.RequestType, provider.GetProviderKey(), model, &req.BifrostRequest)
+			}, req.RequestType, provider.GetProviderKey(), model, &req.BifrostRequest, bifrost.logger)
 		} else {
 			result, bifrostError = executeRequestWithRetries(req.Context, config, func() (*schemas.BifrostResponse, *schemas.BifrostError) {
 				return bifrost.handleProviderRequest(provider, req, key, keys)
-			}, req.RequestType, provider.GetProviderKey(), model, &req.BifrostRequest)
+			}, req.RequestType, provider.GetProviderKey(), model, &req.BifrostRequest, bifrost.logger)
 		}
 
 		// Release pipeline immediately for non-streaming requests only
