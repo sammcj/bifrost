@@ -131,22 +131,22 @@ func TestCodeMode_STDIO_SingleServerBasicExecution(t *testing.T) {
 	}{
 		{
 			name:           "simple_return",
-			code:           `return 42`,
+			code:           `result = 42`,
 			expectedResult: float64(42),
 		},
 		{
 			name:           "string_return",
-			code:           `return "Hello from test-tools-server"`,
+			code:           `result = "Hello from test-tools-server"`,
 			expectedResult: "Hello from test-tools-server",
 		},
 		{
 			name:           "object_return",
-			code:           `return { status: "success", value: 123 }`,
+			code:           `result = {"status": "success", "value": 123}`,
 			expectedResult: map[string]interface{}{"status": "success", "value": float64(123)},
 		},
 		{
 			name:           "array_return",
-			code:           `return [1, 2, 3, 4, 5]`,
+			code:           `result = [1, 2, 3, 4, 5]`,
 			expectedResult: []interface{}{float64(1), float64(2), float64(3), float64(4), float64(5)},
 		},
 	}
@@ -182,8 +182,7 @@ func TestCodeMode_STDIO_ToolCallSingleServer(t *testing.T) {
 	}{
 		{
 			name: "echo_tool",
-			code: `const result = await testToolsServer.echo({message: "test message"});
-return result`,
+			code: `result = testToolsServer.echo(message="test message")`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok, "result should be an object")
@@ -192,8 +191,7 @@ return result`,
 		},
 		{
 			name: "calculator_add",
-			code: `const result = await testToolsServer.calculator({operation: "add", x: 15, y: 27});
-return result`,
+			code: `result = testToolsServer.calculator(operation="add", x=15, y=27)`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok, "result should be an object")
@@ -202,8 +200,7 @@ return result`,
 		},
 		{
 			name: "calculator_multiply",
-			code: `const result = await testToolsServer.calculator({operation: "multiply", x: 6, y: 7});
-return result`,
+			code: `result = testToolsServer.calculator(operation="multiply", x=6, y=7)`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok, "result should be an object")
@@ -212,8 +209,7 @@ return result`,
 		},
 		{
 			name: "get_weather",
-			code: `const result = await testToolsServer.get_weather({location: "San Francisco", units: "celsius"});
-return result`,
+			code: `result = testToolsServer.get_weather(location="San Francisco", units="celsius")`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok, "result should be an object")
@@ -223,9 +219,9 @@ return result`,
 		},
 		{
 			name: "sequential_tool_calls",
-			code: `const echo1 = await testToolsServer.echo({message: "first"});
-const echo2 = await testToolsServer.echo({message: "second"});
-return {first: echo1, second: echo2}`,
+			code: `echo1 = testToolsServer.echo(message="first")
+echo2 = testToolsServer.echo(message="second")
+result = {"first": echo1, "second": echo2}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok, "result should be an object")
@@ -278,8 +274,7 @@ func TestCodeMode_STDIO_MultipleServers(t *testing.T) {
 	}{
 		{
 			name: "call_tool_from_first_server",
-			code: `const result = await testToolsServer.echo({message: "from test-tools"});
-return result`,
+			code: `result = testToolsServer.echo(message="from test-tools")`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -288,8 +283,7 @@ return result`,
 		},
 		{
 			name: "call_tool_from_second_server",
-			code: `const result = await temperature.get_temperature({location: "Tokyo"});
-return result`,
+			code: `result = temperature.get_temperature(location="Tokyo")`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result := execResult["result"]
 				require.NotNil(t, result)
@@ -301,9 +295,9 @@ return result`,
 		},
 		{
 			name: "call_tools_from_both_servers",
-			code: `const echo = await testToolsServer.echo({message: "hello"});
-const temp = await temperature.get_temperature({location: "London"});
-return {echo: echo, temp: temp}`,
+			code: `echo = testToolsServer.echo(message="hello")
+temp = temperature.get_temperature(location="London")
+result = {"echo": echo, "temp": temp}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -317,9 +311,9 @@ return {echo: echo, temp: temp}`,
 		},
 		{
 			name: "calculator_from_both_servers",
-			code: `const calc1 = await testToolsServer.calculator({operation: "add", x: 10, y: 5});
-const calc2 = await temperature.calculator({operation: "multiply", x: 3, y: 4});
-return {tools: calc1, temp: calc2}`,
+			code: `calc1 = testToolsServer.calculator(operation="add", x=10, y=5)
+calc2 = temperature.calculator(operation="multiply", x=3, y=4)
+result = {"tools": calc1, "temp": calc2}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -375,41 +369,37 @@ func TestCodeMode_STDIO_ServerFiltering(t *testing.T) {
 		{
 			name:           "allow_only_test_tools_server",
 			includeClients: []string{"testToolsServer"},
-			code: `const result = await testToolsServer.echo({message: "allowed"});
-return result`,
+			code:           `result = testToolsServer.echo(message="allowed")`,
 			shouldSucceed:    true,
 			expectedInResult: "allowed",
 		},
 		{
 			name:           "block_test_tools_server",
 			includeClients: []string{"temperature"},
-			code: `const result = await testToolsServer.echo({message: "blocked"});
-return result`,
+			code:           `result = testToolsServer.echo(message="blocked")`,
 			shouldSucceed: false,
-			expectedError: "testToolsServer is not defined",
+			expectedError: "undefined: testToolsServer",
 		},
 		{
 			name:           "allow_only_temperature_server",
 			includeClients: []string{"temperature"},
-			code: `const result = await temperature.get_temperature({location: "Paris"});
-return result`,
+			code:           `result = temperature.get_temperature(location="Paris")`,
 			shouldSucceed:    true,
 			expectedInResult: "Paris",
 		},
 		{
 			name:           "block_temperature_server",
 			includeClients: []string{"testToolsServer"},
-			code: `const result = await temperature.get_temperature({location: "blocked"});
-return result`,
+			code:           `result = temperature.get_temperature(location="blocked")`,
 			shouldSucceed: false,
-			expectedError: "temperature is not defined",
+			expectedError: "undefined: temperature",
 		},
 		{
 			name:           "allow_both_servers",
 			includeClients: []string{"testToolsServer", "temperature"},
-			code: `const echo = await testToolsServer.echo({message: "both"});
-const temp = await temperature.get_temperature({location: "NYC"});
-return {echo: echo, temp: temp}`,
+			code: `echo = testToolsServer.echo(message="both")
+temp = temperature.get_temperature(location="NYC")
+result = {"echo": echo, "temp": temp}`,
 			shouldSucceed:    true,
 			expectedInResult: "both",
 		},
@@ -490,46 +480,43 @@ func TestCodeMode_STDIO_ToolFiltering(t *testing.T) {
 		expectedError    string
 	}{
 		{
-			name:         "allow_only_echo",
-			includeTools: []string{"testToolsServer-echo"},
-			code: `const result = await testToolsServer.echo({message: "allowed"});
-return result`,
+			name:             "allow_only_echo",
+			includeTools:     []string{"testToolsServer-echo"},
+			code:             `result = testToolsServer.echo(message="allowed")`,
 			shouldSucceed:    true,
 			expectedInResult: "allowed",
 		},
 		{
-			name:         "block_calculator_allow_echo",
-			includeTools: []string{"testToolsServer-echo"},
-			code: `const result = await testToolsServer.calculator({operation: "add", x: 1, y: 2});
-return result`,
+			name:          "block_calculator_allow_echo",
+			includeTools:  []string{"testToolsServer-echo"},
+			code:          `result = testToolsServer.calculator(operation="add", x=1, y=2)`,
 			shouldSucceed: false,
 			expectedError: "calculator",
 		},
 		{
 			name:         "wildcard_for_client",
 			includeTools: []string{"testToolsServer-*"},
-			code: `const echo = await testToolsServer.echo({message: "test"});
-const calc = await testToolsServer.calculator({operation: "add", x: 5, y: 3});
-return {echo: echo, calc: calc}`,
+			code: `echo = testToolsServer.echo(message="test")
+calc = testToolsServer.calculator(operation="add", x=5, y=3)
+result = {"echo": echo, "calc": calc}`,
 			shouldSucceed:    true,
 			expectedInResult: "test",
 		},
 		{
 			name:         "allow_multiple_specific_tools",
 			includeTools: []string{"testToolsServer-echo", "testToolsServer-calculator"},
-			code: `const echo = await testToolsServer.echo({message: "multi"});
-const calc = await testToolsServer.calculator({operation: "multiply", x: 6, y: 7});
-return {echo: echo, calc: calc}`,
+			code: `echo = testToolsServer.echo(message="multi")
+calc = testToolsServer.calculator(operation="multiply", x=6, y=7)
+result = {"echo": echo, "calc": calc}`,
 			shouldSucceed:    true,
 			expectedInResult: "multi",
 		},
 		{
-			name:         "block_all_tools_empty_filter",
-			includeTools: []string{},
-			code: `const result = await testToolsServer.echo({message: "blocked"});
-return result`,
+			name:          "block_all_tools_empty_filter",
+			includeTools:  []string{},
+			code:          `result = testToolsServer.echo(message="blocked")`,
 			shouldSucceed: false,
-			expectedError: "testToolsServer is not defined",
+			expectedError: "undefined: testToolsServer",
 		},
 	}
 
@@ -604,11 +591,10 @@ func TestCodeMode_STDIO_CombinedFiltering(t *testing.T) {
 		expectedInResult string
 	}{
 		{
-			name:           "allow_server_and_specific_tool",
-			includeClients: []string{"testToolsServer"},
-			includeTools:   []string{"testToolsServer-echo"},
-			code: `const result = await testToolsServer.echo({message: "filtered"});
-return result`,
+			name:             "allow_server_and_specific_tool",
+			includeClients:   []string{"testToolsServer"},
+			includeTools:     []string{"testToolsServer-echo"},
+			code:             `result = testToolsServer.echo(message="filtered")`,
 			shouldSucceed:    true,
 			expectedInResult: "filtered",
 		},
@@ -616,17 +602,16 @@ return result`,
 			name:           "allow_server_but_block_tool",
 			includeClients: []string{"testToolsServer"},
 			includeTools:   []string{"testToolsServer-calculator"},
-			code: `const result = await testToolsServer.echo({message: "blocked"});
-return result`,
-			shouldSucceed: false,
+			code:           `result = testToolsServer.echo(message="blocked")`,
+			shouldSucceed:  false,
 		},
 		{
 			name:           "allow_all_clients_specific_tools_from_each",
 			includeClients: []string{"*"},
 			includeTools:   []string{"testToolsServer-echo", "temperature-get_temperature"},
-			code: `const echo = await testToolsServer.echo({message: "test"});
-const temp = await temperature.get_temperature({location: "Berlin"});
-return {echo: echo, temp: temp}`,
+			code: `echo = testToolsServer.echo(message="test")
+temp = temperature.get_temperature(location="Berlin")
+result = {"echo": echo, "temp": temp}`,
 			shouldSucceed:    true,
 			expectedInResult: "test",
 		},
@@ -690,12 +675,13 @@ func TestCodeMode_STDIO_ComplexCodePatterns(t *testing.T) {
 	}{
 		{
 			name: "for_loop_with_tool_calls",
-			code: `const results = [];
-for (let i = 0; i < 3; i++) {
-  const r = await testToolsServer.echo({message: "count_" + i});
-  results.push(r);
-}
-return results`,
+			code: `def main():
+    results = []
+    for i in range(3):
+        r = testToolsServer.echo(message="count_" + str(i))
+        results.append(r)
+    return results
+result = main()`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				results, ok := execResult["result"].([]interface{})
 				require.True(t, ok, "result should be array")
@@ -704,14 +690,13 @@ return results`,
 		},
 		{
 			name: "conditional_tool_calls",
-			code: `const x = 10;
-let result;
-if (x > 5) {
-  result = await testToolsServer.calculator({operation: "add", x: x, y: 5});
-} else {
-  result = await testToolsServer.echo({message: "small"});
-}
-return result`,
+			code: `def main():
+    x = 10
+    if x > 5:
+        return testToolsServer.calculator(operation="add", x=x, y=5)
+    else:
+        return testToolsServer.echo(message="small")
+result = main()`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -719,28 +704,11 @@ return result`,
 			},
 		},
 		{
-			name: "error_handling_try_catch",
-			code: `let result;
-try {
-  result = await testToolsServer.calculator({operation: "divide", x: 10, y: 0});
-} catch (error) {
-  result = {error: "caught_error", message: error.message};
-}
-return result`,
-			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
-				result := execResult["result"]
-				assert.NotNil(t, result)
-			},
-		},
-		{
-			name: "parallel_tool_calls_promise_all",
-			code: `const promises = [
-  testToolsServer.echo({message: "one"}),
-  testToolsServer.echo({message: "two"}),
-  testToolsServer.echo({message: "three"})
-];
-const results = await Promise.all(promises);
-return results`,
+			name: "sequential_tool_calls_list",
+			code: `r1 = testToolsServer.echo(message="one")
+r2 = testToolsServer.echo(message="two")
+r3 = testToolsServer.echo(message="three")
+result = [r1, r2, r3]`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				results, ok := execResult["result"].([]interface{})
 				require.True(t, ok)
@@ -749,12 +717,12 @@ return results`,
 		},
 		{
 			name: "data_transformation",
-			code: `const calc1 = await testToolsServer.calculator({operation: "add", x: 10, y: 20});
-const calc2 = await testToolsServer.calculator({operation: "multiply", x: 5, y: 3});
-return {
-  sum: calc1.result,
-  product: calc2.result,
-  total: calc1.result + calc2.result
+			code: `calc1 = testToolsServer.calculator(operation="add", x=10, y=20)
+calc2 = testToolsServer.calculator(operation="multiply", x=5, y=3)
+result = {
+    "sum": calc1["result"],
+    "product": calc2["result"],
+    "total": calc1["result"] + calc2["result"]
 }`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
@@ -803,8 +771,7 @@ func TestCodeMode_STDIO_EdgeCaseServer_Unicode(t *testing.T) {
 	}{
 		{
 			name: "unicode_emoji",
-			code: `const result = await edgeCaseServer.return_unicode({type: "emoji"});
-return result`,
+			code: `result = edgeCaseServer.return_unicode(type="emoji")`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -816,8 +783,8 @@ return result`,
 		},
 		{
 			name: "unicode_has_length",
-			code: `const result = await edgeCaseServer.return_unicode({type: "emoji"});
-return {type: result.type, length: result.length, starts_with_hello: result.text.startsWith("Hello")}`,
+			code: `r = edgeCaseServer.return_unicode(type="emoji")
+result = {"type": r["type"], "length": r["length"], "starts_with_hello": r["text"].startswith("Hello")}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -861,11 +828,7 @@ func TestCodeMode_STDIO_EdgeCaseServer_BinaryAndEncoding(t *testing.T) {
 	}{
 		{
 			name: "binary_data_base64",
-			code: `const result = await edgeCaseServer.return_binary({
-  size: 100,
-  encoding: "base64"
-});
-return result`,
+			code: `result = edgeCaseServer.return_binary(size=100, encoding="base64")`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -876,11 +839,7 @@ return result`,
 		},
 		{
 			name: "binary_data_hex",
-			code: `const result = await edgeCaseServer.return_binary({
-  size: 50,
-  encoding: "hex"
-});
-return result`,
+			code: `result = edgeCaseServer.return_binary(size=50, encoding="hex")`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -891,11 +850,8 @@ return result`,
 		},
 		{
 			name: "binary_data_small",
-			code: `const result = await edgeCaseServer.return_binary({
-  size: 10,
-  encoding: "base64"
-});
-return {size: result.size, encoding: result.encoding, data_length: result.data.length}`,
+			code: `r = edgeCaseServer.return_binary(size=10, encoding="base64")
+result = {"size": r["size"], "encoding": r["encoding"], "data_length": len(r["data"])}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -939,8 +895,8 @@ func TestCodeMode_STDIO_EdgeCaseServer_EmptyAndNull(t *testing.T) {
 	}{
 		{
 			name: "null_empty_string",
-			code: `const result = await edgeCaseServer.return_null({});
-return {empty_string: result.empty_string, empty_array: result.empty_array}`,
+			code: `r = edgeCaseServer.return_null()
+result = {"empty_string": r["empty_string"], "empty_array": r["empty_array"]}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -952,8 +908,8 @@ return {empty_string: result.empty_string, empty_array: result.empty_array}`,
 		},
 		{
 			name: "null_empty_object",
-			code: `const result = await edgeCaseServer.return_null({});
-return {empty_object: result.empty_object, has_property: 'empty_object' in result}`,
+			code: `r = edgeCaseServer.return_null()
+result = {"empty_object": r["empty_object"], "has_property": "empty_object" in r}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -962,8 +918,8 @@ return {empty_object: result.empty_object, has_property: 'empty_object' in resul
 		},
 		{
 			name: "null_null_value",
-			code: `const result = await edgeCaseServer.return_null({});
-return {has_null: result.null_value === null, zero: result.zero, false: result.false}`,
+			code: `r = edgeCaseServer.return_null()
+result = {"has_null": r["null_value"] == None, "zero": r["zero"], "false": r["false"]}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -974,9 +930,9 @@ return {has_null: result.null_value === null, zero: result.zero, false: result.f
 		},
 		{
 			name: "null_all_values",
-			code: `const result = await edgeCaseServer.return_null({});
-const keys = Object.keys(result);
-return {key_count: keys.length, has_empty_string: 'empty_string' in result}`,
+			code: `r = edgeCaseServer.return_null()
+keys = list(r.keys())
+result = {"key_count": len(keys), "has_empty_string": "empty_string" in r}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1019,8 +975,7 @@ func TestCodeMode_STDIO_EdgeCaseServer_NestedAndSpecialChars(t *testing.T) {
 	}{
 		{
 			name: "nested_structure_default",
-			code: `const result = await edgeCaseServer.return_nested_structure({depth: 5});
-return result`,
+			code: `result = edgeCaseServer.return_nested_structure(depth=5)`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1033,10 +988,7 @@ return result`,
 		},
 		{
 			name: "nested_structure_deeper",
-			code: `const result = await edgeCaseServer.return_nested_structure({
-  depth: 10
-});
-return result`,
+			code: `result = edgeCaseServer.return_nested_structure(depth=10)`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1045,8 +997,8 @@ return result`,
 		},
 		{
 			name: "special_chars_quotes",
-			code: `const result = await edgeCaseServer.return_special_chars({});
-return {has_quotes: 'quotes' in result, has_backslashes: 'backslashes' in result}`,
+			code: `r = edgeCaseServer.return_special_chars()
+result = {"has_quotes": "quotes" in r, "has_backslashes": "backslashes" in r}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1056,8 +1008,8 @@ return {has_quotes: 'quotes' in result, has_backslashes: 'backslashes' in result
 		},
 		{
 			name: "special_chars_newlines",
-			code: `const result = await edgeCaseServer.return_special_chars({});
-return {has_newlines: 'newlines' in result, has_tabs: 'tabs' in result}`,
+			code: `r = edgeCaseServer.return_special_chars()
+result = {"has_newlines": "newlines" in r, "has_tabs": "tabs" in r}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1067,9 +1019,9 @@ return {has_newlines: 'newlines' in result, has_tabs: 'tabs' in result}`,
 		},
 		{
 			name: "special_chars_all",
-			code: `const result = await edgeCaseServer.return_special_chars({});
-const keys = Object.keys(result);
-return {count: keys.length, has_mixed: 'mixed' in result}`,
+			code: `r = edgeCaseServer.return_special_chars()
+keys = list(r.keys())
+result = {"count": len(keys), "has_mixed": "mixed" in r}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1112,10 +1064,8 @@ func TestCodeMode_STDIO_EdgeCaseServer_ExtremeSizes(t *testing.T) {
 	}{
 		{
 			name: "extreme_sizes_small",
-			code: `const result = await edgeCaseServer.return_large_payload({
-  size_kb: 1
-});
-return {item_count: result.item_count, requested_size_kb: result.requested_size_kb}`,
+			code: `r = edgeCaseServer.return_large_payload(size_kb=1)
+result = {"item_count": r["item_count"], "requested_size_kb": r["requested_size_kb"]}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1125,10 +1075,8 @@ return {item_count: result.item_count, requested_size_kb: result.requested_size_
 		},
 		{
 			name: "extreme_sizes_normal",
-			code: `const result = await edgeCaseServer.return_large_payload({
-  size_kb: 10
-});
-return {item_count: result.item_count, requested_size_kb: result.requested_size_kb}`,
+			code: `r = edgeCaseServer.return_large_payload(size_kb=10)
+result = {"item_count": r["item_count"], "requested_size_kb": r["requested_size_kb"]}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1138,13 +1086,11 @@ return {item_count: result.item_count, requested_size_kb: result.requested_size_
 		},
 		{
 			name: "extreme_sizes_large",
-			code: `const result = await edgeCaseServer.return_large_payload({
-  size_kb: 100
-});
-return {
-  item_count: result.item_count,
-  requested_size_kb: result.requested_size_kb,
-  has_items: result.items !== undefined
+			code: `r = edgeCaseServer.return_large_payload(size_kb=100)
+result = {
+    "item_count": r["item_count"],
+    "requested_size_kb": r["requested_size_kb"],
+    "has_items": "items" in r
 }`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
@@ -1193,10 +1139,8 @@ func TestCodeMode_STDIO_ErrorTestServer_NetworkErrors(t *testing.T) {
 	}{
 		{
 			name: "return_error_network",
-			code: `const result = await errorTestServer.return_error({
-  error_type: "network"
-});
-return {error_message: result}`,
+			code: `r = errorTestServer.return_error(error_type="network")
+result = {"error_message": r}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1205,10 +1149,8 @@ return {error_message: result}`,
 		},
 		{
 			name: "return_error_timeout",
-			code: `const result = await errorTestServer.return_error({
-  error_type: "timeout"
-});
-return {error_message: result}`,
+			code: `r = errorTestServer.return_error(error_type="timeout")
+result = {"error_message": r}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1217,10 +1159,8 @@ return {error_message: result}`,
 		},
 		{
 			name: "return_error_validation",
-			code: `const result = await errorTestServer.return_error({
-  error_type: "validation"
-});
-return {error_message: result}`,
+			code: `r = errorTestServer.return_error(error_type="validation")
+result = {"error_message": r}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1229,10 +1169,8 @@ return {error_message: result}`,
 		},
 		{
 			name: "return_error_permission",
-			code: `const result = await errorTestServer.return_error({
-  error_type: "permission"
-});
-return {error_message: result}`,
+			code: `r = errorTestServer.return_error(error_type="permission")
+result = {"error_message": r}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1274,8 +1212,7 @@ func TestCodeMode_STDIO_ErrorTestServer_MalformedAndPartial(t *testing.T) {
 	}{
 		{
 			name: "return_malformed_json",
-			code: `const result = await errorTestServer.return_malformed_json({});
-return result`,
+			code: `result = errorTestServer.return_malformed_json()`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				// return_malformed_json returns invalid JSON which should be handled
 				result := execResult["result"]
@@ -1284,10 +1221,7 @@ return result`,
 		},
 		{
 			name: "return_error",
-			code: `const result = await errorTestServer.timeout_after({
-  seconds: 0.05
-});
-return result`,
+			code: `result = errorTestServer.timeout_after(seconds=0.05)`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				// Use timeout_after instead of return_error since return_error throws
 				result, ok := execResult["result"].(map[string]interface{})
@@ -1297,10 +1231,7 @@ return result`,
 		},
 		{
 			name: "timeout_after_short",
-			code: `const result = await errorTestServer.timeout_after({
-  seconds: 0.1
-});
-return result`,
+			code: `result = errorTestServer.timeout_after(seconds=0.1)`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1309,10 +1240,7 @@ return result`,
 		},
 		{
 			name: "intermittent_fail_low_rate",
-			code: `const result = await errorTestServer.intermittent_fail({
-  fail_rate: 0.1
-});
-return result`,
+			code: `result = errorTestServer.intermittent_fail(fail_rate=0.1)`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				// Either success or error
 				result := execResult["result"]
@@ -1321,10 +1249,8 @@ return result`,
 		},
 		{
 			name: "memory_intensive_small",
-			code: `const result = await errorTestServer.memory_intensive({
-  size_mb: 1
-});
-return {allocated_mb: result.allocated_mb, has_checksum: result.checksum !== undefined}`,
+			code: `r = errorTestServer.memory_intensive(size_mb=1)
+result = {"allocated_mb": r["allocated_mb"], "has_checksum": "checksum" in r}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1367,13 +1293,11 @@ func TestCodeMode_STDIO_ErrorTestServer_LargePayload(t *testing.T) {
 	}{
 		{
 			name: "memory_intensive_small",
-			code: `const result = await errorTestServer.memory_intensive({
-  size_mb: 5
-});
-return {
-  allocated_mb: result.allocated_mb,
-  allocated_bytes: result.allocated_bytes,
-  has_checksum: result.checksum !== undefined
+			code: `r = errorTestServer.memory_intensive(size_mb=5)
+result = {
+    "allocated_mb": r["allocated_mb"],
+    "allocated_bytes": r["allocated_bytes"],
+    "has_checksum": "checksum" in r
 }`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
@@ -1385,13 +1309,11 @@ return {
 		},
 		{
 			name: "memory_intensive_medium",
-			code: `const result = await errorTestServer.memory_intensive({
-  size_mb: 10
-});
-return {
-  allocated_mb: result.allocated_mb,
-  allocated_bytes: result.allocated_bytes,
-  has_message: result.message !== undefined
+			code: `r = errorTestServer.memory_intensive(size_mb=10)
+result = {
+    "allocated_mb": r["allocated_mb"],
+    "allocated_bytes": r["allocated_bytes"],
+    "has_message": "message" in r
 }`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
@@ -1436,11 +1358,7 @@ func TestCodeMode_STDIO_ErrorTestServer_IntermittentAndHandling(t *testing.T) {
 	}{
 		{
 			name: "intermittent_fail_low_rate",
-			code: `const result = await errorTestServer.intermittent_fail({
-  id: "test-1",
-  fail_rate: 0.1
-});
-return result`,
+			code: `result = errorTestServer.intermittent_fail(id="test-1", fail_rate=0.1)`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1454,11 +1372,7 @@ return result`,
 		},
 		{
 			name: "intermittent_fail_high_rate",
-			code: `const result = await errorTestServer.intermittent_fail({
-  id: "test-2",
-  fail_rate: 0.9
-});
-return result`,
+			code: `result = errorTestServer.intermittent_fail(id="test-2", fail_rate=0.9)`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1468,20 +1382,10 @@ return result`,
 		},
 		{
 			name: "error_handling_in_code",
-			code: `let result;
-try {
-  result = await errorTestServer.network_error({
-    id: "test-3",
-    error_type: "connection_refused"
-  });
-} catch (error) {
-  result = {caught: true, message: error.message};
-}
-return result`,
+			code: `result = errorTestServer.return_error(error_type="network")`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
-				result, ok := execResult["result"].(map[string]interface{})
-				require.True(t, ok)
-				// Either caught error or network error response
+				// Either error message or error response
+				result := execResult["result"]
 				assert.NotNil(t, result)
 			},
 		},
@@ -1524,8 +1428,7 @@ func TestCodeMode_STDIO_ParallelTestServer_Sequential(t *testing.T) {
 	}{
 		{
 			name: "fast_tool_1",
-			code: `const result = await parallelTestServer.fast_operation({});
-return result`,
+			code: `result = parallelTestServer.fast_operation()`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1535,8 +1438,7 @@ return result`,
 		},
 		{
 			name: "medium_tool_1",
-			code: `const result = await parallelTestServer.medium_operation({});
-return result`,
+			code: `result = parallelTestServer.medium_operation()`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1546,8 +1448,7 @@ return result`,
 		},
 		{
 			name: "slow_tool_1",
-			code: `const result = await parallelTestServer.slow_operation({});
-return result`,
+			code: `result = parallelTestServer.slow_operation()`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1557,8 +1458,7 @@ return result`,
 		},
 		{
 			name: "variable_delay",
-			code: `const result = await parallelTestServer.very_slow_operation({});
-return result`,
+			code: `result = parallelTestServer.very_slow_operation()`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1601,55 +1501,41 @@ func TestCodeMode_STDIO_ParallelTestServer_Concurrent(t *testing.T) {
 	}{
 		{
 			name: "parallel_fast_tools",
-			code: `const start = Date.now();
-const results = await Promise.all([
-  parallelTestServer.fast_operation({}),
-  parallelTestServer.return_timestamp({})
-]);
-const elapsed = Date.now() - start;
-return {results: results, elapsed: elapsed}`,
+			code: `r1 = parallelTestServer.fast_operation()
+r2 = parallelTestServer.return_timestamp()
+result = {"results": [r1, r2], "count": 2}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
 				results, ok := result["results"].([]interface{})
 				require.True(t, ok)
 				assert.Len(t, results, 2)
-				// Elapsed should be very quick since these are fast operations
-				elapsed := result["elapsed"].(float64)
-				assert.Less(t, elapsed, float64(100), "parallel execution should be fast")
 			},
 		},
 		{
 			name: "parallel_mixed_speeds",
-			code: `const start = Date.now();
-const results = await Promise.all([
-  parallelTestServer.fast_operation({}),
-  parallelTestServer.medium_operation({}),
-  parallelTestServer.slow_operation({})
-]);
-const elapsed = Date.now() - start;
-return {results: results, elapsed: elapsed, count: results.length}`,
+			code: `r1 = parallelTestServer.fast_operation()
+r2 = parallelTestServer.medium_operation()
+r3 = parallelTestServer.slow_operation()
+result = {"results": [r1, r2, r3], "count": 3}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
 				assert.Equal(t, float64(3), result["count"])
-				// Elapsed should be closer to max(fast, medium, slow) than to sum
-				// slow takes 750ms, so elapsed should be around 750ms
-				elapsed := result["elapsed"].(float64)
-				assert.Greater(t, elapsed, float64(700), "should include slow operation time")
-				assert.Less(t, elapsed, float64(1500), "should not be much more than slow operation")
 			},
 		},
 		{
 			name: "parallel_all_tools",
-			code: `const results = await Promise.all([
-  parallelTestServer.fast_operation({}),
-  parallelTestServer.return_timestamp({}),
-  parallelTestServer.medium_operation({}),
-  parallelTestServer.slow_operation({}),
-  parallelTestServer.very_slow_operation({})
-]);
-return {count: results.length, operations: results.map(r => r.operation || 'timestamp')}`,
+			code: `r1 = parallelTestServer.fast_operation()
+r2 = parallelTestServer.return_timestamp()
+r3 = parallelTestServer.medium_operation()
+r4 = parallelTestServer.slow_operation()
+r5 = parallelTestServer.very_slow_operation()
+def get_op(r):
+    if "operation" in r:
+        return r["operation"]
+    return "timestamp"
+result = {"count": 5, "operations": [get_op(r1), get_op(r2), get_op(r3), get_op(r4), get_op(r5)]}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
@@ -1688,7 +1574,7 @@ return {count: results.length, operations: results.map(r => r.operation || 'time
 func TestCodeMode_STDIO_MultiServer_AllServers(t *testing.T) {
 	t.Parallel()
 
-	_, bifrost := setupCodeModeWithSTDIOServers(t, "test-tools-server", "edge-case-server", "error-test-server", "parallel-test-server")
+	_, bifrost := setupCodeModeWithSTDIOServers(t, "go-test-server", "edge-case-server", "error-test-server", "parallel-test-server")
 	ctx := createTestContext()
 
 	tests := []struct {
@@ -1698,27 +1584,25 @@ func TestCodeMode_STDIO_MultiServer_AllServers(t *testing.T) {
 	}{
 		{
 			name: "call_tools_from_all_servers",
-			code: `const results = await Promise.all([
-  testToolsServer.echo({message: "test-tools"}),
-  edgeCaseServer.return_unicode({type: "emoji"}),
-  errorTestServer.timeout_after({seconds: 0.05}),
-  parallelTestServer.fast_operation({})
-]);
-return {
-  count: results.length,
-  testTools: results[0],
-  edgeCase: results[1],
-  errorTest: results[2],
-  parallelTest: results[3]
+			code: `r1 = goTestServer.string_transform(input="test-tools", operation="uppercase")
+r2 = edgeCaseServer.return_unicode(type="emoji")
+r3 = errorTestServer.timeout_after(seconds=0.05)
+r4 = parallelTestServer.fast_operation()
+result = {
+    "count": 4,
+    "goTest": r1,
+    "edgeCase": r2,
+    "errorTest": r3,
+    "parallelTest": r4
 }`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
 				assert.Equal(t, float64(4), result["count"])
 
-				testTools, ok := result["testTools"].(map[string]interface{})
+				goTest, ok := result["goTest"].(map[string]interface{})
 				require.True(t, ok)
-				assert.Equal(t, "test-tools", testTools["message"])
+				assert.Equal(t, "TEST-TOOLS", goTest["result"])
 
 				edgeCase, ok := result["edgeCase"].(map[string]interface{})
 				require.True(t, ok)
@@ -1735,14 +1619,14 @@ return {
 		},
 		{
 			name: "sequential_across_servers",
-			code: `const echo = await testToolsServer.echo({message: "first"});
-const unicode = await edgeCaseServer.return_unicode({type: "emoji"});
-const fast = await parallelTestServer.fast_operation({});
-return {echo: echo, unicode: unicode, fast: fast}`,
+			code: `transform = goTestServer.string_transform(input="first", operation="uppercase")
+unicode = edgeCaseServer.return_unicode(type="emoji")
+fast = parallelTestServer.fast_operation()
+result = {"transform": transform, "unicode": unicode, "fast": fast}`,
 			verifyResult: func(t *testing.T, execResult map[string]interface{}) {
 				result, ok := execResult["result"].(map[string]interface{})
 				require.True(t, ok)
-				assert.NotNil(t, result["echo"])
+				assert.NotNil(t, result["transform"])
 				assert.NotNil(t, result["unicode"])
 				assert.NotNil(t, result["fast"])
 			},
@@ -1772,7 +1656,7 @@ return {echo: echo, unicode: unicode, fast: fast}`,
 func TestCodeMode_STDIO_MultiServer_FilteringAcrossServers(t *testing.T) {
 	t.Parallel()
 
-	_, bifrost := setupCodeModeWithSTDIOServers(t, "test-tools-server", "edge-case-server", "parallel-test-server")
+	_, bifrost := setupCodeModeWithSTDIOServers(t, "go-test-server", "edge-case-server", "parallel-test-server")
 
 	tests := []struct {
 		name           string
@@ -1781,31 +1665,26 @@ func TestCodeMode_STDIO_MultiServer_FilteringAcrossServers(t *testing.T) {
 		shouldSucceed  bool
 	}{
 		{
-			name:           "allow_only_test_tools_and_edge_case",
-			includeClients: []string{"testToolsServer", "edgeCaseServer"},
-			code: `const results = await Promise.all([
-  testToolsServer.echo({message: "allowed"}),
-  edgeCaseServer.return_unicode({type: "emoji"})
-]);
-return results`,
+			name:           "allow_only_go_test_and_edge_case",
+			includeClients: []string{"goTestServer", "edgeCaseServer"},
+			code: `r1 = goTestServer.string_transform(input="allowed", operation="uppercase")
+r2 = edgeCaseServer.return_unicode(type="emoji")
+result = [r1, r2]`,
 			shouldSucceed: true,
 		},
 		{
 			name:           "block_parallel_server",
-			includeClients: []string{"testToolsServer", "edgeCaseServer"},
-			code: `const result = await parallelTestServer.fast_operation({});
-return result`,
-			shouldSucceed: false,
+			includeClients: []string{"goTestServer", "edgeCaseServer"},
+			code:           `result = parallelTestServer.fast_operation()`,
+			shouldSucceed:  false,
 		},
 		{
 			name:           "allow_all_servers",
 			includeClients: []string{"*"},
-			code: `const results = await Promise.all([
-  testToolsServer.echo({message: "all"}),
-  edgeCaseServer.return_unicode({type: "emoji"}),
-  parallelTestServer.fast_operation({})
-]);
-return {count: results.length}`,
+			code: `r1 = goTestServer.string_transform(input="all", operation="uppercase")
+r2 = edgeCaseServer.return_unicode(type="emoji")
+r3 = parallelTestServer.fast_operation()
+result = {"count": 3}`,
 			shouldSucceed: true,
 		},
 	}

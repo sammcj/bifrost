@@ -39,6 +39,7 @@ const (
 // both local tool hosting and external MCP server connections.
 type MCPManager struct {
 	ctx                  context.Context
+	logger               schemas.Logger                     // Logger instance for this manager
 	oauth2Provider       schemas.OAuth2Provider             // Provider for OAuth2 functionality
 	toolsManager         *ToolsManager                      // Handler for MCP tools
 	server               *server.MCPServer                  // Local MCP server instance for hosting tools (STDIO-based)
@@ -71,7 +72,9 @@ type MCPToolFunction[T any] func(args T) (string, error)
 // Returns:
 //   - *MCPManager: Initialized manager instance
 func NewMCPManager(ctx context.Context, config schemas.MCPConfig, oauth2Provider schemas.OAuth2Provider, logger schemas.Logger, codeMode CodeMode) *MCPManager {
-	SetLogger(logger)
+	if logger == nil {
+		logger = defaultLogger
+	}
 	// Set default values
 	if config.ToolManagerConfig == nil {
 		config.ToolManagerConfig = &schemas.MCPToolManagerConfig{
@@ -82,6 +85,7 @@ func NewMCPManager(ctx context.Context, config schemas.MCPConfig, oauth2Provider
 	// Creating new instance
 	manager := &MCPManager{
 		ctx:                  ctx,
+		logger:               logger,
 		clientMap:            make(map[string]*schemas.MCPClientState),
 		healthMonitorManager: NewHealthMonitorManager(),
 		toolSyncManager:      NewToolSyncManager(config.ToolSyncInterval),
@@ -105,7 +109,7 @@ func NewMCPManager(ctx context.Context, config schemas.MCPConfig, oauth2Provider
 		}
 	}
 
-	manager.toolsManager = NewToolsManager(config.ToolManagerConfig, manager, config.FetchNewRequestIDFunc, pluginPipelineProvider, releasePluginPipeline)
+	manager.toolsManager = NewToolsManager(config.ToolManagerConfig, manager, config.FetchNewRequestIDFunc, pluginPipelineProvider, releasePluginPipeline, logger)
 
 	// Set up CodeMode if provided - inject dependencies after manager is created
 	if codeMode != nil {
@@ -123,13 +127,13 @@ func NewMCPManager(ctx context.Context, config schemas.MCPConfig, oauth2Provider
 			go func(clientConfig *schemas.MCPClientConfig) {
 				defer wg.Done()
 				if err := manager.AddClient(clientConfig); err != nil {
-					logger.Warn("%s Failed to add MCP client %s: %v", MCPLogPrefix, clientConfig.Name, err)
+					manager.logger.Warn("%s Failed to add MCP client %s: %v", MCPLogPrefix, clientConfig.Name, err)
 				}
 			}(clientConfig)
 		}
 		wg.Wait()
 	}
-	logger.Info(MCPLogPrefix + " MCP Manager initialized")
+	manager.logger.Info(MCPLogPrefix + " MCP Manager initialized")
 	return manager
 }
 
@@ -216,7 +220,7 @@ func (m *MCPManager) CheckAndExecuteAgentForChatRequest(
 	}
 	// Check if initial response has tool calls
 	if !hasToolCallsForChatResponse(response) {
-		logger.Debug("No tool calls detected, returning response")
+		m.logger.Debug("No tool calls detected, returning response")
 		return response, nil
 	}
 	// Execute agent mode
@@ -268,7 +272,7 @@ func (m *MCPManager) CheckAndExecuteAgentForResponsesRequest(
 	}
 	// Check if initial response has tool calls
 	if !hasToolCallsForResponsesResponse(response) {
-		logger.Debug("No tool calls detected, returning response")
+		m.logger.Debug("No tool calls detected, returning response")
 		return response, nil
 	}
 	// Execute agent mode
@@ -295,7 +299,7 @@ func (m *MCPManager) Cleanup() error {
 	// Disconnect all external MCP clients
 	for id := range m.clientMap {
 		if err := m.removeClientUnsafe(id); err != nil {
-			logger.Error("%s Failed to remove MCP client %s: %v", MCPLogPrefix, id, err)
+			m.logger.Error("%s Failed to remove MCP client %s: %v", MCPLogPrefix, id, err)
 		}
 	}
 
@@ -305,11 +309,11 @@ func (m *MCPManager) Cleanup() error {
 	// Clear local server reference
 	// Note: mark3labs/mcp-go STDIO server cleanup is handled automatically
 	if m.server != nil {
-		logger.Info(MCPLogPrefix + " Clearing local MCP server reference")
+		m.logger.Info(MCPLogPrefix + " Clearing local MCP server reference")
 		m.server = nil
 		m.serverRunning = false
 	}
 
-	logger.Info(MCPLogPrefix + " MCP cleanup completed")
+	m.logger.Info(MCPLogPrefix + " MCP cleanup completed")
 	return nil
 }

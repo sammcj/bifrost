@@ -58,7 +58,7 @@ func TestCodeMode_Agent_AutoExecuteSingleTool(t *testing.T) {
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 			CreateExecuteToolCodeCall("call-1",
-				`const temp = await TemperatureMCPServer.get_temperature({location: "London"}); return temp;`),
+				`result = TemperatureMCPServer.get_temperature(location="London")`),
 		})
 	}))
 
@@ -188,7 +188,7 @@ func TestCodeMode_Agent_NonAutoToolInCode(t *testing.T) {
 	// Turn 1: LLM returns executeToolCode (auto-executable)
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-			CreateExecuteToolCodeCall("call-1", `return {value: 42};`),
+			CreateExecuteToolCodeCall("call-1", `result = {"value": 42}`),
 		})
 	}))
 

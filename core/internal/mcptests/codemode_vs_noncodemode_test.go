@@ -61,26 +61,27 @@ func TestCodeMode_CodeModeClientOnly(t *testing.T) {
 
 	// Execute code calling both clients
 	code := `
-const results = {
-    codemode_success: null,
-    noncodemode_fail: null
-};
+def main():
+    results = {
+        "codemode_success": None,
+        "noncodemode_fail": None
+    }
 
-// Should succeed - temperature is CodeMode client
-try {
-    results.codemode_success = await TemperatureMCPServer.get_temperature({location: "Tokyo"});
-} catch (e) {
-    results.codemode_success = {error: e.message};
-}
+    # Should succeed - temperature is CodeMode client
+    if hasattr(TemperatureMCPServer, "get_temperature"):
+        results["codemode_success"] = TemperatureMCPServer.get_temperature(location="Tokyo")
+    else:
+        results["codemode_success"] = {"error": "get_temperature not available"}
 
-// Should FAIL - gotest is NOT CodeMode client
-try {
-    results.noncodemode_fail = await GoTestServer.uuid_generate({});
-} catch (e) {
-    results.noncodemode_fail = {error: e.message};
-}
+    # Should FAIL - gotest is NOT CodeMode client
+    if "GoTestServer" in dir() and hasattr(GoTestServer, "uuid_generate"):
+        results["noncodemode_fail"] = GoTestServer.uuid_generate()
+    else:
+        results["noncodemode_fail"] = {"error": "GoTestServer not available"}
 
-return results;
+    return results
+
+result = main()
 `
 
 	toolCall := schemas.ChatAssistantMessageToolCall{
@@ -180,26 +181,23 @@ func TestCodeMode_MixedCodeModeClients(t *testing.T) {
 
 	// Test all servers
 	code := `
-const results = [];
+def test_server(name, server_name, method_name, **kwargs):
+    if server_name not in dir():
+        return {"server": name, "success": False, "error": server_name + " not available"}
+    server = eval(server_name)
+    if not hasattr(server, method_name):
+        return {"server": name, "success": False, "error": method_name + " not available"}
+    method = getattr(server, method_name)
+    r = method(**kwargs)
+    return {"server": name, "success": True, "result": r}
 
-// Test all servers
-const tests = [
-    {name: "temperature", fn: () => TemperatureMCPServer.get_temperature({location: "Paris"})},
-    {name: "edge", fn: () => EdgeCaseServer.return_unicode({type: "emoji"})},
-    {name: "gotest", fn: () => GoTestServer.uuid_generate({})},
-    {name: "parallel", fn: () => ParallelTestServer.fast_operation()}
-];
+results = []
+results.append(test_server("temperature", "TemperatureMCPServer", "get_temperature", location="Paris"))
+results.append(test_server("edge", "EdgeCaseServer", "return_unicode", type="emoji"))
+results.append(test_server("gotest", "GoTestServer", "uuid_generate"))
+results.append(test_server("parallel", "ParallelTestServer", "fast_operation"))
 
-for (const test of tests) {
-    try {
-        const result = await test.fn();
-        results.push({server: test.name, success: true, result: result});
-    } catch (e) {
-        results.push({server: test.name, success: false, error: e.message});
-    }
-}
-
-return results;
+result = results
 `
 
 	toolCall := schemas.ChatAssistantMessageToolCall{
@@ -298,7 +296,7 @@ func TestCodeMode_Agent_MixedCodeModeWithApproval(t *testing.T) {
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 			CreateExecuteToolCodeCall("call-1",
-				`const temp = await TemperatureMCPServer.get_temperature({location: "Dubai"}); return temp;`),
+				`result = TemperatureMCPServer.get_temperature(location="Dubai")`),
 		})
 	}))
 
@@ -404,7 +402,7 @@ func TestCodeMode_Agent_CodeModeInCode_NonCodeModeDirect(t *testing.T) {
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 			CreateExecuteToolCodeCall("call-1",
-				`const temp = await TemperatureMCPServer.get_temperature({location: "Seoul"}); return temp;`),
+				`result = TemperatureMCPServer.get_temperature(location="Seoul")`),
 		})
 	}))
 

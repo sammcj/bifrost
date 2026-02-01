@@ -191,28 +191,28 @@ func (m *MCPManager) removeClientUnsafe(id string) error {
 	if !ok {
 		return fmt.Errorf("client %s not found", id)
 	}
-	logger.Info("%s Disconnecting MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
+	m.logger.Info("%s Disconnecting MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
 	// Stop health monitoring for this client
 	m.healthMonitorManager.StopMonitoring(id)
-	logger.Debug("%s Stopped health monitoring for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
+	m.logger.Debug("%s Stopped health monitoring for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
 	// Stop tool syncing for this client
 	m.toolSyncManager.StopSyncing(id)
-	logger.Debug("%s Stopped tool syncing for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
+	m.logger.Debug("%s Stopped tool syncing for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
 	// Cancel SSE context if present (required for proper SSE cleanup)
 	if client.CancelFunc != nil {
 		client.CancelFunc()
 		client.CancelFunc = nil
 	}
-	logger.Debug("%s Cancelled SSE context for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
+	m.logger.Debug("%s Cancelled SSE context for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
 	// Close the client transport connection
 	// This handles cleanup for all transport types (HTTP, STDIO, SSE)
 	if client.Conn != nil {
 		if err := client.Conn.Close(); err != nil {
-			logger.Error("%s Failed to close MCP server '%s': %v", MCPLogPrefix, client.ExecutionConfig.Name, err)
+			m.logger.Error("%s Failed to close MCP server '%s': %v", MCPLogPrefix, client.ExecutionConfig.Name, err)
 		}
 		client.Conn = nil
 	}
-	logger.Debug("%s Closed client transport connection for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
+	m.logger.Debug("%s Closed client transport connection for MCP server '%s'", MCPLogPrefix, client.ExecutionConfig.Name)
 	// Clear client tool map
 	client.ToolMap = make(map[string]schemas.ChatTool)
 
@@ -394,8 +394,8 @@ func (m *MCPManager) RegisterTool(name, description string, toolFunction MCPTool
 		return fmt.Errorf("tool '%s' is already registered", name)
 	}
 
-	logger.Debug("%s Registering typed tool: %s -> prefixed as %s (client: %s)", MCPLogPrefix, name, prefixedToolName, BifrostMCPClientKey)
-	logger.Info("%s Registering typed tool: %s", MCPLogPrefix, name)
+	m.logger.Debug("%s Registering typed tool: %s -> prefixed as %s (client: %s)", MCPLogPrefix, name, prefixedToolName, BifrostMCPClientKey)
+	m.logger.Info("%s Registering typed tool: %s", MCPLogPrefix, name)
 
 	// Create MCP handler wrapper that converts between typed and MCP interfaces
 	mcpHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -463,7 +463,7 @@ func (m *MCPManager) connectToMCPClient(config *schemas.MCPClientConfig) error {
 	var err error
 
 	// Create appropriate transport based on connection type
-	logger.Debug("%s [%s] Creating %s connection...", MCPLogPrefix, config.Name, config.ConnectionType)
+	m.logger.Debug("%s [%s] Creating %s connection...", MCPLogPrefix, config.Name, config.ConnectionType)
 	switch config.ConnectionType {
 	case schemas.MCPConnectionTypeHTTP:
 		externalClient, connectionInfo, err = m.createHTTPConnection(m.ctx, config)
@@ -480,7 +480,7 @@ func (m *MCPManager) connectToMCPClient(config *schemas.MCPClientConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to create connection: %w", err)
 	}
-	logger.Debug("%s [%s] Connection created successfully", MCPLogPrefix, config.Name)
+	m.logger.Debug("%s [%s] Connection created successfully", MCPLogPrefix, config.Name)
 
 	// Initialize the external client with timeout
 	// For SSE and STDIO connections, we need a long-lived context for the connection
@@ -505,14 +505,14 @@ func (m *MCPManager) connectToMCPClient(config *schemas.MCPClientConfig) error {
 	}
 
 	// Start the transport first (required for STDIO and SSE clients)
-	logger.Debug("%s [%s] Starting transport...", MCPLogPrefix, config.Name)
+	m.logger.Debug("%s [%s] Starting transport...", MCPLogPrefix, config.Name)
 	if err := externalClient.Start(ctx); err != nil {
 		if config.ConnectionType == schemas.MCPConnectionTypeSSE || config.ConnectionType == schemas.MCPConnectionTypeSTDIO {
 			cancel() // Cancel long-lived context on error
 		}
 		return fmt.Errorf("failed to start MCP client transport %s: %v", config.Name, err)
 	}
-	logger.Debug("%s [%s] Transport started successfully", MCPLogPrefix, config.Name)
+	m.logger.Debug("%s [%s] Transport started successfully", MCPLogPrefix, config.Name)
 
 	// Create proper initialize request for external client
 	extInitRequest := mcp.InitializeRequest{
@@ -535,7 +535,7 @@ func (m *MCPManager) connectToMCPClient(config *schemas.MCPClientConfig) error {
 		// Create timeout context for initialization phase only
 		initCtx, initCancel = context.WithTimeout(longLivedCtx, MCPClientConnectionEstablishTimeout)
 		defer initCancel()
-		logger.Debug("%s [%s] Initializing client with %v timeout...", MCPLogPrefix, config.Name, MCPClientConnectionEstablishTimeout)
+		m.logger.Debug("%s [%s] Initializing client with %v timeout...", MCPLogPrefix, config.Name, MCPClientConnectionEstablishTimeout)
 	} else {
 		// HTTP already has timeout
 		initCtx = ctx
@@ -548,18 +548,18 @@ func (m *MCPManager) connectToMCPClient(config *schemas.MCPClientConfig) error {
 		}
 		return fmt.Errorf("failed to initialize MCP client %s: %v", config.Name, err)
 	}
-	logger.Debug("%s [%s] Client initialized successfully", MCPLogPrefix, config.Name)
+	m.logger.Debug("%s [%s] Client initialized successfully", MCPLogPrefix, config.Name)
 
 	// Retrieve tools from the external server (this also requires network I/O)
-	logger.Debug("%s [%s] Retrieving tools...", MCPLogPrefix, config.Name)
-	tools, toolNameMapping, err := retrieveExternalTools(ctx, externalClient, config.Name)
+	m.logger.Debug("%s [%s] Retrieving tools...", MCPLogPrefix, config.Name)
+	tools, toolNameMapping, err := retrieveExternalTools(ctx, externalClient, config.Name, m.logger)
 	if err != nil {
-		logger.Warn("%s Failed to retrieve tools from %s: %v", MCPLogPrefix, config.Name, err)
+		m.logger.Warn("%s Failed to retrieve tools from %s: %v", MCPLogPrefix, config.Name, err)
 		// Continue with connection even if tool retrieval fails
 		tools = make(map[string]schemas.ChatTool)
 		toolNameMapping = make(map[string]string)
 	}
-	logger.Debug("%s [%s] Retrieved %d tools", MCPLogPrefix, config.Name, len(tools))
+	m.logger.Debug("%s [%s] Retrieved %d tools", MCPLogPrefix, config.Name, len(tools))
 
 	// Second lock: Update client with final connection details and tools
 	m.mu.Lock()
@@ -584,8 +584,8 @@ func (m *MCPManager) connectToMCPClient(config *schemas.MCPClientConfig) error {
 		// Store tool name mapping for execution (sanitized_name -> original_mcp_name)
 		client.ToolNameMapping = toolNameMapping
 
-		logger.Debug("%s [%s] Registering %d tools. Client config - ID: %s, Name: %s, IsCodeModeClient: %v", MCPLogPrefix, config.Name, len(tools), config.ID, config.Name, config.IsCodeModeClient)
-		logger.Info("%s Connected to MCP server '%s'", MCPLogPrefix, config.Name)
+		m.logger.Debug("%s [%s] Registering %d tools. Client config - ID: %s, Name: %s, IsCodeModeClient: %v", MCPLogPrefix, config.Name, len(tools), config.ID, config.Name, config.IsCodeModeClient)
+		m.logger.Info("%s Connected to MCP server '%s'", MCPLogPrefix, config.Name)
 	} else {
 		// Release lock before cleanup and return
 		m.mu.Unlock()
@@ -597,7 +597,7 @@ func (m *MCPManager) connectToMCPClient(config *schemas.MCPClientConfig) error {
 		// Close external client connection to prevent transport/goroutine leaks
 		if externalClient != nil {
 			if err := externalClient.Close(); err != nil {
-				logger.Warn("%s Failed to close external client during cleanup: %v", MCPLogPrefix, err)
+				m.logger.Warn("%s Failed to close external client during cleanup: %v", MCPLogPrefix, err)
 			}
 		}
 		return fmt.Errorf("client %s was removed during connection setup", config.Name)
@@ -610,7 +610,7 @@ func (m *MCPManager) connectToMCPClient(config *schemas.MCPClientConfig) error {
 	// Register OnConnectionLost hook for SSE connections to detect idle timeouts
 	if config.ConnectionType == schemas.MCPConnectionTypeSSE && externalClient != nil {
 		externalClient.OnConnectionLost(func(err error) {
-			logger.Warn("%s SSE connection lost for MCP server '%s': %v", MCPLogPrefix, config.Name, err)
+			m.logger.Warn("%s SSE connection lost for MCP server '%s': %v", MCPLogPrefix, config.Name, err)
 			// Update state to disconnected
 			m.mu.Lock()
 			if client, exists := m.clientMap[config.ID]; exists {
@@ -621,14 +621,14 @@ func (m *MCPManager) connectToMCPClient(config *schemas.MCPClientConfig) error {
 	}
 
 	// Start health monitoring for the client
-	monitor := NewClientHealthMonitor(m, config.ID, DefaultHealthCheckInterval, config.IsPingAvailable)
+	monitor := NewClientHealthMonitor(m, config.ID, DefaultHealthCheckInterval, config.IsPingAvailable, m.logger)
 	m.healthMonitorManager.StartMonitoring(monitor)
 
 	// Start tool syncing for the client (skip for internal bifrost client)
 	if config.ID != BifrostMCPClientKey {
 		syncInterval := ResolveToolSyncInterval(config, m.toolSyncManager.GetGlobalInterval())
 		if syncInterval > 0 {
-			syncer := NewClientToolSyncer(m, config.ID, config.Name, syncInterval)
+			syncer := NewClientToolSyncer(m, config.ID, config.Name, syncInterval, m.logger)
 			m.toolSyncManager.StartSyncing(syncer)
 		}
 	}

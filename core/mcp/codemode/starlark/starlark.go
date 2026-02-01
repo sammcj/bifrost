@@ -29,6 +29,9 @@ type StarlarkCodeMode struct {
 	releasePluginPipeline  func(pipeline mcp.PluginPipeline)
 	fetchNewRequestIDFunc  func(ctx *schemas.BifrostContext) string
 
+	// Logger for this instance
+	logger schemas.Logger
+
 	// Mutex for protecting logs during concurrent execution
 	logMu sync.Mutex
 }
@@ -37,13 +40,14 @@ type StarlarkCodeMode struct {
 //
 // Parameters:
 //   - config: Configuration for the code mode (binding level, timeouts). Can be nil for defaults.
+//   - logger: Logger instance for this code mode. Can be nil.
 //
 // Returns:
 //   - *StarlarkCodeMode: A new Starlark code mode instance
 //
 // Note: Dependencies must be set via SetDependencies before the CodeMode can execute tools.
 // This allows the CodeMode to be created before the MCPManager, avoiding circular dependencies.
-func NewStarlarkCodeMode(config *mcp.CodeModeConfig) *StarlarkCodeMode {
+func NewStarlarkCodeMode(config *mcp.CodeModeConfig, logger schemas.Logger) *StarlarkCodeMode {
 	if config == nil {
 		config = mcp.DefaultCodeModeConfig()
 	}
@@ -56,13 +60,19 @@ func NewStarlarkCodeMode(config *mcp.CodeModeConfig) *StarlarkCodeMode {
 		config.ToolExecutionTimeout = schemas.DefaultToolExecutionTimeout
 	}
 
-	s := &StarlarkCodeMode{}
+	if logger == nil {
+		logger = defaultLogger
+	}
+
+	s := &StarlarkCodeMode{
+		logger: logger,
+	}
 
 	// Initialize atomic values
 	s.bindingLevel.Store(config.BindingLevel)
 	s.toolExecutionTimeout.Store(config.ToolExecutionTimeout)
 
-	logger.Info("%s Starlark code mode initialized with binding level: %s, timeout: %v",
+	s.logger.Info("%s Starlark code mode initialized with binding level: %s, timeout: %v",
 		mcp.CodeModeLogPrefix, config.BindingLevel, config.ToolExecutionTimeout)
 
 	return s
@@ -150,7 +160,7 @@ func (s *StarlarkCodeMode) UpdateConfig(config *mcp.CodeModeConfig) {
 		s.toolExecutionTimeout.Store(config.ToolExecutionTimeout)
 	}
 
-	logger.Info("%s Starlark code mode configuration updated: binding level=%s, timeout=%v",
+	s.logger.Info("%s Starlark code mode configuration updated: binding level=%s, timeout=%v",
 		mcp.CodeModeLogPrefix, config.BindingLevel, config.ToolExecutionTimeout)
 }
 

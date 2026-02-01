@@ -68,7 +68,7 @@ func TestCodeMode_Agent_MultiTurn_CodeChaining(t *testing.T) {
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 			CreateExecuteToolCodeCall("call-1",
-				`const temp = await TemperatureMCPServer.get_temperature({location: "Tokyo"}); return temp;`),
+				`result = TemperatureMCPServer.get_temperature(location="Tokyo")`),
 		})
 	}))
 
@@ -81,10 +81,7 @@ func TestCodeMode_Agent_MultiTurn_CodeChaining(t *testing.T) {
 		}
 
 		// Use actual temperature data in next code block
-		code := fmt.Sprintf(`const transformed = await GoTestServer.string_transform({
-			input: %s,
-			operation: "uppercase"
-		}); return transformed;`, strconv.Quote(tempData))
+		code := fmt.Sprintf(`result = GoTestServer.string_transform(input=%s, operation="uppercase")`, strconv.Quote(tempData))
 
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 			CreateExecuteToolCodeCall("call-2", code),
@@ -98,10 +95,7 @@ func TestCodeMode_Agent_MultiTurn_CodeChaining(t *testing.T) {
 			return CreateChatResponseWithText("No transformed data found")
 		}
 
-		code := fmt.Sprintf(`const hash = await GoTestServer.hash({
-			input: %s,
-			algorithm: "sha256"
-		}); return hash;`, strconv.Quote(transformedData))
+		code := fmt.Sprintf(`result = GoTestServer.hash(input=%s, algorithm="sha256")`, strconv.Quote(transformedData))
 
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 			CreateExecuteToolCodeCall("call-3", code),
@@ -210,7 +204,7 @@ func TestCodeMode_Agent_MultiTurn_MixedToolsAndCode(t *testing.T) {
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 			CreateExecuteToolCodeCall("call-1",
-				`const temp = await TemperatureMCPServer.get_temperature({location: "Paris"}); return temp;`),
+				`result = TemperatureMCPServer.get_temperature(location="Paris")`),
 		})
 	}))
 
@@ -227,12 +221,11 @@ func TestCodeMode_Agent_MultiTurn_MixedToolsAndCode(t *testing.T) {
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 			CreateExecuteToolCodeCall("call-3",
-				`try {
-					const echo = await TemperatureMCPServer.echo({text: "test"});
-					return {success: true, result: echo};
-				} catch (e) {
-					return {success: false, error: e.message};
-				}`),
+				`if hasattr(TemperatureMCPServer, "echo"):
+    echo = TemperatureMCPServer.echo(text="test")
+    result = {"success": True, "result": echo}
+else:
+    result = {"success": False, "error": "echo not available"}`),
 		})
 	}))
 
@@ -324,12 +317,11 @@ func TestCodeMode_Agent_MultiTurn_FilteredToolInCode(t *testing.T) {
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 			CreateExecuteToolCodeCall("call-1",
-				`try {
-					const echo = await TemperatureMCPServer.echo({text: "blocked"});
-					return {success: true, result: echo};
-				} catch (e) {
-					return {success: false, error: e.message};
-				}`),
+				`if hasattr(TemperatureMCPServer, "echo"):
+    echo = TemperatureMCPServer.echo(text="blocked")
+    result = {"success": True, "result": echo}
+else:
+    result = {"success": False, "error": "echo not available"}`),
 		})
 	}))
 
@@ -436,7 +428,7 @@ func TestCodeMode_Agent_MultiTurn_ContextFilterOverride(t *testing.T) {
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 			CreateExecuteToolCodeCall("call-1",
-				`const echo = await TemperatureMCPServer.echo({text: "context override"}); return echo;`),
+				`result = TemperatureMCPServer.echo(text="context override")`),
 		})
 	}))
 
@@ -540,28 +532,28 @@ func TestCodeMode_Agent_MultiTurn_MaxDepth(t *testing.T) {
 	// Turn 1
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-			CreateExecuteToolCodeCall("call-1", `return {iteration: 1};`),
+			CreateExecuteToolCodeCall("call-1", `result = {"iteration": 1}`),
 		})
 	}))
 
 	// Turn 2
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-			CreateExecuteToolCodeCall("call-2", `return {iteration: 2};`),
+			CreateExecuteToolCodeCall("call-2", `result = {"iteration": 2}`),
 		})
 	}))
 
 	// Turn 3 (max depth reached)
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-			CreateExecuteToolCodeCall("call-3", `return {iteration: 3};`),
+			CreateExecuteToolCodeCall("call-3", `result = {"iteration": 3}`),
 		})
 	}))
 
 	// Turn 4 (should NOT be called - max depth exceeded)
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
-			CreateExecuteToolCodeCall("call-4", `return {iteration: 4};`),
+			CreateExecuteToolCodeCall("call-4", `result = {"iteration": 4}`),
 		})
 	}))
 
@@ -649,7 +641,7 @@ func TestCodeMode_Agent_MultiTurn_ErrorRecovery(t *testing.T) {
 	mocker.AddChatResponse(CreateDynamicChatResponse(func(history []schemas.ChatMessage) *schemas.BifrostChatResponse {
 		return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 			CreateExecuteToolCodeCall("call-1",
-				`const err = await ErrorTestServer.return_error({error_type: "validation"}); return err;`),
+				`result = ErrorTestServer.return_error(error_type="validation")`),
 		})
 	}))
 
@@ -661,7 +653,7 @@ func TestCodeMode_Agent_MultiTurn_ErrorRecovery(t *testing.T) {
 			// Try alternative approach
 			return CreateChatResponseWithToolCalls([]schemas.ChatAssistantMessageToolCall{
 				CreateExecuteToolCodeCall("call-2",
-					`const temp = await TemperatureMCPServer.get_temperature({location: "Tokyo"}); return temp;`),
+					`result = TemperatureMCPServer.get_temperature(location="Tokyo")`),
 			})
 		}
 		return CreateChatResponseWithText("No error detected")

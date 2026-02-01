@@ -54,7 +54,7 @@ func (m *MCPManager) GetToolPerClient(ctx context.Context) map[string][]schemas.
 		includeClients = existingIncludeClients
 	}
 
-	logger.Debug("%s GetToolPerClient: Total clients in manager: %d, Filter: %v", MCPLogPrefix, len(m.clientMap), includeClients)
+	m.logger.Debug("%s GetToolPerClient: Total clients in manager: %d, Filter: %v", MCPLogPrefix, len(m.clientMap), includeClients)
 
 	tools := make(map[string][]schemas.ChatTool)
 	for _, client := range m.clientMap {
@@ -62,11 +62,11 @@ func (m *MCPManager) GetToolPerClient(ctx context.Context) map[string][]schemas.
 		clientName := client.ExecutionConfig.Name
 		clientID := client.ExecutionConfig.ID
 
-		logger.Debug("%s Evaluating client %s (ID: %s) for tools", MCPLogPrefix, clientName, clientID)
+		m.logger.Debug("%s Evaluating client %s (ID: %s) for tools", MCPLogPrefix, clientName, clientID)
 
 		// Apply client filtering logic - check both ID and Name for compatibility
-		if !shouldIncludeClient(clientName, includeClients) {
-			logger.Debug("%s Skipping MCP client %s: not in include clients list", MCPLogPrefix, clientName)
+		if !shouldIncludeClient(clientName, includeClients, m.logger) {
+			m.logger.Debug("%s Skipping MCP client %s: not in include clients list", MCPLogPrefix, clientName)
 			continue
 		}
 
@@ -91,7 +91,7 @@ func (m *MCPManager) GetToolPerClient(ctx context.Context) map[string][]schemas.
 			tools[clientName] = append(tools[clientName], tool)
 		}
 		if len(tools[clientName]) > 0 {
-			logger.Debug("%s Added %d tools for MCP client %s", MCPLogPrefix, len(tools[clientName]), clientName)
+			m.logger.Debug("%s Added %d tools for MCP client %s", MCPLogPrefix, len(tools[clientName]), clientName)
 		}
 	}
 	return tools
@@ -107,24 +107,24 @@ func (m *MCPManager) GetToolPerClient(ctx context.Context) map[string][]schemas.
 func (m *MCPManager) GetClientByName(clientName string) *schemas.MCPClientState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	logger.Debug("%s GetClientByName: Looking for client '%s' among %d clients", MCPLogPrefix, clientName, len(m.clientMap))
+	m.logger.Debug("%s GetClientByName: Looking for client '%s' among %d clients", MCPLogPrefix, clientName, len(m.clientMap))
 	for _, client := range m.clientMap {
-		logger.Debug("%s Checking client with Name: %s, ID: %s", MCPLogPrefix, client.ExecutionConfig.Name, client.ExecutionConfig.ID)
+		m.logger.Debug("%s Checking client with Name: %s, ID: %s", MCPLogPrefix, client.ExecutionConfig.Name, client.ExecutionConfig.ID)
 		if client.ExecutionConfig.Name == clientName {
 			// Return a copy to prevent TOCTOU race conditions
 			// The caller receives a snapshot of the client state at this point in time
-			logger.Debug("%s Found client '%s' with IsCodeModeClient=%v", MCPLogPrefix, clientName, client.ExecutionConfig.IsCodeModeClient)
+			m.logger.Debug("%s Found client '%s' with IsCodeModeClient=%v", MCPLogPrefix, clientName, client.ExecutionConfig.IsCodeModeClient)
 			clientCopy := *client
 			return &clientCopy
 		}
 	}
-	logger.Debug("%s Client '%s' not found", MCPLogPrefix, clientName)
+	m.logger.Debug("%s Client '%s' not found", MCPLogPrefix, clientName)
 	return nil
 }
 
 // retrieveExternalTools retrieves and filters tools from an external MCP server without holding locks.
 // Returns both the tools map and a name mapping (sanitized_name -> original_mcp_name) for tool execution.
-func retrieveExternalTools(ctx context.Context, client *client.Client, clientName string) (map[string]schemas.ChatTool, map[string]string, error) {
+func retrieveExternalTools(ctx context.Context, client *client.Client, clientName string, logger schemas.Logger) (map[string]schemas.ChatTool, map[string]string, error) {
 	// Get available tools from external server
 	listRequest := mcp.ListToolsRequest{
 		PaginatedRequest: mcp.PaginatedRequest{
@@ -156,7 +156,7 @@ func retrieveExternalTools(ctx context.Context, client *client.Client, clientNam
 		}
 
 		// Convert MCP tool schema to Bifrost format
-		bifrostTool := convertMCPToolToBifrostSchema(&mcpTool)
+		bifrostTool := convertMCPToolToBifrostSchema(&mcpTool, logger)
 		// Prefix tool name with client name to make it permanent (using '-' as separator)
 		// Keep the original tool name (don't sanitize) so we can call the MCP server correctly
 		prefixedToolName := fmt.Sprintf("%s-%s", clientName, mcpTool.Name)
@@ -175,7 +175,7 @@ func retrieveExternalTools(ctx context.Context, client *client.Client, clientNam
 }
 
 // shouldIncludeClient determines if a client should be included based on filtering rules.
-func shouldIncludeClient(clientName string, includeClients []string) bool {
+func shouldIncludeClient(clientName string, includeClients []string, logger schemas.Logger) bool {
 	// If includeClients is specified (not nil), apply whitelist filtering
 	if includeClients != nil {
 		// Handle empty array [] - means no clients are included
@@ -297,14 +297,14 @@ func shouldSkipToolForRequest(ctx context.Context, clientName, toolName string) 
 }
 
 // convertMCPToolToBifrostSchema converts an MCP tool definition to Bifrost format.
-func convertMCPToolToBifrostSchema(mcpTool *mcp.Tool) schemas.ChatTool {
+func convertMCPToolToBifrostSchema(mcpTool *mcp.Tool, logger schemas.Logger) schemas.ChatTool {
 	var properties *schemas.OrderedMap
 	if len(mcpTool.InputSchema.Properties) > 0 {
 		orderedProps := make(schemas.OrderedMap, len(mcpTool.InputSchema.Properties))
 		maps.Copy(orderedProps, mcpTool.InputSchema.Properties)
 
 		// Fix array schemas: ensure all array properties have an 'items' field
-		FixArraySchemas(orderedProps)
+		FixArraySchemas(orderedProps, logger)
 
 		properties = &orderedProps
 	} else {
@@ -670,7 +670,7 @@ func getOriginalToolName(sanitizedToolName string, client *schemas.MCPClientStat
 //
 // Parameters:
 //   - properties: The properties map to fix
-func FixArraySchemas(properties map[string]interface{}) {
+func FixArraySchemas(properties map[string]interface{}, logger schemas.Logger) {
 	for key, value := range properties {
 		// Check if the value is a map (representing a schema object)
 		if schemaMap, ok := value.(map[string]interface{}); ok {
@@ -688,11 +688,11 @@ func FixArraySchemas(properties map[string]interface{}) {
 					switch itemsType {
 					case "array":
 						// Handle nested arrays (array-of-array)
-						FixArraySchemas(map[string]interface{}{"": itemsMap})
+						FixArraySchemas(map[string]interface{}{"": itemsMap}, logger)
 					case "object":
 						// Recurse into object properties
 						if itemsProps, ok := itemsMap["properties"].(map[string]interface{}); ok {
-							FixArraySchemas(itemsProps)
+							FixArraySchemas(itemsProps, logger)
 						}
 					}
 				}
@@ -701,7 +701,7 @@ func FixArraySchemas(properties map[string]interface{}) {
 			// Recursively fix nested object properties
 			if schemaType, ok := schemaMap["type"].(string); ok && schemaType == "object" {
 				if nestedProps, ok := schemaMap["properties"].(map[string]interface{}); ok {
-					FixArraySchemas(nestedProps)
+					FixArraySchemas(nestedProps, logger)
 				}
 			}
 
@@ -721,16 +721,16 @@ func FixArraySchemas(properties map[string]interface{}) {
 									switch itemsType {
 									case "array":
 										// Handle nested arrays
-										FixArraySchemas(map[string]interface{}{"": itemsMap})
+										FixArraySchemas(map[string]interface{}{"": itemsMap}, logger)
 									case "object":
 										if itemsProps, ok := itemsMap["properties"].(map[string]interface{}); ok {
-											FixArraySchemas(itemsProps)
+											FixArraySchemas(itemsProps, logger)
 										}
 									}
 								}
 							}
 							if nestedProps, ok := unionMap["properties"].(map[string]interface{}); ok {
-								FixArraySchemas(nestedProps)
+								FixArraySchemas(nestedProps, logger)
 							}
 						}
 					}

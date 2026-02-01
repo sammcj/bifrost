@@ -32,12 +32,11 @@ func TestCodeMode_NoToolsAvailable(t *testing.T) {
 	ctx := createTestContext()
 
 	// Execute code that tries to call a tool (server object won't exist)
-	code := `try {
-	await httpserver.echo({message: "test"});
-	return "Should not reach here";
-} catch (e) {
-	return "Error: " + e.message;
-}`
+	code := `def main():
+    if hasattr(httpserver, "echo"):
+        return httpserver.echo(message="test")
+    return "Error: httpserver not defined or echo not available"
+result = main()`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -87,7 +86,8 @@ func TestCodeMode_SomeToolsAvailable(t *testing.T) {
 	// Note: In code mode, code mode clients are bound in the execution environment
 	// The client's ToolsToExecute filters which tools are available
 	// The test server provides YouTube tools, so we'll call youtube_search_you_tube
-	code := `const result = await TestCodeModeServer.youtube_search_you_tube({query: "golang"}); return typeof result;`
+	code := `r = TestCodeModeServer.youtube_search_you_tube(query="golang")
+result = type(r)`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -142,13 +142,13 @@ func TestCodeMode_CallingMCPTool(t *testing.T) {
 
 	ctx := createTestContext()
 
-	// Execute code: await serverName.echo({message: "test"})
-	code := `const echoResult = await bifrostInternal.echo({message: "Testing MCP call"});
-console.log("Echo result:", echoResult);
-return {
-	echo: echoResult,
-	success: true
-};`
+	// Execute code: serverName.echo(message="test")
+	code := `echoResult = bifrostInternal.echo(message="Testing MCP call")
+print("Echo result:", echoResult)
+result = {
+    "echo": echoResult,
+    "success": True
+}`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -201,12 +201,12 @@ func TestCodeMode_CallingMultipleServers(t *testing.T) {
 	ctx := createTestContext()
 
 	// Execute code that calls tools from both servers
-	code := `const result1 = await bifrostInternal.echo({message: "from HTTP"});
-const result2 = await bifrostInternal.echo({message: "from SSE"});
-return {
-	http: result1,
-	sse: result2
-};`
+	code := `result1 = bifrostInternal.echo(message="from HTTP")
+result2 = bifrostInternal.echo(message="from SSE")
+result = {
+    "http": result1,
+    "sse": result2
+}`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -257,13 +257,13 @@ func TestCodeMode_CallingCodeModeClient(t *testing.T) {
 	ctx := createTestContext()
 
 	// Execute code on client 1 that tries to call executeToolCode on client 2
-	code := `try {
-	// Code mode clients don't expose their tools to other clients
-	const result = await codemode2.executeToolCode({code: "return 42"});
-	return result;
-} catch (e) {
-	return {error: e.message, expected: "Code mode tools not accessible"};
-}`
+	code := `# Code mode clients don't expose their tools to other clients
+def main():
+    if "codemode2" in dir() and hasattr(codemode2, "executeToolCode"):
+        return codemode2.executeToolCode(code="result = 42")
+    else:
+        return {"error": "codemode2 not accessible", "expected": "Code mode tools not accessible"}
+result = main()`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -314,23 +314,23 @@ func TestCodeMode_NestedToolCalls(t *testing.T) {
 	ctx := createTestContext()
 
 	// Execute code that calls a tool, processes result, then calls another tool
-	code := `// First call
-const echo1 = await bifrostInternal.echo({message: "step 1"});
+	code := `# First call
+echo1 = bifrostInternal.echo(message="step 1")
 
-// Process result
-const processed = "Processed: " + echo1;
+# Process result
+processed = "Processed: " + str(echo1)
 
-// Second call using processed result
-const echo2 = await bifrostInternal.echo({message: processed});
+# Second call using processed result
+echo2 = bifrostInternal.echo(message=processed)
 
-// Third call
-const calc = await bifrostInternal.calculator({operation: "add", x: 5, y: 3});
+# Third call
+calc = bifrostInternal.calculator(operation="add", x=5, y=3)
 
-return {
-	step1: echo1,
-	step2: echo2,
-	step3: calc
-};`
+result = {
+    "step1": echo1,
+    "step2": echo2,
+    "step3": calc
+}`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -388,12 +388,11 @@ func TestCodeMode_ToolNotInExecuteList(t *testing.T) {
 	ctx := createTestContext()
 
 	// Execute code that tries to call filtered-out tool (echo)
-	code := `try {
-	const result = await bifrostInternal.echo({message: "blocked"});
-	return {success: true, result: result};
-} catch (e) {
-	return {success: false, error: e.message};
-}`
+	code := `if hasattr(bifrostInternal, "echo"):
+    r = bifrostInternal.echo(message="blocked")
+    result = {"success": True, "result": r}
+else:
+    result = {"success": False, "error": "echo not available"}`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -446,12 +445,10 @@ func TestCodeMode_NonAllowedToolExecution(t *testing.T) {
 	ctx := createTestContext()
 
 	// Execute code that tries to call it
-	code := `try {
-	const result = await bifrostInternal.echo({message: "denied"});
-	return result;
-} catch (e) {
-	return {blocked: true, message: e.message};
-}`
+	code := `if hasattr(bifrostInternal, "echo"):
+    result = bifrostInternal.echo(message="denied")
+else:
+    result = {"blocked": True, "message": "echo not available"}`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -502,12 +499,11 @@ func TestCodeMode_ToolExecutionTimeout(t *testing.T) {
 	ctx := createTestContext()
 
 	// Execute code that calls a tool
-	code := `try {
-	const result = await bifrostInternal.echo({message: "test"});
-	return {success: true, result: result};
-} catch (e) {
-	return {success: false, error: e.message};
-}`
+	code := `if hasattr(bifrostInternal, "echo"):
+    r = bifrostInternal.echo(message="test")
+    result = {"success": True, "result": r}
+else:
+    result = {"success": False, "error": "echo not available"}`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -565,9 +561,8 @@ func TestCodeMode_ToolCallWithAwait(t *testing.T) {
 
 	ctx := createTestContext()
 
-	// Execute: const result = await server.tool({args})
-	code := `const result = await bifrostInternal.calculator({operation: "multiply", x: 6, y: 7});
-return result;`
+	// Execute: result = server.tool(args)
+	code := `result = bifrostInternal.calculator(operation="multiply", x=6, y=7)`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -589,7 +584,7 @@ return result;`
 	returnValue, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
 	require.False(t, hasError, "should not have execution error: %s", errorMsg)
 
-	// Verify await syntax works
+	// Verify Starlark syntax works
 	assert.NotNil(t, returnValue)
 	assert.Contains(t, fmt.Sprintf("%v", returnValue), "42")
 }
@@ -615,11 +610,8 @@ func TestCodeMode_ToolCallWithoutAwait(t *testing.T) {
 
 	ctx := createTestContext()
 
-	// Execute: const promise = server.tool({args}) without await
-	code := `const promise = bifrostInternal.echo({message: "promise test"});
-// Wait for promise manually
-const result = await promise;
-return result;`
+	// Execute: result = server.tool(args) - Starlark is synchronous
+	code := `result = bifrostInternal.echo(message="promise test")`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -641,7 +633,7 @@ return result;`
 	returnValue, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
 	require.False(t, hasError, "should not have execution error: %s", errorMsg)
 
-	// Verify promise handling works
+	// Verify synchronous execution works
 	assert.Contains(t, fmt.Sprintf("%v", returnValue), "promise test")
 }
 
@@ -666,14 +658,14 @@ func TestCodeMode_MultipleSequentialToolCalls(t *testing.T) {
 
 	ctx := createTestContext()
 
-	// Execute code with multiple await calls in sequence
-	code := `const results = [];
+	// Execute code with multiple calls in sequence
+	code := `results = []
 
-results.push(await bifrostInternal.echo({message: "first"}));
-results.push(await bifrostInternal.echo({message: "second"}));
-results.push(await bifrostInternal.echo({message: "third"}));
+results.append(bifrostInternal.echo(message="first"))
+results.append(bifrostInternal.echo(message="second"))
+results.append(bifrostInternal.echo(message="third"))
 
-return results;`
+result = results`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -726,18 +718,16 @@ func TestCodeMode_MultipleParallelToolCalls(t *testing.T) {
 
 	ctx := createTestContext()
 
-	// Execute code: await Promise.all([tool1(), tool2()])
-	code := `const results = await Promise.all([
-	bifrostInternal.echo({message: "parallel1"}),
-	bifrostInternal.echo({message: "parallel2"}),
-	bifrostInternal.calculator({operation: "add", x: 10, y: 20})
-]);
+	// Execute code: sequential calls (Starlark is synchronous)
+	code := `r1 = bifrostInternal.echo(message="parallel1")
+r2 = bifrostInternal.echo(message="parallel2")
+r3 = bifrostInternal.calculator(operation="add", x=10, y=20)
 
-return {
-	echo1: results[0],
-	echo2: results[1],
-	calc: results[2]
-};`
+result = {
+    "echo1": r1,
+    "echo2": r2,
+    "calc": r3
+}`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -759,7 +749,7 @@ return {
 	returnValue, hasError, errorMsg := ParseCodeModeResponse(t, *result.Content.ContentStr)
 	require.False(t, hasError, "should not have execution error: %s", errorMsg)
 
-	// Verify parallel execution works
+	// Verify sequential execution works
 	resultObj, ok := returnValue.(map[string]interface{})
 	require.True(t, ok)
 	assert.Contains(t, fmt.Sprintf("%v", resultObj["echo1"]), "parallel1")
@@ -793,12 +783,14 @@ func TestCodeMode_ToolReturnsError(t *testing.T) {
 	ctx := createTestContext()
 
 	// Execute code that calls error-throwing tool
-	code := `try {
-	const result = await bifrostInternal.throw_error({error_message: "intentional error"});
-	return {success: true, result: result};
-} catch (e) {
-	return {success: false, error: e.message, caught: true};
-}`
+	code := `def main():
+    r = bifrostInternal.throw_error(error_message="intentional error")
+    # In Starlark, errors are returned in the result
+    if "error" in str(r) or r == None:
+        return {"success": False, "error": str(r), "caught": True}
+    else:
+        return {"success": True, "result": r}
+result = main()`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -850,12 +842,10 @@ func TestCodeMode_ToolNotFound(t *testing.T) {
 	ctx := createTestContext()
 
 	// Execute code that calls non-existent tool
-	code := `try {
-	const result = await bifrostInternal.nonexistent_tool({param: "value"});
-	return result;
-} catch (e) {
-	return {error: e.message, notFound: true};
-}`
+	code := `if hasattr(bifrostInternal, "nonexistent_tool"):
+    result = bifrostInternal.nonexistent_tool(param="value")
+else:
+    result = {"error": "nonexistent_tool not found", "notFound": True}`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -911,8 +901,8 @@ func TestCodeMode_ChatFormat(t *testing.T) {
 
 	ctx := createTestContext()
 
-	code := `const result = await bifrostInternal.calculator({operation: "divide", x: 100, y: 4});
-return {result: result, format: "chat"};`
+	code := `r = bifrostInternal.calculator(operation="divide", x=100, y=4)
+result = {"result": r, "format": "chat"}`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,
@@ -960,8 +950,8 @@ func TestCodeMode_ResponsesFormat(t *testing.T) {
 
 	ctx := createTestContext()
 
-	code := `const result = await TestCodeModeServer.calculator({operation: "subtract", x: 50, y: 8});
-return {result: result, format: "responses"};`
+	code := `r = TestCodeModeServer.calculator(operation="subtract", x=50, y=8)
+result = {"result": r, "format": "responses"}`
 
 	argsJSON, _ := json.Marshal(map[string]interface{}{
 		"code": code,

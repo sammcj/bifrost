@@ -73,7 +73,7 @@ func (s *StarlarkCodeMode) handleListToolFiles(ctx context.Context, toolCall sch
 	for clientName, tools := range availableToolsPerClient {
 		client := s.clientManager.GetClientByName(clientName)
 		if client == nil {
-			logger.Warn("%s Client %s not found, skipping", codemcp.CodeModeLogPrefix, clientName)
+			s.logger.Warn("%s Client %s not found, skipping", codemcp.CodeModeLogPrefix, clientName)
 			continue
 		}
 		if !client.ExecutionConfig.IsCodeModeClient {
@@ -95,7 +95,7 @@ func (s *StarlarkCodeMode) handleListToolFiles(ctx context.Context, toolCall sch
 					toolName = strings.ReplaceAll(toolName, "-", "_")
 					// Validate normalized tool name to prevent path traversal
 					if err := validateNormalizedToolName(toolName); err != nil {
-						logger.Warn("%s Skipping tool '%s' from client '%s': %v", codemcp.CodeModeLogPrefix, tool.Function.Name, clientName, err)
+						s.logger.Warn("%s Skipping tool '%s' from client '%s': %v", codemcp.CodeModeLogPrefix, tool.Function.Name, clientName, err)
 						continue
 					}
 					toolFileName := fmt.Sprintf("servers/%s/%s.pyi", clientName, toolName)

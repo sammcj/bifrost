@@ -731,20 +731,31 @@ test-governance: install-gotestsum $(if $(DEBUG),install-delve) ## Run governanc
 		exit 1; \
 	fi
 
-setup-mcp-tests: ## Build all MCP test servers in examples/mcps/
+setup-mcp-tests: ## Build all MCP test servers in examples/mcps/ (Go and TypeScript)
 	@echo "$(GREEN)Building MCP test servers...$(NC)"
 	@FAILED=0; \
 	for mcp_dir in examples/mcps/*/; do \
-		if [ -d "$$mcp_dir" ] && [ -f "$$mcp_dir/go.mod" ]; then \
+		if [ -d "$$mcp_dir" ]; then \
 			mcp_name=$$(basename $$mcp_dir); \
-			echo "$(CYAN)Building $$mcp_name...$(NC)"; \
-			mkdir -p "$$mcp_dir/bin"; \
-			if cd "$$mcp_dir" && GOWORK=off go build -o bin/$$mcp_name . && cd - > /dev/null; then \
-				echo "$(GREEN)  ✓ $$mcp_name$(NC)"; \
-			else \
-				echo "$(RED)  ✗ $$mcp_name failed$(NC)"; \
-				FAILED=1; \
-				cd - > /dev/null 2>&1 || true; \
+			if [ -f "$$mcp_dir/go.mod" ]; then \
+				echo "$(CYAN)Building $$mcp_name (Go)...$(NC)"; \
+				mkdir -p "$$mcp_dir/bin"; \
+				if cd "$$mcp_dir" && GOWORK=off go build -o bin/$$mcp_name . && cd - > /dev/null; then \
+					echo "$(GREEN)  ✓ $$mcp_name$(NC)"; \
+				else \
+					echo "$(RED)  ✗ $$mcp_name failed$(NC)"; \
+					FAILED=1; \
+					cd - > /dev/null 2>&1 || true; \
+				fi; \
+			elif [ -f "$$mcp_dir/package.json" ]; then \
+				echo "$(CYAN)Building $$mcp_name (TypeScript)...$(NC)"; \
+				if cd "$$mcp_dir" && npm install --silent && npm run build && cd - > /dev/null; then \
+					echo "$(GREEN)  ✓ $$mcp_name$(NC)"; \
+				else \
+					echo "$(RED)  ✗ $$mcp_name failed$(NC)"; \
+					FAILED=1; \
+					cd - > /dev/null 2>&1 || true; \
+				fi; \
 			fi; \
 		fi; \
 	done; \
@@ -755,7 +766,7 @@ setup-mcp-tests: ## Build all MCP test servers in examples/mcps/
 	@echo ""
 	@echo "$(GREEN)✓ All MCP test servers built$(NC)"
 
-test-mcp: install-gotestsum ## Run MCP tests by file type (Usage: make test-mcp TYPE=connection [TESTCASE=TestName] [PATTERN=substring])
+test-mcp: install-gotestsum $(if $(BUILD),setup-mcp-tests) ## Run MCP tests (Usage: make test-mcp [BUILD=1] [TYPE=connection] [TESTCASE=TestName] [PATTERN=substring])
 	@echo "$(GREEN)Running MCP tests...$(NC)"
 	@mkdir -p $(TEST_REPORTS_DIR)
 	@if [ -n "$(PATTERN)" ] && [ -n "$(TESTCASE)" ]; then \

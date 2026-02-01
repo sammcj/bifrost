@@ -4,9 +4,17 @@ package starlark
 
 import "github.com/maximhq/bifrost/core/schemas"
 
-var logger schemas.Logger
+// noopLogger is a no-op implementation of schemas.Logger used as a fallback
+// when no logger is provided.
+type noopLogger struct{}
 
-// SetLogger sets the logger for the starlark package.
-func SetLogger(l schemas.Logger) {
-	logger = l
-}
+func (noopLogger) Debug(string, ...any)                        {}
+func (noopLogger) Info(string, ...any)                         {}
+func (noopLogger) Warn(string, ...any)                         {}
+func (noopLogger) Error(string, ...any)                        {}
+func (noopLogger) Fatal(string, ...any)                        {}
+func (noopLogger) SetLevel(schemas.LogLevel)                   {}
+func (noopLogger) SetOutputType(schemas.LoggerOutputType)      {}
+
+// defaultLogger is used when nil is passed to NewStarlarkCodeMode.
+var defaultLogger schemas.Logger = noopLogger{}

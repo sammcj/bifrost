@@ -21,7 +21,7 @@ func TestConvertMCPToolToBifrostSchema_EmptyParameters(t *testing.T) {
 	}
 
 	// Convert the tool
-	bifrostTool := convertMCPToolToBifrostSchema(mcpTool)
+	bifrostTool := convertMCPToolToBifrostSchema(mcpTool, defaultLogger)
 
 	// Verify the function was created
 	if bifrostTool.Function == nil {
@@ -72,7 +72,7 @@ func TestConvertMCPToolToBifrostSchema_WithParameters(t *testing.T) {
 	}
 
 	// Convert the tool
-	bifrostTool := convertMCPToolToBifrostSchema(mcpTool)
+	bifrostTool := convertMCPToolToBifrostSchema(mcpTool, defaultLogger)
 
 	// Verify the function was created
 	if bifrostTool.Function == nil {
