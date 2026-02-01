@@ -23,7 +23,7 @@ func TestHuggingface(t *testing.T) {
 
 	testConfig := llmtests.ComprehensiveTestConfig{
 		Provider:             schemas.HuggingFace,
-		ChatModel:            "sambanova/meta-llama/Llama-3.1-8B-Instruct",
+		ChatModel:            "groq/meta-llama/Llama-3.3-70B-Instruct",
 		VisionModel:          "cohere/CohereLabs/aya-vision-32b",
 		EmbeddingModel:       "sambanova/intfloat/e5-mistral-7b-instruct",
 		TranscriptionModel:   "fal-ai/openai/whisper-large-v3",

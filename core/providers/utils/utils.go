@@ -727,13 +727,20 @@ func CheckOperationAllowed(defaultProvider schemas.ModelProvider, config *schema
 }
 
 // CheckAndDecodeBody checks the content encoding and decodes the body accordingly.
+// It returns a copy of the body to avoid race conditions when the response is released
+// back to fasthttp's buffer pool.
 func CheckAndDecodeBody(resp *fasthttp.Response) ([]byte, error) {
 	contentEncoding := strings.ToLower(strings.TrimSpace(string(resp.Header.Peek("Content-Encoding"))))
 	switch contentEncoding {
 	case "gzip":
+		// BodyGunzip already returns a new slice, so it's safe
 		return resp.BodyGunzip()
 	default:
-		return resp.Body(), nil
+		// Copy the body to avoid race conditions when response is released back to pool
+		body := resp.Body()
+		result := make([]byte, len(body))
+		copy(result, body)
+		return result, nil
 	}
 }
 
