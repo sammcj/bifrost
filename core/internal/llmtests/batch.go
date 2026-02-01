@@ -18,11 +18,11 @@ func getFakeBatchID(provider schemas.ModelProvider) string {
 	case schemas.OpenAI, schemas.Azure:
 		return "batch_test-batch-id"
 	case schemas.Bedrock:
-		// Bedrock uses ARNs for batch IDs
-		return "arn:aws:bedrock:us-east-1:791152688819:model-invocation-job/test-batch-id"
+		// Bedrock uses ARNs for batch IDs - job ID must be exactly 12 lowercase alphanumeric chars
+		return "arn:aws:bedrock:us-east-1:791152688819:model-invocation-job/aaaaaaaaaaaa"
 	case schemas.Gemini:
-		// Gemini uses "batches/" prefix for batch IDs
-		return "batches/test-batch-id"
+		// Gemini uses "batches/" prefix with alphanumeric batch IDs
+		return "batches/aaaaaaaaaaaa"
 	default:
 		return "batch_test-batch-id"
 	}
@@ -464,23 +464,30 @@ func RunBatchResultsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Cont
 				}
 			}
 
-			// Check error type/message for "not found" indicators
-			isNotFoundError := false
+			// Check error type/message for "not found" or validation error indicators
+			// Providers may return "not found" errors OR validation errors for fake batch IDs
+			isExpectedError := false
 			if err.Error != nil {
 				if err.Error.Type != nil {
 					errType := strings.ToLower(*err.Error.Type)
 					if strings.Contains(errType, "not_found") || strings.Contains(errType, "notfound") {
-						isNotFoundError = true
+						isExpectedError = true
 					}
 				}
 				errMsg := strings.ToLower(err.Error.Message)
+				// Check for "not found" style errors
 				if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "does not exist") || strings.Contains(errMsg, "could not find") {
-					isNotFoundError = true
+					isExpectedError = true
+				}
+				// Check for validation/parsing errors (providers validate batch ID format before lookup)
+				if strings.Contains(errMsg, "could not parse") || strings.Contains(errMsg, "validation error") ||
+					strings.Contains(errMsg, "failed to satisfy constraint") || strings.Contains(errMsg, "invalid") {
+					isExpectedError = true
 				}
 			}
 
-			if isNotFoundError {
-				t.Logf("[INFO] BatchResults test completed (expected not found error with fake ID): %v", GetErrorMessage(err))
+			if isExpectedError {
+				t.Logf("[INFO] BatchResults test completed (expected error with fake ID): %v", GetErrorMessage(err))
 				return
 			}
 

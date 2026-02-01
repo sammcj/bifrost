@@ -1105,41 +1105,50 @@ func (provider *AzureProvider) SpeechStream(ctx *schemas.BifrostContext, postHoo
 						audioData = event
 					}
 
-					// First, try to parse as JSON error response (these would be valid JSON text)
-					var bifrostErr schemas.BifrostError
-					if err := sonic.Unmarshal(audioData, &bifrostErr); err == nil {
-						if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
-							bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
-								Provider:       provider.GetProviderKey(),
-								ModelRequested: request.Model,
-								RequestType:    schemas.SpeechStreamRequest,
-							}
-							ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-							providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, &bifrostErr, responseChan, provider.logger)
-							return
-						}
+					// Skip empty data
+					if len(audioData) == 0 {
+						continue
 					}
 
-					// Skip empty audio data
-					if len(audioData) == 0 {
+					// Azure sends JSON-wrapped responses for speech streaming
+					// Parse the JSON to extract the response type and audio data
+					var response schemas.BifrostSpeechStreamResponse
+					if err := sonic.Unmarshal(audioData, &response); err != nil {
+						// If JSON parsing fails, check if this might be an error response
+						var bifrostErr schemas.BifrostError
+						if errParseErr := sonic.Unmarshal(audioData, &bifrostErr); errParseErr == nil {
+							if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
+								bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+									Provider:       provider.GetProviderKey(),
+									ModelRequested: request.Model,
+									RequestType:    schemas.SpeechStreamRequest,
+								}
+								ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+								providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, &bifrostErr, responseChan, provider.logger)
+								return
+							}
+						}
+						// If it's not valid JSON, log and skip
+						provider.logger.Warn("failed to parse speech stream response: %v", err)
+						continue
+					}
+
+					// Check for completion event - skip if no audio data
+					if response.Type == schemas.SpeechStreamResponseTypeDone || len(response.Audio) == 0 {
+						// This is a control event or empty response - skip
 						continue
 					}
 
 					chunkIndex++
 
-					// Create response with raw audio data
-					// Azure sends raw binary MP3 frames (starting with 0xff 0xf3 or 0xff 0xfb)
-					response := schemas.BifrostSpeechStreamResponse{
-						Type:  schemas.SpeechStreamResponseTypeDelta,
-						Audio: audioData,
-						ExtraFields: schemas.BifrostResponseExtraFields{
-							RequestType:     schemas.SpeechStreamRequest,
-							Provider:        provider.GetProviderKey(),
-							ModelRequested:  request.Model,
-							ModelDeployment: deployment,
-							ChunkIndex:      chunkIndex,
-							Latency:         time.Since(lastChunkTime).Milliseconds(),
-						},
+					// Set extra fields for the response
+					response.ExtraFields = schemas.BifrostResponseExtraFields{
+						RequestType:     schemas.SpeechStreamRequest,
+						Provider:        provider.GetProviderKey(),
+						ModelRequested:  request.Model,
+						ModelDeployment: deployment,
+						ChunkIndex:      chunkIndex,
+						Latency:         time.Since(lastChunkTime).Milliseconds(),
 					}
 					lastChunkTime = time.Now()
 

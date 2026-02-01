@@ -207,18 +207,15 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 				config := &BedrockGuardrailConfig{}
 
 				if identifier, ok := gc["guardrailIdentifier"].(string); ok {
-					delete(gc, "guardrailIdentifier")
 					config.GuardrailIdentifier = identifier
 				}
 				if version, ok := gc["guardrailVersion"].(string); ok {
-					delete(gc, "guardrailVersion")
 					config.GuardrailVersion = version
 				}
 				if trace, ok := gc["trace"].(string); ok {
-					delete(gc, "trace")
 					config.Trace = &trace
 				}
-				bedrockReq.ExtraParams["guardrailConfig"] = gc
+				delete(bedrockReq.ExtraParams, "guardrailConfig")
 				bedrockReq.GuardrailConfig = config
 			}
 		}
@@ -253,13 +250,11 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 			// Handle performance configuration
 			if perfConfig, exists := bifrostReq.Params.ExtraParams["performanceConfig"]; exists {
 				if pc, ok := perfConfig.(map[string]interface{}); ok {
-
 					config := &BedrockPerformanceConfig{}
 					if latency, ok := pc["latency"].(string); ok {
-						delete(pc, "latency")
 						config.Latency = &latency
 					}
-					bedrockReq.ExtraParams["performanceConfig"] = pc
+					delete(bedrockReq.ExtraParams, "performanceConfig")
 					bedrockReq.PerformanceConfig = config
 				}
 			}
@@ -291,6 +286,10 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 					bedrockReq.RequestMetadata = metadata
 				}
 			}
+		}
+		// Set ExtraParams to nil if all keys were extracted to dedicated fields
+		if len(bedrockReq.ExtraParams) == 0 {
+			bedrockReq.ExtraParams = nil
 		}
 	}
 	return nil
