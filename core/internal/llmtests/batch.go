@@ -19,7 +19,7 @@ func getFakeBatchID(provider schemas.ModelProvider) string {
 		return "batch_test-batch-id"
 	case schemas.Bedrock:
 		// Bedrock uses ARNs for batch IDs
-		return "arn:aws:bedrock:us-east-1:123456789012:model-invocation-job/test-batch-id"
+		return "arn:aws:bedrock:us-east-1:791152688819:model-invocation-job/test-batch-id"
 	case schemas.Gemini:
 		// Gemini uses "batches/" prefix for batch IDs
 		return "batches/test-batch-id"
