@@ -4,12 +4,41 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/maximhq/bifrost/core/schemas"
 )
+
+// retryAfterRegex is compiled once at package level for performance
+var retryAfterRegex = regexp.MustCompile(`(?i)retry after (\d+)\s*(seconds?|minutes?)`)
+
+// parseRetryAfterFromError extracts the retry-after duration from rate limit error messages.
+// Matches patterns like "retry after 28 seconds", "retry after 1 minute", "Please retry after 30 seconds".
+// Returns the duration to wait, or 0 if not found.
+func parseRetryAfterFromError(err *schemas.BifrostError) time.Duration {
+	if err == nil || err.Error == nil {
+		return 0
+	}
+
+	message := err.Error.Message
+	matches := retryAfterRegex.FindStringSubmatch(message)
+	if len(matches) >= 3 {
+		value, parseErr := strconv.Atoi(matches[1])
+		if parseErr != nil {
+			return 0
+		}
+		unit := strings.ToLower(matches[2])
+		if strings.HasPrefix(unit, "minute") {
+			return time.Duration(value) * time.Minute
+		}
+		return time.Duration(value) * time.Second
+	}
+	return 0
+}
 
 // =============================================================================
 // RETRY FRAMEWORK FOR TEST SCENARIOS
@@ -568,6 +597,18 @@ func WithChatTestRetry(
 
 		// If we have an error without a response, check if we should retry
 		if err != nil && attempt < config.MaxAttempts {
+			// Check for rate limit with retry-after time - use provider-specified delay
+			if retryAfter := parseRetryAfterFromError(err); retryAfter > 0 {
+				// Add buffer to be safe
+				retryAfter += 2 * time.Second
+				retryReason := fmt.Sprintf("❌ rate limit error - waiting %v as specified by provider", retryAfter)
+				if config.OnRetry != nil {
+					config.OnRetry(attempt, retryReason, t)
+				}
+				time.Sleep(retryAfter)
+				continue
+			}
+
 			// ALWAYS retry on timeout errors - this takes precedence over other conditions
 			if isTimeoutError(err) {
 				retryReason := fmt.Sprintf("❌ timeout error detected: %s", GetErrorMessage(err))
@@ -721,6 +762,18 @@ func WithResponsesTestRetry(
 
 		// If we have an error without a response, check if we should retry
 		if err != nil && attempt < config.MaxAttempts {
+			// Check for rate limit with retry-after time - use provider-specified delay
+			if retryAfter := parseRetryAfterFromError(err); retryAfter > 0 {
+				// Add buffer to be safe
+				retryAfter += 2 * time.Second
+				retryReason := fmt.Sprintf("❌ rate limit error - waiting %v as specified by provider", retryAfter)
+				if config.OnRetry != nil {
+					config.OnRetry(attempt, retryReason, t)
+				}
+				time.Sleep(retryAfter)
+				continue
+			}
+
 			// ALWAYS retry on timeout errors - this takes precedence over other conditions
 			if isTimeoutError(err) {
 				retryReason := fmt.Sprintf("❌ timeout error detected: %s", GetErrorMessage(err))
@@ -1547,6 +1600,18 @@ func WithTextCompletionTestRetry(
 
 		// If we have an error without a response, check if we should retry
 		if err != nil && attempt < config.MaxAttempts {
+			// Check for rate limit with retry-after time - use provider-specified delay
+			if retryAfter := parseRetryAfterFromError(err); retryAfter > 0 {
+				// Add buffer to be safe
+				retryAfter += 2 * time.Second
+				retryReason := fmt.Sprintf("❌ rate limit error - waiting %v as specified by provider", retryAfter)
+				if config.OnRetry != nil {
+					config.OnRetry(attempt, retryReason, t)
+				}
+				time.Sleep(retryAfter)
+				continue
+			}
+
 			// ALWAYS retry on timeout errors - this takes precedence over other conditions
 			if isTimeoutError(err) {
 				retryReason := fmt.Sprintf("❌ timeout error detected: %s", GetErrorMessage(err))
@@ -1700,6 +1765,18 @@ func WithSpeechTestRetry(
 
 		// If we have an error without a response, check if we should retry
 		if err != nil && attempt < config.MaxAttempts {
+			// Check for rate limit with retry-after time - use provider-specified delay
+			if retryAfter := parseRetryAfterFromError(err); retryAfter > 0 {
+				// Add buffer to be safe
+				retryAfter += 2 * time.Second
+				retryReason := fmt.Sprintf("❌ rate limit error - waiting %v as specified by provider", retryAfter)
+				if config.OnRetry != nil {
+					config.OnRetry(attempt, retryReason, t)
+				}
+				time.Sleep(retryAfter)
+				continue
+			}
+
 			// ALWAYS retry on timeout errors - this takes precedence over other conditions
 			if isTimeoutError(err) {
 				retryReason := fmt.Sprintf("❌ timeout error detected: %s", GetErrorMessage(err))
@@ -1875,6 +1952,18 @@ func WithEmbeddingTestRetry(
 
 		// If we have an error without a response, check if we should retry
 		if err != nil && attempt < config.MaxAttempts {
+			// Check for rate limit with retry-after time - use provider-specified delay
+			if retryAfter := parseRetryAfterFromError(err); retryAfter > 0 {
+				// Add buffer to be safe
+				retryAfter += 2 * time.Second
+				retryReason := fmt.Sprintf("❌ rate limit error - waiting %v as specified by provider", retryAfter)
+				if config.OnRetry != nil {
+					config.OnRetry(attempt, retryReason, t)
+				}
+				time.Sleep(retryAfter)
+				continue
+			}
+
 			// ALWAYS retry on timeout errors - this takes precedence over other conditions
 			if isTimeoutError(err) {
 				retryReason := fmt.Sprintf("❌ timeout error detected: %s", GetErrorMessage(err))
@@ -2028,6 +2117,18 @@ func WithTranscriptionTestRetry(
 
 		// If we have an error without a response, check if we should retry
 		if err != nil && attempt < config.MaxAttempts {
+			// Check for rate limit with retry-after time - use provider-specified delay
+			if retryAfter := parseRetryAfterFromError(err); retryAfter > 0 {
+				// Add buffer to be safe
+				retryAfter += 2 * time.Second
+				retryReason := fmt.Sprintf("❌ rate limit error - waiting %v as specified by provider", retryAfter)
+				if config.OnRetry != nil {
+					config.OnRetry(attempt, retryReason, t)
+				}
+				time.Sleep(retryAfter)
+				continue
+			}
+
 			// ALWAYS retry on timeout errors - this takes precedence over other conditions
 			if isTimeoutError(err) {
 				retryReason := fmt.Sprintf("❌ timeout error detected: %s", GetErrorMessage(err))
@@ -2195,6 +2296,18 @@ func WithCountTokensTestRetry(
 
 		// If we have an error without a response, check if we should retry
 		if err != nil && attempt < config.MaxAttempts {
+			// Check for rate limit with retry-after time - use provider-specified delay
+			if retryAfter := parseRetryAfterFromError(err); retryAfter > 0 {
+				// Add buffer to be safe
+				retryAfter += 2 * time.Second
+				retryReason := fmt.Sprintf("❌ rate limit error - waiting %v as specified by provider", retryAfter)
+				if config.OnRetry != nil {
+					config.OnRetry(attempt, retryReason, t)
+				}
+				time.Sleep(retryAfter)
+				continue
+			}
+
 			// ALWAYS retry on timeout errors - this takes precedence over other conditions
 			if isTimeoutError(err) {
 				retryReason := fmt.Sprintf("❌ timeout error detected: %s", GetErrorMessage(err))
@@ -2363,6 +2476,18 @@ func WithImageGenerationRetry(
 
 		// If we have an error without a response, check if we should retry
 		if err != nil && attempt < config.MaxAttempts {
+			// Check for rate limit with retry-after time - use provider-specified delay
+			if retryAfter := parseRetryAfterFromError(err); retryAfter > 0 {
+				// Add buffer to be safe
+				retryAfter += 2 * time.Second
+				retryReason := fmt.Sprintf("❌ rate limit error - waiting %v as specified by provider", retryAfter)
+				if config.OnRetry != nil {
+					config.OnRetry(attempt, retryReason, t)
+				}
+				time.Sleep(retryAfter)
+				continue
+			}
+
 			// ALWAYS retry on timeout errors - this takes precedence over other conditions
 			if isTimeoutError(err) {
 				retryReason := fmt.Sprintf("❌ timeout error detected: %s", GetErrorMessage(err))
