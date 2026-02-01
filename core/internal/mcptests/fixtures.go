@@ -1448,7 +1448,7 @@ func setupBifrost(t *testing.T) *bifrost.Bifrost {
 	// Create bifrost instance
 	bifrostInstance, err := bifrost.Init(context.Background(), schemas.BifrostConfig{
 		Account: account,
-		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelInfo),
+		Logger:  bifrost.NewDefaultLogger(schemas.LogLevelError),
 	})
 	require.NoError(t, err, "failed to create bifrost instance")
 
@@ -1464,7 +1464,7 @@ func setupBifrost(t *testing.T) *bifrost.Bifrost {
 func setupMCPManager(t *testing.T, clientConfigs ...schemas.MCPClientConfig) *mcp.MCPManager {
 	t.Helper()
 
-	logger := &testLogger{t: t}
+	logger := newTestLogger(t)
 
 	// Convert to pointer slice for MCPConfig
 	clientConfigPtrs := make([]*schemas.MCPClientConfig, len(clientConfigs))
@@ -2164,25 +2164,50 @@ func CreateTempTestFile(t *testing.T, content string) string {
 // TEST LOGGER
 // =============================================================================
 
-// testLogger implements schemas.Logger for testing
+// testLogger implements schemas.Logger for testing with configurable log level
 type testLogger struct {
-	t *testing.T
+	t     *testing.T
+	level schemas.LogLevel
+}
+
+// newTestLogger creates a new test logger with log level set to Error by default
+// to reduce test output noise
+func newTestLogger(t *testing.T) *testLogger {
+	return &testLogger{t: t, level: schemas.LogLevelError}
+}
+
+func (l *testLogger) shouldLog(msgLevel schemas.LogLevel) bool {
+	levels := map[schemas.LogLevel]int{
+		schemas.LogLevelDebug: 0,
+		schemas.LogLevelInfo:  1,
+		schemas.LogLevelWarn:  2,
+		schemas.LogLevelError: 3,
+	}
+	return levels[msgLevel] >= levels[l.level]
 }
 
 func (l *testLogger) Debug(msg string, args ...any) {
-	l.t.Logf("[DEBUG] "+msg, args...)
+	if l.shouldLog(schemas.LogLevelDebug) {
+		l.t.Logf("[DEBUG] "+msg, args...)
+	}
 }
 
 func (l *testLogger) Info(msg string, args ...any) {
-	l.t.Logf("[INFO] "+msg, args...)
+	if l.shouldLog(schemas.LogLevelInfo) {
+		l.t.Logf("[INFO] "+msg, args...)
+	}
 }
 
 func (l *testLogger) Warn(msg string, args ...any) {
-	l.t.Logf("[WARN] "+msg, args...)
+	if l.shouldLog(schemas.LogLevelWarn) {
+		l.t.Logf("[WARN] "+msg, args...)
+	}
 }
 
 func (l *testLogger) Error(msg string, args ...any) {
-	l.t.Logf("[ERROR] "+msg, args...)
+	if l.shouldLog(schemas.LogLevelError) {
+		l.t.Logf("[ERROR] "+msg, args...)
+	}
 }
 
 func (l *testLogger) Fatal(msg string, args ...any) {
@@ -2190,7 +2215,7 @@ func (l *testLogger) Fatal(msg string, args ...any) {
 }
 
 func (l *testLogger) SetLevel(level schemas.LogLevel) {
-	// No-op for tests
+	l.level = level
 }
 
 func (l *testLogger) SetOutputType(outputType schemas.LoggerOutputType) {

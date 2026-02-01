@@ -68,6 +68,7 @@ func TestAzure(t *testing.T) {
 			ImageEditStream:       true,
 			ImageVariation:        false, // Not supported by Azure
 		},
+		DisableParallelFor: []string{"Transcription"}, // Azure Whisper has 3 calls/minute quota
 	}
 
 	t.Run("AzureTests", func(t *testing.T) {

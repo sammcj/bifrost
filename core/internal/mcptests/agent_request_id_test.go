@@ -21,7 +21,7 @@ import (
 func setupMCPManagerWithRequestIDFunc(t *testing.T, fetchNewRequestIDFunc func(ctx *schemas.BifrostContext) string, clientConfigs ...schemas.MCPClientConfig) *mcp.MCPManager {
 	t.Helper()
 
-	logger := &testLogger{t: t}
+	logger := newTestLogger(t)
 
 	// Convert to pointer slice for MCPConfig
 	clientConfigPtrs := make([]*schemas.MCPClientConfig, len(clientConfigs))

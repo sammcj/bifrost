@@ -56,9 +56,7 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Con
 
 		for _, tc := range roundTripCases {
 			t.Run(tc.name, func(t *testing.T) {
-				if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
-					t.Parallel()
-				}
+				ShouldRunParallel(t, testConfig, "Transcription")
 
 				speechSynthesisProvider := testConfig.Provider
 				if testConfig.ExternalTTSProvider != "" {
@@ -246,9 +244,7 @@ func RunTranscriptionTest(t *testing.T, client *bifrost.Bifrost, ctx context.Con
 
 			for _, tc := range customCases {
 				t.Run(tc.name, func(t *testing.T) {
-					if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
-						t.Parallel()
-					}
+					ShouldRunParallel(t, testConfig, "Transcription")
 
 					speechSynthesisProvider := testConfig.Provider
 					if testConfig.ExternalTTSProvider != "" {
@@ -355,9 +351,7 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx con
 
 			for _, format := range formats {
 				t.Run("Format_"+format, func(t *testing.T) {
-					if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
-						t.Parallel()
-					}
+					ShouldRunParallel(t, testConfig, "Transcription")
 
 					speechSynthesisProvider := testConfig.Provider
 					if testConfig.ExternalTTSProvider != "" {
@@ -450,9 +444,7 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx con
 		})
 
 		t.Run("WithCustomParameters", func(t *testing.T) {
-			if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
-				t.Parallel()
-			}
+			ShouldRunParallel(t, testConfig, "Transcription")
 
 			speechSynthesisProvider := testConfig.Provider
 			if testConfig.ExternalTTSProvider != "" {
@@ -549,9 +541,7 @@ func RunTranscriptionAdvancedTest(t *testing.T, client *bifrost.Bifrost, ctx con
 
 			for _, lang := range languages {
 				t.Run("Language_"+lang, func(t *testing.T) {
-					if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
-						t.Parallel()
-					}
+					ShouldRunParallel(t, testConfig, "Transcription")
 
 					speechSynthesisProvider := testConfig.Provider
 					if testConfig.ExternalTTSProvider != "" {

@@ -21,9 +21,7 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 	}
 
 	t.Run("TranscriptionStream", func(t *testing.T) {
-		if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
-			t.Parallel()
-		}
+		ShouldRunParallel(t, testConfig, "Transcription")
 
 		// Generate TTS audio for streaming round-trip validation
 		streamRoundTripCases := []struct {
@@ -58,9 +56,7 @@ func RunTranscriptionStreamTest(t *testing.T, client *bifrost.Bifrost, ctx conte
 
 		for _, tc := range streamRoundTripCases {
 			t.Run(tc.name, func(t *testing.T) {
-				if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
-					t.Parallel()
-				}
+				ShouldRunParallel(t, testConfig, "Transcription")
 
 				speechSynthesisProvider := testConfig.Provider
 				if testConfig.ExternalTTSProvider != "" {
@@ -342,9 +338,7 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 
 	t.Run("TranscriptionStreamAdvanced", func(t *testing.T) {
 		t.Run("JSONStreaming", func(t *testing.T) {
-			if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
-				t.Parallel()
-			}
+			ShouldRunParallel(t, testConfig, "Transcription")
 
 			speechSynthesisProvider := testConfig.Provider
 			if testConfig.ExternalTTSProvider != "" {
@@ -438,9 +432,7 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 		})
 
 		t.Run("MultipleLanguages_Streaming", func(t *testing.T) {
-			if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
-				t.Parallel()
-			}
+			ShouldRunParallel(t, testConfig, "Transcription")
 
 			speechSynthesisProvider := testConfig.Provider
 			if testConfig.ExternalTTSProvider != "" {
@@ -459,9 +451,7 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 
 			for _, lang := range languages {
 				t.Run("StreamLang_"+lang, func(t *testing.T) {
-					if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
-						t.Parallel()
-					}
+					ShouldRunParallel(t, testConfig, "Transcription")
 
 					langCopy := lang
 					request := &schemas.BifrostTranscriptionRequest{
@@ -538,9 +528,7 @@ func RunTranscriptionStreamAdvancedTest(t *testing.T, client *bifrost.Bifrost, c
 		})
 
 		t.Run("WithCustomPrompt_Streaming", func(t *testing.T) {
-			if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
-				t.Parallel()
-			}
+			ShouldRunParallel(t, testConfig, "Transcription")
 
 			speechSynthesisProvider := testConfig.Provider
 			if testConfig.ExternalTTSProvider != "" {
