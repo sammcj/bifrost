@@ -61,11 +61,11 @@ func TestAzure(t *testing.T) {
 			TranscriptionStream:   false, // Not properly supported yet by Azure
 			SpeechSynthesis:       true,
 			SpeechSynthesisStream: true,
-			StructuredOutputs:     true, // Structured outputs with nullable enum support
+			StructuredOutputs:     true,  // Structured outputs with nullable enum support
 			ImageGeneration:       false, // Skipped for Azure
 			ImageGenerationStream: false, // Skipped for Azure
-			ImageEdit:             true,
-			ImageEditStream:       true,
+			ImageEdit:             false, // Model not deployed on Azure endpoint
+			ImageEditStream:       false, // Model not deployed on Azure endpoint
 			ImageVariation:        false, // Not supported by Azure
 		},
 		DisableParallelFor: []string{"Transcription"}, // Azure Whisper has 3 calls/minute quota

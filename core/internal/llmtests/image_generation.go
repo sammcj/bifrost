@@ -19,6 +19,11 @@ import (
 
 // RunImageGenerationTest executes the end-to-end image generation test (non-streaming)
 func RunImageGenerationTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+	if !testConfig.Scenarios.ImageGeneration {
+		t.Logf("Image generation not supported for provider %s", testConfig.Provider)
+		return
+	}
+
 	if testConfig.ImageGenerationModel == "" {
 		t.Logf("Image generation not configured for provider %s", testConfig.Provider)
 		return
