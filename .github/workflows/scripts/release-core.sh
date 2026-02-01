@@ -55,7 +55,7 @@ echo "✅ MCP test servers built"
 # Run core tests with coverage
 echo "🔧 Running core tests with coverage..."
 cd core
-go test -race -timeout 20m -coverprofile=coverage.txt -coverpkg=./... ./...
+go test -race -v -timeout 20m -coverprofile=coverage.txt -coverpkg=./... ./...
 
 # Upload coverage to Codecov
 if [ -n "${CODECOV_TOKEN:-}" ]; then
