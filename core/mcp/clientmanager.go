@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/client"
@@ -260,16 +261,33 @@ func (m *MCPManager) UpdateClient(id string, updatedConfig *schemas.MCPClientCon
 
 	oldName := client.ExecutionConfig.Name
 
-	// Update the client's execution config with new tool filters
-	config := client.ExecutionConfig
-	config.Name = updatedConfig.Name
-	config.Headers = updatedConfig.Headers
-	config.ToolsToExecute = updatedConfig.ToolsToExecute
-	config.ToolsToAutoExecute = updatedConfig.ToolsToAutoExecute
-	config.IsCodeModeClient = updatedConfig.IsCodeModeClient
+	// Create a new config struct (immutable pattern) to avoid race conditions
+	// with concurrent reads. Any snapshot holding the old ExecutionConfig pointer
+	// will continue to see consistent data.
+	newConfig := &schemas.MCPClientConfig{
+		// Immutable fields - copy from existing config
+		ID:               client.ExecutionConfig.ID,
+		ConnectionType:   client.ExecutionConfig.ConnectionType,
+		ConnectionString: client.ExecutionConfig.ConnectionString,
+		StdioConfig:      client.ExecutionConfig.StdioConfig,
+		AuthType:         client.ExecutionConfig.AuthType,
+		OauthConfigID:    client.ExecutionConfig.OauthConfigID,
+		State:            client.ExecutionConfig.State,
+		InProcessServer:  client.ExecutionConfig.InProcessServer,
+		IsPingAvailable:  client.ExecutionConfig.IsPingAvailable,
+		ToolSyncInterval: client.ExecutionConfig.ToolSyncInterval,
+		ConfigHash:       client.ExecutionConfig.ConfigHash,
+		ToolPricing:      maps.Clone(client.ExecutionConfig.ToolPricing),
+		// Updatable fields - copy from updated config with proper cloning
+		Name:               updatedConfig.Name,
+		IsCodeModeClient:   updatedConfig.IsCodeModeClient,
+		Headers:            maps.Clone(updatedConfig.Headers),
+		ToolsToExecute:     slices.Clone(updatedConfig.ToolsToExecute),
+		ToolsToAutoExecute: slices.Clone(updatedConfig.ToolsToAutoExecute),
+	}
 
-	// Store the updated config
-	client.ExecutionConfig = config
+	// Atomically replace the config pointer
+	client.ExecutionConfig = newConfig
 
 	// If the client name has changed, update all tool name prefixes in the ToolMap
 	if oldName != updatedConfig.Name {

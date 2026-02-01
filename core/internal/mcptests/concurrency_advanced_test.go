@@ -255,9 +255,15 @@ func TestConcurrent_EditClientDuringExecution_Advanced(t *testing.T) {
 			clients := manager.GetClients()
 			for _, client := range clients {
 				if client.ExecutionConfig.ID == "bifrostInternal" {
-					// Modify ToolsToExecute
-					client.ExecutionConfig.ToolsToExecute = []string{"echo"}
-					err := manager.UpdateClient(client.ExecutionConfig.ID, client.ExecutionConfig)
+					// Create a fresh config instead of modifying the returned snapshot
+					// to avoid race conditions with concurrent reads
+					newConfig := &schemas.MCPClientConfig{
+						ID:             client.ExecutionConfig.ID,
+						Name:           client.ExecutionConfig.Name,
+						ConnectionType: client.ExecutionConfig.ConnectionType,
+						ToolsToExecute: []string{"echo"},
+					}
+					err := manager.UpdateClient(newConfig.ID, newConfig)
 					if err != nil {
 						errors <- fmt.Errorf("edit %d failed: %v", id, err)
 					}
