@@ -13,9 +13,18 @@ import (
 // RunPassthroughExtraParamsTest executes the passthrough extraParams test scenario
 // This test verifies that extraParams are properly propagated into the provider request body
 // when the passthrough flag is set in the context.
+// Note: This test only runs for providers that support arbitrary extra params at the root level
+// of the request body. Providers like Anthropic have strict schema validation and don't accept
+// unknown fields, so they should set PassThroughExtraParams: false in their test config.
 func RunPassthroughExtraParamsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
-	if !testConfig.Scenarios.SimpleChat {
-		t.Logf("Simple chat not supported for provider %s, skipping passthrough test", testConfig.Provider)
+	// Guard: Check if ChatModel is configured
+	if testConfig.ChatModel == "" {
+		t.Logf("ChatModel not configured for provider %s, skipping passthrough test", testConfig.Provider)
+		return
+	}
+
+	if !testConfig.Scenarios.PassThroughExtraParams {
+		t.Logf("PassThroughExtraParams not supported for provider %s, skipping passthrough test", testConfig.Provider)
 		return
 	}
 

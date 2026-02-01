@@ -325,20 +325,20 @@ func (provider *AnthropicProvider) ChatCompletion(ctx *schemas.BifrostContext, k
 		return nil, err
 	}
 	// Convert to Anthropic format and get required beta headers
-	var jsonData []byte
-	if useRawBody, ok := ctx.Value(schemas.BifrostContextKeyUseRawRequestBody).(bool); ok && useRawBody {
-		jsonData = request.GetRawRequestBody()
-	} else {
-		anthropicReq, convErr := ToAnthropicChatRequest(ctx, request)
-		if convErr != nil {
-			return nil, providerUtils.NewBifrostOperationError(schemas.ErrRequestBodyConversion, convErr, provider.GetProviderKey())
-		}
-		addMissingBetaHeadersToContext(ctx, anthropicReq)
-		var marshalErr error
-		jsonData, marshalErr = sonic.Marshal(anthropicReq)
-		if marshalErr != nil {
-			return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRequestMarshal, marshalErr, provider.GetProviderKey())
-		}
+	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
+		ctx,
+		request,
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			anthropicReq, convErr := ToAnthropicChatRequest(ctx, request)
+			if convErr != nil {
+				return nil, convErr
+			}
+			addMissingBetaHeadersToContext(ctx, anthropicReq)
+			return anthropicReq, nil
+		},
+		provider.GetProviderKey())
+	if bifrostErr != nil {
+		return nil, bifrostErr
 	}
 
 	// Use struct directly for JSON marshaling
@@ -390,23 +390,21 @@ func (provider *AnthropicProvider) ChatCompletionStream(ctx *schemas.BifrostCont
 	}
 
 	// Convert to Anthropic format and get required beta headers
-	var jsonData []byte
-	var betaHeaders []string
-
-	if useRawBody, ok := ctx.Value(schemas.BifrostContextKeyUseRawRequestBody).(bool); ok && useRawBody {
-		jsonData = request.GetRawRequestBody()
-	} else {
-		anthropicReq, convErr := ToAnthropicChatRequest(ctx, request)
-		if convErr != nil {
-			return nil, providerUtils.NewBifrostOperationError(schemas.ErrRequestBodyConversion, convErr, provider.GetProviderKey())
-		}
-		anthropicReq.Stream = schemas.Ptr(true)
-		addMissingBetaHeadersToContext(ctx, anthropicReq)
-		var marshalErr error
-		jsonData, marshalErr = sonic.Marshal(anthropicReq)
-		if marshalErr != nil {
-			return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRequestMarshal, marshalErr, provider.GetProviderKey())
-		}
+	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
+		ctx,
+		request,
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			anthropicReq, convErr := ToAnthropicChatRequest(ctx, request)
+			if convErr != nil {
+				return nil, convErr
+			}
+			anthropicReq.Stream = schemas.Ptr(true)
+			addMissingBetaHeadersToContext(ctx, anthropicReq)
+			return anthropicReq, nil
+		},
+		provider.GetProviderKey())
+	if bifrostErr != nil {
+		return nil, bifrostErr
 	}
 
 	// Prepare Anthropic headers
@@ -418,10 +416,6 @@ func (provider *AnthropicProvider) ChatCompletionStream(ctx *schemas.BifrostCont
 	}
 	if key.Value.GetValue() != "" {
 		headers["x-api-key"] = key.Value.GetValue()
-	}
-	// Add beta headers if any features require them
-	if len(betaHeaders) > 0 {
-		headers["anthropic-beta"] = strings.Join(betaHeaders, ",")
 	}
 
 	// Use shared Anthropic streaming logic
@@ -2208,23 +2202,23 @@ func (provider *AnthropicProvider) CountTokens(ctx *schemas.BifrostContext, key 
 	}
 
 	// Convert to Anthropic format and get required beta headers
-	var jsonData []byte
-
-	if useRawBody, ok := ctx.Value(schemas.BifrostContextKeyUseRawRequestBody).(bool); ok && useRawBody {
-		jsonData = request.GetRawRequestBody()
-	} else {
-		anthropicReq, convErr := ToAnthropicResponsesRequest(ctx, request)
-		if convErr != nil {
-			return nil, providerUtils.NewBifrostOperationError(schemas.ErrRequestBodyConversion, convErr, provider.GetProviderKey())
-		}
-		addMissingBetaHeadersToContext(ctx, anthropicReq)
-		var marshalErr error
-		jsonData, marshalErr = sonic.Marshal(anthropicReq)
-		if marshalErr != nil {
-			return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRequestMarshal, marshalErr, provider.GetProviderKey())
-		}
+	jsonData, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
+		ctx,
+		request,
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			anthropicReq, convErr := ToAnthropicResponsesRequest(ctx, request)
+			if convErr != nil {
+				return nil, convErr
+			}
+			addMissingBetaHeadersToContext(ctx, anthropicReq)
+			return anthropicReq, nil
+		},
+		provider.GetProviderKey())
+	if bifrostErr != nil {
+		return nil, bifrostErr
 	}
 
+	// Remove max_tokens and temperature for count_tokens endpoint
 	var payload map[string]any
 	if err := sonic.Unmarshal(jsonData, &payload); err == nil {
 		delete(payload, "max_tokens")

@@ -3,11 +3,30 @@ package llmtests
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	bifrost "github.com/maximhq/bifrost/core"
 	"github.com/maximhq/bifrost/core/schemas"
 )
+
+// getFakeBatchID returns a provider-specific fake batch ID for testing
+func getFakeBatchID(provider schemas.ModelProvider) string {
+	switch provider {
+	case schemas.Anthropic:
+		return "msgbatch_test-batch-id"
+	case schemas.OpenAI, schemas.Azure:
+		return "batch_test-batch-id"
+	case schemas.Bedrock:
+		// Bedrock uses ARNs for batch IDs
+		return "arn:aws:bedrock:us-east-1:123456789012:model-invocation-job/test-batch-id"
+	case schemas.Gemini:
+		// Gemini uses "batches/" prefix for batch IDs
+		return "batches/test-batch-id"
+	default:
+		return "batch_test-batch-id"
+	}
+}
 
 // RunBatchCreateTest tests the batch create functionality
 func RunBatchCreateTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
@@ -418,52 +437,55 @@ func RunBatchResultsTest(t *testing.T, client *bifrost.Bifrost, ctx context.Cont
 		t.Logf("[RUNNING] Batch Results test for provider: %s", testConfig.Provider)
 
 		// Note: For a complete test, you would need a completed batch
-		// This test assumes there might be an existing completed batch
-		// In practice, you might want to poll for completion or use a pre-existing batch ID
+		// This test uses a fake batch ID to verify the API endpoint is reachable
+		// and returns the expected "not found" error format.
+		// In practice, you would use an actual completed batch ID.
 
-		// Use retry framework
-		retryConfig := GetTestRetryConfigForScenario("BatchResults", testConfig)
-		retryContext := TestRetryContext{
-			ScenarioName: "BatchResults",
-			ExpectedBehavior: map[string]interface{}{
-				"should_return_results": true,
-			},
-			TestMetadata: map[string]interface{}{
-				"provider": testConfig.Provider,
-			},
+		// We intentionally don't use the retry framework here because we expect
+		// an error with the fake batch ID - retrying would give the same result.
+		request := &schemas.BifrostBatchResultsRequest{
+			Provider: testConfig.Provider,
+			BatchID:  getFakeBatchID(testConfig.Provider), // Fake batch ID with provider-specific prefix
 		}
-
-		batchResultsRetryConfig := BatchResultsRetryConfig{
-			MaxAttempts: retryConfig.MaxAttempts,
-			BaseDelay:   retryConfig.BaseDelay,
-			MaxDelay:    retryConfig.MaxDelay,
-			Conditions:  []BatchResultsRetryCondition{},
-			OnRetry:     retryConfig.OnRetry,
-			OnFinalFail: retryConfig.OnFinalFail,
-		}
-
-		expectations := ResponseExpectations{
-			ShouldHaveLatency: true,
-			ProviderSpecific: map[string]interface{}{
-				"expected_provider": string(testConfig.Provider),
-			},
-		}
-
-		// For now, we'll just verify the API call works
-		// A full test would involve creating a batch, waiting for completion, then getting results
-		_, err := WithBatchResultsTestRetry(t, batchResultsRetryConfig, retryContext, expectations, "BatchResults", func() (*schemas.BifrostBatchResultsResponse, *schemas.BifrostError) {
-			request := &schemas.BifrostBatchResultsRequest{
-				Provider: testConfig.Provider,
-				BatchID:  "test-batch-id", // This would be a real batch ID in practice
-			}
-			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
-			return client.BatchResultsRequest(bfCtx, request)
-		})
+		bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+		_, err := client.BatchResultsRequest(bfCtx, request)
 
 		if err != nil {
-			// This is expected to fail with a "batch not found" error since we're using a fake ID
-			// In a real test, you would use an actual completed batch ID
-			t.Logf("[INFO] BatchResults test completed (expected error with test ID): %v", GetErrorMessage(err))
+			// Check for auth/configuration errors - these should fail the test
+			if err.StatusCode != nil {
+				switch *err.StatusCode {
+				case 401, 403:
+					t.Fatalf("❌ BatchResults failed with auth error (status %d): %v", *err.StatusCode, GetErrorMessage(err))
+					return
+				case 404:
+					// Not found is expected for a fake batch ID
+					t.Logf("[INFO] BatchResults test completed (expected 404 not found error): %v", GetErrorMessage(err))
+					return
+				}
+			}
+
+			// Check error type/message for "not found" indicators
+			isNotFoundError := false
+			if err.Error != nil {
+				if err.Error.Type != nil {
+					errType := strings.ToLower(*err.Error.Type)
+					if strings.Contains(errType, "not_found") || strings.Contains(errType, "notfound") {
+						isNotFoundError = true
+					}
+				}
+				errMsg := strings.ToLower(err.Error.Message)
+				if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "does not exist") || strings.Contains(errMsg, "could not find") {
+					isNotFoundError = true
+				}
+			}
+
+			if isNotFoundError {
+				t.Logf("[INFO] BatchResults test completed (expected not found error with fake ID): %v", GetErrorMessage(err))
+				return
+			}
+
+			// Unexpected error type - fail the test to avoid masking real issues
+			t.Fatalf("❌ BatchResults failed with unexpected error: %v", GetErrorMessage(err))
 			return
 		}
 

@@ -526,8 +526,8 @@ func convertToolMessages(msgs []schemas.ChatMessage) (BedrockMessage, error) {
 // convertContent converts Bifrost message content to Bedrock content blocks
 func convertContent(content schemas.ChatMessageContent) ([]BedrockContentBlock, error) {
 	var contentBlocks []BedrockContentBlock
-	if content.ContentStr != nil {
-		// Simple text content
+	if content.ContentStr != nil && *content.ContentStr != "" {
+		// Simple text content (skip empty strings as Bedrock rejects blank text)
 		contentBlocks = append(contentBlocks, BedrockContentBlock{
 			Text: content.ContentStr,
 		})
@@ -549,7 +549,12 @@ func convertContent(content schemas.ChatMessageContent) ([]BedrockContentBlock, 
 func convertContentBlock(block schemas.ChatContentBlock) ([]BedrockContentBlock, error) {
 	switch block.Type {
 	case schemas.ChatContentBlockTypeText:
-		if block.Text == nil {
+		// NOTE: we are doing this because LiteLLM does this for empty text blocks.
+		// Ideally we should not play with the payload - we should let the provider handle it.
+		// But for now, we are doing this to avoid the API error.
+		// Once the world onboards on Bifrost - we should remove these shitty patterns.
+		if block.Text == nil || *block.Text == "" {
+			// Skip nil or empty text as Bedrock rejects blank text content blocks
 			return []BedrockContentBlock{}, nil
 		}
 		blocks := []BedrockContentBlock{

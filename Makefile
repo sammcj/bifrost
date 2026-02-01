@@ -8,7 +8,7 @@ PROMETHEUS_LABELS ?=
 LOG_STYLE ?= json
 LOG_LEVEL ?= info
 TEST_REPORTS_DIR ?= test-reports
-GOTESTSUM_FORMAT ?= testname
+GOTESTSUM_FORMAT ?= standard-verbose
 VERSION ?= dev-build
 LOCAL ?=
 DEBUG ?=
@@ -48,7 +48,7 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(YELLOW)Test Configuration:$(NC)"
 	@echo "  TEST_REPORTS_DIR  Directory for HTML test reports (default: test-reports)"
-	@echo "  GOTESTSUM_FORMAT  Test output format: testname|dots|pkgname|standard-verbose (default: testname)"
+	@echo "  GOTESTSUM_FORMAT  Test output format: testname|dots|pkgname|standard-verbose (default: standard-verbose)"
 	@echo "  TESTCASE          Exact test name to run (e.g., TestVirtualKeyTokenRateLimit)"
 	@echo "  PATTERN           Substring pattern to filter tests (alternative to TESTCASE)"
 

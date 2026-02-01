@@ -339,13 +339,13 @@ type RequestBodyWithExtraParams interface {
 
 type RequestBodyConverter func() (RequestBodyWithExtraParams, error)
 
-// mergeExtraParams merges extraParams into jsonMap, handling nested maps recursively.
-func mergeExtraParams(jsonMap map[string]interface{}, extraParams map[string]interface{}) {
+// MergeExtraParams merges extraParams into jsonMap, handling nested maps recursively.
+func MergeExtraParams(jsonMap map[string]interface{}, extraParams map[string]interface{}) {
 	for k, v := range extraParams {
 		if existingVal, exists := jsonMap[k]; exists {
 			if existingMap, ok := existingVal.(map[string]interface{}); ok {
 				if newMap, ok := v.(map[string]interface{}); ok {
-					mergeExtraParams(existingMap, newMap)
+					MergeExtraParams(existingMap, newMap)
 					continue
 				}
 			}
@@ -380,7 +380,7 @@ func CheckContextAndGetRequestBody(ctx context.Context, request RequestBodyGette
 				}
 
 				// Merge ExtraParams recursively (handles nested maps)
-				mergeExtraParams(jsonMap, extraParams)
+				MergeExtraParams(jsonMap, extraParams)
 
 				// Re-marshal the merged map
 				jsonBody, err = sonic.MarshalIndent(jsonMap, "", "  ")
