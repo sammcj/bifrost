@@ -146,8 +146,21 @@ type tracerWrapper struct {
 	tracer schemas.Tracer
 }
 
-// Global logger instance which is set in the Init function
-var logger schemas.Logger
+// Global logger instance which is set in the Init function (thread-safe via atomic.Pointer)
+var globalLogger atomic.Pointer[schemas.Logger]
+
+// getGlobalLogger returns the global logger (thread-safe).
+func getGlobalLogger() schemas.Logger {
+	if l := globalLogger.Load(); l != nil {
+		return *l
+	}
+	return nil
+}
+
+// setGlobalLogger sets the global logger (thread-safe).
+func setGlobalLogger(l schemas.Logger) {
+	globalLogger.Store(&l)
+}
 
 // INITIALIZATION
 
@@ -318,8 +331,8 @@ func Init(ctx context.Context, config schemas.BifrostConfig) (*Bifrost, error) {
 		}
 	}
 
-	// Set logger
-	logger = bifrost.logger
+	// Set global logger (thread-safe)
+	setGlobalLogger(bifrost.logger)
 
 	return bifrost, nil
 }
@@ -3210,7 +3223,9 @@ func (bifrost *Bifrost) getProviderByKey(providerKey schemas.ModelProvider) sche
 	config, err := bifrost.account.GetConfigForProvider(providerKey)
 	if err != nil || config == nil {
 		if slices.Contains(dynamicallyConfigurableProviders, providerKey) {
-			logger.Info(fmt.Sprintf("initializing provider %s with default config", providerKey))
+			if l := getGlobalLogger(); l != nil {
+				l.Info(fmt.Sprintf("initializing provider %s with default config", providerKey))
+			}
 			// If no config found, use default config
 			config = &schemas.ProviderConfig{
 				NetworkConfig:            schemas.DefaultNetworkConfig,
@@ -4053,20 +4068,28 @@ func executeRequestWithRetries[T any](
 					retryMsg += ", type=" + *bifrostError.Type
 				}
 			}
-			logger.Debug("retrying request (attempt %d/%d) for model %s: %s", attempts, config.NetworkConfig.MaxRetries, model, retryMsg)
+			if l := getGlobalLogger(); l != nil {
+				l.Debug("retrying request (attempt %d/%d) for model %s: %s", attempts, config.NetworkConfig.MaxRetries, model, retryMsg)
+			}
 
 			// Calculate and apply backoff
 			backoff := calculateBackoff(attempts-1, config)
-			logger.Debug("sleeping for %s before retry", backoff)
+			if l := getGlobalLogger(); l != nil {
+				l.Debug("sleeping for %s before retry", backoff)
+			}
 			time.Sleep(backoff)
 		}
 
-		logger.Debug("attempting %s request for provider %s", requestType, providerKey)
+		if l := getGlobalLogger(); l != nil {
+			l.Debug("attempting %s request for provider %s", requestType, providerKey)
+		}
 
 		// Start span for LLM call (or retry attempt)
 		tracer, ok := ctx.Value(schemas.BifrostContextKeyTracer).(schemas.Tracer)
 		if !ok || tracer == nil {
-			logger.Error("tracer not found in context of executeRequestWithRetries")
+			if l := getGlobalLogger(); l != nil {
+				l.Error("tracer not found in context of executeRequestWithRetries")
+			}
 			return result, newBifrostErrorFromMsg("tracer not found in context")
 		}
 		var spanName string
@@ -4132,7 +4155,9 @@ func executeRequestWithRetries[T any](
 			}
 		}
 
-		logger.Debug("request %s for provider %s completed", requestType, providerKey)
+		if l := getGlobalLogger(); l != nil {
+			l.Debug("request %s for provider %s completed", requestType, providerKey)
+		}
 
 		// Check if successful or if we should retry
 		if bifrostError == nil ||
@@ -4146,7 +4171,9 @@ func executeRequestWithRetries[T any](
 
 		if bifrostError.Error != nil && (bifrostError.Error.Message == schemas.ErrProviderDoRequest || bifrostError.Error.Message == schemas.ErrProviderNetworkError) {
 			shouldRetry = true
-			logger.Debug("detected request HTTP/network error, will retry: %s", bifrostError.Error.Message)
+			if l := getGlobalLogger(); l != nil {
+				l.Debug("detected request HTTP/network error, will retry: %s", bifrostError.Error.Message)
+			}
 		}
 
 		// Retry if status code or error object indicates rate limiting
@@ -4155,7 +4182,9 @@ func executeRequestWithRetries[T any](
 				(IsRateLimitErrorMessage(bifrostError.Error.Message) ||
 					(bifrostError.Error.Type != nil && IsRateLimitErrorMessage(*bifrostError.Error.Type)))) {
 			shouldRetry = true
-			logger.Debug("detected rate limit error in message, will retry: %s", bifrostError.Error.Message)
+			if l := getGlobalLogger(); l != nil {
+				l.Debug("detected rate limit error in message, will retry: %s", bifrostError.Error.Message)
+			}
 		}
 
 		if !shouldRetry {
@@ -4165,7 +4194,9 @@ func executeRequestWithRetries[T any](
 
 	// Add retry information to error
 	if attempts > 0 {
-		logger.Debug("request failed after %d %s", attempts, map[bool]string{true: "attempts", false: "attempt"}[attempts > 1])
+		if l := getGlobalLogger(); l != nil {
+			l.Debug("request failed after %d %s", attempts, map[bool]string{true: "attempts", false: "attempt"}[attempts > 1])
+		}
 	}
 
 	return result, bifrostError

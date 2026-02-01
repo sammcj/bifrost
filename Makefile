@@ -766,7 +766,7 @@ setup-mcp-tests: ## Build all MCP test servers in examples/mcps/ (Go and TypeScr
 	@echo ""
 	@echo "$(GREEN)✓ All MCP test servers built$(NC)"
 
-test-mcp: install-gotestsum $(if $(BUILD),setup-mcp-tests) ## Run MCP tests (Usage: make test-mcp [BUILD=1] [TYPE=connection] [TESTCASE=TestName] [PATTERN=substring])
+test-mcp: install-gotestsum setup-mcp-tests ## Run MCP tests (Usage: make test-mcp [TYPE=connection] [TESTCASE=TestName] [PATTERN=substring])
 	@echo "$(GREEN)Running MCP tests...$(NC)"
 	@mkdir -p $(TEST_REPORTS_DIR)
 	@if [ -n "$(PATTERN)" ] && [ -n "$(TESTCASE)" ]; then \
@@ -801,7 +801,7 @@ test-mcp: install-gotestsum $(if $(BUILD),setup-mcp-tests) ## Run MCP tests (Usa
 			cd core/internal/mcptests && GOWORK=off gotestsum \
 				--format=$(GOTESTSUM_FORMAT) \
 				--junitfile=../../../$$REPORT_FILE \
-				-- -v -run "^$(TESTCASE)$$" . || TEST_FAILED=1; \
+				-- -v -race -run "^$(TESTCASE)$$" . || TEST_FAILED=1; \
 		elif [ -n "$(PATTERN)" ]; then \
 			echo "$(CYAN)Running $(TYPE) tests matching '$(PATTERN)'...$(NC)"; \
 			SAFE_PATTERN=$$(echo "$(PATTERN)" | sed 's|/|_|g'); \
@@ -809,14 +809,14 @@ test-mcp: install-gotestsum $(if $(BUILD),setup-mcp-tests) ## Run MCP tests (Usa
 			cd core/internal/mcptests && GOWORK=off gotestsum \
 				--format=$(GOTESTSUM_FORMAT) \
 				--junitfile=../../../$$REPORT_FILE \
-				-- -v -run ".*$(PATTERN).*" . || TEST_FAILED=1; \
+				-- -v -race -run ".*$(PATTERN).*" . || TEST_FAILED=1; \
 		else \
 			echo "$(CYAN)Running all $(TYPE) tests (pattern: $$TEST_PATTERN)...$(NC)"; \
 			REPORT_FILE="$(TEST_REPORTS_DIR)/mcp-$(TYPE).xml"; \
 			cd core/internal/mcptests && GOWORK=off gotestsum \
 				--format=$(GOTESTSUM_FORMAT) \
 				--junitfile=../../../$$REPORT_FILE \
-				-- -v -run "$$TEST_PATTERN" . || TEST_FAILED=1; \
+				-- -v -race -run "$$TEST_PATTERN" . || TEST_FAILED=1; \
 		fi; \
 		cd ../../..; \
 		if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
@@ -841,21 +841,21 @@ test-mcp: install-gotestsum $(if $(BUILD),setup-mcp-tests) ## Run MCP tests (Usa
 			cd core/internal/mcptests && GOWORK=off gotestsum \
 				--format=$(GOTESTSUM_FORMAT) \
 				--junitfile=../../../$$REPORT_FILE \
-				-- -v -run "^$(TESTCASE)$$" || TEST_FAILED=1; \
+				-- -v -race -run "^$(TESTCASE)$$" || TEST_FAILED=1; \
 		elif [ -n "$(PATTERN)" ]; then \
 			echo "$(CYAN)Running tests matching '$(PATTERN)' across all MCP tests...$(NC)"; \
 			REPORT_FILE="$(TEST_REPORTS_DIR)/mcp-all-$(PATTERN).xml"; \
 			cd core/internal/mcptests && GOWORK=off gotestsum \
 				--format=$(GOTESTSUM_FORMAT) \
 				--junitfile=../../../$$REPORT_FILE \
-				-- -v -run ".*$(PATTERN).*" || TEST_FAILED=1; \
+				-- -v -race -run ".*$(PATTERN).*" || TEST_FAILED=1; \
 		else \
 			echo "$(CYAN)Running all MCP tests...$(NC)"; \
 			REPORT_FILE="$(TEST_REPORTS_DIR)/mcp-all.xml"; \
 			cd core/internal/mcptests && GOWORK=off gotestsum \
 				--format=$(GOTESTSUM_FORMAT) \
 				--junitfile=../../../$$REPORT_FILE \
-				-- -v || TEST_FAILED=1; \
+				-- -v -race || TEST_FAILED=1; \
 		fi; \
 		cd ../../..; \
 		if [ -z "$$CI" ] && [ -z "$$GITHUB_ACTIONS" ] && [ -z "$$GITLAB_CI" ] && [ -z "$$CIRCLECI" ] && [ -z "$$JENKINS_HOME" ]; then \
