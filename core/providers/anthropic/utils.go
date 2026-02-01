@@ -78,6 +78,23 @@ func getRequestBodyForResponses(ctx *schemas.BifrostContext, request *schemas.Bi
 		if err != nil {
 			return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRequestMarshal, fmt.Errorf("failed to marshal request body: %w", err), providerName)
 		}
+		// Merge ExtraParams into the JSON if passthrough is enabled
+		if ctx.Value(schemas.BifrostContextKeyPassthroughExtraParams) != nil && ctx.Value(schemas.BifrostContextKeyPassthroughExtraParams) == true {
+			extraParams := reqBody.GetExtraParams()
+			if len(extraParams) > 0 {
+				var jsonMap map[string]interface{}
+				if err := sonic.Unmarshal(jsonBody, &jsonMap); err != nil {
+					return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRequestMarshal, err, providerName)
+				}
+				// Merge ExtraParams recursively (handles nested maps)
+				providerUtils.MergeExtraParams(jsonMap, extraParams)
+				// Re-marshal the merged map
+				jsonBody, err = sonic.Marshal(jsonMap)
+				if err != nil {
+					return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderRequestMarshal, err, providerName)
+				}
+			}
+		}
 	}
 	return jsonBody, nil
 }
@@ -1032,19 +1049,10 @@ func convertChatResponseFormatToAnthropicOutputFormat(responseFormat *interface{
 	}
 
 	// Build the flattened Anthropic-compatible output_format structure
+	// Note: name, description, and strict are NOT included as they are not permitted
+	// in Anthropic's GA structured outputs API (output_config.format)
 	outputFormat := map[string]interface{}{
 		"type": formatType,
-	}
-
-	// Forward name, description, and strict from the json_schema object
-	if name, ok := jsonSchemaObj["name"].(string); ok && name != "" {
-		outputFormat["name"] = name
-	}
-	if description, ok := jsonSchemaObj["description"].(string); ok && description != "" {
-		outputFormat["description"] = description
-	}
-	if strict, ok := jsonSchemaObj["strict"].(bool); ok {
-		outputFormat["strict"] = strict
 	}
 
 	if schema, ok := jsonSchemaObj["schema"].(map[string]interface{}); ok {

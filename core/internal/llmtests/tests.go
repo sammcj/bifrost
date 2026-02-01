@@ -176,6 +176,7 @@ func printTestSummary(t *testing.T, testConfig ComprehensiveTestConfig) {
 		{"ContainerFileContent", testConfig.Scenarios.ContainerFileContent},
 		{"ContainerFileDelete", testConfig.Scenarios.ContainerFileDelete},
 		{"ContainerFileUnsupported", !testConfig.Scenarios.ContainerFileCreate && !testConfig.Scenarios.ContainerFileList && !testConfig.Scenarios.ContainerFileRetrieve && !testConfig.Scenarios.ContainerFileContent && !testConfig.Scenarios.ContainerFileDelete},
+		{"PassThroughExtraParams", testConfig.Scenarios.PassThroughExtraParams},
 	}
 
 	supported := 0

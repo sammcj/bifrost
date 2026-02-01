@@ -52,7 +52,13 @@ func ToAnthropicChatRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.Bif
 					}
 				}
 			} else {
-				anthropicReq.OutputFormat = convertChatResponseFormatToAnthropicOutputFormat(bifrostReq.Params.ResponseFormat)
+				// Use GA structured outputs (output_config.format) instead of beta (output_format)
+				outputFormat := convertChatResponseFormatToAnthropicOutputFormat(bifrostReq.Params.ResponseFormat)
+				if outputFormat != nil {
+					anthropicReq.OutputConfig = &AnthropicOutputConfig{
+						Format: outputFormat,
+					}
+				}
 			}
 		}
 
