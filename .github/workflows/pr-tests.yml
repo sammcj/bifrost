@@ -17,7 +17,7 @@ concurrency:
 jobs:
   # Check if pipeline should be skipped based on first line of commit message
   check-skip:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
@@ -42,7 +42,7 @@ jobs:
     needs: [check-skip]
     if: needs.check-skip.outputs.should-skip != 'true'
     name: Run Tests (Awaiting Approval)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
 
     # Environment with protection rules - requires admin approval
     # Note: You need to configure this environment in repo settings
