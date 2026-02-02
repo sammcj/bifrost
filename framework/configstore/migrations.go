@@ -218,6 +218,16 @@ func migrationInit(ctx context.Context, db *gorm.DB) error {
 					return err
 				}
 			}
+			if !migrator.HasTable(&tables.TableOauthConfig{}) {
+				if err := migrator.CreateTable(&tables.TableOauthConfig{}); err != nil {
+					return err
+				}
+			}
+			if !migrator.HasTable(&tables.TableOauthToken{}) {
+				if err := migrator.CreateTable(&tables.TableOauthToken{}); err != nil {
+					return err
+				}
+			}
 			if !migrator.HasTable(&tables.TableMCPClient{}) {
 				if err := migrator.CreateTable(&tables.TableMCPClient{}); err != nil {
 					return err
@@ -3047,8 +3057,27 @@ func migrationAddOAuthTables(ctx context.Context, db *gorm.DB) error {
 		ID: "add_oauth_tables",
 		Migrate: func(tx *gorm.DB) error {
 			tx = tx.WithContext(ctx)
-			migrator := tx.Migrator()
-			// Updating MCPClient table to add auth_type, oauth_config_id, and oauth_config columns
+			migrator := tx.Migrator()			
+			// Create oauth_configs table FIRST (before adding FK columns that reference it)
+			if !migrator.HasTable(&tables.TableOauthConfig{}) {
+				if err := migrator.CreateTable(&tables.TableOauthConfig{}); err != nil {
+					return fmt.Errorf("failed to create oauth_configs table: %w", err)
+				}
+			}
+			// Create oauth_tokens table
+			if !migrator.HasTable(&tables.TableOauthToken{}) {
+				if err := migrator.CreateTable(&tables.TableOauthToken{}); err != nil {
+					return fmt.Errorf("failed to create oauth_tokens table: %w", err)
+				}
+			}
+			// IF MCPClient table is not present, create it first
+			if !migrator.HasTable(&tables.TableMCPClient{}) {
+				if err := migrator.CreateTable(&tables.TableMCPClient{}); err != nil {
+					return fmt.Errorf("failed to create mcp_clients table: %w", err)
+				}
+			}
+			// Now update MCPClient table to add auth_type, oauth_config_id columns
+			// (oauth_config_id has FK constraint to oauth_configs table created above)
 			if !migrator.HasColumn(&tables.TableMCPClient{}, "auth_type") {
 				if err := migrator.AddColumn(&tables.TableMCPClient{}, "auth_type"); err != nil {
 					return fmt.Errorf("failed to add auth_type column: %w", err)
@@ -3062,18 +3091,6 @@ func migrationAddOAuthTables(ctx context.Context, db *gorm.DB) error {
 			// Set default value for auth_type column
 			if err := tx.Model(&tables.TableMCPClient{}).Where("auth_type IS NULL").Update("auth_type", "headers").Error; err != nil {
 				return err
-			}
-			// Create oauth_configs table
-			if !migrator.HasTable(&tables.TableOauthConfig{}) {
-				if err := migrator.CreateTable(&tables.TableOauthConfig{}); err != nil {
-					return fmt.Errorf("failed to create oauth_configs table: %w", err)
-				}
-			}
-			// Create oauth_tokens table
-			if !migrator.HasTable(&tables.TableOauthToken{}) {
-				if err := migrator.CreateTable(&tables.TableOauthToken{}); err != nil {
-					return fmt.Errorf("failed to create oauth_tokens table: %w", err)
-				}
 			}
 			return nil
 		},
