@@ -195,8 +195,8 @@ github.com/mattn/go-sqlite3 v1.14.32 h1:JD12Ag3oLy1zQA+BNn74xRgaBbdhbNIDYvQUEuuE
 github.com/mattn/go-sqlite3 v1.14.32/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/maximhq/bifrost/core v1.4.0 h1:1RvhQJXTQ+BP0HWoEeCVTDwVnseef8KeFj02VibEKsc=
 github.com/maximhq/bifrost/core v1.4.0/go.mod h1:658dDpcnkKso1zkuBKxZSAENgXjQloM8+phgoQRToTg=
-github.com/maximhq/bifrost/framework v1.2.17 h1:q1Guywfd1DKYkLCJjcBFPc01C4uL+ngsEWVzB11P3NY=
-github.com/maximhq/bifrost/framework v1.2.17/go.mod h1:2WJv19BkDKArQuMwgDHYZEYZZcV7fLiYo7P8i6FdXzk=
+github.com/maximhq/bifrost/framework v1.2.18 h1:ipYDMhUvFh2HxDFmtAdq2OHvM6kF0mdTZgnfs0BaavI=
+github.com/maximhq/bifrost/framework v1.2.18/go.mod h1:2WJv19BkDKArQuMwgDHYZEYZZcV7fLiYo7P8i6FdXzk=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/oapi-codegen/runtime v1.1.1 h1:EXLHh0DXIJnWhdRPN2w4MXAzFyE4CskzhNLUmtpMYro=
