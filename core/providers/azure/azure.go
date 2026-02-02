@@ -1051,6 +1051,7 @@ func (provider *AzureProvider) SpeechStream(ctx *schemas.BifrostContext, postHoo
 		// We can't use bufio.Scanner because MP3 data contains 0x0a bytes which get interpreted as newlines
 		readBuffer := make([]byte, 64*1024) // 64KB read chunks
 		var accumulated []byte
+		doneReceived := false
 
 		for {
 			// If context was cancelled/timed out, let defer handle it
@@ -1096,9 +1097,10 @@ func (provider *AzureProvider) SpeechStream(ctx *schemas.BifrostContext, postHoo
 					// Check if this has "data: " prefix (standard SSE format)
 					if bytes.HasPrefix(event, []byte("data: ")) {
 						audioData = event[6:] // Skip "data: " prefix
-						// Check for [DONE] marker
+						// Check for [DONE] marker - break out of loops to send final response
 						if bytes.Equal(audioData, []byte("[DONE]")) {
-							return
+							doneReceived = true
+							break
 						}
 					} else {
 						// Raw data without prefix (shouldn't happen with Azure, but handle it)
@@ -1157,6 +1159,11 @@ func (provider *AzureProvider) SpeechStream(ctx *schemas.BifrostContext, postHoo
 					}
 
 					providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, &response, nil, nil), responseChan)
+				}
+
+				// Check if we received [DONE] marker - break outer loop to send final response
+				if doneReceived {
+					break
 				}
 			}
 
