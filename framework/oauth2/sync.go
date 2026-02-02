@@ -18,6 +18,10 @@ type TokenRefreshWorker struct {
 
 // NewTokenRefreshWorker creates a new token refresh worker
 func NewTokenRefreshWorker(provider *OAuth2Provider, logger schemas.Logger) *TokenRefreshWorker {
+	if provider.configStore == nil {
+		logger.Warn("config store is nil, skipping token refresh worker")
+		return nil
+	}
 	return &TokenRefreshWorker{
 		provider:        provider,
 		refreshInterval: 5 * time.Minute, // Check every 5 minutes
