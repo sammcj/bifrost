@@ -85,8 +85,9 @@ func getWeight(w *float64) float64 {
 // It contains the client configuration, provider configurations, MCP configuration,
 // vector store configuration, config store configuration, and logs store configuration.
 type ConfigData struct {
-	Client            *configstore.ClientConfig             `json:"client"`
-	EncryptionKey     string                                `json:"encryption_key"`
+	Client        *configstore.ClientConfig `json:"client"`
+	EncryptionKey string                    `json:"encryption_key"`
+	// Deprecated: Use GovernanceConfig.AuthConfig instead
 	AuthConfig        *configstore.AuthConfig               `json:"auth_config,omitempty"`
 	Providers         map[string]configstore.ProviderConfig `json:"providers"`
 	FrameworkConfig   *framework.FrameworkConfig            `json:"framework,omitempty"`
@@ -1414,16 +1415,44 @@ func createGovernanceConfigInStore(ctx context.Context, config *Config) {
 	}
 }
 
+// isBcryptHash checks if a string looks like a bcrypt hash
+func isBcryptHash(s string) bool {
+	return strings.HasPrefix(s, "$2a$") ||
+		strings.HasPrefix(s, "$2b$") ||
+		strings.HasPrefix(s, "$2y$")
+}
+
 // loadAuthConfigFromFile loads auth config from file
 func loadAuthConfigFromFile(ctx context.Context, config *Config, configData *ConfigData) {
-	if configData.AuthConfig == nil {
-		return
+	if config.GovernanceConfig == nil || config.GovernanceConfig.AuthConfig == nil {
+		if configData.AuthConfig == nil {
+			return
+		}
+		if config.GovernanceConfig == nil {
+			config.GovernanceConfig = &configstore.GovernanceConfig{}
+		}
+		if config.GovernanceConfig.AuthConfig == nil {
+			config.GovernanceConfig.AuthConfig = &configstore.AuthConfig{}
+		}
+		config.GovernanceConfig.AuthConfig.AdminUserName = configData.AuthConfig.AdminUserName
+		config.GovernanceConfig.AuthConfig.AdminPassword = configData.AuthConfig.AdminPassword
+		config.GovernanceConfig.AuthConfig.IsEnabled = configData.AuthConfig.IsEnabled
+		config.GovernanceConfig.AuthConfig.DisableAuthOnInference = configData.AuthConfig.DisableAuthOnInference
 	}
 
 	if config.ConfigStore != nil {
 		configStoreAuthConfig, err := config.ConfigStore.GetAuthConfig(ctx)
 		if err == nil && configStoreAuthConfig == nil {
-			if err := config.ConfigStore.UpdateAuthConfig(ctx, configData.AuthConfig); err != nil {
+			// Hash the password if it's not already a bcrypt hash
+			if config.GovernanceConfig.AuthConfig.AdminPassword != "" && !isBcryptHash(config.GovernanceConfig.AuthConfig.AdminPassword) {
+				hashedPassword, err := encrypt.Hash(config.GovernanceConfig.AuthConfig.AdminPassword)
+				if err != nil {
+					logger.Warn("failed to hash auth password: %v", err)
+					return
+				}
+				config.GovernanceConfig.AuthConfig.AdminPassword = hashedPassword
+			}
+			if err := config.ConfigStore.UpdateAuthConfig(ctx, config.GovernanceConfig.AuthConfig); err != nil {
 				logger.Warn("failed to update auth config: %v", err)
 			}
 		}

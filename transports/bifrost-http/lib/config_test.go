@@ -345,6 +345,7 @@ import (
 	"github.com/maximhq/bifrost/framework"
 	"github.com/maximhq/bifrost/framework/configstore"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
+	"github.com/maximhq/bifrost/framework/encrypt"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/framework/migrator"
 	"github.com/maximhq/bifrost/framework/modelcatalog"
@@ -450,6 +451,10 @@ func (m *MockConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig,
 	return m.mcpConfig, nil
 }
 
+func (m *MockConfigStore) GetMCPClientByID(ctx context.Context, id string) (*tables.TableMCPClient, error) {
+	return nil, nil
+}
+
 func (m *MockConfigStore) GetMCPClientByName(ctx context.Context, name string) (*tables.TableMCPClient, error) {
 	return nil, nil
 }
@@ -460,13 +465,13 @@ func (m *MockConfigStore) CreateMCPClientConfig(ctx context.Context, clientConfi
 	return nil
 }
 
-func (m *MockConfigStore) UpdateMCPClientConfig(ctx context.Context, id string, clientConfig tables.TableMCPClient) error {
+func (m *MockConfigStore) UpdateMCPClientConfig(ctx context.Context, id string, clientConfig *tables.TableMCPClient) error {
 	m.mcpClientConfigUpdates = append(m.mcpClientConfigUpdates, struct {
 		ID     string
 		Config tables.TableMCPClient
 	}{
 		ID:     id,
-		Config: clientConfig,
+		Config: *clientConfig,
 	})
 
 	// Initialize m.mcpConfig if nil (same pattern as CreateMCPClientConfig)
@@ -907,6 +912,77 @@ func (m *MockConfigStore) FlushSessions(ctx context.Context) error {
 
 // Plugins
 func (m *MockConfigStore) UpsertPlugin(ctx context.Context, plugin *tables.TablePlugin, tx ...*gorm.DB) error {
+	return nil
+}
+
+// OAuth config
+func (m *MockConfigStore) GetOauthConfigByID(ctx context.Context, id string) (*tables.TableOauthConfig, error) {
+	return nil, nil
+}
+
+func (m *MockConfigStore) GetOauthConfigByState(ctx context.Context, state string) (*tables.TableOauthConfig, error) {
+	return nil, nil
+}
+
+func (m *MockConfigStore) GetOauthConfigByTokenID(ctx context.Context, tokenID string) (*tables.TableOauthConfig, error) {
+	return nil, nil
+}
+
+func (m *MockConfigStore) CreateOauthConfig(ctx context.Context, config *tables.TableOauthConfig) error {
+	return nil
+}
+
+func (m *MockConfigStore) UpdateOauthConfig(ctx context.Context, config *tables.TableOauthConfig) error {
+	return nil
+}
+
+// OAuth token
+func (m *MockConfigStore) GetOauthTokenByID(ctx context.Context, id string) (*tables.TableOauthToken, error) {
+	return nil, nil
+}
+
+func (m *MockConfigStore) GetExpiringOauthTokens(ctx context.Context, before time.Time) ([]*tables.TableOauthToken, error) {
+	return nil, nil
+}
+
+func (m *MockConfigStore) CreateOauthToken(ctx context.Context, token *tables.TableOauthToken) error {
+	return nil
+}
+
+func (m *MockConfigStore) UpdateOauthToken(ctx context.Context, token *tables.TableOauthToken) error {
+	return nil
+}
+
+func (m *MockConfigStore) DeleteOauthToken(ctx context.Context, id string) error {
+	return nil
+}
+
+// Routing rules
+func (m *MockConfigStore) GetRoutingRules(ctx context.Context) ([]tables.TableRoutingRule, error) {
+	return nil, nil
+}
+
+func (m *MockConfigStore) GetRoutingRulesByScope(ctx context.Context, scope string, scopeID string) ([]tables.TableRoutingRule, error) {
+	return nil, nil
+}
+
+func (m *MockConfigStore) GetRoutingRule(ctx context.Context, id string) (*tables.TableRoutingRule, error) {
+	return nil, nil
+}
+
+func (m *MockConfigStore) GetRedactedRoutingRules(ctx context.Context, ids []string) ([]tables.TableRoutingRule, error) {
+	return nil, nil
+}
+
+func (m *MockConfigStore) CreateRoutingRule(ctx context.Context, rule *tables.TableRoutingRule, tx ...*gorm.DB) error {
+	return nil
+}
+
+func (m *MockConfigStore) UpdateRoutingRule(ctx context.Context, rule *tables.TableRoutingRule, tx ...*gorm.DB) error {
+	return nil
+}
+
+func (m *MockConfigStore) DeleteRoutingRule(ctx context.Context, id string, tx ...*gorm.DB) error {
 	return nil
 }
 
@@ -15249,4 +15325,175 @@ func TestConfigSchemaSyncTopLevel(t *testing.T) {
 		t.Logf("Top-level sync validated: %d properties match (%d enterprise-only excluded)",
 			matchedCount, len(enterpriseSchemaFields))
 	}
+}
+
+// ===================================================================================
+// AUTH CONFIG PASSWORD HASHING TESTS
+// ===================================================================================
+
+func TestIsBcryptHash(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"bcrypt $2a$ prefix", "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy", true},
+		{"bcrypt $2b$ prefix", "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy", true},
+		{"bcrypt $2y$ prefix", "$2y$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy", true},
+		{"plain text password", "mypassword", false},
+		{"empty string", "", false},
+		{"partial prefix $2a", "$2a", false},
+		{"different hash format", "$argon2id$v=19$m=65536,t=3,p=4$...", false},
+		{"sha256 hash", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isBcryptHash(tt.input)
+			if result != tt.expected {
+				t.Errorf("isBcryptHash(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLoadAuthConfigFromFile_PasswordHashing(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("plain text password gets hashed", func(t *testing.T) {
+		mockStore := NewMockConfigStore()
+		config := &Config{
+			ConfigStore: mockStore,
+		}
+		plainPassword := "mysecretpassword"
+		configData := &ConfigData{
+			AuthConfig: &configstore.AuthConfig{
+				AdminUserName: "admin",
+				AdminPassword: plainPassword,
+				IsEnabled:     true,
+			},
+		}
+
+		loadAuthConfigFromFile(ctx, config, configData)
+
+		// Verify auth config was stored
+		storedAuth, err := mockStore.GetAuthConfig(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, storedAuth)
+
+		// Verify password was hashed (not plain text)
+		require.NotEqual(t, plainPassword, storedAuth.AdminPassword, "password should be hashed, not plain text")
+
+		// Verify the stored hash is a valid bcrypt hash
+		require.True(t, isBcryptHash(storedAuth.AdminPassword), "stored password should be a bcrypt hash")
+
+		// Verify the hash can be used to verify the original password
+		match, err := encrypt.CompareHash(storedAuth.AdminPassword, plainPassword)
+		require.NoError(t, err)
+		require.True(t, match, "hashed password should match original plain text password")
+	})
+
+	t.Run("already hashed password is not re-hashed", func(t *testing.T) {
+		mockStore := NewMockConfigStore()
+		config := &Config{
+			ConfigStore: mockStore,
+		}
+		// Create a bcrypt hash of a password
+		originalPassword := "originalpassword"
+		hashedPassword, err := encrypt.Hash(originalPassword)
+		require.NoError(t, err)
+
+		configData := &ConfigData{
+			AuthConfig: &configstore.AuthConfig{
+				AdminUserName: "admin",
+				AdminPassword: hashedPassword,
+				IsEnabled:     true,
+			},
+		}
+
+		loadAuthConfigFromFile(ctx, config, configData)
+
+		// Verify auth config was stored
+		storedAuth, err := mockStore.GetAuthConfig(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, storedAuth)
+
+		// Verify password was NOT re-hashed (should be the same hash)
+		require.Equal(t, hashedPassword, storedAuth.AdminPassword, "already hashed password should not be re-hashed")
+
+		// Verify the stored hash still works to verify the original password
+		match, err := encrypt.CompareHash(storedAuth.AdminPassword, originalPassword)
+		require.NoError(t, err)
+		require.True(t, match, "stored hash should still verify against original password")
+	})
+
+	t.Run("empty password is not hashed", func(t *testing.T) {
+		mockStore := NewMockConfigStore()
+		config := &Config{
+			ConfigStore: mockStore,
+		}
+		configData := &ConfigData{
+			AuthConfig: &configstore.AuthConfig{
+				AdminUserName: "admin",
+				AdminPassword: "",
+				IsEnabled:     true,
+			},
+		}
+
+		loadAuthConfigFromFile(ctx, config, configData)
+
+		// Verify auth config was stored
+		storedAuth, err := mockStore.GetAuthConfig(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, storedAuth)
+
+		// Verify empty password remains empty
+		require.Equal(t, "", storedAuth.AdminPassword, "empty password should remain empty")
+	})
+
+	t.Run("auth config not loaded when DB already has config", func(t *testing.T) {
+		mockStore := NewMockConfigStore()
+		existingPassword := "$2a$10$existinghashvaluehere1234567890123456789012345678901234"
+		mockStore.authConfig = &configstore.AuthConfig{
+			AdminUserName: "existingadmin",
+			AdminPassword: existingPassword,
+			IsEnabled:     true,
+		}
+		config := &Config{
+			ConfigStore: mockStore,
+		}
+		configData := &ConfigData{
+			AuthConfig: &configstore.AuthConfig{
+				AdminUserName: "newadmin",
+				AdminPassword: "newpassword",
+				IsEnabled:     false,
+			},
+		}
+
+		loadAuthConfigFromFile(ctx, config, configData)
+
+		// Verify the existing config was NOT overwritten
+		storedAuth, err := mockStore.GetAuthConfig(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, storedAuth)
+		require.Equal(t, "existingadmin", storedAuth.AdminUserName, "existing username should be preserved")
+		require.Equal(t, existingPassword, storedAuth.AdminPassword, "existing password should be preserved")
+		require.True(t, storedAuth.IsEnabled, "existing enabled status should be preserved")
+	})
+
+	t.Run("nil auth config in file is skipped", func(t *testing.T) {
+		mockStore := NewMockConfigStore()
+		config := &Config{
+			ConfigStore: mockStore,
+		}
+		configData := &ConfigData{
+			AuthConfig: nil,
+		}
+
+		loadAuthConfigFromFile(ctx, config, configData)
+
+		// Verify no auth config was stored
+		storedAuth, err := mockStore.GetAuthConfig(ctx)
+		require.NoError(t, err)
+		require.Nil(t, storedAuth, "no auth config should be stored when file config is nil")
+	})
 }

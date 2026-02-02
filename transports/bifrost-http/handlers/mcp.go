@@ -420,7 +420,7 @@ func (h *MCPHandler) updateMCPClient(ctx *fasthttp.RequestCtx) {
 		OauthConfigID:      req.OauthConfigID,
 		IsPingAvailable:    isPingAvailable,
 		ToolSyncInterval:   toolSyncInterval,
-		ToolPricing:        req.ToolPricing,
+		ToolPricing:        req.ToolPricing,		
 	}
 	// Update MCP client in memory
 	if err := h.mcpManager.UpdateMCPClient(ctx, id, schemasConfig); err != nil {
@@ -540,91 +540,7 @@ func validateToolsToAutoExecute(toolsToAutoExecute []string, toolsToExecute []st
 	return nil
 }
 
-// mergeMCPClientConfig merges an updated MCP client config with the old config to preserve sensitive fields.
-// This follows the same pattern as provider config merging to handle redacted values correctly.
-//
-// The merge logic:
-//   - If a field in the updated config is redacted and matches the old redacted value, it means the user
-//     didn't actually modify that field, so we preserve the original raw value
-//   - If a field is missing or nil in the updated config, we preserve the old value
-//   - Otherwise, we use the updated value
-//
-// This prevents accidentally overwriting sensitive data (headers) with redacted
-// versions when the user only intended to update other fields like IsCodeModeClient.
-func mergeMCPClientConfig(oldConfig *schemas.MCPClientConfig, oldRedactedConfig *schemas.MCPClientConfig, updatedConfig schemas.MCPClientConfig) schemas.MCPClientConfig {
-	// If old config doesn't exist, return the updated config as-is (new client case)
-	if oldConfig == nil {
-		return updatedConfig
-	}
-
-	// If old redacted config doesn't exist, use old config for comparison
-	if oldRedactedConfig == nil {
-		oldRedactedConfig = oldConfig
-	}
-
-	// Start with the updated config as base
-	merged := updatedConfig
-
-	// Preserve connection_type if not provided in update
-	if merged.ConnectionType == "" && oldConfig.ConnectionType != "" {
-		merged.ConnectionType = oldConfig.ConnectionType
-	}
-
-	// Preserve stdio_config if not provided in update
-	if merged.StdioConfig == nil && oldConfig.StdioConfig != nil {
-		merged.StdioConfig = oldConfig.StdioConfig
-	}
-
-	// Handle connection_string: preserve if nil, or restore original if redacted matches old redacted value
-	if merged.ConnectionString == nil && oldConfig.ConnectionString != nil {
-		merged.ConnectionString = oldConfig.ConnectionString
-	} else if merged.ConnectionString != nil && merged.ConnectionString.IsRedacted() {
-		// If updated connection_string is redacted and matches old redacted value, restore original
-		if oldRedactedConfig.ConnectionString != nil && merged.ConnectionString.Equals(oldRedactedConfig.ConnectionString) {
-			merged.ConnectionString = oldConfig.ConnectionString
-		}
-	}
-
-	// Merge Headers: preserve old headers if new headers are empty or redacted
-	if len(updatedConfig.Headers) == 0 {
-		// If no new headers provided, keep old headers
-		merged.Headers = oldConfig.Headers
-	} else {
-		// Merge individual headers
-		if merged.Headers == nil {
-			merged.Headers = make(map[string]schemas.EnvVar)
-		}
-
-		oldHeaders := oldConfig.Headers
-		if oldHeaders == nil {
-			oldHeaders = make(map[string]schemas.EnvVar)
-		}
-
-		// Process each header in the updated config
-		for headerKey, newHeaderValue := range updatedConfig.Headers {
-			// Check if this header is redacted and matches the old redacted value
-			if newHeaderValue.IsRedacted() {
-				oldRedactedValue, hasOldRedacted := oldRedactedConfig.Headers[headerKey]
-				if hasOldRedacted && newHeaderValue.Equals(&oldRedactedValue) {
-					// User didn't change this header, restore original value
-					if oldValue, hasOld := oldHeaders[headerKey]; hasOld {
-						merged.Headers[headerKey] = oldValue
-					}
-				}
-			}
-		}
-
-		// Preserve any old headers that weren't included in the updated config
-		for headerKey, oldHeaderValue := range oldHeaders {
-			if _, exists := updatedConfig.Headers[headerKey]; !exists {
-				merged.Headers[headerKey] = oldHeaderValue
-			}
-		}
-	}
-
-	return merged
-}
-
+// validateMCPClientName validates the name of an MCP client
 func validateMCPClientName(name string) error {
 	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("client name is required")
