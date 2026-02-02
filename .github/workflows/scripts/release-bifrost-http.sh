@@ -118,6 +118,8 @@ go build ./...
 cd ..
 echo "✅ Transport build validation successful"
 
+# Note: Migration tests run as a separate CI job (test-migrations) before this release job
+
 # Commit and push changes if any
 # First, pull latest changes to avoid conflicts
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
