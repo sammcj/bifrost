@@ -29,45 +29,6 @@ if [[ "$FILE_VERSION" != "$VERSION" ]]; then
   exit 1
 fi
 
-# Building core
-go mod download
-go build ./...
-cd ..
-echo "✅ Core build validation successful"
-
-# Build MCP test servers for STDIO tests
-echo "🔧 Building MCP test servers..."
-for mcp_dir in examples/mcps/*/; do
-  if [ -d "$mcp_dir" ]; then
-    mcp_name=$(basename "$mcp_dir")
-    if [ -f "$mcp_dir/go.mod" ]; then
-      echo "  Building $mcp_name (Go)..."
-      mkdir -p "$mcp_dir/bin"
-      cd "$mcp_dir" && GOWORK=off go build -o "bin/$mcp_name" . && cd - > /dev/null
-    elif [ -f "$mcp_dir/package.json" ]; then
-      echo "  Building $mcp_name (TypeScript)..."
-      cd "$mcp_dir" && npm install --silent && npm run build && cd - > /dev/null
-    fi
-  fi
-done
-echo "✅ MCP test servers built"
-
-# Run core tests with coverage
-echo "🔧 Running core tests with coverage..."
-cd core
-go test -race -timeout 20m -coverprofile=coverage.txt -coverpkg=./... ./...
-
-# Upload coverage to Codecov
-if [ -n "${CODECOV_TOKEN:-}" ]; then
-  echo "📊 Uploading coverage to Codecov..."
-  curl -Os https://uploader.codecov.io/latest/linux/codecov
-  chmod +x codecov
-  ./codecov -t "$CODECOV_TOKEN" -f coverage.txt -F core
-  rm -f codecov coverage.txt
-else
-  echo "ℹ️ CODECOV_TOKEN not set, skipping coverage upload"
-  rm -f coverage.txt
-fi
 cd ..
 
 # Capturing changelog

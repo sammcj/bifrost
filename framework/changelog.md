@@ -1,2 +1,3 @@
 - feat: added tables for routing rules
 - fix: tracing race condition fixes
+- fix: handles token refresh worker initialization when config store is empty

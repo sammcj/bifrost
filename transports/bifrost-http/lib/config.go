@@ -1635,7 +1635,9 @@ func initFrameworkConfigFromFile(ctx context.Context, config *Config, configData
 
 	// Start token refresh worker for automatic OAuth token refresh
 	config.TokenRefreshWorker = oauth2.NewTokenRefreshWorker(config.OAuthProvider, logger)
-	config.TokenRefreshWorker.Start(ctx)
+	if config.TokenRefreshWorker != nil {
+		config.TokenRefreshWorker.Start(ctx)
+	}
 
 	config.FrameworkConfig = &framework.FrameworkConfig{
 		Pricing: pricingConfig,
@@ -1992,7 +1994,9 @@ func initDefaultFrameworkConfig(ctx context.Context, config *Config) error {
 
 	// Start token refresh worker for automatic OAuth token refresh
 	config.TokenRefreshWorker = oauth2.NewTokenRefreshWorker(config.OAuthProvider, logger)
-	config.TokenRefreshWorker.Start(ctx)
+	if config.TokenRefreshWorker != nil {
+		config.TokenRefreshWorker.Start(ctx)
+	}
 
 	config.FrameworkConfig = &framework.FrameworkConfig{
 		Pricing: pricingConfig,
