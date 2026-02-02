@@ -333,16 +333,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"runtime"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/maximhq/bifrost/core/schemas"
+	"github.com/maximhq/bifrost/framework"
 	"github.com/maximhq/bifrost/framework/configstore"
 	"github.com/maximhq/bifrost/framework/configstore/tables"
 	"github.com/maximhq/bifrost/framework/logstore"
 	"github.com/maximhq/bifrost/framework/migrator"
+	"github.com/maximhq/bifrost/framework/modelcatalog"
 	"github.com/maximhq/bifrost/framework/vectorstore"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -14775,4 +14782,471 @@ func TestKeyHashComparison_VertexDeploymentsChange(t *testing.T) {
 			t.Error("Expected different hash when Vertex deployments go from nil to non-empty")
 		}
 	})
+}
+
+// ===================================================================================
+// CONFIG SCHEMA SYNC TEST
+// ===================================================================================
+// This test ensures that the JSON schema (config.schema.json) and the Go structs
+// remain synchronized at ALL levels (not just top-level). It validates that:
+//   - All properties in the JSON schema have corresponding fields in Go structs
+//   - All JSON-tagged fields in Go structs have corresponding properties in the schema
+//   - Nested types (ClientConfig, GovernanceConfig, etc.) match their schema definitions
+//
+// This prevents schema drift when new configuration options are added.
+// ===================================================================================
+
+// schemaTypeMapping defines a mapping between a JSON schema path and its corresponding Go type
+type schemaTypeMapping struct {
+	SchemaPath string       // Path in schema (e.g., "client", "governance.budgets")
+	GoType     reflect.Type // The Go type to validate against
+	IsArray    bool         // True if the schema path refers to array items
+}
+
+// getSchemaTypeMappings returns all mappings between JSON schema paths and Go types
+func getSchemaTypeMappings() []schemaTypeMapping {
+	return []schemaTypeMapping{
+		// Top-level ConfigData fields
+		{"", reflect.TypeOf(ConfigData{}), false},
+
+		// Client config
+		{"client", reflect.TypeOf(configstore.ClientConfig{}), false},
+		{"client.header_filter_config", reflect.TypeOf(tables.GlobalHeaderFilterConfig{}), false},
+
+		// Auth config (top-level)
+		{"auth_config", reflect.TypeOf(configstore.AuthConfig{}), false},
+
+		// Framework config
+		{"framework", reflect.TypeOf(framework.FrameworkConfig{}), false},
+		{"framework.pricing", reflect.TypeOf(modelcatalog.Config{}), false},
+
+		// MCP config
+		{"mcp", reflect.TypeOf(schemas.MCPConfig{}), false},
+		{"mcp.client_configs", reflect.TypeOf(schemas.MCPClientConfig{}), true},
+		{"mcp.client_configs.stdio_config", reflect.TypeOf(schemas.MCPStdioConfig{}), false},
+		{"mcp.tool_manager_config", reflect.TypeOf(schemas.MCPToolManagerConfig{}), false},
+
+		// Governance config
+		{"governance", reflect.TypeOf(configstore.GovernanceConfig{}), false},
+		{"governance.budgets", reflect.TypeOf(tables.TableBudget{}), true},
+		{"governance.rate_limits", reflect.TypeOf(tables.TableRateLimit{}), true},
+		{"governance.customers", reflect.TypeOf(tables.TableCustomer{}), true},
+		{"governance.teams", reflect.TypeOf(tables.TableTeam{}), true},
+		{"governance.virtual_keys", reflect.TypeOf(tables.TableVirtualKey{}), true},
+		{"governance.virtual_keys.provider_configs", reflect.TypeOf(tables.TableVirtualKeyProviderConfig{}), true},
+		{"governance.virtual_keys.mcp_configs", reflect.TypeOf(tables.TableVirtualKeyMCPConfig{}), true},
+		{"governance.auth_config", reflect.TypeOf(configstore.AuthConfig{}), false},
+
+		// Plugins
+		{"plugins", reflect.TypeOf(schemas.PluginConfig{}), true},
+	}
+}
+
+// enterpriseSchemaPaths are schema paths that exist only in enterprise version
+var enterpriseSchemaPaths = map[string]bool{
+	"cluster_config":       true,
+	"saml_config":          true,
+	"load_balancer_config": true,
+	"guardrails_config":    true,
+}
+
+// excludedGoFields are Go struct fields that should not be in the schema (internal use only)
+// These include:
+// - Database/ORM fields (created_at, updated_at, config_hash)
+// - GORM relationship fields (budget, team, customer, etc.)
+// - Internal state fields not meant for config files
+var excludedGoFields = map[string]map[string]bool{
+	// ClientConfig - MCP fields are managed at MCP level, not client level
+	"configstore.ClientConfig": {
+		"ConfigHash":              true,
+		"allowed_headers":         true, // Internal use
+		"mcp_agent_depth":         true, // Managed via MCP config
+		"mcp_code_mode_binding_level": true,
+		"mcp_tool_execution_timeout":  true,
+		"mcp_tool_sync_interval":      true,
+	},
+	"configstore.ProviderConfig": {"ConfigHash": true},
+	// GovernanceConfig - some fields are internal/enterprise
+	"configstore.GovernanceConfig": {
+		"model_configs": true, // Internal
+		"providers":     true, // Internal
+		"routing_rules": true, // Internal
+	},
+	// Table types have DB-specific fields
+	"tables.TableBudget": {
+		"config_hash": true,
+		"created_at":  true,
+		"updated_at":  true,
+	},
+	"tables.TableRateLimit": {
+		"config_hash": true,
+		"created_at":  true,
+		"updated_at":  true,
+	},
+	"tables.TableCustomer": {
+		"config_hash":  true,
+		"created_at":   true,
+		"updated_at":   true,
+		"budget":       true, // GORM relation
+		"teams":        true, // GORM relation
+		"virtual_keys": true, // GORM relation
+	},
+	"tables.TableTeam": {
+		"config_hash":  true,
+		"created_at":   true,
+		"updated_at":   true,
+		"budget":       true, // GORM relation
+		"customer":     true, // GORM relation
+		"virtual_keys": true, // GORM relation
+	},
+	"tables.TableVirtualKey": {
+		"config_hash": true,
+		"created_at":  true,
+		"updated_at":  true,
+		"budget":      true, // GORM relation
+		"rate_limit":  true, // GORM relation
+		"team":        true, // GORM relation
+		"customer":    true, // GORM relation
+	},
+	"tables.TableVirtualKeyProviderConfig": {
+		"budget":     true, // GORM relation
+		"rate_limit": true, // GORM relation
+	},
+	"tables.TableVirtualKeyMCPConfig": {
+		"mcp_client": true, // GORM relation
+	},
+	// MCP types have internal state fields
+	"schemas.MCPConfig": {
+		"tool_sync_interval": true, // Internal
+	},
+	"schemas.MCPClientConfig": {
+		"client_id":            true, // Internal ID
+		"state":                true, // Runtime state
+		"is_code_mode_client":  true, // Internal
+		"auth_type":            true, // Internal
+		"oauth_config_id":      true, // Internal
+		"is_ping_available":    true, // Runtime state
+		"tool_sync_interval":   true, // Internal
+		"tool_pricing":         true, // Internal
+		"tools_to_auto_execute": true, // Internal
+		"tools_to_execute":     true, // Moved to VK MCP config
+		"connection_string":    true, // Use specific config types instead
+		"headers":              true, // Internal
+	},
+	"schemas.MCPToolManagerConfig": {
+		"code_mode_binding_level": true, // Internal
+	},
+	"schemas.PluginConfig":            {},
+	"framework.FrameworkConfig":       {},
+	"modelcatalog.Config":             {},
+	"tables.GlobalHeaderFilterConfig": {},
+	"configstore.AuthConfig":          {},
+	"schemas.MCPStdioConfig":          {},
+	"lib.ConfigData":                  {},
+	"vectorstore.Config":              {},
+	"configstore.Config":              {},
+	"logstore.Config":                 {},
+}
+
+// excludedSchemaFields are schema fields that don't exist in Go structs (schema-only documentation)
+var excludedSchemaFields = map[string]map[string]bool{
+	"client": {
+		"allowed_headers": true, // Not in ClientConfig
+	},
+	"governance.virtual_keys.provider_configs": {
+		"keys": true, // Complex nested type, validated separately
+	},
+	"mcp.client_configs": {
+		"websocket_config": true, // Schema documents all connection types
+		"http_config":      true, // Schema documents all connection types
+	},
+}
+
+// loadJSONSchema loads and parses the JSON schema file
+func loadJSONSchema(t *testing.T) map[string]interface{} {
+	_, currentFile, _, ok := runtime.Caller(0)
+	require.True(t, ok, "Failed to get current file path")
+
+	testDir := filepath.Dir(currentFile)
+	schemaPath := filepath.Join(testDir, "..", "..", "config.schema.json")
+
+	schemaData, err := os.ReadFile(schemaPath)
+	require.NoError(t, err, "Failed to read config.schema.json at %s", schemaPath)
+
+	var schema map[string]interface{}
+	err = json.Unmarshal(schemaData, &schema)
+	require.NoError(t, err, "Failed to parse config.schema.json")
+
+	return schema
+}
+
+// resolveSchemaRef resolves a $ref reference in the schema
+func resolveSchemaRef(schema map[string]interface{}, ref string) map[string]interface{} {
+	// refs look like "#/$defs/some_type"
+	if !strings.HasPrefix(ref, "#/$defs/") {
+		return nil
+	}
+	defName := strings.TrimPrefix(ref, "#/$defs/")
+
+	defs, ok := schema["$defs"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	def, ok := defs[defName].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	return def
+}
+
+// getSchemaPropertiesAtPath gets the properties object at a given path in the schema
+func getSchemaPropertiesAtPath(schema map[string]interface{}, path string) map[string]interface{} {
+	if path == "" {
+		// Root level
+		props, _ := schema["properties"].(map[string]interface{})
+		return props
+	}
+
+	parts := strings.Split(path, ".")
+	current := schema["properties"].(map[string]interface{})
+
+	for i, part := range parts {
+		prop, ok := current[part].(map[string]interface{})
+		if !ok {
+			return nil
+		}
+
+		// Check if this is a $ref
+		if ref, ok := prop["$ref"].(string); ok {
+			prop = resolveSchemaRef(schema, ref)
+			if prop == nil {
+				return nil
+			}
+		}
+
+		// If this is the last part, get its properties
+		if i == len(parts)-1 {
+			// Check for array items
+			if prop["type"] == "array" {
+				items, ok := prop["items"].(map[string]interface{})
+				if !ok {
+					return nil
+				}
+				// Check if items is a $ref
+				if ref, ok := items["$ref"].(string); ok {
+					items = resolveSchemaRef(schema, ref)
+					if items == nil {
+						return nil
+					}
+				}
+				props, _ := items["properties"].(map[string]interface{})
+				return props
+			}
+			props, _ := prop["properties"].(map[string]interface{})
+			return props
+		}
+
+		// Navigate deeper
+		// Check for array items
+		if prop["type"] == "array" {
+			items, ok := prop["items"].(map[string]interface{})
+			if !ok {
+				return nil
+			}
+			// Check if items is a $ref
+			if ref, ok := items["$ref"].(string); ok {
+				items = resolveSchemaRef(schema, ref)
+				if items == nil {
+					return nil
+				}
+			}
+			current, ok = items["properties"].(map[string]interface{})
+			if !ok {
+				return nil
+			}
+		} else {
+			current, ok = prop["properties"].(map[string]interface{})
+			if !ok {
+				return nil
+			}
+		}
+	}
+
+	return current
+}
+
+// getGoStructFields extracts JSON field names from a Go struct type
+func getGoStructFields(t reflect.Type) map[string]bool {
+	fields := make(map[string]bool)
+
+	// Handle pointer types
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	if t.Kind() != reflect.Struct {
+		return fields
+	}
+
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		jsonTag := field.Tag.Get("json")
+		if jsonTag == "" || jsonTag == "-" {
+			continue
+		}
+		// Handle tags like `json:"field_name,omitempty"`
+		tagParts := strings.Split(jsonTag, ",")
+		fieldName := tagParts[0]
+		if fieldName != "" && fieldName != "-" {
+			fields[fieldName] = true
+		}
+	}
+
+	return fields
+}
+
+// getTypeName returns a short name for a type (for exclusion map lookup)
+func getTypeName(t reflect.Type) string {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	pkgPath := t.PkgPath()
+	// Extract just the package name from the full path
+	parts := strings.Split(pkgPath, "/")
+	pkgName := parts[len(parts)-1]
+	return pkgName + "." + t.Name()
+}
+
+// TestConfigSchemaSync validates that config.schema.json and all Go structs are in sync.
+// This test recursively validates all nested types, ensuring complete synchronization.
+func TestConfigSchemaSync(t *testing.T) {
+	schema := loadJSONSchema(t)
+
+	mappings := getSchemaTypeMappings()
+	var allErrors []string
+
+	for _, mapping := range mappings {
+		// Skip enterprise-only paths
+		if enterpriseSchemaPaths[mapping.SchemaPath] {
+			continue
+		}
+
+		// Get schema properties at this path
+		schemaProps := getSchemaPropertiesAtPath(schema, mapping.SchemaPath)
+		if schemaProps == nil && mapping.SchemaPath != "" {
+			// For struct/array mappings, missing schema path is a test failure
+			// Only simple-type mappings (none currently defined) would be acceptable to skip
+			goTypeKind := mapping.GoType.Kind()
+			if goTypeKind == reflect.Struct || mapping.IsArray {
+				t.Fatalf("Schema path not found for struct/array mapping: SchemaPath=%q, GoType=%v, IsArray=%v",
+					mapping.SchemaPath, mapping.GoType, mapping.IsArray)
+			}
+			// Simple types can be skipped
+			continue
+		}
+
+		// Get Go struct fields
+		goFields := getGoStructFields(mapping.GoType)
+
+		typeName := getTypeName(mapping.GoType)
+		excludedGo := excludedGoFields[typeName]
+		if excludedGo == nil {
+			excludedGo = make(map[string]bool)
+		}
+		excludedSchema := excludedSchemaFields[mapping.SchemaPath]
+		if excludedSchema == nil {
+			excludedSchema = make(map[string]bool)
+		}
+
+		// Find fields in schema but missing from Go struct
+		for prop := range schemaProps {
+			if !goFields[prop] && !excludedSchema[prop] && !enterpriseSchemaPaths[prop] {
+				allErrors = append(allErrors, fmt.Sprintf(
+					"[%s] Field '%s' in schema but missing from %s",
+					mapping.SchemaPath, prop, typeName))
+			}
+		}
+
+		// Find fields in Go struct but missing from schema
+		for field := range goFields {
+			_, inSchema := schemaProps[field]
+			if schemaProps != nil && !inSchema && !excludedGo[field] {
+				allErrors = append(allErrors, fmt.Sprintf(
+					"[%s] Field '%s' in %s but missing from schema",
+					mapping.SchemaPath, field, typeName))
+			}
+		}
+	}
+
+	// Sort errors for consistent output
+	sort.Strings(allErrors)
+
+	if len(allErrors) > 0 {
+		t.Errorf("Schema sync errors found (%d total):\n%s\n\n"+
+			"To fix:\n"+
+			"- Add missing fields to Go structs, OR\n"+
+			"- Add missing fields to config.schema.json, OR\n"+
+			"- Add to excludedGoFields/excludedSchemaFields if intentionally different",
+			len(allErrors), strings.Join(allErrors, "\n"))
+	} else {
+		t.Logf("Schema sync validated: %d type mappings checked, all fields match", len(mappings))
+	}
+}
+
+// TestConfigSchemaSyncTopLevel is a simpler test that only checks top-level properties
+// This is kept for backwards compatibility and as a quick smoke test
+func TestConfigSchemaSyncTopLevel(t *testing.T) {
+	// Enterprise-only features: These fields exist in the JSON schema for documentation
+	// and validation purposes, but are only available in the enterprise version.
+	enterpriseSchemaFields := map[string]bool{
+		"cluster_config":       true,
+		"saml_config":          true,
+		"load_balancer_config": true,
+		"guardrails_config":    true,
+	}
+
+	schema := loadJSONSchema(t)
+	schemaProps, ok := schema["properties"].(map[string]interface{})
+	require.True(t, ok, "JSON schema must have a 'properties' field")
+
+	// Extract JSON tag names from ConfigData struct
+	structProps := getGoStructFields(reflect.TypeOf(ConfigData{}))
+
+	// Find mismatches
+	var missingInStruct, missingInSchema []string
+
+	for prop := range schemaProps {
+		if !structProps[prop] && !enterpriseSchemaFields[prop] {
+			missingInStruct = append(missingInStruct, prop)
+		}
+	}
+
+	for prop := range structProps {
+		if schemaProps[prop] == nil {
+			missingInSchema = append(missingInSchema, prop)
+		}
+	}
+
+	if len(missingInStruct) > 0 {
+		sort.Strings(missingInStruct)
+		t.Errorf("Fields in schema but missing from ConfigData: %v", missingInStruct)
+	}
+
+	if len(missingInSchema) > 0 {
+		sort.Strings(missingInSchema)
+		t.Errorf("Fields in ConfigData but missing from schema: %v", missingInSchema)
+	}
+
+	if len(missingInStruct) == 0 && len(missingInSchema) == 0 {
+		matchedCount := 0
+		for prop := range schemaProps {
+			if structProps[prop] {
+				matchedCount++
+			}
+		}
+		t.Logf("Top-level sync validated: %d properties match (%d enterprise-only excluded)",
+			matchedCount, len(enterpriseSchemaFields))
+	}
 }

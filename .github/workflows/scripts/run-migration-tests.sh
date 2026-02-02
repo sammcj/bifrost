@@ -435,6 +435,7 @@ generate_faker_sql() {
 -- Generated for: $db_type
 -- IMPORTANT: Insert data into ALL tables to verify migration preserves data
 -- Order respects foreign key dependencies
+-- NOTE: All columns must be covered to ensure migration tests are comprehensive
 
 -- ============================================================================
 -- 1. Tables with NO foreign keys (base tables)
@@ -446,38 +447,38 @@ VALUES (1, 'migration-test-hash-abc123def456', $now, $now)
 ON CONFLICT DO NOTHING;
 
 -- governance_budgets (reset_duration is a string like "1d", "1h", etc.)
-INSERT INTO governance_budgets (id, max_limit, current_usage, reset_duration, last_reset, created_at, updated_at)
+INSERT INTO governance_budgets (id, max_limit, current_usage, reset_duration, last_reset, config_hash, created_at, updated_at)
 VALUES 
-  ('budget-migration-test-1', 1000.00, 100.00, '1d', $now, $now, $now),
-  ('budget-migration-test-2', 5000.00, 250.00, '7d', $now, $now, $now)
+  ('budget-migration-test-1', 1000.00, 100.00, '1d', $now, 'budget-hash-001', $now, $now),
+  ('budget-migration-test-2', 5000.00, 250.00, '7d', $now, 'budget-hash-002', $now, $now)
 ON CONFLICT DO NOTHING;
 
 -- governance_rate_limits (flexible duration format with token_* and request_* columns)
-INSERT INTO governance_rate_limits (id, token_max_limit, token_reset_duration, token_current_usage, token_last_reset, request_max_limit, request_reset_duration, request_current_usage, request_last_reset, created_at, updated_at)
+INSERT INTO governance_rate_limits (id, token_max_limit, token_reset_duration, token_current_usage, token_last_reset, request_max_limit, request_reset_duration, request_current_usage, request_last_reset, config_hash, created_at, updated_at)
 VALUES 
-  ('ratelimit-migration-test-1', 10000, '1m', 500, $now, 100, '1m', 10, $now, $now, $now),
-  ('ratelimit-migration-test-2', 50000, '1d', 2500, $now, 500, '1d', 50, $now, $now, $now)
+  ('ratelimit-migration-test-1', 10000, '1m', 500, $now, 100, '1m', 10, $now, 'ratelimit-hash-001', $now, $now),
+  ('ratelimit-migration-test-2', 50000, '1d', 2500, $now, 500, '1d', 50, $now, 'ratelimit-hash-002', $now, $now)
 ON CONFLICT DO NOTHING;
 
--- governance_customers
-INSERT INTO governance_customers (id, name, created_at, updated_at)
+-- governance_customers (with budget_id and config_hash)
+INSERT INTO governance_customers (id, name, budget_id, config_hash, created_at, updated_at)
 VALUES 
-  ('customer-migration-test-1', 'Migration Test Customer One', $now, $now),
-  ('customer-migration-test-2', 'Migration Test Customer Two', $now, $now)
+  ('customer-migration-test-1', 'Migration Test Customer One', 'budget-migration-test-1', 'customer-hash-001', $now, $now),
+  ('customer-migration-test-2', 'Migration Test Customer Two', NULL, 'customer-hash-002', $now, $now)
 ON CONFLICT DO NOTHING;
 
--- governance_teams
-INSERT INTO governance_teams (id, name, created_at, updated_at)
+-- governance_teams (with customer_id, budget_id, profile, config, claims, config_hash)
+INSERT INTO governance_teams (id, name, customer_id, budget_id, profile, config, claims, config_hash, created_at, updated_at)
 VALUES 
-  ('team-migration-test-1', 'Migration Test Team Alpha', $now, $now),
-  ('team-migration-test-2', 'Migration Test Team Beta', $now, $now)
+  ('team-migration-test-1', 'Migration Test Team Alpha', 'customer-migration-test-1', 'budget-migration-test-2', '{"role": "admin"}', '{"setting": "value"}', '{"claim1": "val1"}', 'team-hash-001', $now, $now),
+  ('team-migration-test-2', 'Migration Test Team Beta', NULL, NULL, NULL, NULL, NULL, 'team-hash-002', $now, $now)
 ON CONFLICT DO NOTHING;
 
--- config_providers
-INSERT INTO config_providers (name, send_back_raw_request, send_back_raw_response, created_at, updated_at)
+-- config_providers (with all JSON config fields and governance fields including budget_id, rate_limit_id)
+INSERT INTO config_providers (name, send_back_raw_request, send_back_raw_response, network_config_json, concurrency_buffer_json, proxy_config_json, custom_provider_config_json, budget_id, rate_limit_id, config_hash, created_at, updated_at)
 VALUES 
-  ('openai', false, false, $now, $now),
-  ('anthropic', true, true, $now, $now)
+  ('openai', false, false, '{"timeout": 30}', '{"buffer_size": 100}', NULL, NULL, 'budget-migration-test-1', 'ratelimit-migration-test-1', 'provider-hash-openai', $now, $now),
+  ('anthropic', true, true, '{"timeout": 60}', '{"buffer_size": 200}', '{"url": "http://proxy.test"}', NULL, NULL, NULL, 'provider-hash-anthropic', $now, $now)
 ON CONFLICT DO NOTHING;
 
 -- framework_configs
@@ -485,14 +486,14 @@ INSERT INTO framework_configs (id, pricing_url, pricing_sync_interval)
 VALUES (1, 'https://example.com/pricing.json', 3600)
 ON CONFLICT DO NOTHING;
 
--- config_log_store
-INSERT INTO config_log_store (id, enabled, type, created_at, updated_at)
-VALUES (1, true, 'postgres', $now, $now)
+-- config_log_store (with config column)
+INSERT INTO config_log_store (id, enabled, type, config, created_at, updated_at)
+VALUES (1, true, 'postgres', '{"host": "localhost", "port": 5432}', $now, $now)
 ON CONFLICT DO NOTHING;
 
--- config_vector_store
-INSERT INTO config_vector_store (id, enabled, type, ttl_seconds, cache_by_model, cache_by_provider, created_at, updated_at)
-VALUES (1, false, 'redis', 300, true, false, $now, $now)
+-- config_vector_store (with config column)
+INSERT INTO config_vector_store (id, enabled, type, ttl_seconds, cache_by_model, cache_by_provider, config, created_at, updated_at)
+VALUES (1, false, 'redis', 300, true, false, '{"host": "localhost", "port": 6379}', $now, $now)
 ON CONFLICT DO NOTHING;
 
 -- distributed_locks
@@ -500,18 +501,49 @@ INSERT INTO distributed_locks (lock_key, holder_id, expires_at, created_at)
 VALUES ('migration-test-lock', 'holder-migration-test-001', $future, $now)
 ON CONFLICT DO NOTHING;
 
+-- config_client (global client configuration)
+INSERT INTO config_client (id, drop_excess_requests, prometheus_labels_json, allowed_origins_json, allowed_headers_json, header_filter_config_json, initial_pool_size, enable_logging, disable_content_logging, disable_db_pings_in_health, log_retention_days, enable_governance, enforce_governance_header, allow_direct_keys, max_request_body_size_mb, mcp_agent_depth, mcp_tool_execution_timeout, mcp_code_mode_binding_level, mcp_tool_sync_interval, enable_litellm_fallbacks, config_hash, created_at, updated_at)
+VALUES (1, false, '["provider", "model"]', '["*"]', '["Authorization"]', '{}', 300, true, false, false, 365, true, false, true, 100, 10, 30, 'server', 10, false, 'client-config-hash-001', $now, $now)
+ON CONFLICT DO NOTHING;
+
+-- governance_config (key-value config table)
+INSERT INTO governance_config (key, value)
+VALUES 
+  ('migration_test_key_1', 'migration_test_value_1'),
+  ('migration_test_key_2', 'migration_test_value_2')
+ON CONFLICT DO NOTHING;
+
+-- governance_model_pricing (model pricing data - with ALL columns)
+INSERT INTO governance_model_pricing (id, model, provider, input_cost_per_token, output_cost_per_token, mode, input_cost_per_video_per_second, input_cost_per_audio_per_second, input_cost_per_character, output_cost_per_character, input_cost_per_token_above128k_tokens, input_cost_per_character_above128k_tokens, input_cost_per_image_above128k_tokens, input_cost_per_video_per_second_above128k_tokens, input_cost_per_audio_per_second_above128k_tokens, output_cost_per_token_above128k_tokens, output_cost_per_character_above128k_tokens, input_cost_per_token_above_200k_tokens, output_cost_per_token_above_200k_tokens, cache_creation_input_token_cost_above_200k_tokens, cache_read_input_token_cost_above_200k_tokens, cache_read_input_token_cost, cache_creation_input_token_cost, input_cost_per_token_batches, output_cost_per_token_batches, input_cost_per_image_token, output_cost_per_image_token, input_cost_per_image, output_cost_per_image, cache_read_input_image_token_cost)
+VALUES 
+  (1, 'gpt-4', 'openai', 0.00003, 0.00006, 'chat', NULL, NULL, NULL, NULL, 0.00006, NULL, NULL, NULL, NULL, 0.00012, NULL, NULL, NULL, NULL, NULL, 0.000015, 0.000045, 0.000015, 0.00003, NULL, NULL, NULL, NULL, NULL),
+  (2, 'claude-3-opus', 'anthropic', 0.000015, 0.000075, 'chat', NULL, NULL, 0.00000125, 0.00000625, 0.00002, 0.00000150, NULL, NULL, NULL, 0.0001, 0.0000075, 0.000025, 0.000125, 0.0000375, 0.0000075, 0.0000075, 0.0000375, 0.0000075, 0.0000375, NULL, NULL, 0.02, 0.04, NULL)
+ON CONFLICT DO NOTHING;
+
+-- governance_model_configs (model-level governance configuration)
+INSERT INTO governance_model_configs (id, model_name, provider, budget_id, rate_limit_id, config_hash, created_at, updated_at)
+VALUES 
+  ('model-config-migration-test-1', 'gpt-4', 'openai', 'budget-migration-test-1', 'ratelimit-migration-test-1', 'model-config-hash-001', $now, $now),
+  ('model-config-migration-test-2', 'claude-3-opus', 'anthropic', NULL, NULL, 'model-config-hash-002', $now, $now)
+ON CONFLICT DO NOTHING;
+
+-- migrations (migration tracking table - used by gorp migrator)
+INSERT INTO migrations (id, applied_at)
+VALUES ('migration-test-001', $now)
+ON CONFLICT DO NOTHING;
+
 -- ============================================================================
 -- 2. Tables with foreign keys to base tables
 -- ============================================================================
 
--- config_keys (references config_providers)
-INSERT INTO config_keys (name, provider_id, provider, key_id, value, created_at, updated_at)
-SELECT 'migration-test-key-openai', id, 'openai', 'key-migration-uuid-001', 'sk-migration-test-fake-key-value-openai', $now, $now
+-- config_keys (references config_providers) - with ALL columns including Azure/Vertex/Bedrock fields
+INSERT INTO config_keys (name, provider_id, provider, key_id, value, models_json, weight, enabled, config_hash, azure_endpoint, azure_api_version, azure_deployments_json, azure_client_id, azure_client_secret, azure_tenant_id, vertex_project_id, vertex_project_number, vertex_region, vertex_auth_credentials, vertex_deployments_json, bedrock_access_key, bedrock_secret_key, bedrock_session_token, bedrock_region, bedrock_arn, bedrock_deployments_json, bedrock_batch_s3_config_json, use_for_batch_api, created_at, updated_at)
+SELECT 'migration-test-key-openai', id, 'openai', 'key-migration-uuid-001', 'sk-migration-test-fake-key-value-openai', '["gpt-4", "gpt-3.5-turbo"]', 1.0, true, 'key-hash-001', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false, $now, $now
 FROM config_providers WHERE name = 'openai'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO config_keys (name, provider_id, provider, key_id, value, created_at, updated_at)
-SELECT 'migration-test-key-anthropic', id, 'anthropic', 'key-migration-uuid-002', 'sk-ant-migration-test-fake-key', $now, $now
+INSERT INTO config_keys (name, provider_id, provider, key_id, value, models_json, weight, enabled, config_hash, azure_endpoint, azure_api_version, azure_deployments_json, azure_client_id, azure_client_secret, azure_tenant_id, vertex_project_id, vertex_project_number, vertex_region, vertex_auth_credentials, vertex_deployments_json, bedrock_access_key, bedrock_secret_key, bedrock_session_token, bedrock_region, bedrock_arn, bedrock_deployments_json, bedrock_batch_s3_config_json, use_for_batch_api, created_at, updated_at)
+SELECT 'migration-test-key-anthropic', id, 'anthropic', 'key-migration-uuid-002', 'sk-ant-migration-test-fake-key', '["claude-3-opus"]', 0.8, true, 'key-hash-002', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false, $now, $now
 FROM config_providers WHERE name = 'anthropic'
 ON CONFLICT DO NOTHING;
 
@@ -533,30 +565,39 @@ VALUES
   ('ANTHROPIC_API_KEY', 'anthropic', 'api_key', 'providers.anthropic.keys[0]', 'key-migration-uuid-002', $now)
 ON CONFLICT DO NOTHING;
 
--- config_plugins
-INSERT INTO config_plugins (name, enabled, config_json, version, is_custom, created_at, updated_at)
+-- config_plugins (with path and config_hash)
+INSERT INTO config_plugins (name, enabled, config_json, version, is_custom, path, config_hash, created_at, updated_at)
 VALUES 
-  ('migration-test-plugin', true, '{"setting1": "value1", "setting2": 42}', 1, false, $now, $now)
+  ('migration-test-plugin', true, '{"setting1": "value1", "setting2": 42}', 1, false, '/path/to/plugin', 'plugin-hash-001', $now, $now)
 ON CONFLICT DO NOTHING;
 
--- config_mcp_clients (MCP server configurations)
-INSERT INTO config_mcp_clients (client_id, name, connection_type, tools_to_execute_json, tools_to_auto_execute_json, headers_json, created_at, updated_at)
+-- config_mcp_clients (MCP server configurations - with all columns)
+INSERT INTO config_mcp_clients (client_id, name, is_code_mode_client, connection_type, connection_string, stdio_config_json, tools_to_execute_json, tools_to_auto_execute_json, headers_json, is_ping_available, config_hash, created_at, updated_at)
 VALUES 
-  ('mcp-migration-test-001', 'migration-test-mcp-server', 'sse', '["tool1", "tool2"]', '[]', '{}', $now, $now)
+  ('mcp-migration-test-001', 'migration-test-mcp-server', false, 'sse', 'http://mcp-server:8080', NULL, '["tool1", "tool2"]', '[]', '{}', true, 'mcp-hash-001', $now, $now)
 ON CONFLICT DO NOTHING;
 
--- governance_virtual_keys (simple insert without FK references first to ensure they exist)
-INSERT INTO governance_virtual_keys (id, name, value, created_at, updated_at)
+-- governance_virtual_keys (with all columns including description, is_active, team_id, customer_id, budget_id, rate_limit_id, config_hash)
+INSERT INTO governance_virtual_keys (id, name, description, value, is_active, team_id, customer_id, budget_id, rate_limit_id, config_hash, created_at, updated_at)
 VALUES 
-  ('vk-migration-test-1', 'Migration Test Virtual Key 1', 'vk-migration-fake-value-001', $now, $now),
-  ('vk-migration-test-2', 'Migration Test Virtual Key 2', 'vk-migration-fake-value-002', $now, $now)
+  ('vk-migration-test-1', 'Migration Test Virtual Key 1', 'Test virtual key for migration', 'vk-migration-fake-value-001', true, 'team-migration-test-1', NULL, 'budget-migration-test-1', 'ratelimit-migration-test-1', 'vk-hash-001', $now, $now),
+  ('vk-migration-test-2', 'Migration Test Virtual Key 2', 'Another test virtual key', 'vk-migration-fake-value-002', true, NULL, 'customer-migration-test-2', NULL, NULL, 'vk-hash-002', $now, $now)
 ON CONFLICT DO NOTHING;
 
--- governance_virtual_key_provider_configs (references virtual_keys)
-INSERT INTO governance_virtual_key_provider_configs (virtual_key_id, provider, weight)
+-- governance_virtual_key_provider_configs (references virtual_keys - with all columns)
+INSERT INTO governance_virtual_key_provider_configs (virtual_key_id, provider, weight, allowed_models, budget_id, rate_limit_id)
 VALUES 
-  ('vk-migration-test-1', 'openai', 0.7),
-  ('vk-migration-test-2', 'anthropic', 0.3)
+  ('vk-migration-test-1', 'openai', 0.7, '["gpt-4"]', NULL, NULL),
+  ('vk-migration-test-2', 'anthropic', 0.3, '[]', 'budget-migration-test-2', 'ratelimit-migration-test-2')
+ON CONFLICT DO NOTHING;
+
+-- governance_virtual_key_provider_config_keys (join table for provider configs and keys)
+-- Insert after provider configs exist - link to config_keys
+INSERT INTO governance_virtual_key_provider_config_keys (table_virtual_key_provider_config_id, table_key_id)
+SELECT vpc.id, ck.id
+FROM governance_virtual_key_provider_configs vpc
+CROSS JOIN config_keys ck
+WHERE vpc.virtual_key_id = 'vk-migration-test-1' AND ck.name = 'migration-test-key-openai'
 ON CONFLICT DO NOTHING;
 
 -- governance_virtual_key_mcp_configs (references virtual_keys and mcp_clients)
@@ -584,24 +625,281 @@ ON CONFLICT DO NOTHING;
 -- 3. Log store tables
 -- ============================================================================
 
--- logs (main log table)
-INSERT INTO logs (id, timestamp, object_type, provider, model, status, stream, selected_key_id, selected_key_name, latency, cost, number_of_retries, fallback_index, created_at)
+-- logs (main log table) - with ALL columns
+INSERT INTO logs (id, parent_request_id, timestamp, object_type, provider, model, number_of_retries, fallback_index, selected_key_id, selected_key_name, virtual_key_id, virtual_key_name, routing_rule_id, routing_rule_name, input_history, responses_input_history, output_message, responses_output, embedding_output, params, tools, tool_calls, speech_input, transcription_input, image_generation_input, speech_output, transcription_output, image_generation_output, cache_debug, latency, token_usage, cost, status, error_details, stream, content_summary, raw_request, raw_response, prompt_tokens, completion_tokens, total_tokens, created_at)
 VALUES 
-  ('log-migration-test-001', $past, 'chat_completion', 'openai', 'gpt-4', 'success', false, 'key-migration-uuid-001', 'migration-test-key-openai', 1250.5, 0.0045, 0, 0, $past),
-  ('log-migration-test-002', $past, 'chat_completion', 'anthropic', 'claude-3-opus', 'success', true, 'key-migration-uuid-002', 'migration-test-key-anthropic', 2500.75, 0.0125, 1, 0, $past),
-  ('log-migration-test-003', $past, 'embedding', 'openai', 'text-embedding-3-small', 'error', false, 'key-migration-uuid-001', 'migration-test-key-openai', 500.0, NULL, 0, 0, $past)
+  ('log-migration-test-001', NULL, $past, 'chat_completion', 'openai', 'gpt-4', 0, 0, 'key-migration-uuid-001', 'migration-test-key-openai', 'vk-migration-test-1', 'Migration Test Virtual Key 1', 'rule-migration-test-1', 'Migration Test Rule One', '[{"role":"user","content":"Hello"}]', '', '{"role":"assistant","content":"Hi there!"}', '', '', '{"temperature":0.7}', '[]', '[]', '', '', '', '', '', '', '', 1250.5, '{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}', 0.0045, 'success', '', false, 'Test summary', '{"model":"gpt-4"}', '{"id":"resp-001"}', 10, 20, 30, $past),
+  ('log-migration-test-002', 'log-migration-test-001', $past, 'chat_completion', 'anthropic', 'claude-3-opus', 1, 0, 'key-migration-uuid-002', 'migration-test-key-anthropic', 'vk-migration-test-2', 'Migration Test Virtual Key 2', NULL, NULL, '[{"role":"user","content":"Test"}]', '', '{"role":"assistant","content":"Response"}', '', '', '{}', '[]', '[]', '', '', '', '', '', '', '', 2500.75, '{"prompt_tokens":5,"completion_tokens":15,"total_tokens":20}', 0.0125, 'success', '', true, '', '', '', 5, 15, 20, $past),
+  ('log-migration-test-003', NULL, $past, 'embedding', 'openai', 'text-embedding-3-small', 0, 0, 'key-migration-uuid-001', 'migration-test-key-openai', NULL, NULL, NULL, NULL, '', '', '', '', '[[0.1,0.2,0.3]]', '{}', '[]', '[]', '', '', '', '', '', '', '', 500.0, '{"prompt_tokens":8,"total_tokens":8}', NULL, 'error', '{"message":"Rate limit exceeded"}', false, '', '', '', 8, 0, 8, $past)
 ON CONFLICT DO NOTHING;
 
--- mcp_tool_logs
-INSERT INTO mcp_tool_logs (id, timestamp, tool_name, server_label, status, latency, cost, created_at)
+-- mcp_tool_logs (with all columns including virtual_key_id, virtual_key_name)
+INSERT INTO mcp_tool_logs (id, llm_request_id, timestamp, tool_name, server_label, virtual_key_id, virtual_key_name, arguments, result, error_details, latency, cost, status, created_at)
 VALUES 
-  ('mcp-log-migration-001', $past, 'migration_test_tool_alpha', 'test-server-1', 'success', 150.5, 0.001, $past),
-  ('mcp-log-migration-002', $past, 'migration_test_tool_beta', 'test-server-2', 'error', 75.25, NULL, $past)
+  ('mcp-log-migration-001', 'log-migration-test-001', $past, 'migration_test_tool_alpha', 'test-server-1', 'vk-migration-test-1', 'Migration Test Virtual Key 1', '{"arg1":"value1"}', '{"result":"success"}', '', 150.5, 0.001, 'success', $past),
+  ('mcp-log-migration-002', NULL, $past, 'migration_test_tool_beta', 'test-server-2', NULL, NULL, '{"arg2":"value2"}', '', '{"message":"Tool failed"}', 75.25, NULL, 'error', $past)
 ON CONFLICT DO NOTHING;
 
 EOF
 
   log_info "Generated faker SQL: $output_file"
+}
+
+# ============================================================================
+# Faker Column Coverage Validation
+# ============================================================================
+
+# Extract table -> columns mapping from the generated faker SQL
+# Output format: table_name:col1,col2,col3 (one per line, sorted)
+extract_faker_columns() {
+  local faker_sql="$1"
+  local output_file="$2"
+  
+  # Extract INSERT statements and parse table/columns
+  # Handles both "INSERT INTO table (cols)" and "INSERT INTO table (cols) SELECT ..."
+  grep -E "^INSERT INTO [a-z_]+ \(" "$faker_sql" | \
+    sed -E 's/INSERT INTO ([a-z_]+) \(([^)]+)\).*/\1:\2/' | \
+    tr -d ' ' | sort -u > "$output_file"
+}
+
+# Get columns that are auto-increment primary keys (don't need faker coverage)
+get_postgres_auto_increment_columns() {
+  local table="$1"
+  local container
+  container=$(get_postgres_container)
+  
+  if [ -z "$container" ]; then
+    return
+  fi
+  
+  # Find columns with SERIAL/BIGSERIAL or identity columns
+  docker exec "$container" \
+    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A \
+    -c "SELECT column_name FROM information_schema.columns 
+        WHERE table_name = '$table' 
+        AND table_schema = 'public'
+        AND (column_default LIKE 'nextval%' OR is_identity = 'YES');" 2>/dev/null
+}
+
+# Validate that faker SQL covers all columns in the older version's schema
+validate_faker_column_coverage_postgres() {
+  local faker_sql="$1"
+  local version="$2"
+  local temp_dir="$3"
+  
+  log_info "Validating faker column coverage for $version schema..."
+  
+  # Tables to skip (system/tracking tables)
+  local skip_tables="gorp_migrations schema_migrations"
+  
+  # Extract faker columns to a temp file
+  local faker_cols_file="$temp_dir/faker_columns.txt"
+  extract_faker_columns "$faker_sql" "$faker_cols_file"
+  
+  local failed=0
+  local missing_report=""
+  
+  # Get all tables from the database
+  local tables
+  tables=$(get_postgres_tables)
+  
+  for table in $tables; do
+    # Skip system tables
+    if [[ " $skip_tables " == *" $table "* ]]; then
+      continue
+    fi
+    
+    # Get columns that faker inserts for this table
+    local faker_cols
+    faker_cols=$(grep "^${table}:" "$faker_cols_file" 2>/dev/null | cut -d: -f2 | tr ',' '\n' | sort -u)
+    
+    # If faker doesn't insert into this table at all, that's a problem
+    if [ -z "$faker_cols" ]; then
+      missing_report="${missing_report}\n  Table '$table': NO FAKER DATA - table not covered by faker SQL"
+      failed=1
+      continue
+    fi
+    
+    # Get all columns from the database schema
+    local db_cols
+    db_cols=$(get_postgres_columns "$table")
+    
+    # Get auto-increment columns (these don't need faker coverage)
+    local auto_cols
+    auto_cols=$(get_postgres_auto_increment_columns "$table")
+    
+    # Check each DB column
+    local missing_cols=""
+    for col in $db_cols; do
+      # Skip auto-increment columns
+      if echo "$auto_cols" | grep -q "^${col}$"; then
+        continue
+      fi
+      
+      # Check if faker covers this column
+      if ! echo "$faker_cols" | grep -q "^${col}$"; then
+        if [ -z "$missing_cols" ]; then
+          missing_cols="$col"
+        else
+          missing_cols="$missing_cols, $col"
+        fi
+      fi
+    done
+    
+    if [ -n "$missing_cols" ]; then
+      missing_report="${missing_report}\n  Table '$table': $missing_cols"
+      failed=1
+    fi
+  done
+  
+  if [ $failed -eq 1 ]; then
+    log_error "Faker SQL missing coverage for columns in $version schema:"
+    echo -e "$missing_report" | while read -r line; do
+      [ -n "$line" ] && log_error "$line"
+    done
+    log_error ""
+    log_error "Please update generate_faker_sql() in this script to include these columns."
+    log_error "Migration tests require all columns in the older schema to have test data coverage."
+    return 1
+  fi
+  
+  log_info "Faker column coverage validation passed for $version schema"
+  return 0
+}
+
+# Get SQLite table columns
+get_sqlite_columns() {
+  local db_path="$1"
+  local table="$2"
+  
+  if [ ! -f "$db_path" ]; then
+    return
+  fi
+  
+  sqlite3 "$db_path" "PRAGMA table_info($table);" 2>/dev/null | cut -d'|' -f2
+}
+
+# Get SQLite tables
+get_sqlite_tables() {
+  local db_path="$1"
+  
+  if [ ! -f "$db_path" ]; then
+    return
+  fi
+  
+  sqlite3 "$db_path" "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;" 2>/dev/null
+}
+
+# Get SQLite auto-increment primary key columns
+get_sqlite_auto_increment_columns() {
+  local db_path="$1"
+  local table="$2"
+  
+  if [ ! -f "$db_path" ]; then
+    return
+  fi
+  
+  # In SQLite, INTEGER PRIMARY KEY columns are auto-increment
+  sqlite3 "$db_path" "PRAGMA table_info($table);" 2>/dev/null | \
+    awk -F'|' '$3 == "INTEGER" && $6 == "1" {print $2}'
+}
+
+# Validate faker column coverage for SQLite
+validate_faker_column_coverage_sqlite() {
+  local faker_sql="$1"
+  local version="$2"
+  local temp_dir="$3"
+  local config_db="$4"
+  local logs_db="$5"
+  
+  log_info "Validating faker column coverage for $version schema (SQLite)..."
+  
+  # Tables to skip (system/tracking tables)
+  local skip_tables="gorp_migrations schema_migrations"
+  
+  # Extract faker columns to a temp file
+  local faker_cols_file="$temp_dir/faker_columns.txt"
+  extract_faker_columns "$faker_sql" "$faker_cols_file"
+  
+  local failed=0
+  local missing_report=""
+  
+  # Check both config and logs databases
+  for db_path in "$config_db" "$logs_db"; do
+    if [ ! -f "$db_path" ]; then
+      continue
+    fi
+    
+    local db_name
+    db_name=$(basename "$db_path")
+    
+    # Get all tables from the database
+    local tables
+    tables=$(get_sqlite_tables "$db_path")
+    
+    for table in $tables; do
+      # Skip system tables
+      if [[ " $skip_tables " == *" $table "* ]]; then
+        continue
+      fi
+      
+      # Get columns that faker inserts for this table
+      local faker_cols
+      faker_cols=$(grep "^${table}:" "$faker_cols_file" 2>/dev/null | cut -d: -f2 | tr ',' '\n' | sort -u)
+      
+      # If faker doesn't insert into this table at all, that's a problem
+      if [ -z "$faker_cols" ]; then
+        missing_report="${missing_report}\n  Table '$table' ($db_name): NO FAKER DATA - table not covered by faker SQL"
+        failed=1
+        continue
+      fi
+      
+      # Get all columns from the database schema
+      local db_cols
+      db_cols=$(get_sqlite_columns "$db_path" "$table")
+      
+      # Get auto-increment columns
+      local auto_cols
+      auto_cols=$(get_sqlite_auto_increment_columns "$db_path" "$table")
+      
+      # Check each DB column
+      local missing_cols=""
+      for col in $db_cols; do
+        # Skip auto-increment columns
+        if echo "$auto_cols" | grep -q "^${col}$"; then
+          continue
+        fi
+        
+        # Check if faker covers this column
+        if ! echo "$faker_cols" | grep -q "^${col}$"; then
+          if [ -z "$missing_cols" ]; then
+            missing_cols="$col"
+          else
+            missing_cols="$missing_cols, $col"
+          fi
+        fi
+      done
+      
+      if [ -n "$missing_cols" ]; then
+        missing_report="${missing_report}\n  Table '$table' ($db_name): $missing_cols"
+        failed=1
+      fi
+    done
+  done
+  
+  if [ $failed -eq 1 ]; then
+    log_error "Faker SQL missing coverage for columns in $version schema:"
+    echo -e "$missing_report" | while read -r line; do
+      [ -n "$line" ] && log_error "$line"
+    done
+    log_error ""
+    log_error "Please update generate_faker_sql() in this script to include these columns."
+    log_error "Migration tests require all columns in the older schema to have test data coverage."
+    return 1
+  fi
+  
+  log_info "Faker column coverage validation passed for $version schema (SQLite)"
+  return 0
 }
 
 # ============================================================================
@@ -721,7 +1019,10 @@ compare_postgres_snapshots() {
   # - models_json: migrations add default empty array
   # - weight: migrations add default value
   # - allowed_models: migrations add default empty array
-  local ignore_columns="updated_at config_hash created_at models_json weight allowed_models"
+  # - network_config_json, concurrency_buffer_json, proxy_config_json, custom_provider_config_json:
+  #   JSON fields that get normalized with default values during migration
+  # - budget_id, rate_limit_id: governance fields that may be reset or initialized during migrations
+  local ignore_columns="updated_at config_hash created_at models_json weight allowed_models network_config_json concurrency_buffer_json proxy_config_json custom_provider_config_json budget_id rate_limit_id"
   
   # Get tables from before snapshot
   if [ ! -f "$before_dir/tables.txt" ]; then
@@ -1074,6 +1375,12 @@ EOF
     # Stop bifrost (schema is now created)
     stop_bifrost
     
+    # Validate faker column coverage against older version's schema
+    if ! validate_faker_column_coverage_postgres "$faker_sql" "$version" "$TEMP_DIR"; then
+      log_error "Faker column coverage validation failed for $version"
+      return 1
+    fi
+    
     # Insert faker data
     log_info "Inserting faker data..."
     if ! run_postgres_sql_file "$faker_sql"; then
@@ -1249,6 +1556,12 @@ EOF
     
     # Stop bifrost (schema is now created)
     stop_bifrost
+    
+    # Validate faker column coverage against older version's schema
+    if ! validate_faker_column_coverage_sqlite "$faker_sql" "$version" "$TEMP_DIR" "$config_db" "$logs_db"; then
+      log_error "Faker column coverage validation failed for $version"
+      return 1
+    fi
     
     # Insert faker data into config store
     log_info "Inserting faker data..."
