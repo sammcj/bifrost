@@ -643,7 +643,7 @@ func TestDynamicPlugin_GetNameNotEmpty(t *testing.T) {
 
 	name := plugin.GetName()
 	assert.NotEmpty(t, name, "Plugin name should not be empty")
-	assert.True(t, strings.Contains(name, "Plugin"), "Plugin name should contain 'Plugin'")
+	assert.True(t, strings.Contains(name, "hello-world"), "Plugin name should contain 'hello-world'")
 }
 
 // Helper function to create a pointer to a string
