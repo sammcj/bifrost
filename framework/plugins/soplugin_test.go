@@ -50,7 +50,7 @@ func TestDynamicPluginLifecycle(t *testing.T) {
 	// Test GetName
 	t.Run("GetName", func(t *testing.T) {
 		name := plugin.GetName()
-		assert.Equal(t, "Hello World Plugin", name, "Plugin name should match")
+		assert.Equal(t, "hello-world", name, "Plugin name should match")
 	})
 
 	// Test HTTPTransportPreHook
@@ -250,7 +250,7 @@ func TestLoadPlugins_MultiplePlugins(t *testing.T) {
 	assert.Len(t, plugins, 2, "Two plugins should be loaded")
 
 	for _, plugin := range plugins {
-		assert.Equal(t, "Hello World Plugin", plugin.GetName())
+		assert.Equal(t, "hello-world", plugin.GetName())
 	}
 }
 
@@ -372,7 +372,7 @@ func TestDynamicPlugin_ConcurrentCalls(t *testing.T) {
 
 			// Call GetName
 			name := basePlugin.GetName()
-			assert.Equal(t, "Hello World Plugin", name, "GetName should return correct name in goroutine %d", id)
+			assert.Equal(t, "hello-world", name, "GetName should return correct name in goroutine %d", id)
 		}(i)
 	}
 
@@ -472,7 +472,7 @@ func TestDynamicPlugin_NilConfig(t *testing.T) {
 
 	// Verify plugin works correctly
 	name := plugin.GetName()
-	assert.Equal(t, "Hello World Plugin", name)
+	assert.Equal(t, "hello-world", name)
 }
 
 // TestDynamicPlugin_ShortCircuitNil tests that nil short circuit is handled properly
@@ -675,7 +675,7 @@ func TestLoadPlugins(t *testing.T) {
 		require.Len(t, plugins, 1, "Expected exactly one plugin to be loaded")
 
 		plugin := plugins[0]
-		assert.Equal(t, "Hello World Plugin", plugin.GetName())
+		assert.Equal(t, "hello-world", plugin.GetName())
 	})
 
 	t.Run("LoadMultiplePlugins", func(t *testing.T) {
@@ -741,22 +741,22 @@ func TestFilterPlugins(t *testing.T) {
 
 	t.Run("FilterLLMPlugins", func(t *testing.T) {
 		llmPlugins := FilterLLMPlugins(plugins)
-		assert.Len(t, llmPlugins, 1, "Hello world plugin should implement LLMPlugin")
+		assert.Len(t, llmPlugins, 1, "hello-world should implement LLMPlugin")
 	})
 
 	t.Run("FilterHTTPTransportPlugins", func(t *testing.T) {
 		httpPlugins := FilterHTTPTransportPlugins(plugins)
-		assert.Len(t, httpPlugins, 1, "Hello world plugin should implement HTTPTransportPlugin")
+		assert.Len(t, httpPlugins, 1, "hello-world should implement HTTPTransportPlugin")
 	})
 
 	t.Run("FilterMCPPlugins", func(t *testing.T) {
 		mcpPlugins := FilterMCPPlugins(plugins)
-		assert.Len(t, mcpPlugins, 0, "Hello world plugin does not implement MCPPlugin")
+		assert.Len(t, mcpPlugins, 0, "hello-world does not implement MCPPlugin")
 	})
 
 	t.Run("FilterObservabilityPlugins", func(t *testing.T) {
 		obsPlugins := FilterObservabilityPlugins(plugins)
-		assert.Len(t, obsPlugins, 0, "Hello world plugin does not implement ObservabilityPlugin")
+		assert.Len(t, obsPlugins, 0, "hello-world does not implement ObservabilityPlugin")
 	})
 }
 
