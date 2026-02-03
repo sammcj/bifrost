@@ -2463,3 +2463,127 @@ func TestConvertBifrostResponsesMessageContentBlocksToBedrockContentBlocks_Empty
 		})
 	}
 }
+
+// TestToolResultDeduplication tests that duplicate tool results are properly handled
+func TestToolResultDeduplication(t *testing.T) {
+	t.Run("DuplicateResultInPendingResults", func(t *testing.T) {
+		manager := bedrock.NewToolCallStateManager()
+
+		// tool call and result
+		manager.RegisterToolCall("call-123", "get_weather", `{"location":"NYC"}`)
+		content1 := []bedrock.BedrockContentBlock{{Text: schemas.Ptr("First result")}}
+		manager.RegisterToolResult("call-123", content1, "success")
+
+		// duplicate result with different content
+		content2 := []bedrock.BedrockContentBlock{{Text: schemas.Ptr("Duplicate result")}}
+		manager.RegisterToolResult("call-123", content2, "success")
+
+		// Deduplicated regardless of content. Practically same ID should not ever has diff content.
+		results := manager.GetPendingResults()
+		require.Len(t, results, 1)
+		require.NotNil(t, results["call-123"])
+		assert.Equal(t, "First result", *results["call-123"].Content[0].Text)
+	})
+
+	t.Run("DuplicateResultAfterEmission", func(t *testing.T) {
+		manager := bedrock.NewToolCallStateManager()
+
+		// Register and emit a tool call
+		manager.RegisterToolCall("call-456", "calculate", `{"x":1,"y":2}`)
+		callIDs := manager.EmitPendingToolCalls()
+		require.Len(t, callIDs, 1)
+		manager.MarkToolCallsEmitted(callIDs, 0)
+
+		// register and emit the result
+		content1 := []bedrock.BedrockContentBlock{{Text: schemas.Ptr("3")}}
+		manager.RegisterToolResult("call-456", content1, "success")
+		manager.MarkResultsEmitted([]string{"call-456"})
+
+		// Register a duplicate
+		content2 := []bedrock.BedrockContentBlock{{Text: schemas.Ptr("Duplicate")}}
+		manager.RegisterToolResult("call-456", content2, "success")
+
+		// Not added due to it being duplicated with the emitted result
+		results := manager.GetPendingResults()
+		assert.Empty(t, results)
+	})
+
+	t.Run("MultipleToolCallsWithDuplicateResults", func(t *testing.T) {
+		manager := bedrock.NewToolCallStateManager()
+
+		// Register multiple tool calls
+		manager.RegisterToolCall("call-a", "tool_a", `{}`)
+		manager.RegisterToolCall("call-b", "tool_b", `{}`)
+
+		// Register results for both
+		contentA := []bedrock.BedrockContentBlock{{Text: schemas.Ptr("Result A")}}
+		contentB := []bedrock.BedrockContentBlock{{Text: schemas.Ptr("Result B")}}
+		manager.RegisterToolResult("call-a", contentA, "success")
+		manager.RegisterToolResult("call-b", contentB, "success")
+
+		// Try to register duplicates
+		contentADup := []bedrock.BedrockContentBlock{{Text: schemas.Ptr("Result A")}}
+		contentBDup := []bedrock.BedrockContentBlock{{Text: schemas.Ptr("Result B")}}
+		manager.RegisterToolResult("call-a", contentADup, "success")
+		manager.RegisterToolResult("call-b", contentBDup, "success")
+
+		// Verify original results are preserved
+		results := manager.GetPendingResults()
+		require.Len(t, results, 2)
+		assert.Equal(t, "Result A", *results["call-a"].Content[0].Text)
+		assert.Equal(t, "Result B", *results["call-b"].Content[0].Text)
+	})
+}
+
+// TestToolCallDeduplication tests that duplicate tool calls are properly handled
+func TestToolCallDeduplication(t *testing.T) {
+	t.Run("DuplicateToolCallIgnored", func(t *testing.T) {
+		manager := bedrock.NewToolCallStateManager()
+
+		manager.RegisterToolCall("call-123", "get_weather", `{"location":"NYC"}`)
+		manager.RegisterToolCall("call-123", "get_weather", `{"location":"NYC"}`)
+
+		// Deduplicated regardless of content.
+		callIDs := manager.EmitPendingToolCalls()
+		require.Len(t, callIDs, 1)
+		assert.Equal(t, "call-123", callIDs[0])
+	})
+
+	t.Run("MultipleDistinctToolCalls", func(t *testing.T) {
+		manager := bedrock.NewToolCallStateManager()
+
+		// initial registration
+		manager.RegisterToolCall("call-a", "tool_a", `{"x":1}`)
+		manager.RegisterToolCall("call-b", "tool_b", `{"y":2}`)
+		manager.RegisterToolCall("call-c", "tool_c", `{"z":3}`)
+
+		// duplications
+		manager.RegisterToolCall("call-a", "tool_a", `{"x":1}`)
+		manager.RegisterToolCall("call-b", "tool_b", `{"y":2}`)
+		manager.RegisterToolCall("call-c", "tool_c", `{"z":3}`)
+
+		// no duplicates
+		callIDs := manager.EmitPendingToolCalls()
+		require.Len(t, callIDs, 3)
+		assert.Contains(t, callIDs, "call-a")
+		assert.Contains(t, callIDs, "call-b")
+		assert.Contains(t, callIDs, "call-c")
+	})
+
+	t.Run("DuplicateToolCallAfterEmission", func(t *testing.T) {
+		manager := bedrock.NewToolCallStateManager()
+
+		// register and emit a tool call
+		manager.RegisterToolCall("call-789", "calculator", `{"expr":"1+1"}`)
+		callIDs := manager.EmitPendingToolCalls()
+		require.Len(t, callIDs, 1)
+		manager.MarkToolCallsEmitted(callIDs, 0)
+
+		// register the same tool call again after emission
+		manager.RegisterToolCall("call-789", "calculator", `{"expr":"1+1"}`)
+
+		// duplicate was rejected
+		newCallIDs := manager.EmitPendingToolCalls()
+		assert.Empty(t, newCallIDs)
+	})
+}
