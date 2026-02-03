@@ -81,6 +81,11 @@ func (m *MCPManager) AddClient(config *schemas.MCPClientConfig) error {
 	// Make a copy of the config to use after unlocking
 	configCopy := config
 
+	// Check if a client with the same name already exists (GetClientByName has its own lock)
+	if client := m.GetClientByName(config.Name); client != nil {
+		return fmt.Errorf("MCP client with name '%s' already exists", config.Name)
+	}
+
 	m.mu.Lock()
 
 	if _, ok := m.clientMap[config.ID]; ok {
