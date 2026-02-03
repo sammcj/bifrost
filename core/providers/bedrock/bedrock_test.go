@@ -2174,6 +2174,125 @@ func TestToBedrockResponsesRequest_AdditionalFields_InterfaceSlice(t *testing.T)
 	assert.Equal(t, []string{"/amazon-bedrock-invocationMetrics/inputTokenCount"}, bedrockReq.AdditionalModelResponseFieldPaths)
 }
 
+// TestToolResultJSONParsingResponsesAPI tests that tool results are correctly parsed and wrapped based on JSON type
+// Tests only Responses API.
+func TestToolResultJSONParsingResponsesAPI(t *testing.T) {
+	tests := []struct {
+		name                string
+		toolResultContent   string
+		expectedContentType string // "text" or "json"
+		expectedJSON        map[string]any
+		expectedText        *string
+	}{
+		{
+			name:                "PlainTextResult",
+			toolResultContent:   "Hello there! This is plain text, not JSON.",
+			expectedContentType: "text",
+			expectedText:        schemas.Ptr("Hello there! This is plain text, not JSON."),
+		},
+		{
+			name:                "InvalidJSONResult",
+			toolResultContent:   "{invalid json syntax",
+			expectedContentType: "text",
+			expectedText:        schemas.Ptr("{invalid json syntax"),
+		},
+		{
+			name:                "JSONObjectResult",
+			toolResultContent:   `{"location":"NYC","temperature":72}`,
+			expectedContentType: "json",
+			expectedJSON:        map[string]any{"location": "NYC", "temperature": float64(72)},
+		},
+		{
+			name:                "JSONArrayResult",
+			toolResultContent:   `[{"period":"now","weather":"sunny"},{"period":"next_1_hour","weather":"cloudy"}]`,
+			expectedContentType: "json",
+			expectedJSON: map[string]any{
+				"results": []any{
+					map[string]any{"period": "now", "weather": "sunny"},
+					map[string]any{"period": "next_1_hour", "weather": "cloudy"},
+				},
+			},
+		},
+		{
+			name:                "JSONPrimitiveNumberResult",
+			toolResultContent:   `42`,
+			expectedContentType: "json",
+			expectedJSON:        map[string]any{"value": float64(42)},
+		},
+		{
+			name:                "JSONPrimitiveStringResult",
+			toolResultContent:   `"hello world"`,
+			expectedContentType: "json",
+			expectedJSON:        map[string]any{"value": "hello world"},
+		},
+		{
+			name:                "JSONPrimitiveBooleanResult",
+			toolResultContent:   `true`,
+			expectedContentType: "json",
+			expectedJSON:        map[string]any{"value": true},
+		},
+		{
+			name:                "JSONPrimitiveNullResult",
+			toolResultContent:   `null`,
+			expectedContentType: "json",
+			expectedJSON:        map[string]any{"value": nil},
+		},
+		{
+			name:                "EmptyJSONObjectResult",
+			toolResultContent:   `{}`,
+			expectedContentType: "json",
+			expectedJSON:        map[string]any{},
+		},
+		{
+			name:                "EmptyJSONArrayResult",
+			toolResultContent:   `[]`,
+			expectedContentType: "json",
+			expectedJSON:        map[string]any{"results": []any{}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a Responses API message with function call output (tool result)
+			input := []schemas.ResponsesMessage{
+				{
+					Type: schemas.Ptr(schemas.ResponsesMessageTypeFunctionCallOutput),
+					ResponsesToolMessage: &schemas.ResponsesToolMessage{
+						CallID: schemas.Ptr("tooluse_test_123"),
+						Output: &schemas.ResponsesToolMessageOutputStruct{
+							ResponsesToolCallOutputStr: schemas.Ptr(tt.toolResultContent),
+						},
+					},
+				},
+			}
+
+			messages, _, err := bedrock.ConvertBifrostMessagesToBedrockMessages(input)
+			require.NoError(t, err)
+			require.Len(t, messages, 1)
+
+			// The tool result should be in a user message
+			toolResultMsg := messages[0]
+			assert.Equal(t, bedrock.BedrockMessageRoleUser, toolResultMsg.Role)
+			require.Len(t, toolResultMsg.Content, 1)
+
+			toolResult := toolResultMsg.Content[0].ToolResult
+			require.NotNil(t, toolResult)
+			assert.Equal(t, "tooluse_test_123", toolResult.ToolUseID)
+			require.Len(t, toolResult.Content, 1)
+
+			resultContent := toolResult.Content[0]
+			if tt.expectedContentType == "text" {
+				assert.NotNil(t, resultContent.Text, "Expected text content")
+				assert.Nil(t, resultContent.JSON, "Expected no JSON content")
+				assert.Equal(t, tt.expectedText, resultContent.Text)
+			} else {
+				assert.Nil(t, resultContent.Text, "Expected no text content")
+				assert.Equal(t, tt.expectedJSON, resultContent.JSON)
+			}
+		})
+	}
+}
+
 // TestConvertBifrostResponsesMessageContentBlocksToBedrockContentBlocks_EmptyBlocks tests that
 // empty ContentBlocks are not created when required fields are missing, preventing the Bedrock API error:
 // "ContentBlock object at messages.1.content.0 must set one of the following keys: text, image, toolUse, toolResult, document, video, cachePoint, reasoningContent, citationsContent, searchResult."
