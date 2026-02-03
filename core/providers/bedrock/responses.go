@@ -2175,6 +2175,17 @@ func (m *ToolCallStateManager) RegisterToolCall(callID, toolName, arguments stri
 
 // RegisterToolResult registers a tool result
 func (m *ToolCallStateManager) RegisterToolResult(callID string, content []BedrockContentBlock, status string) {
+	// Attemp to deduplicate the result similar to tool call. Need to check in 2 places, since after moving
+	// on from pendingResults into a completed toolCall, the same ID might come again.
+	if _, ok := m.pendingResults[callID]; ok {
+		return
+	}
+
+	if toolCall, exists := m.toolCalls[callID]; exists && toolCall.Result != nil {
+		// Tool result already processed for this call ID, skip
+		return
+	}
+
 	result := &ToolResult{
 		CallID:  callID,
 		Content: content,
