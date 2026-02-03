@@ -1091,6 +1091,9 @@
         ],
         "additionalProperties": false
       }
+    },
+    "audit_logs": {
+      "$ref": "#/$defs/audit_logs_config"
     }
   },
   "additionalProperties": false,
@@ -2529,6 +2532,22 @@
             ],
             "additionalProperties": false
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "audit_logs_config": {
+      "type": "object",
+      "description": "Audit logs configuration for CADF-compliant activity logging",
+      "properties": {
+        "disabled": {
+          "type": "boolean",
+          "description": "Whether audit logging is disabled (default: false)",
+          "default": false
+        },
+        "hmac_key": {
+          "type": "string",
+          "description": "HMAC secret key for signing audit events (minimum 32 bytes). Can use env. prefix for environment variables (e.g., 'env.AUDIT_HMAC_KEY')."
         }
       },
       "additionalProperties": false

@@ -118,6 +118,31 @@
     return true;
   }
 
+  function openChatWhenReady() {
+    var attempts = 0;
+    var maxAttempts = 20;
+    var intervalMs = 300;
+
+    function tryOpen() {
+      attempts += 1;
+      if (typeof window.Pylon === "function") {
+        window.Pylon("show");
+        return true;
+      }
+      return false;
+    }
+
+    if (tryOpen()) {
+      return;
+    }
+
+    var interval = window.setInterval(function () {
+      if (tryOpen() || attempts >= maxAttempts) {
+        window.clearInterval(interval);
+      }
+    }, intervalMs);
+  }
+
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) {
       return;
@@ -285,6 +310,7 @@
       var ok = setPylonUser(email);
       if (ok) {
         safeSetItem(STORAGE_KEY, email);
+        openChatWhenReady();
         closeModal();
         removeTrigger();
       }
