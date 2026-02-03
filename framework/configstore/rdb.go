@@ -832,7 +832,6 @@ func (s *RDBConfigStore) GetMCPConfig(ctx context.Context) (*schemas.MCPConfig, 
 	}, nil
 }
 
-
 // GetMCPClientByID retrieves an MCP client by ID from the database.
 func (s *RDBConfigStore) GetMCPClientByID(ctx context.Context, id string) (*tables.TableMCPClient, error) {
 	var mcpClient tables.TableMCPClient
@@ -860,6 +859,10 @@ func (s *RDBConfigStore) GetMCPClientByName(ctx context.Context, name string) (*
 // CreateMCPClientConfig creates a new MCP client configuration in the database.
 func (s *RDBConfigStore) CreateMCPClientConfig(ctx context.Context, clientConfig *schemas.MCPClientConfig) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		// Check if a client with the same name already exists
+		if _, err := s.GetMCPClientByName(ctx, clientConfig.Name); err == nil {
+			return fmt.Errorf("MCP client with name '%s' already exists", clientConfig.Name)
+		}
 		// Create a deep copy to avoid modifying the original
 		clientConfigCopy, err := deepCopy(*clientConfig)
 		if err != nil {

@@ -306,16 +306,24 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 		ToolPricing:        req.ToolPricing,
 	}
 
-	if err := h.mcpManager.AddMCPClient(ctx, schemasConfig); err != nil {
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to connect MCP client: %v", err))
-		return
-	}
 	// Creating MCP client config in config store
 	if h.store.ConfigStore != nil {
 		if err := h.store.ConfigStore.CreateMCPClientConfig(ctx, schemasConfig); err != nil {
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Added to core but failed to create MCP config in database: %v, please restart bifrost to keep core and database in sync", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to create MCP config: %v", err))
 			return
 		}
+	}
+	if err := h.mcpManager.AddMCPClient(ctx, schemasConfig); err != nil {
+		// Delete the created config from config store
+		if h.store.ConfigStore != nil {
+			if err := h.store.ConfigStore.DeleteMCPClientConfig(ctx, schemasConfig.ID); err != nil {
+				logger.Error(fmt.Sprintf("Failed to delete MCP client config from database: %v. please restart bifrost to keep core and database in sync", err))
+				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to delete MCP client config from database: %v. please restart bifrost to keep core and database in sync", err))
+				return
+			}
+		}
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to connect MCP client: %v", err))
+		return
 	}
 
 	SendJSON(ctx, map[string]any{
@@ -424,7 +432,8 @@ func (h *MCPHandler) updateMCPClient(ctx *fasthttp.RequestCtx) {
 	}
 	// Update MCP client in memory
 	if err := h.mcpManager.UpdateMCPClient(ctx, id, schemasConfig); err != nil {
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update mcp client: %v", err))
+		logger.Error(fmt.Sprintf("Failed to update MCP client: %v. please restart bifrost to keep core and database in sync", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update mcp client: %v please restart bifrost to keep core and database in sync", err))
 		return
 	}
 	SendJSON(ctx, map[string]any{
@@ -451,7 +460,8 @@ func (h *MCPHandler) deleteMCPClient(ctx *fasthttp.RequestCtx) {
 	// Deleting MCP client config from config store
 	if h.store.ConfigStore != nil {
 		if err := h.store.ConfigStore.DeleteMCPClientConfig(ctx, id); err != nil {
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Removed from core but failed to delete MCP config from database: %v, please restart bifrost to keep core and database in sync", err))
+			logger.Error(fmt.Sprintf("Failed to delete MCP client config from database: %v. please restart bifrost to keep core and database in sync", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to delete MCP config: %v please restart bifrost to keep core and database in sync", err))
 			return
 		}
 	}
