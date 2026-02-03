@@ -420,7 +420,7 @@ func (h *MCPHandler) updateMCPClient(ctx *fasthttp.RequestCtx) {
 		OauthConfigID:      req.OauthConfigID,
 		IsPingAvailable:    isPingAvailable,
 		ToolSyncInterval:   toolSyncInterval,
-		ToolPricing:        req.ToolPricing,		
+		ToolPricing:        req.ToolPricing,
 	}
 	// Update MCP client in memory
 	if err := h.mcpManager.UpdateMCPClient(ctx, id, schemasConfig); err != nil {

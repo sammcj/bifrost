@@ -127,7 +127,7 @@ func NewMCPManager(ctx context.Context, config schemas.MCPConfig, oauth2Provider
 			go func(clientConfig *schemas.MCPClientConfig) {
 				defer wg.Done()
 				if err := manager.AddClient(clientConfig); err != nil {
-					manager.logger.Warn("%s Failed to add MCP client %s: %v", MCPLogPrefix, clientConfig.Name, err)
+					manager.logger.Warn("%s Failed to register MCP client %s: %v", MCPLogPrefix, clientConfig.Name, err)
 				}
 			}(clientConfig)
 		}
