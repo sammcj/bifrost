@@ -836,6 +836,9 @@ func loadMCPConfigFromFile(ctx context.Context, config *Config, configData *Conf
 			logger.Debug("updating MCP config in store")
 			for _, clientConfig := range config.MCPConfig.ClientConfigs {
 				if clientConfig != nil {
+					if clientConfig.ID == "" {
+						clientConfig.ID = uuid.NewString()
+					}
 					if err := config.ConfigStore.CreateMCPClientConfig(ctx, clientConfig); err != nil {
 						logger.Warn("failed to create MCP client config: %v", err)
 					}
@@ -857,10 +860,12 @@ func mergeMCPConfig(ctx context.Context, config *Config, configData *ConfigData,
 	// Merge ClientConfigs arrays by ClientID or Name
 	clientConfigsToAdd := make([]*schemas.MCPClientConfig, 0)
 	for _, newClientConfig := range tempMCPConfig.ClientConfigs {
+		if newClientConfig.ID == "" {
+			newClientConfig.ID = uuid.NewString()
+		}
 		found := false
 		for _, existingClientConfig := range mcpConfig.ClientConfigs {
-			if (newClientConfig.ID != "" && existingClientConfig.ID == newClientConfig.ID) ||
-				(newClientConfig.Name != "" && existingClientConfig.Name == newClientConfig.Name) {
+			if newClientConfig.Name != "" && existingClientConfig.Name == newClientConfig.Name {
 				found = true
 				break
 			}
@@ -2925,68 +2930,17 @@ func (c *Config) AddMCPClient(ctx context.Context, clientConfig *schemas.MCPClie
 		c.MCPConfig.ClientConfigs = c.MCPConfig.ClientConfigs[:len(c.MCPConfig.ClientConfigs)-1]
 		return fmt.Errorf("failed to connect MCP client: %w", err)
 	}
-	// Updating in config store
-	if c.ConfigStore != nil {
-		skipDBUpdate := false
-		if ctx.Value(schemas.BifrostContextKeySkipDBUpdate) != nil {
-			if skip, ok := ctx.Value(schemas.BifrostContextKeySkipDBUpdate).(bool); ok {
-				skipDBUpdate = skip
+	// Update MCP catalog pricing data for the new client
+	if c.MCPCatalog != nil && c.ConfigStore != nil {
+		// Get the created client config from store to get tool_pricing
+		dbClientConfig, err := c.ConfigStore.GetMCPClientByName(ctx, clientConfig.Name)
+		if err != nil {
+			logger.Warn("failed to get MCP client config for catalog update: %v", err)
+		} else if dbClientConfig != nil {
+			for toolName, costPerExecution := range dbClientConfig.ToolPricing {
+				c.MCPCatalog.UpdatePricingData(dbClientConfig.Name, toolName, costPerExecution)
 			}
-		}
-		if !skipDBUpdate {
-			if err := c.ConfigStore.CreateMCPClientConfig(ctx, clientConfig); err != nil {
-				return fmt.Errorf("failed to create MCP client config in store: %w", err)
-			}
-		}
-		// Update MCP catalog pricing data for the new client
-		if c.MCPCatalog != nil {
-			// Get the created client config from store to get tool_pricing
-			dbClientConfig, err := c.ConfigStore.GetMCPClientByName(ctx, clientConfig.Name)
-			if err != nil {
-				logger.Warn("failed to get MCP client config for catalog update: %v", err)
-			} else if dbClientConfig != nil {
-				for toolName, costPerExecution := range dbClientConfig.ToolPricing {
-					c.MCPCatalog.UpdatePricingData(dbClientConfig.Name, toolName, costPerExecution)
-				}
-				logger.Debug("updated MCP catalog pricing for client: %s (%d tools)", dbClientConfig.Name, len(dbClientConfig.ToolPricing))
-			}
-		}
-	}
-	return nil
-}
-
-// RemoveMCPClient removes an MCP client from the configuration.
-// This method is called when an MCP client is removed via the HTTP API.
-//
-// The method:
-//   - Validates that the MCP client exists
-//   - Removes the MCP client from the configuration
-//   - Removes the MCP client from the Bifrost client
-func (c *Config) RemoveMCPClient(ctx context.Context, id string) error {
-	if c.client == nil {
-		return fmt.Errorf("bifrost client not set")
-	}
-	c.muMCP.Lock()
-	defer c.muMCP.Unlock()
-	if c.MCPConfig == nil {
-		return fmt.Errorf("no MCP config found")
-	}
-	// Check if client is registered in Bifrost (can be not registered if client initialization failed)
-	if clients, err := c.client.GetMCPClients(); err == nil && len(clients) > 0 {
-		for _, client := range clients {
-			if client.Config.ID == id {
-				if err := c.client.RemoveMCPClient(id); err != nil {
-					return fmt.Errorf("failed to remove MCP client: %w", err)
-				}
-				break
-			}
-		}
-	}
-	// Find and remove client from in-memory config
-	for i, clientConfig := range c.MCPConfig.ClientConfigs {
-		if clientConfig.ID == id {
-			c.MCPConfig.ClientConfigs = append(c.MCPConfig.ClientConfigs[:i], c.MCPConfig.ClientConfigs[i+1:]...)
-			break
+			logger.Debug("updated MCP catalog pricing for client: %s (%d tools)", dbClientConfig.Name, len(dbClientConfig.ToolPricing))
 		}
 	}
 	return nil
@@ -3068,6 +3022,43 @@ func (c *Config) UpdateMCPClient(ctx context.Context, id string, updatedConfig *
 	c.MCPConfig.ClientConfigs[configIndex].ToolsToAutoExecute = updatedConfig.ToolsToAutoExecute
 	c.MCPConfig.ClientConfigs[configIndex].ToolPricing = updatedConfig.ToolPricing
 
+	return nil
+}
+
+// RemoveMCPClient removes an MCP client from the configuration.
+// This method is called when an MCP client is removed via the HTTP API.
+//
+// The method:
+//   - Validates that the MCP client exists
+//   - Removes the MCP client from the configuration
+//   - Removes the MCP client from the Bifrost client
+func (c *Config) RemoveMCPClient(ctx context.Context, id string) error {
+	if c.client == nil {
+		return fmt.Errorf("bifrost client not set")
+	}
+	c.muMCP.Lock()
+	defer c.muMCP.Unlock()
+	if c.MCPConfig == nil {
+		return fmt.Errorf("no MCP config found")
+	}
+	// Check if client is registered in Bifrost (can be not registered if client initialization failed)
+	if clients, err := c.client.GetMCPClients(); err == nil && len(clients) > 0 {
+		for _, client := range clients {
+			if client.Config.ID == id {
+				if err := c.client.RemoveMCPClient(id); err != nil {
+					return fmt.Errorf("failed to remove MCP client: %w", err)
+				}
+				break
+			}
+		}
+	}
+	// Find and remove client from in-memory config
+	for i, clientConfig := range c.MCPConfig.ClientConfigs {
+		if clientConfig.ID == id {
+			c.MCPConfig.ClientConfigs = append(c.MCPConfig.ClientConfigs[:i], c.MCPConfig.ClientConfigs[i+1:]...)
+			break
+		}
+	}
 	return nil
 }
 

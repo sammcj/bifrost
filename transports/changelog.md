@@ -1,0 +1,1 @@
+- fix: duplicate mcp server creation when adding non oauth mcp client
