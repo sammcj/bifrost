@@ -1332,3 +1332,26 @@ func bedrockExtractFloat64(v interface{}) (float64, bool) {
 		return 0, false
 	}
 }
+
+// tryParseJSONIntoContentBlock try to parse input text into a JSON and returns a proper
+// BedrockContentBlock based on the result.
+func tryParseJSONIntoContentBlock(text string) BedrockContentBlock {
+	var parsed interface{}
+	// Try to parse as JSON, otherwise treat as text
+	if err := sonic.UnmarshalString(text, &parsed); err != nil {
+		return BedrockContentBlock{Text: schemas.Ptr(text)}
+	} else {
+		// Bedrock does not accept primitives or arrays directly in the json field
+		switch v := parsed.(type) {
+		case map[string]any:
+			// Objects are valid as-is
+			return BedrockContentBlock{JSON: v}
+		case []any:
+			// Arrays need to be wrapped
+			return BedrockContentBlock{JSON: map[string]any{"results": v}}
+		default:
+			// Primitives (string, number, boolean, null) need to be wrapped
+			return BedrockContentBlock{JSON: map[string]any{"value": v}}
+		}
+	}
+}
