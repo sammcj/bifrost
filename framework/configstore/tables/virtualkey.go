@@ -106,6 +106,7 @@ func (pc *TableVirtualKeyProviderConfig) AfterFind(tx *gorm.DB) error {
 			key.AzureClientID = nil
 			key.AzureClientSecret = nil
 			key.AzureTenantID = nil
+			key.AzureScopesJSON = nil
 			key.AzureDeploymentsJSON = nil
 			key.AzureKeyConfig = nil
 

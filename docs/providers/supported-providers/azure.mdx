@@ -104,6 +104,7 @@ If you set `client_id`, `client_secret`, and `tenant_id`, Azure Entra ID authent
     "client_id": "your-client-id",
     "client_secret": "your-client-secret",
     "tenant_id": "your-tenant-id",
+    "scopes": ["https://cognitiveservices.azure.com/.default"],
     "api_version": "2024-10-21",
     "deployments": {
       "gpt-4": "my-gpt4-deployment",
@@ -139,6 +140,7 @@ If you set `client_id`, `client_secret`, and `tenant_id`, Azure Entra ID authent
 - `client_id` - Azure Entra ID client ID (optional, for Service Principal auth)
 - `client_secret` - Azure Entra ID client secret (optional, for Service Principal auth)
 - `tenant_id` - Azure Entra ID tenant ID (optional, for Service Principal auth)
+- `scopes` - OAuth scopes for token requests (default: `["https://cognitiveservices.azure.com/.default"]`)
 - `api_version` - API version to use (default: `2024-10-21`)
 - `deployments` - Map of model names to deployment IDs (optional, can be provided per-request)
 - `allowed_models` - List of allowed models to use from this key (optional)

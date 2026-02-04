@@ -28,6 +28,7 @@ export interface AzureKeyConfig {
 	client_id?: EnvVar;
 	client_secret?: EnvVar;
 	tenant_id?: EnvVar;
+	scopes?: string[];
 }
 
 export const DefaultAzureKeyConfig: AzureKeyConfig = {
@@ -37,6 +38,7 @@ export const DefaultAzureKeyConfig: AzureKeyConfig = {
 	client_id: { value: "", env_var: "", from_env: false },
 	client_secret: { value: "", env_var: "", from_env: false },
 	tenant_id: { value: "", env_var: "", from_env: false },
+	scopes: [],
 } as const satisfies Required<AzureKeyConfig>;
 
 // VertexKeyConfig matching Go's schemas.VertexKeyConfig

@@ -28,6 +28,7 @@ export const azureKeyConfigSchema = z
 		client_id: envVarSchema.optional(),
 		client_secret: envVarSchema.optional(),
 		tenant_id: envVarSchema.optional(),
+		scopes: z.array(z.string()).optional(),
 	})
 	.refine(
 		(data) => {

@@ -6,6 +6,7 @@ import { EnvVarInput } from "@/components/ui/envVarInput";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ModelMultiselect } from "@/components/ui/modelMultiselect";
+import { TagInput } from "@/components/ui/tagInput";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -220,6 +221,7 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 								form.setValue('key.azure_key_config.client_id', undefined)
 								form.setValue('key.azure_key_config.client_secret', undefined)
 								form.setValue('key.azure_key_config.tenant_id', undefined)
+								form.setValue('key.azure_key_config.scopes', undefined)
 							}
 						}}>
 							<TabsList className="grid w-full grid-cols-2">
@@ -292,6 +294,38 @@ export function ApiKeyFormFragment({ control, providerName, form }: Props) {
 										<FormLabel>Tenant ID (Required)</FormLabel>
 										<FormControl>
 											<EnvVarInput placeholder="your-tenant-id or env.AZURE_TENANT_ID" {...field} />
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={control}
+								name={`key.azure_key_config.scopes`}
+								render={({ field }) => (
+									<FormItem>
+										<div className="flex items-center gap-2">
+											<FormLabel>Scopes (Optional)</FormLabel>
+											<TooltipProvider>
+												<Tooltip>
+													<TooltipTrigger asChild>
+														<span>
+															<Info className="text-muted-foreground h-3 w-3" />
+														</span>
+													</TooltipTrigger>
+													<TooltipContent>
+														<p>Optional OAuth scopes for token requests. By default we use
+														https://cognitiveservices.azure.com/.default — add additional scopes here if your setup requires extra permissions.</p>
+													</TooltipContent>
+												</Tooltip>
+											</TooltipProvider>
+										</div>
+										<FormControl>
+											<TagInput
+												placeholder="Add scope (Enter or comma)"
+												value={field.value ?? []}
+												onValueChange={field.onChange}
+											/>
 										</FormControl>
 										<FormMessage />
 									</FormItem>

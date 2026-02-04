@@ -11,3 +11,4 @@
 - feat: request path override functionality to support full URLs (with scheme and host) as well as custom paths
 - fix: missing and duplicated tool results in Bedrock - [@hhieuu](https://github.com/hhieuu)
 - fix: errored request logs are now not counted in missing cost filter
+- feat: adds support for custom OAuth scopes when authenticating with Azure Entra ID
