@@ -462,7 +462,11 @@ func (provider *HuggingFaceProvider) ChatCompletion(ctx *schemas.BifrostContext,
 			},
 		}
 	}
-	request.Model = fmt.Sprintf("%s:%s", modelName, inferenceProvider)
+	if inferenceProvider != "" {
+		request.Model = fmt.Sprintf("%s:%s", modelName, inferenceProvider)
+	} else {
+		request.Model = modelName
+	}
 
 	jsonBody, err := providerUtils.CheckContextAndGetRequestBody(
 		ctx,
@@ -545,7 +549,11 @@ func (provider *HuggingFaceProvider) ChatCompletionStream(ctx *schemas.BifrostCo
 			},
 		}
 	}
-	request.Model = fmt.Sprintf("%s:%s", modelName, inferenceProvider)
+	if inferenceProvider != "" {
+		request.Model = fmt.Sprintf("%s:%s", modelName, inferenceProvider)
+	} else {
+		request.Model = modelName
+	}
 
 	var authHeader map[string]string
 	if key.Value.GetValue() != "" {

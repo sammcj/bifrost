@@ -140,7 +140,7 @@ func splitIntoModelProvider(bifrostModelName string) (inferenceProvider, string,
 		prov = inferenceProvider(before)
 		model = after
 	} else if t == 1 {
-		prov = auto
+		prov = ""
 		model = bifrostModelName
 	}
 	return prov, model, nil
