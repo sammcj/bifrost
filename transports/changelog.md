@@ -12,3 +12,4 @@
 - fix: missing and duplicated tool results in Bedrock - [@hhieuu](https://github.com/hhieuu)
 - fix: errored request logs are now not counted in missing cost filter
 - feat: adds support for custom OAuth scopes when authenticating with Azure Entra ID
+- fix: if governance is disabled set enforce virtual key header to false
