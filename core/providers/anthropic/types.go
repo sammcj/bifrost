@@ -23,6 +23,8 @@ const (
 	AnthropicAdvancedToolUseBetaHeader = "advanced-tool-use-2025-11-20"
 	// AnthropicMCPClientBetaHeader is required for MCP servers.
 	AnthropicMCPClientBetaHeader = "mcp-client-2025-04-04"
+	// AnthropicPromptCachingScopeBetaHeader is required for prompt caching scope.
+	AnthropicPromptCachingScopeBetaHeader = "prompt-caching-scope-2026-01-05"
 )
 
 // ==================== REQUEST TYPES ====================
@@ -60,29 +62,37 @@ type AnthropicOutputConfig struct {
 
 // AnthropicMessageRequest represents an Anthropic messages API request
 type AnthropicMessageRequest struct {
-	Model         string               `json:"model"`
-	MaxTokens     int                  `json:"max_tokens"`
-	Messages      []AnthropicMessage   `json:"messages"`
-	Metadata      *AnthropicMetaData   `json:"metadata,omitempty"`
-	System        *AnthropicContent    `json:"system,omitempty"`
-	Temperature   *float64             `json:"temperature,omitempty"`
-	TopP          *float64             `json:"top_p,omitempty"`
-	TopK          *int                 `json:"top_k,omitempty"`
-	StopSequences []string             `json:"stop_sequences,omitempty"`
-	Stream        *bool                `json:"stream,omitempty"`
-	Tools         []AnthropicTool      `json:"tools,omitempty"`
-	ToolChoice    *AnthropicToolChoice `json:"tool_choice,omitempty"`
-	MCPServers    []AnthropicMCPServer `json:"mcp_servers,omitempty"` // This feature requires the beta header: "anthropic-beta": "mcp-client-2025-04-04"
-	Thinking      *AnthropicThinking   `json:"thinking,omitempty"`
-	OutputFormat  interface{}          `json:"output_format,omitempty"` // Beta: requires header "anthropic-beta": "structured-outputs-2025-11-13"
+	Model         string                 `json:"model"`
+	MaxTokens     int                    `json:"max_tokens"`
+	Messages      []AnthropicMessage     `json:"messages"`
+	Metadata      *AnthropicMetaData     `json:"metadata,omitempty"`
+	System        *AnthropicContent      `json:"system,omitempty"`
+	Temperature   *float64               `json:"temperature,omitempty"`
+	TopP          *float64               `json:"top_p,omitempty"`
+	TopK          *int                   `json:"top_k,omitempty"`
+	StopSequences []string               `json:"stop_sequences,omitempty"`
+	Stream        *bool                  `json:"stream,omitempty"`
+	Tools         []AnthropicTool        `json:"tools,omitempty"`
+	ToolChoice    *AnthropicToolChoice   `json:"tool_choice,omitempty"`
+	MCPServers    []AnthropicMCPServer   `json:"mcp_servers,omitempty"` // This feature requires the beta header: "anthropic-beta": "mcp-client-2025-04-04"
+	Thinking      *AnthropicThinking     `json:"thinking,omitempty"`
+	OutputFormat  interface{}            `json:"output_format,omitempty"` // Beta: requires header "anthropic-beta": "structured-outputs-2025-11-13"
 	OutputConfig  *AnthropicOutputConfig `json:"output_config,omitempty"` // GA: structured outputs without beta header
-	ServiceTier   *string              `json:"service_tier,omitempty"`  // "auto" or "standard_only"
+	ServiceTier   *string                `json:"service_tier,omitempty"`  // "auto" or "standard_only"
 
 	// Extra params for advanced use cases
 	ExtraParams map[string]interface{} `json:"-"`
 
 	// Bifrost specific field (only parsed when converting from Provider -> Bifrost request)
 	Fallbacks []string `json:"fallbacks,omitempty"`
+
+	// Internal field to track whether to strip scope from cache control blocks (for Vertex + prompt caching scope)
+	stripCacheControlScope bool `json:"-"`
+}
+
+// SetStripCacheControlScope sets the stripCacheControlScope flag
+func (req *AnthropicMessageRequest) SetStripCacheControlScope(strip bool) {
+	req.stripCacheControlScope = strip
 }
 
 // GetExtraParams implements the RequestBodyWithExtraParams interface
@@ -171,6 +181,8 @@ func (req *AnthropicMessageRequest) UnmarshalJSON(data []byte) error {
 
 // MarshalJSON implements custom JSON marshalling for AnthropicMessageRequest.
 // It validates that OutputFormat and OutputConfig are mutually exclusive.
+// When stripCacheControlScope is true (for Vertex + prompt caching scope), it strips
+// the scope field from all cache control blocks in tools, system, and messages.
 func (req *AnthropicMessageRequest) MarshalJSON() ([]byte, error) {
 	// Validation: ensure OutputFormat and OutputConfig are not both set
 	if req.OutputFormat != nil && req.OutputConfig != nil {
@@ -179,7 +191,77 @@ func (req *AnthropicMessageRequest) MarshalJSON() ([]byte, error) {
 
 	// Use alias type to avoid infinite recursion
 	type Alias AnthropicMessageRequest
+
+	// If stripCacheControlScope is enabled, create a copy and strip scope from all cache control blocks
+	if req.stripCacheControlScope {
+		reqCopy := *req
+		reqCopy.stripCacheControlScope = false
+
+		// Strip scope from tools
+		if len(reqCopy.Tools) > 0 {
+			toolsCopy := make([]AnthropicTool, len(reqCopy.Tools))
+			for i, tool := range reqCopy.Tools {
+				toolsCopy[i] = tool
+				if tool.CacheControl != nil && tool.CacheControl.Scope != nil {
+					// Create a copy of cache control without scope
+					toolsCopy[i].CacheControl = &schemas.CacheControl{
+						Type: tool.CacheControl.Type,
+						TTL:  tool.CacheControl.TTL,
+						// Scope is intentionally omitted
+					}
+				}
+			}
+			reqCopy.Tools = toolsCopy
+		}
+
+		// Strip scope from system content
+		if reqCopy.System != nil {
+			reqCopy.System = stripScopeFromContent(reqCopy.System)
+		}
+
+		// Strip scope from messages
+		if len(reqCopy.Messages) > 0 {
+			messagesCopy := make([]AnthropicMessage, len(reqCopy.Messages))
+			for i, msg := range reqCopy.Messages {
+				messagesCopy[i] = msg
+				messagesCopy[i].Content = *stripScopeFromContent(&msg.Content)
+			}
+			reqCopy.Messages = messagesCopy
+		}
+
+		return sonic.Marshal((*Alias)(&reqCopy))
+	}
+
 	return sonic.Marshal((*Alias)(req))
+}
+
+// stripScopeFromContent strips scope from all cache control blocks in content
+func stripScopeFromContent(content *AnthropicContent) *AnthropicContent {
+	if content == nil {
+		return nil
+	}
+
+	result := &AnthropicContent{
+		ContentStr: content.ContentStr,
+	}
+
+	if len(content.ContentBlocks) > 0 {
+		blocksCopy := make([]AnthropicContentBlock, len(content.ContentBlocks))
+		for i, block := range content.ContentBlocks {
+			blocksCopy[i] = block
+			if block.CacheControl != nil && block.CacheControl.Scope != nil {
+				// Create a copy of cache control without scope
+				blocksCopy[i].CacheControl = &schemas.CacheControl{
+					Type: block.CacheControl.Type,
+					TTL:  block.CacheControl.TTL,
+					// Scope is intentionally omitted
+				}
+			}
+		}
+		result.ContentBlocks = blocksCopy
+	}
+
+	return result
 }
 
 type AnthropicMessageRole string

@@ -102,6 +102,7 @@ func getRequestBodyForResponses(ctx *schemas.BifrostContext, request *schemas.Bi
 // addMissingBetaHeadersToContext analyzes the Anthropic request and adds missing beta headers to the context
 func addMissingBetaHeadersToContext(ctx *schemas.BifrostContext, req *AnthropicMessageRequest) error {
 	headers := []string{}
+	hasCachingScope := false
 	if req.Tools != nil {
 		for _, tool := range req.Tools {
 			// Check for strict (structured-outputs)
@@ -118,6 +119,11 @@ func addMissingBetaHeadersToContext(ctx *schemas.BifrostContext, req *AnthropicM
 			if len(tool.AllowedCallers) > 0 {
 				headers = appendUniqueHeader(headers, AnthropicAdvancedToolUseBetaHeader)
 			}
+			// Check for cache control with scope
+			if !hasCachingScope && tool.CacheControl != nil && tool.CacheControl.Scope != nil {
+				headers = appendUniqueHeader(headers, AnthropicPromptCachingScopeBetaHeader)
+				hasCachingScope = true
+			}
 		}
 	}
 	// Check for MCP servers
@@ -127,6 +133,33 @@ func addMissingBetaHeadersToContext(ctx *schemas.BifrostContext, req *AnthropicM
 	// Check for output format (structured outputs)
 	if req.OutputFormat != nil {
 		headers = appendUniqueHeader(headers, AnthropicStructuredOutputsBetaHeader)
+	}
+	// Check for cache control with scope in system message (only if not already found)
+	if !hasCachingScope && req.System != nil && req.System.ContentBlocks != nil {
+		for _, block := range req.System.ContentBlocks {
+			if block.CacheControl != nil && block.CacheControl.Scope != nil {
+				headers = appendUniqueHeader(headers, AnthropicPromptCachingScopeBetaHeader)
+				hasCachingScope = true
+				break
+			}
+		}
+	}
+	// Check for cache control with scope in messages (only if not already found)
+	if !hasCachingScope {
+		for _, message := range req.Messages {
+			if message.Content.ContentBlocks != nil {
+				for _, block := range message.Content.ContentBlocks {
+					if block.CacheControl != nil && block.CacheControl.Scope != nil {
+						headers = appendUniqueHeader(headers, AnthropicPromptCachingScopeBetaHeader)
+						hasCachingScope = true
+						break
+					}
+				}
+				if hasCachingScope {
+					break
+				}
+			}
+		}
 	}
 	if len(headers) == 0 {
 		return nil

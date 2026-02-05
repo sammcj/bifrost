@@ -145,6 +145,84 @@ func CreateAnthropicRouteConfigs(pathPrefix string) []RouteConfig {
 	}, createAnthropicMessagesRouteConfig(pathPrefix)...)
 }
 
+// passthroughSafeHeaders is a whitelist of headers that are safe to pass through
+var passthroughSafeHeaders = map[string]bool{
+	"anthropic-beta": true,
+	"anthropic-dangerous-direct-browser-access": true,
+	"anthropic-version":                         true,
+}
+
+func hasPromptCachingScopeBetaHeader(headers map[string][]string) bool {
+	for k, v := range headers {
+		if strings.ToLower(k) == "anthropic-beta" {
+			for _, headerValue := range v {
+				if strings.Contains(headerValue, anthropic.AnthropicPromptCachingScopeBetaHeader) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// filterVertexUnsupportedBetaHeaders removes beta headers that Vertex AI doesn't support.
+// Vertex AI doesn't support: structured-outputs, advanced-tool-use, prompt-caching-scope, mcp-client.
+func filterVertexUnsupportedBetaHeaders(headers map[string][]string) map[string][]string {
+	var betaHeaderKey string
+	var betaHeaders []string
+	var found bool
+	for k, v := range headers {
+		if strings.ToLower(k) == "anthropic-beta" {
+			betaHeaderKey = k
+			betaHeaders = v
+			found = true
+			break
+		}
+	}
+
+	if found {
+		var filteredBetas []string
+		for _, headerValue := range betaHeaders {
+			// Split comma-separated beta headers
+			for beta := range strings.SplitSeq(headerValue, ",") {
+				beta = strings.TrimSpace(beta)
+				// Skip unsupported headers for Vertex
+				if beta == anthropic.AnthropicAdvancedToolUseBetaHeader ||
+					beta == anthropic.AnthropicStructuredOutputsBetaHeader ||
+					beta == anthropic.AnthropicPromptCachingScopeBetaHeader ||
+					beta == anthropic.AnthropicMCPClientBetaHeader {
+					continue
+				}
+				filteredBetas = append(filteredBetas, beta)
+			}
+		}
+		if len(filteredBetas) > 0 {
+			headers[betaHeaderKey] = []string{strings.Join(filteredBetas, ",")}
+		} else {
+			delete(headers, betaHeaderKey)
+		}
+	}
+
+	return headers
+}
+
+// extractPassthroughHeaders filters headers to only include those in the safe whitelist.
+// Header matching is case-insensitive.
+func extractPassthroughHeaders(allHeaders map[string][]string, provider schemas.ModelProvider) map[string][]string {
+	filtered := make(map[string][]string)
+	for k, v := range allHeaders {
+		if passthroughSafeHeaders[strings.ToLower(k)] {
+			filtered[k] = v
+		}
+	}
+
+	if provider == schemas.Vertex {
+		filtered = filterVertexUnsupportedBetaHeaders(filtered)
+	}
+
+	return filtered
+}
+
 func CreateAnthropicListModelsRouteConfigs(pathPrefix string, handlerStore lib.HandlerStore) []RouteConfig {
 	return []RouteConfig{
 		{
@@ -219,6 +297,10 @@ func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.Bif
 
 	// Check if anthropic oauth headers are present
 	if shouldUsePassthrough(bifrostCtx, provider, model, "") {
+		if provider == schemas.Vertex && hasPromptCachingScopeBetaHeader(headers) {
+			bifrostCtx.SetValue(schemas.BifrostContextKeyUseRawRequestBody, false)
+			return nil
+		}
 		bifrostCtx.SetValue(schemas.BifrostContextKeyUseRawRequestBody, true)
 		if !isAnthropicAPIKeyAuth(ctx) && (provider == schemas.Anthropic || provider == "") {
 			url := extractExactPath(ctx)
@@ -228,6 +310,12 @@ func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.Bif
 			bifrostCtx.SetValue(schemas.BifrostContextKeyExtraHeaders, headers)
 			bifrostCtx.SetValue(schemas.BifrostContextKeyURLPath, url)
 			bifrostCtx.SetValue(schemas.BifrostContextKeySkipKeySelection, true)
+		} else {
+			// API key flow: pass only whitelisted safe headers (like anthropic-beta for feature detection)
+			passthroughHeaders := extractPassthroughHeaders(headers, provider)
+			if len(passthroughHeaders) > 0 {
+				bifrostCtx.SetValue(schemas.BifrostContextKeyExtraHeaders, passthroughHeaders)
+			}
 		}
 	}
 	return nil
