@@ -179,6 +179,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddBaseModelPricingColumn(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddAzureScopesColumn(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -3226,4 +3229,35 @@ func migrationAddBaseModelPricingColumn(ctx context.Context, db *gorm.DB) error 
 		},
 	}})
 	return m.Migrate()
+}
+
+// migrationAddAzureScopesColumn adds the azure_scopes column to the key table for Entra ID OAuth scopes
+func migrationAddAzureScopesColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_azure_scopes_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasColumn(&tables.TableKey{}, "azure_scopes") {
+				if err := migrator.AddColumn(&tables.TableKey{}, "azure_scopes"); err != nil {
+					return fmt.Errorf("failed to add azure_scopes column: %w", err)
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if migrator.HasColumn(&tables.TableKey{}, "azure_scopes") {
+				if err := migrator.DropColumn(&tables.TableKey{}, "azure_scopes"); err != nil {
+					return fmt.Errorf("failed to drop azure_scopes column: %w", err)
+				}
+			}
+			return nil
+		},
+	}})
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error running azure_scopes migration: %s", err.Error())
+	}
+	return nil
 }

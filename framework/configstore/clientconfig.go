@@ -293,6 +293,9 @@ func (p *ProviderConfig) Redacted() *ProviderConfig {
 			if key.AzureKeyConfig.TenantID != nil {
 				azureConfig.TenantID = key.AzureKeyConfig.TenantID.Redacted()
 			}
+			if len(key.AzureKeyConfig.Scopes) > 0 {
+				azureConfig.Scopes = key.AzureKeyConfig.Scopes
+			}
 			redactedConfig.Keys[i].AzureKeyConfig = azureConfig
 		}
 

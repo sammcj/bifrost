@@ -83,8 +83,10 @@ func (provider *AzureProvider) getAzureAuthHeaders(ctx *schemas.BifrostContext, 
 			return nil, providerUtils.NewBifrostOperationError("failed to get or create Azure authentication", err, schemas.Azure)
 		}
 
+		scopes := getAzureScopes(key.AzureKeyConfig.Scopes)
+
 		token, err := cred.GetToken(ctx, policy.TokenRequestOptions{
-			Scopes: []string{DefaultAzureScope},
+			Scopes: scopes,
 		})
 		if err != nil {
 			return nil, providerUtils.NewBifrostOperationError("failed to get Azure access token", err, schemas.Azure)
