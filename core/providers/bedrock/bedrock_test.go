@@ -2706,3 +2706,160 @@ func TestToolCallDeduplication(t *testing.T) {
 		assert.Empty(t, newCallIDs)
 	})
 }
+
+// TestAnthropicReasoningConfigUsesThinkinField verifies that Anthropic models use
+// the "thinking" field (not "reasoning_config") in additionalModelRequestFields
+// for the Bedrock Converse API.
+func TestAnthropicReasoningConfigUsesThinkingField(t *testing.T) {
+	tests := []struct {
+		name                string
+		model               string
+		effort              *string
+		maxTokens           *int
+		expectedFieldName   string
+		expectedType        string
+		expectBudgetTokens  bool
+		expectNoOutputConfig bool
+	}{
+		{
+			name:               "Opus4.6_AdaptiveThinking_UsesThinkingField",
+			model:              "anthropic.claude-opus-4-6-v1",
+			effort:             schemas.Ptr("high"),
+			expectedFieldName:  "thinking",
+			expectedType:       "adaptive",
+			expectBudgetTokens: false,
+			expectNoOutputConfig: true,
+		},
+		{
+			name:               "Opus4.5_NativeEffort_UsesThinkingField",
+			model:              "anthropic.claude-opus-4-5-v1",
+			effort:             schemas.Ptr("high"),
+			expectedFieldName:  "thinking",
+			expectedType:       "enabled",
+			expectBudgetTokens: true,
+			expectNoOutputConfig: true,
+		},
+		{
+			name:               "Sonnet3.7_OlderModel_UsesThinkingField",
+			model:              "anthropic.claude-3-7-sonnet-v1",
+			effort:             schemas.Ptr("medium"),
+			expectedFieldName:  "thinking",
+			expectedType:       "enabled",
+			expectBudgetTokens: true,
+			expectNoOutputConfig: true,
+		},
+		{
+			name:               "Anthropic_MaxTokens_UsesThinkingField",
+			model:              "anthropic.claude-3-7-sonnet-v1",
+			maxTokens:          schemas.Ptr(2048),
+			expectedFieldName:  "thinking",
+			expectedType:       "enabled",
+			expectBudgetTokens: true,
+			expectNoOutputConfig: true,
+		},
+		{
+			name:               "Anthropic_DisabledReasoning_UsesThinkingField",
+			model:              "anthropic.claude-3-7-sonnet-v1",
+			effort:             schemas.Ptr("none"),
+			expectedFieldName:  "thinking",
+			expectedType:       "disabled",
+			expectBudgetTokens: false,
+			expectNoOutputConfig: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reasoning := &schemas.ChatReasoning{}
+			if tt.effort != nil {
+				reasoning.Effort = tt.effort
+			}
+			if tt.maxTokens != nil {
+				reasoning.MaxTokens = tt.maxTokens
+			}
+
+			bifrostReq := &schemas.BifrostChatRequest{
+				Model: tt.model,
+				Input: []schemas.ChatMessage{
+					{
+						Role: schemas.ChatMessageRoleUser,
+						Content: &schemas.ChatMessageContent{
+							ContentStr: schemas.Ptr("Hello"),
+						},
+					},
+				},
+				Params: &schemas.ChatParameters{
+					Reasoning: reasoning,
+				},
+			}
+
+			ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
+			result, err := bedrock.ToBedrockChatCompletionRequest(ctx, bifrostReq)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.NotNil(t, result.AdditionalModelRequestFields)
+
+			// Verify the correct field name is used
+			thinkingConfig, hasThinking := result.AdditionalModelRequestFields[tt.expectedFieldName]
+			assert.True(t, hasThinking, "expected field %q in AdditionalModelRequestFields", tt.expectedFieldName)
+
+			// Verify reasoning_config is NOT used for Anthropic models
+			_, hasReasoningConfig := result.AdditionalModelRequestFields["reasoning_config"]
+			assert.False(t, hasReasoningConfig, "reasoning_config should NOT be set for Anthropic models")
+
+			// Verify output_config is NOT used (not supported in Converse API)
+			if tt.expectNoOutputConfig {
+				_, hasOutputConfig := result.AdditionalModelRequestFields["output_config"]
+				assert.False(t, hasOutputConfig, "output_config should NOT be set in Converse API")
+			}
+
+			// Verify the type
+			if configMap, ok := thinkingConfig.(map[string]any); ok {
+				typeStr, _ := configMap["type"].(string)
+				assert.Equal(t, tt.expectedType, typeStr)
+
+				if tt.expectBudgetTokens {
+					_, hasBudget := configMap["budget_tokens"]
+					assert.True(t, hasBudget, "expected budget_tokens in thinking config")
+				}
+			} else if configMap, ok := thinkingConfig.(map[string]string); ok {
+				assert.Equal(t, tt.expectedType, configMap["type"])
+			}
+		})
+	}
+}
+
+// TestNovaReasoningConfigUsesReasoningConfigField verifies that Nova models use
+// the "reasoningConfig" field (camelCase) and NOT "thinking".
+func TestNovaReasoningConfigUsesReasoningConfigField(t *testing.T) {
+	bifrostReq := &schemas.BifrostChatRequest{
+		Model: "amazon.nova-pro-v1",
+		Input: []schemas.ChatMessage{
+			{
+				Role: schemas.ChatMessageRoleUser,
+				Content: &schemas.ChatMessageContent{
+					ContentStr: schemas.Ptr("Hello"),
+				},
+			},
+		},
+		Params: &schemas.ChatParameters{
+			Reasoning: &schemas.ChatReasoning{
+				Effort: schemas.Ptr("medium"),
+			},
+		},
+	}
+
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
+	result, err := bedrock.ToBedrockChatCompletionRequest(ctx, bifrostReq)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.AdditionalModelRequestFields)
+
+	// Nova should use reasoningConfig (camelCase)
+	_, hasReasoningConfig := result.AdditionalModelRequestFields["reasoningConfig"]
+	assert.True(t, hasReasoningConfig, "Nova models should use reasoningConfig field")
+
+	// Nova should NOT use "thinking"
+	_, hasThinking := result.AdditionalModelRequestFields["thinking"]
+	assert.False(t, hasThinking, "Nova models should NOT use thinking field")
+}

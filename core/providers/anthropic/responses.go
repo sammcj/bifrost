@@ -1893,7 +1893,7 @@ func (req *AnthropicMessageRequest) ToBifrostResponsesRequest(ctx *schemas.Bifro
 		params.Text = convertAnthropicOutputFormatToResponsesTextConfig(req.OutputConfig.Format)
 	}
 	if req.Thinking != nil {
-		if req.Thinking.Type == "enabled" {
+		if req.Thinking.Type == "enabled" || req.Thinking.Type == "adaptive" {
 			var summary *string
 			if summaryValue, ok := schemas.SafeExtractStringPointer(req.ExtraParams["reasoning_summary"]); ok {
 				summary = summaryValue
@@ -1906,10 +1906,26 @@ func (req *AnthropicMessageRequest) ToBifrostResponsesRequest(ctx *schemas.Bifro
 					}
 				}
 			}
-			params.Reasoning = &schemas.ResponsesParametersReasoning{
-				Effort:    schemas.Ptr(providerUtils.GetReasoningEffortFromBudgetTokens(*req.Thinking.BudgetTokens, MinimumReasoningMaxTokens, AnthropicDefaultMaxTokens)),
-				MaxTokens: req.Thinking.BudgetTokens,
-				Summary:   summary,
+			if req.OutputConfig != nil && req.OutputConfig.Effort != nil {
+				// Native effort present — map to Bifrost enum (e.g., "max" → "high")
+				params.Reasoning = &schemas.ResponsesParametersReasoning{
+					Effort:    schemas.Ptr(MapAnthropicEffortToBifrost(*req.OutputConfig.Effort)),
+					MaxTokens: req.Thinking.BudgetTokens,
+					Summary:   summary,
+				}
+			} else if req.Thinking.BudgetTokens != nil {
+				// Fallback: convert budget_tokens to effort
+				params.Reasoning = &schemas.ResponsesParametersReasoning{
+					Effort:    schemas.Ptr(providerUtils.GetReasoningEffortFromBudgetTokens(*req.Thinking.BudgetTokens, MinimumReasoningMaxTokens, AnthropicDefaultMaxTokens)),
+					MaxTokens: req.Thinking.BudgetTokens,
+					Summary:   summary,
+				}
+			} else {
+				// Adaptive with no explicit effort — default to "high"
+				params.Reasoning = &schemas.ResponsesParametersReasoning{
+					Effort:  schemas.Ptr("high"),
+					Summary: summary,
+				}
 			}
 		} else {
 			params.Reasoning = &schemas.ResponsesParametersReasoning{
@@ -2081,13 +2097,33 @@ func ToAnthropicResponsesRequest(ctx *schemas.BifrostContext, bifrostReq *schema
 			} else {
 				if bifrostReq.Params.Reasoning.Effort != nil {
 					if *bifrostReq.Params.Reasoning.Effort != "none" {
-						budgetTokens, err := providerUtils.GetBudgetTokensFromReasoningEffort(*bifrostReq.Params.Reasoning.Effort, MinimumReasoningMaxTokens, anthropicReq.MaxTokens)
-						if err != nil {
-							return nil, err
-						}
-						anthropicReq.Thinking = &AnthropicThinking{
-							Type:         "enabled",
-							BudgetTokens: schemas.Ptr(budgetTokens),
+						effort := MapBifrostEffortToAnthropic(*bifrostReq.Params.Reasoning.Effort)
+
+						if SupportsAdaptiveThinking(bifrostReq.Model) {
+							// Opus 4.6+: adaptive thinking + native effort
+							anthropicReq.Thinking = &AnthropicThinking{Type: "adaptive"}
+							setEffortOnOutputConfig(anthropicReq, effort)
+						} else if SupportsNativeEffort(bifrostReq.Model) {
+							// Opus 4.5: native effort + budget_tokens thinking
+							setEffortOnOutputConfig(anthropicReq, effort)
+							budgetTokens, err := providerUtils.GetBudgetTokensFromReasoningEffort(effort, MinimumReasoningMaxTokens, anthropicReq.MaxTokens)
+							if err != nil {
+								return nil, err
+							}
+							anthropicReq.Thinking = &AnthropicThinking{
+								Type:         "enabled",
+								BudgetTokens: schemas.Ptr(budgetTokens),
+							}
+						} else {
+							// Older models: budget_tokens only
+							budgetTokens, err := providerUtils.GetBudgetTokensFromReasoningEffort(effort, MinimumReasoningMaxTokens, anthropicReq.MaxTokens)
+							if err != nil {
+								return nil, err
+							}
+							anthropicReq.Thinking = &AnthropicThinking{
+								Type:         "enabled",
+								BudgetTokens: schemas.Ptr(budgetTokens),
+							}
 						}
 					} else {
 						anthropicReq.Thinking = &AnthropicThinking{
