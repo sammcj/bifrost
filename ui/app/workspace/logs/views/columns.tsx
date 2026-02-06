@@ -53,6 +53,12 @@ function getMessage(log?: LogEntry) {
 		return log.speech_input.input;
 	} else if (log?.transcription_input) {
 		return "Audio file";
+	} else if (log?.image_generation_input?.prompt) {
+		return log.image_generation_input.prompt;
+	} 
+	const obj = log?.object as string | undefined;
+	if (obj === "image_edit" || obj === "image_edit_stream" || obj === "image_variation") {
+		return "Image file";
 	}
 	return "";
 }
