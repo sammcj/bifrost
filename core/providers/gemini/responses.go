@@ -2912,6 +2912,14 @@ func convertContentBlockToGeminiPart(block schemas.ResponsesMessageContentBlock)
 			}, nil
 		}
 
+	case schemas.ResponsesOutputMessageContentTypeCompaction:
+		// Convert compaction to text block for Gemini (compaction is Anthropic-specific)
+		if block.ResponsesOutputMessageContentCompaction != nil {
+			if summary := strings.TrimSpace(block.ResponsesOutputMessageContentCompaction.Summary); summary != "" {
+				return &Part{Text: summary}, nil
+			}
+		}
+
 	case schemas.ResponsesInputMessageContentBlockTypeImage:
 		if block.ResponsesInputMessageContentBlockImage != nil && block.ResponsesInputMessageContentBlockImage.ImageURL != nil {
 			imageURL := *block.ResponsesInputMessageContentBlockImage.ImageURL

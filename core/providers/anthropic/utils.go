@@ -19,6 +19,7 @@ var (
 		AnthropicStopReasonMaxTokens:    "length",
 		AnthropicStopReasonStopSequence: "stop",
 		AnthropicStopReasonToolUse:      "tool_calls",
+		AnthropicStopReasonCompaction:   "compaction",
 	}
 
 	// Maps Bifrost finish reasons to provider-specific format
@@ -26,6 +27,7 @@ var (
 		"stop":       AnthropicStopReasonEndTurn, // canonical default
 		"length":     AnthropicStopReasonMaxTokens,
 		"tool_calls": AnthropicStopReasonToolUse,
+		"compaction": AnthropicStopReasonCompaction,
 	}
 )
 
@@ -169,6 +171,17 @@ func addMissingBetaHeadersToContext(ctx *schemas.BifrostContext, req *AnthropicM
 			if !hasCachingScope && tool.CacheControl != nil && tool.CacheControl.Scope != nil {
 				headers = appendUniqueHeader(headers, AnthropicPromptCachingScopeBetaHeader)
 				hasCachingScope = true
+			}
+		}
+	}
+	// Check for compaction
+	if req.ContextManagement != nil {
+		for _, edit := range req.ContextManagement.Edits {
+			if edit.Type == ContextManagementEditTypeCompact {
+				headers = appendUniqueHeader(headers, AnthropicCompactionBetaHeader)
+			}
+			if edit.Type == ContextManagementEditTypeClearToolUses || edit.Type == ContextManagementEditTypeClearThinking {
+				headers = appendUniqueHeader(headers, AnthropicContextManagementBetaHeader)
 			}
 		}
 	}

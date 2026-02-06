@@ -39,6 +39,23 @@ func ToAnthropicChatRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.Bif
 			anthropicReq.TopK = topK
 
 		}
+		// extract inference_geo and context management
+		if inferenceGeo, ok := schemas.SafeExtractStringPointer(bifrostReq.Params.ExtraParams["inference_geo"]); ok {
+			delete(anthropicReq.ExtraParams, "inference_geo")
+			anthropicReq.InferenceGeo = inferenceGeo
+		}
+		if cmVal := bifrostReq.Params.ExtraParams["context_management"]; cmVal != nil {
+			if cm, ok := cmVal.(*ContextManagement); ok && cm != nil {
+				delete(anthropicReq.ExtraParams, "context_management")
+				anthropicReq.ContextManagement = cm
+			} else if data, err := json.Marshal(cmVal); err == nil {
+				var cm ContextManagement
+				if json.Unmarshal(data, &cm) == nil {
+					delete(anthropicReq.ExtraParams, "context_management")
+					anthropicReq.ContextManagement = &cm
+				}
+			}
+		}
 		if bifrostReq.Params.ResponseFormat != nil {
 			// Vertex doesn't support native structured outputs, so convert to tool
 			if bifrostReq.Provider == schemas.Vertex {

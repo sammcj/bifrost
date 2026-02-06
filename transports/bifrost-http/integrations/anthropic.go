@@ -297,10 +297,6 @@ func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.Bif
 
 	// Check if anthropic oauth headers are present
 	if shouldUsePassthrough(bifrostCtx, provider, model, "") {
-		if provider == schemas.Vertex && hasPromptCachingScopeBetaHeader(headers) {
-			bifrostCtx.SetValue(schemas.BifrostContextKeyUseRawRequestBody, false)
-			return nil
-		}
 		bifrostCtx.SetValue(schemas.BifrostContextKeyUseRawRequestBody, true)
 		if !isAnthropicAPIKeyAuth(ctx) && (provider == schemas.Anthropic || provider == "") {
 			url := extractExactPath(ctx)
@@ -316,6 +312,10 @@ func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.Bif
 			if len(passthroughHeaders) > 0 {
 				bifrostCtx.SetValue(schemas.BifrostContextKeyExtraHeaders, passthroughHeaders)
 			}
+		}
+		if provider == schemas.Vertex && hasPromptCachingScopeBetaHeader(headers) {
+			bifrostCtx.SetValue(schemas.BifrostContextKeyUseRawRequestBody, false)
+			return nil
 		}
 	}
 	return nil

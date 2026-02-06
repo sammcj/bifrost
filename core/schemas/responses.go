@@ -193,6 +193,8 @@ func (resp *BifrostResponsesResponse) WithDefaults() *BifrostResponsesResponse {
 	// Usage - ensure token details exist
 	result.Usage = resp.Usage
 	if result.Usage != nil {
+		result.Usage.Iterations = nil
+		result.Usage.Type = nil
 		if result.Usage.InputTokensDetails == nil {
 			result.Usage.InputTokensDetails = &ResponsesResponseInputTokens{CachedTokens: 0}
 		}
@@ -417,12 +419,14 @@ type ResponsesResponseIncompleteDetails struct {
 }
 
 type ResponsesResponseUsage struct {
+	Type                *string                        `json:"type,omitempty"`        // type field is sent by anthropic
 	InputTokens         int                            `json:"input_tokens"`          // Number of input tokens
 	InputTokensDetails  *ResponsesResponseInputTokens  `json:"input_tokens_details"`  // Detailed breakdown of input tokens
 	OutputTokens        int                            `json:"output_tokens"`         // Number of output tokens
 	OutputTokensDetails *ResponsesResponseOutputTokens `json:"output_tokens_details"` // Detailed breakdown of output tokens	TotalTokens int `json:"total_tokens"` // Total number of tokens used
 	TotalTokens         int                            `json:"total_tokens"`          // Total number of tokens used
 	Cost                *BifrostCost                   `json:"cost,omitempty"`        // Only for the providers which support cost calculation
+	Iterations          []ResponsesResponseUsage       `json:"iterations,omitempty"`  // iterations field is sent by anthropic
 }
 
 type ResponsesResponseInputTokens struct {
@@ -564,6 +568,8 @@ const (
 
 	// gemini sends rendered content in google search results
 	ResponsesOutputMessageContentTypeRenderedContent ResponsesMessageContentBlockType = "rendered_content"
+
+	ResponsesOutputMessageContentTypeCompaction ResponsesMessageContentBlockType = "compaction"
 )
 
 // ResponsesMessageContentBlock represents different types of content (text, image, file, audio)
@@ -581,12 +587,16 @@ type ResponsesMessageContentBlock struct {
 	*ResponsesOutputMessageContentText            // Normal text output from the model
 	*ResponsesOutputMessageContentRefusal         // Model refusal to answer
 	*ResponsesOutputMessageContentRenderedContent // Rendered content from search entry point
+	*ResponsesOutputMessageContentCompaction      // Compaction content from the model
 
 	// Not in OpenAI's schemas, but sent by a few providers (Anthropic, Bedrock are some of them)
 	CacheControl *CacheControl `json:"cache_control,omitempty"`
 	Citations    *Citations    `json:"citations,omitempty"`
 }
 
+type ResponsesOutputMessageContentCompaction struct {
+	Summary string `json:"summary,omitempty"` // The compaction summary text
+}
 type ResponsesOutputMessageContentRenderedContent struct {
 	RenderedContent string `json:"rendered_content"` // HTML/styled content from search entry point
 }

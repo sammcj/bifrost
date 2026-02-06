@@ -42,8 +42,53 @@ func ToOpenAIResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *Open
 
 	var messages []schemas.ResponsesMessage
 	// OpenAI models (except for gpt-oss) do not support reasoning content blocks, so we need to convert them to summaries, if there are any
+	// OpenAI also doesn't support compaction content blocks, so we need to convert them to text blocks
 	messages = make([]schemas.ResponsesMessage, 0, len(bifrostReq.Input))
 	for _, message := range bifrostReq.Input {
+		// First, check if message has compaction content blocks and convert them to text
+		if message.Content != nil && len(message.Content.ContentBlocks) > 0 {
+			hasCompaction := false
+			for _, block := range message.Content.ContentBlocks {
+				if block.Type == schemas.ResponsesOutputMessageContentTypeCompaction {
+					hasCompaction = true
+					break
+				}
+			}
+			
+			if hasCompaction {
+				// Create a new message with converted content blocks
+				newMessage := message
+				newContentBlocks := make([]schemas.ResponsesMessageContentBlock, 0, len(message.Content.ContentBlocks))
+				
+				for _, block := range message.Content.ContentBlocks {
+					if block.Type == schemas.ResponsesOutputMessageContentTypeCompaction {
+						// Convert compaction block to text block
+						if block.ResponsesOutputMessageContentCompaction != nil && block.ResponsesOutputMessageContentCompaction.Summary != "" {
+							newContentBlocks = append(newContentBlocks, schemas.ResponsesMessageContentBlock{
+								Type: schemas.ResponsesOutputMessageContentTypeText,
+								Text: schemas.Ptr(block.ResponsesOutputMessageContentCompaction.Summary),
+							})
+						}
+						// If summary is empty, skip the block entirely
+					} else {
+						// Keep non-compaction blocks as-is
+						newContentBlocks = append(newContentBlocks, block)
+					}
+				}
+				
+				// Only update if we have blocks remaining after conversion
+				if len(newContentBlocks) > 0 {
+					newMessage.Content = &schemas.ResponsesMessageContent{
+						ContentBlocks: newContentBlocks,
+					}
+					message = newMessage
+				} else {
+					// If all blocks were compaction with empty summaries, skip message
+					continue
+				}
+			}
+		}
+		
 		if message.ResponsesReasoning != nil {
 			// According to OpenAI's Responses API format specification, for non-gpt-oss models, a message
 			// with ResponsesReasoning != nil and non-empty Content.ContentBlocks but empty Summary and

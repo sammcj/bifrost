@@ -1703,6 +1703,16 @@ func convertResponsesMessageContentBlocksToCohere(blocks []schemas.ResponsesMess
 					Thinking: block.Text,
 				})
 			}
+		case schemas.ResponsesOutputMessageContentTypeCompaction:
+			// Convert compaction to text block for Cohere (compaction is Anthropic-specific)
+			if block.ResponsesOutputMessageContentCompaction != nil {
+				if summary := strings.TrimSpace(block.ResponsesOutputMessageContentCompaction.Summary); summary != "" {
+					cohereBlocks = append(cohereBlocks, CohereContentBlock{
+						Type: CohereContentBlockTypeText,
+						Text: schemas.Ptr(summary),
+					})
+				}
+			}
 		}
 	}
 
