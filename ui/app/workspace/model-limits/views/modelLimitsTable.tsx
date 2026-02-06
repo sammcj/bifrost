@@ -36,10 +36,9 @@ const formatResetDuration = (duration: string) => {
 
 interface ModelLimitsTableProps {
 	modelConfigs: ModelConfig[];
-	onRefresh: () => void;
 }
 
-export default function ModelLimitsTable({ modelConfigs, onRefresh }: ModelLimitsTableProps) {
+export default function ModelLimitsTable({ modelConfigs }: ModelLimitsTableProps) {
 	const [showModelLimitSheet, setShowModelLimitSheet] = useState(false);
 	const [editingModelConfigId, setEditingModelConfigId] = useState<string | null>(null);
 
@@ -59,7 +58,6 @@ export default function ModelLimitsTable({ modelConfigs, onRefresh }: ModelLimit
 		try {
 			await deleteModelConfig(id).unwrap();
 			toast.success("Model limit deleted successfully");
-			onRefresh();
 		} catch (error) {
 			toast.error(getErrorMessage(error));
 		}
@@ -79,7 +77,6 @@ export default function ModelLimitsTable({ modelConfigs, onRefresh }: ModelLimit
 	const handleModelLimitSaved = () => {
 		setShowModelLimitSheet(false);
 		setEditingModelConfigId(null);
-		onRefresh();
 	};
 
 	return (

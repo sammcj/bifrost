@@ -42,7 +42,27 @@ export const routingRulesApi = baseApi.injectEndpoints({
 				body,
 			}),
 			transformResponse: (response: { rule: RoutingRule }) => response.rule,
-			invalidatesTags: ["RoutingRules"],
+			async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+				try {
+					const { data: newRule } = await queryFulfilled;
+					// Update the default cache variant
+					dispatch(
+						routingRulesApi.util.updateQueryData("getRoutingRules", undefined, (draft) => {
+							draft.push(newRule);
+						})
+					);
+					// Update the fromMemory cache variant
+					dispatch(
+						routingRulesApi.util.updateQueryData("getRoutingRules", { fromMemory: true }, (draft) => {
+							draft.push(newRule);
+						})
+					);
+					// Also update the individual routing rule cache
+					dispatch(
+						routingRulesApi.util.updateQueryData("getRoutingRule", newRule.id, () => newRule)
+					);
+				} catch {}
+			},
 		}),
 
 		// Update an existing routing rule
@@ -53,7 +73,33 @@ export const routingRulesApi = baseApi.injectEndpoints({
 				body: data,
 			}),
 			transformResponse: (response: { rule: RoutingRule }) => response.rule,
-			invalidatesTags: (result, error, arg) => ["RoutingRules", { type: "RoutingRules", id: arg.id }],
+			async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+				try {
+					const { data: updatedRule } = await queryFulfilled;
+					// Update the default cache variant
+					dispatch(
+						routingRulesApi.util.updateQueryData("getRoutingRules", undefined, (draft) => {
+							const index = draft.findIndex((r) => r.id === updatedRule.id);
+							if (index !== -1) {
+								draft[index] = updatedRule;
+							}
+						})
+					);
+					// Update the fromMemory cache variant
+					dispatch(
+						routingRulesApi.util.updateQueryData("getRoutingRules", { fromMemory: true }, (draft) => {
+							const index = draft.findIndex((r) => r.id === updatedRule.id);
+							if (index !== -1) {
+								draft[index] = updatedRule;
+							}
+						})
+					);
+					// Also update the individual routing rule cache
+					dispatch(
+						routingRulesApi.util.updateQueryData("getRoutingRule", updatedRule.id, () => updatedRule)
+					);
+				} catch {}
+			},
 		}),
 
 		// Delete a routing rule
@@ -62,7 +108,29 @@ export const routingRulesApi = baseApi.injectEndpoints({
 				url: `/governance/routing-rules/${id}`,
 				method: "DELETE",
 			}),
-			invalidatesTags: (result, error, id) => [{ type: "RoutingRules", id }, { type: "RoutingRules", id: "LIST" }, "RoutingRules"],
+			async onQueryStarted(ruleId, { dispatch, queryFulfilled }) {
+				try {
+					await queryFulfilled;
+					// Update the default cache variant
+					dispatch(
+						routingRulesApi.util.updateQueryData("getRoutingRules", undefined, (draft) => {
+							const index = draft.findIndex((r) => r.id === ruleId);
+							if (index !== -1) {
+								draft.splice(index, 1);
+							}
+						})
+					);
+					// Update the fromMemory cache variant
+					dispatch(
+						routingRulesApi.util.updateQueryData("getRoutingRules", { fromMemory: true }, (draft) => {
+							const index = draft.findIndex((r) => r.id === ruleId);
+							if (index !== -1) {
+								draft.splice(index, 1);
+							}
+						})
+					);
+				} catch {}
+			},
 		}),
 	}),
 });

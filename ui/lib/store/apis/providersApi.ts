@@ -53,7 +53,16 @@ export const providersApi = baseApi.injectEndpoints({
 				method: "POST",
 				body: data,
 			}),
-			invalidatesTags: ["Providers"],
+			async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+				try {
+					const { data: newProvider } = await queryFulfilled;
+					dispatch(
+						providersApi.util.updateQueryData("getProviders", undefined, (draft) => {
+							draft.push(newProvider);
+						})
+					);
+				} catch {}
+			},
 		}),
 
 		// Update existing provider
@@ -63,7 +72,20 @@ export const providersApi = baseApi.injectEndpoints({
 				method: "PUT",
 				body: provider,
 			}),
-			invalidatesTags: (result, error, provider) => ["Providers", { type: "Providers", id: provider.name }],
+			async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+				try {
+					const { data: updatedProvider } = await queryFulfilled;
+					dispatch(
+						providersApi.util.updateQueryData("getProviders", undefined, (draft) => {
+							const index = draft.findIndex((p) => p.name === arg.name);
+							if (index !== -1) {
+								draft[index] = updatedProvider;
+							}
+						})
+					);
+					dispatch(providersApi.util.updateQueryData("getProvider", arg.name, () => updatedProvider));
+				} catch {}
+			},
 		}),
 
 		// Delete provider
@@ -72,7 +94,19 @@ export const providersApi = baseApi.injectEndpoints({
 				url: `/providers/${encodeURIComponent(provider)}`,
 				method: "DELETE",
 			}),
-			invalidatesTags: ["Providers"],
+			async onQueryStarted(providerName, { dispatch, queryFulfilled }) {
+				try {
+					await queryFulfilled;
+					dispatch(
+						providersApi.util.updateQueryData("getProviders", undefined, (draft) => {
+							const index = draft.findIndex((p) => p.name === providerName);
+							if (index !== -1) {
+								draft.splice(index, 1);
+							}
+						})
+					);
+				} catch {}
+			},
 		}),
 
 		// Get all available keys from all providers for governance selection

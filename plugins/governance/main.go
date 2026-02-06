@@ -128,7 +128,6 @@ func Init(
 	modelCatalog *modelcatalog.ModelCatalog,
 	mcpCatalog *mcpcatalog.MCPCatalog,
 	inMemoryStore InMemoryStore,
-	eventBroadcaster schemas.EventBroadcaster,
 ) (*GovernancePlugin, error) {
 	if configStore == nil {
 		logger.Warn("governance plugin requires config store to persist data, running in memory only mode")
@@ -150,7 +149,6 @@ func Init(
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize governance store: %w", err)
 	}
-	governanceStore.eventBroadcaster = eventBroadcaster
 	// Initialize components in dependency order with fixed, optimal settings
 	// Resolver (pure decision engine for hierarchical governance, depends only on store)
 	resolver := NewBudgetResolver(governanceStore, modelCatalog, logger)
@@ -232,7 +230,6 @@ func InitFromStore(
 	modelCatalog *modelcatalog.ModelCatalog,
 	mcpCatalog *mcpcatalog.MCPCatalog,
 	inMemoryStore InMemoryStore,
-	eventBroadcaster schemas.EventBroadcaster,
 ) (*GovernancePlugin, error) {
 	if configStore == nil {
 		logger.Warn("governance plugin requires config store to persist data, running in memory only mode")
@@ -250,9 +247,6 @@ func InitFromStore(
 	var isVkMandatory *bool
 	if config != nil {
 		isVkMandatory = config.IsVkMandatory
-	}
-	if localStore, ok := governanceStore.(*LocalGovernanceStore); ok {
-		localStore.eventBroadcaster = eventBroadcaster
 	}
 	resolver := NewBudgetResolver(governanceStore, modelCatalog, logger)
 	tracker := NewUsageTracker(ctx, governanceStore, resolver, configStore, logger)
