@@ -2486,6 +2486,7 @@ func (s *RDBConfigStore) GetGovernanceConfig(ctx context.Context) (*GovernanceCo
 		var username *string
 		var password *string
 		var isEnabled bool
+		var disableAuthOnInference bool
 		for _, entry := range governanceConfigs {
 			switch entry.Key {
 			case tables.ConfigAdminUsernameKey:
@@ -2494,13 +2495,16 @@ func (s *RDBConfigStore) GetGovernanceConfig(ctx context.Context) (*GovernanceCo
 				password = bifrost.Ptr(entry.Value)
 			case tables.ConfigIsAuthEnabledKey:
 				isEnabled = entry.Value == "true"
+			case tables.ConfigDisableAuthOnInferenceKey:
+				disableAuthOnInference = entry.Value == "true"
 			}
 		}
 		if username != nil && password != nil {
 			authConfig = &AuthConfig{
-				AdminUserName: *username,
-				AdminPassword: *password,
-				IsEnabled:     isEnabled,
+				AdminUserName:          schemas.NewEnvVar(*username),
+				AdminPassword:          schemas.NewEnvVar(*password),
+				IsEnabled:              isEnabled,
+				DisableAuthOnInference: disableAuthOnInference,
 			}
 		}
 	}
@@ -2548,8 +2552,8 @@ func (s *RDBConfigStore) GetAuthConfig(ctx context.Context) (*AuthConfig, error)
 		return nil, nil
 	}
 	return &AuthConfig{
-		AdminUserName:          *username,
-		AdminPassword:          *password,
+		AdminUserName:          schemas.NewEnvVar(*username),
+		AdminPassword:          schemas.NewEnvVar(*password),
 		IsEnabled:              isEnabled,
 		DisableAuthOnInference: disableAuthOnInference,
 	}, nil
@@ -2560,13 +2564,13 @@ func (s *RDBConfigStore) UpdateAuthConfig(ctx context.Context, config *AuthConfi
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&tables.TableGovernanceConfig{
 			Key:   tables.ConfigAdminUsernameKey,
-			Value: config.AdminUserName,
+			Value: config.AdminUserName.GetValue(),
 		}).Error; err != nil {
 			return err
 		}
 		if err := tx.Save(&tables.TableGovernanceConfig{
 			Key:   tables.ConfigAdminPasswordKey,
-			Value: config.AdminPassword,
+			Value: config.AdminPassword.GetValue(),
 		}).Error; err != nil {
 			return err
 		}

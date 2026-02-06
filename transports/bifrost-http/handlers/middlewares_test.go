@@ -557,8 +557,8 @@ func TestAuthMiddleware_DisabledAuthConfig(t *testing.T) {
 
 	am := &AuthMiddleware{}
 	am.UpdateAuthConfig(&configstore.AuthConfig{
-		AdminUserName: "admin",
-		AdminPassword: "password",
+		AdminUserName: schemas.NewEnvVar("admin"),
+		AdminPassword: schemas.NewEnvVar("password"),
 		IsEnabled:     false,
 	})
 
@@ -586,8 +586,8 @@ func TestAuthMiddleware_EnabledAuthConfig_NoAuth(t *testing.T) {
 
 	am := &AuthMiddleware{}
 	am.UpdateAuthConfig(&configstore.AuthConfig{
-		AdminUserName: "admin",
-		AdminPassword: "hashedpassword",
+		AdminUserName: schemas.NewEnvVar("admin"),
+		AdminPassword: schemas.NewEnvVar("hashedpassword"),
 		IsEnabled:     true,
 	})
 
@@ -618,8 +618,8 @@ func TestAuthMiddleware_WhitelistedRoutes(t *testing.T) {
 
 	am := &AuthMiddleware{}
 	am.UpdateAuthConfig(&configstore.AuthConfig{
-		AdminUserName: "admin",
-		AdminPassword: "hashedpassword",
+		AdminUserName: schemas.NewEnvVar("admin"),
+		AdminPassword: schemas.NewEnvVar("hashedpassword"),
 		IsEnabled:     true,
 	})
 
@@ -677,8 +677,8 @@ func TestAuthMiddleware_UpdateAuthConfig_NilToEnabled(t *testing.T) {
 
 	// Now enable auth
 	am.UpdateAuthConfig(&configstore.AuthConfig{
-		AdminUserName: "admin",
-		AdminPassword: "hashedpassword",
+		AdminUserName: schemas.NewEnvVar("admin"),
+		AdminPassword: schemas.NewEnvVar("hashedpassword"),
 		IsEnabled:     true,
 	})
 
@@ -704,8 +704,8 @@ func TestAuthMiddleware_UpdateAuthConfig_EnabledToDisabled(t *testing.T) {
 	am := &AuthMiddleware{}
 	// Start with auth enabled
 	am.UpdateAuthConfig(&configstore.AuthConfig{
-		AdminUserName: "admin",
-		AdminPassword: "hashedpassword",
+		AdminUserName: schemas.NewEnvVar("admin"),
+		AdminPassword: schemas.NewEnvVar("hashedpassword"),
 		IsEnabled:     true,
 	})
 
@@ -728,8 +728,8 @@ func TestAuthMiddleware_UpdateAuthConfig_EnabledToDisabled(t *testing.T) {
 
 	// Now disable auth
 	am.UpdateAuthConfig(&configstore.AuthConfig{
-		AdminUserName: "admin",
-		AdminPassword: "hashedpassword",
+		AdminUserName: schemas.NewEnvVar("admin"),
+		AdminPassword: schemas.NewEnvVar("hashedpassword"),
 		IsEnabled:     false,
 	})
 

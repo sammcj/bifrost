@@ -143,22 +143,42 @@ func (h *ConfigHandler) getConfig(ctx *fasthttp.RequestCtx) {
 		// Getting username and password from auth config
 		// This username password is for the dashboard authentication
 		if authConfig != nil {
-			password := ""
-			if authConfig.AdminPassword != "" {
-				password = "<redacted>"
+			// For password, return EnvVar structure with redacted value
+			// If from env, preserve env_var reference but clear value
+			// If not from env, show <redacted> as the value
+			var passwordEnvVar *schemas.EnvVar
+			if authConfig.AdminPassword != nil && authConfig.AdminPassword.IsFromEnv() {
+				passwordEnvVar = &schemas.EnvVar{
+					Val:     "",
+					EnvVar:  authConfig.AdminPassword.EnvVar,
+					FromEnv: true,
+				}
+			} else {
+				passwordEnvVar = &schemas.EnvVar{
+					Val:     "<redacted>",
+					EnvVar:  "",
+					FromEnv: false,
+				}
 			}
-			// Password we will hash it
 			mapConfig["auth_config"] = map[string]any{
 				"admin_username":            authConfig.AdminUserName,
-				"admin_password":            password,
+				"admin_password":            passwordEnvVar,
 				"is_enabled":                authConfig.IsEnabled,
 				"disable_auth_on_inference": authConfig.DisableAuthOnInference,
+			}
+		} else {
+			// No auth config exists yet, return default empty EnvVar values
+			mapConfig["auth_config"] = map[string]any{
+				"admin_username":            &schemas.EnvVar{Val: "", EnvVar: "", FromEnv: false},
+				"admin_password":            &schemas.EnvVar{Val: "", EnvVar: "", FromEnv: false},
+				"is_enabled":                false,
+				"disable_auth_on_inference": false,
 			}
 		}
 	} else {
 		mapConfig["auth_config"] = map[string]any{
-			"admin_username":            "",
-			"admin_password":            "",
+			"admin_username":            &schemas.EnvVar{Val: "", EnvVar: "", FromEnv: false},
+			"admin_password":            &schemas.EnvVar{Val: "", EnvVar: "", FromEnv: false},
 			"is_enabled":                false,
 			"disable_auth_on_inference": false,
 		}
@@ -490,20 +510,38 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 			// Compare with existing config
 			if payload.AuthConfig.IsEnabled != authConfig.IsEnabled ||
 				payload.AuthConfig.AdminUserName != authConfig.AdminUserName ||
-				(payload.AuthConfig.AdminPassword != "<redacted>" && payload.AuthConfig.AdminPassword != "") {
+				(payload.AuthConfig.AdminPassword.IsRedacted() && payload.AuthConfig.AdminPassword.GetValue() != "") {
 				authChanged = true
 			}
 		}
 
 		if payload.AuthConfig.IsEnabled {
-			if authConfig == nil && (payload.AuthConfig.AdminUserName == "" || payload.AuthConfig.AdminPassword == "") {
+			// Initialize nil pointers to empty EnvVar to prevent nil-pointer dereference
+			if payload.AuthConfig.AdminUserName == nil {
+				payload.AuthConfig.AdminUserName = &schemas.EnvVar{}
+			}
+			if payload.AuthConfig.AdminPassword == nil {
+				payload.AuthConfig.AdminPassword = &schemas.EnvVar{}
+			}
+
+			// Validate env variables are set if referenced
+			if payload.AuthConfig.AdminUserName.IsFromEnv() && payload.AuthConfig.AdminUserName.GetValue() == "" {
+				SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("environment variable %s is not set", payload.AuthConfig.AdminUserName.EnvVar))
+				return
+			}
+			if payload.AuthConfig.AdminPassword.IsFromEnv() && payload.AuthConfig.AdminPassword.GetValue() == "" {
+				SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("environment variable %s is not set", payload.AuthConfig.AdminPassword.EnvVar))
+				return
+			}
+
+			if authConfig == nil && (payload.AuthConfig.AdminUserName.GetValue() == "" || payload.AuthConfig.AdminPassword.GetValue() == "") {
 				SendError(ctx, fasthttp.StatusBadRequest, "auth username and password must be provided")
 				return
 			}
 			// Fetching current Auth config
-			if payload.AuthConfig.AdminUserName != "" {
-				if payload.AuthConfig.AdminPassword == "<redacted>" {
-					if authConfig == nil || authConfig.AdminPassword == "" {
+			if payload.AuthConfig.AdminUserName.GetValue() != "" {
+				if payload.AuthConfig.AdminPassword.IsRedacted() {
+					if authConfig == nil || authConfig.AdminPassword.GetValue() == "" {
 						SendError(ctx, fasthttp.StatusBadRequest, "auth password must be provided")
 						return
 					}
@@ -512,13 +550,18 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 				} else {
 					// Password has been changed
 					// We will hash the password
-					hashedPassword, err := encrypt.Hash(payload.AuthConfig.AdminPassword)
+					hashedPassword, err := encrypt.Hash(payload.AuthConfig.AdminPassword.GetValue())
 					if err != nil {
 						logger.Warn("failed to hash password: %v", err)
 						SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to hash password: %v", err))
 						return
 					}
-					payload.AuthConfig.AdminPassword = string(hashedPassword)
+					// Preserve env-var metadata when storing hashed password
+					payload.AuthConfig.AdminPassword = &schemas.EnvVar{
+						Val:     hashedPassword,
+						FromEnv: payload.AuthConfig.AdminPassword.IsFromEnv(),
+						EnvVar:  payload.AuthConfig.AdminPassword.EnvVar,
+					}
 				}
 			}
 			// Save auth config - this handles both first-time creation and updates
@@ -530,10 +573,10 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 			}
 		} else if authConfig != nil {
 			// Auth is being disabled but there's an existing config - preserve credentials and update disabled state
-			if payload.AuthConfig.AdminPassword == "<redacted>" || payload.AuthConfig.AdminPassword == "" {
+			if payload.AuthConfig.AdminPassword == nil || payload.AuthConfig.AdminPassword.IsRedacted() || payload.AuthConfig.AdminPassword.GetValue() == "" {
 				payload.AuthConfig.AdminPassword = authConfig.AdminPassword
 			}
-			if payload.AuthConfig.AdminUserName == "" {
+			if payload.AuthConfig.AdminUserName == nil || payload.AuthConfig.AdminUserName.GetValue() == "" {
 				payload.AuthConfig.AdminUserName = authConfig.AdminUserName
 			}
 			err = h.configManager.UpdateAuthConfig(ctx, payload.AuthConfig)

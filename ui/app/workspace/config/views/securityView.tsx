@@ -3,13 +3,14 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { EnvVarInput } from "@/components/ui/envVarInput";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { IS_ENTERPRISE } from "@/lib/constants/config";
 import { getErrorMessage, useGetCoreConfigQuery, useUpdateCoreConfigMutation } from "@/lib/store";
 import { AuthConfig, CoreConfig, DefaultCoreConfig } from "@/lib/types/config";
+import { EnvVar } from "@/lib/types/schemas";
 import { parseArrayFromText } from "@/lib/utils/array";
 import { validateOrigins } from "@/lib/utils/validation";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
@@ -35,8 +36,8 @@ export default function SecurityView() {
 	});
 
 	const [authConfig, setAuthConfig] = useState<AuthConfig>({
-		admin_username: "",
-		admin_password: "",
+		admin_username: { value: "", env_var: "", from_env: false },
+		admin_password: { value: "", env_var: "", from_env: false },
 		is_enabled: false,
 		disable_auth_on_inference: false,
 	});
@@ -64,10 +65,18 @@ export default function SecurityView() {
 		const serverHeaders = config.allowed_headers?.slice().sort().join(",");
 		const headersChanged = localHeaders !== serverHeaders;
 
+		const usernameChanged =
+			authConfig.admin_username?.value !== bifrostConfig?.auth_config?.admin_username?.value ||
+			authConfig.admin_username?.env_var !== bifrostConfig?.auth_config?.admin_username?.env_var ||
+			authConfig.admin_username?.from_env !== bifrostConfig?.auth_config?.admin_username?.from_env;
+		const passwordChanged =
+			authConfig.admin_password?.value !== bifrostConfig?.auth_config?.admin_password?.value ||
+			authConfig.admin_password?.env_var !== bifrostConfig?.auth_config?.admin_password?.env_var ||
+			authConfig.admin_password?.from_env !== bifrostConfig?.auth_config?.admin_password?.from_env;
 		const authChanged =
 			authConfig.is_enabled !== bifrostConfig?.auth_config?.is_enabled ||
-			authConfig.admin_username !== bifrostConfig?.auth_config?.admin_username ||
-			authConfig.admin_password !== bifrostConfig?.auth_config?.admin_password ||
+			usernameChanged ||
+			passwordChanged ||
 			authConfig.disable_auth_on_inference !== bifrostConfig?.auth_config?.disable_auth_on_inference;
 
 		const enforceVirtualKeyChanged = localConfig.enforce_governance_header !== config.enforce_governance_header;
@@ -112,7 +121,7 @@ export default function SecurityView() {
 		setAuthConfig((prev) => ({ ...prev, disable_auth_on_inference: checked }));
 	}, []);
 
-	const handleAuthFieldChange = useCallback((field: "admin_username" | "admin_password", value: string) => {
+	const handleAuthFieldChange = useCallback((field: "admin_username" | "admin_password", value: EnvVar) => {
 		setAuthConfig((prev) => ({ ...prev, [field]: value }));
 	}, []);
 
@@ -126,13 +135,12 @@ export default function SecurityView() {
 				);
 				return;
 			}
+			const hasUsername = authConfig.admin_username?.value || authConfig.admin_username?.env_var;
+			const hasPassword = authConfig.admin_password?.value || authConfig.admin_password?.env_var;
 			await updateCoreConfig({
 				...bifrostConfig!,
 				client_config: localConfig,
-				auth_config:
-					authConfig.is_enabled && authConfig.admin_username && authConfig.admin_password
-						? authConfig
-						: { ...authConfig, is_enabled: false },
+				auth_config: authConfig.is_enabled && hasUsername && hasPassword ? authConfig : { ...authConfig, is_enabled: false },
 			}).unwrap();
 			toast.success("Security settings updated successfully.");
 		} catch (error) {
@@ -191,24 +199,24 @@ export default function SecurityView() {
 							<div className="space-y-4">
 								<div className="space-y-2">
 									<Label htmlFor="admin-username">Username</Label>
-									<Input
+									<EnvVarInput
 										id="admin-username"
 										type="text"
-										placeholder="Enter admin username"
+										placeholder="Enter admin username or env.VAR_NAME"
 										value={authConfig.admin_username}
 										disabled={!authConfig.is_enabled}
-										onChange={(e) => handleAuthFieldChange("admin_username", e.target.value)}
+										onChange={(value) => handleAuthFieldChange("admin_username", value)}
 									/>
 								</div>
 								<div className="space-y-2">
 									<Label htmlFor="admin-password">Password</Label>
-									<Input
+									<EnvVarInput
 										id="admin-password"
 										type="password"
-										placeholder="Enter admin password"
+										placeholder="Enter admin password or env.VAR_NAME"
 										value={authConfig.admin_password}
 										disabled={!authConfig.is_enabled}
-										onChange={(e) => handleAuthFieldChange("admin_password", e.target.value)}
+										onChange={(value) => handleAuthFieldChange("admin_password", value)}
 									/>
 								</div>
 								<div className="flex items-center justify-between">
@@ -242,7 +250,12 @@ export default function SecurityView() {
 							</label>
 							<p className="text-muted-foreground text-sm">
 								Enforce the use of a virtual key for all requests. If enabled, requests without the virtual key header will be rejected. See{" "}
-								<Link href="https://docs.getbifrost.ai/features/governance/virtual-keys" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+								<Link
+									href="https://docs.getbifrost.ai/features/governance/virtual-keys"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="text-primary underline"
+								>
 									documentation
 								</Link>{" "}
 								for header details.

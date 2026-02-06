@@ -294,8 +294,8 @@ export interface FrameworkConfig {
 
 // Auth config
 export interface AuthConfig {
-	admin_username: string;
-	admin_password: string;
+	admin_username: EnvVar;
+	admin_password: EnvVar;
 	is_enabled: boolean;
 	disable_auth_on_inference?: boolean;
 }
