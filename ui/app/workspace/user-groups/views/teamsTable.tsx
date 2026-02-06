@@ -29,10 +29,9 @@ interface TeamsTableProps {
 	teams: Team[];
 	customers: Customer[];
 	virtualKeys: VirtualKey[];
-	onRefresh: () => void;
 }
 
-export default function TeamsTable({ teams, customers, virtualKeys, onRefresh }: TeamsTableProps) {
+export default function TeamsTable({ teams, customers, virtualKeys }: TeamsTableProps) {
   const [showTeamDialog, setShowTeamDialog] = useState(false)
   const [editingTeam, setEditingTeam] = useState<Team | null>(null)
 
@@ -46,7 +45,6 @@ export default function TeamsTable({ teams, customers, virtualKeys, onRefresh }:
 		try {
 			await deleteTeam(teamId).unwrap();
 			toast.success("Team deleted successfully");
-			onRefresh();
 		} catch (error) {
 			toast.error(getErrorMessage(error));
 		}
@@ -65,7 +63,6 @@ export default function TeamsTable({ teams, customers, virtualKeys, onRefresh }:
 	const handleTeamSaved = () => {
 		setShowTeamDialog(false);
 		setEditingTeam(null);
-		onRefresh();
 	};
 
 	const getVirtualKeysForTeam = (teamId: string) => {

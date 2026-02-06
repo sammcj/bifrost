@@ -29,10 +29,9 @@ interface VirtualKeysTableProps {
 	virtualKeys: VirtualKey[];
 	teams: Team[];
 	customers: Customer[];
-	onRefresh: () => void;
 }
 
-export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefresh }: VirtualKeysTableProps) {
+export default function VirtualKeysTable({ virtualKeys, teams, customers }: VirtualKeysTableProps) {
   const [showVirtualKeySheet, setShowVirtualKeySheet] = useState(false)
   const [editingVirtualKeyId, setEditingVirtualKeyId] = useState<string | null>(null)
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
@@ -59,7 +58,6 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefr
 		try {
 			await deleteVirtualKey(vkId).unwrap();
 			toast.success("Virtual key deleted successfully");
-			onRefresh();
 		} catch (error) {
 			toast.error(getErrorMessage(error));
 		}
@@ -79,7 +77,6 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers, onRefr
 	const handleVirtualKeySaved = () => {
 		setShowVirtualKeySheet(false);
 		setEditingVirtualKeyId(null);
-		onRefresh();
 	};
 
 	const handleRowClick = (vk: VirtualKey) => {

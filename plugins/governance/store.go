@@ -45,9 +45,6 @@ type LocalGovernanceStore struct {
 	// Model matcher for cross-provider model matching (optional)
 	modelMatcher ModelMatcher
 
-	// Generic event broadcaster for pushing real-time updates to connected clients
-	eventBroadcaster schemas.EventBroadcaster
-
 	// Logger
 	logger schemas.Logger
 }
@@ -165,40 +162,6 @@ func NewLocalGovernanceStore(ctx context.Context, logger schemas.Logger, configS
 
 	store.logger.Info("governance store initialized successfully")
 	return store, nil
-}
-
-// emitBudgetUpdate broadcasts a single budget change via the event broadcaster
-func (gs *LocalGovernanceStore) emitBudgetUpdate(budgetID string, budget *configstoreTables.TableBudget) {
-	if gs.eventBroadcaster != nil {
-		cb := gs.eventBroadcaster
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					gs.logger.Warn("event broadcaster panic (budget update): %v", r)
-				}
-			}()
-			cb("governance_update", map[string]interface{}{
-				"budgets": map[string]*configstoreTables.TableBudget{budgetID: budget},
-			})
-		}()
-	}
-}
-
-// emitRateLimitUpdate broadcasts a single rate limit change via the event broadcaster
-func (gs *LocalGovernanceStore) emitRateLimitUpdate(rateLimitID string, rateLimit *configstoreTables.TableRateLimit) {
-	if gs.eventBroadcaster != nil {
-		cb := gs.eventBroadcaster
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					gs.logger.Warn("event broadcaster panic (rate limit update): %v", r)
-				}
-			}()
-			cb("governance_update", map[string]interface{}{
-				"rate_limits": map[string]*configstoreTables.TableRateLimit{rateLimitID: rateLimit},
-			})
-		}()
-	}
 }
 
 func (gs *LocalGovernanceStore) GetGovernanceData() *GovernanceData {
@@ -989,7 +952,6 @@ func (gs *LocalGovernanceStore) UpdateVirtualKeyBudgetUsageInMemory(ctx context.
 				// Update the clone
 				clone.CurrentUsage += cost
 				gs.budgets.Store(budgetID, &clone)
-				gs.emitBudgetUpdate(budgetID, &clone)
 				gs.logger.Debug("UpdateVirtualKeyBudgetUsageInMemory: Updated budget %s: %.4f -> %.4f (added %.4f)",
 					budgetID, oldUsage, clone.CurrentUsage, cost)
 			}
@@ -1022,7 +984,6 @@ func (gs *LocalGovernanceStore) UpdateProviderAndModelBudgetUsageInMemory(ctx co
 				// Update the clone
 				clone.CurrentUsage += cost
 				gs.budgets.Store(budgetID, &clone)
-				gs.emitBudgetUpdate(budgetID, &clone)
 			}
 		}
 	}
@@ -1092,7 +1053,6 @@ func (gs *LocalGovernanceStore) UpdateProviderAndModelRateLimitUsageInMemory(ctx
 					clone.RequestCurrentUsage += 1
 				}
 				gs.rateLimits.Store(rateLimitID, &clone)
-				gs.emitRateLimitUpdate(rateLimitID, &clone)
 			}
 		}
 	}
@@ -1172,7 +1132,6 @@ func (gs *LocalGovernanceStore) UpdateVirtualKeyRateLimitUsageInMemory(ctx conte
 					clone.RequestCurrentUsage += 1
 				}
 				gs.rateLimits.Store(rateLimitID, &clone)
-				gs.emitRateLimitUpdate(rateLimitID, &clone)
 			}
 		}
 	}
@@ -1207,7 +1166,6 @@ func (gs *LocalGovernanceStore) ResetExpiredBudgetsInMemory(ctx context.Context)
 
 			// Atomically replace the entry using the original key
 			gs.budgets.Store(key, &copiedBudget)
-			gs.emitBudgetUpdate(key.(string), &copiedBudget)
 			resetBudgets = append(resetBudgets, &copiedBudget)
 
 			// Update all VKs, teams, customers, and provider configs that reference this budget
@@ -1279,7 +1237,6 @@ func (gs *LocalGovernanceStore) ResetExpiredRateLimitsInMemory(ctx context.Conte
 
 			// Atomically replace the entry using the original key
 			gs.rateLimits.Store(key, &copiedRateLimit)
-			gs.emitRateLimitUpdate(key.(string), &copiedRateLimit)
 			resetRateLimits = append(resetRateLimits, &copiedRateLimit)
 
 			// Update all VKs and provider configs that reference this rate limit

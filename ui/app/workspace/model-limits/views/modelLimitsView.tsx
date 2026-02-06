@@ -13,15 +13,14 @@ export default function ModelLimitsView() {
 
 	const [triggerGetConfig] = useLazyGetCoreConfigQuery();
 
-	// Use regular query with skip, polling, and refetch on focus
+	// Use regular query with skip and polling
 	const {
 		data: modelConfigsData,
 		error: modelConfigsError,
 		isLoading: modelConfigsLoading,
-		refetch: refetchModelConfigs,
 	} = useGetModelConfigsQuery(undefined, {
 		skip: !governanceEnabled || !hasGovernanceAccess,
-		refetchOnFocus: true,
+		pollingInterval: 5000,
 	});
 
 	const isLoading = modelConfigsLoading || governanceEnabled === null;
@@ -50,19 +49,13 @@ export default function ModelLimitsView() {
 		}
 	}, [modelConfigsError]);
 
-	const handleRefresh = () => {
-		if (governanceEnabled) {
-			refetchModelConfigs();
-		}
-	};
-
 	if (isLoading) {
 		return <FullPageLoader />;
 	}
 
 	return (
 		<div className="mx-auto w-full max-w-7xl">
-			<ModelLimitsTable modelConfigs={modelConfigsData?.model_configs || []} onRefresh={handleRefresh} />
+			<ModelLimitsTable modelConfigs={modelConfigsData?.model_configs || []} />
 		</div>
 	);
 }

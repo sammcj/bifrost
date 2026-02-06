@@ -29,10 +29,9 @@ interface CustomersTableProps {
 	customers: Customer[];
 	teams: Team[];
 	virtualKeys: VirtualKey[];
-	onRefresh: () => void;
 }
 
-export default function CustomersTable({ customers, teams, virtualKeys, onRefresh }: CustomersTableProps) {
+export default function CustomersTable({ customers, teams, virtualKeys }: CustomersTableProps) {
   const [showCustomerDialog, setShowCustomerDialog] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
 
@@ -46,7 +45,6 @@ export default function CustomersTable({ customers, teams, virtualKeys, onRefres
 		try {
 			await deleteCustomer(customerId).unwrap();
 			toast.success("Customer deleted successfully");
-			onRefresh();
 		} catch (error) {
 			toast.error(getErrorMessage(error));
 		}
@@ -65,7 +63,6 @@ export default function CustomersTable({ customers, teams, virtualKeys, onRefres
 	const handleCustomerSaved = () => {
 		setShowCustomerDialog(false);
 		setEditingCustomer(null);
-		onRefresh();
 	};
 
 	const getTeamsForCustomer = (customerId: string) => {
