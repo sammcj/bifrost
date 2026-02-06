@@ -350,11 +350,15 @@ func (m *AuthMiddleware) middleware(shouldSkip func(*configstore.AuthConfig, str
 					return
 				}
 				// Verify the username and password
-				if username != authConfig.AdminUserName {
+				if authConfig.AdminUserName == nil || username != authConfig.AdminUserName.GetValue() {
 					SendError(ctx, fasthttp.StatusUnauthorized, "Unauthorized")
 					return
 				}
-				compare, err := encrypt.CompareHash(authConfig.AdminPassword, password)
+				if authConfig.AdminPassword == nil {
+					SendError(ctx, fasthttp.StatusInternalServerError, "Authentication not properly configured")
+					return
+				}
+				compare, err := encrypt.CompareHash(authConfig.AdminPassword.GetValue(), password)
 				if err != nil {
 					SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to compare password: %v", err))
 					return

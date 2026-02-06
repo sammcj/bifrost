@@ -1431,42 +1431,114 @@ func isBcryptHash(s string) bool {
 		strings.HasPrefix(s, "$2y$")
 }
 
-// loadAuthConfigFromFile loads auth config from file
+// preserveEnvVar returns a new EnvVar with the given value but preserving
+// env var metadata (EnvVar reference and FromEnv flag) from the source.
+// This allows the hashed password to be used as the value while retaining
+// the original env var reference for display in the UI.
+func preserveEnvVar(source *schemas.EnvVar, value string) *schemas.EnvVar {
+	if source == nil {
+		return schemas.NewEnvVar(value)
+	}
+	return &schemas.EnvVar{
+		Val:     value,
+		EnvVar:  source.EnvVar,
+		FromEnv: source.FromEnv,
+	}
+}
+
+// loadAuthConfigFromFile loads auth config from file.
+// File config (configData) always takes precedence over DB config.
 func loadAuthConfigFromFile(ctx context.Context, config *Config, configData *ConfigData) {
-	if config.GovernanceConfig == nil || config.GovernanceConfig.AuthConfig == nil {
-		if configData.AuthConfig == nil {
+	hasFileConfig := configData != nil && configData.AuthConfig != nil	
+	if !hasFileConfig && (config.GovernanceConfig == nil || config.GovernanceConfig.AuthConfig == nil) {
+		return
+	}
+	// Ensure GovernanceConfig is initialized
+	if config.GovernanceConfig == nil {
+		config.GovernanceConfig = &configstore.GovernanceConfig{}
+	}
+	if config.ConfigStore == nil {
+		logger.Warn("config store is required to load auth config from file")
+		if hasFileConfig {
+			config.GovernanceConfig.AuthConfig = configData.AuthConfig
+		}
+		return
+	}
+	// Load existing auth config from DB
+	dbAuthConfig, err := config.ConfigStore.GetAuthConfig(ctx)
+	if err != nil {
+		logger.Warn("failed to get auth config from store: %v", err)
+		return
+	}
+	// If no file config, use DB config and return (no write needed)
+	if !hasFileConfig {
+		if dbAuthConfig != nil {
+			config.GovernanceConfig.AuthConfig = dbAuthConfig
+		}
+		return
+	}
+	// File config present: validate env vars
+	if configData.AuthConfig.AdminUserName != nil && configData.AuthConfig.AdminUserName.GetValue() == "" && configData.AuthConfig.AdminUserName.IsFromEnv() {
+		logger.Fatal("username set with env var but value is empty: %s", configData.AuthConfig.AdminUserName.EnvVar)
+	}
+	if configData.AuthConfig.AdminPassword != nil && configData.AuthConfig.AdminPassword.GetValue() == "" && configData.AuthConfig.AdminPassword.IsFromEnv() {
+		logger.Fatal("password set with env var but value is empty: %s", configData.AuthConfig.AdminPassword.EnvVar)
+	}
+	filePassword := configData.AuthConfig.AdminPassword.GetValue()
+	// If DB already matches file config, skip hashing and DB write
+	if dbAuthConfig != nil {
+		usernameMatch := dbAuthConfig.AdminUserName.GetValue() == configData.AuthConfig.AdminUserName.GetValue()
+		boolsMatch := dbAuthConfig.IsEnabled == configData.AuthConfig.IsEnabled &&
+			dbAuthConfig.DisableAuthOnInference == configData.AuthConfig.DisableAuthOnInference
+		var passwordMatch bool
+		if filePassword == "" {
+			passwordMatch = dbAuthConfig.AdminPassword.GetValue() == ""
+		} else if isBcryptHash(filePassword) {
+			passwordMatch = dbAuthConfig.AdminPassword.GetValue() == filePassword
+		} else {
+			passwordMatch, _ = encrypt.CompareHash(dbAuthConfig.AdminPassword.GetValue(), filePassword)
+		}
+		if usernameMatch && passwordMatch && boolsMatch {
+			// DB matches file -- use DB hash but preserve file env var references
+			config.GovernanceConfig.AuthConfig = &configstore.AuthConfig{
+				AdminUserName:          configData.AuthConfig.AdminUserName,
+				AdminPassword:          preserveEnvVar(configData.AuthConfig.AdminPassword, dbAuthConfig.AdminPassword.GetValue()),
+				IsEnabled:              configData.AuthConfig.IsEnabled,
+				DisableAuthOnInference: configData.AuthConfig.DisableAuthOnInference,
+			}
 			return
 		}
-		if config.GovernanceConfig == nil {
-			config.GovernanceConfig = &configstore.GovernanceConfig{}
+		if !passwordMatch {
+			// Here we nuke all sessions
+			if err := config.ConfigStore.FlushSessions(ctx); err != nil {
+				logger.Warn("failed to flush sessions: %v", err)
+			}
 		}
-		if config.GovernanceConfig.AuthConfig == nil {
-			config.GovernanceConfig.AuthConfig = &configstore.AuthConfig{}
-		}
-		config.GovernanceConfig.AuthConfig.AdminUserName = configData.AuthConfig.AdminUserName
-		config.GovernanceConfig.AuthConfig.AdminPassword = configData.AuthConfig.AdminPassword
-		config.GovernanceConfig.AuthConfig.IsEnabled = configData.AuthConfig.IsEnabled
-		config.GovernanceConfig.AuthConfig.DisableAuthOnInference = configData.AuthConfig.DisableAuthOnInference
 	}
-
-	if config.ConfigStore != nil {
-		configStoreAuthConfig, err := config.ConfigStore.GetAuthConfig(ctx)
-		if err == nil && configStoreAuthConfig == nil {
-			// Hash the password if it's not already a bcrypt hash
-			if config.GovernanceConfig.AuthConfig.AdminPassword != "" && !isBcryptHash(config.GovernanceConfig.AuthConfig.AdminPassword) {
-				hashedPassword, err := encrypt.Hash(config.GovernanceConfig.AuthConfig.AdminPassword)
-				if err != nil {
-					logger.Warn("failed to hash auth password: %v", err)
-					return
-				}
-				config.GovernanceConfig.AuthConfig.AdminPassword = hashedPassword
+	// Hash password if it's plaintext (not already a bcrypt hash)
+	hashedPassword := filePassword
+	if hashedPassword != "" && !isBcryptHash(hashedPassword) {
+		var err error
+		hashedPassword, err = encrypt.Hash(hashedPassword)
+		if err != nil {
+			logger.Warn("failed to hash auth password: %v", err)
+			// Fall back to DB config if available rather than leaving AuthConfig unset
+			if dbAuthConfig != nil {
+				config.GovernanceConfig.AuthConfig = dbAuthConfig
 			}
-			if err := config.ConfigStore.UpdateAuthConfig(ctx, config.GovernanceConfig.AuthConfig); err != nil {
-				logger.Warn("failed to update auth config: %v", err)
-			}
+			return
 		}
-	} else {
-		logger.Warn("config store is required to load auth config from file")
+	}
+	// Build auth config with hashed password but preserve env var references
+	config.GovernanceConfig.AuthConfig = &configstore.AuthConfig{
+		AdminUserName:          configData.AuthConfig.AdminUserName,
+		AdminPassword:          preserveEnvVar(configData.AuthConfig.AdminPassword, hashedPassword),
+		IsEnabled:              configData.AuthConfig.IsEnabled,
+		DisableAuthOnInference: configData.AuthConfig.DisableAuthOnInference,
+	}
+	// Persist to config store
+	if err := config.ConfigStore.UpdateAuthConfig(ctx, config.GovernanceConfig.AuthConfig); err != nil {
+		logger.Warn("failed to update auth config: %v", err)
 	}
 }
 

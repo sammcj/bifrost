@@ -7,6 +7,12 @@
       "path": "../../examples/configs/withconfigstore/config.db"
     }
   },
+  "auth_config": {
+    "admin_username": "env.ADMIN",
+    "admin_password": "env.PASS",
+    "is_enabled": true,
+    "disable_auth_on_inference": true
+  },
   "governance": {
     "virtual_keys": [
       {
