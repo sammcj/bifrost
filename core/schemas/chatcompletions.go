@@ -787,8 +787,9 @@ const (
 )
 
 type CacheControl struct {
-	Type CacheControlType `json:"type"`
-	TTL  *string          `json:"ttl,omitempty"` // "1m" | "1h"
+	Type  CacheControlType `json:"type"`
+	TTL   *string          `json:"ttl,omitempty"`   // "1m" | "1h"
+	Scope *string          `json:"scope,omitempty"` // "user" | "global"
 }
 
 // ChatInputImage represents image data in a message.
