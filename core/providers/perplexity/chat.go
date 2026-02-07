@@ -26,6 +26,16 @@ func ToPerplexityChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) *
 		perplexityReq.FrequencyPenalty = bifrostReq.Params.FrequencyPenalty
 		perplexityReq.ResponseFormat = bifrostReq.Params.ResponseFormat
 
+		// Tool calling parameters
+		perplexityReq.Tools = bifrostReq.Params.Tools
+		perplexityReq.ToolChoice = bifrostReq.Params.ToolChoice
+		perplexityReq.ParallelToolCalls = bifrostReq.Params.ParallelToolCalls
+
+		// Standard parameters
+		perplexityReq.Stop = bifrostReq.Params.Stop
+		perplexityReq.LogProbs = bifrostReq.Params.LogProbs
+		perplexityReq.TopLogProbs = bifrostReq.Params.TopLogProbs
+
 		// Handle reasoning effort mapping
 		if bifrostReq.Params.Reasoning != nil && bifrostReq.Params.Reasoning.Effort != nil {
 			if *bifrostReq.Params.Reasoning.Effort == "minimal" {
@@ -109,6 +119,42 @@ func ToPerplexityChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) *
 				perplexityReq.EnableSearchClassifier = enableSearchClassifier
 			}
 
+			// Perplexity-specific request fields
+			if numSearchResults, ok := schemas.SafeExtractIntPointer(bifrostReq.Params.ExtraParams["num_search_results"]); ok {
+				delete(perplexityReq.ExtraParams, "num_search_results")
+				perplexityReq.NumSearchResults = numSearchResults
+			}
+
+			if numImages, ok := schemas.SafeExtractIntPointer(bifrostReq.Params.ExtraParams["num_images"]); ok {
+				delete(perplexityReq.ExtraParams, "num_images")
+				perplexityReq.NumImages = numImages
+			}
+
+			if searchLanguageFilter, ok := schemas.SafeExtractStringSlice(bifrostReq.Params.ExtraParams["search_language_filter"]); ok {
+				delete(perplexityReq.ExtraParams, "search_language_filter")
+				perplexityReq.SearchLanguageFilter = searchLanguageFilter
+			}
+
+			if imageFormatFilter, ok := schemas.SafeExtractStringSlice(bifrostReq.Params.ExtraParams["image_format_filter"]); ok {
+				delete(perplexityReq.ExtraParams, "image_format_filter")
+				perplexityReq.ImageFormatFilter = imageFormatFilter
+			}
+
+			if imageDomainFilter, ok := schemas.SafeExtractStringSlice(bifrostReq.Params.ExtraParams["image_domain_filter"]); ok {
+				delete(perplexityReq.ExtraParams, "image_domain_filter")
+				perplexityReq.ImageDomainFilter = imageDomainFilter
+			}
+
+			if safeSearch, ok := schemas.SafeExtractBoolPointer(bifrostReq.Params.ExtraParams["safe_search"]); ok {
+				delete(perplexityReq.ExtraParams, "safe_search")
+				perplexityReq.SafeSearch = safeSearch
+			}
+
+			if streamMode, ok := schemas.SafeExtractStringPointer(bifrostReq.Params.ExtraParams["stream_mode"]); ok {
+				delete(perplexityReq.ExtraParams, "stream_mode")
+				perplexityReq.StreamMode = streamMode
+			}
+
 			// Handle web_search_options
 			if webSearchOptionsParam, ok := schemas.SafeExtractFromMap(bifrostReq.Params.ExtraParams, "web_search_options"); ok {
 				if webSearchOptionsSlice, ok := webSearchOptionsParam.([]interface{}); ok {
@@ -123,9 +169,14 @@ func ToPerplexityChatCompletionRequest(bifrostReq *schemas.BifrostChatRequest) *
 								option.SearchContextSize = searchContextSize
 							}
 
-							if imageSearchRelevanceEnhanced, ok := schemas.SafeExtractBoolPointer(optionMap["image_search_relevance_enhanced"]); ok {
-								delete(optionMap, "image_search_relevance_enhanced")
-								option.ImageSearchRelevanceEnhanced = imageSearchRelevanceEnhanced
+							if imageResultsEnhancedRelevance, ok := schemas.SafeExtractBoolPointer(optionMap["image_results_enhanced_relevance"]); ok {
+								delete(optionMap, "image_results_enhanced_relevance")
+								option.ImageResultsEnhancedRelevance = imageResultsEnhancedRelevance
+							}
+
+							if searchType, ok := schemas.SafeExtractStringPointer(optionMap["search_type"]); ok {
+								delete(optionMap, "search_type")
+								option.SearchType = searchType
 							}
 
 							// Handle user_location
@@ -234,6 +285,7 @@ func (response *PerplexityChatResponse) ToBifrostChatResponse(model string) *sch
 		},
 		SearchResults: response.SearchResults,
 		Videos:        response.Videos,
+		Citations:     response.Citations,
 	}
 
 	// Map all response fields
