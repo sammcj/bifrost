@@ -3150,6 +3150,11 @@ func convertBifrostResponsesMessageContentBlocksToBedrockContentBlocks(content s
 						},
 					}
 				}
+			case schemas.ResponsesOutputMessageContentTypeCompaction:
+				// Convert compaction to text block for Bedrock (compaction is Anthropic-specific)
+				if block.ResponsesOutputMessageContentCompaction != nil {
+					bedrockBlock.Text = &block.ResponsesOutputMessageContentCompaction.Summary
+				}
 			case schemas.ResponsesInputMessageContentBlockTypeFile:
 				if block.ResponsesInputMessageContentBlockFile != nil {
 					doc := &BedrockDocumentSource{

@@ -844,6 +844,11 @@ def assert_valid_chat_response(response: Any, min_length: int = 1):
             text_content = [c for c in response.content if hasattr(c, "type") and c.type == "text"]
             if text_content:
                 content = text_content[0].text
+            else:
+                # Check for compaction blocks
+                compaction_content = [c for c in response.content if hasattr(c, "type") and c.type == "compaction"]
+                if compaction_content and hasattr(compaction_content[0], "content"):
+                    content = compaction_content[0].content
     elif hasattr(response, "choices") and len(response.choices) > 0:  # OpenAI
         # Handle OpenAI format (content can be string or list)
         choice = response.choices[0]

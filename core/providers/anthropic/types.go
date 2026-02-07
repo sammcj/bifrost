@@ -25,6 +25,10 @@ const (
 	AnthropicMCPClientBetaHeader = "mcp-client-2025-04-04"
 	// AnthropicPromptCachingScopeBetaHeader is required for prompt caching scope.
 	AnthropicPromptCachingScopeBetaHeader = "prompt-caching-scope-2026-01-05"
+	// AnthropicCompactionBetaHeader is required for compaction.
+	AnthropicCompactionBetaHeader = "compact-2026-01-12"
+	// AnthropicContextManagementBetaHeader is required for context management.
+	AnthropicContextManagementBetaHeader = "context-management-2025-06-27"
 )
 
 // ==================== REQUEST TYPES ====================
@@ -64,23 +68,25 @@ type AnthropicOutputConfig struct {
 
 // AnthropicMessageRequest represents an Anthropic messages API request
 type AnthropicMessageRequest struct {
-	Model         string                 `json:"model"`
-	MaxTokens     int                    `json:"max_tokens"`
-	Messages      []AnthropicMessage     `json:"messages"`
-	Metadata      *AnthropicMetaData     `json:"metadata,omitempty"`
-	System        *AnthropicContent      `json:"system,omitempty"`
-	Temperature   *float64               `json:"temperature,omitempty"`
-	TopP          *float64               `json:"top_p,omitempty"`
-	TopK          *int                   `json:"top_k,omitempty"`
-	StopSequences []string               `json:"stop_sequences,omitempty"`
-	Stream        *bool                  `json:"stream,omitempty"`
-	Tools         []AnthropicTool        `json:"tools,omitempty"`
-	ToolChoice    *AnthropicToolChoice   `json:"tool_choice,omitempty"`
-	MCPServers    []AnthropicMCPServer   `json:"mcp_servers,omitempty"` // This feature requires the beta header: "anthropic-beta": "mcp-client-2025-04-04"
-	Thinking      *AnthropicThinking     `json:"thinking,omitempty"`
-	OutputFormat  interface{}            `json:"output_format,omitempty"` // Beta: requires header "anthropic-beta": "structured-outputs-2025-11-13"
-	OutputConfig  *AnthropicOutputConfig `json:"output_config,omitempty"` // GA: structured outputs without beta header
-	ServiceTier   *string                `json:"service_tier,omitempty"`  // "auto" or "standard_only"
+	Model             string                 `json:"model"`
+	MaxTokens         int                    `json:"max_tokens"`
+	Messages          []AnthropicMessage     `json:"messages"`
+	Metadata          *AnthropicMetaData     `json:"metadata,omitempty"`
+	System            *AnthropicContent      `json:"system,omitempty"`
+	Temperature       *float64               `json:"temperature,omitempty"`
+	TopP              *float64               `json:"top_p,omitempty"`
+	TopK              *int                   `json:"top_k,omitempty"`
+	StopSequences     []string               `json:"stop_sequences,omitempty"`
+	Stream            *bool                  `json:"stream,omitempty"`
+	Tools             []AnthropicTool        `json:"tools,omitempty"`
+	ToolChoice        *AnthropicToolChoice   `json:"tool_choice,omitempty"`
+	MCPServers        []AnthropicMCPServer   `json:"mcp_servers,omitempty"` // This feature requires the beta header: "anthropic-beta": "mcp-client-2025-04-04"
+	Thinking          *AnthropicThinking     `json:"thinking,omitempty"`
+	OutputFormat      interface{}            `json:"output_format,omitempty"` // Beta: requires header "anthropic-beta": "structured-outputs-2025-11-13"
+	OutputConfig      *AnthropicOutputConfig `json:"output_config,omitempty"` // GA: structured outputs without beta header
+	ServiceTier       *string                `json:"service_tier,omitempty"`  // "auto" or "standard_only"
+	InferenceGeo      *string                `json:"inference_geo,omitempty"` // the geographic region for inference processing. If not specified, the workspace's default_inference_geo is used.
+	ContextManagement *ContextManagement     `json:"context_management,omitempty"`
 
 	// Extra params for advanced use cases
 	ExtraParams map[string]interface{} `json:"-"`
@@ -111,6 +117,223 @@ type AnthropicThinking struct {
 	BudgetTokens *int   `json:"budget_tokens,omitempty"`
 }
 
+type ContextManagementEditType string
+
+const (
+	ContextManagementEditTypeClearToolUses ContextManagementEditType = "clear_tool_uses_20250919"
+	ContextManagementEditTypeClearThinking ContextManagementEditType = "clear_thinking_20251015"
+	ContextManagementEditTypeCompact       ContextManagementEditType = "compact_20260112"
+)
+
+type CompactManagementEditTypeAndValueObject struct {
+	Type  string `json:"type"`
+	Value *int   `json:"value,omitempty"`
+}
+
+type CompactManagementEditTypeAndValue struct {
+	TypeAndValueString *string
+	TypeAndValueObject *CompactManagementEditTypeAndValueObject
+}
+
+// MarshalJSON implements custom JSON marshalling for CompactManagementEditTypeAndValue.
+// It marshals either TypeAndValueString or TypeAndValueObject directly without wrapping.
+func (tv CompactManagementEditTypeAndValue) MarshalJSON() ([]byte, error) {
+	// Validation: ensure only one field is set at a time
+	if tv.TypeAndValueString != nil && tv.TypeAndValueObject != nil {
+		return nil, fmt.Errorf("both TypeAndValueString and TypeAndValueObject are set; only one should be non-nil")
+	}
+
+	if tv.TypeAndValueString != nil {
+		return sonic.Marshal(*tv.TypeAndValueString)
+	}
+	if tv.TypeAndValueObject != nil {
+		return sonic.Marshal(tv.TypeAndValueObject)
+	}
+	return sonic.Marshal(nil)
+}
+
+// UnmarshalJSON implements custom JSON unmarshalling for CompactManagementEditTypeAndValue.
+// It determines whether the field is a string or object and assigns to the appropriate field.
+func (tv *CompactManagementEditTypeAndValue) UnmarshalJSON(data []byte) error {
+	// First, try to unmarshal as a direct string
+	var typeAndValueString string
+	if err := sonic.Unmarshal(data, &typeAndValueString); err == nil {
+		tv.TypeAndValueString = &typeAndValueString
+		return nil
+	}
+
+	// Try to unmarshal as an object
+	var objectContent CompactManagementEditTypeAndValueObject
+	if err := sonic.Unmarshal(data, &objectContent); err == nil {
+		tv.TypeAndValueObject = &objectContent
+		return nil
+	}
+
+	return fmt.Errorf("field is neither a string nor a CompactManagementEditTypeAndValueObject")
+}
+
+type CompactManagementEditConfig struct {
+	Trigger              *CompactManagementEditTypeAndValue `json:"trigger,omitempty"`
+	PauseAfterCompaction *bool                              `json:"pause_after_compaction,omitempty"`
+	Instructions         *string                            `json:"instructions,omitempty"`
+}
+
+type CompactManagementEditClearThinking struct {
+	Keep *CompactManagementEditTypeAndValue `json:"keep,omitempty"`
+}
+
+type ClearToolInputs struct {
+	ClearToolInputsBoolean *bool
+	ClearToolInputsArray   []string
+}
+
+// MarshalJSON implements custom JSON marshalling for ClearToolInputs.
+// It marshals either ClearToolInputsBoolean or ClearToolInputsArray directly without wrapping.
+func (ct ClearToolInputs) MarshalJSON() ([]byte, error) {
+	// Validation: ensure only one field is set at a time
+	if ct.ClearToolInputsBoolean != nil && ct.ClearToolInputsArray != nil {
+		return nil, fmt.Errorf("both ClearToolInputsBoolean and ClearToolInputsArray are set; only one should be non-nil")
+	}
+
+	if ct.ClearToolInputsBoolean != nil {
+		return sonic.Marshal(*ct.ClearToolInputsBoolean)
+	}
+	if ct.ClearToolInputsArray != nil {
+		return sonic.Marshal(ct.ClearToolInputsArray)
+	}
+	return sonic.Marshal(nil)
+}
+
+// UnmarshalJSON implements custom JSON unmarshalling for ClearToolInputs.
+// It determines whether the field is a boolean or array of strings and assigns to the appropriate field.
+func (ct *ClearToolInputs) UnmarshalJSON(data []byte) error {
+	// First, try to unmarshal as a boolean
+	var clearToolInputsBoolean bool
+	if err := sonic.Unmarshal(data, &clearToolInputsBoolean); err == nil {
+		ct.ClearToolInputsBoolean = &clearToolInputsBoolean
+		return nil
+	}
+
+	// Try to unmarshal as a direct array of strings
+	var arrayContent []string
+	if err := sonic.Unmarshal(data, &arrayContent); err == nil {
+		ct.ClearToolInputsArray = arrayContent
+		return nil
+	}
+
+	return fmt.Errorf("clear_tool_inputs field is neither a boolean nor an array of strings")
+}
+
+type CompactManagementEditClearToolUses struct {
+	ClearToolInputs *ClearToolInputs                   `json:"clear_tool_inputs,omitempty"`
+	ClearAtLast     *CompactManagementEditTypeAndValue `json:"clear_at_last,omitempty"`
+	Keep            *CompactManagementEditTypeAndValue `json:"keep,omitempty"`
+	ExcludeTools    []string                           `json:"exclude_tools,omitempty"`
+	Trigger         *CompactManagementEditTypeAndValue `json:"trigger,omitempty"`
+}
+
+type ContextManagementEdit struct {
+	Type ContextManagementEditType `json:"type"`
+	*CompactManagementEditConfig
+	*CompactManagementEditClearThinking
+	*CompactManagementEditClearToolUses
+}
+
+func (edit ContextManagementEdit) MarshalJSON() ([]byte, error) {
+	// Create a base map with the type field
+	type Alias ContextManagementEdit
+
+	// Marshal based on the type
+	switch edit.Type {
+	case ContextManagementEditTypeCompact:
+		if edit.CompactManagementEditConfig == nil {
+			return sonic.Marshal(struct {
+				Type ContextManagementEditType `json:"type"`
+			}{
+				Type: edit.Type,
+			})
+		}
+		return sonic.Marshal(struct {
+			Type ContextManagementEditType `json:"type"`
+			*CompactManagementEditConfig
+		}{
+			Type:                        edit.Type,
+			CompactManagementEditConfig: edit.CompactManagementEditConfig,
+		})
+	case ContextManagementEditTypeClearThinking:
+		if edit.CompactManagementEditClearThinking == nil {
+			return nil, fmt.Errorf("compact management edit clear thinking is nil for type clear_thinking_20251015")
+		}
+		return sonic.Marshal(struct {
+			Type ContextManagementEditType `json:"type"`
+			*CompactManagementEditClearThinking
+		}{
+			Type:                               edit.Type,
+			CompactManagementEditClearThinking: edit.CompactManagementEditClearThinking,
+		})
+	case ContextManagementEditTypeClearToolUses:
+		if edit.CompactManagementEditClearToolUses == nil {
+			return nil, fmt.Errorf("compact management edit clear tool uses is nil for type clear_tool_uses_20250919")
+		}
+		return sonic.Marshal(struct {
+			Type ContextManagementEditType `json:"type"`
+			*CompactManagementEditClearToolUses
+		}{
+			Type:                               edit.Type,
+			CompactManagementEditClearToolUses: edit.CompactManagementEditClearToolUses,
+		})
+	default:
+		return nil, fmt.Errorf("unknown context management edit type: %s", edit.Type)
+	}
+}
+
+func (edit *ContextManagementEdit) UnmarshalJSON(data []byte) error {
+	// First, peek at the type field to determine which variant to unmarshal
+	var typeStruct struct {
+		Type ContextManagementEditType `json:"type"`
+	}
+	if err := sonic.Unmarshal(data, &typeStruct); err != nil {
+		return fmt.Errorf("failed to peek at type field: %w", err)
+	}
+
+	// Set the type
+	edit.Type = typeStruct.Type
+
+	// Based on the type, unmarshal into the appropriate variant
+	switch typeStruct.Type {
+	case ContextManagementEditTypeCompact:
+		var config CompactManagementEditConfig
+		if err := sonic.Unmarshal(data, &config); err != nil {
+			return fmt.Errorf("failed to unmarshal compact management edit config: %w", err)
+		}
+		edit.CompactManagementEditConfig = &config
+		return nil
+
+	case ContextManagementEditTypeClearThinking:
+		var clearThinking CompactManagementEditClearThinking
+		if err := sonic.Unmarshal(data, &clearThinking); err != nil {
+			return fmt.Errorf("failed to unmarshal compact management edit clear thinking: %w", err)
+		}
+		edit.CompactManagementEditClearThinking = &clearThinking
+		return nil
+
+	case ContextManagementEditTypeClearToolUses:
+		var clearToolUses CompactManagementEditClearToolUses
+		if err := sonic.Unmarshal(data, &clearToolUses); err != nil {
+			return fmt.Errorf("failed to unmarshal compact management edit clear tool uses: %w", err)
+		}
+		edit.CompactManagementEditClearToolUses = &clearToolUses
+		return nil
+
+	default:
+		return fmt.Errorf("unknown context management edit type: %s", typeStruct.Type)
+	}
+}
+
+type ContextManagement struct {
+	Edits []ContextManagementEdit `json:"edits,omitempty"`
+}
+
 // IsStreamingRequested implements the StreamingRequest interface
 func (req *AnthropicMessageRequest) IsStreamingRequested() bool {
 	return req.Stream != nil && *req.Stream
@@ -118,25 +341,27 @@ func (req *AnthropicMessageRequest) IsStreamingRequested() bool {
 
 // Known fields for AnthropicMessageRequest
 var anthropicMessageRequestKnownFields = map[string]bool{
-	"model":          true,
-	"max_tokens":     true,
-	"messages":       true,
-	"metadata":       true,
-	"system":         true,
-	"temperature":    true,
-	"top_p":          true,
-	"top_k":          true,
-	"stop_sequences": true,
-	"stream":         true,
-	"tools":          true,
-	"tool_choice":    true,
-	"mcp_servers":    true,
-	"thinking":       true,
-	"output_format":  true,
-	"output_config":  true,
-	"service_tier":   true,
-	"extra_params":   true,
-	"fallbacks":      true,
+	"model":              true,
+	"max_tokens":         true,
+	"messages":           true,
+	"metadata":           true,
+	"system":             true,
+	"temperature":        true,
+	"top_p":              true,
+	"top_k":              true,
+	"stop_sequences":     true,
+	"stream":             true,
+	"tools":              true,
+	"tool_choice":        true,
+	"mcp_servers":        true,
+	"thinking":           true,
+	"output_format":      true,
+	"output_config":      true,
+	"service_tier":       true,
+	"inference_geo":      true,
+	"context_management": true,
+	"extra_params":       true,
+	"fallbacks":          true,
 }
 
 // UnmarshalJSON implements custom JSON unmarshalling for AnthropicMessageRequest.
@@ -347,6 +572,7 @@ const (
 	AnthropicContentBlockTypeMCPToolResult            AnthropicContentBlockType = "mcp_tool_result"
 	AnthropicContentBlockTypeThinking                 AnthropicContentBlockType = "thinking"
 	AnthropicContentBlockTypeRedactedThinking         AnthropicContentBlockType = "redacted_thinking"
+	AnthropicContentBlockTypeCompaction               AnthropicContentBlockType = "compaction"
 )
 
 // AnthropicContentBlock represents content in Anthropic message format
@@ -591,6 +817,7 @@ const (
 	AnthropicStopReasonPauseTurn                  AnthropicStopReason = "pause_turn"
 	AnthropicStopReasonRefusal                    AnthropicStopReason = "refusal"
 	AnthropicStopReasonModelContextWindowExceeded AnthropicStopReason = "model_context_window_exceeded"
+	AnthropicStopReasonCompaction                 AnthropicStopReason = "compaction"
 )
 
 // AnthropicMessageResponse represents an Anthropic messages API response
@@ -619,6 +846,7 @@ type AnthropicTextResponse struct {
 
 // AnthropicUsage represents usage information in Anthropic format
 type AnthropicUsage struct {
+	Type                     *string                      `json:"type,omitempty"`
 	InputTokens              int                          `json:"input_tokens"`
 	CacheCreationInputTokens int                          `json:"cache_creation_input_tokens"`
 	CacheReadInputTokens     int                          `json:"cache_read_input_tokens"`
@@ -626,6 +854,8 @@ type AnthropicUsage struct {
 	OutputTokens             int                          `json:"output_tokens"`
 	ServerToolUse            *AnthropicServerToolUseUsage `json:"server_tool_use,omitempty"` // Server tool use statistics (e.g., web search)
 	ServiceTier              *string                      `json:"service_tier,omitempty"`    // "standard", "priority", or "batch"
+	InferenceGeo             *string                      `json:"inference_geo,omitempty"`   // the geographic region for inference processing. If not specified, the workspace's default_inference_geo is used.
+	Iterations               []AnthropicUsage             `json:"iterations,omitempty"`      // Iterations statistics
 }
 
 // AnthropicServerToolUseUsage represents server tool use statistics in usage
@@ -668,17 +898,19 @@ type AnthropicStreamEvent struct {
 type AnthropicStreamDeltaType string
 
 const (
-	AnthropicStreamDeltaTypeText      AnthropicStreamDeltaType = "text_delta"
-	AnthropicStreamDeltaTypeInputJSON AnthropicStreamDeltaType = "input_json_delta"
-	AnthropicStreamDeltaTypeThinking  AnthropicStreamDeltaType = "thinking_delta"
-	AnthropicStreamDeltaTypeSignature AnthropicStreamDeltaType = "signature_delta"
-	AnthropicStreamDeltaTypeCitations AnthropicStreamDeltaType = "citations_delta"
+	AnthropicStreamDeltaTypeText       AnthropicStreamDeltaType = "text_delta"
+	AnthropicStreamDeltaTypeInputJSON  AnthropicStreamDeltaType = "input_json_delta"
+	AnthropicStreamDeltaTypeThinking   AnthropicStreamDeltaType = "thinking_delta"
+	AnthropicStreamDeltaTypeSignature  AnthropicStreamDeltaType = "signature_delta"
+	AnthropicStreamDeltaTypeCitations  AnthropicStreamDeltaType = "citations_delta"
+	AnthropicStreamDeltaTypeCompaction AnthropicStreamDeltaType = "compaction_delta"
 )
 
 // AnthropicStreamDelta represents incremental updates to content blocks during streaming (legacy)
 type AnthropicStreamDelta struct {
 	Type         AnthropicStreamDeltaType `json:"type,omitempty"`
 	Text         *string                  `json:"text,omitempty"`
+	Content      *string                  `json:"content,omitempty"` // For compaction_delta
 	PartialJSON  *string                  `json:"partial_json,omitempty"`
 	Thinking     *string                  `json:"thinking,omitempty"`
 	Signature    *string                  `json:"signature,omitempty"`

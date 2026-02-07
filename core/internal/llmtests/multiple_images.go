@@ -28,6 +28,17 @@ func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx context.Co
 			t.Fatalf("Failed to load lion base64 image: %v", err)
 		}
 
+		// Use URL image for the first image if supported, otherwise fall back to lion base64
+		var firstImageURL string
+		var prompt string
+		if testConfig.Scenarios.ImageURL {
+			firstImageURL = TestImageURL // Ant image URL
+			prompt = "Compare these two images - what are the similarities and differences? Both are animals, but what are the specific differences between them?"
+		} else {
+			firstImageURL = lionBase64 // Use lion base64 for both when URLs not supported
+			prompt = "I'm showing you two images. Please describe what you see in each image and note whether they appear to be the same or different."
+		}
+
 		messages := []schemas.ChatMessage{
 			{
 				Role: schemas.ChatMessageRoleUser,
@@ -35,12 +46,12 @@ func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx context.Co
 					ContentBlocks: []schemas.ChatContentBlock{
 						{
 							Type: schemas.ChatContentBlockTypeText,
-							Text: bifrost.Ptr("Compare these two images - what are the similarities and differences? Both are animals, but what are the specific differences between them?"),
+							Text: bifrost.Ptr(prompt),
 						},
 						{
 							Type: schemas.ChatContentBlockTypeImage,
 							ImageURLStruct: &schemas.ChatInputImage{
-								URL: TestImageURL, // Ant image
+								URL: firstImageURL,
 							},
 						},
 						{
@@ -78,7 +89,7 @@ func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx context.Co
 				"provider":          testConfig.Provider,
 				"model":             testConfig.VisionModel,
 				"image_count":       2,
-				"mixed_formats":     true,                                                                                               // URL and base64
+				"mixed_formats":     testConfig.Scenarios.ImageURL, // URL and base64 only when URL is supported
 				"expected_keywords": []string{"different", "differences", "contrast", "unlike", "comparison", "compare", "both", "two"}, // 🎯 Comparison-specific terms
 			},
 		}
@@ -91,8 +102,14 @@ func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx context.Co
 			OnFinalFail: retryConfig.OnFinalFail,
 		}
 
-		// Enhanced validation for multiple image comparison (ant vs lion)
-		expectations := VisionExpectations([]string{"ant", "lion"}) // Basic expectation - should identify both as animals with differences
+		// Enhanced validation for multiple image comparison
+		var expectedKeywords []string
+		if testConfig.Scenarios.ImageURL {
+			expectedKeywords = []string{"ant", "lion"} // ant URL + lion base64
+		} else {
+			expectedKeywords = []string{"lion"} // lion base64 for both images
+		}
+		expectations := VisionExpectations(expectedKeywords)
 		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
 		expectations.ShouldNotContainWords = append(expectations.ShouldNotContainWords, []string{
 			"only see one", "cannot compare", "missing image",
@@ -111,20 +128,23 @@ func RunMultipleImagesTest(t *testing.T, client *bifrost.Bifrost, ctx context.Co
 
 		content := GetChatContent(response)
 
-		// Additional validation for ant vs lion comparison
+		// Additional validation for image comparison
 		contentLower := strings.ToLower(content)
-		foundAnimalRef := strings.Contains(contentLower, "ant") || strings.Contains(contentLower, "lion") ||
+		foundImageRef := strings.Contains(contentLower, "ant") || strings.Contains(contentLower, "lion") ||
 			strings.Contains(contentLower, "insect") || strings.Contains(contentLower, "cat") ||
-			strings.Contains(contentLower, "animal")
+			strings.Contains(contentLower, "animal") || strings.Contains(contentLower, "image")
 		foundComparison := strings.Contains(contentLower, "different") || strings.Contains(contentLower, "compare") ||
-			strings.Contains(contentLower, "contrast") || strings.Contains(contentLower, "versus")
+			strings.Contains(contentLower, "contrast") || strings.Contains(contentLower, "versus") ||
+			strings.Contains(contentLower, "first") || strings.Contains(contentLower, "second") ||
+			strings.Contains(contentLower, "same") || strings.Contains(contentLower, "identical") ||
+			strings.Contains(contentLower, "both")
 
-		if foundAnimalRef && foundComparison {
-			t.Logf("✅ Model successfully identified animals and made comparisons: %s", content)
-		} else if foundAnimalRef {
-			t.Logf("✅ Model identified animals but may not have made clear comparisons")
+		if foundImageRef && foundComparison {
+			t.Logf("✅ Model successfully identified images and made comparisons: %s", content)
+		} else if foundImageRef {
+			t.Logf("✅ Model identified images but may not have made clear comparisons")
 		} else {
-			t.Logf("⚠️ Model may not have clearly identified the animals in the images")
+			t.Logf("⚠️ Model may not have clearly identified the content in the images")
 		}
 
 		// Check for substantial response indicating both images were processed
