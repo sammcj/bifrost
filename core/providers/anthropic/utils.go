@@ -29,6 +29,52 @@ var (
 	}
 )
 
+// SupportsNativeEffort returns true if the model supports Anthropic's native output_config.effort parameter.
+// Currently supported on Claude Opus 4.5 and Opus 4.6.
+func SupportsNativeEffort(model string) bool {
+	model = strings.ToLower(model)
+	if !strings.Contains(model, "opus") {
+		return false
+	}
+	return strings.Contains(model, "4-5") || strings.Contains(model, "4.5") ||
+		strings.Contains(model, "4-6") || strings.Contains(model, "4.6")
+}
+
+// SupportsAdaptiveThinking returns true if the model supports thinking.type: "adaptive".
+// Currently only supported on Claude Opus 4.6.
+func SupportsAdaptiveThinking(model string) bool {
+	model = strings.ToLower(model)
+	return strings.Contains(model, "opus") &&
+		(strings.Contains(model, "4-6") || strings.Contains(model, "4.6"))
+}
+
+// MapBifrostEffortToAnthropic maps a Bifrost effort level to an Anthropic effort level.
+// Anthropic supports "low", "medium", "high", "max"; Bifrost also has "minimal" which maps to "low".
+func MapBifrostEffortToAnthropic(effort string) string {
+	if effort == "minimal" {
+		return "low"
+	}
+	return effort
+}
+
+// MapAnthropicEffortToBifrost maps an Anthropic effort level to a Bifrost effort level.
+// Anthropic supports "max" (Opus 4.6+) which is not in Bifrost's enum; it maps to "high".
+func MapAnthropicEffortToBifrost(effort string) string {
+	if effort == "max" {
+		return "high"
+	}
+	return effort
+}
+
+// setEffortOnOutputConfig merges the effort value into the request's OutputConfig,
+// preserving any existing Format field (used for structured outputs).
+func setEffortOnOutputConfig(req *AnthropicMessageRequest, effort string) {
+	if req.OutputConfig == nil {
+		req.OutputConfig = &AnthropicOutputConfig{}
+	}
+	req.OutputConfig.Effort = &effort
+}
+
 func getRequestBodyForResponses(ctx *schemas.BifrostContext, request *schemas.BifrostResponsesRequest, providerName schemas.ModelProvider, isStreaming bool) ([]byte, *schemas.BifrostError) {
 	var jsonBody []byte
 	var err error

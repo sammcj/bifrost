@@ -79,7 +79,7 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 				if tokenBudget < anthropic.MinimumReasoningMaxTokens {
 					return fmt.Errorf("reasoning.max_tokens must be >= %d for anthropic", anthropic.MinimumReasoningMaxTokens)
 				}
-				bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]any{
+				bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]any{
 					"type":          "enabled",
 					"budget_tokens": tokenBudget,
 				}
@@ -163,18 +163,38 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 
 				bedrockReq.AdditionalModelRequestFields["reasoningConfig"] = config
 			} else if schemas.IsAnthropicModel(bifrostReq.Model) {
-				budgetTokens, err := providerUtils.GetBudgetTokensFromReasoningEffort(*bifrostReq.Params.Reasoning.Effort, anthropic.MinimumReasoningMaxTokens, maxTokens)
-				if err != nil {
-					return err
-				}
-				bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]any{
-					"type":          "enabled",
-					"budget_tokens": budgetTokens,
+				if anthropic.SupportsAdaptiveThinking(bifrostReq.Model) {
+					// Opus 4.6+: adaptive thinking
+					effort := anthropic.MapBifrostEffortToAnthropic(*bifrostReq.Params.Reasoning.Effort)
+					bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]any{
+						"type":   "adaptive",
+						"effort": effort,
+					}
+				} else {
+					// Opus 4.5 and older models: budget_tokens thinking
+					budgetTokens, err := providerUtils.GetBudgetTokensFromReasoningEffort(*bifrostReq.Params.Reasoning.Effort, anthropic.MinimumReasoningMaxTokens, maxTokens)
+					if err != nil {
+						return err
+					}
+					bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]any{
+						"type":          "enabled",
+						"budget_tokens": budgetTokens,
+					}
 				}
 			}
 		} else {
-			bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]string{
-				"type": "disabled",
+			if schemas.IsAnthropicModel(bifrostReq.Model) {
+				bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]string{
+					"type": "disabled",
+				}
+			} else if schemas.IsNovaModel(bifrostReq.Model) {
+				bedrockReq.AdditionalModelRequestFields["reasoningConfig"] = map[string]string{
+					"type": "disabled",
+				}
+			} else {
+				bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]string{
+					"type": "disabled",
+				}
 			}
 		}
 	}

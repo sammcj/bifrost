@@ -56,8 +56,10 @@ func (req *AnthropicTextRequest) IsStreamingRequested() bool {
 }
 
 // AnthropicOutputConfig represents the GA structured outputs config (output_config.format)
+// and the effort parameter (output_config.effort) for controlling token spending.
 type AnthropicOutputConfig struct {
 	Format interface{} `json:"format,omitempty"`
+	Effort *string     `json:"effort,omitempty"` // "low", "medium", "high", "max" (Opus 4.5+)
 }
 
 // AnthropicMessageRequest represents an Anthropic messages API request
