@@ -232,13 +232,14 @@ const SidebarItemView = ({
 		<SidebarMenuItem key={item.title}>
 			<SidebarMenuButton
 				tooltip={item.title}
-				className={`relative h-7.5 cursor-pointer rounded-sm border px-3 transition-all duration-200 ${isActive || isAnySubItemActive
-					? "bg-sidebar-accent text-primary border-primary/20"
-					: isAllowed && item.hasAccess
-						? "hover:bg-sidebar-accent hover:text-accent-foreground border-transparent text-slate-500 dark:text-zinc-400"
-						: "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
-					} `}
-				onClick={hasSubItems ? handleClick : (item.hasAccess ? () => handleNavigation(item.url) : undefined)}
+				className={`relative h-7.5 cursor-pointer rounded-sm border px-3 transition-all duration-200 ${
+					isActive || isAnySubItemActive
+						? "bg-sidebar-accent text-primary border-primary/20"
+						: isAllowed && item.hasAccess
+							? "hover:bg-sidebar-accent hover:text-accent-foreground border-transparent text-slate-500 dark:text-zinc-400"
+							: "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
+				} `}
+				onClick={hasSubItems ? handleClick : item.hasAccess ? () => handleNavigation(item.url) : undefined}
 			>
 				<div className="flex w-full items-center justify-between">
 					<div className="flex w-full items-center gap-2">
@@ -269,19 +270,21 @@ const SidebarItemView = ({
 				<SidebarMenuSub className="border-sidebar-border mt-1 ml-4 space-y-0.5 border-l pl-2">
 					{item.subItems?.map((subItem: SidebarItem) => {
 						// Hide governance-dependent subitems when governance is disabled
-						if ((subItem.url === "/workspace/model-limits" || subItem.url === "/workspace/routing-rules") && !isGovernanceEnabled) return null;
+						if ((subItem.url === "/workspace/model-limits" || subItem.url === "/workspace/routing-rules") && !isGovernanceEnabled)
+							return null;
 						// For query param based subitems, check if tab matches
 						const isSubItemActive = subItem.queryParam ? pathname === subItem.url : pathname.startsWith(subItem.url);
 						const SubItemIcon = subItem.icon;
 						return (
 							<SidebarMenuSubItem key={subItem.title}>
 								<SidebarMenuSubButton
-									className={`h-7 cursor-pointer rounded-sm px-2 transition-all duration-200 ${isSubItemActive
-										? "bg-sidebar-accent text-primary font-medium"
-										: subItem.hasAccess === false
-											? "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
-											: "hover:bg-sidebar-accent hover:text-accent-foreground text-slate-500 dark:text-zinc-400"
-										}`}
+									className={`h-7 cursor-pointer rounded-sm px-2 transition-all duration-200 ${
+										isSubItemActive
+											? "bg-sidebar-accent text-primary font-medium"
+											: subItem.hasAccess === false
+												? "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
+												: "hover:bg-sidebar-accent hover:text-accent-foreground text-slate-500 dark:text-zinc-400"
+									}`}
 									onClick={() => (subItem.hasAccess === false ? undefined : handleSubItemClick(subItem))}
 								>
 									<div className="flex items-center gap-2">

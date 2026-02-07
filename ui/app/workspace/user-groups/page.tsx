@@ -1,13 +1,7 @@
 "use client";
 
 import FullPageLoader from "@/components/fullPageLoader";
-import {
-	getErrorMessage,
-	useGetCustomersQuery,
-	useGetTeamsQuery,
-	useGetVirtualKeysQuery,
-	useLazyGetCoreConfigQuery,
-} from "@/lib/store";
+import { getErrorMessage, useGetCustomersQuery, useGetTeamsQuery, useGetVirtualKeysQuery, useLazyGetCoreConfigQuery } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import UsersView from "@enterprise/components/user-groups/usersView";
 import { Building, Users, WalletCards } from "lucide-react";
@@ -57,10 +51,13 @@ export default function TeamsCustomersPage() {
 		data: teamsData,
 		error: teamsError,
 		isLoading: teamsLoading,
-	} = useGetTeamsQuery({}, {
-		skip: !governanceEnabled,
-		pollingInterval: POLLING_INTERVAL,
-	});
+	} = useGetTeamsQuery(
+		{},
+		{
+			skip: !governanceEnabled,
+			pollingInterval: POLLING_INTERVAL,
+		},
+	);
 
 	const {
 		data: customersData,
@@ -121,11 +118,12 @@ export default function TeamsCustomersPage() {
 	}
 
 	return (
-		<div className="flex w-full flex-row gap-4 max-w-7xl mx-auto">
+		<div className="mx-auto flex w-full max-w-7xl flex-row gap-4">
 			<div className="flex min-w-[200px] flex-col gap-1 rounded-md bg-zinc-50/50 p-4 dark:bg-zinc-800/20">
 				{tabs.map((tab) => (
 					<button
 						key={tab.id}
+						data-testid={`${tab.id}-tab`}
 						className={cn(
 							"mb-1 flex w-full items-center gap-2 rounded-sm border px-3 py-1.5 text-sm",
 							activeTab === tab.id

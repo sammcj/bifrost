@@ -1,29 +1,29 @@
-"use client"
+"use client";
 
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alertDialog"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { getErrorMessage, useDeleteCustomerMutation } from "@/lib/store"
-import { Customer, Team, VirtualKey } from "@/lib/types/governance"
-import { cn } from "@/lib/utils"
-import { formatCurrency, parseResetPeriod } from "@/lib/utils/governance"
-import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib"
-import { Edit, Plus, Trash2 } from "lucide-react"
-import { useState } from "react"
-import { toast } from "sonner"
-import CustomerDialog from "./customerDialog"
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "@/components/ui/alertDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { getErrorMessage, useDeleteCustomerMutation } from "@/lib/store";
+import { Customer, Team, VirtualKey } from "@/lib/types/governance";
+import { cn } from "@/lib/utils";
+import { formatCurrency, parseResetPeriod } from "@/lib/utils/governance";
+import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
+import { Edit, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import CustomerDialog from "./customerDialog";
 
 interface CustomersTableProps {
 	customers: Customer[];
@@ -32,14 +32,14 @@ interface CustomersTableProps {
 }
 
 export default function CustomersTable({ customers, teams, virtualKeys }: CustomersTableProps) {
-  const [showCustomerDialog, setShowCustomerDialog] = useState(false)
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+	const [showCustomerDialog, setShowCustomerDialog] = useState(false);
+	const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
-  const hasCreateAccess = useRbac(RbacResource.Customers, RbacOperation.Create)
-  const hasUpdateAccess = useRbac(RbacResource.Customers, RbacOperation.Update)
-  const hasDeleteAccess = useRbac(RbacResource.Customers, RbacOperation.Delete)
+	const hasCreateAccess = useRbac(RbacResource.Customers, RbacOperation.Create);
+	const hasUpdateAccess = useRbac(RbacResource.Customers, RbacOperation.Update);
+	const hasDeleteAccess = useRbac(RbacResource.Customers, RbacOperation.Delete);
 
-  const [deleteCustomer, { isLoading: isDeleting }] = useDeleteCustomerMutation()
+	const [deleteCustomer, { isLoading: isDeleting }] = useDeleteCustomerMutation();
 
 	const handleDelete = async (customerId: string) => {
 		try {
@@ -84,13 +84,13 @@ export default function CustomersTable({ customers, teams, virtualKeys }: Custom
 					<div>
 						<p className="text-muted-foreground text-sm">Manage customer accounts with their own teams, budgets, and access controls.</p>
 					</div>
-					<Button onClick={handleAddCustomer} disabled={!hasCreateAccess}>
+					<Button data-testid="create-customer-btn" onClick={handleAddCustomer} disabled={!hasCreateAccess}>
 						<Plus className="h-4 w-4" />
 						Add Customer
 					</Button>
 				</div>
 
-				<div className="rounded-sm border">
+				<div className="rounded-sm border" data-testid="customers-table">
 					<Table>
 						<TableHeader>
 							<TableRow>
