@@ -211,8 +211,8 @@ test.describe('MCP Logs', () => {
 
         await mcpLogsPage.toggleLiveUpdates()
 
-        // Wait for URL to update
-        await mcpLogsPage.page.waitForTimeout(500)
+        // Wait for URL to reflect live_enabled toggle
+        await mcpLogsPage.page.waitForURL(/live_enabled=/, { timeout: 5000 }).catch(() => {})
 
         const newUrl = mcpLogsPage.page.url()
         const newLiveDisabled = newUrl.includes('live_enabled=false')

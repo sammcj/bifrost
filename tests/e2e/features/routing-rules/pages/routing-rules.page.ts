@@ -114,6 +114,16 @@ export class RoutingRulesPage extends BasePage {
     return this.table.locator('tr').filter({ hasText: name })
   }
 
+  private async waitForToastAndAssertSuccess(action: string): Promise<void> {
+    const toast = this.page.locator('[data-sonner-toast]').first()
+    await expect(toast).toBeVisible({ timeout: 10000 })
+    const toastText = await toast.textContent()
+    if (toastText?.toLowerCase().includes('error') || toastText?.toLowerCase().includes('failed')) {
+      throw new Error(`Failed to ${action}: ${toastText}`)
+    }
+    await this.dismissToasts()
+  }
+
   /**
    * Check if routing rule exists
    */
@@ -177,17 +187,7 @@ export class RoutingRulesPage extends BasePage {
     await this.saveBtn.waitFor({ state: 'visible' })
     await this.saveBtn.click()
 
-    // Wait for either success or error toast
-    const toast = this.page.locator('[data-sonner-toast]').first()
-    await expect(toast).toBeVisible({ timeout: 10000 })
-
-    // Check if it's an error
-    const toastText = await toast.textContent()
-    if (toastText?.toLowerCase().includes('error') || toastText?.toLowerCase().includes('failed')) {
-      throw new Error(`Failed to create routing rule: ${toastText}`)
-    }
-
-    await this.dismissToasts()
+    await this.waitForToastAndAssertSuccess('create routing rule')
     await expect(this.sheet).not.toBeVisible({ timeout: 10000 })
     await waitForNetworkIdle(this.page)
   }
@@ -235,11 +235,7 @@ export class RoutingRulesPage extends BasePage {
     await this.saveBtn.waitFor({ state: 'visible' })
     await this.saveBtn.click()
 
-    // Wait for either success or error toast
-    const toast = this.page.locator('[data-sonner-toast]').first()
-    await expect(toast).toBeVisible({ timeout: 10000 })
-
-    await this.dismissToasts()
+    await this.waitForToastAndAssertSuccess('edit routing rule')
     await expect(this.sheet).not.toBeVisible({ timeout: 10000 })
     await waitForNetworkIdle(this.page)
   }

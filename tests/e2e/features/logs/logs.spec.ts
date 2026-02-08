@@ -251,8 +251,8 @@ test.describe('LLM Logs', () => {
 
         await logsPage.toggleLiveUpdates()
 
-        // Wait for URL to update
-        await logsPage.page.waitForTimeout(500)
+        // Wait for URL to reflect live_enabled toggle
+        await logsPage.page.waitForURL(/live_enabled=/, { timeout: 5000 }).catch(() => {})
 
         const newUrl = logsPage.page.url()
         const newLiveDisabled = newUrl.includes('live_enabled=false')

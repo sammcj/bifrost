@@ -52,8 +52,9 @@ export class PluginsPage extends BasePage {
   async goto(): Promise<void> {
     await this.page.goto('/workspace/plugins')
     await waitForNetworkIdle(this.page)
-    // Wait for create button to be visible (indicates page loaded)
-    await this.createBtn.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {})
+    // Wait for create button or empty state to be visible (indicates page loaded)
+    await this.createBtn.or(this.page.getByText(/No plugins installed/i))
+      .waitFor({ state: 'visible', timeout: 10000 })
     // Ensure sheet is closed (in case it was left open from previous test)
     await this.ensureSheetClosed()
   }
