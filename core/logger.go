@@ -120,3 +120,49 @@ func (logger *DefaultLogger) SetOutputType(outputType schemas.LoggerOutputType) 
 		logger.stdoutLogger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 	}
 }
+
+// zerologEventBuilder wraps a zerolog.Event to implement schemas.LogEventBuilder.
+type zerologEventBuilder struct {
+	event *zerolog.Event
+	msg   string
+}
+
+func (b *zerologEventBuilder) Str(key, val string) schemas.LogEventBuilder {
+	b.event = b.event.Str(key, val)
+	return b
+}
+
+func (b *zerologEventBuilder) Int(key string, val int) schemas.LogEventBuilder {
+	b.event = b.event.Int(key, val)
+	return b
+}
+
+func (b *zerologEventBuilder) Int64(key string, val int64) schemas.LogEventBuilder {
+	b.event = b.event.Int64(key, val)
+	return b
+}
+
+func (b *zerologEventBuilder) Send() {
+	b.event.Msg(b.msg)
+}
+
+// LogHTTPRequest returns a LogEventBuilder for structured HTTP access logging.
+// We are exposing the zerolog loggers directly to allow for more flexibility in logging and also to reduce the number of allocations we do in the logger.
+func (logger *DefaultLogger) LogHTTPRequest(level schemas.LogLevel, msg string) schemas.LogEventBuilder {
+	l := logger.stdoutLogger
+	if level == schemas.LogLevelError {
+		l = logger.stderrLogger
+	}
+	var event *zerolog.Event
+	switch level {
+	case schemas.LogLevelDebug:
+		event = l.Debug()
+	case schemas.LogLevelWarn:
+		event = l.Warn()
+	case schemas.LogLevelError:
+		event = l.Error()
+	default:
+		event = l.Info()
+	}
+	return &zerologEventBuilder{event: event, msg: msg}
+}

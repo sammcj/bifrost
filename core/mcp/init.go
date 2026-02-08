@@ -13,6 +13,9 @@ func (noopLogger) Error(string, ...any)                   {}
 func (noopLogger) Fatal(string, ...any)                   {}
 func (noopLogger) SetLevel(schemas.LogLevel)              {}
 func (noopLogger) SetOutputType(schemas.LoggerOutputType) {}
+func (noopLogger) LogHTTPRequest(schemas.LogLevel, string) schemas.LogEventBuilder {
+	return schemas.NoopLogEvent
+}
 
 // defaultLogger is used when nil is passed to NewMCPManager.
 var defaultLogger schemas.Logger = noopLogger{}

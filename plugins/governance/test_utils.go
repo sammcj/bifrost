@@ -72,6 +72,10 @@ func (ml *MockLogger) Fatal(format string, args ...interface{}) {
 	ml.errors = append(ml.errors, format)
 }
 
+func (ml *MockLogger) LogHTTPRequest(level schemas.LogLevel, msg string) schemas.LogEventBuilder {
+	return schemas.NoopLogEvent
+}
+
 // Test data builders
 
 func buildVirtualKey(id, value, name string, isActive bool) *configstoreTables.TableVirtualKey {

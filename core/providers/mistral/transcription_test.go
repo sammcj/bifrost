@@ -1473,6 +1473,9 @@ func (l *testLogger) Error(msg string, args ...any)                     {}
 func (l *testLogger) Fatal(msg string, args ...any)                     {}
 func (l *testLogger) SetLevel(level schemas.LogLevel)                   {}
 func (l *testLogger) SetOutputType(outputType schemas.LoggerOutputType) {}
+func (l *testLogger) LogHTTPRequest(level schemas.LogLevel, msg string) schemas.LogEventBuilder {
+	return schemas.NoopLogEvent
+}
 
 // TestMistralTranscriptionIntegration tests the transcription endpoint with the real Mistral API.
 // This test requires MISTRAL_API_KEY environment variable to be set.

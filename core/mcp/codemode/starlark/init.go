@@ -8,13 +8,16 @@ import "github.com/maximhq/bifrost/core/schemas"
 // when no logger is provided.
 type noopLogger struct{}
 
-func (noopLogger) Debug(string, ...any)                        {}
-func (noopLogger) Info(string, ...any)                         {}
-func (noopLogger) Warn(string, ...any)                         {}
-func (noopLogger) Error(string, ...any)                        {}
-func (noopLogger) Fatal(string, ...any)                        {}
-func (noopLogger) SetLevel(schemas.LogLevel)                   {}
-func (noopLogger) SetOutputType(schemas.LoggerOutputType)      {}
+func (noopLogger) Debug(string, ...any)                   {}
+func (noopLogger) Info(string, ...any)                    {}
+func (noopLogger) Warn(string, ...any)                    {}
+func (noopLogger) Error(string, ...any)                   {}
+func (noopLogger) Fatal(string, ...any)                   {}
+func (noopLogger) SetLevel(schemas.LogLevel)              {}
+func (noopLogger) SetOutputType(schemas.LoggerOutputType) {}
+func (noopLogger) LogHTTPRequest(schemas.LogLevel, string) schemas.LogEventBuilder {
+	return schemas.NoopLogEvent
+}
 
 // defaultLogger is used when nil is passed to NewStarlarkCodeMode.
 var defaultLogger schemas.Logger = noopLogger{}
