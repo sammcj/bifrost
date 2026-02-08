@@ -2222,6 +2222,10 @@ func (l *testLogger) SetOutputType(outputType schemas.LoggerOutputType) {
 	// No-op for tests
 }
 
+func (l *testLogger) LogHTTPRequest(level schemas.LogLevel, msg string) schemas.LogEventBuilder {
+	return schemas.NoopLogEvent
+}
+
 // =============================================================================
 // DYNAMIC LLM MOCKER
 // =============================================================================
@@ -2234,14 +2238,14 @@ type ResponsesResponseFunc func(history []schemas.ResponsesMessage) (*schemas.Bi
 
 // DynamicLLMMocker provides dynamic LLM responses that can inspect message history
 type DynamicLLMMocker struct {
-	chatResponseFuncs       []ChatResponseFunc
-	responsesResponseFuncs  []ResponsesResponseFunc
-	defaultChatResponse     ChatResponseFunc
+	chatResponseFuncs        []ChatResponseFunc
+	responsesResponseFuncs   []ResponsesResponseFunc
+	defaultChatResponse      ChatResponseFunc
 	defaultResponsesResponse ResponsesResponseFunc
-	chatCallCount           int
-	responsesCallCount      int
-	chatHistory             [][]schemas.ChatMessage
-	responsesHistory        [][]schemas.ResponsesMessage
+	chatCallCount            int
+	responsesCallCount       int
+	chatHistory              [][]schemas.ChatMessage
+	responsesHistory         [][]schemas.ResponsesMessage
 }
 
 // NewDynamicLLMMocker creates a new dynamic LLM mocker

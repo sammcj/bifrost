@@ -56,6 +56,9 @@ func (m *MockLogger) Error(msg string, args ...any)                     {}
 func (m *MockLogger) Fatal(msg string, args ...any)                     {}
 func (m *MockLogger) SetLevel(level schemas.LogLevel)                   {}
 func (m *MockLogger) SetOutputType(outputType schemas.LoggerOutputType) {}
+func (m *MockLogger) LogHTTPRequest(level schemas.LogLevel, msg string) schemas.LogEventBuilder {
+	return schemas.NoopLogEvent
+}
 
 // MockClientManager implements ClientManager for testing
 type MockClientManager struct{}
