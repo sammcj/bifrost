@@ -387,6 +387,16 @@ func (h *MCPHandler) updateMCPClient(ctx *fasthttp.RequestCtx) {
 
 	// Merge redacted values - preserve old values if incoming values are redacted and unchanged
 	req = mergeMCPRedactedValues(req, existingConfig, h.store.RedactMCPClientConfig(existingConfig))
+	// Save existing DB config before update so we can rollback if memory update fails
+	var oldDBConfig *configstoreTables.TableMCPClient
+	if h.store.ConfigStore != nil {
+		var err error
+		oldDBConfig, err = h.store.ConfigStore.GetMCPClientByID(ctx, id)
+		if err != nil {
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to get existing mcp client config: %v", err))
+			return
+		}
+	}
 	// Persist changes to config store
 	if h.store.ConfigStore != nil {
 		if err := h.store.ConfigStore.UpdateMCPClientConfig(ctx, id, req); err != nil {
@@ -431,8 +441,14 @@ func (h *MCPHandler) updateMCPClient(ctx *fasthttp.RequestCtx) {
 	}
 	// Update MCP client in memory
 	if err := h.mcpManager.UpdateMCPClient(ctx, id, schemasConfig); err != nil {
-		logger.Error(fmt.Sprintf("Failed to update MCP client: %v. please restart bifrost to keep core and database in sync", err))
-		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update mcp client: %v please restart bifrost to keep core and database in sync", err))
+		// Rollback DB update to keep DB and memory in sync
+		if h.store.ConfigStore != nil && oldDBConfig != nil {
+			if rollbackErr := h.store.ConfigStore.UpdateMCPClientConfig(ctx, id, oldDBConfig); rollbackErr != nil {
+				logger.Error(fmt.Sprintf("Failed to rollback MCP client DB update: %v. please restart bifrost to keep core and database in sync", rollbackErr))
+			}
+		}
+		logger.Error(fmt.Sprintf("Failed to update MCP client: %v", err))
+		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update mcp client: %v", err))
 		return
 	}
 
@@ -453,17 +469,17 @@ func (h *MCPHandler) deleteMCPClient(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("invalid id: %v", err))
 		return
 	}
+	// Delete from DB first to avoid memory/DB inconsistency if DB delete fails
+	if h.store.ConfigStore != nil {
+		if err := h.store.ConfigStore.DeleteMCPClientConfig(ctx, id); err != nil {
+			logger.Error(fmt.Sprintf("Failed to delete MCP client config from database: %v", err))
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to delete MCP config: %v", err))
+			return
+		}
+	}
 	if err := h.mcpManager.RemoveMCPClient(ctx, id); err != nil {
 		SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to remove MCP client: %v", err))
 		return
-	}
-	// Deleting MCP client config from config store
-	if h.store.ConfigStore != nil {
-		if err := h.store.ConfigStore.DeleteMCPClientConfig(ctx, id); err != nil {
-			logger.Error(fmt.Sprintf("Failed to delete MCP client config from database: %v. please restart bifrost to keep core and database in sync", err))
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to delete MCP config: %v please restart bifrost to keep core and database in sync", err))
-			return
-		}
 	}
 	SendJSON(ctx, map[string]any{
 		"status":  "success",

@@ -15,6 +15,7 @@ import { ConfigSettingsPage } from '../../features/config/pages/config-settings.
  * Custom test fixtures type
  */
 type BifrostFixtures = {
+  closeDevProfiler: void
   sidebarPage: SidebarPage
   providersPage: ProvidersPage
   virtualKeysPage: VirtualKeysPage
@@ -32,6 +33,18 @@ type BifrostFixtures = {
  * Extended test with Bifrost-specific fixtures
  */
 export const test = base.extend<BifrostFixtures>({
+  closeDevProfiler: [async ({ page }, use) => {
+    // Automatically dismiss the Dev Profiler overlay whenever it appears.
+    // Uses addLocatorHandler so it triggers before any test action if the profiler is visible.
+    await page.addLocatorHandler(
+      page.getByText('Dev Profiler', { exact: true }),
+      async () => {
+        await page.locator('button[title="Dismiss"]').click()
+      }
+    )
+    await use()
+  }, { auto: true }],
+
   sidebarPage: async ({ page }, use) => {
     await use(new SidebarPage(page))
   },

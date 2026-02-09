@@ -132,6 +132,22 @@ export class BasePage {
   }
 
   /**
+   * Close the Dev Profiler overlay if it is visible.
+   * Clicks the dismiss (X) button on the profiler panel. Silently continues if not present.
+   */
+  async closeDevProfiler(): Promise<void> {
+    const profilerHeader = this.page.locator('text=Dev Profiler')
+    const isVisible = await profilerHeader.isVisible().catch(() => false)
+    if (isVisible) {
+      const dismissBtn = this.page.locator('button[title="Dismiss"]')
+      if (await dismissBtn.isVisible().catch(() => false)) {
+        await dismissBtn.click()
+        await profilerHeader.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {})
+      }
+    }
+  }
+
+  /**
    * Fill a form field by label
    */
   async fillByLabel(label: string, value: string): Promise<void> {

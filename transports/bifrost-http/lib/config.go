@@ -2908,7 +2908,7 @@ func (c *Config) RemoveProvider(ctx context.Context, provider schemas.ModelProvi
 	if _, exists := c.Providers[provider]; !exists {
 		return ErrNotFound
 	}
-	delete(c.Providers, provider)
+	// Delete from DB first to avoid memory/DB inconsistency if DB delete fails
 	skipDBUpdate := false
 	if ctx.Value(schemas.BifrostContextKeySkipDBUpdate) != nil {
 		if skip, ok := ctx.Value(schemas.BifrostContextKeySkipDBUpdate).(bool); ok {
@@ -2917,9 +2917,10 @@ func (c *Config) RemoveProvider(ctx context.Context, provider schemas.ModelProvi
 	}
 	if c.ConfigStore != nil && !skipDBUpdate {
 		if err := c.ConfigStore.DeleteProvider(ctx, provider); err != nil {
-			return fmt.Errorf("failed to update provider config in store: %w", err)
+			return fmt.Errorf("failed to delete provider config from store: %w", err)
 		}
 	}
+	delete(c.Providers, provider)
 	logger.Info("Removed provider: %s", provider)
 	return nil
 }

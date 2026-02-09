@@ -15863,3 +15863,122 @@ func TestAddProvider_NilConfigStore_AddsToMemoryOnly(t *testing.T) {
 		t.Fatal("provider should be in memory when ConfigStore is nil")
 	}
 }
+
+// =============================================================================
+// RemoveProvider Tests
+// =============================================================================
+
+// mockConfigStoreDeleteProvider is a ConfigStore mock that allows controlling DeleteProvider behavior.
+type mockConfigStoreDeleteProvider struct {
+	MockConfigStore
+	deleteProviderErr error
+}
+
+func (m *mockConfigStoreDeleteProvider) DeleteProvider(ctx context.Context, provider schemas.ModelProvider, tx ...*gorm.DB) error {
+	if m.deleteProviderErr != nil {
+		return m.deleteProviderErr
+	}
+	return m.MockConfigStore.DeleteProvider(ctx, provider, tx...)
+}
+
+func TestRemoveProvider_Success(t *testing.T) {
+	initTestLogger()
+	mockStore := NewMockConfigStore()
+	mockStore.providers["test-provider"] = configstore.ProviderConfig{}
+	cfg := &Config{
+		Providers: map[schemas.ModelProvider]configstore.ProviderConfig{
+			"test-provider": {Keys: []schemas.Key{{Value: *schemas.NewEnvVar("test-key")}}},
+		},
+		ConfigStore: mockStore,
+	}
+
+	err := cfg.RemoveProvider(context.Background(), "test-provider")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if _, exists := cfg.Providers["test-provider"]; exists {
+		t.Fatal("provider should be removed from in-memory map after successful delete")
+	}
+}
+
+func TestRemoveProvider_NotFound(t *testing.T) {
+	initTestLogger()
+	cfg := &Config{
+		Providers:   make(map[schemas.ModelProvider]configstore.ProviderConfig),
+		ConfigStore: NewMockConfigStore(),
+	}
+
+	err := cfg.RemoveProvider(context.Background(), "nonexistent-provider")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got: %v", err)
+	}
+}
+
+func TestRemoveProvider_DBError_DoesNotRemoveFromMemory(t *testing.T) {
+	initTestLogger()
+	mockStore := &mockConfigStoreDeleteProvider{
+		MockConfigStore:   *NewMockConfigStore(),
+		deleteProviderErr: errors.New("connection refused"),
+	}
+	cfg := &Config{
+		Providers: map[schemas.ModelProvider]configstore.ProviderConfig{
+			"test-provider": {Keys: []schemas.Key{{Value: *schemas.NewEnvVar("test-key")}}},
+		},
+		ConfigStore: mockStore,
+	}
+
+	err := cfg.RemoveProvider(context.Background(), "test-provider")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	if _, exists := cfg.Providers["test-provider"]; !exists {
+		t.Fatal("provider should still be in memory when DB delete fails")
+	}
+}
+
+func TestRemoveProvider_NilConfigStore_RemovesFromMemoryOnly(t *testing.T) {
+	initTestLogger()
+	cfg := &Config{
+		Providers: map[schemas.ModelProvider]configstore.ProviderConfig{
+			"test-provider": {Keys: []schemas.Key{{Value: *schemas.NewEnvVar("test-key")}}},
+		},
+		ConfigStore: nil,
+	}
+
+	err := cfg.RemoveProvider(context.Background(), "test-provider")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if _, exists := cfg.Providers["test-provider"]; exists {
+		t.Fatal("provider should be removed from memory when ConfigStore is nil")
+	}
+}
+
+func TestRemoveProvider_SkipDBUpdate(t *testing.T) {
+	initTestLogger()
+	// When skipDBUpdate is set, DeleteProvider should not be called on the store.
+	// Use a mock that would fail if called, proving it was skipped.
+	mockStore := &mockConfigStoreDeleteProvider{
+		MockConfigStore:   *NewMockConfigStore(),
+		deleteProviderErr: errors.New("should not be called"),
+	}
+	cfg := &Config{
+		Providers: map[schemas.ModelProvider]configstore.ProviderConfig{
+			"test-provider": {Keys: []schemas.Key{{Value: *schemas.NewEnvVar("test-key")}}},
+		},
+		ConfigStore: mockStore,
+	}
+
+	ctx := context.WithValue(context.Background(), schemas.BifrostContextKeySkipDBUpdate, true)
+	err := cfg.RemoveProvider(ctx, "test-provider")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if _, exists := cfg.Providers["test-provider"]; exists {
+		t.Fatal("provider should be removed from memory when skipDBUpdate is true")
+	}
+}

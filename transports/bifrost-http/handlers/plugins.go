@@ -222,16 +222,7 @@ func (h *PluginsHandler) createPlugin(ctx *fasthttp.RequestCtx) {
 		SendError(ctx, fasthttp.StatusConflict, "Plugin already exists")
 		return
 	}
-	// We reload the plugin if its enabled
-	if request.Enabled {
-		if err := h.pluginsLoader.ReloadPlugin(ctx, request.Name, request.Path, request.Config); err != nil {
-			logger.Error("failed to load plugin: %v", err)
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Plugin created in database but failed to load: %v", err))
-			return
-		}
-	}
-
-	// Create a DB entry if plugin loading was successful
+	// Create DB entry first to avoid orphaned in-memory state if DB write fails
 	if err := h.configStore.CreatePlugin(ctx, &configstoreTables.TablePlugin{
 		Name:     request.Name,
 		Enabled:  request.Enabled,
@@ -242,6 +233,18 @@ func (h *PluginsHandler) createPlugin(ctx *fasthttp.RequestCtx) {
 		logger.Error("failed to create plugin: %v", err)
 		SendError(ctx, 500, "Failed to create plugin")
 		return
+	}
+
+	// Reload the plugin into memory if it's enabled
+	if request.Enabled {
+		if err := h.pluginsLoader.ReloadPlugin(ctx, request.Name, request.Path, request.Config); err != nil {
+			logger.Error("failed to load plugin: %v", err)
+			if rbErr := h.configStore.DeletePlugin(ctx, request.Name); rbErr != nil {
+				logger.Error("failed to rollback plugin creation: %v", rbErr)
+			}
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Plugin created in database but failed to load: %v", err))
+			return
+		}
 	}
 
 	plugin, err := h.configStore.GetPlugin(ctx, request.Name)
