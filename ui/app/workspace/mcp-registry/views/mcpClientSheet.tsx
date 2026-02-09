@@ -30,6 +30,15 @@ interface MCPClientSheetProps {
 	onSubmitSuccess: () => void;
 }
 
+/** API sends tool_sync_interval as nanoseconds (Go time.Duration). Normalize to minutes for form/store. */
+function toolSyncIntervalToMinutes(v: number | undefined | null): number {
+	if (v === undefined || v === null) return 0;
+	const n = Number(v);
+	if (Number.isNaN(n)) return 0;
+	if (Math.abs(n) >= 1e9) return Math.round(n / 6e10);
+	return n;
+}
+
 export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: MCPClientSheetProps) {
 	const hasUpdateMCPClientAccess = useRbac(RbacResource.MCPGateway, RbacOperation.Update);
 	const [updateMCPClient, { isLoading: isUpdating }] = useUpdateMCPClientMutation();
@@ -61,7 +70,7 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 			tools_to_execute: mcpClient.config.tools_to_execute || [],
 			tools_to_auto_execute: mcpClient.config.tools_to_auto_execute || [],
 			tool_pricing: mcpClient.config.tool_pricing || {},
-			tool_sync_interval: mcpClient.config.tool_sync_interval ?? 0,
+			tool_sync_interval: toolSyncIntervalToMinutes(mcpClient.config.tool_sync_interval),
 		},
 	});
 
@@ -75,7 +84,7 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 			tools_to_execute: mcpClient.config.tools_to_execute || [],
 			tools_to_auto_execute: mcpClient.config.tools_to_auto_execute || [],
 			tool_pricing: mcpClient.config.tool_pricing || {},
-			tool_sync_interval: mcpClient.config.tool_sync_interval ?? 0,
+			tool_sync_interval: toolSyncIntervalToMinutes(mcpClient.config.tool_sync_interval),
 		});
 	}, [form, mcpClient]);
 
@@ -339,7 +348,7 @@ export default function MCPClientSheet({ mcpClient, onClose, onSubmitSuccess }: 
 														type="number"
 														className={`w-24 ${isUsingGlobal ? "text-muted-foreground" : ""}`}
 														placeholder={String(globalToolSyncInterval)}
-														value={field.value === 0 ? "" : (field.value ?? "")}
+														value={field.value === 0 || field.value === undefined ? "" : String(field.value)}
 														onChange={(e) => {
 															const val = e.target.value === "" ? undefined : parseInt(e.target.value);
 															field.onChange(val);
