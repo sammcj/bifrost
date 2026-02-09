@@ -35,96 +35,114 @@ test.describe('LLM Logs', () => {
       const providerFilter = logsPage.providerFilter
       const isVisible = await providerFilter.isVisible().catch(() => false)
 
-      if (isVisible && SAMPLE_PROVIDERS.length > 0) {
-        // Get initial filter state
-        const initialValue = await providerFilter.textContent().catch(() => '')
-
-        await logsPage.filterByProvider(SAMPLE_PROVIDERS[0])
-
-        // Check that filter value changed (or verify filter is applied via DOM)
-        const newValue = await providerFilter.textContent().catch(() => '')
-        // Filter should have changed or show selected provider
-        expect(newValue || initialValue).toBeTruthy()
+      if (!isVisible || SAMPLE_PROVIDERS.length === 0) {
+        test.skip(!isVisible || SAMPLE_PROVIDERS.length === 0, 'Provider filter not visible or no sample providers')
+        return
       }
+
+      // Get initial filter state
+      const initialValue = await providerFilter.textContent().catch(() => '')
+
+      await logsPage.filterByProvider(SAMPLE_PROVIDERS[0])
+
+      // Check that filter value changed (or verify filter is applied via DOM)
+      const newValue = await providerFilter.textContent().catch(() => '')
+      // Filter should have changed or show selected provider
+      expect(newValue || initialValue).toBeTruthy()
     })
 
     test('should filter logs by model', async ({ logsPage }) => {
       const modelFilter = logsPage.modelFilter
       const isVisible = await modelFilter.isVisible().catch(() => false)
 
-      if (isVisible && SAMPLE_MODELS.length > 0) {
-        // Get initial filter state
-        const initialValue = await modelFilter.textContent().catch(() => '')
-
-        await logsPage.filterByModel(SAMPLE_MODELS[0])
-
-        // Check that filter value changed (or verify filter is applied via DOM)
-        const newValue = await modelFilter.textContent().catch(() => '')
-        // Filter should have changed or show selected model
-        expect(newValue || initialValue).toBeTruthy()
+      if (!isVisible || SAMPLE_MODELS.length === 0) {
+        test.skip(!isVisible || SAMPLE_MODELS.length === 0, 'Model filter not visible or no sample models')
+        return
       }
+
+      // Get initial filter state
+      const initialValue = await modelFilter.textContent().catch(() => '')
+
+      await logsPage.filterByModel(SAMPLE_MODELS[0])
+
+      // Check that filter value changed (or verify filter is applied via DOM)
+      const newValue = await modelFilter.textContent().catch(() => '')
+      // Filter should have changed or show selected model
+      expect(newValue || initialValue).toBeTruthy()
     })
 
     test('should filter logs by status', async ({ logsPage }) => {
       const statusFilter = logsPage.statusFilter
       const isVisible = await statusFilter.isVisible().catch(() => false)
 
-      if (isVisible) {
-        // Get initial filter state
-        const initialValue = await statusFilter.textContent().catch(() => '')
-
-        await logsPage.filterByStatus('success')
-
-        // Check that filter value changed (or verify filter is applied via DOM)
-        const newValue = await statusFilter.textContent().catch(() => '')
-        // Filter should have changed or show selected status
-        expect(newValue || initialValue).toBeTruthy()
+      if (!isVisible) {
+        test.skip(true, 'Status filter not visible')
+        return
       }
+
+      // Get initial filter state
+      const initialValue = await statusFilter.textContent().catch(() => '')
+
+      await logsPage.filterByStatus('success')
+
+      // Check that filter value changed (or verify filter is applied via DOM)
+      const newValue = await statusFilter.textContent().catch(() => '')
+      // Filter should have changed or show selected status
+      expect(newValue || initialValue).toBeTruthy()
     })
 
     test('should search logs by content', async ({ logsPage }) => {
       const searchInput = logsPage.searchInput
       const isVisible = await searchInput.isVisible().catch(() => false)
 
-      if (isVisible) {
-        const query = createLogSearchQuery()
-        await logsPage.searchLogs(query)
-
-        // Check that search input contains the query (DOM state)
-        const inputValue = await searchInput.inputValue().catch(() => '')
-        expect(inputValue).toContain(query)
+      if (!isVisible) {
+        test.skip(true, 'Search input not visible')
+        return
       }
+
+      const query = createLogSearchQuery()
+      await logsPage.searchLogs(query)
+
+      // Check that search input contains the query (DOM state)
+      const inputValue = await searchInput.inputValue().catch(() => '')
+      expect(inputValue).toContain(query)
     })
 
     test('should clear search', async ({ logsPage }) => {
       const searchInput = logsPage.searchInput
       const isVisible = await searchInput.isVisible().catch(() => false)
 
-      if (isVisible) {
-        await logsPage.searchLogs('test query')
-        await logsPage.clearSearch()
-
-        // Search should be cleared
-        const inputValue = await searchInput.inputValue().catch(() => '')
-        expect(inputValue).toBe('')
+      if (!isVisible) {
+        test.skip(true, 'Search input not visible')
+        return
       }
+
+      await logsPage.searchLogs('test query')
+      await logsPage.clearSearch()
+
+      // Search should be cleared
+      const inputValue = await searchInput.inputValue().catch(() => '')
+      expect(inputValue).toBe('')
     })
 
     test('should filter by time period', async ({ logsPage }) => {
       const datePicker = logsPage.dateRangePicker
       const isVisible = await datePicker.isVisible().catch(() => false)
 
-      if (isVisible) {
-        // Get initial date picker value
-        const initialValue = await datePicker.textContent().catch(() => '')
-
-        await logsPage.selectTimePeriod('7d')
-
-        // Check that date picker value changed (DOM state)
-        const newValue = await datePicker.textContent().catch(() => '')
-        // Date picker should show "Last 7 days" or similar
-        expect(newValue || initialValue).toBeTruthy()
+      if (!isVisible) {
+        test.skip(true, 'Date range picker not visible')
+        return
       }
+
+      // Get initial date picker value
+      const initialValue = await datePicker.textContent().catch(() => '')
+
+      await logsPage.selectTimePeriod('7d')
+
+      // Check that date picker value changed (DOM state)
+      const newValue = await datePicker.textContent().catch(() => '')
+      // Date picker should show "Last 7 days" or similar
+      expect(newValue || initialValue).toBeTruthy()
     })
   })
 
@@ -177,9 +195,10 @@ test.describe('LLM Logs', () => {
 
         await logsPage.goToNextPage()
 
-        const newUrl = logsPage.page.url()
-        // URL should have changed (offset increased)
-        expect(newUrl).not.toBe(initialUrl)
+        // Wait for URL to change after pagination
+        await expect
+          .poll(() => logsPage.page.url(), { timeout: 5000 })
+          .not.toBe(initialUrl)
       }
     })
 
@@ -199,8 +218,10 @@ test.describe('LLM Logs', () => {
           const urlBefore = logsPage.page.url()
           await logsPage.goToPreviousPage()
 
-          const urlAfter = logsPage.page.url()
-          expect(urlAfter).not.toBe(urlBefore)
+          // Wait for URL to change after pagination
+          await expect
+            .poll(() => logsPage.page.url(), { timeout: 5000 })
+            .not.toBe(urlBefore)
         }
       }
     })
@@ -243,25 +264,28 @@ test.describe('LLM Logs', () => {
       const liveToggle = logsPage.liveToggle
       const isVisible = await liveToggle.isVisible().catch(() => false)
 
-      if (isVisible) {
-        // Default is live_enabled=true (but URL may not have it since it's the default)
-        // Check for live_enabled=false to determine if currently disabled
-        const initialUrl = logsPage.page.url()
-        const initialLiveDisabled = initialUrl.includes('live_enabled=false')
-
-        await logsPage.toggleLiveUpdates()
-
-        // Wait for URL to reflect live_enabled toggle
-        await logsPage.page.waitForURL(/live_enabled=/, { timeout: 5000 }).catch(() => {})
-
-        const newUrl = logsPage.page.url()
-        const newLiveDisabled = newUrl.includes('live_enabled=false')
-
-        // Live enabled state should have toggled
-        // If initially enabled (not disabled), after toggle it should be disabled
-        // If initially disabled, after toggle it should be enabled (no live_enabled=false)
-        expect(newLiveDisabled).not.toBe(initialLiveDisabled)
+      if (!isVisible) {
+        test.skip(true, 'Live toggle not visible')
+        return
       }
+
+      // Default is live_enabled=true (but URL may not have it since it's the default)
+      // Check for live_enabled=false to determine if currently disabled
+      const initialUrl = logsPage.page.url()
+      const initialLiveDisabled = initialUrl.includes('live_enabled=false')
+
+      await logsPage.toggleLiveUpdates()
+
+      // Wait for URL to reflect live_enabled toggle
+      await logsPage.page.waitForURL(/live_enabled=/, { timeout: 5000 })
+
+      const newUrl = logsPage.page.url()
+      const newLiveDisabled = newUrl.includes('live_enabled=false')
+
+      // Live enabled state should have toggled
+      // If initially enabled (not disabled), after toggle it should be disabled
+      // If initially disabled, after toggle it should be enabled (no live_enabled=false)
+      expect(newLiveDisabled).not.toBe(initialLiveDisabled)
     })
   })
 
@@ -271,14 +295,16 @@ test.describe('LLM Logs', () => {
       const searchInput = logsPage.searchInput
       const isVisible = await searchInput.isVisible().catch(() => false)
 
-      if (isVisible) {
-        await logsPage.searchLogs(`nonexistent-query-${Date.now()}`)
-
-        // May show empty state or filtered results
-        const emptyStateVisible = await logsPage.isEmptyStateVisible()
-        // This test passes regardless - empty state may or may not show depending on data
-        expect(typeof emptyStateVisible).toBe('boolean')
+      if (!isVisible) {
+        test.skip(true, 'Search input not visible')
+        return
       }
+
+      await logsPage.searchLogs(`nonexistent-query-${Date.now()}`)
+
+      // After searching for a non-existent query, empty state should be visible
+      const emptyStateVisible = await logsPage.isEmptyStateVisible()
+      expect(emptyStateVisible).toBe(true)
     })
   })
 
@@ -288,52 +314,61 @@ test.describe('LLM Logs', () => {
       const searchVisible = await logsPage.searchInput.isVisible().catch(() => false)
       const providerVisible = await logsPage.providerFilter.isVisible().catch(() => false)
 
-      if (searchVisible && providerVisible) {
-        // Apply search filter
-        await logsPage.searchLogs('test')
-
-        // Apply provider filter
-        if (SAMPLE_PROVIDERS.length > 0) {
-          await logsPage.filterByProvider(SAMPLE_PROVIDERS[0])
-        }
-
-        // Both filters should be applied
-        const searchValue = await logsPage.searchInput.inputValue().catch(() => '')
-        expect(searchValue).toContain('test')
+      if (!searchVisible || !providerVisible) {
+        test.skip(true, 'Search input or provider filter not visible')
+        return
       }
+
+      // Apply search filter
+      await logsPage.searchLogs('test')
+
+      // Apply provider filter
+      if (SAMPLE_PROVIDERS.length > 0) {
+        await logsPage.filterByProvider(SAMPLE_PROVIDERS[0])
+      }
+
+      // Both filters should be applied
+      const searchValue = await logsPage.searchInput.inputValue().catch(() => '')
+      expect(searchValue).toContain('test')
     })
 
     test('should clear all filters', async ({ logsPage }) => {
       const searchVisible = await logsPage.searchInput.isVisible().catch(() => false)
 
-      if (searchVisible) {
-        // Apply a filter first
-        await logsPage.searchLogs('test query to clear')
-
-        // Clear the search
-        await logsPage.clearSearch()
-
-        // Search should be empty
-        const searchValue = await logsPage.searchInput.inputValue().catch(() => '')
-        expect(searchValue).toBe('')
+      if (!searchVisible) {
+        test.skip(true, 'Search input not visible')
+        return
       }
+
+      // Apply a filter first
+      await logsPage.searchLogs('test query to clear')
+
+      // Clear the search
+      await logsPage.clearSearch()
+
+      // Search should be empty
+      const searchValue = await logsPage.searchInput.inputValue().catch(() => '')
+      expect(searchValue).toBe('')
     })
 
     test('should search within filtered results', async ({ logsPage }) => {
       const searchVisible = await logsPage.searchInput.isVisible().catch(() => false)
       const statusVisible = await logsPage.statusFilter.isVisible().catch(() => false)
 
-      if (searchVisible && statusVisible) {
-        // Apply status filter first
-        await logsPage.filterByStatus('success')
-
-        // Then apply search
-        await logsPage.searchLogs('api')
-
-        // Search input should contain the query
-        const searchValue = await logsPage.searchInput.inputValue().catch(() => '')
-        expect(searchValue).toContain('api')
+      if (!searchVisible || !statusVisible) {
+        test.skip(true, 'Search input or status filter not visible')
+        return
       }
+
+      // Apply status filter first
+      await logsPage.filterByStatus('success')
+
+      // Then apply search
+      await logsPage.searchLogs('api')
+
+      // Search input should contain the query
+      const searchValue = await logsPage.searchInput.inputValue().catch(() => '')
+      expect(searchValue).toContain('api')
     })
   })
 

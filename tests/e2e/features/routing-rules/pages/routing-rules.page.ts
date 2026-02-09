@@ -111,7 +111,12 @@ export class RoutingRulesPage extends BasePage {
    * Get routing rule row locator
    */
   getRuleRow(name: string): Locator {
-    return this.table.locator('tr').filter({ hasText: name })
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return this.table.locator('tr').filter({
+      has: this.page.locator('td').first().filter({
+        hasText: new RegExp(`^\\s*${escapedName}\\s*$`)
+      })
+    })
   }
 
   private async waitForToastAndAssertSuccess(action: string): Promise<void> {
@@ -175,10 +180,12 @@ export class RoutingRulesPage extends BasePage {
       await this.priorityInput.fill(String(config.priority))
     }
 
-    // Set enabled state
-    if (config.enabled === false) {
+    // Set enabled state if explicitly specified
+    if (config.enabled !== undefined) {
       const isChecked = await this.enabledToggle.getAttribute('data-state') === 'checked'
-      if (isChecked) {
+      if (config.enabled && !isChecked) {
+        await this.enabledToggle.click()
+      } else if (!config.enabled && isChecked) {
         await this.enabledToggle.click()
       }
     }
@@ -615,7 +622,7 @@ export class RoutingRulesPage extends BasePage {
       if (scope !== 'global' && scopeId) {
         // Wait for scope ID select/input to appear
         const scopeIdInput = this.sheet.locator('[role="combobox"]').filter({ hasText: /Select/i }).last().or(
-          this.sheet.locator('input').filter({ hasText: /Select/i }).last()
+          this.sheet.locator('input[placeholder*="Select" i]').last()
         )
 
         if (await scopeIdInput.isVisible().catch(() => false)) {

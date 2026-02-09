@@ -179,18 +179,17 @@ test.describe('MCP Logs', () => {
 
       await mcpLogsPage.sortBy('timestamp')
 
-      // Wait for URL to update with sort parameter
-      await mcpLogsPage.page.waitForURL(/order=/, { timeout: 5000 }).catch(() => {})
-
-      const newUrl = mcpLogsPage.page.url()
-      expect(newUrl).not.toBe(initialUrl)
+      // Wait for URL to actually change after sort
+      await expect
+        .poll(() => mcpLogsPage.page.url(), { timeout: 5000 })
+        .not.toBe(initialUrl)
     })
 
     test('should sort by latency', async ({ mcpLogsPage }) => {
       await mcpLogsPage.sortBy('latency')
 
       // Wait for URL to update
-      await mcpLogsPage.page.waitForURL(/sort_by=latency/, { timeout: 5000 }).catch(() => {})
+      await mcpLogsPage.page.waitForURL(/sort_by=latency/, { timeout: 5000 })
 
       // Check URL state for latency sort
       const sortState = await mcpLogsPage.getSortState('latency')
@@ -212,7 +211,7 @@ test.describe('MCP Logs', () => {
         await mcpLogsPage.toggleLiveUpdates()
 
         // Wait for URL to reflect live_enabled toggle
-        await mcpLogsPage.page.waitForURL(/live_enabled=/, { timeout: 5000 }).catch(() => {})
+        await mcpLogsPage.page.waitForURL(/live_enabled=/, { timeout: 5000 })
 
         const newUrl = mcpLogsPage.page.url()
         const newLiveDisabled = newUrl.includes('live_enabled=false')
