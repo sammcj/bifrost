@@ -330,6 +330,7 @@ EXPECTED BEHAVIORS SUMMARY
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15734,4 +15735,131 @@ func TestLoadAuthConfigFromFile_PasswordHashing(t *testing.T) {
 		// Verify sessions were NOT flushed because password did not change
 		require.False(t, mockStore.flushSessionsCalled, "sessions should not be flushed when password matches")
 	})
+}
+
+// =============================================================================
+// AddProvider Tests
+// =============================================================================
+
+// mockConfigStoreAddProvider is a ConfigStore mock that allows controlling AddProvider behavior.
+type mockConfigStoreAddProvider struct {
+	MockConfigStore
+	addProviderErr error
+}
+
+func (m *mockConfigStoreAddProvider) AddProvider(ctx context.Context, provider schemas.ModelProvider, config configstore.ProviderConfig, tx ...*gorm.DB) error {
+	if m.addProviderErr != nil {
+		return m.addProviderErr
+	}
+	return m.MockConfigStore.AddProvider(ctx, provider, config, tx...)
+}
+
+func TestAddProvider_Success(t *testing.T) {
+	initTestLogger()
+	cfg := &Config{
+		Providers:   make(map[schemas.ModelProvider]configstore.ProviderConfig),
+		ConfigStore: NewMockConfigStore(),
+	}
+
+	err := cfg.AddProvider(context.Background(), "test-provider", configstore.ProviderConfig{
+		Keys: []schemas.Key{{Value: *schemas.NewEnvVar("test-key")}},
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if _, exists := cfg.Providers["test-provider"]; !exists {
+		t.Fatal("provider should be in the in-memory map after successful add")
+	}
+}
+
+func TestAddProvider_AlreadyExistsInMemory(t *testing.T) {
+	initTestLogger()
+	cfg := &Config{
+		Providers: map[schemas.ModelProvider]configstore.ProviderConfig{
+			"test-provider": {},
+		},
+		ConfigStore: NewMockConfigStore(),
+	}
+
+	err := cfg.AddProvider(context.Background(), "test-provider", configstore.ProviderConfig{})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrAlreadyExists) {
+		t.Fatalf("expected ErrAlreadyExists, got: %v", err)
+	}
+}
+
+func TestAddProvider_AlreadyExistsInDB_SyncsToMemory(t *testing.T) {
+	initTestLogger()
+	// Simulate: provider exists in DB but not in the in-memory map.
+	// This can happen when a previous AddProvider wrote to DB but the process failed
+	// before syncing the in-memory state (e.g., UpdateProviderConfig failed after AddProvider).
+	mockStore := &mockConfigStoreAddProvider{
+		MockConfigStore: *NewMockConfigStore(),
+		addProviderErr:  configstore.ErrAlreadyExists,
+	}
+	cfg := &Config{
+		Providers:   make(map[schemas.ModelProvider]configstore.ProviderConfig),
+		ConfigStore: mockStore,
+	}
+
+	config := configstore.ProviderConfig{
+		Keys: []schemas.Key{{Value: *schemas.NewEnvVar("test-key")}},
+	}
+	err := cfg.AddProvider(context.Background(), "test-provider", config)
+
+	// Should return ErrAlreadyExists
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrAlreadyExists) {
+		t.Fatalf("expected ErrAlreadyExists, got: %v", err)
+	}
+
+	// The provider should be synced to the in-memory map
+	// so that subsequent UpdateProviderConfig calls can succeed
+	if _, exists := cfg.Providers["test-provider"]; !exists {
+		t.Fatal("provider should be synced to in-memory map when DB returns already exists")
+	}
+}
+
+func TestAddProvider_DBError_DoesNotSyncToMemory(t *testing.T) {
+	initTestLogger()
+	// Non-duplicate DB errors should NOT add the provider to memory
+	mockStore := &mockConfigStoreAddProvider{
+		MockConfigStore: *NewMockConfigStore(),
+		addProviderErr:  errors.New("connection refused"),
+	}
+	cfg := &Config{
+		Providers:   make(map[schemas.ModelProvider]configstore.ProviderConfig),
+		ConfigStore: mockStore,
+	}
+
+	err := cfg.AddProvider(context.Background(), "test-provider", configstore.ProviderConfig{})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	if _, exists := cfg.Providers["test-provider"]; exists {
+		t.Fatal("provider should NOT be in memory when DB returns a non-duplicate error")
+	}
+}
+
+func TestAddProvider_NilConfigStore_AddsToMemoryOnly(t *testing.T) {
+	initTestLogger()
+	cfg := &Config{
+		Providers:   make(map[schemas.ModelProvider]configstore.ProviderConfig),
+		ConfigStore: nil,
+	}
+
+	err := cfg.AddProvider(context.Background(), "test-provider", configstore.ProviderConfig{
+		Keys: []schemas.Key{{Value: *schemas.NewEnvVar("test-key")}},
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if _, exists := cfg.Providers["test-provider"]; !exists {
+		t.Fatal("provider should be in memory when ConfigStore is nil")
+	}
 }

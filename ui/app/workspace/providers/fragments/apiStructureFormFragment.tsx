@@ -78,6 +78,7 @@ export function ApiStructureFormFragment({ provider }: Props) {
 			.unwrap()
 			.then(() => {
 				toast.success("Provider configuration updated successfully");
+				form.reset(data);
 			})
 			.catch((err) => {
 				toast.error("Failed to update provider configuration", {

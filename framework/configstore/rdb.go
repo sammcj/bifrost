@@ -155,10 +155,10 @@ func (s *RDBConfigStore) parseGormError(err error) error {
 		if columnName != "" {
 			// Convert snake_case to space-separated words
 			columnName = strings.ReplaceAll(columnName, "_", " ")
-			return fmt.Errorf("a record with this %s already exists. Please use a different value", columnName)
+			return fmt.Errorf("a record with this %s %w. Please use a different value", columnName, ErrAlreadyExists)
 		}
 		// Fallback message if we couldn't parse the column name
-		return fmt.Errorf("a record with this value already exists. Please use a different value")
+		return fmt.Errorf("a record with this value %w. Please use a different value", ErrAlreadyExists)
 	}
 
 	// For other errors, return the original error

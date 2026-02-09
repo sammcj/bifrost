@@ -5,15 +5,14 @@
 
 "use client";
 
-import { useState } from "react";
+import { RbacOperation, RbacResource, useRbac } from "@/app/_fallbacks/enterprise/lib/contexts/rbacContext";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import { RoutingRule } from "@/lib/types/routingRules";
 import { useGetRoutingRulesQuery } from "@/lib/store/apis/routingRulesApi";
-import { RoutingRulesTable } from "./routingRulesTable";
+import { RoutingRule } from "@/lib/types/routingRules";
+import { Plus } from "lucide-react";
+import { useState } from "react";
 import { RoutingRuleSheet } from "./routingRuleSheet";
-import { useRbac } from "@/app/_fallbacks/enterprise/lib/contexts/rbacContext";
-import { RbacResource, RbacOperation } from "@/app/_fallbacks/enterprise/lib/contexts/rbacContext";
+import { RoutingRulesTable } from "./routingRulesTable";
 
 export function RoutingRulesView() {
 	const [dialogOpen, setDialogOpen] = useState(false);
@@ -48,16 +47,11 @@ export function RoutingRulesView() {
 			{/* Header */}
 			<div className="flex items-center justify-between">
 				<div>
-					<p className="text-muted-foreground text-sm">
-						Manage CEL-based routing rules for intelligent request routing across providers
-					</p>
+					<h1 className="text-foreground text-lg font-semibold">Routing Rules</h1>
+					<p className="text-muted-foreground text-sm">Manage CEL-based routing rules for intelligent request routing across providers</p>
 				</div>
 				{canCreate && (
-					<Button
-						onClick={handleCreateNew}
-						disabled={isLoading}
-						className="gap-2"
-					>
+					<Button onClick={handleCreateNew} disabled={isLoading} className="gap-2">
 						<Plus className="h-4 w-4" />
 						<span className="hidden sm:inline">New Rule</span>
 					</Button>
@@ -67,38 +61,22 @@ export function RoutingRulesView() {
 			{/* Empty state or Table */}
 			{!isLoading && rules.length === 0 ? (
 				<div className="rounded-lg border border-dashed p-12 text-center">
-					<Plus className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-					<h3 className="text-lg font-semibold mb-1">
-						No routing rules yet
-					</h3>
-					<p className="text-muted-foreground mb-6">
-						Create your first routing rule to start intelligently routing requests
-					</p>
+					<Plus className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+					<h3 className="mb-1 text-lg font-semibold">No routing rules yet</h3>
+					<p className="text-muted-foreground mb-6">Create your first routing rule to start intelligently routing requests</p>
 					{canCreate && (
-						<Button
-							onClick={handleCreateNew}
-							className="gap-2"
-						>
+						<Button onClick={handleCreateNew} className="gap-2">
 							<Plus className="h-4 w-4" />
 							Create First Rule
 						</Button>
 					)}
 				</div>
 			) : (
-				<RoutingRulesTable
-					rules={rules}
-					isLoading={isLoading}
-					onEdit={handleEdit}
-					canDelete={canDelete}
-				/>
+				<RoutingRulesTable rules={rules} isLoading={isLoading} onEdit={handleEdit} canDelete={canDelete} />
 			)}
 
 			{/* RoutingRuleSheet */}
-			<RoutingRuleSheet
-				open={dialogOpen}
-				onOpenChange={handleDialogOpenChange}
-				editingRule={editingRule}
-			/>
+			<RoutingRuleSheet open={dialogOpen} onOpenChange={handleDialogOpenChange} editingRule={editingRule} />
 		</div>
 	);
 }

@@ -1,12 +1,10 @@
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { isKnownProvider, ModelProvider } from "@/lib/types/config";
+import { Button } from "@/components/ui/button";
 import { useGetCoreConfigQuery } from "@/lib/store";
+import { ModelProvider } from "@/lib/types/config";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
-import { useEffect, useMemo, useState } from "react";
-import { ApiStructureFormFragment, GovernanceFormFragment, ProxyFormFragment } from "../fragments";
-import { NetworkFormFragment } from "../fragments/networkFormFragment";
-import { PerformanceFormFragment } from "../fragments/performanceFormFragment";
+import { SettingsIcon } from "lucide-react";
+import { useMemo, useState } from "react";
+import ProviderConfigSheet from "../dialogs/providerConfigSheet";
 import ModelProviderKeysTableView from "./modelProviderKeysTableView";
 import ProviderGovernanceTable from "./providerGovernanceTable";
 import { keysRequired } from "./utils";
@@ -15,52 +13,11 @@ interface Props {
 	provider: ModelProvider;
 }
 
-const availableTabs = (provider: ModelProvider, hasGovernanceAccess: boolean, isGovernanceEnabled: boolean) => {
-	const availableTabs = [];
-	// Custom Settings tab is available for custom providers
-	if (provider?.custom_provider_config) {
-		availableTabs.push({
-			id: "api-structure",
-			label: "API Structure",
-		});
-	}
-	// Network tab is always available
-	availableTabs.push({
-		id: "network",
-		label: "Network config",
-	});
-
-	availableTabs.push({
-		id: "proxy",
-		label: "Proxy config",
-	});
-
-	// Performance tab is always available
-	availableTabs.push({
-		id: "performance",
-		label: "Performance tuning",
-	});
-
-	// Governance tab for budgets and rate limits (requires Governance permission and feature enabled)
-	if (hasGovernanceAccess && isGovernanceEnabled) {
-		availableTabs.push({
-			id: "governance",
-			label: "Governance",
-		});
-	}
-	return availableTabs;
-};
-
 export default function ModelProviderConfig({ provider }: Props) {
-	const [selectedTab, setSelectedTab] = useState<string | undefined>(undefined);
-	const [accordionValue, setAccordionValue] = useState<string | undefined>(undefined);
-	const isCustomProvider = !isKnownProvider(provider.name);
+	const [showConfigSheet, setShowConfigSheet] = useState(false);
 	const hasGovernanceAccess = useRbac(RbacResource.Governance, RbacOperation.View);
 	const { data: coreConfig } = useGetCoreConfigQuery({});
 	const isGovernanceEnabled = coreConfig?.client_config?.enable_governance || false;
-	const tabs = useMemo(() => {
-		return availableTabs(provider, hasGovernanceAccess, isGovernanceEnabled);
-	}, [provider.name, provider.custom_provider_config, hasGovernanceAccess, isGovernanceEnabled]);
 
 	const showApiKeys = useMemo(() => {
 		if (provider.custom_provider_config) {
@@ -69,60 +26,17 @@ export default function ModelProviderConfig({ provider }: Props) {
 		return keysRequired(provider.name);
 	}, [provider.name, provider.custom_provider_config?.is_key_less]);
 
-	useEffect(() => {
-		setSelectedTab(tabs[0]?.id);
-	}, [tabs]);
-
-	useEffect(() => {
-		setAccordionValue(!showApiKeys || isCustomProvider ? "item-1" : undefined);
-	}, [showApiKeys, isCustomProvider]);
+	const editConfigButton = (
+		<Button variant="outline" onClick={() => setShowConfigSheet(true)}>
+			<SettingsIcon className="h-4 w-4" />
+			Edit Provider Config
+		</Button>
+	);
 
 	return (
 		<div className="flex w-full flex-col gap-2">
-			<Accordion type="single" collapsible={true} value={accordionValue} onValueChange={setAccordionValue}>
-				<AccordionItem value="item-1">
-					<AccordionTrigger className="flex cursor-pointer items-center text-[17px] font-semibold">
-						Provider level configuration
-					</AccordionTrigger>
-					<AccordionContent>
-						<div className="mb-2 w-full rounded-sm border">
-							<Tabs defaultValue={tabs[0]?.id} value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-								<TabsList
-									style={{ gridTemplateColumns: `repeat(${tabs.length + 3}, 1fr)` }}
-									className={`mb-4 grid h-10 w-full rounded-tl-sm rounded-tr-sm rounded-br-none rounded-bl-none`}
-								>
-									{tabs.map((tab) => (
-										<TabsTrigger key={tab.id} value={tab.id} className="flex items-center gap-2">
-											{tab.label}
-										</TabsTrigger>
-									))}
-								</TabsList>
-								<TabsContent value="api-structure">
-									<ApiStructureFormFragment provider={provider} />
-								</TabsContent>
-								<TabsContent value="network">
-									<NetworkFormFragment provider={provider} />
-								</TabsContent>
-								<TabsContent value="proxy">
-									<ProxyFormFragment provider={provider} />
-								</TabsContent>
-								<TabsContent value="performance">
-									<PerformanceFormFragment provider={provider} />
-								</TabsContent>
-								<TabsContent value="governance">
-									<GovernanceFormFragment provider={provider} />
-								</TabsContent>
-							</Tabs>
-						</div>
-					</AccordionContent>
-				</AccordionItem>
-			</Accordion>
-			{showApiKeys && (
-				<>
-					<div className="bg-accent h-[1px] w-full" />
-					<ModelProviderKeysTableView className="mt-4" provider={provider} />
-				</>
-			)}
+			<ProviderConfigSheet show={showConfigSheet} onCancel={() => setShowConfigSheet(false)} provider={provider} />
+			<ModelProviderKeysTableView provider={provider} headerActions={editConfigButton} isKeyless={!showApiKeys} />
 			{hasGovernanceAccess && isGovernanceEnabled ? <ProviderGovernanceTable className="mt-4" provider={provider} /> : null}
 		</div>
 	);

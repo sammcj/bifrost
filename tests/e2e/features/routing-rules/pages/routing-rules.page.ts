@@ -120,7 +120,7 @@ export class RoutingRulesPage extends BasePage {
   }
 
   private async waitForToastAndAssertSuccess(action: string): Promise<void> {
-    const toast = this.page.locator('[data-sonner-toast]').first()
+    const toast = this.page.locator('[data-sonner-toast]:not([data-removed="true"])').first()
     await expect(toast).toBeVisible({ timeout: 10000 })
     const toastText = await toast.textContent()
     if (toastText?.toLowerCase().includes('error') || toastText?.toLowerCase().includes('failed')) {

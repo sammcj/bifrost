@@ -92,42 +92,39 @@ func createAnthropicMessagesRouteConfig(pathPrefix string) []RouteConfig {
 				return anthropic.ToAnthropicChatCompletionError(err)
 			},
 			StreamConfig: &StreamConfig{
-				ResponsesStreamResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostResponsesStreamResponse) (string, interface{}, error) {
-					if shouldUsePassthrough(ctx, resp.ExtraFields.Provider, resp.ExtraFields.ModelRequested, resp.ExtraFields.ModelDeployment) {
-						if resp.ExtraFields.RawResponse != nil {
-							raw, ok := resp.ExtraFields.RawResponse.(string)
-							if !ok {
-								return "", nil, fmt.Errorf("expected RawResponse string, got %T", resp.ExtraFields.RawResponse)
-							}
-							var rawResponseJSON anthropic.AnthropicStreamEvent
-							if err := sonic.Unmarshal([]byte(raw), &rawResponseJSON); err == nil {
-								return string(rawResponseJSON.Type), raw, nil
-							}
+			ResponsesStreamResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostResponsesStreamResponse) (string, interface{}, error) {
+				if shouldUsePassthrough(ctx, resp.ExtraFields.Provider, resp.ExtraFields.ModelRequested, resp.ExtraFields.ModelDeployment) {
+					if resp.ExtraFields.RawResponse != nil {
+						raw, ok := resp.ExtraFields.RawResponse.(string)
+						if !ok {
+							return "", nil, fmt.Errorf("expected RawResponse string, got %T", resp.ExtraFields.RawResponse)
 						}
-						return "", nil, nil
-					}
-					anthropicResponse := anthropic.ToAnthropicResponsesStreamResponse(ctx, resp)
-					// Can happen for openai lifecycle events
-					if len(anthropicResponse) == 0 {
-						return "", nil, nil
-					} else {
-						if len(anthropicResponse) > 1 {
-							combinedContent := ""
-							for _, event := range anthropicResponse {
-								responseJSON, err := sonic.Marshal(event)
-								if err != nil {
-									continue
-								}
-								combinedContent += fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, responseJSON)
-							}
-							return "", combinedContent, nil
-						} else if len(anthropicResponse) == 1 {
-							return string(anthropicResponse[0].Type), anthropicResponse[0], nil
-						} else {
-							return "", nil, nil
+						var rawResponseJSON anthropic.AnthropicStreamEvent
+						if err := sonic.Unmarshal([]byte(raw), &rawResponseJSON); err == nil {
+							return string(rawResponseJSON.Type), raw, nil
 						}
 					}
-				},
+					// Fallback: if RawResponse is not available, use bifrost-to-anthropic conversion
+					// instead of silently dropping all events
+				}
+				anthropicResponse := anthropic.ToAnthropicResponsesStreamResponse(ctx, resp)
+				// Can happen for openai lifecycle events
+				if len(anthropicResponse) == 0 {
+					return "", nil, nil
+				}
+				if len(anthropicResponse) > 1 {
+					combinedContent := ""
+					for _, event := range anthropicResponse {
+						responseJSON, err := sonic.Marshal(event)
+						if err != nil {
+							continue
+						}
+						combinedContent += fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, responseJSON)
+					}
+					return "", combinedContent, nil
+				}
+				return string(anthropicResponse[0].Type), anthropicResponse[0], nil
+			},
 				ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
 					return anthropic.ToAnthropicResponsesStreamError(err)
 				},
@@ -298,6 +295,7 @@ func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.Bif
 	// Check if anthropic oauth headers are present
 	if shouldUsePassthrough(bifrostCtx, provider, model, "") {
 		bifrostCtx.SetValue(schemas.BifrostContextKeyUseRawRequestBody, true)
+		bifrostCtx.SetValue(schemas.BifrostContextKeySendBackRawResponse, true)
 		if !isAnthropicAPIKeyAuth(ctx) && (provider == schemas.Anthropic || provider == "") {
 			url := extractExactPath(ctx)
 			if !strings.HasPrefix(url, "/") {
@@ -322,13 +320,7 @@ func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.Bif
 }
 
 func shouldUsePassthrough(ctx *schemas.BifrostContext, provider schemas.ModelProvider, model string, deployment string) bool {
-	isClaudeCode := false
-	if userAgent, ok := ctx.Value(schemas.BifrostContextKeyUserAgent).(string); ok {
-		if strings.Contains(userAgent, "claude-cli") {
-			isClaudeCode = true
-		}
-	}
-	return isClaudeCode && isClaudeModel(model, deployment, string(provider))
+	return anthropic.IsClaudeCodeRequest(ctx) && isClaudeModel(model, deployment, string(provider))
 }
 
 func isClaudeModel(model, deployment, provider string) bool {

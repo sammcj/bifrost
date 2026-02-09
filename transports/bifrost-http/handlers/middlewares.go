@@ -22,6 +22,10 @@ func CorsMiddleware(config *lib.Config) schemas.BifrostHTTPMiddleware {
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			startTime := time.Now()
+			// skip logging if it's a /health check request
+			if string(ctx.RequestURI()) == "/health" {
+				goto corsFlow
+			}
 			defer func() {
 				statusCode := ctx.Response.Header.StatusCode()
 				level := schemas.LogLevelInfo
@@ -42,6 +46,7 @@ func CorsMiddleware(config *lib.Config) schemas.BifrostHTTPMiddleware {
 				}
 				logBuilder.Send()
 			}()
+		corsFlow:
 			origin := string(ctx.Request.Header.Peek("Origin"))
 			allowed := IsOriginAllowed(origin, config.ClientConfig.AllowedOrigins)
 			allowedHeaders := []string{"Content-Type", "Authorization", "X-Requested-With", "X-Stainless-Timeout"}

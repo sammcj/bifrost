@@ -1589,3 +1589,13 @@ func anthropicExtractFloat64(v interface{}) (float64, bool) {
 		return 0, false
 	}
 }
+
+// IsClaudeCodeRequest checks if the request is a Claude Code request.
+func IsClaudeCodeRequest(ctx *schemas.BifrostContext) bool {
+	if userAgent, ok := ctx.Value(schemas.BifrostContextKeyUserAgent).(string); ok {
+		if strings.Contains(strings.ToLower(userAgent), "claude-cli") {
+			return true
+		}
+	}
+	return false
+}

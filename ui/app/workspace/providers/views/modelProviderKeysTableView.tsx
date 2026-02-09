@@ -20,16 +20,18 @@ import { ModelProvider } from "@/lib/types/config";
 import { cn } from "@/lib/utils";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { EllipsisIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { toast } from "sonner";
 import AddNewKeySheet from "../dialogs/addNewKeySheet";
 
 interface Props {
 	className?: string;
 	provider: ModelProvider;
+	headerActions?: ReactNode;
+	isKeyless?: boolean;
 }
 
-export default function ModelProviderKeysTableView({ provider, className }: Props) {
+export default function ModelProviderKeysTableView({ provider, className, headerActions, isKeyless }: Props) {
 	const hasUpdateProviderAccess = useRbac(RbacResource.ModelProvider, RbacOperation.Update);
 	const hasDeleteProviderAccess = useRbac(RbacResource.ModelProvider, RbacOperation.Delete);
 	const [updateProvider, { isLoading: isUpdatingProvider }] = useUpdateProviderMutation();
@@ -89,107 +91,119 @@ export default function ModelProviderKeysTableView({ provider, className }: Prop
 			<CardHeader className="mb-4 px-0">
 				<CardTitle className="flex items-center justify-between">
 					<div className="flex items-center gap-2">Configured keys</div>
-				<Button
-					disabled={!hasUpdateProviderAccess}
-					data-testid="add-key-btn"
-					onClick={() => {
-						handleAddKey(provider.keys.length);
-					}}
-				>
-					<PlusIcon className="h-4 w-4" />
-					Add new key
-				</Button>
+					<div className="flex items-center gap-2">
+						{headerActions}
+						{!isKeyless && (
+							<Button
+								disabled={!hasUpdateProviderAccess}
+								data-testid="add-key-btn"
+								onClick={() => {
+									handleAddKey(provider.keys.length);
+								}}
+							>
+								<PlusIcon className="h-4 w-4" />
+								Add new key
+							</Button>
+						)}
+					</div>
 				</CardTitle>
 			</CardHeader>
-			<div className="w-full rounded-sm border">
-				<Table className="w-full" data-testid="keys-table">
-					<TableHeader className="w-full">
-						<TableRow>
-							<TableHead>API Key</TableHead>
-							<TableHead>Weight</TableHead>
-							<TableHead>Enabled</TableHead>
-							<TableHead className="text-right"></TableHead>
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{provider.keys.length === 0 && (
+			{isKeyless ? (
+				<div className="text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-sm border py-10 text-center text-sm">
+					<p>This is a keyless provider — no API keys are required.</p>
+					<p>You can edit the provider configuration using the button above.</p>
+				</div>
+			) : (
+				<div className="w-full rounded-sm border">
+					<Table className="w-full" data-testid="keys-table">
+						<TableHeader className="w-full">
 							<TableRow>
-								<TableCell colSpan={4} className="py-6 text-center">
-									No keys found.
-								</TableCell>
+								<TableHead>API Key</TableHead>
+								<TableHead>Weight</TableHead>
+								<TableHead>Enabled</TableHead>
+								<TableHead className="text-right"></TableHead>
 							</TableRow>
-						)}
-						{provider.keys.map((key, index) => {
-							const isKeyEnabled = key.enabled ?? true;
-							return (
-								<TableRow key={index} data-testid={`key-row-${key.name}`} className="text-sm transition-colors hover:bg-white" onClick={() => {}}>
-									<TableCell>
-										<div className="flex items-center space-x-2">
-											<span className="font-mono text-sm">{key.name}</span>
-										</div>
-									</TableCell>
-									<TableCell>
-										<div className="flex items-center space-x-2">
-											<span className="font-mono text-sm">{key.weight}</span>
-										</div>
-									</TableCell>
-									<TableCell>
-										<Switch
-											checked={isKeyEnabled}
-											size="md"
-											disabled={!hasUpdateProviderAccess}
-											onCheckedChange={(checked) => {
-												updateProvider({
-													...provider,
-													keys: provider.keys.map((k, i) => (i === index ? { ...k, enabled: checked } : k)),
-												})
-													.unwrap()
-													.then(() => {
-														toast.success(`Key ${checked ? "enabled" : "disabled"} successfully`);
-													})
-													.catch((err) => {
-														toast.error("Failed to update key", { description: getErrorMessage(err) });
-													});
-											}}
-										/>
-									</TableCell>
-									<TableCell className="text-right">
-										<div className="flex items-center justify-end space-x-2">
-											<DropdownMenu>
-												<DropdownMenuTrigger asChild>
-													<Button onClick={(e) => e.stopPropagation()} variant="ghost">
-														<EllipsisIcon className="h-5 w-5" />
-													</Button>
-												</DropdownMenuTrigger>
-												<DropdownMenuContent align="end">
-													<DropdownMenuItem
-														onClick={() => {
-															setShowAddNewKeyDialog({ show: true, keyIndex: index });
-														}}
-														disabled={!hasUpdateProviderAccess || !isKeyEnabled}
-													>
-														<PencilIcon className="mr-1 h-4 w-4" />
-														Edit
-												</DropdownMenuItem>
-												<DropdownMenuItem
-													onClick={() => {
-														setShowDeleteKeyDialog({ show: true, keyIndex: index });
-													}}
-													disabled={!hasDeleteProviderAccess}
-												>
-													<TrashIcon className="mr-1 h-4 w-4" />
-													Delete
-												</DropdownMenuItem>
-												</DropdownMenuContent>
-											</DropdownMenu>
-										</div>
+						</TableHeader>
+						<TableBody>
+							{provider.keys.length === 0 && (
+								<TableRow>
+									<TableCell colSpan={4} className="py-6 text-center">
+										No keys found.
 									</TableCell>
 								</TableRow>
-							);
-						})}
-					</TableBody>
-				</Table>
-			</div>
+							)}
+							{provider.keys.map((key, index) => {
+								const isKeyEnabled = key.enabled ?? true;
+								return (
+									<TableRow key={index} data-testid={`key-row-${key.name}`} className="text-sm transition-colors hover:bg-white" onClick={() => {}}>
+										<TableCell>
+											<div className="flex items-center space-x-2">
+												<span className="font-mono text-sm">{key.name}</span>
+											</div>
+										</TableCell>
+										<TableCell>
+											<div className="flex items-center space-x-2">
+												<span className="font-mono text-sm">{key.weight}</span>
+											</div>
+										</TableCell>
+										<TableCell>
+											<Switch
+												checked={isKeyEnabled}
+												size="md"
+												disabled={!hasUpdateProviderAccess}
+												onCheckedChange={(checked) => {
+													updateProvider({
+														...provider,
+														keys: provider.keys.map((k, i) => (i === index ? { ...k, enabled: checked } : k)),
+													})
+														.unwrap()
+														.then(() => {
+															toast.success(`Key ${checked ? "enabled" : "disabled"} successfully`);
+														})
+														.catch((err) => {
+															toast.error("Failed to update key", { description: getErrorMessage(err) });
+														});
+												}}
+											/>
+										</TableCell>
+										<TableCell className="text-right">
+											<div className="flex items-center justify-end space-x-2">
+												<DropdownMenu>
+													<DropdownMenuTrigger asChild>
+														<Button onClick={(e) => e.stopPropagation()} variant="ghost">
+															<EllipsisIcon className="h-5 w-5" />
+														</Button>
+													</DropdownMenuTrigger>
+													<DropdownMenuContent align="end">
+														<DropdownMenuItem
+															onClick={() => {
+																setShowAddNewKeyDialog({ show: true, keyIndex: index });
+															}}
+															disabled={!hasUpdateProviderAccess || !isKeyEnabled}
+														>
+															<PencilIcon className="mr-1 h-4 w-4" />
+															Edit
+														</DropdownMenuItem>
+														<DropdownMenuItem
+															onClick={() => {
+																setShowDeleteKeyDialog({ show: true, keyIndex: index });
+															}}
+															disabled={!hasDeleteProviderAccess}
+														>
+															<TrashIcon className="mr-1 h-4 w-4" />
+															Delete
+														</DropdownMenuItem>
+													</DropdownMenuContent>
+												</DropdownMenu>
+											</div>
+										</TableCell>
+									</TableRow>
+								);
+							})}
+						</TableBody>
+					</Table>
+				</div>
+			)}
 		</div>
 	);
 }

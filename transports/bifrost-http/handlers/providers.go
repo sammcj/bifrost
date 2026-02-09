@@ -425,7 +425,7 @@ func (h *ProviderHandler) updateProvider(ctx *fasthttp.RequestCtx) {
 		config.SendBackRawResponse = *payload.SendBackRawResponse
 	}
 
-	// Add provider to store if it doesn't exist
+	// Add provider to store if it doesn't exist (upsert behavior)
 	if _, err := h.inMemoryStore.GetProviderConfigRaw(provider); err != nil {
 		if !errors.Is(err, lib.ErrNotFound) {
 			logger.Warn("Failed to get provider %s: %v", provider, err)
@@ -434,9 +434,14 @@ func (h *ProviderHandler) updateProvider(ctx *fasthttp.RequestCtx) {
 		}
 		// Adding the provider to store
 		if err := h.inMemoryStore.AddProvider(ctx, provider, config); err != nil {
-			logger.Warn("Failed to add provider %s: %v", provider, err)
-			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to add provider: %v", err))
-			return
+			// In an upsert flow, "already exists" is not fatal — the provider may have been
+			// added concurrently or exist in the DB from a previous failed attempt.
+			if !errors.Is(err, lib.ErrAlreadyExists) {
+				logger.Warn("Failed to add provider %s: %v", provider, err)
+				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to add provider: %v", err))
+				return
+			}
+			logger.Info("Provider %s already exists during upsert, proceeding with update", provider)
 		}
 	}
 

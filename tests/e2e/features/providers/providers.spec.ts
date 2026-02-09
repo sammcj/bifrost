@@ -381,22 +381,32 @@ test.describe('Performance Tuning', () => {
 
     const concurrencyInput = providersPage.getConcurrencyInput()
     const originalValue = await concurrencyInput.inputValue()
-    const newValue = originalValue === '10' ? '20' : '10'
 
-    await concurrencyInput.clear()
-    await concurrencyInput.fill(newValue)
+    // Use a small value that is always <= buffer size
+    const newValue = '5'
+
+    await providersPage.fillNumberInput(concurrencyInput, newValue)
 
     // Verify value changed
     const currentValue = await concurrencyInput.inputValue()
     expect(currentValue).toBe(newValue)
+    // Blur the input
+    await concurrencyInput.blur()
+    // No validation error should appear
+    await expect(providersPage.page.getByText('Concurrency must be a number')).not.toBeVisible()
+    await expect(providersPage.page.getByText('Concurrency must be greater than 0')).not.toBeVisible()
+    await expect(providersPage.page.getByText('Concurrency must be less than or equal to buffer size')).not.toBeVisible()
 
-    // Save button should be enabled (form is dirty)
+    // Save and verify success
     const saveBtn = providersPage.getConfigSaveBtn('performance')
     await expect(saveBtn).toBeEnabled()
+    await providersPage.savePerformanceConfig()
 
-    // Restore original value to avoid leaving form dirty
-    await concurrencyInput.clear()
-    await concurrencyInput.fill(originalValue)
+    // Restore original value
+    await providersPage.fillNumberInput(concurrencyInput, originalValue)
+    // Blur the input
+    await concurrencyInput.blur()
+    await providersPage.savePerformanceConfig()
   })
 
   test('should update buffer size value', async ({ providersPage }) => {
@@ -404,18 +414,67 @@ test.describe('Performance Tuning', () => {
 
     const bufferSizeInput = providersPage.getBufferSizeInput()
     const originalValue = await bufferSizeInput.inputValue()
-    const newValue = originalValue === '10' ? '20' : '10'
 
-    await bufferSizeInput.clear()
-    await bufferSizeInput.fill(newValue)
+    // Use a large value that is always >= concurrency
+    const newValue = '6000'
+
+    await providersPage.fillNumberInput(bufferSizeInput, newValue)
 
     // Verify value changed
     const currentValue = await bufferSizeInput.inputValue()
     expect(currentValue).toBe(newValue)
 
-    // Restore original value to avoid leaving form dirty
-    await bufferSizeInput.clear()
-    await bufferSizeInput.fill(originalValue)
+    // Blur the input
+    await bufferSizeInput.blur()
+
+    // No validation error should appear
+    await expect(providersPage.page.getByText('Buffer size must be a number')).not.toBeVisible()
+    await expect(providersPage.page.getByText('Buffer size must be greater than 0')).not.toBeVisible()
+    await expect(providersPage.page.getByText('Concurrency must be less than or equal to buffer size')).not.toBeVisible()
+
+    // Save and verify success
+    const saveBtn = providersPage.getConfigSaveBtn('performance')
+    await expect(saveBtn).toBeEnabled()
+    await providersPage.savePerformanceConfig()
+
+    // Restore original value
+    await providersPage.fillNumberInput(bufferSizeInput, originalValue)
+    // Blur the input
+    await bufferSizeInput.blur()
+    await providersPage.savePerformanceConfig()
+  })
+
+  test('should toggle and save raw request/response', async ({ providersPage }) => {
+    await providersPage.selectConfigTab('performance')
+
+    const rawRequestSwitch = providersPage.getRawRequestSwitch()
+    const rawResponseSwitch = providersPage.getRawResponseSwitch()
+
+    // Capture original states
+    const originalRawRequest = await rawRequestSwitch.getAttribute('data-state') === 'checked'
+    const originalRawResponse = await rawResponseSwitch.getAttribute('data-state') === 'checked'
+
+    // Toggle both switches
+    await rawRequestSwitch.click()
+    await rawResponseSwitch.click()
+
+    // Save and verify success
+    const saveBtn = providersPage.getConfigSaveBtn('performance')
+    await expect(saveBtn).toBeEnabled()
+    await providersPage.savePerformanceConfig()
+
+    // Restore original states
+    const currentRawRequest = await rawRequestSwitch.getAttribute('data-state') === 'checked'
+    const currentRawResponse = await rawResponseSwitch.getAttribute('data-state') === 'checked'
+
+    if (currentRawRequest !== originalRawRequest) {
+      await rawRequestSwitch.click()
+    }
+    if (currentRawResponse !== originalRawResponse) {
+      await rawResponseSwitch.click()
+    }
+
+    await providersPage.savePerformanceConfig()
   })
 })
 
@@ -493,8 +552,9 @@ test.describe('Network Configuration', () => {
     const originalValue = await timeoutInput.inputValue()
     const newValue = originalValue === '30' ? '60' : '30'
 
-    await timeoutInput.clear()
-    await timeoutInput.fill(newValue)
+    await providersPage.fillNumberInput(timeoutInput, newValue)
+    // Blur the input
+    await timeoutInput.blur()
 
     // Verify value changed
     const currentValue = await timeoutInput.inputValue()
@@ -503,10 +563,15 @@ test.describe('Network Configuration', () => {
     // Save button should be enabled
     const saveBtn = providersPage.getConfigSaveBtn('network')
     await expect(saveBtn).toBeEnabled()
+    await providersPage.saveNetworkConfig()
 
     // Restore original value to avoid leaving form dirty
     await timeoutInput.clear()
-    await timeoutInput.fill(originalValue)
+    await providersPage.fillNumberInput(timeoutInput, originalValue)
+    // Blur the input
+    await timeoutInput.blur()
+    await providersPage.saveNetworkConfig()
+
   })
 
   test('should update max retries value', async ({ providersPage }) => {
@@ -516,8 +581,9 @@ test.describe('Network Configuration', () => {
     const originalValue = await retriesInput.inputValue()
     const newValue = originalValue === '0' ? '3' : '0'
 
-    await retriesInput.clear()
-    await retriesInput.fill(newValue)
+    await providersPage.fillNumberInput(retriesInput, newValue)
+    // Blur the input
+    await retriesInput.blur()
 
     // Verify value changed
     const currentValue = await retriesInput.inputValue()
@@ -526,10 +592,13 @@ test.describe('Network Configuration', () => {
     // Save button should be enabled
     const saveBtn = providersPage.getConfigSaveBtn('network')
     await expect(saveBtn).toBeEnabled()
+    await providersPage.saveNetworkConfig()
 
     // Restore original value to avoid leaving form dirty
-    await retriesInput.clear()
-    await retriesInput.fill(originalValue)
+    await providersPage.fillNumberInput(retriesInput, originalValue)
+    // Blur the input
+    await retriesInput.blur()
+    await providersPage.saveNetworkConfig()  
   })
 })
 

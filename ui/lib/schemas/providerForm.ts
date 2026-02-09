@@ -47,9 +47,9 @@ const ConcurrencyAndBufferSizeSchema = z
 		concurrency: z.number().min(1, "Concurrency must be greater than 0"),
 		buffer_size: z.number().min(1, "Buffer size must be greater than 0"),
 	})
-	.refine((data) => data.concurrency < data.buffer_size, {
-		message: "Buffer size must be greater than concurrency",
-		path: ["buffer_size"],
+	.refine((data) => data.concurrency <= data.buffer_size, {
+		message: "Concurrency must be less than or equal to buffer size",
+		path: ["concurrency"],
 	});
 
 const AllowedRequestsSchema = z.object({

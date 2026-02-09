@@ -51,8 +51,7 @@ export function PerformanceFormFragment({ provider }: PerformanceFormFragmentPro
 			send_back_raw_request: provider.send_back_raw_request ?? false,
 			send_back_raw_response: provider.send_back_raw_response ?? false,
 		});
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [form, provider.name]);
+	}, [form, provider.name, provider.concurrency_and_buffer_size, provider.send_back_raw_request, provider.send_back_raw_response]);
 
 	const onSubmit = (data: PerformanceFormSchema) => {
 		// Create updated provider configuration
@@ -69,6 +68,7 @@ export function PerformanceFormFragment({ provider }: PerformanceFormFragmentPro
 			.unwrap()
 			.then(() => {
 				toast.success("Provider configuration updated successfully");
+				form.reset(data);
 			})
 			.catch((err) => {
 				toast.error("Failed to update provider configuration", {
@@ -107,6 +107,7 @@ export function PerformanceFormFragment({ provider }: PerformanceFormFragmentPro
 													if (!Number.isNaN(parsed)) {
 														field.onChange(parsed)
 													}
+													form.trigger("concurrency_and_buffer_size");
 												}}
 											/>
 										</FormControl>
@@ -139,6 +140,7 @@ export function PerformanceFormFragment({ provider }: PerformanceFormFragmentPro
 													if (!Number.isNaN(parsed)) {
 														field.onChange(parsed)
 													}
+													form.trigger("concurrency_and_buffer_size");
 												}}
 											/>
 										</FormControl>
