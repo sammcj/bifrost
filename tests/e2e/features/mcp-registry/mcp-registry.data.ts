@@ -1,5 +1,27 @@
 import { resolve } from 'path'
-import { MCPClientConfig, MCPConnectionType, MCPAuthType } from './pages/mcp-registry.page'
+import { MCPClientConfig, EnvVarLike } from './pages/mcp-registry.page'
+
+/** Normalize header value from env (string or EnvVarLike) to EnvVarLike */
+function toEnvVarLike(v: string | EnvVarLike): EnvVarLike {
+  if (typeof v === 'object' && v !== null && 'value' in v) return v as EnvVarLike
+  return { value: String(v), env_var: '', from_env: false }
+}
+
+/** Build headers from MCP_SSE_HEADERS JSON (injected in workflow). No defaults in code. */
+function getSSEHeadersFromEnv(): Record<string, EnvVarLike> {
+  const raw = process.env.MCP_SSE_HEADERS
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string | EnvVarLike>
+    const out: Record<string, EnvVarLike> = {}
+    for (const [k, v] of Object.entries(parsed)) {
+      if (v !== undefined && v !== null) out[k] = toEnvVarLike(v)
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
 
 /**
  * Create basic MCP client data
@@ -28,14 +50,19 @@ export function createHTTPClientData(overrides: Partial<MCPClientConfig> = {}): 
 }
 
 /**
- * Create SSE MCP client data
- * Uses http-no-ping-server SSE endpoint from examples/mcps
+ * Create SSE MCP client data.
+ * URL and headers are injected via workflow env: MCP_SSE_URL, MCP_SSE_HEADERS (JSON).
+ * When unset, uses local http://localhost:3001/sse and no headers (no secrets in code).
  */
 export function createSSEClientData(overrides: Partial<MCPClientConfig> = {}): MCPClientConfig {
+  const connectionUrl = process.env.MCP_SSE_URL ?? 'http://localhost:3001/sse'
+  const headers = getSSEHeadersFromEnv()
+  const hasHeaders = headers && Object.keys(headers).length > 0
   return createMCPClientData({
     connectionType: 'sse',
-    connectionUrl: 'http://localhost:3001/sse', // StreamableHTTP provides /sse endpoint
-    authType: 'none',
+    connectionUrl,
+    authType: hasHeaders ? 'headers' : 'none',
+    headers: hasHeaders ? headers : undefined,
     isPingAvailable: false,
     ...overrides,
   })

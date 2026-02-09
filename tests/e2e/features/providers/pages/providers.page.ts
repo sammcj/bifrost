@@ -160,9 +160,10 @@ export class ProvidersPage extends BasePage {
   }
 
   /**
-   * Delete a custom provider
+   * Delete a custom provider.
+   * @param options.skipToastWait - If true, do not wait for success toast (e.g. for cleanup); avoids cleanup failures when toast is missing or already gone.
    */
-  async deleteProvider(name: string): Promise<void> {
+  async deleteProvider(name: string, options?: { skipToastWait?: boolean }): Promise<void> {
     // First select the provider
     await this.selectProvider(name)
 
@@ -176,6 +177,12 @@ export class ProvidersPage extends BasePage {
     // Confirm deletion in dialog
     await this.page.getByRole('button', { name: 'Delete' }).click()
 
+    if (options?.skipToastWait) {
+      // Wait for dialog to close; do not require toast so cleanup does not fail
+      await this.page.locator('[role="alertdialog"]').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
+      await waitForNetworkIdle(this.page)
+      return
+    }
     // Wait for success toast
     await this.waitForSuccessToast('deleted')
   }
@@ -329,11 +336,17 @@ export class ProvidersPage extends BasePage {
    * Open the provider configuration sheet
    */
   async openConfigSheet(): Promise<void> {
+    // If the config sheet is already open, just return
+    const dialog = this.page.locator('[role="dialog"]')
+    if (await dialog.isVisible().catch(() => false)) {
+      return
+    }
     const editConfigBtn = this.page.getByRole('button', { name: /Edit Provider Config/i })
+    await editConfigBtn.waitFor({ state: 'visible', timeout: 10000 })
     await editConfigBtn.click()
     // Wait for the sheet to appear (SheetContent renders with role="dialog")
-    await this.page.locator('[role="dialog"]').waitFor({ state: 'visible' })
-    await this.page.waitForTimeout(300)
+    await dialog.waitFor({ state: 'visible' })
+    await this.waitForSheetAnimation()
   }
 
   /**
@@ -408,6 +421,7 @@ export class ProvidersPage extends BasePage {
     await input.click()
     await input.press('ControlOrMeta+a')
     await input.pressSequentially(value)
+    await input.blur()
   }
 
   /**

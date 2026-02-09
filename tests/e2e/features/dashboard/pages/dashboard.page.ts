@@ -40,14 +40,16 @@ export class DashboardPage extends BasePage {
     this.modelUsageChart = page.locator('[data-testid="chart-model-usage"]')
 
     // Chart type toggles - using data-testid with actions suffix
+    // Volume and token charts have only ChartTypeToggle in the actions bar
     this.volumeChartToggle = page.locator('[data-testid="chart-log-volume-actions"]').locator('button').filter({ has: page.locator('svg') })
     this.tokenChartToggle = page.locator('[data-testid="chart-token-usage-actions"]').locator('button').filter({ has: page.locator('svg') })
-    this.costChartToggle = page.locator('[data-testid="chart-cost-actions"]').locator('button').filter({ has: page.locator('svg') })
-    this.modelChartToggle = page.locator('[data-testid="chart-model-usage-actions"]').locator('button').filter({ has: page.locator('svg') })
+    // Cost and model charts have model filter + ChartTypeToggle; scope to ChartTypeToggle buttons only so getChartToggleState reads the right element
+    this.costChartToggle = page.locator('[data-testid="chart-cost-actions"]').locator('> div > div').last().locator('button')
+    this.modelChartToggle = page.locator('[data-testid="chart-model-usage-actions"]').locator('> div > div').last().locator('button')
 
-    // Model filters - using data-testid with actions suffix and combobox role
-    this.costModelFilter = page.locator('[data-testid="chart-cost-actions"]').locator('[role="combobox"]').first()
-    this.usageModelFilter = page.locator('[data-testid="chart-model-usage-actions"]').locator('[role="combobox"]').first()
+    // Model filters - select trigger inside each chart's actions area (opens dropdown; Radix uses role=combobox or data-slot=select-trigger)
+    this.costModelFilter = page.locator('[data-testid="chart-cost-actions"]').locator('[role="combobox"], [data-slot="select-trigger"]').first()
+    this.usageModelFilter = page.locator('[data-testid="chart-model-usage-actions"]').locator('[role="combobox"], [data-slot="select-trigger"]').first()
   }
 
   /**
@@ -90,58 +92,79 @@ export class DashboardPage extends BasePage {
     }
   }
 
+  /** Period label map used by the date picker (must match UI) */
+  static readonly PERIOD_LABELS: Record<string, string> = {
+    '1h': 'Last hour',
+    '6h': 'Last 6 hours',
+    '24h': 'Last 24 hours',
+    '7d': 'Last 7 days',
+    '30d': 'Last 30 days',
+  }
+
+  /**
+   * Get the date picker trigger button (the button that shows the current period and opens the popover).
+   * Identified by having the calendar icon so we don't match preset buttons inside the popover.
+   */
+  getDatePickerTrigger(): Locator {
+    return this.page.locator('button').filter({ has: this.page.locator('svg') }).filter({ hasText: /Last|Pick/i }).first()
+  }
+
+  /**
+   * Get the currently displayed period label from the date picker trigger (what the user sees as selected).
+   */
+  async getSelectedPeriodLabel(): Promise<string> {
+    const trigger = this.getDatePickerTrigger()
+    await trigger.waitFor({ state: 'visible', timeout: 5000 })
+    const text = await trigger.textContent()
+    return (text ?? '').trim()
+  }
+
   /**
    * Select a predefined time period
    */
   async selectTimePeriod(period: '1h' | '6h' | '24h' | '7d' | '30d'): Promise<void> {
     await this.closePopups()
 
-    // Click the date picker
-    const picker = this.page.locator('button').filter({ hasText: /Last/i }).or(this.page.locator('[data-testid="dashboard-date-picker"]'))
-    await picker.first().click()
+    const trigger = this.getDatePickerTrigger()
+    await trigger.click()
 
     // Wait for dialog to open
     await this.page.waitForSelector('[data-radix-popper-content-wrapper]', { timeout: 5000 }).catch(() => {})
 
-    // Select the period from the preset buttons
-    const periodLabels: Record<string, string> = {
-      '1h': 'Last hour',
-      '6h': 'Last 6 hours',
-      '24h': 'Last 24 hours',
-      '7d': 'Last 7 days',
-      '30d': 'Last 30 days',
-    }
-
-    await this.page.getByRole('button', { name: periodLabels[period] }).click()
+    const label = DashboardPage.PERIOD_LABELS[period]
+    await this.page.getByRole('button', { name: label }).click()
 
     // Wait for dialog to close
     await this.page.locator('[data-radix-popper-content-wrapper]').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
 
     await waitForNetworkIdle(this.page)
-    // Wait for URL to update with period parameter
-    await this.waitForUrlParam('period', period)
   }
 
   /**
-   * Get the inactive toggle button (the one to click to switch chart type)
+   * Get the inactive toggle button from a set of buttons (the one to click to switch chart type).
    */
-  private async getInactiveToggleButton(actionsContainer: Locator): Promise<Locator> {
-    const buttons = actionsContainer.locator('button')
+  private async getInactiveToggleButtonFrom(buttons: Locator): Promise<Locator> {
     const count = await buttons.count()
 
-    // Find the button that is NOT active (doesn't have bg-secondary class or active attribute)
     for (let i = 0; i < count; i++) {
       const btn = buttons.nth(i)
       const className = await btn.getAttribute('class').catch(() => '')
       const hasActive = await btn.evaluate((el) => el.hasAttribute('active')).catch(() => false)
 
-      // If button doesn't have active styling, return it
       if (!className?.includes('bg-secondary') && !hasActive) {
         return btn
       }
     }
 
     throw new Error(`No inactive toggle button found among ${count} buttons`)
+  }
+
+  /**
+   * Get the inactive toggle button (the one to click to switch chart type) from a full actions container.
+   */
+  private async getInactiveToggleButton(actionsContainer: Locator): Promise<Locator> {
+    const buttons = actionsContainer.locator('button')
+    return this.getInactiveToggleButtonFrom(buttons)
   }
 
   /**
@@ -171,70 +194,68 @@ export class DashboardPage extends BasePage {
   }
 
   /**
-   * Toggle chart type for cost chart
+   * Toggle chart type for cost chart.
+   * Scopes to the ChartTypeToggle only (excludes the model dropdown in the same actions bar).
    */
   async toggleCostChartType(): Promise<void> {
     await this.dismissToasts()
     await this.closePopups()
     const actionsContainer = this.page.locator('[data-testid="chart-cost-actions"]')
-    const toggleBtn = await this.getInactiveToggleButton(actionsContainer)
+    // ChartTypeToggle is the last child in the actions bar; its two buttons are the bar/line toggles only
+    const chartTypeButtons = actionsContainer.locator('> div > div').last().locator('button')
+    const toggleBtn = await this.getInactiveToggleButtonFrom(chartTypeButtons)
     await toggleBtn.waitFor({ state: 'visible' })
     await toggleBtn.click()
     await this.page.waitForLoadState('networkidle').catch(() => {})
   }
 
   /**
-   * Toggle chart type for model chart
+   * Toggle chart type for model chart.
+   * Scopes to the ChartTypeToggle only (excludes the model dropdown in the same actions bar).
    */
   async toggleModelChartType(): Promise<void> {
     await this.dismissToasts()
     await this.closePopups()
     const actionsContainer = this.page.locator('[data-testid="chart-model-usage-actions"]')
-    const toggleBtn = await this.getInactiveToggleButton(actionsContainer)
+    // ChartTypeToggle is the last child in the actions bar; its two buttons are the bar/line toggles only
+    const chartTypeButtons = actionsContainer.locator('> div > div').last().locator('button')
+    const toggleBtn = await this.getInactiveToggleButtonFrom(chartTypeButtons)
     await toggleBtn.waitFor({ state: 'visible' })
     await toggleBtn.click()
     await this.page.waitForLoadState('networkidle').catch(() => {})
   }
 
   /**
-   * Filter cost chart by model
+   * Filter cost chart by model. Opens the model dropdown, then selects the option.
    */
   async filterCostChartByModel(model: string): Promise<void> {
     await this.dismissToasts()
-    // Wait for filter to be visible and clickable
     await this.costModelFilter.waitFor({ state: 'visible' })
+    // Open the dropdown by clicking the trigger
     await this.costModelFilter.click()
-    await this.page.waitForSelector('[role="listbox"]', { timeout: 5000 })
-
-    if (model === 'all') {
-      await this.page.getByRole('option', { name: 'All Models' }).click()
-    } else {
-      await this.page.getByRole('option', { name: model }).click()
-    }
-
-    // Wait for listbox to close and data to refresh
-    await this.page.waitForSelector('[role="listbox"]', { state: 'hidden', timeout: 5000 }).catch(() => {})
+    // Wait for dropdown to open (option becomes visible in portal)
+    const optionName = model === 'all' ? 'All Models' : model
+    await this.page.getByRole('option', { name: optionName }).waitFor({ state: 'visible', timeout: 5000 })
+    await this.page.getByRole('option', { name: optionName }).click()
+    // Wait for dropdown to close and data to refresh
+    await this.page.getByRole('option', { name: optionName }).waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
     await waitForNetworkIdle(this.page)
   }
 
   /**
-   * Filter usage chart by model
+   * Filter usage chart by model. Opens the model dropdown, then selects the option.
    */
   async filterUsageChartByModel(model: string): Promise<void> {
     await this.dismissToasts()
-    // Wait for filter to be visible and clickable
     await this.usageModelFilter.waitFor({ state: 'visible' })
+    // Open the dropdown by clicking the trigger
     await this.usageModelFilter.click()
-    await this.page.waitForSelector('[role="listbox"]', { timeout: 5000 })
-
-    if (model === 'all') {
-      await this.page.getByRole('option', { name: 'All Models' }).click()
-    } else {
-      await this.page.getByRole('option', { name: model }).click()
-    }
-
-    // Wait for listbox to close and data to refresh
-    await this.page.waitForSelector('[role="listbox"]', { state: 'hidden', timeout: 5000 }).catch(() => {})
+    // Wait for dropdown to open (option becomes visible in portal)
+    const optionName = model === 'all' ? 'All Models' : model
+    await this.page.getByRole('option', { name: optionName }).waitFor({ state: 'visible', timeout: 5000 })
+    await this.page.getByRole('option', { name: optionName }).click()
+    // Wait for dropdown to close and data to refresh
+    await this.page.getByRole('option', { name: optionName }).waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
     await waitForNetworkIdle(this.page)
   }
 

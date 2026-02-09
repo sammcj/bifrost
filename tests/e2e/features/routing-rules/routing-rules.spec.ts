@@ -212,26 +212,17 @@ test.describe('Routing Rules', () => {
     })
 
     test('should reorder rules by changing priority', async ({ routingRulesPage }) => {
-      // Create first rule with low priority
-      const rule1 = createRoutingRuleData({
-        name: `Reorder Test Rule 1 ${Date.now()}`,
-        priority: 500,
-      })
-      createdRules.push(rule1.name)
+      // Create two rules with unique priorities (avoid fixed 500/600 so parallel workers don't collide)
+      const rule1 = createRoutingRuleData({ name: `Reorder Test Rule 1 ${Date.now()}` })
+      const rule2 = createRoutingRuleData({ name: `Reorder Test Rule 2 ${Date.now()}` })
+      createdRules.push(rule1.name, rule2.name)
 
       await routingRulesPage.createRoutingRule(rule1)
-
-      // Create second rule with higher priority
-      const rule2 = createRoutingRuleData({
-        name: `Reorder Test Rule 2 ${Date.now()}`,
-        priority: 600,
-      })
-      createdRules.push(rule2.name)
-
       await routingRulesPage.createRoutingRule(rule2)
 
-      // Change first rule's priority to be higher
-      await routingRulesPage.editRoutingRule(rule1.name, { priority: 700 })
+      // Change first rule's priority (edit to a new value to test reorder)
+      const newPriority = (rule1.priority! + 100) % 901
+      await routingRulesPage.editRoutingRule(rule1.name, { priority: newPriority })
 
       // Verify rules still exist
       expect(await routingRulesPage.ruleExists(rule1.name)).toBe(true)

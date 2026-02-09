@@ -58,14 +58,13 @@ test-reports
 **/.coverage/
 **/.pytest_cache/
 
-
 # Nix specific
 .direnv
 .nix-store
 
 # MCP servers
 examples/mcps/**/bin/
-
+examples/mcps/http-no-ping-server/http-server
 
 # Dependencies
 node_modules/

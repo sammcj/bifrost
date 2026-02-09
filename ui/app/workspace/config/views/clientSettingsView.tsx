@@ -190,7 +190,7 @@ export default function ClientSettingsView() {
 		<div className="mx-auto w-full max-w-4xl space-y-6">
 			<div className="flex items-center justify-between">
 				<div>
-					<h2 className="text-2xl font-semibold tracking-tight">Client Settings</h2>
+					<h2 className="text-lg font-semibold tracking-tight">Client Settings</h2>
 					<p className="text-muted-foreground text-sm">Configure client behavior and request handling.</p>
 				</div>
 				{hasSecurityHeaderError ? (
@@ -389,7 +389,7 @@ export default function ClientSettingsView() {
 									className={cn(
 										"font-mono lowercase",
 										isSecurityHeader(header) &&
-										"border-destructive focus:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50",
+											"border-destructive focus:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50",
 									)}
 									value={header}
 									onChange={(e) => handleAllowlistChange(index, e.target.value)}
@@ -432,7 +432,7 @@ export default function ClientSettingsView() {
 									className={cn(
 										"font-mono lowercase",
 										isSecurityHeader(header) &&
-										"border-destructive focus:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50",
+											"border-destructive focus:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50",
 									)}
 									value={header}
 									onChange={(e) => handleDenylistChange(index, e.target.value)}

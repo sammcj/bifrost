@@ -12,6 +12,9 @@ export type MCPConnectionType = 'http' | 'sse' | 'stdio'
  */
 export type MCPAuthType = 'none' | 'headers' | 'oauth'
 
+/** Header value shape used by API (value / env_var / from_env) */
+export type EnvVarLike = { value: string; env_var?: string; from_env?: boolean }
+
 /**
  * MCP Client configuration
  */
@@ -20,7 +23,8 @@ export interface MCPClientConfig {
   connectionType?: MCPConnectionType
   connectionUrl?: string
   authType?: MCPAuthType
-  headers?: Record<string, string>
+  /** Headers for auth_type 'headers'. API shape: Record<string, EnvVarLike> */
+  headers?: Record<string, EnvVarLike | string>
   isCodeMode?: boolean
   isPingAvailable?: boolean
   // STDIO specific
@@ -114,8 +118,9 @@ export class MCPRegistryPage extends BasePage {
     await this.table.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {})
   }
 
+  /** Get the table row for a client by name. Scoped to tbody so the header row is never matched; first() for stable single-row target. */
   getClientRow(name: string): Locator {
-    return this.table.locator('tr').filter({ hasText: name })
+    return this.table.locator('tbody tr').filter({ hasText: name }).first()
   }
 
   async clientExists(name: string): Promise<boolean> {
@@ -232,6 +237,24 @@ export class MCPRegistryPage extends BasePage {
         await this.connectionUrlInput.fill(config.connectionUrl)
         // Wait for React to process the input
         await this.page.waitForTimeout(500)
+      }
+
+      // Fill headers when auth_type is 'headers'
+      if (config.authType === 'headers' && config.headers && Object.keys(config.headers).length > 0) {
+        const entries = Object.entries(config.headers)
+        for (let i = 0; i < entries.length; i++) {
+          const [key, val] = entries[i]
+          const valueStr = typeof val === 'object' && val !== null && 'value' in val ? (val as EnvVarLike).value : String(val)
+          const keyInput = this.sheet.locator(`input[data-row="${i}"][data-column="key"]`)
+          const valueInput = this.sheet.locator(`input[data-row="${i}"][data-column="value"]`).or(
+            this.sheet.locator(`[data-row="${i}"][data-column="value"] input`)
+          )
+          await keyInput.waitFor({ state: 'visible', timeout: 8000 })
+          await keyInput.fill(key)
+          await this.page.waitForTimeout(300)
+          await valueInput.first().fill(valueStr)
+          await this.page.waitForTimeout(300)
+        }
       }
 
       // Handle OAuth config

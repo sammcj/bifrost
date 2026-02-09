@@ -511,11 +511,11 @@ export const performanceFormSchema = z.object({
 	concurrency_and_buffer_size: z
 		.object({
 			concurrency: z
-				.number({ invalid_type_error: "Concurrency must be a number" })
+				.number({ error: "Concurrency must be a number" })
 				.min(1, "Concurrency must be greater than 0")
 				.max(100000, "Concurrency must be less than 100000"),
 			buffer_size: z
-				.number({ invalid_type_error: "Buffer size must be a number" })
+				.number({ error: "Buffer size must be a number" })
 				.min(1, "Buffer size must be greater than 0")
 				.max(100000, "Buffer size must be less than 100000"),
 		})

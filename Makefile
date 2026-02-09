@@ -1186,11 +1186,15 @@ build-test-plugin: ## Build test plugin for E2E tests (copies to tmp/bifrost-tes
 	@cp examples/plugins/hello-world/build/hello-world.so tmp/bifrost-test-plugin.so
 	@echo "$(GREEN)✓ Test plugin ready at tmp/bifrost-test-plugin.so$(NC)"
 
-run-e2e: install-playwright ## Run E2E tests (Usage: make run-e2e [FLOW=providers|virtual-keys])
+run-e2e: install-playwright ## Run E2E tests (Usage: make run-e2e [FLOW=providers|virtual-keys|config])
 	@echo "$(GREEN)Running Playwright E2E tests...$(NC)"
 	@if [ -n "$(FLOW)" ]; then \
 		echo "$(CYAN)Running $(FLOW) tests...$(NC)"; \
-		cd tests/e2e && npx playwright test features/$(FLOW); \
+		if [ "$(FLOW)" = "config" ]; then \
+			cd tests/e2e && npx playwright test --project=chromium-config; \
+		else \
+			cd tests/e2e && npx playwright test features/$(FLOW); \
+		fi; \
 	else \
 		echo "$(CYAN)Running all E2E tests...$(NC)"; \
 		cd tests/e2e && npx playwright test; \
@@ -1200,14 +1204,22 @@ run-e2e: install-playwright ## Run E2E tests (Usage: make run-e2e [FLOW=provider
 	@echo "$(CYAN)View HTML report: cd tests/e2e && npx playwright show-report$(NC)"
 
 run-e2e-ui: install-playwright ## Run E2E tests in interactive UI mode
-	@echo "$(GREEN)Opening Playwright UI...$(NC)"
-	@cd tests/e2e && npx playwright test --ui
+	@if [ -f .env ]; then \
+		echo "$(YELLOW)Loading environment variables from .env...$(NC)"; \
+		set -a; . ./.env; set +a; \
+	fi; \
+	echo "$(GREEN)Opening Playwright UI...$(NC)"; \
+	cd tests/e2e && npx playwright test --ui
 
 run-e2e-headed: install-playwright ## Run E2E tests in headed browser mode
 	@echo "$(GREEN)Running E2E tests in headed mode...$(NC)"
 	@if [ -n "$(FLOW)" ]; then \
 		echo "$(CYAN)Running $(FLOW) tests (headed)...$(NC)"; \
-		cd tests/e2e && npx playwright test features/$(FLOW) --headed; \
+		if [ "$(FLOW)" = "config" ]; then \
+			cd tests/e2e && npx playwright test --project=chromium-config --headed; \
+		else \
+			cd tests/e2e && npx playwright test features/$(FLOW) --headed; \
+		fi; \
 	else \
 		echo "$(CYAN)Running all E2E tests (headed)...$(NC)"; \
 		cd tests/e2e && npx playwright test --headed; \

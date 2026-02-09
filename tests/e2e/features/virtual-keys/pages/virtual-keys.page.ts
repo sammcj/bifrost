@@ -529,8 +529,13 @@ export class VirtualKeysPage extends BasePage {
   async closeSheet(): Promise<void> {
     const isSheetVisible = await this.sheet.isVisible().catch(() => false)
     if (isSheetVisible) {
-      // Press Escape to close the sheet
-      await this.page.keyboard.press('Escape')
+      // We have to click on the close button to close the sheet
+      const closeBtn = this.sheet.locator('button[aria-label*="close"], button:has(svg.lucide-x)').first()
+      if (await closeBtn.isVisible().catch(() => false)) {
+        await closeBtn.click()
+      } else {
+        await this.page.keyboard.press('Escape')
+      }
       await expect(this.sheet).not.toBeVisible({ timeout: 5000 }).catch(() => {})
     }
   }

@@ -84,7 +84,7 @@ export default function PricingConfigView() {
 			<form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 				<div className="flex items-center justify-between">
 					<div>
-						<h2 className="text-2xl font-semibold tracking-tight">Pricing Configuration</h2>
+						<h2 className="text-lg font-semibold tracking-tight">Pricing Configuration</h2>
 						<p className="text-muted-foreground text-sm">Configure custom pricing datasheet and sync intervals.</p>
 					</div>
 					<div className="flex items-center gap-2">

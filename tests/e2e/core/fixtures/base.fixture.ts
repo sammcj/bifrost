@@ -39,7 +39,7 @@ export const test = base.extend<BifrostFixtures>({
     await page.addLocatorHandler(
       page.getByText('Dev Profiler', { exact: true }),
       async () => {
-        await page.locator('button[title="Dismiss"]').click()
+        await page.locator('button[title="Dismiss"]').click({ force: true })
       }
     )
     await use()

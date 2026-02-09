@@ -53,8 +53,10 @@ export class RoutingRulesPage extends BasePage {
   constructor(page: Page) {
     super(page)
 
-    // Main elements
-    this.table = page.locator('[data-testid="routing-rules-table"]').or(page.locator('table'))
+    // Main elements: scope to the routing rules table (has Priority column); no data-testid in UI
+    this.table = page.locator('table').filter({
+      has: page.locator('th').filter({ hasText: /^Priority$/ })
+    }).first()
     this.emptyState = page.getByText(/No routing rules yet/i)
     // Use .first() to handle both "New Rule" and "Create First Rule" buttons
     this.createBtn = page.locator('[data-testid="create-routing-rule-btn"]').or(
@@ -102,21 +104,19 @@ export class RoutingRulesPage extends BasePage {
    */
   async goto(): Promise<void> {
     await this.page.goto('/workspace/routing-rules')
-    await waitForNetworkIdle(this.page)
-    // Wait for table to be visible
-    await this.table.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {})
+    // Wait for page content (create button, empty state, or table); avoid networkidle (SPA often never idles)
+    await Promise.race([
+      this.createBtn.waitFor({ state: 'visible', timeout: 15000 }),
+      this.emptyState.waitFor({ state: 'visible', timeout: 15000 }),
+      this.table.waitFor({ state: 'visible', timeout: 15000 }),
+    ])
   }
 
   /**
-   * Get routing rule row locator
+   * Get routing rule row locator (tbody data row containing the rule name).
    */
   getRuleRow(name: string): Locator {
-    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return this.table.locator('tr').filter({
-      has: this.page.locator('td').first().filter({
-        hasText: new RegExp(`^\\s*${escapedName}\\s*$`)
-      })
-    })
+    return this.table.locator('tbody tr').filter({ hasText: name }).first()
   }
 
   private async waitForToastAndAssertSuccess(action: string): Promise<void> {
@@ -135,6 +135,13 @@ export class RoutingRulesPage extends BasePage {
   async ruleExists(name: string): Promise<boolean> {
     const row = this.getRuleRow(name)
     return await row.count() > 0
+  }
+
+  /**
+   * Wait for a rule to appear in the table (e.g. after create)
+   */
+  async waitForRuleToAppear(name: string, timeoutMs: number = 10000): Promise<void> {
+    await expect.poll(() => this.ruleExists(name), { timeout: timeoutMs }).toBe(true)
   }
 
   /**
@@ -162,7 +169,9 @@ export class RoutingRulesPage extends BasePage {
       if (await providerCombo.isVisible().catch(() => false)) {
         await providerCombo.click()
         await this.page.waitForSelector('[role="listbox"]', { timeout: 5000 })
-        await this.page.getByRole('option', { name: new RegExp(config.provider, 'i') }).first().click()
+        const option = this.page.getByRole('option', { name: new RegExp(config.provider, 'i') }).first()
+        await option.scrollIntoViewIfNeeded()
+        await option.click({ force: true })
         // Wait for dropdown to close
         await this.page.waitForSelector('[role="listbox"]', { state: 'hidden', timeout: 5000 }).catch(() => {})
       }
@@ -197,6 +206,8 @@ export class RoutingRulesPage extends BasePage {
     await this.waitForToastAndAssertSuccess('create routing rule')
     await expect(this.sheet).not.toBeVisible({ timeout: 10000 })
     await waitForNetworkIdle(this.page)
+    // Wait for the new rule to appear in the table (list may refresh async)
+    await this.waitForRuleToAppear(config.name, 10000)
   }
 
   /**
@@ -395,7 +406,7 @@ export class RoutingRulesPage extends BasePage {
     await fieldSelector.waitFor({ state: 'visible', timeout: 5000 })
     await fieldSelector.click()
     await this.page.waitForTimeout(300)
-    await this.page.getByRole('option', { name: new RegExp(`^${fieldName}$`, 'i') }).first().click()
+    await this.page.getByRole('option', { name: new RegExp(`^${fieldName}$`, 'i') }).first().click({ force: true })
     await this.page.waitForTimeout(300)
   }
 
@@ -410,7 +421,7 @@ export class RoutingRulesPage extends BasePage {
     await this.page.waitForTimeout(300)
     // Match operator by exact symbol or text
     const option = this.page.getByRole('option').filter({ hasText: new RegExp(`^${operatorName}$|^${operatorName} `, 'i') }).first()
-    await option.click()
+    await option.click({ force: true })
     await this.page.waitForTimeout(300)
   }
 
@@ -458,7 +469,7 @@ export class RoutingRulesPage extends BasePage {
       // Try to select matching option
       const option = this.page.getByRole('option', { name: new RegExp(value, 'i') }).first()
       if (await option.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await option.click()
+        await option.click({ force: true })
       } else {
         // Press escape and type directly in input if no option found
         await this.page.keyboard.press('Escape')
@@ -616,7 +627,7 @@ export class RoutingRulesPage extends BasePage {
         'virtual_key': 'Virtual Key'
       }
 
-      await this.page.getByRole('option', { name: labels[scope] }).click()
+      await this.page.getByRole('option', { name: labels[scope] }).click({ force: true })
 
       // If not global, fill in the scope ID
       if (scope !== 'global' && scopeId) {
@@ -627,7 +638,7 @@ export class RoutingRulesPage extends BasePage {
 
         if (await scopeIdInput.isVisible().catch(() => false)) {
           await scopeIdInput.click()
-          await this.page.getByRole('option', { name: new RegExp(scopeId, 'i') }).first().click()
+          await this.page.getByRole('option', { name: new RegExp(scopeId, 'i') }).first().click({ force: true })
         }
       }
     }

@@ -87,7 +87,6 @@ func (provider *OpenAIProvider) ListModels(ctx *schemas.BifrostContext, keys []s
 	if err := providerUtils.CheckOperationAllowed(schemas.OpenAI, provider.customProviderConfig, schemas.ListModelsRequest); err != nil {
 		return nil, err
 	}
-
 	providerName := provider.GetProviderKey()
 
 	if provider.customProviderConfig != nil && provider.customProviderConfig.IsKeyLess {

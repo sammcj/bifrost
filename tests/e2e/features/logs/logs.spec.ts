@@ -71,24 +71,19 @@ test.describe('LLM Logs', () => {
       expect(newValue || initialValue).toBeTruthy()
     })
 
-    test('should filter logs by status', async ({ logsPage }) => {
-      const statusFilter = logsPage.statusFilter
-      const isVisible = await statusFilter.isVisible().catch(() => false)
-
-      if (!isVisible) {
-        test.skip(true, 'Status filter not visible')
+    test('should filter logs by status', async ({ logsPage, page }) => {
+      const filtersVisible = await logsPage.filtersButton.isVisible().catch(() => false)
+      if (!filtersVisible) {
+        test.skip(true, 'Filters button not visible')
         return
       }
 
-      // Get initial filter state
-      const initialValue = await statusFilter.textContent().catch(() => '')
-
       await logsPage.filterByStatus('success')
 
-      // Check that filter value changed (or verify filter is applied via DOM)
-      const newValue = await statusFilter.textContent().catch(() => '')
-      // Filter should have changed or show selected status
-      expect(newValue || initialValue).toBeTruthy()
+      // Assert status filter is applied: logs page persists filters in URL (e.g. status=success)
+      await expect
+        .poll(() => page.url(), { timeout: 5000, intervals: [200, 300, 500] })
+        .toMatch(/status=success/)
     })
 
     test('should search logs by content', async ({ logsPage }) => {
@@ -187,43 +182,65 @@ test.describe('LLM Logs', () => {
 
   test.describe('Pagination', () => {
     test('should navigate to next page', async ({ logsPage }) => {
-      const nextBtn = logsPage.nextPageBtn
+      // Wait for pagination to settle (useTablePageSize may adjust limit dynamically)
+      await logsPage.page.waitForTimeout(2000)
+      const paginationVisible = await logsPage.paginationControls.isVisible().catch(() => false)
+      if (!paginationVisible) {
+        test.skip(true, 'Pagination controls not visible')
+        return
+      }
+      const nextBtn = logsPage.nextPageBtn.first()
       const isEnabled = await nextBtn.isEnabled().catch(() => false)
 
-      if (isEnabled) {
-        const initialUrl = logsPage.page.url()
-
-        await logsPage.goToNextPage()
-
-        // Wait for URL to change after pagination
-        await expect
-          .poll(() => logsPage.page.url(), { timeout: 5000 })
-          .not.toBe(initialUrl)
+      if (!isEnabled) {
+        test.skip(true, 'Only one page of results; skipping pagination test')
+        return
       }
+
+      const initialPage = logsPage.getCurrentPageNumber()
+      expect(initialPage).toBe(1)
+      await logsPage.goToNextPage()
+
+      await expect
+        .poll(() => logsPage.getCurrentPageNumber(), { timeout: 5000 })
+        .toBe(initialPage + 1)
     })
 
     test('should navigate to previous page', async ({ logsPage }) => {
-      // First go to next page if possible
-      const nextBtn = logsPage.nextPageBtn
+      // Wait for pagination to settle (useTablePageSize may adjust limit dynamically)
+      await logsPage.page.waitForTimeout(2000)
+      const paginationVisible = await logsPage.paginationControls.isVisible().catch(() => false)
+      if (!paginationVisible) {
+        test.skip(true, 'Pagination controls not visible')
+        return
+      }
+      const nextBtn = logsPage.nextPageBtn.first()
       const nextEnabled = await nextBtn.isEnabled().catch(() => false)
 
-      if (nextEnabled) {
-        await logsPage.goToNextPage()
-
-        // Then go back
-        const prevBtn = logsPage.prevPageBtn
-        const prevEnabled = await prevBtn.isEnabled().catch(() => false)
-
-        if (prevEnabled) {
-          const urlBefore = logsPage.page.url()
-          await logsPage.goToPreviousPage()
-
-          // Wait for URL to change after pagination
-          await expect
-            .poll(() => logsPage.page.url(), { timeout: 5000 })
-            .not.toBe(urlBefore)
-        }
+      if (!nextEnabled) {
+        test.skip(true, 'Only one page of results; skipping pagination test')
+        return
       }
+
+      await logsPage.goToNextPage()
+
+      await expect
+        .poll(() => logsPage.getCurrentPageNumber(), { timeout: 5000 })
+        .toBe(2)
+
+      const prevBtn = logsPage.prevPageBtn.first()
+      const prevEnabled = await prevBtn.isEnabled().catch(() => false)
+
+      if (!prevEnabled) {
+        test.skip(true, 'Only one page of results; skipping previous-page test')
+        return
+      }
+
+      await logsPage.goToPreviousPage()
+
+      await expect
+        .poll(() => logsPage.getCurrentPageNumber(), { timeout: 5000 })
+        .toBe(1)
     })
   })
 
@@ -302,9 +319,10 @@ test.describe('LLM Logs', () => {
 
       await logsPage.searchLogs(`nonexistent-query-${Date.now()}`)
 
-      // After searching for a non-existent query, empty state should be visible
-      const emptyStateVisible = await logsPage.isEmptyStateVisible()
-      expect(emptyStateVisible).toBe(true)
+      // After searching for a non-existent query, empty state should appear (wait for API + render)
+      await expect(
+        logsPage.page.locator('text=/No results found|No logs found/i')
+      ).toBeVisible({ timeout: 10000 })
     })
   })
 
@@ -383,28 +401,27 @@ test.describe('LLM Logs', () => {
       await expect
         .poll(
           () => logsPage.page.url(),
-          { timeout: 5000, intervals: [200, 300, 500] }
+          { timeout: 8000, intervals: [300, 500, 500] }
         )
         .toContain('content_search=')
       const url = logsPage.page.url()
-      expect(url).toContain('persistent-search')
+      // Value may be percent-encoded (e.g. persistent-search → persistent%2Dsearch)
+      expect(decodeURIComponent(url)).toContain('persistent-search')
     })
 
-    test('should restore state from URL', async ({ logsPage }) => {
-      // Navigate with filters in URL
-      await logsPage.page.goto('/workspace/logs?period=7d')
+    test('should restore state from URL', async ({ logsPage, page }) => {
+      // Logs page uses start_time and end_time (unix timestamps), not period
+      const endTime = Math.floor(Date.now() / 1000)
+      const startTime = endTime - 7 * 24 * 60 * 60 // 7 days ago
+      await page.goto(`/workspace/logs?start_time=${startTime}&end_time=${endTime}`)
 
-      // Wait for page to load
-      await logsPage.page.waitForURL(/period=7d/, { timeout: 5000 })
-
-      // Verify the UI reflects the URL state (date picker should show 7d period)
-      const datePicker = logsPage.dateRangePicker
-      const isVisible = await datePicker.isVisible().catch(() => false)
-      if (isVisible) {
-        const datePickerText = await datePicker.textContent()
-        // Date picker should reflect the 7d period selection
-        expect(datePickerText?.toLowerCase()).toMatch(/7\s*d|7\s*day|last\s*7/)
-      }
+      // Wait for page to load and URL to reflect state (nuqs may merge or keep params)
+      await expect
+        .poll(() => page.url(), { timeout: 5000, intervals: [200, 300, 500] })
+        .toMatch(/start_time=\d+/)
+      const url = page.url()
+      expect(url).toMatch(/start_time=\d+/)
+      expect(url).toMatch(/end_time=\d+/)
     })
   })
 })

@@ -150,7 +150,7 @@ export function MCPLogFilters({ filters, onFiltersChange, liveEnabled, onLiveTog
 
 	return (
 		<div className="flex items-center justify-between space-x-2">
-			<Button variant={"outline"} size="sm" className="h-9" onClick={() => onLiveToggle(!liveEnabled)}>
+			<Button variant={"outline"} size="sm" className="h-7.5" onClick={() => onLiveToggle(!liveEnabled)}>
 				{liveEnabled ? (
 					<>
 						<Pause className="h-4 w-4" />
@@ -163,11 +163,11 @@ export function MCPLogFilters({ filters, onFiltersChange, liveEnabled, onLiveTog
 					</>
 				)}
 			</Button>
-			<div className="border-input flex flex-1 items-center gap-2 rounded-sm border">
+			<div className="border-input flex h-7.5 flex-1 items-center gap-2 rounded-sm border">
 				<Search className="mr-0.5 ml-2 size-4" />
 				<Input
 					type="text"
-					className="rounded-tl-none rounded-tr-sm rounded-br-sm rounded-bl-none border-none bg-slate-50 shadow-none outline-none focus-visible:ring-0 dark:bg-zinc-900"
+					className="!h-7 rounded-tl-none rounded-tr-sm rounded-br-sm rounded-bl-none border-none bg-slate-50 shadow-none outline-none focus-visible:ring-0 dark:bg-zinc-900"
 					placeholder="Search MCP logs"
 					value={localSearch}
 					onChange={(e) => handleSearchChange(e.target.value)}
@@ -191,7 +191,7 @@ export function MCPLogFilters({ filters, onFiltersChange, liveEnabled, onLiveTog
 			/>
 			<Popover open={openFiltersPopover} onOpenChange={setOpenFiltersPopover}>
 				<PopoverTrigger asChild>
-					<Button variant="outline" size="sm" className="h-9 w-[120px]">
+					<Button variant="outline" size="sm" className="h-7.5 w-[120px]">
 						<FilterIcon className="h-4 w-4" />
 						Filters
 						{getSelectedCount() > 0 && (

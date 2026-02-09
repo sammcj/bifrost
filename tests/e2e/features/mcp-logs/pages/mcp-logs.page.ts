@@ -64,14 +64,14 @@ export class MCPLogsPage extends BasePage {
 
     // Table elements - exclude status message rows
     this.tableRows = this.logsTable.locator('tbody tr').filter({ hasNot: page.locator('text=Listening for') }).filter({ hasNot: page.locator('text=Live updates paused') }).filter({ hasNot: page.locator('text=Not connected') }).filter({ hasNot: page.locator('text=No results found') })
-    this.paginationControls = page.locator('[data-testid="pagination"]').or(
-      page.locator('text=/\\d+-\\d+ of \\d+/')
+    // Scope pagination to the MCP logs view (avoid matching other pages when navigating)
+    const paginationContainer = page.getByTestId('pagination').filter({ has: page.locator('[data-testid="next-page"]') }).first()
+    this.paginationControls = paginationContainer
+    this.nextPageBtn = paginationContainer.getByRole('button', { name: 'Next page' }).or(
+      paginationContainer.locator('[data-testid="next-page"]')
     )
-    this.nextPageBtn = page.locator('[data-testid="next-page"]').or(
-      page.locator('button').filter({ has: page.locator('svg.lucide-chevron-right') })
-    )
-    this.prevPageBtn = page.locator('[data-testid="prev-page"]').or(
-      page.locator('button').filter({ has: page.locator('svg.lucide-chevron-left') })
+    this.prevPageBtn = paginationContainer.getByRole('button', { name: 'Previous page' }).or(
+      paginationContainer.locator('[data-testid="prev-page"]')
     )
 
     // Log detail sheet - Sheet component with role="dialog"
@@ -90,61 +90,99 @@ export class MCPLogsPage extends BasePage {
   }
 
   /**
-   * Filter by tool name
+   * Open Filters popover and wait for the command list. Caller can then resolve group/option locators.
    */
-  async filterByToolName(toolName: string): Promise<void> {
-    await this.toolNameFilter.first().waitFor({ state: 'visible' })
-    await this.toolNameFilter.first().click()
-    await this.page.waitForSelector('[role="listbox"]', { timeout: 5000 }).catch(() => {})
+  private async openFiltersPopover(): Promise<void> {
+    await this.filtersButton.first().waitFor({ state: 'visible' })
+    await this.filtersButton.first().click()
+    await this.page.waitForSelector('[role="listbox"], [data-slot="command-list"]', { timeout: 5000 })
+  }
 
-    const option = this.page.getByRole('option', { name: new RegExp(toolName, 'i') })
-    if (await option.count() > 0) {
-      await option.first().click()
-    } else {
-      await this.page.keyboard.press('Escape')
-    }
-
-    // Wait for dropdown to close and data to refresh
+  /**
+   * Close Filters popover (Escape) and wait for network idle.
+   */
+  private async closeFiltersPopover(): Promise<void> {
+    await this.page.keyboard.press('Escape')
     await this.page.waitForSelector('[role="listbox"]', { state: 'hidden', timeout: 5000 }).catch(() => {})
     await waitForNetworkIdle(this.page)
   }
 
   /**
-   * Filter by server label
+   * Get the first selectable option in a filter group by heading (e.g. "Tool Names", "Servers").
+   * Skips "Loading..." so we only click real options.
    */
-  async filterByServerLabel(serverLabel: string): Promise<void> {
-    await this.serverLabelFilter.first().waitFor({ state: 'visible' })
-    await this.serverLabelFilter.first().click()
-    await this.page.waitForSelector('[role="listbox"]', { timeout: 5000 }).catch(() => {})
-
-    const option = this.page.getByRole('option', { name: new RegExp(serverLabel, 'i') })
-    if (await option.count() > 0) {
-      await option.first().click()
-    } else {
-      await this.page.keyboard.press('Escape')
+  private async getFirstOptionInGroup(groupHeading: string): Promise<Locator | null> {
+    const list = this.page.locator('[data-slot="command-list"]').or(this.page.locator('[role="listbox"]'))
+    const group = list.locator('[data-slot="command-group"]').filter({
+      has: this.page.getByText(groupHeading, { exact: true }),
+    })
+    const items = group.locator('[data-slot="command-item"]').or(group.getByRole('option'))
+    const count = await items.count()
+    for (let i = 0; i < count; i++) {
+      const item = items.nth(i)
+      const text = await item.textContent().catch(() => '')
+      if (text && !/loading/i.test(text)) {
+        return item
+      }
     }
-
-    await this.page.waitForSelector('[role="listbox"]', { state: 'hidden', timeout: 5000 }).catch(() => {})
-    await waitForNetworkIdle(this.page)
+    return null
   }
 
   /**
-   * Filter by status
+   * Open Filters popover and click an option by name. Returns true if the option was found and clicked.
    */
-  async filterByStatus(status: 'success' | 'error' | 'pending'): Promise<void> {
-    await this.statusFilter.first().waitFor({ state: 'visible' })
-    await this.statusFilter.first().click()
-    await this.page.waitForSelector('[role="listbox"]', { timeout: 5000 }).catch(() => {})
-
-    const option = this.page.getByRole('option', { name: new RegExp(status, 'i') })
-    if (await option.count() > 0) {
+  private async openFiltersAndSelectOption(optionText: string | RegExp): Promise<boolean> {
+    await this.openFiltersPopover()
+    const re = typeof optionText === 'string' ? new RegExp(optionText, 'i') : optionText
+    const option = this.page.getByRole('option', { name: re })
+    const count = await option.count()
+    if (count > 0) {
       await option.first().click()
-    } else {
-      await this.page.keyboard.press('Escape')
+      await this.closeFiltersPopover()
+      return true
     }
+    await this.closeFiltersPopover()
+    return false
+  }
 
-    await this.page.waitForSelector('[role="listbox"]', { state: 'hidden', timeout: 5000 }).catch(() => {})
-    await waitForNetworkIdle(this.page)
+  /**
+   * Filter by tool name: open Filters and select the first available tool name option.
+   * @returns true if at least one tool name option was found and selected
+   */
+  async filterByToolName(): Promise<boolean> {
+    await this.openFiltersPopover()
+    const first = await this.getFirstOptionInGroup('Tool Names')
+    if (!first) {
+      await this.closeFiltersPopover()
+      return false
+    }
+    await first.click()
+    await this.closeFiltersPopover()
+    return true
+  }
+
+  /**
+   * Filter by server label: open Filters and select the first available server label option.
+   * @returns true if at least one server label option was found and selected
+   */
+  async filterByServerLabel(): Promise<boolean> {
+    await this.openFiltersPopover()
+    const first = await this.getFirstOptionInGroup('Servers')
+    if (!first) {
+      await this.closeFiltersPopover()
+      return false
+    }
+    await first.click()
+    await this.closeFiltersPopover()
+    return true
+  }
+
+  /**
+   * Filter by status. Opens Filters popover and toggles the given status option (e.g. success, error).
+   * @returns true if the option was found and clicked
+   */
+  async filterByStatus(status: 'success' | 'error' | 'pending'): Promise<boolean> {
+    return this.openFiltersAndSelectOption(status)
   }
 
   /**
@@ -239,25 +277,58 @@ export class MCPLogsPage extends BasePage {
   }
 
   /**
-   * Navigate to next page
+   * Get current 1-based page number from URL (offset/limit).
    */
-  async goToNextPage(): Promise<void> {
-    const isEnabled = await this.nextPageBtn.isEnabled().catch(() => false)
-    if (isEnabled) {
-      await this.nextPageBtn.click()
-      await waitForNetworkIdle(this.page)
-    }
+  getCurrentPageNumber(): number {
+    const url = this.page.url()
+    const params = new URL(url).searchParams
+    const offset = Number.parseInt(params.get('offset') ?? '0', 10)
+    const limit = Number.parseInt(params.get('limit') ?? '50', 10) || 50
+    return Math.floor(offset / limit) + 1
   }
 
   /**
-   * Navigate to previous page
+   * Navigate to next page (waits for URL to update)
+   */
+  async goToNextPage(): Promise<void> {
+    const btn = this.nextPageBtn.first()
+    const isEnabled = await btn.isEnabled().catch(() => false)
+    if (!isEnabled) return
+    await btn.scrollIntoViewIfNeeded()
+    await btn.waitFor({ state: 'visible' })
+    const limit = Number.parseInt(new URL(this.page.url()).searchParams.get('limit') ?? '50', 10) || 50
+    const currentOffset = Number.parseInt(new URL(this.page.url()).searchParams.get('offset') ?? '0', 10)
+    const expectedOffset = currentOffset + limit
+    await btn.click()
+    await this.page.waitForURL((url) => {
+      const params = new URL(url).searchParams
+      const offset = params.get('offset')
+      return offset === String(expectedOffset)
+    }, { timeout: 10000 })
+    await waitForNetworkIdle(this.page)
+  }
+
+  /**
+   * Navigate to previous page (waits for URL to update)
    */
   async goToPreviousPage(): Promise<void> {
-    const isEnabled = await this.prevPageBtn.isEnabled().catch(() => false)
-    if (isEnabled) {
-      await this.prevPageBtn.click()
-      await waitForNetworkIdle(this.page)
-    }
+    const btn = this.prevPageBtn.first()
+    const isEnabled = await btn.isEnabled().catch(() => false)
+    if (!isEnabled) return
+    await btn.scrollIntoViewIfNeeded()
+    await btn.waitFor({ state: 'visible' })
+    const limit = Number.parseInt(new URL(this.page.url()).searchParams.get('limit') ?? '50', 10) || 50
+    const currentOffset = Number.parseInt(new URL(this.page.url()).searchParams.get('offset') ?? '0', 10)
+    const expectedOffset = Math.max(0, currentOffset - limit)
+    await btn.click()
+    await this.page.waitForURL((url) => {
+      const params = new URL(url).searchParams
+      const offset = params.get('offset')
+      // When going back to page 1, offset param may be removed (null) or set to "0"
+      if (expectedOffset === 0) return offset === null || offset === '0'
+      return offset === String(expectedOffset)
+    }, { timeout: 10000 })
+    await waitForNetworkIdle(this.page)
   }
 
   /**

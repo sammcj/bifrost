@@ -111,7 +111,7 @@ export default function MCPView() {
 		<div className="mx-auto w-full max-w-4xl space-y-4">
 			<div className="flex items-center justify-between">
 				<div>
-					<h2 className="text-2xl font-semibold tracking-tight">MCP Settings</h2>
+					<h2 className="text-lg font-semibold tracking-tight">MCP Settings</h2>
 					<p className="text-muted-foreground text-sm">Configure MCP (Model Context Protocol) agent and tool settings.</p>
 				</div>
 				<Button onClick={handleSave} disabled={!hasChanges || isLoading || !hasSettingsUpdateAccess}>
@@ -161,9 +161,7 @@ export default function MCPView() {
 						<label htmlFor="mcp-tool-sync-interval" className="text-sm font-medium">
 							Tool Sync Interval (minutes)
 						</label>
-						<p className="text-muted-foreground text-sm">
-							How often to refresh tool lists from MCP servers. Set to 0 to disable.
-						</p>
+						<p className="text-muted-foreground text-sm">How often to refresh tool lists from MCP servers. Set to 0 to disable.</p>
 					</div>
 					<Input
 						id="mcp-tool-sync-interval"

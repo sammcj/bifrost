@@ -90,7 +90,7 @@ docker exec -e PGPASSWORD=bifrost_password "$(docker compose -f "$CONFIGS_DIR/do
 # Start bifrost-http server with default config
 SERVER_LOG=$(mktemp)
 echo "🚀 Starting bifrost-http server..."
-timeout 300s ./tmp/bifrost-http --app-dir "$CONFIGS_DIR/default" --port 18080 --log-level debug 2>&1 | tee "$SERVER_LOG" &
+./tmp/bifrost-http --app-dir "$CONFIGS_DIR/default" --port 18080 --log-level debug 2>&1 | tee "$SERVER_LOG" &
 SERVER_PID=$!
 
 # Wait for server to be ready
@@ -127,9 +127,9 @@ cd tests/e2e
 npm ci
 npx playwright install --with-deps chromium
 
-# Run Playwright tests
+# Run Playwright tests (BASE_URL = browser; BIFROST_BASE_URL = global-setup API calls)
 echo "🎭 Running Playwright E2E tests..."
-CI=true SKIP_WEB_SERVER=1 BASE_URL=http://localhost:18080 npx playwright test --workers=1
+CI=true SKIP_WEB_SERVER=1 BASE_URL=http://localhost:18080 BIFROST_BASE_URL=http://localhost:18080 npx playwright test --workers=4
 PLAYWRIGHT_EXIT=$?
 
 cd ../..
