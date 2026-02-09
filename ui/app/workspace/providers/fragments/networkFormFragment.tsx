@@ -105,6 +105,7 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 			.unwrap()
 			.then(() => {
 				toast.success("Provider configuration updated successfully");
+				form.reset(data);
 			})
 			.catch((err) => {
 				toast.error("Failed to update provider configuration", {
@@ -177,6 +178,7 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 													if (!Number.isNaN(parsed)) {
 														field.onChange(parsed)
 													}
+													form.trigger("network_config");
 												}}
 											/>
 										</FormControl>
@@ -207,6 +209,7 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 													if (!Number.isNaN(parsed)) {
 														field.onChange(parsed)
 													}
+													form.trigger("network_config");
 												}}
 											/>
 										</FormControl>
@@ -238,6 +241,7 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 													if (!Number.isNaN(parsed)) {
 														field.onChange(parsed)
 													}
+													form.trigger("network_config");
 												}}
 											/>
 										</FormControl>
@@ -267,6 +271,7 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 													if (!Number.isNaN(parsed)) {
 														field.onChange(parsed)
 													}
+													form.trigger("network_config");
 												}}
 											/>
 										</FormControl>

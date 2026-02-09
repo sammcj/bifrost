@@ -60,7 +60,8 @@ export async function assertToast(
   expectedText: string,
   type: 'success' | 'error' | 'info' = 'success'
 ): Promise<void> {
-  const toast = page.locator('[data-sonner-toast]')
+  const selector = `[data-sonner-toast][data-type="${type}"]:not([data-removed="true"])`
+  const toast = page.locator(selector).first()
   await expect(toast).toBeVisible({ timeout: 10000 })
   await expect(toast).toContainText(expectedText)
 }

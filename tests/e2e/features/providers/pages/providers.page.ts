@@ -326,22 +326,21 @@ export class ProvidersPage extends BasePage {
   // ============================================
 
   /**
-   * Expand the provider level configuration accordion
+   * Open the provider configuration sheet
    */
-  async expandConfigAccordion(): Promise<void> {
-    const accordionTrigger = this.page.getByRole('button', { name: /Provider level configuration/i })
-    const isExpanded = await accordionTrigger.getAttribute('data-state') === 'open'
-    if (!isExpanded) {
-      await accordionTrigger.click()
-      await this.page.waitForTimeout(300)
-    }
+  async openConfigSheet(): Promise<void> {
+    const editConfigBtn = this.page.getByRole('button', { name: /Edit Provider Config/i })
+    await editConfigBtn.click()
+    // Wait for the sheet to appear (SheetContent renders with role="dialog")
+    await this.page.locator('[role="dialog"]').waitFor({ state: 'visible' })
+    await this.page.waitForTimeout(300)
   }
 
   /**
    * Select a configuration tab
    */
   async selectConfigTab(tabName: 'network' | 'proxy' | 'performance' | 'governance'): Promise<void> {
-    await this.expandConfigAccordion()
+    await this.openConfigSheet()
 
     const tabLabels: Record<string, string> = {
       network: 'Network config',
@@ -401,6 +400,36 @@ export class ProvidersPage extends BasePage {
   }
 
   /**
+   * Fill a React controlled number input by using the native value setter
+   * and dispatching an input event. This bypasses React's value tracker
+   * to reliably update controlled input components.
+   */
+  async fillNumberInput(input: Locator, value: string): Promise<void> {
+    await input.click()
+    await input.press('ControlOrMeta+a')
+    await input.pressSequentially(value)
+  }
+
+  /**
+   * Save performance configuration and wait for success toast
+   */
+  async savePerformanceConfig(): Promise<void> {
+    const saveBtn = this.getConfigSaveBtn('performance')
+    await saveBtn.click()
+    await this.waitForSuccessToast()
+  }
+
+
+  /**
+   * Save network configuration and wait for success toast
+   */
+  async saveNetworkConfig(): Promise<void> {
+    const saveBtn = this.getConfigSaveBtn('network')
+    await saveBtn.click()
+    await this.waitForSuccessToast()
+  }
+
+  /**
    * Set performance configuration
    */
   async setPerformanceConfig(config: {
@@ -413,14 +442,12 @@ export class ProvidersPage extends BasePage {
 
     if (config.concurrency !== undefined) {
       const input = this.getConcurrencyInput()
-      await input.clear()
-      await input.fill(String(config.concurrency))
+      await this.fillNumberInput(input, String(config.concurrency))
     }
 
     if (config.bufferSize !== undefined) {
       const input = this.getBufferSizeInput()
-      await input.clear()
-      await input.fill(String(config.bufferSize))
+      await this.fillNumberInput(input, String(config.bufferSize))
     }
 
     if (config.rawRequest !== undefined) {
@@ -565,7 +592,7 @@ export class ProvidersPage extends BasePage {
    * Check if governance tab is visible (depends on permissions)
    */
   async isGovernanceTabVisible(): Promise<boolean> {
-    await this.expandConfigAccordion()
+    await this.openConfigSheet()
     const tab = this.page.getByRole('tab', { name: 'Governance' })
     return await tab.isVisible().catch(() => false)
   }

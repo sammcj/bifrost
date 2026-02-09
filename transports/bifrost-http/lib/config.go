@@ -2775,7 +2775,7 @@ func (c *Config) AddProvider(ctx context.Context, provider schemas.ModelProvider
 	defer c.Mu.Unlock()
 	// Check if provider already exists
 	if _, exists := c.Providers[provider]; exists {
-		return fmt.Errorf("provider %s already exists", provider)
+		return fmt.Errorf("provider %s: %w", provider, ErrAlreadyExists)
 	}
 	// Validate CustomProviderConfig if present
 	if err := ValidateCustomProvider(config, provider); err != nil {
@@ -2797,6 +2797,14 @@ func (c *Config) AddProvider(ctx context.Context, provider schemas.ModelProvider
 		if err := c.ConfigStore.AddProvider(ctx, provider, config); err != nil {
 			if errors.Is(err, configstore.ErrNotFound) {
 				return ErrNotFound
+			}
+			// If the provider already exists in the DB (e.g., from a previous failed attempt)
+			// but not in the in-memory map, sync it to memory and return ErrAlreadyExists
+			// so the caller can proceed with an update instead of failing.
+			if errors.Is(err, configstore.ErrAlreadyExists) {
+				c.Providers[provider] = config
+				logger.Info("provider %s already exists in DB, synced to memory", provider)
+				return fmt.Errorf("provider %s: %w", provider, ErrAlreadyExists)
 			}
 			return fmt.Errorf("failed to update provider config in store: %w", err)
 		}

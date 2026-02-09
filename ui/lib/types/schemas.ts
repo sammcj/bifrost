@@ -508,16 +508,21 @@ export const networkOnlyFormSchema = z.object({
 
 // Performance form schema for the PerformanceFormFragment
 export const performanceFormSchema = z.object({
-	concurrency_and_buffer_size: z.object({
-		concurrency: z.coerce
-			.number("Concurrency must be a number")
-			.min(1, "Concurrency must be greater than 0")
-			.max(100000, "Concurrency must be less than 100000"),
-		buffer_size: z.coerce
-			.number("Buffer size must be a number")
-			.min(1, "Buffer size must be greater than 0")
-			.max(100000, "Buffer size must be less than 100000"),
-	}),
+	concurrency_and_buffer_size: z
+		.object({
+			concurrency: z
+				.number({ invalid_type_error: "Concurrency must be a number" })
+				.min(1, "Concurrency must be greater than 0")
+				.max(100000, "Concurrency must be less than 100000"),
+			buffer_size: z
+				.number({ invalid_type_error: "Buffer size must be a number" })
+				.min(1, "Buffer size must be greater than 0")
+				.max(100000, "Buffer size must be less than 100000"),
+		})
+		.refine((data) => data.concurrency <= data.buffer_size, {
+			message: "Concurrency must be less than or equal to buffer size",
+			path: ["concurrency"],
+		}),
 	send_back_raw_request: z.boolean(),
 	send_back_raw_response: z.boolean(),
 });

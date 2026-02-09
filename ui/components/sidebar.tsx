@@ -215,21 +215,26 @@ const SidebarItemView = ({
 		}
 	};
 
-	const handleNavigation = (url: string) => {
+	const openInNewTab = (url: string) => {
+		window.open(url, "_blank", "noopener,noreferrer");
+	};
+
+	const handleNavigation = (url: string, e?: React.MouseEvent) => {
 		if (!isAllowed) return;
-		if (isExternal) {
-			window.open(url, "_blank");
+		if (isExternal || e?.metaKey || e?.ctrlKey) {
+			openInNewTab(url);
 			return;
 		}
 		router.push(url);
 	};
 
-	const handleSubItemClick = (subItem: SidebarItem) => {
-		if (subItem.queryParam) {
-			router.push(`${subItem.url}?tab=${subItem.queryParam}`);
-		} else {
-			router.push(subItem.url);
+	const handleSubItemClick = (subItem: SidebarItem, e?: React.MouseEvent) => {
+		const url = subItem.queryParam ? `${subItem.url}?tab=${subItem.queryParam}` : subItem.url;
+		if (e?.metaKey || e?.ctrlKey) {
+			openInNewTab(url);
+			return;
 		}
+		router.push(url);
 	};
 
 	const isHighlighted = !hasSubItems && highlightedUrl === item.url;
@@ -248,7 +253,7 @@ const SidebarItemView = ({
 								? "hover:bg-sidebar-accent hover:text-accent-foreground border-transparent text-slate-500 dark:text-zinc-400"
 								: "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
 				} `}
-				onClick={hasSubItems ? handleClick : item.hasAccess ? () => handleNavigation(item.url) : undefined}
+				onClick={hasSubItems ? handleClick : item.hasAccess ? (e) => handleNavigation(item.url, e) : undefined}
 			>
 				<div className="flex w-full items-center justify-between">
 					<div className="flex w-full items-center gap-2">
@@ -298,7 +303,7 @@ const SidebarItemView = ({
 													? "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
 													: "hover:bg-sidebar-accent hover:text-accent-foreground text-slate-500 dark:text-zinc-400"
 									}`}
-									onClick={() => (subItem.hasAccess === false ? undefined : handleSubItemClick(subItem))}
+									onClick={(e) => (subItem.hasAccess === false ? undefined : handleSubItemClick(subItem, e))}
 								>
 									<div className="flex items-center gap-2">
 										{SubItemIcon && <SubItemIcon className={`h-3.5 w-3.5 ${isSubItemActive ? "text-primary" : "text-muted-foreground"}`} />}
@@ -845,16 +850,16 @@ export default function AppSidebar() {
 			} else if (e.key === "ArrowUp") {
 				e.preventDefault();
 				setFocusedIndex((prev) => Math.max(prev - 1, 0));
-			} else if (e.key === "Enter") {
-				e.preventDefault();
-				const target = navigableItems[focusedIndex];
-				if (target) {
-					const url = target.queryParam ? `${target.url}?tab=${target.queryParam}` : target.url;
-					if (target.isExternal) {
-						window.open(url, "_blank");
-					} else {
-						router.push(url);
-					}
+		} else if (e.key === "Enter") {
+			e.preventDefault();
+			const target = navigableItems[focusedIndex];
+			if (target) {
+				const url = target.queryParam ? `${target.url}?tab=${target.queryParam}` : target.url;
+				if (target.isExternal || e.metaKey || e.ctrlKey) {
+					window.open(url, "_blank", "noopener,noreferrer");
+				} else {
+					router.push(url);
+				}
 					setSearchQuery("");
 					setFocusedIndex(-1);
 					searchInputRef.current?.blur();

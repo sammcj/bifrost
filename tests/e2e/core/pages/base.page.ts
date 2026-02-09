@@ -1,4 +1,4 @@
-import { Page, Locator, expect } from '@playwright/test'
+import { Locator, Page, expect } from '@playwright/test'
 
 /**
  * Base page object with common methods shared across all pages
@@ -19,16 +19,21 @@ export class BasePage {
 
   /**
    * Get the toast notification element (first/most recent one)
+   * Filters out toasts that are being removed to avoid matching stale toasts.
+   * Optionally filters by toast type (success, error, loading, default).
    */
-  getToast(): Locator {
-    return this.page.locator('[data-sonner-toast]').first()
+  getToast(type?: 'success' | 'error' | 'loading' | 'default'): Locator {
+    const selector = type
+      ? `[data-sonner-toast][data-type="${type}"]:not([data-removed="true"])`
+      : '[data-sonner-toast]:not([data-removed="true"])'
+    return this.page.locator(selector).first()
   }
 
   /**
    * Wait for a success toast to appear
    */
   async waitForSuccessToast(message?: string): Promise<void> {
-    const toast = this.getToast()
+    const toast = this.getToast('success')
     await expect(toast).toBeVisible({ timeout: 10000 })
     if (message) {
       await expect(toast).toContainText(message)
@@ -39,7 +44,7 @@ export class BasePage {
    * Wait for an error toast to appear
    */
   async waitForErrorToast(message?: string): Promise<void> {
-    const toast = this.getToast()
+    const toast = this.getToast('error')
     await expect(toast).toBeVisible({ timeout: 10000 })
     if (message) {
       await expect(toast).toContainText(message)
@@ -50,7 +55,7 @@ export class BasePage {
    * Wait for all toasts to disappear
    */
   async waitForToastsToDisappear(timeout = 5000): Promise<void> {
-    const toasts = this.page.locator('[data-sonner-toast]')
+    const toasts = this.page.locator('[data-sonner-toast]:not([data-removed="true"])')
     try {
       // Wait for all toasts to be detached from DOM
       await toasts.first().waitFor({ state: 'detached', timeout }).catch(() => {

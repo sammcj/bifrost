@@ -376,7 +376,7 @@ func (chunk *AnthropicStreamEvent) ToBifrostResponsesStream(ctx context.Context,
 				return nil, nil, false
 			}
 
-		switch chunk.ContentBlock.Type {
+			switch chunk.ContentBlock.Type {
 			case AnthropicContentBlockTypeCompaction:
 				// Compaction block - track it but don't emit yet (summary arrives in delta)
 				itemID := fmt.Sprintf("cmp_%d", outputIndex)
@@ -623,7 +623,7 @@ func (chunk *AnthropicStreamEvent) ToBifrostResponsesStream(ctx context.Context,
 		if chunk.Index != nil && chunk.Delta != nil {
 			outputIndex := state.getOrCreateOutputIndex(chunk.Index)
 
-		// Handle different delta types
+			// Handle different delta types
 			switch chunk.Delta.Type {
 			case AnthropicStreamDeltaTypeCompaction:
 				if chunk.Delta.Content != nil {
@@ -1572,49 +1572,47 @@ func ToAnthropicResponsesStreamResponse(ctx *schemas.BifrostContext, bifrostResp
 
 		// check for claude-cli user agent
 		if ctx != nil {
-			if userAgent, ok := ctx.Value(schemas.BifrostContextKeyUserAgent).(string); ok {
-				if strings.Contains(userAgent, "claude-cli") {
-					// check for WebSearch tool
-					if bifrostResp.Item != nil &&
-						bifrostResp.Item.Type != nil &&
-						*bifrostResp.Item.Type == schemas.ResponsesMessageTypeFunctionCall &&
-						bifrostResp.Item.ResponsesToolMessage != nil &&
-						bifrostResp.Item.ResponsesToolMessage.Name != nil &&
-						*bifrostResp.Item.ResponsesToolMessage.Name == "WebSearch" &&
-						bifrostResp.Item.ResponsesToolMessage.Arguments != nil {
+			if IsClaudeCodeRequest(ctx) {
+				// check for WebSearch tool
+				if bifrostResp.Item != nil &&
+					bifrostResp.Item.Type != nil &&
+					*bifrostResp.Item.Type == schemas.ResponsesMessageTypeFunctionCall &&
+					bifrostResp.Item.ResponsesToolMessage != nil &&
+					bifrostResp.Item.ResponsesToolMessage.Name != nil &&
+					*bifrostResp.Item.ResponsesToolMessage.Name == "WebSearch" &&
+					bifrostResp.Item.ResponsesToolMessage.Arguments != nil {
 
-						argumentsJSON := sanitizeWebSearchArguments(*bifrostResp.Item.ResponsesToolMessage.Arguments)
-						bifrostResp.Item.ResponsesToolMessage.Arguments = &argumentsJSON
+					argumentsJSON := sanitizeWebSearchArguments(*bifrostResp.Item.ResponsesToolMessage.Arguments)
+					bifrostResp.Item.ResponsesToolMessage.Arguments = &argumentsJSON
 
-						// Generate synthetic input_json_delta events for the sanitized WebSearch arguments
-						// This replaces the delta events that were skipped earlier
-						var events []*AnthropicStreamEvent
+					// Generate synthetic input_json_delta events for the sanitized WebSearch arguments
+					// This replaces the delta events that were skipped earlier
+					var events []*AnthropicStreamEvent
 
-						// Use OutputIndex for proper Anthropic indexing, fallback to ContentIndex
-						var indexToUse *int
-						if bifrostResp.OutputIndex != nil {
-							indexToUse = bifrostResp.OutputIndex
-						} else if bifrostResp.ContentIndex != nil {
-							indexToUse = bifrostResp.ContentIndex
-						}
-
-						deltaEvents := generateSyntheticInputJSONDeltas(argumentsJSON, indexToUse)
-						events = append(events, deltaEvents...)
-
-						// Add the content_block_stop event at the end
-						stopEvent := &AnthropicStreamEvent{
-							Type:  AnthropicStreamEventTypeContentBlockStop,
-							Index: indexToUse,
-						}
-						events = append(events, stopEvent)
-
-						// Clean up the tracking for this WebSearch item
-						if bifrostResp.Item.ID != nil {
-							webSearchItemIDs.Delete(*bifrostResp.Item.ID)
-						}
-
-						return events
+					// Use OutputIndex for proper Anthropic indexing, fallback to ContentIndex
+					var indexToUse *int
+					if bifrostResp.OutputIndex != nil {
+						indexToUse = bifrostResp.OutputIndex
+					} else if bifrostResp.ContentIndex != nil {
+						indexToUse = bifrostResp.ContentIndex
 					}
+
+					deltaEvents := generateSyntheticInputJSONDeltas(argumentsJSON, indexToUse)
+					events = append(events, deltaEvents...)
+
+					// Add the content_block_stop event at the end
+					stopEvent := &AnthropicStreamEvent{
+						Type:  AnthropicStreamEventTypeContentBlockStop,
+						Index: indexToUse,
+					}
+					events = append(events, stopEvent)
+
+					// Clean up the tracking for this WebSearch item
+					if bifrostResp.Item.ID != nil {
+						webSearchItemIDs.Delete(*bifrostResp.Item.ID)
+					}
+
+					return events
 				}
 			}
 		}
@@ -1945,10 +1943,8 @@ func (req *AnthropicMessageRequest) ToBifrostResponsesRequest(ctx *schemas.Bifro
 			}
 			// check if user agent in ctx is claude-cli
 			if ctx != nil {
-				if userAgent, ok := ctx.Value(schemas.BifrostContextKeyUserAgent).(string); ok {
-					if strings.Contains(userAgent, "claude-cli") {
-						summary = schemas.Ptr("detailed")
-					}
+				if IsClaudeCodeRequest(ctx) {
+					summary = schemas.Ptr("detailed")
 				}
 			}
 			if req.OutputConfig != nil && req.OutputConfig.Effort != nil {
@@ -3804,41 +3800,16 @@ func convertBifrostFunctionCallToAnthropicToolUse(ctx *schemas.BifrostContext, m
 			// Anthropic only allows one or the other, not both
 			// Only do this for Claude CLI
 			if ctx != nil {
-				if userAgent, ok := ctx.Value(schemas.BifrostContextKeyUserAgent).(string); ok {
-					if strings.Contains(userAgent, "claude-cli") {
-						if msg.ResponsesToolMessage.Name != nil && *msg.ResponsesToolMessage.Name == "WebSearch" {
-							argumentsJSON = sanitizeWebSearchArguments(argumentsJSON)
-						}
+				if IsClaudeCodeRequest(ctx) {
+					if msg.ResponsesToolMessage.Name != nil && *msg.ResponsesToolMessage.Name == "WebSearch" {
+						argumentsJSON = sanitizeWebSearchArguments(argumentsJSON)
 					}
 				}
 			}
-
 			toolUseBlock.Input = parseJSONInput(argumentsJSON)
 		}
 
 		return &toolUseBlock
-	}
-	return nil
-}
-
-// convertBifrostFunctionCallOutputToAnthropicMessage converts a Bifrost function call output to Anthropic message
-func convertBifrostFunctionCallOutputToAnthropicMessage(msg *schemas.ResponsesMessage) *AnthropicMessage {
-	if msg.ResponsesToolMessage != nil {
-		toolResultBlock := AnthropicContentBlock{
-			Type:      AnthropicContentBlockTypeToolResult,
-			ToolUseID: msg.ResponsesToolMessage.CallID,
-		}
-
-		if msg.ResponsesToolMessage.Output != nil {
-			toolResultBlock.Content = convertToolOutputToAnthropicContent(msg.ResponsesToolMessage.Output)
-		}
-
-		return &AnthropicMessage{
-			Role: AnthropicMessageRoleUser,
-			Content: AnthropicContent{
-				ContentBlocks: []AnthropicContentBlock{toolResultBlock},
-			},
-		}
 	}
 	return nil
 }
