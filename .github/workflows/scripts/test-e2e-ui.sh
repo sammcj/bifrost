@@ -129,7 +129,7 @@ npx playwright install --with-deps chromium
 
 # Run Playwright tests
 echo "🎭 Running Playwright E2E tests..."
-CI=true SKIP_WEB_SERVER=1 BASE_URL=http://localhost:18080 npx playwright test
+CI=true SKIP_WEB_SERVER=1 BASE_URL=http://localhost:18080 npx playwright test --workers=1
 PLAYWRIGHT_EXIT=$?
 
 cd ../..
