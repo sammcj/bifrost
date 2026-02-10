@@ -306,15 +306,14 @@ export function LogDetailSheet({ log, open, onOpenChange, handleDelete }: LogDet
 							{log.fallback_index > 0 && <LogEntryDetailsView className="w-full" label="Fallback Index" value={log.fallback_index} />}
 							{log.virtual_key && <LogEntryDetailsView className="w-full" label="Virtual Key" value={log.virtual_key.name} />}
 							{log.routing_engine_used && (
-								<div className="flex flex-col gap-2">
-									<span className="text-sm font-medium text-muted-foreground">Routing Engine Used</span>
+								<LogEntryDetailsView className="w-full" label="Routing Engine Used" value={
 									<Badge className={RoutingEngineUsedColors[log.routing_engine_used as keyof typeof RoutingEngineUsedColors] ?? "bg-gray-100 text-gray-800"}>
 										<div className="flex items-center gap-2">
 											{RoutingEngineUsedIcons[log.routing_engine_used as keyof typeof RoutingEngineUsedIcons]?.()}
 											<span>{RoutingEngineUsedLabels[log.routing_engine_used as keyof typeof RoutingEngineUsedLabels] ?? log.routing_engine_used}</span>
 										</div>
 									</Badge>
-								</div>
+								} />
 							)}
 							{log.routing_rule && <LogEntryDetailsView className="w-full" label="Routing Rule" value={log.routing_rule.name} />}
 

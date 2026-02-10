@@ -1173,14 +1173,16 @@ func mergeGovernanceConfig(ctx context.Context, config *Config, configData *Conf
 		len(rateLimitsToAdd) > 0 || len(rateLimitsToUpdate) > 0 ||
 		len(customersToAdd) > 0 || len(customersToUpdate) > 0 ||
 		len(teamsToAdd) > 0 || len(teamsToUpdate) > 0 ||
-		len(virtualKeysToAdd) > 0 || len(virtualKeysToUpdate) > 0
+		len(virtualKeysToAdd) > 0 || len(virtualKeysToUpdate) > 0 ||
+		len(routingRulesToAdd) > 0 || len(routingRulesToUpdate) > 0
 	if config.ConfigStore != nil && hasChanges {
 		err := updateGovernanceConfigInStore(ctx, config,
 			budgetsToAdd, budgetsToUpdate,
 			rateLimitsToAdd, rateLimitsToUpdate,
 			customersToAdd, customersToUpdate,
 			teamsToAdd, teamsToUpdate,
-			virtualKeysToAdd, virtualKeysToUpdate)
+			virtualKeysToAdd, virtualKeysToUpdate,
+			routingRulesToAdd, routingRulesToUpdate)
 		if err != nil {
 			logger.Fatal("failed to sync governance config: %v", err)
 		}
@@ -1201,6 +1203,8 @@ func updateGovernanceConfigInStore(
 	teamsToUpdate []configstoreTables.TableTeam,
 	virtualKeysToAdd []configstoreTables.TableVirtualKey,
 	virtualKeysToUpdate []configstoreTables.TableVirtualKey,
+	routingRulesToAdd []configstoreTables.TableRoutingRule,
+	routingRulesToUpdate []configstoreTables.TableRoutingRule,
 ) error {
 	logger.Debug("updating governance config in store with merged items")
 	return config.ConfigStore.ExecuteTransaction(ctx, func(tx *gorm.DB) error {
@@ -1295,6 +1299,20 @@ func updateGovernanceConfigInStore(
 			}
 			if err := config.ConfigStore.UpdateVirtualKey(ctx, &virtualKey, tx); err != nil {
 				return fmt.Errorf("failed to update virtual key %s: %w", virtualKey.ID, err)
+			}
+		}
+
+		// Create routing rules (new from config.json)
+		for _, rule := range routingRulesToAdd {
+			if err := config.ConfigStore.CreateRoutingRule(ctx, &rule, tx); err != nil {
+				return fmt.Errorf("failed to create routing rule %s: %w", rule.ID, err)
+			}
+		}
+
+		// Update routing rules (config.json changed)
+		for _, rule := range routingRulesToUpdate {
+			if err := config.ConfigStore.UpdateRoutingRule(ctx, &rule, tx); err != nil {
+				return fmt.Errorf("failed to update routing rule %s: %w", rule.ID, err)
 			}
 		}
 
