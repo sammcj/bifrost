@@ -32,7 +32,7 @@ func TestGemini(t *testing.T) {
 			{Provider: schemas.Gemini, Model: "gemini-2.5-flash"},
 		},
 		VisionModel:          "gemini-2.5-flash",
-		EmbeddingModel:       "text-embedding-004",
+		EmbeddingModel:       "gemini-embedding-001",
 		TranscriptionModel:   "gemini-2.5-flash",
 		SpeechSynthesisModel: "gemini-2.5-flash-preview-tts",
 		ImageGenerationModel: "gemini-2.5-flash-image",

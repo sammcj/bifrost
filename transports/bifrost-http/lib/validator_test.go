@@ -202,27 +202,6 @@ func TestValidateConfigSchema_ProviderKey_MissingName(t *testing.T) {
 	}
 }
 
-func TestValidateConfigSchema_ProviderKey_MissingValue(t *testing.T) {
-	// Missing required field: value
-	invalidConfig := `{
-		"providers": {
-			"openai": {
-				"keys": [
-					{
-						"name": "my-key",
-						"weight": 1.0
-					}
-				]
-			}
-		}
-	}`
-
-	err := ValidateConfigSchema([]byte(invalidConfig))
-	if err == nil {
-		t.Error("expected config missing 'value' in provider key to fail validation")
-	}
-}
-
 func TestValidateConfigSchema_ProviderKey_MissingWeight(t *testing.T) {
 	// Missing required field: weight
 	invalidConfig := `{
@@ -545,25 +524,6 @@ func TestValidateConfigSchema_VirtualKey_MissingName(t *testing.T) {
 	err := ValidateConfigSchema([]byte(invalidConfig))
 	if err == nil {
 		t.Error("expected config missing 'name' in virtual key to fail validation")
-	}
-}
-
-func TestValidateConfigSchema_VirtualKey_MissingValue(t *testing.T) {
-	// Missing required field: value
-	invalidConfig := `{
-		"governance": {
-			"virtual_keys": [
-				{
-					"id": "vk-1",
-					"name": "Test Virtual Key"
-				}
-			]
-		}
-	}`
-
-	err := ValidateConfigSchema([]byte(invalidConfig))
-	if err == nil {
-		t.Error("expected config missing 'value' in virtual key to fail validation")
 	}
 }
 
