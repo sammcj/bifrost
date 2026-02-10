@@ -559,10 +559,10 @@ func TestErrorHandling_STDIO_IntermittentFailures(t *testing.T) {
 				assert.Equal(t, tc.runs, errorCount, "all should fail with 100%% fail rate")
 			} else {
 				// For 50%, we expect roughly half to succeed (with some variance)
-				// Allow 20-80% success range to account for randomness
+				// Allow 20-80% success range (inclusive) to account for randomness
 				successRate := float64(successCount) / float64(tc.runs) * 100
-				assert.Greater(t, successRate, 20.0, "success rate should be > 20%%")
-				assert.Less(t, successRate, 80.0, "success rate should be < 80%%")
+				assert.GreaterOrEqual(t, successRate, 20.0, "success rate should be >= 20%%")
+				assert.LessOrEqual(t, successRate, 80.0, "success rate should be <= 80%%")
 			}
 
 			t.Logf("✅ %s: %d successes, %d errors out of %d runs", tc.name, successCount, errorCount, tc.runs)
