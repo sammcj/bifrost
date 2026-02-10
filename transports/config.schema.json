@@ -182,7 +182,7 @@
     },
     "governance": {
       "type": "object",
-      "description": "Governance configuration for budgets, rate limits, customers, teams, and virtual keys",
+      "description": "Governance configuration for budgets, rate limits, customers, teams, virtual keys, and routing rules",
       "properties": {
         "budgets": {
           "type": "array",
@@ -406,6 +406,13 @@
               "value"
             ],
             "additionalProperties": false
+          }
+        },
+        "routing_rules": {
+          "type": "array",
+          "description": "Routing rules for dynamic provider/model selection based on CEL expressions",
+          "items": {
+            "$ref": "#/$defs/routing_rule"
           }
         },
         "auth_config": {
@@ -1098,6 +1105,70 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "routing_rule": {
+      "type": "object",
+      "description": "Routing rule for dynamic provider/model selection",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique routing rule ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable rule name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description of the rule"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the rule is enabled",
+          "default": true
+        },
+        "cel_expression": {
+          "type": "string",
+          "description": "CEL (Common Expression Language) expression for rule evaluation"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Target provider name (e.g., 'openai', 'azure'). Empty means use original provider"
+        },
+        "model": {
+          "type": "string",
+          "description": "Target model name. Empty means use original model"
+        },
+        "fallbacks": {
+          "type": "array",
+          "description": "Fallback provider chain in order",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["global", "team", "customer", "virtual_key"],
+          "description": "Rule scope level",
+          "default": "global"
+        },
+        "scope_id": {
+          "type": ["string", "null"],
+          "description": "Entity ID for non-global scopes (required for non-global scope)"
+        },
+        "priority": {
+          "type": "integer",
+          "description": "Evaluation priority within scope (lower = earlier)",
+          "default": 0
+        },
+        "query": {
+          "type": "object",
+          "description": "Additional query parameters",
+          "additionalProperties": true
+        }
+      },
+      "required": ["id", "name"],
+      "additionalProperties": false
+    },
     "virtual_key_provider_config": {
       "type": "object",
       "description": "Provider configuration for a virtual key",
