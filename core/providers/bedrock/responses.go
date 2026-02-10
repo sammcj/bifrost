@@ -1451,11 +1451,11 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest(ctx *schemas.Bi
 	}
 
 	// Convert additional model request fields to extra params
-	if len(request.AdditionalModelRequestFields) > 0 {
+	if request.AdditionalModelRequestFields.Len() > 0 {
 		// Handle Anthropic thinking/reasoning_config format
-		reasoningConfig, ok := schemas.SafeExtractFromMap(request.AdditionalModelRequestFields, "thinking")
+		reasoningConfig, ok := request.AdditionalModelRequestFields.Get("thinking")
 		if !ok {
-			reasoningConfig, ok = schemas.SafeExtractFromMap(request.AdditionalModelRequestFields, "reasoning_config")
+			reasoningConfig, ok = request.AdditionalModelRequestFields.Get("reasoning_config")
 		}
 		if ok {
 			if reasoningConfigMap, ok := reasoningConfig.(map[string]interface{}); ok {
@@ -1466,7 +1466,7 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest(ctx *schemas.Bi
 							summary = summaryValue
 						}
 						// Check for native output_config.effort first
-						if outputConfig, ok := schemas.SafeExtractFromMap(request.AdditionalModelRequestFields, "output_config"); ok {
+						if outputConfig, ok := request.AdditionalModelRequestFields.Get("output_config"); ok {
 							if outputConfigMap, ok := outputConfig.(map[string]interface{}); ok {
 								if effortStr, ok := schemas.SafeExtractString(outputConfigMap["effort"]); ok {
 									var maxTokens *int
@@ -1513,7 +1513,7 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest(ctx *schemas.Bi
 		}
 
 		// Handle Nova reasoningConfig format (camelCase)
-		if novaReasoningConfig, ok := schemas.SafeExtractFromMap(request.AdditionalModelRequestFields, "reasoningConfig"); ok {
+		if novaReasoningConfig, ok := request.AdditionalModelRequestFields.Get("reasoningConfig"); ok {
 			if novaReasoningConfigMap, ok := novaReasoningConfig.(map[string]interface{}); ok {
 				if typeStr, ok := schemas.SafeExtractString(novaReasoningConfigMap["type"]); ok {
 					if typeStr == "enabled" {
@@ -1582,7 +1582,7 @@ func (request *BedrockConverseRequest) ToBifrostResponsesRequest(ctx *schemas.Bi
 	}
 
 	// Convert additional model request fields to extra params
-	if len(request.AdditionalModelRequestFields) > 0 {
+	if request.AdditionalModelRequestFields.Len() > 0 {
 		if bifrostReq.Params.ExtraParams == nil {
 			bifrostReq.Params.ExtraParams = make(map[string]interface{})
 		}
@@ -1646,7 +1646,7 @@ func ToBedrockResponsesRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.
 		}
 		if bifrostReq.Params.Reasoning != nil {
 			if bedrockReq.AdditionalModelRequestFields == nil {
-				bedrockReq.AdditionalModelRequestFields = make(schemas.OrderedMap)
+				bedrockReq.AdditionalModelRequestFields = schemas.NewOrderedMap()
 			}
 			if bifrostReq.Params.Reasoning.MaxTokens != nil {
 				tokenBudget := *bifrostReq.Params.Reasoning.MaxTokens
@@ -1659,10 +1659,10 @@ func ToBedrockResponsesRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.
 					return nil, fmt.Errorf("reasoning.max_tokens must be >= %d for anthropic", anthropic.MinimumReasoningMaxTokens)
 				}
 				if schemas.IsAnthropicModel(bifrostReq.Model) {
-					bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]any{
+					bedrockReq.AdditionalModelRequestFields.Set("thinking", map[string]any{
 						"type":          "enabled",
 						"budget_tokens": tokenBudget,
-					}
+					})
 				} else if schemas.IsNovaModel(bifrostReq.Model) {
 					minBudgetTokens := MinimumReasoningMaxTokens
 					defaultMaxTokens := DefaultCompletionMaxTokens
@@ -1691,7 +1691,7 @@ func ToBedrockResponsesRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.
 						config["maxReasoningEffort"] = maxReasoningEffort
 					}
 
-					bedrockReq.AdditionalModelRequestFields["reasoningConfig"] = config
+					bedrockReq.AdditionalModelRequestFields.Set("reasoningConfig", config)
 				}
 			} else {
 				if bifrostReq.Params.Reasoning.Effort != nil && *bifrostReq.Params.Reasoning.Effort != "none" {
@@ -1719,15 +1719,15 @@ func ToBedrockResponsesRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.
 							config["maxReasoningEffort"] = effort
 						}
 
-						bedrockReq.AdditionalModelRequestFields["reasoningConfig"] = config
+						bedrockReq.AdditionalModelRequestFields.Set("reasoningConfig", config)
 					} else if schemas.IsAnthropicModel(bifrostReq.Model) {
 						if anthropic.SupportsAdaptiveThinking(bifrostReq.Model) {
 							// Opus 4.6+: adaptive thinking
 							effort := anthropic.MapBifrostEffortToAnthropic(*bifrostReq.Params.Reasoning.Effort)
-							bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]any{
+							bedrockReq.AdditionalModelRequestFields.Set("thinking", map[string]any{
 								"type":   "adaptive",
 								"effort": effort,
-							}
+							})
 						} else {
 							// Opus 4.5 and older Anthropic models: budget_tokens thinking
 							defaultMaxTokens := DefaultCompletionMaxTokens
@@ -1740,10 +1740,10 @@ func ToBedrockResponsesRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.
 							if err != nil {
 								return nil, err
 							}
-							bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]any{
+							bedrockReq.AdditionalModelRequestFields.Set("thinking", map[string]any{
 								"type":          "enabled",
 								"budget_tokens": budgetTokens,
-							}
+							})
 						}
 					} else {
 						// Non-Anthropic, non-Nova models: budget_tokens only
@@ -1758,24 +1758,24 @@ func ToBedrockResponsesRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.
 						if err != nil {
 							return nil, err
 						}
-						bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]any{
+						bedrockReq.AdditionalModelRequestFields.Set("reasoning_config", map[string]any{
 							"type":          "enabled",
 							"budget_tokens": budgetTokens,
-						}
+						})
 					}
 				} else {
 					if schemas.IsAnthropicModel(bifrostReq.Model) {
-						bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]string{
+						bedrockReq.AdditionalModelRequestFields.Set("thinking", map[string]any{
 							"type": "disabled",
-						}
+						})
 					} else if schemas.IsNovaModel(bifrostReq.Model) {
-						bedrockReq.AdditionalModelRequestFields["reasoningConfig"] = map[string]string{
+						bedrockReq.AdditionalModelRequestFields.Set("reasoningConfig", map[string]any{
 							"type": "disabled",
-						}
+						})
 					} else {
-						bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]string{
+						bedrockReq.AdditionalModelRequestFields.Set("reasoning_config", map[string]any{
 							"type": "disabled",
-						}
+						})
 					}
 				}
 			}
@@ -2067,7 +2067,7 @@ func extractToolsFromResponsesConversationHistory(messages []schemas.ResponsesMe
 							ResponsesToolFunction: &schemas.ResponsesToolFunction{
 								Parameters: &schemas.ToolFunctionParameters{
 									Type:       "object",
-									Properties: &schemas.OrderedMap{},
+									Properties: schemas.NewOrderedMap(),
 								},
 							},
 						}
@@ -2085,7 +2085,7 @@ func extractToolsFromResponsesConversationHistory(messages []schemas.ResponsesMe
 			if schemaObject == nil {
 				schemaObject = &schemas.ToolFunctionParameters{
 					Type:       "object",
-					Properties: &schemas.OrderedMap{},
+					Properties: schemas.NewOrderedMap(),
 				}
 			}
 

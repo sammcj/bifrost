@@ -202,7 +202,7 @@ func convertSchemaToFunctionParameters(schema *Schema) schemas.ToolFunctionParam
 	}
 
 	if len(schema.Properties) > 0 {
-		params.Properties = schemas.Ptr(convertSchemaToMap(schema))
+		params.Properties = convertSchemaToMap(schema)
 	}
 
 	if len(schema.Enum) > 0 {
@@ -211,8 +211,7 @@ func convertSchemaToFunctionParameters(schema *Schema) schemas.ToolFunctionParam
 
 	// Array schema fields
 	if schema.Items != nil {
-		itemsMap := convertSchemaToOrderedMap(schema.Items)
-		params.Items = &itemsMap
+		params.Items = convertSchemaToOrderedMap(schema.Items)
 	}
 	if schema.MinItems != nil {
 		params.MinItems = schema.MinItems
@@ -225,7 +224,7 @@ func convertSchemaToFunctionParameters(schema *Schema) schemas.ToolFunctionParam
 	if len(schema.AnyOf) > 0 {
 		anyOf := make([]schemas.OrderedMap, len(schema.AnyOf))
 		for i, s := range schema.AnyOf {
-			anyOf[i] = convertSchemaToOrderedMap(s)
+			anyOf[i] = *convertSchemaToOrderedMap(s)
 		}
 		params.AnyOf = anyOf
 	}
@@ -267,98 +266,98 @@ func convertSchemaToFunctionParameters(schema *Schema) schemas.ToolFunctionParam
 }
 
 // convertSchemaToOrderedMap converts a Gemini Schema to an OrderedMap
-func convertSchemaToOrderedMap(schema *Schema) schemas.OrderedMap {
+func convertSchemaToOrderedMap(schema *Schema) *schemas.OrderedMap {
 	if schema == nil {
-		return schemas.OrderedMap{}
+		return schemas.NewOrderedMap()
 	}
 
-	result := schemas.OrderedMap{}
+	result := schemas.NewOrderedMap()
 
 	if schema.Type != "" {
-		result["type"] = strings.ToLower(string(schema.Type))
+		result.Set("type", strings.ToLower(string(schema.Type)))
 	}
 	if schema.Description != "" {
-		result["description"] = schema.Description
+		result.Set("description", schema.Description)
 	}
 	if len(schema.Enum) > 0 {
-		result["enum"] = schema.Enum
+		result.Set("enum", schema.Enum)
 	}
 	if len(schema.Required) > 0 {
-		result["required"] = schema.Required
+		result.Set("required", schema.Required)
 	}
 	if len(schema.Properties) > 0 {
 		props := make(map[string]interface{})
 		for k, v := range schema.Properties {
 			props[k] = convertSchemaToOrderedMap(v)
 		}
-		result["properties"] = props
+		result.Set("properties", props)
 	}
 	if schema.Items != nil {
-		result["items"] = convertSchemaToOrderedMap(schema.Items)
+		result.Set("items", convertSchemaToOrderedMap(schema.Items))
 	}
 	if len(schema.AnyOf) > 0 {
 		anyOf := make([]interface{}, len(schema.AnyOf))
 		for i, s := range schema.AnyOf {
 			anyOf[i] = convertSchemaToOrderedMap(s)
 		}
-		result["anyOf"] = anyOf
+		result.Set("anyOf", anyOf)
 	}
 	if schema.Format != "" {
-		result["format"] = schema.Format
+		result.Set("format", schema.Format)
 	}
 	if schema.Pattern != "" {
-		result["pattern"] = schema.Pattern
+		result.Set("pattern", schema.Pattern)
 	}
 	if schema.MinLength != nil {
-		result["minLength"] = *schema.MinLength
+		result.Set("minLength", *schema.MinLength)
 	}
 	if schema.MaxLength != nil {
-		result["maxLength"] = *schema.MaxLength
+		result.Set("maxLength", *schema.MaxLength)
 	}
 	if schema.MinItems != nil {
-		result["minItems"] = *schema.MinItems
+		result.Set("minItems", *schema.MinItems)
 	}
 	if schema.MaxItems != nil {
-		result["maxItems"] = *schema.MaxItems
+		result.Set("maxItems", *schema.MaxItems)
 	}
 	if schema.Minimum != nil {
-		result["minimum"] = *schema.Minimum
+		result.Set("minimum", *schema.Minimum)
 	}
 	if schema.Maximum != nil {
-		result["maximum"] = *schema.Maximum
+		result.Set("maximum", *schema.Maximum)
 	}
 	if schema.Title != "" {
-		result["title"] = schema.Title
+		result.Set("title", schema.Title)
 	}
 	if schema.Default != nil {
-		result["default"] = schema.Default
+		result.Set("default", schema.Default)
 	}
 	if schema.Nullable != nil {
-		result["nullable"] = *schema.Nullable
+		result.Set("nullable", *schema.Nullable)
 	}
 
 	return result
 }
 
-func convertSchemaToMap(schema *Schema) schemas.OrderedMap {
+func convertSchemaToMap(schema *Schema) *schemas.OrderedMap {
 	// Convert map[string]*Schema to map[string]interface{} using JSON marshaling
 	data, err := sonic.Marshal(schema.Properties)
 	if err != nil {
-		return make(map[string]interface{})
+		return schemas.NewOrderedMap()
 	}
 
 	var properties map[string]interface{}
 	if err := sonic.Unmarshal(data, &properties); err != nil {
-		return make(map[string]interface{})
+		return schemas.NewOrderedMap()
 	}
 
 	result := convertTypeToLowerCase(properties)
 
 	// Type assert back to map[string]interface{}
 	if resultMap, ok := result.(map[string]interface{}); ok {
-		return resultMap
+		return schemas.OrderedMapFromMap(resultMap)
 	}
-	return make(map[string]interface{})
+	return schemas.NewOrderedMap()
 }
 
 // convertTypeToLowerCase recursively converts all 'type' fields to lowercase in a schema
@@ -1069,16 +1068,17 @@ func convertFunctionParametersToSchema(params schemas.ToolFunctionParameters) *S
 		schema.Enum = params.Enum
 	}
 
-	if params.Properties != nil && len(*params.Properties) > 0 {
+	if params.Properties != nil && params.Properties.Len() > 0 {
 		schema.Properties = make(map[string]*Schema)
-		for k, v := range *params.Properties {
+		params.Properties.Range(func(k string, v interface{}) bool {
 			schema.Properties[k] = convertPropertyToSchema(v)
-		}
+			return true
+		})
 	}
 
 	// Array schema fields
 	if params.Items != nil {
-		schema.Items = convertPropertyToSchema(*params.Items)
+		schema.Items = convertPropertyToSchema(params.Items)
 	}
 	if params.MinItems != nil {
 		schema.MinItems = params.MinItems
@@ -1149,8 +1149,10 @@ func convertPropertyToSchema(prop interface{}) *Schema {
 	switch v := prop.(type) {
 	case map[string]interface{}:
 		propMap = v
+	case *schemas.OrderedMap:
+		propMap = v.ToMap()
 	case schemas.OrderedMap:
-		propMap = map[string]interface{}(v)
+		propMap = v.ToMap()
 	}
 	if propMap != nil {
 		if propType, exists := propMap["type"]; exists {
@@ -1854,7 +1856,7 @@ func buildJSONSchemaFromMap(schemaMap map[string]interface{}) *schemas.Responses
 
 	if additionalProps, ok := schemas.SafeExtractOrderedMap(normalizedSchemaMap["additionalProperties"]); ok {
 		jsonSchema.AdditionalProperties = &schemas.AdditionalPropertiesStruct{
-			AdditionalPropertiesMap: &additionalProps,
+			AdditionalPropertiesMap: additionalProps,
 		}
 	}
 

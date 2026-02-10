@@ -200,9 +200,9 @@ func TestContext_ValueIsolation(t *testing.T) {
 			Description: schemas.Ptr("Handles context values"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"value": map[string]interface{}{"type": "string"},
-				},
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("value", map[string]interface{}{"type": "string"}),
+				),
 			},
 		},
 	}

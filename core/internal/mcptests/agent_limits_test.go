@@ -536,7 +536,7 @@ func TestAgent_Timeout(t *testing.T) {
 			Description: schemas.Ptr("A tool that takes a long time"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type:       "object",
-				Properties: &schemas.OrderedMap{},
+				Properties: schemas.NewOrderedMap(),
 			},
 		},
 	}
@@ -613,7 +613,7 @@ func TestAgent_TimeoutDuringExecution(t *testing.T) {
 			Description: schemas.Ptr("A tool that takes 1 full second"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type:       "object",
-				Properties: &schemas.OrderedMap{},
+				Properties: schemas.NewOrderedMap(),
 			},
 		},
 	}
@@ -675,7 +675,7 @@ func TestAgent_Timeout_ChatFormat(t *testing.T) {
 		Function: &schemas.ChatToolFunction{
 			Name:        "slow_chat_tool",
 			Description: schemas.Ptr("Tool for chat format timeout test"),
-			Parameters:  &schemas.ToolFunctionParameters{Type: "object", Properties: &schemas.OrderedMap{}},
+			Parameters:  &schemas.ToolFunctionParameters{Type: "object", Properties: schemas.NewOrderedMap()},
 		},
 	}
 
@@ -723,7 +723,7 @@ func TestAgent_Timeout_ResponsesFormat(t *testing.T) {
 		Function: &schemas.ChatToolFunction{
 			Name:        "slow_responses_tool",
 			Description: schemas.Ptr("Tool for responses format timeout test"),
-			Parameters:  &schemas.ToolFunctionParameters{Type: "object", Properties: &schemas.OrderedMap{}},
+			Parameters:  &schemas.ToolFunctionParameters{Type: "object", Properties: schemas.NewOrderedMap()},
 		},
 	}
 

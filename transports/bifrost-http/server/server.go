@@ -1139,9 +1139,11 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 			}
 			allowedModels := make([]schemas.Model, 0)
 			for _, key := range providerConfig.Keys {
-				allowedModels = append(allowedModels, schemas.Model{
-					ID: string(provider) + "/" + key.ID,
-				})
+				for _, model := range key.Models {
+					allowedModels = append(allowedModels, schemas.Model{
+						ID: string(provider) + "/" + model,
+					})
+				}
 			}
 			s.Config.ModelCatalog.UpsertModelDataForProvider(provider, modelData, allowedModels)
 		}

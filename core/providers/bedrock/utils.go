@@ -66,7 +66,7 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 	// Convert reasoning config
 	if bifrostReq.Params.Reasoning != nil {
 		if bedrockReq.AdditionalModelRequestFields == nil {
-			bedrockReq.AdditionalModelRequestFields = make(schemas.OrderedMap)
+			bedrockReq.AdditionalModelRequestFields = schemas.NewOrderedMap()
 		}
 		if bifrostReq.Params.Reasoning.MaxTokens != nil {
 			tokenBudget := *bifrostReq.Params.Reasoning.MaxTokens
@@ -79,10 +79,10 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 				if tokenBudget < anthropic.MinimumReasoningMaxTokens {
 					return fmt.Errorf("reasoning.max_tokens must be >= %d for anthropic", anthropic.MinimumReasoningMaxTokens)
 				}
-				bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]any{
+				bedrockReq.AdditionalModelRequestFields.Set("thinking", map[string]any{
 					"type":          "enabled",
 					"budget_tokens": tokenBudget,
-				}
+				})
 			} else if schemas.IsNovaModel(bifrostReq.Model) {
 				minBudgetTokens := MinimumReasoningMaxTokens
 				defaultMaxTokens := DefaultCompletionMaxTokens
@@ -118,12 +118,12 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 					config["maxReasoningEffort"] = maxReasoningEffort
 				}
 
-				bedrockReq.AdditionalModelRequestFields["reasoningConfig"] = config
+				bedrockReq.AdditionalModelRequestFields.Set("reasoningConfig", config)
 			} else {
-				bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]any{
+				bedrockReq.AdditionalModelRequestFields.Set("reasoning_config", map[string]any{
 					"type":          "enabled",
 					"budget_tokens": tokenBudget,
-				}
+				})
 			}
 		} else if bifrostReq.Params.Reasoning.Effort != nil && *bifrostReq.Params.Reasoning.Effort != "none" {
 			maxTokens := DefaultCompletionMaxTokens
@@ -161,40 +161,40 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 					config["maxReasoningEffort"] = effort
 				}
 
-				bedrockReq.AdditionalModelRequestFields["reasoningConfig"] = config
+				bedrockReq.AdditionalModelRequestFields.Set("reasoningConfig", config)
 			} else if schemas.IsAnthropicModel(bifrostReq.Model) {
 				if anthropic.SupportsAdaptiveThinking(bifrostReq.Model) {
 					// Opus 4.6+: adaptive thinking
 					effort := anthropic.MapBifrostEffortToAnthropic(*bifrostReq.Params.Reasoning.Effort)
-					bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]any{
+					bedrockReq.AdditionalModelRequestFields.Set("thinking", map[string]any{
 						"type":   "adaptive",
 						"effort": effort,
-					}
+					})
 				} else {
 					// Opus 4.5 and older models: budget_tokens thinking
 					budgetTokens, err := providerUtils.GetBudgetTokensFromReasoningEffort(*bifrostReq.Params.Reasoning.Effort, anthropic.MinimumReasoningMaxTokens, maxTokens)
 					if err != nil {
 						return err
 					}
-					bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]any{
+					bedrockReq.AdditionalModelRequestFields.Set("thinking", map[string]any{
 						"type":          "enabled",
 						"budget_tokens": budgetTokens,
-					}
+					})
 				}
 			}
 		} else {
 			if schemas.IsAnthropicModel(bifrostReq.Model) {
-				bedrockReq.AdditionalModelRequestFields["thinking"] = map[string]string{
+				bedrockReq.AdditionalModelRequestFields.Set("thinking", map[string]any{
 					"type": "disabled",
-				}
+				})
 			} else if schemas.IsNovaModel(bifrostReq.Model) {
-				bedrockReq.AdditionalModelRequestFields["reasoningConfig"] = map[string]string{
+				bedrockReq.AdditionalModelRequestFields.Set("reasoningConfig", map[string]any{
 					"type": "disabled",
-				}
+				})
 			} else {
-				bedrockReq.AdditionalModelRequestFields["reasoning_config"] = map[string]string{
+				bedrockReq.AdditionalModelRequestFields.Set("reasoning_config", map[string]any{
 					"type": "disabled",
-				}
+				})
 			}
 		}
 	}
@@ -1172,7 +1172,7 @@ func convertMapToToolFunctionParameters(paramsMap map[string]interface{}) *schem
 
 	// Extract properties
 	if props, ok := schemas.SafeExtractOrderedMap(paramsMap["properties"]); ok {
-		params.Properties = &props
+		params.Properties = props
 	}
 
 	// Extract required
@@ -1206,18 +1206,18 @@ func convertMapToToolFunctionParameters(paramsMap map[string]interface{}) *schem
 		}
 	} else if addPropsVal, ok := schemas.SafeExtractOrderedMap(paramsMap["additionalProperties"]); ok {
 		params.AdditionalProperties = &schemas.AdditionalPropertiesStruct{
-			AdditionalPropertiesMap: &addPropsVal,
+			AdditionalPropertiesMap: addPropsVal,
 		}
 	}
 
 	// Extract $defs (JSON Schema draft 2019-09+)
 	if defsVal, ok := schemas.SafeExtractOrderedMap(paramsMap["$defs"]); ok {
-		params.Defs = &defsVal
+		params.Defs = defsVal
 	}
 
 	// Extract definitions (legacy JSON Schema draft-07)
 	if defsVal, ok := schemas.SafeExtractOrderedMap(paramsMap["definitions"]); ok {
-		params.Definitions = &defsVal
+		params.Definitions = defsVal
 	}
 
 	// Extract $ref
@@ -1227,7 +1227,7 @@ func convertMapToToolFunctionParameters(paramsMap map[string]interface{}) *schem
 
 	// Extract items (array element schema)
 	if itemsVal, ok := schemas.SafeExtractOrderedMap(paramsMap["items"]); ok {
-		params.Items = &itemsVal
+		params.Items = itemsVal
 	}
 
 	// Extract minItems
@@ -1245,7 +1245,7 @@ func convertMapToToolFunctionParameters(paramsMap map[string]interface{}) *schem
 		anyOf := make([]schemas.OrderedMap, 0, len(anyOfVal))
 		for _, v := range anyOfVal {
 			if m, ok := schemas.SafeExtractOrderedMap(v); ok {
-				anyOf = append(anyOf, m)
+				anyOf = append(anyOf, *m)
 			}
 		}
 		params.AnyOf = anyOf
@@ -1256,7 +1256,7 @@ func convertMapToToolFunctionParameters(paramsMap map[string]interface{}) *schem
 		oneOf := make([]schemas.OrderedMap, 0, len(oneOfVal))
 		for _, v := range oneOfVal {
 			if m, ok := schemas.SafeExtractOrderedMap(v); ok {
-				oneOf = append(oneOf, m)
+				oneOf = append(oneOf, *m)
 			}
 		}
 		params.OneOf = oneOf
@@ -1267,7 +1267,7 @@ func convertMapToToolFunctionParameters(paramsMap map[string]interface{}) *schem
 		allOf := make([]schemas.OrderedMap, 0, len(allOfVal))
 		for _, v := range allOfVal {
 			if m, ok := schemas.SafeExtractOrderedMap(v); ok {
-				allOf = append(allOf, m)
+				allOf = append(allOf, *m)
 			}
 		}
 		params.AllOf = allOf

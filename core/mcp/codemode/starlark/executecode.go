@@ -49,12 +49,12 @@ type ExecutionEnvironment struct {
 // createExecuteToolCodeTool creates the executeToolCode tool definition for code mode.
 // This tool allows executing Python (Starlark) code in a sandboxed interpreter with access to MCP server tools.
 func (s *StarlarkCodeMode) createExecuteToolCodeTool() schemas.ChatTool {
-	executeToolCodeProps := schemas.OrderedMap{
-		"code": map[string]interface{}{
+	executeToolCodeProps := schemas.NewOrderedMapFromPairs(
+		schemas.KV("code", map[string]interface{}{
 			"type":        "string",
 			"description": "Python code to execute. The code runs in a Starlark interpreter (Python subset). Tool calls are synchronous - no async/await needed. For loops/conditionals, wrap in a function. Use print() for logging. ALWAYS retry if code fails. Example: def main():\n  items = server.list_items()\n  for item in items:\n    print(item)\nresult = main()",
-		},
-	}
+		}),
+	)
 	return schemas.ChatTool{
 		Type: schemas.ChatToolTypeFunction,
 		Function: &schemas.ChatToolFunction{
@@ -94,7 +94,7 @@ func (s *StarlarkCodeMode) createExecuteToolCodeTool() schemas.ChatTool {
 
 			Parameters: &schemas.ToolFunctionParameters{
 				Type:       "object",
-				Properties: &executeToolCodeProps,
+				Properties: executeToolCodeProps,
 				Required:   []string{"code"},
 			},
 		},

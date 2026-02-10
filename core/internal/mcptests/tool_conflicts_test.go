@@ -228,12 +228,12 @@ func TestMultipleSameNameTools_DifferentImplementations(t *testing.T) {
 			Description: schemas.Ptr("Custom data processor"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"data": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("data", map[string]interface{}{
 						"type":        "string",
 						"description": "Data to process",
-					},
-				},
+					}),
+				),
 				Required: []string{"data"},
 			},
 		},

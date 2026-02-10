@@ -39,8 +39,8 @@ func TestConvertMCPToolToBifrostSchema_EmptyParameters(t *testing.T) {
 	}
 
 	// Verify it's an empty map
-	if bifrostTool.Function.Parameters.Properties != nil && len(*bifrostTool.Function.Parameters.Properties) != 0 {
-		t.Errorf("Expected empty properties map, got %d properties", len(*bifrostTool.Function.Parameters.Properties))
+	if bifrostTool.Function.Parameters.Properties != nil && bifrostTool.Function.Parameters.Properties.Len() != 0 {
+		t.Errorf("Expected empty properties map, got %d properties", bifrostTool.Function.Parameters.Properties.Len())
 	}
 
 	// Verify the type is preserved
@@ -90,8 +90,8 @@ func TestConvertMCPToolToBifrostSchema_WithParameters(t *testing.T) {
 	}
 
 	// Verify the correct number of properties
-	if len(*bifrostTool.Function.Parameters.Properties) != 2 {
-		t.Errorf("Expected 2 properties, got %d", len(*bifrostTool.Function.Parameters.Properties))
+	if bifrostTool.Function.Parameters.Properties.Len() != 2 {
+		t.Errorf("Expected 2 properties, got %d", bifrostTool.Function.Parameters.Properties.Len())
 	}
 
 	// Verify required fields

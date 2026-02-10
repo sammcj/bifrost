@@ -77,21 +77,21 @@ func GetSampleCalculatorTool() schemas.ChatTool {
 			Description: schemas.Ptr("Performs basic arithmetic operations (add, subtract, multiply, divide)"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"operation": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("operation", map[string]interface{}{
 						"type":        "string",
 						"description": "The operation to perform",
 						"enum":        []string{"add", "subtract", "multiply", "divide"},
-					},
-					"x": map[string]interface{}{
+					}),
+					schemas.KV("x", map[string]interface{}{
 						"type":        "number",
 						"description": "First number",
-					},
-					"y": map[string]interface{}{
+					}),
+					schemas.KV("y", map[string]interface{}{
 						"type":        "number",
 						"description": "Second number",
-					},
-				},
+					}),
+				),
 				Required: []string{"operation", "x", "y"},
 			},
 		},
@@ -107,12 +107,12 @@ func GetSampleEchoTool() schemas.ChatTool {
 			Description: schemas.Ptr("Echoes back the input message"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"message": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("message", map[string]interface{}{
 						"type":        "string",
 						"description": "The message to echo",
-					},
-				},
+					}),
+				),
 				Required: []string{"message"},
 			},
 		},
@@ -128,17 +128,17 @@ func GetSampleWeatherTool() schemas.ChatTool {
 			Description: schemas.Ptr("Gets the current weather for a location"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"location": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("location", map[string]interface{}{
 						"type":        "string",
 						"description": "The location to get weather for",
-					},
-					"units": map[string]interface{}{
+					}),
+					schemas.KV("units", map[string]interface{}{
 						"type":        "string",
 						"description": "Temperature units (celsius or fahrenheit)",
 						"enum":        []string{"celsius", "fahrenheit"},
-					},
-				},
+					}),
+				),
 				Required: []string{"location"},
 			},
 		},
@@ -154,12 +154,12 @@ func GetSampleDelayTool() schemas.ChatTool {
 			Description: schemas.Ptr("Delays execution for a specified number of seconds"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"seconds": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("seconds", map[string]interface{}{
 						"type":        "number",
 						"description": "Number of seconds to delay",
-					},
-				},
+					}),
+				),
 				Required: []string{"seconds"},
 			},
 		},
@@ -175,12 +175,12 @@ func GetSampleErrorTool() schemas.ChatTool {
 			Description: schemas.Ptr("Throws an error for testing error handling"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"error_message": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("error_message", map[string]interface{}{
 						"type":        "string",
 						"description": "The error message to throw",
-					},
-				},
+					}),
+				),
 				Required: []string{"error_message"},
 			},
 		},
@@ -320,12 +320,12 @@ func RegisterEchoTool(manager *mcp.MCPManager) error {
 			Description: schemas.Ptr("Echoes back the input message"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"message": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("message", map[string]interface{}{
 						"type":        "string",
 						"description": "The message to echo back",
-					},
-				},
+					}),
+				),
 				Required: []string{"message"},
 			},
 		},
@@ -362,21 +362,21 @@ func RegisterCalculatorTool(manager *mcp.MCPManager) error {
 			Description: schemas.Ptr("Performs basic arithmetic operations"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"operation": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("operation", map[string]interface{}{
 						"type":        "string",
 						"description": "The operation to perform (add, subtract, multiply, divide)",
 						"enum":        []string{"add", "subtract", "multiply", "divide"},
-					},
-					"x": map[string]interface{}{
+					}),
+					schemas.KV("x", map[string]interface{}{
 						"type":        "number",
 						"description": "First number",
-					},
-					"y": map[string]interface{}{
+					}),
+					schemas.KV("y", map[string]interface{}{
 						"type":        "number",
 						"description": "Second number",
-					},
-				},
+					}),
+				),
 				Required: []string{"operation", "x", "y"},
 			},
 		},
@@ -442,17 +442,17 @@ func RegisterWeatherTool(manager *mcp.MCPManager) error {
 			Description: schemas.Ptr("Gets the current weather for a location"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"location": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("location", map[string]interface{}{
 						"type":        "string",
 						"description": "The city and state, e.g. San Francisco, CA",
-					},
-					"units": map[string]interface{}{
+					}),
+					schemas.KV("units", map[string]interface{}{
 						"type":        "string",
 						"description": "The temperature unit (celsius or fahrenheit)",
 						"enum":        []string{"celsius", "fahrenheit"},
-					},
-				},
+					}),
+				),
 				Required: []string{"location"},
 			},
 		},
@@ -500,16 +500,16 @@ func RegisterSearchTool(manager *mcp.MCPManager) error {
 			Description: schemas.Ptr("Searches for information on a topic"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"query": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("query", map[string]interface{}{
 						"type":        "string",
 						"description": "The search query",
-					},
-					"max_results": map[string]interface{}{
+					}),
+					schemas.KV("max_results", map[string]interface{}{
 						"type":        "number",
 						"description": "Maximum number of results to return",
-					},
-				},
+					}),
+				),
 				Required: []string{"query"},
 			},
 		},
@@ -556,12 +556,12 @@ func RegisterGetTemperatureTool(manager *mcp.MCPManager) error {
 			Description: schemas.Ptr("Get the current temperature for a popular city"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"location": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("location", map[string]interface{}{
 						"type":        "string",
 						"description": "The name of the city (e.g., 'New York', 'London', 'Tokyo')",
-					},
-				},
+					}),
+				),
 				Required: []string{"location"},
 			},
 		},
@@ -605,12 +605,12 @@ func RegisterGetTimeTool(manager *mcp.MCPManager) error {
 			Description: schemas.Ptr("Gets the current date and time"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"timezone": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("timezone", map[string]interface{}{
 						"type":        "string",
 						"description": "The timezone (e.g., UTC, America/New_York)",
-					},
-				},
+					}),
+				),
 			},
 		},
 	}
@@ -649,12 +649,12 @@ func RegisterReadFileTool(manager *mcp.MCPManager) error {
 			Description: schemas.Ptr("Reads the contents of a file"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"path": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("path", map[string]interface{}{
 						"type":        "string",
 						"description": "The file path to read",
-					},
-				},
+					}),
+				),
 				Required: []string{"path"},
 			},
 		},
@@ -696,12 +696,12 @@ func RegisterDelayTool(manager *mcp.MCPManager) error {
 			Description: schemas.Ptr("Delays execution for specified seconds"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"seconds": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("seconds", map[string]interface{}{
 						"type":        "number",
 						"description": "Number of seconds to delay",
-					},
-				},
+					}),
+				),
 				Required: []string{"seconds"},
 			},
 		},
@@ -744,12 +744,12 @@ func RegisterThrowErrorTool(manager *mcp.MCPManager) error {
 			Description: schemas.Ptr("Throws an error with specified message"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"error_message": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("error_message", map[string]interface{}{
 						"type":        "string",
 						"description": "The error message to throw",
-					},
-				},
+					}),
+				),
 				Required: []string{"error_message"},
 			},
 		},
