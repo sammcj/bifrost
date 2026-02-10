@@ -267,12 +267,14 @@ func TestHealthCheckMultipleClientsMixedStates(t *testing.T) {
 	// Create one valid and one invalid client
 	validConfig := GetSampleHTTPClientConfig(config.HTTPServerURL)
 	validConfig.ID = "valid-client"
+	validConfig.Name = "ValidHTTPServer"
 	if len(config.HTTPHeaders) > 0 {
 		validConfig.Headers = config.HTTPHeaders
 	}
 
 	invalidConfig := GetSampleHTTPClientConfig("http://invalid-url-test:9999")
 	invalidConfig.ID = "invalid-client"
+	invalidConfig.Name = "InvalidHTTPServer"
 
 	manager := setupMCPManager(t, validConfig, invalidConfig)
 

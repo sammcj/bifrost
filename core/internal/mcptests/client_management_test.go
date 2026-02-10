@@ -88,9 +88,11 @@ func TestRemoveClientMultiple(t *testing.T) {
 	// Add multiple clients
 	httpConfig1 := GetSampleHTTPClientConfig(config.HTTPServerURL)
 	httpConfig1.ID = "client-1"
+	httpConfig1.Name = "TestHTTPServer1"
 
 	httpConfig2 := GetSampleHTTPClientConfig(config.HTTPServerURL)
 	httpConfig2.ID = "client-2"
+	httpConfig2.Name = "TestHTTPServer2"
 
 	manager := setupMCPManager(t, httpConfig1, httpConfig2)
 
@@ -427,6 +429,7 @@ func TestConcurrentClientOperations(t *testing.T) {
 		go func(id int) {
 			clientConfig := GetSampleHTTPClientConfig(config.HTTPServerURL)
 			clientConfig.ID = string(rune('a'+id)) + "-concurrent-client"
+			clientConfig.Name = "TestHTTPServer" + string(rune('a'+id))
 
 			err := manager.AddClient(&clientConfig)
 			if err != nil {
