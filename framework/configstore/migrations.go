@@ -2,6 +2,7 @@ package configstore
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -18,8 +19,69 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+const (
+	// migrationAdvisoryLockKey is used for PostgreSQL advisory locks
+	// to serialize migrations across cluster nodes
+	migrationAdvisoryLockKey = 1000001
+)
+
+// migrationLock holds a dedicated connection for the advisory lock.
+// This ensures the lock is held on the same connection throughout migrations,
+// preventing race conditions caused by GORM's connection pooling.
+type migrationLock struct {
+	conn *sql.Conn
+}
+
+// acquireMigrationLock gets a dedicated connection and acquires an advisory lock.
+// For non-PostgreSQL databases, returns a no-op lock.
+func acquireMigrationLock(ctx context.Context, db *gorm.DB) (*migrationLock, error) {
+	if db.Dialector.Name() != "postgres" {
+		return &migrationLock{}, nil
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sql.DB: %w", err)
+	}
+
+	// Get a dedicated connection (not returned to pool until Close())
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dedicated connection: %w", err)
+	}
+
+	// Acquire advisory lock on this dedicated connection.
+	// This will BLOCK if another node holds the lock.
+	_, err = conn.ExecContext(ctx, "SELECT pg_advisory_lock($1)", migrationAdvisoryLockKey)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to acquire migration advisory lock: %w", err)
+	}
+
+	return &migrationLock{conn: conn}, nil
+}
+
+// release unlocks and closes the dedicated connection
+func (l *migrationLock) release(ctx context.Context) {
+	if l.conn == nil {
+		return
+	}
+	// Release lock on the SAME connection that acquired it
+	_, _ = l.conn.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", migrationAdvisoryLockKey)
+	l.conn.Close()
+}
+
 // Migrate performs the necessary database migrations.
 func triggerMigrations(ctx context.Context, db *gorm.DB) error {
+	// Acquire advisory lock to serialize migrations across cluster nodes.
+	// This prevents race conditions when multiple nodes start simultaneously
+	// and try to create the same tables in parallel.
+	lock, err := acquireMigrationLock(ctx, db)
+	if err != nil {
+		return err
+	}
+	defer lock.release(ctx)
+
 	if err := migrationInit(ctx, db); err != nil {
 		return err
 	}
