@@ -62,15 +62,10 @@ export class LogsPage extends BasePage {
 
     // Table elements - exclude the "Listening for logs" row which is not a data row
     this.tableRows = this.logsTable.locator('tbody tr').filter({ hasNot: page.locator('text=Listening for logs') }).filter({ hasNot: page.locator('text=Live updates paused') }).filter({ hasNot: page.locator('text=Not connected') }).filter({ hasNot: page.locator('text=No results found') })
-    this.paginationControls = page.locator('[data-testid="pagination"]').or(
-      page.locator('text=/\\d+-\\d+ of \\d+/')
-    )
-    this.nextPageBtn = page.locator('[data-testid="next-page"]').or(
-      page.locator('button').filter({ has: page.locator('svg.lucide-chevron-right') })
-    )
-    this.prevPageBtn = page.locator('[data-testid="prev-page"]').or(
-      page.locator('button').filter({ has: page.locator('svg.lucide-chevron-left') })
-    )
+    // LLM logs pagination (data-testid added to logsTable.tsx)
+    this.paginationControls = page.getByTestId('pagination')
+    this.nextPageBtn = page.getByTestId('next-page')
+    this.prevPageBtn = page.getByTestId('prev-page')
 
     // Log detail sheet - Sheet component with role="dialog"
     this.logDetailSheet = page.locator('[role="dialog"]')
@@ -85,6 +80,20 @@ export class LogsPage extends BasePage {
     await waitForNetworkIdle(this.page)
     // Wait for table or empty state to be visible
     await this.logsTable.or(this.page.locator('text=/No logs found|No results found/i')).waitFor({ state: 'visible', timeout: 10000 })
+  }
+
+  /**
+   * Navigate to the logs page with a small page size so pagination can be tested with fewer total logs.
+   */
+  async gotoWithSmallPageSize(limit = 5): Promise<void> {
+    await this.page.goto(`/workspace/logs?limit=${limit}&offset=0`)
+    await waitForNetworkIdle(this.page)
+    await this.logsTable.or(this.page.locator('text=/No logs found|No results found/i')).waitFor({ state: 'visible', timeout: 10000 })
+    // The useTablePageSize hook may override the limit from URL, causing a re-render.
+    // Wait for pagination to become visible, retrying if the dynamic page size effect causes a brief re-render.
+    await this.page.waitForTimeout(1500) // Allow useTablePageSize effect to settle
+    await waitForNetworkIdle(this.page)
+    await this.paginationControls.waitFor({ state: 'visible', timeout: 10000 })
   }
 
   /**
@@ -131,13 +140,13 @@ export class LogsPage extends BasePage {
   }
 
   /**
-   * Filter by status
+   * Filter by status. Opens the Filters popover and toggles the given status option (Status group uses lowercase: success, error, etc.).
    */
   async filterByStatus(status: 'success' | 'error' | 'pending'): Promise<void> {
     await this.dismissToasts()
-    await this.statusFilter.first().waitFor({ state: 'visible' })
-    await this.statusFilter.first().click()
-    await this.page.waitForSelector('[role="listbox"]', { timeout: 5000 }).catch(() => {})
+    await this.filtersButton.first().waitFor({ state: 'visible' })
+    await this.filtersButton.first().click()
+    await this.page.waitForSelector('[role="listbox"], [data-slot="command-list"]', { timeout: 5000 }).catch(() => {})
 
     const option = this.page.getByRole('option', { name: new RegExp(status, 'i') })
     if (await option.count() > 0) {
@@ -168,12 +177,14 @@ export class LogsPage extends BasePage {
   }
 
   /**
-   * Select time period
+   * Select time period. Opens the date range popover, then clicks the predefined period button.
    */
   async selectTimePeriod(period: '1h' | '6h' | '24h' | '7d' | '30d'): Promise<void> {
-    await this.dateRangePicker.first().click()
-    await this.page.waitForSelector('[role="listbox"], [role="menu"]', { timeout: 5000 }).catch(() => {})
-
+    await this.dismissToasts()
+    const trigger = this.dateRangePicker.first()
+    await trigger.waitFor({ state: 'visible' })
+    // Open the time period popover by clicking the date range trigger
+    await trigger.click()
     const periodLabels: Record<string, string> = {
       '1h': 'Last hour',
       '6h': 'Last 6 hours',
@@ -181,14 +192,12 @@ export class LogsPage extends BasePage {
       '7d': 'Last 7 days',
       '30d': 'Last 30 days',
     }
-
     const periodButton = this.page.getByRole('button', { name: periodLabels[period] })
-    if (await periodButton.count() > 0) {
-      await periodButton.click()
-    } else {
-      await this.page.keyboard.press('Escape')
-    }
-
+    // Wait for popover to open (predefined period button becomes visible)
+    await periodButton.waitFor({ state: 'visible', timeout: 5000 })
+    await periodButton.click()
+    // Wait for popover to close and requests to settle
+    await periodButton.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
     await waitForNetworkIdle(this.page)
   }
 
@@ -245,25 +254,59 @@ export class LogsPage extends BasePage {
   }
 
   /**
-   * Navigate to next page
+   * Get current 1-based page number from URL (offset/limit).
    */
-  async goToNextPage(): Promise<void> {
-    const isEnabled = await this.nextPageBtn.isEnabled().catch(() => false)
-    if (isEnabled) {
-      await this.nextPageBtn.click()
-      await waitForNetworkIdle(this.page)
-    }
+  getCurrentPageNumber(): number {
+    const url = this.page.url()
+    const params = new URL(url).searchParams
+    const offset = Number.parseInt(params.get('offset') ?? '0', 10)
+    const limit = Number.parseInt(params.get('limit') ?? '25', 10) || 25
+    return Math.floor(offset / limit) + 1
   }
 
   /**
-   * Navigate to previous page
+   * Navigate to next page (waits for URL to update)
+   */
+  async goToNextPage(): Promise<void> {
+    const btn = this.nextPageBtn.first()
+    const isEnabled = await btn.isEnabled().catch(() => false)
+    if (!isEnabled) return
+    await btn.scrollIntoViewIfNeeded()
+    await btn.waitFor({ state: 'visible' })
+    const limit = Number.parseInt(new URL(this.page.url()).searchParams.get('limit') ?? '25', 10) || 25
+    const currentOffset = Number.parseInt(new URL(this.page.url()).searchParams.get('offset') ?? '0', 10)
+    const expectedOffset = currentOffset + limit
+    await btn.click()
+    await this.page.waitForURL(
+      (url) => new URL(url).searchParams.get('offset') === String(expectedOffset),
+      { timeout: 10000 }
+    )
+    await waitForNetworkIdle(this.page)
+  }
+
+  /**
+   * Navigate to previous page (waits for URL to update)
    */
   async goToPreviousPage(): Promise<void> {
-    const isEnabled = await this.prevPageBtn.isEnabled().catch(() => false)
-    if (isEnabled) {
-      await this.prevPageBtn.click()
-      await waitForNetworkIdle(this.page)
-    }
+    const btn = this.prevPageBtn.first()
+    const isEnabled = await btn.isEnabled().catch(() => false)
+    if (!isEnabled) return
+    await btn.scrollIntoViewIfNeeded()
+    await btn.waitFor({ state: 'visible' })
+    const limit = Number.parseInt(new URL(this.page.url()).searchParams.get('limit') ?? '25', 10) || 25
+    const currentOffset = Number.parseInt(new URL(this.page.url()).searchParams.get('offset') ?? '0', 10)
+    const expectedOffset = Math.max(0, currentOffset - limit)
+    await btn.click()
+    await this.page.waitForURL(
+      (url) => {
+        const offset = new URL(url).searchParams.get('offset')
+        // When going back to page 1, offset param may be removed (null) or set to "0"
+        if (expectedOffset === 0) return offset === null || offset === '0'
+        return offset === String(expectedOffset)
+      },
+      { timeout: 10000 }
+    )
+    await waitForNetworkIdle(this.page)
   }
 
   /**
@@ -312,12 +355,13 @@ export class LogsPage extends BasePage {
   }
 
   /**
-   * Check if empty state is shown
+   * Check if empty state is shown (no logs, or no results for current filters)
    */
   async isEmptyStateVisible(): Promise<boolean> {
-    const emptyState = this.page.locator('text=/No logs found/i').or(
-      this.page.locator('text=/No data/i')
-    )
+    const emptyState = this.page
+      .locator('text=/No logs found/i')
+      .or(this.page.locator('text=/No data/i'))
+      .or(this.page.locator('text=/No results found/i'))
     return await emptyState.isVisible().catch(() => false)
   }
 

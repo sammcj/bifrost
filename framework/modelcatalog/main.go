@@ -475,30 +475,85 @@ func (mc *ModelCatalog) IsSameModel(model1, model2 string) bool {
 	return mc.GetBaseModelName(model1) == mc.GetBaseModelName(model2)
 }
 
-// AddModelDataToPool adds model data to the model pool.
-func (mc *ModelCatalog) AddModelDataToPool(modelData *schemas.BifrostListModelsResponse) {
-	if modelData == nil {
-		return
-	}
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-
-	for _, model := range modelData.Data {
-		provider, model := schemas.ParseModelString(model.ID, "")
-		if provider == "" {
-			continue
-		}
-		provider = schemas.ModelProvider(provider)
-		mc.modelPool[provider] = append(mc.modelPool[provider], model)
-	}
-}
-
 // DeleteModelDataForProvider deletes all model data from the pool for a given provider
 func (mc *ModelCatalog) DeleteModelDataForProvider(provider schemas.ModelProvider) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
 	delete(mc.modelPool, provider)
+}
+
+// UpsertModelDataForProvider upserts model data for a given provider
+func (mc *ModelCatalog) UpsertModelDataForProvider(provider schemas.ModelProvider, modelData *schemas.BifrostListModelsResponse, allowedModels []schemas.Model) {
+	if modelData == nil {
+		return
+	}
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	// Populating models from pricing data for the given provider
+	// Provider models map
+	providerModels := []string{}
+	// Iterate through all pricing data to collect models per provider
+	for _, pricing := range mc.pricingData {
+		// Normalize provider before adding to model pool
+		normalizedProvider := schemas.ModelProvider(normalizeProvider(pricing.Provider))
+		// We will only add models for the given provider
+		if normalizedProvider != provider {
+			continue
+		}
+		// Add model to the provider's model set (using map for deduplication)
+		if slices.Contains(providerModels, pricing.Model) {
+			continue
+		}
+		providerModels = append(providerModels, pricing.Model)
+		// Build base model index from pre-computed base_model field
+		if pricing.BaseModel != "" {
+			mc.baseModelIndex[pricing.Model] = pricing.BaseModel
+		}
+	}
+	// If modelData is empty, then we allow all models
+	if len(modelData.Data) == 0 && len(allowedModels) == 0 {
+		mc.modelPool[provider] = providerModels
+		return
+	}	
+	// Here we make sure that we still keep the backup for model catalog intact
+	// So we start with a existing model pool and add the new models from incoming data
+	finalModelList := make([]string, 0)
+	seenModels := make(map[string]bool)
+	// Case where list models failed but we have allowed models from keys
+	if len(modelData.Data) == 0 && len(allowedModels) > 0 {
+		for _, allowedModel := range allowedModels {
+			parsedProvider, parsedModel := schemas.ParseModelString(allowedModel.ID, "")
+			if parsedProvider != provider {
+				continue
+			}
+			if !seenModels[parsedModel] {
+				seenModels[parsedModel] = true
+				finalModelList = append(finalModelList, parsedModel)
+			}
+		}
+	}
+	for _, model := range modelData.Data {
+		parsedProvider, parsedModel := schemas.ParseModelString(model.ID, "")
+		if parsedProvider != provider {
+			continue
+		}
+		if !seenModels[parsedModel] {
+			seenModels[parsedModel] = true
+			finalModelList = append(finalModelList, parsedModel)
+		}
+	}
+	// If there are no allowed models, we add all models from the provider models
+	if len(allowedModels) == 0 {
+		for _, model := range providerModels {
+			if !seenModels[model] {
+				seenModels[model] = true
+				finalModelList = append(finalModelList, model)
+			}
+		}
+	}
+	mc.modelPool[provider] = finalModelList
 }
 
 // RefineModelForProvider refines the model for a given provider by performing a lookup

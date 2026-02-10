@@ -482,10 +482,31 @@ func (s *BifrostHTTPServer) ReloadProvider(ctx context.Context, provider schemas
 		Provider: provider,
 	})
 	if bifrostErr != nil {
-		return nil, fmt.Errorf("failed to update provider model catalog: failed to list all models: %s", bifrost.GetErrorMessage(bifrostErr))
+		logger.Warn("failed to update provider model catalog: failed to list all models: %s. We are falling back onto the static datasheet", bifrost.GetErrorMessage(bifrostErr))
+		// In case of error, we return an empty list of models, and fallback onto the static datasheet
+		allModels = &schemas.BifrostListModelsResponse{
+			Data: make([]schemas.Model, 0),
+		}
 	}
-	s.Config.ModelCatalog.DeleteModelDataForProvider(provider)
-	s.Config.ModelCatalog.AddModelDataToPool(allModels)
+	// Getting allowed models from all provider keys
+	providerKeys, err := s.Config.ConfigStore.GetKeysByProvider(ctx, string(provider))
+	if err != nil {
+		return nil, fmt.Errorf("failed to update provider model catalog: failed to get keys by provider: %s", err)
+	}
+	modelsInKeys := make([]schemas.Model, 0)
+	for _, key := range providerKeys {
+		if len(key.Models) == 0 {
+			// Clean up
+			modelsInKeys = make([]schemas.Model, 0)
+			break
+		}
+		for _, model := range key.Models {
+			modelsInKeys = append(modelsInKeys, schemas.Model{
+				ID: string(provider) + "/" + model,
+			})
+		}
+	}
+	s.Config.ModelCatalog.UpsertModelDataForProvider(provider, allModels, modelsInKeys)
 	return updatedProvider, nil
 }
 
@@ -1073,15 +1094,24 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 	logger.Info("bifrost client initialized")
 	// List all models and add to model catalog
 	logger.Info("listing all models and adding to model catalog")
-	modelData, listModelsErr := s.Client.ListAllModels(s.Ctx, nil)
-	if listModelsErr != nil {
-		if listModelsErr.Error != nil {
-			logger.Error("failed to list all models: %s", listModelsErr.Error.Message)
-		} else {
-			logger.Error("failed to list all models: %v", listModelsErr)
+	if s.Config.ModelCatalog != nil {
+		// Fetching keys for all providers and allowed models first
+		// Based on allowed models we will set the data in the model catalog
+		for provider, providerConfig := range s.Config.Providers {
+			modelData, listModelsErr := s.Client.ListModelsRequest(s.Ctx, &schemas.BifrostListModelsRequest{
+				Provider: provider,
+			})
+			if listModelsErr != nil {
+				logger.Error("failed to list models for provider %s: %v: falling back onto the static datasheet", provider, listModelsErr)
+			}
+			allowedModels := make([]schemas.Model, 0)
+			for _, key := range providerConfig.Keys {
+				allowedModels = append(allowedModels, schemas.Model{
+					ID: string(provider) + "/" + key.ID,
+				})
+			}
+			s.Config.ModelCatalog.UpsertModelDataForProvider(provider, modelData, allowedModels)
 		}
-	} else if s.Config.ModelCatalog != nil {
-		s.Config.ModelCatalog.AddModelDataToPool(modelData)
 	}
 	// Add pricing data to the client
 	logger.Info("models added to catalog")

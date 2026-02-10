@@ -63,7 +63,7 @@ export default function ProxyView() {
 				<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
 					<div className="flex items-center justify-between">
 						<div>
-							<h2 className="text-2xl font-semibold tracking-tight">Proxy Settings</h2>
+							<h2 className="text-lg font-semibold tracking-tight">Proxy Settings</h2>
 							<p className="text-muted-foreground text-sm">Configure global proxy settings for outbound requests.</p>
 						</div>
 						<Tooltip>

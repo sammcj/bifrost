@@ -850,16 +850,16 @@ export default function AppSidebar() {
 			} else if (e.key === "ArrowUp") {
 				e.preventDefault();
 				setFocusedIndex((prev) => Math.max(prev - 1, 0));
-		} else if (e.key === "Enter") {
-			e.preventDefault();
-			const target = navigableItems[focusedIndex];
-			if (target) {
-				const url = target.queryParam ? `${target.url}?tab=${target.queryParam}` : target.url;
-				if (target.isExternal || e.metaKey || e.ctrlKey) {
-					window.open(url, "_blank", "noopener,noreferrer");
-				} else {
-					router.push(url);
-				}
+			} else if (e.key === "Enter") {
+				e.preventDefault();
+				const target = navigableItems[focusedIndex];
+				if (target) {
+					const url = target.queryParam ? `${target.url}?tab=${target.queryParam}` : target.url;
+					if (target.isExternal || e.metaKey || e.ctrlKey) {
+						window.open(url, "_blank", "noopener,noreferrer");
+					} else {
+						router.push(url);
+					}
 					setSearchQuery("");
 					setFocusedIndex(-1);
 					searchInputRef.current?.blur();
@@ -1041,11 +1041,11 @@ export default function AppSidebar() {
 							setFocusedIndex(-1);
 						}}
 						onKeyDown={handleSearchKeyDown}
-						className="border-input text-foreground placeholder:text-shadow-muted-foreground focus:ring-ring h-8 w-full rounded-sm border bg-transparent pr-14 pl-8 text-sm outline-none focus:ring-1"
+						className="border-input text-foreground placeholder:text-shadow-muted-foreground focus:ring-ring h-8 w-full rounded-sm border bg-transparent pr-14 pl-8 text-sm outline-none focus:bg-white"
 					/>
 					<kbd className="text-muted-foreground pointer-events-none absolute top-1/2 right-2 flex -translate-y-1/2 gap-0.5 text-[10px]">
-						<span className="border-border bg-muted rounded px-1 py-0.5 font-mono shadow-sm">⌘</span>
-						<span className="border-border bg-muted rounded px-1 py-0.5 font-mono shadow-sm">K</span>
+						<span className="border-border bg-muted rounded-sm px-1 font-mono shadow-sm">⌘</span>
+						<span className="border-border bg-muted rounded-sm px-1 font-mono shadow-sm">K</span>
 					</kbd>
 				</div>
 			</div>

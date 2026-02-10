@@ -274,22 +274,14 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 
 	shouldReloadMCPToolManagerConfig := false
 
-	if payload.ClientConfig.MCPAgentDepth != currentConfig.MCPAgentDepth {
-		if payload.ClientConfig.MCPAgentDepth <= 0 {
-			logger.Warn("mcp_agent_depth must be greater than 0")
-			SendError(ctx, fasthttp.StatusBadRequest, "mcp_agent_depth must be greater than 0")
-			return
-		}
+	// Only process MCPAgentDepth if explicitly provided (> 0) and different from current
+	if payload.ClientConfig.MCPAgentDepth > 0 && payload.ClientConfig.MCPAgentDepth != currentConfig.MCPAgentDepth {
 		updatedConfig.MCPAgentDepth = payload.ClientConfig.MCPAgentDepth
 		shouldReloadMCPToolManagerConfig = true
 	}
 
-	if payload.ClientConfig.MCPToolExecutionTimeout != currentConfig.MCPToolExecutionTimeout {
-		if payload.ClientConfig.MCPToolExecutionTimeout <= 0 {
-			logger.Warn("mcp_tool_execution_timeout must be greater than 0")
-			SendError(ctx, fasthttp.StatusBadRequest, "mcp_tool_execution_timeout must be greater than 0")
-			return
-		}
+	// Only process MCPToolExecutionTimeout if explicitly provided (> 0) and different from current
+	if payload.ClientConfig.MCPToolExecutionTimeout > 0 && payload.ClientConfig.MCPToolExecutionTimeout != currentConfig.MCPToolExecutionTimeout {
 		updatedConfig.MCPToolExecutionTimeout = payload.ClientConfig.MCPToolExecutionTimeout
 		shouldReloadMCPToolManagerConfig = true
 	}
@@ -299,7 +291,8 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		shouldReloadMCPToolManagerConfig = true
 	}
 
-	if shouldReloadMCPToolManagerConfig {
+	// Only reload MCP tool manager config if MCP is configured
+	if shouldReloadMCPToolManagerConfig && h.store.MCPConfig != nil {
 		if err := h.configManager.UpdateMCPToolManagerConfig(ctx, updatedConfig.MCPAgentDepth, updatedConfig.MCPToolExecutionTimeout, updatedConfig.MCPCodeModeBindingLevel); err != nil {
 			logger.Warn(fmt.Sprintf("failed to update mcp tool manager config: %v", err))
 			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("failed to update mcp tool manager config: %v", err))
@@ -322,10 +315,13 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		restartReasons = append(restartReasons, "Allowed headers")
 	}
 
-	if payload.ClientConfig.InitialPoolSize != currentConfig.InitialPoolSize {
-		restartReasons = append(restartReasons, "Initial pool size")
+	// Only update InitialPoolSize if explicitly provided (> 0) to avoid clearing stored value
+	if payload.ClientConfig.InitialPoolSize > 0 {
+		if payload.ClientConfig.InitialPoolSize != currentConfig.InitialPoolSize {
+			restartReasons = append(restartReasons, "Initial pool size")
+		}
+		updatedConfig.InitialPoolSize = payload.ClientConfig.InitialPoolSize
 	}
-	updatedConfig.InitialPoolSize = payload.ClientConfig.InitialPoolSize
 
 	if payload.ClientConfig.EnableLogging != currentConfig.EnableLogging {
 		restartReasons = append(restartReasons, "Logging enabled")
@@ -350,10 +346,13 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 	}
 	updatedConfig.AllowDirectKeys = payload.ClientConfig.AllowDirectKeys
 
-	if payload.ClientConfig.MaxRequestBodySizeMB != currentConfig.MaxRequestBodySizeMB {
-		restartReasons = append(restartReasons, "Max request body size")
+	// Only update MaxRequestBodySizeMB if explicitly provided (> 0) to avoid clearing stored value
+	if payload.ClientConfig.MaxRequestBodySizeMB > 0 {
+		if payload.ClientConfig.MaxRequestBodySizeMB != currentConfig.MaxRequestBodySizeMB {
+			restartReasons = append(restartReasons, "Max request body size")
+		}
+		updatedConfig.MaxRequestBodySizeMB = payload.ClientConfig.MaxRequestBodySizeMB
 	}
-	updatedConfig.MaxRequestBodySizeMB = payload.ClientConfig.MaxRequestBodySizeMB
 
 	// Handle LiteLLM compat plugin toggle
 	if payload.ClientConfig.EnableLiteLLMFallbacks != currentConfig.EnableLiteLLMFallbacks {
@@ -371,8 +370,13 @@ func (h *ConfigHandler) updateConfig(ctx *fasthttp.RequestCtx) {
 		}
 	}
 	updatedConfig.EnableLiteLLMFallbacks = payload.ClientConfig.EnableLiteLLMFallbacks
-	updatedConfig.MCPAgentDepth = payload.ClientConfig.MCPAgentDepth
-	updatedConfig.MCPToolExecutionTimeout = payload.ClientConfig.MCPToolExecutionTimeout
+	// Only update MCP fields if explicitly provided (non-zero) to avoid clearing stored values
+	if payload.ClientConfig.MCPAgentDepth > 0 {
+		updatedConfig.MCPAgentDepth = payload.ClientConfig.MCPAgentDepth
+	}
+	if payload.ClientConfig.MCPToolExecutionTimeout > 0 {
+		updatedConfig.MCPToolExecutionTimeout = payload.ClientConfig.MCPToolExecutionTimeout
+	}
 	// Only update MCPCodeModeBindingLevel if payload is non-empty to avoid clearing stored value
 	if payload.ClientConfig.MCPCodeModeBindingLevel != "" {
 		updatedConfig.MCPCodeModeBindingLevel = payload.ClientConfig.MCPCodeModeBindingLevel

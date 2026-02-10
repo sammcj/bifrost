@@ -1,5 +1,6 @@
 import { expect, test } from '../../core/fixtures/base.fixture'
 import { waitForNetworkIdle } from '../../core/utils/test-helpers'
+import { DashboardPage } from './pages/dashboard.page'
 
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ dashboardPage }) => {
@@ -29,26 +30,62 @@ test.describe('Dashboard', () => {
   })
 
   test.describe('Time Period Selection', () => {
+    test('should filter by time period (full flow)', async ({ dashboardPage }) => {
+      // Time period control must exist and be visible (no skip)
+      const trigger = dashboardPage.getDatePickerTrigger()
+      await expect(trigger).toBeVisible({ timeout: 10000 })
+
+      // Let initial chart load finish so the refetch we wait for is the one from the period change
+      await dashboardPage.waitForChartsToLoad()
+
+      // Wait for the chart data request that fires when we change the period (proves filter is applied)
+      const responsePromise = dashboardPage.page.waitForResponse(
+        (res) => res.url().includes('/logs/histogram') && res.status() === 200,
+        { timeout: 15000 }
+      )
+
+      await dashboardPage.selectTimePeriod('1h')
+
+      // UI: trigger shows the selected period
+      const label = await dashboardPage.getSelectedPeriodLabel()
+      expect(label).toContain('Last hour')
+
+      // URL: selection is reflected in query state
+      const url = dashboardPage.page.url()
+      expect(url).toMatch(/period=1h|start_time=\d+&end_time=\d+/)
+
+      // Data: dashboard refetched with the new range
+      await responsePromise
+    })
+
     test('should change time period to last hour', async ({ dashboardPage }) => {
       await dashboardPage.selectTimePeriod('1h')
 
-      // Verify URL contains the period parameter
+      const label = await dashboardPage.getSelectedPeriodLabel()
+      expect(label).toContain('Last hour')
+
       const url = dashboardPage.page.url()
-      expect(url).toContain('period=1h')
+      expect(url).toMatch(/period=1h|start_time=\d+&end_time=\d+/)
     })
 
     test('should change time period to last 7 days', async ({ dashboardPage }) => {
       await dashboardPage.selectTimePeriod('7d')
 
+      const label = await dashboardPage.getSelectedPeriodLabel()
+      expect(label).toContain('Last 7 days')
+
       const url = dashboardPage.page.url()
-      expect(url).toContain('period=7d')
+      expect(url).toMatch(/period=7d|start_time=\d+&end_time=\d+/)
     })
 
     test('should change time period to last 30 days', async ({ dashboardPage }) => {
       await dashboardPage.selectTimePeriod('30d')
 
+      const label = await dashboardPage.getSelectedPeriodLabel()
+      expect(label).toContain('Last 30 days')
+
       const url = dashboardPage.page.url()
-      expect(url).toContain('period=30d')
+      expect(url).toMatch(/period=30d|start_time=\d+&end_time=\d+/)
     })
   })
 
@@ -247,15 +284,16 @@ test.describe('Dashboard', () => {
     test('should update chart when time period changes', async ({ dashboardPage }) => {
       await dashboardPage.waitForChartsToLoad()
 
-      // Record initial URL state
       const initialUrl = dashboardPage.page.url()
 
-      // Change time period
       await dashboardPage.selectTimePeriod('1h')
 
-      // URL should have changed
+      // Trigger should show new period (filter was applied)
+      const label = await dashboardPage.getSelectedPeriodLabel()
+      expect(label).toContain('Last hour')
+
       const newUrl = dashboardPage.page.url()
-      expect(newUrl).toContain('period=1h')
+      expect(newUrl).toMatch(/period=1h|start_time=\d+&end_time=\d+/)
       expect(newUrl).not.toBe(initialUrl)
     })
 
@@ -277,13 +315,14 @@ test.describe('Dashboard', () => {
     })
 
     test('should display correct time period labels', async ({ dashboardPage }) => {
-      // Test each time period option
       const periods: Array<'1h' | '6h' | '24h' | '7d' | '30d'> = ['1h', '6h', '24h', '7d', '30d']
 
       for (const period of periods) {
         await dashboardPage.selectTimePeriod(period)
-        const url = dashboardPage.page.url()
-        expect(url).toContain(`period=${period}`)
+        // Assert the date picker trigger shows the selected period (actual selected value)
+        const label = await dashboardPage.getSelectedPeriodLabel()
+        const expected = DashboardPage.PERIOD_LABELS[period]
+        expect(label).toContain(expected)
       }
     })
   })

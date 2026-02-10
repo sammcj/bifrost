@@ -161,13 +161,20 @@ export function MCPLogsDataTable({
 			</div>
 
 			{/* Pagination Footer */}
-			<div className="flex items-center justify-between text-xs">
+			<div className="flex items-center justify-between text-xs" data-testid="pagination">
 				<div className="text-muted-foreground flex items-center gap-2">
 					{startItemDisplay.toLocaleString()}-{endItemDisplay.toLocaleString()} of {totalItems.toLocaleString()} entries
 				</div>
 
 				<div className="flex items-center gap-2">
-					<Button variant="ghost" size="sm" onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}>
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={() => goToPage(currentPage - 1)}
+						disabled={currentPage <= 1}
+						data-testid="prev-page"
+						aria-label="Previous page"
+					>
 						<ChevronLeft className="size-3" />
 					</Button>
 
@@ -182,6 +189,8 @@ export function MCPLogsDataTable({
 						size="sm"
 						onClick={() => goToPage(currentPage + 1)}
 						disabled={totalPages === 0 || currentPage >= totalPages}
+						data-testid="next-page"
+						aria-label="Next page"
 					>
 						<ChevronRight className="size-3" />
 					</Button>

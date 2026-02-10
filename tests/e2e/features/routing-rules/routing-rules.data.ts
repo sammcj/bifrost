@@ -9,9 +9,11 @@ let priorityCounter = 0
  */
 function getUniquePriority(): number {
   priorityCounter++
-  // Use modulo to keep within valid range (0-1000)
-  // Start at 100 to avoid conflicts with low-priority rules
-  return (100 + (Date.now() % 800) + priorityCounter) % 1000
+  // Per-process and time spread so parallel workers get different priorities (backend rejects duplicate).
+  // Use high-resolution time to minimise collisions across test runs.
+  const pid = typeof process !== 'undefined' && process.pid ? process.pid : 0
+  const now = Date.now()
+  return 1 + (pid * 7 + now % 100000 + priorityCounter * 131 + Math.floor(Math.random() * 500)) % 999
 }
 
 /**

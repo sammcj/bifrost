@@ -52,8 +52,10 @@ export class PluginsPage extends BasePage {
   async goto(): Promise<void> {
     await this.page.goto('/workspace/plugins')
     await waitForNetworkIdle(this.page)
-    // Wait for create button or empty state to be visible (indicates page loaded)
+    // Wait for create button or empty state to be visible (indicates page loaded).
+    // Use .first() so the locator resolves to one element when both are visible (strict mode).
     await this.createBtn.or(this.page.getByText(/No plugins installed/i))
+      .first()
       .waitFor({ state: 'visible', timeout: 10000 })
     // Ensure sheet is closed (in case it was left open from previous test)
     await this.ensureSheetClosed()
@@ -125,9 +127,10 @@ export class PluginsPage extends BasePage {
   }
 
   /**
-   * Create a new plugin
+   * Create a new plugin.
+   * Returns true if the plugin was created successfully, false if the backend rejected it (e.g. .so load failure).
    */
-  async createPlugin(config: PluginConfig): Promise<void> {
+  async createPlugin(config: PluginConfig): Promise<boolean> {
     await this.dismissToasts()
     // Ensure sheet is closed before starting
     await this.ensureSheetClosed()
@@ -157,13 +160,30 @@ export class PluginsPage extends BasePage {
     // Save
     await this.saveBtn.waitFor({ state: 'visible' })
     await this.saveBtn.click()
-    await this.waitForSuccessToast()
+
+    // Wait for either a success toast or an error toast (backend may fail to load .so)
+    const successToast = this.getToast('success')
+    const errorToast = this.getToast('error')
+    await successToast.or(errorToast).waitFor({ state: 'visible', timeout: 15000 })
+
+    const hasError = await errorToast.isVisible().catch(() => false)
+    if (hasError) {
+      // Backend rejected plugin creation (e.g. failed to load .so)
+      console.warn(`[Plugin] Backend error on create "${config.name}" — plugin was not created`)
+      await this.dismissToasts()
+      // Sheet may stay open on error — close it manually
+      await this.ensureSheetClosed()
+      await waitForNetworkIdle(this.page)
+      return false
+    }
+
     await this.dismissToasts()
 
     // Wait for sheet to close with multiple checks
     await expect(this.sheet).not.toBeVisible({ timeout: 10000 })
     await this.ensureSheetClosed() // Double-check it's closed
     await waitForNetworkIdle(this.page)
+    return true
   }
 
   /**

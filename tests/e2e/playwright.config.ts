@@ -25,9 +25,9 @@ export default defineConfig({
     [
       'html',
       {
-        // Write the HTML report to the repo root so `npx playwright show-report`
-        // (run from the project root) can find it at `./playwright-report`.
-        outputFolder: '../../playwright-report',
+        // Report in tests/e2e/playwright-report so `npx playwright show-report`
+        // (run from tests/e2e) finds it. CI uploads tests/e2e/playwright-report/.
+        outputFolder: 'playwright-report',
         open: 'never',
       },
     ],
@@ -63,11 +63,24 @@ export default defineConfig({
     timeout: 10000,
   },
 
-  // Configure projects for different browsers
+  // Configure projects: run all tests first, then config last (via dependency order)
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: ['**/config/**', '**/plugins/**', '**/virtual-keys/**'],
+    },
+    {
+      name: 'chromium-serial',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: ['**/plugins/**/*.spec.ts', '**/virtual-keys/**/*.spec.ts'],
+      fullyParallel: false,
+    },
+    {
+      name: 'chromium-config',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: ['**/config/**/*.spec.ts'],
+      dependencies: ['chromium', 'chromium-serial'],
     },
     // Uncomment for additional browser testing
     // {
@@ -80,7 +93,7 @@ export default defineConfig({
     // },
   ],
 
-  // Run local dev server before starting tests
+  // Run local dev server before starting tests 
   // Set SKIP_WEB_SERVER=1 to skip auto-starting the dev server
   webServer: process.env.SKIP_WEB_SERVER ? undefined : {
     command: 'npm run dev',

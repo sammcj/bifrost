@@ -365,24 +365,21 @@ test.describe('Virtual Keys Table', () => {
   })
 
   test('should display virtual keys table', async ({ virtualKeysPage }) => {
-    await expect(virtualKeysPage.table).toBeVisible()
+    await expect(virtualKeysPage.table).toBeVisible({ timeout: 10000 })
+    // Verify table has the expected column headers
+    await expect(virtualKeysPage.table.locator('th', { hasText: 'Name' })).toBeVisible()
+    await expect(virtualKeysPage.table.locator('th', { hasText: 'Key' })).toBeVisible()
   })
 
   test('should show empty state when no virtual keys', async ({ virtualKeysPage }) => {
-    // This test depends on the state of the database
-    const count = await virtualKeysPage.getVirtualKeyCount()
-    const emptyMessage = virtualKeysPage.page.getByText('No virtual keys found')
-    const isEmptyStateVisible = await emptyMessage.isVisible().catch(() => false)
+    // Wait for the table to be visible first so we know the page has loaded
+    await expect(virtualKeysPage.table).toBeVisible({ timeout: 10000 })
 
-    // Deterministic assertion: either empty state is shown OR there are keys
-    if (count === 0) {
-      // When no keys, empty state should be shown
-      expect(isEmptyStateVisible).toBe(true)
-    } else {
-      // When keys exist, empty state should NOT be shown
-      expect(count).toBeGreaterThan(0)
-      expect(isEmptyStateVisible).toBe(false)
-    }
+    // Delete all existing virtual keys to guarantee empty state
+    await virtualKeysPage.cleanupAllVirtualKeys()
+
+    const emptyMessage = virtualKeysPage.page.getByText('No virtual keys found')
+    await expect(emptyMessage).toBeVisible({ timeout: 10000 })
   })
 })
 

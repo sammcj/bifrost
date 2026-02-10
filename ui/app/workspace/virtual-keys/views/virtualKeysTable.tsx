@@ -1,16 +1,16 @@
 "use client"
 
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alertDialog"
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "@/components/ui/alertDialog";
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -126,6 +126,7 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers }: Virt
 			<div className="space-y-4">
 				<div className="flex items-center justify-between">
 					<div>
+						<h2 className="text-lg font-semibold">Virtual Keys</h2>
 						<p className="text-muted-foreground text-sm">Manage virtual keys, their permissions, budgets, and rate limits.</p>
 					</div>
 					<Button onClick={handleAddVirtualKey} disabled={!hasCreateAccess} data-testid="create-vk-btn">
@@ -165,17 +166,32 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers }: Virt
 											vk.rate_limit.request_current_usage >= vk.rate_limit.request_max_limit);
 
 									return (
-										<TableRow key={vk.id} data-testid={`vk-row-${vk.name}`} className="hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => handleRowClick(vk)}>
+										<TableRow
+											key={vk.id}
+											data-testid={`vk-row-${vk.name}`}
+											className="hover:bg-muted/50 cursor-pointer transition-colors"
+											onClick={() => handleRowClick(vk)}
+										>
 											<TableCell className="max-w-[200px]">
 												<div className="truncate font-medium">{vk.name}</div>
 											</TableCell>
 											<TableCell onClick={(e) => e.stopPropagation()}>
 												<div className="flex items-center gap-2">
 													<code className="cursor-default px-2 py-1 font-mono text-sm">{maskKey(vk.value, isRevealed)}</code>
-													<Button variant="ghost" size="sm" onClick={() => toggleKeyVisibility(vk.id)} data-testid={`vk-visibility-btn-${vk.name}`}>
+													<Button
+														variant="ghost"
+														size="sm"
+														onClick={() => toggleKeyVisibility(vk.id)}
+														data-testid={`vk-visibility-btn-${vk.name}`}
+													>
 														{isRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
 													</Button>
-													<Button variant="ghost" size="sm" onClick={() => copyToClipboard(vk.value)} data-testid={`vk-copy-btn-${vk.name}`}>
+													<Button
+														variant="ghost"
+														size="sm"
+														onClick={() => copyToClipboard(vk.value)}
+														data-testid={`vk-copy-btn-${vk.name}`}
+													>
 														<Copy className="h-4 w-4" />
 													</Button>
 												</div>
@@ -196,12 +212,24 @@ export default function VirtualKeysTable({ virtualKeys, teams, customers }: Virt
 											</TableCell>
 											<TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
 												<div className="flex items-center justify-end gap-2">
-													<Button variant="ghost" size="sm" onClick={(e) => handleEditVirtualKey(vk, e)} disabled={!hasUpdateAccess} data-testid={`vk-edit-btn-${vk.name}`}>
+													<Button
+														variant="ghost"
+														size="sm"
+														onClick={(e) => handleEditVirtualKey(vk, e)}
+														disabled={!hasUpdateAccess}
+														data-testid={`vk-edit-btn-${vk.name}`}
+													>
 														<Edit className="h-4 w-4" />
 													</Button>
 													<AlertDialog>
 														<AlertDialogTrigger asChild>
-															<Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()} disabled={!hasDeleteAccess} data-testid={`vk-delete-btn-${vk.name}`}>
+															<Button
+																variant="ghost"
+																size="sm"
+																onClick={(e) => e.stopPropagation()}
+																disabled={!hasDeleteAccess}
+																data-testid={`vk-delete-btn-${vk.name}`}
+															>
 																<Trash2 className="h-4 w-4" />
 															</Button>
 														</AlertDialogTrigger>

@@ -28,10 +28,10 @@ test.describe('Providers', () => {
     }
     createdKeys.length = 0
 
-    // Clean up any custom providers created during tests
+    // Clean up any custom providers created during tests (skip toast wait so cleanup does not fail if toast is missing)
     for (const providerName of [...createdProviders]) {
       try {
-        await providersPage.deleteProvider(providerName)
+        await providersPage.deleteProvider(providerName, { skipToastWait: true })
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error)
         console.error(`[CLEANUP ERROR] Failed to delete provider ${providerName}: ${errorMsg}`)
@@ -548,13 +548,23 @@ test.describe('Network Configuration', () => {
   test('should update timeout value', async ({ providersPage }) => {
     await providersPage.selectConfigTab('network')
 
+    // Ensure backoff fields are valid (minimum 100ms) so form validation passes
+    const initialBackoff = providersPage.page.getByLabel(/Initial Backoff/i)
+    const maxBackoff = providersPage.page.getByLabel(/Max Backoff/i)
+    const ibVal = await initialBackoff.inputValue()
+    const mbVal = await maxBackoff.inputValue()
+    if (Number(ibVal) < 100) {
+      await providersPage.fillNumberInput(initialBackoff, '500')
+    }
+    if (Number(mbVal) < 100) {
+      await providersPage.fillNumberInput(maxBackoff, '10000')
+    }
+
     const timeoutInput = providersPage.page.getByLabel(/Timeout/i)
     const originalValue = await timeoutInput.inputValue()
     const newValue = originalValue === '30' ? '60' : '30'
 
     await providersPage.fillNumberInput(timeoutInput, newValue)
-    // Blur the input
-    await timeoutInput.blur()
 
     // Verify value changed
     const currentValue = await timeoutInput.inputValue()
@@ -566,10 +576,7 @@ test.describe('Network Configuration', () => {
     await providersPage.saveNetworkConfig()
 
     // Restore original value to avoid leaving form dirty
-    await timeoutInput.clear()
     await providersPage.fillNumberInput(timeoutInput, originalValue)
-    // Blur the input
-    await timeoutInput.blur()
     await providersPage.saveNetworkConfig()
 
   })
@@ -577,13 +584,23 @@ test.describe('Network Configuration', () => {
   test('should update max retries value', async ({ providersPage }) => {
     await providersPage.selectConfigTab('network')
 
+    // Ensure backoff fields are valid (minimum 100ms) so form validation passes
+    const initialBackoff = providersPage.page.getByLabel(/Initial Backoff/i)
+    const maxBackoff = providersPage.page.getByLabel(/Max Backoff/i)
+    const ibVal = await initialBackoff.inputValue()
+    const mbVal = await maxBackoff.inputValue()
+    if (Number(ibVal) < 100) {
+      await providersPage.fillNumberInput(initialBackoff, '500')
+    }
+    if (Number(mbVal) < 100) {
+      await providersPage.fillNumberInput(maxBackoff, '10000')
+    }
+
     const retriesInput = providersPage.page.getByLabel(/Max Retries/i)
     const originalValue = await retriesInput.inputValue()
     const newValue = originalValue === '0' ? '3' : '0'
 
     await providersPage.fillNumberInput(retriesInput, newValue)
-    // Blur the input
-    await retriesInput.blur()
 
     // Verify value changed
     const currentValue = await retriesInput.inputValue()
@@ -596,9 +613,7 @@ test.describe('Network Configuration', () => {
 
     // Restore original value to avoid leaving form dirty
     await providersPage.fillNumberInput(retriesInput, originalValue)
-    // Blur the input
-    await retriesInput.blur()
-    await providersPage.saveNetworkConfig()  
+    await providersPage.saveNetworkConfig()
   })
 })
 
