@@ -107,7 +107,7 @@ type BifrostHTTPServer struct {
 	LogsCleaner    *logstore.LogsCleaner
 
 	Client *bifrost.Bifrost
-	Config *lib.Config	
+	Config *lib.Config
 
 	Server *fasthttp.Server
 	Router *router.Router
@@ -711,7 +711,7 @@ func (s *BifrostHTTPServer) ForceReloadPricing(ctx context.Context) error {
 				Provider: provider,
 			})
 			if listModelsErr != nil {
-				logger.Error("failed to list models for provider %s: %v: falling back onto the static datasheet", provider, listModelsErr)
+				logger.Error("failed to list models for provider %s: %v: falling back onto the static datasheet", provider, bifrost.GetErrorMessage(listModelsErr))
 			}
 			allowedModels := make([]schemas.Model, 0)
 			for _, key := range providerConfig.Keys {
@@ -1135,7 +1135,7 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 				Provider: provider,
 			})
 			if listModelsErr != nil {
-				logger.Error("failed to list models for provider %s: %v: falling back onto the static datasheet", provider, listModelsErr)
+				logger.Error("failed to list models for provider %s: %v: falling back onto the static datasheet", provider, bifrost.GetErrorMessage(listModelsErr))
 			}
 			allowedModels := make([]schemas.Model, 0)
 			for _, key := range providerConfig.Keys {
