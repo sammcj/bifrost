@@ -44,16 +44,17 @@ func detectBatchedStream(chunkTimings []chunkTiming, minChunks int) (bool, strin
 		}
 	}
 
-	totalIntervals := len(chunkTimings) - 1
-	ratio := float64(nearInstantCount) / float64(totalIntervals)
+	// This goes off for faster models - so disabling it
+	// totalIntervals := len(chunkTimings) - 1
+	// ratio := float64(nearInstantCount) / float64(totalIntervals)
 
-	// Threshold: >80% of chunks arriving near-instantly indicates batching
-	if ratio > 0.8 {
-		return true, fmt.Sprintf(
-			"chunks appear batched: %d/%d (%.0f%%) arrived within %v of each other",
-			nearInstantCount, totalIntervals, ratio*100, threshold,
-		)
-	}
+	// // Threshold: >80% of chunks arriving near-instantly indicates batching
+	// if ratio > 0.8 {
+	// 	return true, fmt.Sprintf(
+	// 		"chunks appear batched: %d/%d (%.0f%%) arrived within %v of each other",
+	// 		nearInstantCount, totalIntervals, ratio*100, threshold,
+	// 	)
+	// }
 
 	return false, ""
 }
