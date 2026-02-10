@@ -17,13 +17,17 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+var loggingSkipPaths = []string{"/health", "/_next","/api/dev"}
+
 // CorsMiddleware handles CORS headers for localhost and configured allowed origins
 func CorsMiddleware(config *lib.Config) schemas.BifrostHTTPMiddleware {
 	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 		return func(ctx *fasthttp.RequestCtx) {
 			startTime := time.Now()
 			// skip logging if it's a /health check request
-			if string(ctx.RequestURI()) == "/health" {
+			if slices.IndexFunc(loggingSkipPaths, func(path string) bool {
+				return strings.HasPrefix(string(ctx.RequestURI()), path)
+			}) != -1 {
 				goto corsFlow
 			}
 			defer func() {
