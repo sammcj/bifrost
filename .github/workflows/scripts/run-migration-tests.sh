@@ -499,6 +499,20 @@ INSERT INTO config_vector_store (id, enabled, type, ttl_seconds, cache_by_model,
 VALUES (1, false, 'redis', 300, true, false, '{"host": "localhost", "port": 6379}', $now, $now)
 ON CONFLICT DO NOTHING;
 
+-- oauth_tokens (OAuth access/refresh tokens - no FK, must be before oauth_configs)
+INSERT INTO oauth_tokens (id, access_token, refresh_token, token_type, expires_at, scopes, last_refreshed_at, created_at, updated_at)
+VALUES
+  ('oauth-token-migration-test-001', 'encrypted-access-token-fake-001', 'encrypted-refresh-token-fake-001', 'Bearer', $future, '["read", "write"]', $now, $now, $now),
+  ('oauth-token-migration-test-002', 'encrypted-access-token-fake-002', '', 'Bearer', $future, '[]', NULL, $now, $now)
+ON CONFLICT DO NOTHING;
+
+-- oauth_configs (OAuth client configurations - references oauth_tokens via token_id)
+INSERT INTO oauth_configs (id, client_id, client_secret, authorize_url, token_url, registration_url, redirect_uri, scopes, state, code_verifier, code_challenge, status, token_id, server_url, use_discovery, mcp_client_config_json, created_at, updated_at, expires_at)
+VALUES
+  ('oauth-config-migration-test-001', 'client-id-fake-001', 'encrypted-secret-fake-001', 'https://auth.example.com/authorize', 'https://auth.example.com/token', NULL, 'https://bifrost.example.com/oauth/callback', '["read", "write"]', 'state-migration-test-001', 'verifier-migration-test-001', 'challenge-migration-test-001', 'authorized', 'oauth-token-migration-test-001', 'https://mcp.example.com', false, NULL, $now, $now, $future),
+  ('oauth-config-migration-test-002', 'client-id-fake-002', '', 'https://auth2.example.com/authorize', 'https://auth2.example.com/token', 'https://auth2.example.com/register', 'https://bifrost.example.com/oauth/callback2', '[]', 'state-migration-test-002', 'verifier-migration-test-002', 'challenge-migration-test-002', 'pending', NULL, 'https://mcp2.example.com', true, '{"name":"test-client"}', $now, $now, $future)
+ON CONFLICT DO NOTHING;
+
 -- distributed_locks
 INSERT INTO distributed_locks (lock_key, holder_id, expires_at, created_at)
 VALUES ('migration-test-lock', 'holder-migration-test-001', $future, $now)
@@ -574,11 +588,8 @@ VALUES
   ('migration-test-plugin', true, '{"setting1": "value1", "setting2": 42}', 1, false, '/path/to/plugin', 'plugin-hash-001', $now, $now)
 ON CONFLICT DO NOTHING;
 
--- config_mcp_clients (MCP server configurations - with all columns)
-INSERT INTO config_mcp_clients (client_id, name, is_code_mode_client, connection_type, connection_string, stdio_config_json, tools_to_execute_json, tools_to_auto_execute_json, headers_json, is_ping_available, config_hash, created_at, updated_at)
-VALUES 
-  ('mcp-migration-test-001', 'migration-test-mcp-server', false, 'sse', 'http://mcp-server:8080', NULL, '["tool1", "tool2"]', '[]', '{}', true, 'mcp-hash-001', $now, $now)
-ON CONFLICT DO NOTHING;
+-- config_mcp_clients INSERT is generated dynamically after this heredoc
+-- to handle older schemas that may not have newer columns (tool_pricing_json, auth_type, etc.)
 
 -- governance_virtual_keys (with all columns including description, is_active, team_id, customer_id, budget_id, rate_limit_id, config_hash)
 INSERT INTO governance_virtual_keys (id, name, description, value, is_active, team_id, customer_id, budget_id, rate_limit_id, config_hash, created_at, updated_at)
@@ -617,11 +628,11 @@ VALUES
   ('session-migration-token-fake-456', $future, $now, $now)
 ON CONFLICT DO NOTHING;
 
--- routing_rules
-INSERT INTO routing_rules (id, name, cel_expression, provider, scope, enabled, priority, created_at, updated_at)
-VALUES 
-  ('rule-migration-test-1', 'Migration Test Rule One', 'true', 'openai', 'global', true, 1, $now, $now),
-  ('rule-migration-test-2', 'Migration Test Rule Two', 'true', 'anthropic', 'global', false, 2, $now, $now)
+-- routing_rules (with all columns including config_hash, description, model, fallbacks, query, scope_id)
+INSERT INTO routing_rules (id, config_hash, name, description, cel_expression, provider, model, fallbacks, query, scope, scope_id, enabled, priority, created_at, updated_at)
+VALUES
+  ('rule-migration-test-1', 'rule-hash-001', 'Migration Test Rule One', 'Routes all traffic to openai', 'true', 'openai', 'gpt-4', '["anthropic", "azure"]', '{"temperature": 0.7}', 'global', NULL, true, 1, $now, $now),
+  ('rule-migration-test-2', 'rule-hash-002', 'Migration Test Rule Two', 'Fallback rule for anthropic', 'true', 'anthropic', '', NULL, NULL, 'team', 'team-migration-test-1', false, 2, $now, $now)
 ON CONFLICT DO NOTHING;
 
 -- ============================================================================

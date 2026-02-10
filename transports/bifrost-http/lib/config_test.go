@@ -14926,6 +14926,8 @@ func getSchemaTypeMappings() []schemaTypeMapping {
 
 // enterpriseSchemaPaths are schema paths that exist only in enterprise version
 var enterpriseSchemaPaths = map[string]bool{
+	"$schema":              true,
+	"audit_logs":           true,
 	"cluster_config":       true,
 	"saml_config":          true,
 	"load_balancer_config": true,
@@ -15283,6 +15285,8 @@ func TestConfigSchemaSyncTopLevel(t *testing.T) {
 	// Enterprise-only features: These fields exist in the JSON schema for documentation
 	// and validation purposes, but are only available in the enterprise version.
 	enterpriseSchemaFields := map[string]bool{
+		"$schema":              true,
+		"audit_logs":           true,
 		"cluster_config":       true,
 		"saml_config":          true,
 		"load_balancer_config": true,

@@ -1106,7 +1106,7 @@ var AllProviderConfigs = []ComprehensiveTestConfig{
 		TextModel:            "", // GenAI doesn't support text completion in newer models
 		TranscriptionModel:   "gemini-2.5-flash",
 		SpeechSynthesisModel: "gemini-2.5-flash-preview-tts",
-		EmbeddingModel:       "text-embedding-004",
+		EmbeddingModel:       "gemini-embedding-001",
 		ImageGenerationModel: "imagen-4.0-generate-001",
 		ImageEditModel:       "imagen-4.0-generate-001",
 		Scenarios: TestScenarios{
