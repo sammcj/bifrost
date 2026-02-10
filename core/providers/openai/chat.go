@@ -41,7 +41,7 @@ func ToOpenAIChatRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifros
 		openaiReq.ExtraParams = bifrostReq.Params.ExtraParams
 	}
 	switch bifrostReq.Provider {
-	case schemas.OpenAI:
+	case schemas.OpenAI, schemas.Azure:
 		return openaiReq
 	case schemas.XAI:
 		openaiReq.filterOpenAISpecificParameters()
