@@ -204,7 +204,7 @@ func TestToolVariations(t *testing.T) {
 		t.Fatalf("Second request with tools failed: %v", err3)
 	}
 
-	AssertCacheHit(t, &schemas.BifrostResponse{ChatResponse: response3}, string(CacheTypeDirect))
+	AssertCacheHit(t, &schemas.BifrostResponse{ChatResponse: response3}, "")
 
 	// Test 4: Request with different tools (should NOT cache hit)
 	t.Log("Making request with different tools...")

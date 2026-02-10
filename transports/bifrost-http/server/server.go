@@ -495,12 +495,7 @@ func (s *BifrostHTTPServer) ReloadProvider(ctx context.Context, provider schemas
 		return nil, fmt.Errorf("failed to update provider model catalog: failed to get keys by provider: %s", err)
 	}
 	modelsInKeys := make([]schemas.Model, 0)
-	for _, key := range providerKeys {
-		if len(key.Models) == 0 {
-			// Clean up
-			modelsInKeys = make([]schemas.Model, 0)
-			break
-		}
+	for _, key := range providerKeys {		
 		for _, model := range key.Models {
 			modelsInKeys = append(modelsInKeys, schemas.Model{
 				ID: string(provider) + "/" + model,
@@ -715,9 +710,11 @@ func (s *BifrostHTTPServer) ForceReloadPricing(ctx context.Context) error {
 			}
 			allowedModels := make([]schemas.Model, 0)
 			for _, key := range providerConfig.Keys {
-				allowedModels = append(allowedModels, schemas.Model{
-					ID: string(provider) + "/" + key.ID,
-				})
+				for _, model := range key.Models {
+					allowedModels = append(allowedModels, schemas.Model{
+						ID: string(provider) + "/" + model,
+					})
+				}
 			}
 			s.Config.ModelCatalog.UpsertModelDataForProvider(provider, modelData, allowedModels)
 		}
