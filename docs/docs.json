@@ -381,6 +381,7 @@
         "tab": "Changelogs",
         "icon": "bolt",
         "pages": [
+          "changelogs/v1.4.5",
           "changelogs/v1.4.4",
           {
             "group": "January 2026",

@@ -1,2 +1,0 @@
-- feat: add routing engine used to log entries
-- chore: upgrade core to 1.4.1 and framework to 1.2.19

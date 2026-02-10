@@ -1,8 +1,0 @@
-- fix: model names with namespaces (e.g., `meta-llama/Llama-3.1-8B`) are now correctly preserved instead of being incorrectly split as provider-prefixed models
-- fix: mapping of multiple modality tokens from gemini usage metadata to bifrost usage
-- fix: embedding thought signature in tool call id for valid tool calling cycle in gemini chat
-- feat: request path override functionality to support full URLs (with scheme and host) as well as custom paths
-- fix: missing and duplicated tool results in Bedrock - [@hhieuu](https://github.com/hhieuu)
-- fix: support HuggingFace model names without an explicit provider prefix
-- feat: adds support for custom OAuth scopes when authenticating with Azure Entra ID
-- feat: adds retry logic to MCP client connection establishment and tool retrieval
