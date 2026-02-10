@@ -810,9 +810,9 @@ func GenerateRoutingRuleHash(r tables.TableRoutingRule) (string, error) {
 	if r.Query != nil {
 		hash.Write([]byte(*r.Query))
 	} else if len(r.ParsedQuery) > 0 {
-		// Convert map to OrderedMap which has deterministic JSON marshalling with sorted keys
-		orderedMap := schemas.OrderedMap(r.ParsedQuery)
-		data, err := sonic.Marshal(orderedMap)
+		// Convert map to OrderedMap and use sorted marshalling for deterministic hashes
+		orderedMap := schemas.OrderedMapFromMap(r.ParsedQuery)
+		data, err := orderedMap.MarshalSorted()
 		if err != nil {
 			return "", err
 		}

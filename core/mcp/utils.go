@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"net"
 	"regexp"
 	"slices"
@@ -473,19 +472,20 @@ func shouldSkipToolForRequest(ctx context.Context, clientName, toolName string) 
 func convertMCPToolToBifrostSchema(mcpTool *mcp.Tool, logger schemas.Logger) schemas.ChatTool {
 	var properties *schemas.OrderedMap
 	if len(mcpTool.InputSchema.Properties) > 0 {
-		orderedProps := make(schemas.OrderedMap, len(mcpTool.InputSchema.Properties))
-		maps.Copy(orderedProps, mcpTool.InputSchema.Properties)
+		// Fix array schemas on the source map before copying to OrderedMap
+		FixArraySchemas(mcpTool.InputSchema.Properties, logger)
 
-		// Fix array schemas: ensure all array properties have an 'items' field
-		FixArraySchemas(orderedProps, logger)
+		orderedProps := schemas.NewOrderedMapWithCapacity(len(mcpTool.InputSchema.Properties))
+		for k, v := range mcpTool.InputSchema.Properties {
+			orderedProps.Set(k, v)
+		}
 
-		properties = &orderedProps
+		properties = orderedProps
 	} else {
 		// For tools with no parameters, initialize an empty properties map
 		// This is required by some providers (e.g., OpenAI) which expect
 		// object schemas to always have a properties field, even if empty
-		emptyProps := make(schemas.OrderedMap)
-		properties = &emptyProps
+		properties = schemas.NewOrderedMap()
 	}
 	return schemas.ChatTool{
 		Type: schemas.ChatToolTypeFunction,

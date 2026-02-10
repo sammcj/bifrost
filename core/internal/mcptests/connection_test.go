@@ -192,12 +192,12 @@ func TestInProcessConnection(t *testing.T) {
 			Description: schemas.Ptr("A test tool for in-process execution"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"message": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("message", map[string]interface{}{
 						"type":        "string",
 						"description": "The message to process",
-					},
-				},
+					}),
+				),
 				Required: []string{"message"},
 			},
 		},
@@ -244,11 +244,11 @@ func TestInProcessToolExecution(t *testing.T) {
 			Description: schemas.Ptr("Echoes the input"),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type: "object",
-				Properties: &schemas.OrderedMap{
-					"text": map[string]interface{}{
+				Properties: schemas.NewOrderedMapFromPairs(
+					schemas.KV("text", map[string]interface{}{
 						"type": "string",
-					},
-				},
+					}),
+				),
 			},
 		},
 	}

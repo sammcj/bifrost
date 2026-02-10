@@ -40,12 +40,12 @@ func GetPromptCachingTools() []schemas.ChatTool {
 				Description: bifrost.Ptr("Retrieve account information for a given account ID"),
 				Parameters: &schemas.ToolFunctionParameters{
 					Type: "object",
-					Properties: &schemas.OrderedMap{
-						"account_id": map[string]interface{}{
+					Properties: schemas.NewOrderedMapFromPairs(
+						schemas.KV("account_id", map[string]interface{}{
 							"type":        "string",
 							"description": "The unique account identifier",
-						},
-					},
+						}),
+					),
 					Required: []string{"account_id"},
 				},
 			},
@@ -57,22 +57,22 @@ func GetPromptCachingTools() []schemas.ChatTool {
 				Description: bifrost.Ptr("Calculate the cost for cloud resource usage based on service type and quantity"),
 				Parameters: &schemas.ToolFunctionParameters{
 					Type: "object",
-					Properties: &schemas.OrderedMap{
-						"service_type": map[string]interface{}{
+					Properties: schemas.NewOrderedMapFromPairs(
+						schemas.KV("service_type", map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"compute", "storage", "network", "database"},
 							"description": "The type of service being used",
-						},
-						"quantity": map[string]interface{}{
+						}),
+						schemas.KV("quantity", map[string]interface{}{
 							"type":        "number",
 							"description": "The quantity of resources used",
-						},
-						"unit": map[string]interface{}{
+						}),
+						schemas.KV("unit", map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"hours", "GB", "requests", "GB-hours"},
 							"description": "The unit of measurement",
-						},
-					},
+						}),
+					),
 					Required: []string{"service_type", "quantity", "unit"},
 				},
 			},
@@ -84,12 +84,12 @@ func GetPromptCachingTools() []schemas.ChatTool {
 				Description: bifrost.Ptr("Check the current status and health of the API service"),
 				Parameters: &schemas.ToolFunctionParameters{
 					Type: "object",
-					Properties: &schemas.OrderedMap{
-						"endpoint": map[string]interface{}{
+					Properties: schemas.NewOrderedMapFromPairs(
+						schemas.KV("endpoint", map[string]interface{}{
 							"type":        "string",
 							"description": "Optional specific API endpoint to check",
-						},
-					},
+						}),
+					),
 					Required: []string{},
 				},
 			},
@@ -101,26 +101,26 @@ func GetPromptCachingTools() []schemas.ChatTool {
 				Description: bifrost.Ptr("Create a new support ticket for a customer issue"),
 				Parameters: &schemas.ToolFunctionParameters{
 					Type: "object",
-					Properties: &schemas.OrderedMap{
-						"subject": map[string]interface{}{
+					Properties: schemas.NewOrderedMapFromPairs(
+						schemas.KV("subject", map[string]interface{}{
 							"type":        "string",
 							"description": "Brief subject line for the ticket",
-						},
-						"description": map[string]interface{}{
+						}),
+						schemas.KV("description", map[string]interface{}{
 							"type":        "string",
 							"description": "Detailed description of the issue",
-						},
-						"priority": map[string]interface{}{
+						}),
+						schemas.KV("priority", map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"low", "medium", "high", "urgent"},
 							"description": "Priority level of the ticket",
-						},
-						"category": map[string]interface{}{
+						}),
+						schemas.KV("category", map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"technical", "billing", "account", "feature_request"},
 							"description": "Category of the support request",
-						},
-					},
+						}),
+					),
 					Required: []string{"subject", "description", "priority", "category"},
 				},
 			},
@@ -132,17 +132,17 @@ func GetPromptCachingTools() []schemas.ChatTool {
 				Description: bifrost.Ptr("Retrieve documentation for a specific service or feature"),
 				Parameters: &schemas.ToolFunctionParameters{
 					Type: "object",
-					Properties: &schemas.OrderedMap{
-						"service_name": map[string]interface{}{
+					Properties: schemas.NewOrderedMapFromPairs(
+						schemas.KV("service_name", map[string]interface{}{
 							"type":        "string",
 							"description": "Name of the service or feature",
-						},
-						"doc_type": map[string]interface{}{
+						}),
+						schemas.KV("doc_type", map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"api", "guide", "tutorial", "reference"},
 							"description": "Type of documentation requested",
-						},
-					},
+						}),
+					),
 					Required: []string{"service_name"},
 				},
 			},
@@ -154,13 +154,13 @@ func GetPromptCachingTools() []schemas.ChatTool {
 				Description: bifrost.Ptr("Get a list of available cloud regions for deployment"),
 				Parameters: &schemas.ToolFunctionParameters{
 					Type: "object",
-					Properties: &schemas.OrderedMap{
-						"service_type": map[string]interface{}{
+					Properties: schemas.NewOrderedMapFromPairs(
+						schemas.KV("service_type", map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"compute", "storage", "database", "all"},
 							"description": "Filter by service type or 'all' for all services",
-						},
-					},
+						}),
+					),
 					Required: []string{},
 				},
 			},
@@ -172,24 +172,24 @@ func GetPromptCachingTools() []schemas.ChatTool {
 				Description: bifrost.Ptr("Estimate the monthly cost for a cloud deployment configuration"),
 				Parameters: &schemas.ToolFunctionParameters{
 					Type: "object",
-					Properties: &schemas.OrderedMap{
-						"instance_type": map[string]interface{}{
+					Properties: schemas.NewOrderedMapFromPairs(
+						schemas.KV("instance_type", map[string]interface{}{
 							"type":        "string",
 							"description": "Type of compute instance",
-						},
-						"instance_count": map[string]interface{}{
+						}),
+						schemas.KV("instance_count", map[string]interface{}{
 							"type":        "integer",
 							"description": "Number of instances",
-						},
-						"storage_gb": map[string]interface{}{
+						}),
+						schemas.KV("storage_gb", map[string]interface{}{
 							"type":        "number",
 							"description": "Storage in GB",
-						},
-						"region": map[string]interface{}{
+						}),
+						schemas.KV("region", map[string]interface{}{
 							"type":        "string",
 							"description": "Deployment region",
-						},
-					},
+						}),
+					),
 					Required: []string{"instance_type", "instance_count", "storage_gb", "region"},
 				},
 			},
@@ -201,12 +201,12 @@ func GetPromptCachingTools() []schemas.ChatTool {
 				Description: bifrost.Ptr("Validate an API key and return its permissions and status"),
 				Parameters: &schemas.ToolFunctionParameters{
 					Type: "object",
-					Properties: &schemas.OrderedMap{
-						"api_key": map[string]interface{}{
+					Properties: schemas.NewOrderedMapFromPairs(
+						schemas.KV("api_key", map[string]interface{}{
 							"type":        "string",
 							"description": "The API key to validate",
-						},
-					},
+						}),
+					),
 					Required: []string{"api_key"},
 				},
 			},
@@ -218,25 +218,25 @@ func GetPromptCachingTools() []schemas.ChatTool {
 				Description: bifrost.Ptr("Retrieve usage analytics and metrics for an account"),
 				Parameters: &schemas.ToolFunctionParameters{
 					Type: "object",
-					Properties: &schemas.OrderedMap{
-						"account_id": map[string]interface{}{
+					Properties: schemas.NewOrderedMapFromPairs(
+						schemas.KV("account_id", map[string]interface{}{
 							"type":        "string",
 							"description": "Account ID to get analytics for",
-						},
-						"start_date": map[string]interface{}{
+						}),
+						schemas.KV("start_date", map[string]interface{}{
 							"type":        "string",
 							"description": "Start date in YYYY-MM-DD format",
-						},
-						"end_date": map[string]interface{}{
+						}),
+						schemas.KV("end_date", map[string]interface{}{
 							"type":        "string",
 							"description": "End date in YYYY-MM-DD format",
-						},
-						"metric_type": map[string]interface{}{
+						}),
+						schemas.KV("metric_type", map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"requests", "cost", "latency", "errors", "all"},
 							"description": "Type of metrics to retrieve",
-						},
-					},
+						}),
+					),
 					Required: []string{"account_id", "start_date", "end_date"},
 				},
 			},
@@ -248,17 +248,17 @@ func GetPromptCachingTools() []schemas.ChatTool {
 				Description: bifrost.Ptr("Check compliance status and certifications for security and regulatory requirements"),
 				Parameters: &schemas.ToolFunctionParameters{
 					Type: "object",
-					Properties: &schemas.OrderedMap{
-						"compliance_type": map[string]interface{}{
+					Properties: schemas.NewOrderedMapFromPairs(
+						schemas.KV("compliance_type", map[string]interface{}{
 							"type":        "string",
 							"enum":        []string{"SOC2", "ISO27001", "GDPR", "HIPAA", "all"},
 							"description": "Type of compliance to check",
-						},
-						"region": map[string]interface{}{
+						}),
+						schemas.KV("region", map[string]interface{}{
 							"type":        "string",
 							"description": "Optional region to check compliance for",
-						},
-					},
+						}),
+					),
 					Required: []string{},
 				},
 			},

@@ -316,16 +316,16 @@ func RunResponsesStreamTest(t *testing.T, client *bifrost.Bifrost, ctx context.C
 				ResponsesToolFunction: &schemas.ResponsesToolFunction{
 					Parameters: &schemas.ToolFunctionParameters{
 						Type: "object",
-						Properties: &schemas.OrderedMap{
-							"location": map[string]interface{}{
+						Properties: schemas.NewOrderedMapFromPairs(
+							schemas.KV("location", map[string]interface{}{
 								"type":        "string",
 								"description": "The city and state, e.g. San Francisco, CA",
-							},
-							"unit": map[string]interface{}{
+							}),
+							schemas.KV("unit", map[string]interface{}{
 								"type": "string",
 								"enum": []string{"celsius", "fahrenheit"},
-							},
-						},
+							}),
+						),
 						Required: []string{"location"},
 					},
 				},

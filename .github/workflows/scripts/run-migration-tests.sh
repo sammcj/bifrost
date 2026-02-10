@@ -656,7 +656,28 @@ ON CONFLICT DO NOTHING;
 
 EOF
 
+  # NOTE: config_mcp_clients INSERT is NOT generated here because it needs to be
+  # generated dynamically AFTER the schema is created for each version.
+  # Use append_dynamic_mcp_clients_insert() after schema creation.
+
   log_info "Generated faker SQL: $output_file"
+}
+
+# Append dynamic config_mcp_clients INSERT to faker SQL based on current schema
+# Must be called AFTER the database schema is created (e.g., after bifrost starts/stops)
+append_dynamic_mcp_clients_insert() {
+  local db_type="$1"
+  local faker_sql="$2"
+  local config_db="${3:-}"  # Only used for SQLite
+  
+  local now
+  if [ "$db_type" = "postgres" ]; then
+    now="NOW()"
+    generate_mcp_clients_insert_postgres "$now" "$faker_sql"
+  else
+    now="datetime('now')"
+    generate_mcp_clients_insert_sqlite "$now" "$faker_sql" "$config_db"
+  fi
 }
 
 # ============================================================================
@@ -674,6 +695,65 @@ extract_faker_columns() {
   grep -E "^INSERT INTO [a-z_]+ \(" "$faker_sql" | \
     sed -E 's/INSERT INTO ([a-z_]+) \(([^)]+)\).*/\1:\2/' | \
     tr -d ' ' | sort -u > "$output_file"
+}
+
+# Check if a column exists in a PostgreSQL table
+column_exists_postgres() {
+  local table="$1"
+  local column="$2"
+  local container
+  container=$(get_postgres_container)
+  
+  if [ -z "$container" ]; then
+    return 1
+  fi
+  
+  local count
+  count=$(docker exec "$container" \
+    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A \
+    -c "SELECT COUNT(*) FROM information_schema.columns 
+        WHERE table_name = '$table' 
+        AND column_name = '$column'
+        AND table_schema = 'public';" 2>/dev/null)
+  
+  [ "$count" = "1" ]
+}
+
+# Generate config_mcp_clients INSERT based on schema columns
+# This handles older schemas that may not have newer columns like tool_pricing_json, auth_type, etc.
+generate_mcp_clients_insert_postgres() {
+  local now="$1"
+  local output_file="$2"
+  
+  # Core columns that always exist in config_mcp_clients
+  local cols="client_id, name, is_code_mode_client, connection_type, connection_string, stdio_config_json, tools_to_execute_json, tools_to_auto_execute_json, headers_json, is_ping_available, config_hash, created_at, updated_at"
+  local vals="'mcp-migration-test-001', 'migration-test-mcp-server', false, 'sse', 'http://mcp-server:8080', NULL, '[\"tool1\", \"tool2\"]', '[]', '{}', true, 'mcp-hash-001', $now, $now"
+  
+  # Add optional columns if they exist in the schema
+  if column_exists_postgres "config_mcp_clients" "tool_pricing_json"; then
+    cols="$cols, tool_pricing_json"
+    vals="$vals, '{\"tool1\": 0.001, \"tool2\": 0.002}'"
+  fi
+  
+  if column_exists_postgres "config_mcp_clients" "tool_sync_interval"; then
+    cols="$cols, tool_sync_interval"
+    vals="$vals, 5"
+  fi
+  
+  if column_exists_postgres "config_mcp_clients" "auth_type"; then
+    cols="$cols, auth_type"
+    vals="$vals, 'oauth'"
+  fi
+  
+  if column_exists_postgres "config_mcp_clients" "oauth_config_id"; then
+    cols="$cols, oauth_config_id"
+    vals="$vals, 'oauth-config-migration-test-001'"
+  fi
+  
+  # Append the dynamic INSERT to the output file
+  echo "" >> "$output_file"
+  echo "-- config_mcp_clients (MCP server configurations - dynamically generated based on schema)" >> "$output_file"
+  echo "INSERT INTO config_mcp_clients ($cols) VALUES ($vals) ON CONFLICT DO NOTHING;" >> "$output_file"
 }
 
 # Get columns that are auto-increment primary keys (don't need faker coverage)
@@ -816,6 +896,72 @@ get_sqlite_auto_increment_columns() {
   # In SQLite, INTEGER PRIMARY KEY columns are auto-increment
   sqlite3 "$db_path" "PRAGMA table_info($table);" 2>/dev/null | \
     awk -F'|' '$3 == "INTEGER" && $6 == "1" {print $2}'
+}
+
+# Check if a column exists in a SQLite table
+column_exists_sqlite() {
+  local db_path="$1"
+  local table="$2"
+  local column="$3"
+  
+  if [ ! -f "$db_path" ]; then
+    return 1
+  fi
+  
+  local count
+  count=$(sqlite3 "$db_path" "PRAGMA table_info($table);" 2>/dev/null | grep -c "^[0-9]*|${column}|" || echo "0")
+  
+  [ "$count" -ge "1" ]
+}
+
+# Generate config_mcp_clients INSERT based on schema columns for SQLite
+# This handles older schemas that may not have newer columns like tool_pricing_json, auth_type, etc.
+generate_mcp_clients_insert_sqlite() {
+  local now="$1"
+  local output_file="$2"
+  local config_db="$3"
+  
+  # Check if the table exists in the database
+  if [ ! -f "$config_db" ]; then
+    return
+  fi
+  
+  local table_exists
+  table_exists=$(sqlite3 "$config_db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='config_mcp_clients';" 2>/dev/null || echo "0")
+  
+  if [ "$table_exists" != "1" ]; then
+    return
+  fi
+  
+  # Core columns that always exist in config_mcp_clients
+  local cols="client_id, name, is_code_mode_client, connection_type, connection_string, stdio_config_json, tools_to_execute_json, tools_to_auto_execute_json, headers_json, is_ping_available, config_hash, created_at, updated_at"
+  local vals="'mcp-migration-test-001', 'migration-test-mcp-server', 0, 'sse', 'http://mcp-server:8080', NULL, '[\"tool1\", \"tool2\"]', '[]', '{}', 1, 'mcp-hash-001', $now, $now"
+  
+  # Add optional columns if they exist in the schema
+  if column_exists_sqlite "$config_db" "config_mcp_clients" "tool_pricing_json"; then
+    cols="$cols, tool_pricing_json"
+    vals="$vals, '{\"tool1\": 0.001, \"tool2\": 0.002}'"
+  fi
+  
+  if column_exists_sqlite "$config_db" "config_mcp_clients" "tool_sync_interval"; then
+    cols="$cols, tool_sync_interval"
+    vals="$vals, 5"
+  fi
+  
+  if column_exists_sqlite "$config_db" "config_mcp_clients" "auth_type"; then
+    cols="$cols, auth_type"
+    vals="$vals, 'oauth'"
+  fi
+  
+  if column_exists_sqlite "$config_db" "config_mcp_clients" "oauth_config_id"; then
+    cols="$cols, oauth_config_id"
+    vals="$vals, 'oauth-config-migration-test-001'"
+  fi
+  
+  # Append the dynamic INSERT to the output file
+  echo "" >> "$output_file"
+  echo "-- config_mcp_clients (MCP server configurations - dynamically generated based on schema)" >> "$output_file"
+  echo "INSERT INTO config_mcp_clients ($cols) VALUES ($vals) ON CONFLICT DO NOTHING;" >> "$output_file"
 }
 
 # Validate faker column coverage for SQLite
@@ -1394,15 +1540,20 @@ EOF
     # Stop bifrost (schema is now created)
     stop_bifrost
     
+    # Create version-specific faker SQL with dynamic config_mcp_clients INSERT
+    local version_faker_sql="$TEMP_DIR/faker-$version.sql"
+    cp "$faker_sql" "$version_faker_sql"
+    append_dynamic_mcp_clients_insert "postgres" "$version_faker_sql"
+    
     # Validate faker column coverage against older version's schema
-    if ! validate_faker_column_coverage_postgres "$faker_sql" "$version" "$TEMP_DIR"; then
+    if ! validate_faker_column_coverage_postgres "$version_faker_sql" "$version" "$TEMP_DIR"; then
       log_error "Faker column coverage validation failed for $version"
       return 1
     fi
     
     # Insert faker data
     log_info "Inserting faker data..."
-    if ! run_postgres_sql_file "$faker_sql"; then
+    if ! run_postgres_sql_file "$version_faker_sql"; then
       log_warn "Some faker data inserts may have failed (tables might not exist in this version)"
     fi
     
@@ -1581,8 +1732,13 @@ EOF
     # Stop bifrost (schema is now created)
     stop_bifrost
     
+    # Create version-specific faker SQL with dynamic config_mcp_clients INSERT
+    local version_faker_sql="$TEMP_DIR/faker-$version.sql"
+    cp "$faker_sql" "$version_faker_sql"
+    append_dynamic_mcp_clients_insert "sqlite" "$version_faker_sql" "$config_db"
+    
     # Validate faker column coverage against older version's schema
-    if ! validate_faker_column_coverage_sqlite "$faker_sql" "$version" "$TEMP_DIR" "$config_db" "$logs_db"; then
+    if ! validate_faker_column_coverage_sqlite "$version_faker_sql" "$version" "$TEMP_DIR" "$config_db" "$logs_db"; then
       log_error "Faker column coverage validation failed for $version"
       return 1
     fi
@@ -1590,10 +1746,10 @@ EOF
     # Insert faker data into config store
     log_info "Inserting faker data..."
     if [ -f "$config_db" ]; then
-      run_sqlite_sql_file "$config_db" "$faker_sql" 2>/dev/null || true
+      run_sqlite_sql_file "$config_db" "$version_faker_sql" 2>/dev/null || true
     fi
     if [ -f "$logs_db" ]; then
-      run_sqlite_sql_file "$logs_db" "$faker_sql" 2>/dev/null || true
+      run_sqlite_sql_file "$logs_db" "$version_faker_sql" 2>/dev/null || true
     fi
     
     # Now run current version to test migration

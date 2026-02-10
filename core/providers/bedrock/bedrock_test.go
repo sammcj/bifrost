@@ -21,12 +21,12 @@ var (
 	testStop      = []string{"STOP"}
 	testTrace     = "enabled"
 	testLatency   = "optimized"
-	testProps     = schemas.OrderedMap{
-		"location": map[string]interface{}{
+	testProps     = *schemas.NewOrderedMapFromPairs(
+		schemas.KV("location", map[string]interface{}{
 			"type":        "string",
 			"description": "The city name",
-		},
-	}
+		}),
+	)
 )
 
 // assertBedrockRequestEqual compares two BedrockConverseRequest objects
@@ -395,12 +395,12 @@ func TestBifrostToBedrockRequestConversion(t *testing.T) {
 								Description: schemas.Ptr("Get weather information"),
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "object",
-									Properties: &schemas.OrderedMap{
-										"location": map[string]interface{}{
+									Properties: schemas.NewOrderedMapFromPairs(
+										schemas.KV("location", map[string]interface{}{
 											"type":        "string",
 											"description": "The city name",
-										},
-									},
+										}),
+									),
 									Required: []string{"location"},
 								},
 							},
@@ -506,9 +506,9 @@ func TestBifrostToBedrockRequestConversion(t *testing.T) {
 				RequestMetadata: map[string]string{
 					"user": "test-user",
 				},
-				AdditionalModelRequestFields: schemas.OrderedMap{
-					"customField": "customValue",
-				},
+				AdditionalModelRequestFields: schemas.NewOrderedMapFromPairs(
+					schemas.KV("customField", "customValue"),
+				),
 				AdditionalModelResponseFieldPaths: []string{"field1", "field2"},
 			},
 		},
@@ -727,12 +727,12 @@ func TestBifrostToBedrockRequestConversion(t *testing.T) {
 								Description: schemas.Ptr("Get weather information"),
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "object",
-									Properties: &schemas.OrderedMap{
-										"location": map[string]interface{}{
+									Properties: schemas.NewOrderedMapFromPairs(
+										schemas.KV("location", map[string]interface{}{
 											"type":        "string",
 											"description": "The city name",
-										},
-									},
+										}),
+									),
 									Required: []string{"location"},
 								},
 							},
@@ -1136,9 +1136,9 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 				RequestMetadata: map[string]string{
 					"user": "test-user",
 				},
-				AdditionalModelRequestFields: schemas.OrderedMap{
-					"customField": "customValue",
-				},
+				AdditionalModelRequestFields: schemas.NewOrderedMapFromPairs(
+					schemas.KV("customField", "customValue"),
+				),
 				AdditionalModelResponseFieldPaths: []string{"field1", "field2"},
 			},
 			expected: &schemas.BifrostResponsesRequest{
@@ -1177,9 +1177,9 @@ func TestBedrockToBifrostRequestConversion(t *testing.T) {
 						"requestMetadata": map[string]string{
 							"user": "test-user",
 						},
-						"additionalModelRequestFieldPaths": schemas.OrderedMap{
-							"customField": "customValue",
-						},
+						"additionalModelRequestFieldPaths": schemas.NewOrderedMapFromPairs(
+							schemas.KV("customField", "customValue"),
+						),
 						"additionalModelResponseFieldPaths": []string{"field1", "field2"},
 					},
 				},
@@ -2146,10 +2146,7 @@ func TestToBedrockResponsesRequest_AdditionalFields(t *testing.T) {
 
 	// Convert OrderedMap to map[string]interface{} for comparison
 	expectedFields := map[string]interface{}{"top_k": 200}
-	actualFields := make(map[string]interface{})
-	for k, v := range bedrockReq.AdditionalModelRequestFields {
-		actualFields[k] = v
-	}
+	actualFields := bedrockReq.AdditionalModelRequestFields.ToMap()
 	assert.Equal(t, expectedFields, actualFields)
 	assert.Equal(t, []string{"/amazon-bedrock-invocationMetrics/inputTokenCount"}, bedrockReq.AdditionalModelResponseFieldPaths)
 }
@@ -2800,16 +2797,16 @@ func TestAnthropicReasoningConfigUsesThinkingField(t *testing.T) {
 			require.NotNil(t, result.AdditionalModelRequestFields)
 
 			// Verify the correct field name is used
-			thinkingConfig, hasThinking := result.AdditionalModelRequestFields[tt.expectedFieldName]
+			thinkingConfig, hasThinking := result.AdditionalModelRequestFields.Get(tt.expectedFieldName)
 			assert.True(t, hasThinking, "expected field %q in AdditionalModelRequestFields", tt.expectedFieldName)
 
 			// Verify reasoning_config is NOT used for Anthropic models
-			_, hasReasoningConfig := result.AdditionalModelRequestFields["reasoning_config"]
+			_, hasReasoningConfig := result.AdditionalModelRequestFields.Get("reasoning_config")
 			assert.False(t, hasReasoningConfig, "reasoning_config should NOT be set for Anthropic models")
 
 			// Verify output_config is NOT used (not supported in Converse API)
 			if tt.expectNoOutputConfig {
-				_, hasOutputConfig := result.AdditionalModelRequestFields["output_config"]
+				_, hasOutputConfig := result.AdditionalModelRequestFields.Get("output_config")
 				assert.False(t, hasOutputConfig, "output_config should NOT be set in Converse API")
 			}
 
@@ -2856,10 +2853,10 @@ func TestNovaReasoningConfigUsesReasoningConfigField(t *testing.T) {
 	require.NotNil(t, result.AdditionalModelRequestFields)
 
 	// Nova should use reasoningConfig (camelCase)
-	_, hasReasoningConfig := result.AdditionalModelRequestFields["reasoningConfig"]
+	_, hasReasoningConfig := result.AdditionalModelRequestFields.Get("reasoningConfig")
 	assert.True(t, hasReasoningConfig, "Nova models should use reasoningConfig field")
 
 	// Nova should NOT use "thinking"
-	_, hasThinking := result.AdditionalModelRequestFields["thinking"]
+	_, hasThinking := result.AdditionalModelRequestFields.Get("thinking")
 	assert.False(t, hasThinking, "Nova models should NOT use thinking field")
 }

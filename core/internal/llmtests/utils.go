@@ -109,16 +109,16 @@ var sampleToolDescriptions = map[SampleToolType]string{
 var WeatherToolFunction = &schemas.ChatToolFunction{
 	Parameters: &schemas.ToolFunctionParameters{
 		Type: "object",
-		Properties: &schemas.OrderedMap{
-			"location": map[string]interface{}{
+		Properties: schemas.NewOrderedMapFromPairs(
+			schemas.KV("location", map[string]interface{}{
 				"type":        "string",
 				"description": "The city and state, e.g. San Francisco, CA",
-			},
-			"unit": map[string]interface{}{
+			}),
+			schemas.KV("unit", map[string]interface{}{
 				"type": "string",
 				"enum": []string{"celsius", "fahrenheit"},
-			},
-		},
+			}),
+		),
 		Required: []string{"location"},
 	},
 }
@@ -126,12 +126,12 @@ var WeatherToolFunction = &schemas.ChatToolFunction{
 var CalculatorToolFunction = &schemas.ChatToolFunction{
 	Parameters: &schemas.ToolFunctionParameters{
 		Type: "object",
-		Properties: &schemas.OrderedMap{
-			"expression": map[string]interface{}{
+		Properties: schemas.NewOrderedMapFromPairs(
+			schemas.KV("expression", map[string]interface{}{
 				"type":        "string",
 				"description": "The mathematical expression to evaluate, e.g. '2 + 3' or '10 * 5'",
-			},
-		},
+			}),
+		),
 		Required: []string{"expression"},
 	},
 }
@@ -139,12 +139,12 @@ var CalculatorToolFunction = &schemas.ChatToolFunction{
 var TimeToolFunction = &schemas.ChatToolFunction{
 	Parameters: &schemas.ToolFunctionParameters{
 		Type: "object",
-		Properties: &schemas.OrderedMap{
-			"timezone": map[string]interface{}{
+		Properties: schemas.NewOrderedMapFromPairs(
+			schemas.KV("timezone", map[string]interface{}{
 				"type":        "string",
 				"description": "The timezone identifier, e.g. 'America/New_York' or 'UTC'",
-			},
-		},
+			}),
+		),
 		Required: []string{"timezone"},
 	},
 }

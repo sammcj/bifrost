@@ -355,25 +355,25 @@ func TestBifrostToGeminiToolConversion(t *testing.T) {
 								Description: schemas.Ptr("Search for products with filters"),
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "object",
-									Properties: &schemas.OrderedMap{
-										"query": map[string]interface{}{
+									Properties: schemas.NewOrderedMapFromPairs(
+										schemas.KV("query", map[string]interface{}{
 											"type":        "string",
 											"description": "Search query",
-										},
-										"category": map[string]interface{}{
+										}),
+										schemas.KV("category", map[string]interface{}{
 											"type":        "string",
 											"description": "Product category",
 											"enum":        []interface{}{"electronics", "books", "clothing"},
-										},
-										"tags": map[string]interface{}{
+										}),
+										schemas.KV("tags", map[string]interface{}{
 											"type":        "array",
 											"description": "Filter tags",
 											"items": map[string]interface{}{
 												"type":        "string",
 												"description": "A tag",
 											},
-										},
-									},
+										}),
+									),
 									Required: []string{"query"},
 								},
 							},
@@ -427,8 +427,8 @@ func TestBifrostToGeminiToolConversion(t *testing.T) {
 								Description: schemas.Ptr("Process customer order"),
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "object",
-									Properties: &schemas.OrderedMap{
-										"customer": map[string]interface{}{
+									Properties: schemas.NewOrderedMapFromPairs(
+										schemas.KV("customer", map[string]interface{}{
 											"type": "object",
 											"properties": map[string]interface{}{
 												"name": map[string]interface{}{
@@ -439,8 +439,8 @@ func TestBifrostToGeminiToolConversion(t *testing.T) {
 												},
 											},
 											"required": []string{"name", "email"},
-										},
-										"items": map[string]interface{}{
+										}),
+										schemas.KV("items", map[string]interface{}{
 											"type": "array",
 											"items": map[string]interface{}{
 												"type": "object",
@@ -454,8 +454,8 @@ func TestBifrostToGeminiToolConversion(t *testing.T) {
 												},
 												"required": []string{"product_id", "quantity"},
 											},
-										},
-									},
+										}),
+									),
 									Required: []string{"customer", "items"},
 								},
 							},
@@ -504,12 +504,12 @@ func TestBifrostToGeminiToolConversion(t *testing.T) {
 								Name: "test_tool",
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "object",
-									Properties: &schemas.OrderedMap{
-										"data": map[string]interface{}{
+									Properties: schemas.NewOrderedMapFromPairs(
+										schemas.KV("data", map[string]interface{}{
 											"type":  "array",
 											"items": map[string]interface{}{}, // Empty items object
-										},
-									},
+										}),
+									),
 								},
 							},
 						},
@@ -545,28 +545,28 @@ func TestBifrostToGeminiToolConversion(t *testing.T) {
 								Description: schemas.Ptr("Validate input with constraints"),
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "object",
-									Properties: &schemas.OrderedMap{
-										"username": map[string]interface{}{
+									Properties: schemas.NewOrderedMapFromPairs(
+										schemas.KV("username", map[string]interface{}{
 											"type":        "string",
 											"description": "Username with length constraints",
 											"minLength":   float64(3),
 											"maxLength":   float64(20),
 											"pattern":     "^[a-zA-Z0-9_]+$",
-										},
-										"age": map[string]interface{}{
+										}),
+										schemas.KV("age", map[string]interface{}{
 											"type":    "integer",
 											"minimum": float64(0),
 											"maximum": float64(150),
-										},
-										"tags": map[string]interface{}{
+										}),
+										schemas.KV("tags", map[string]interface{}{
 											"type":     "array",
 											"minItems": float64(1),
 											"maxItems": float64(5),
 											"items": map[string]interface{}{
 												"type": "string",
 											},
-										},
-									},
+										}),
+									),
 									Required: []string{"username"},
 								},
 							},
@@ -625,15 +625,15 @@ func TestBifrostToGeminiToolConversion(t *testing.T) {
 								Description: schemas.Ptr("Process ID that can be string or number"),
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "object",
-									Properties: &schemas.OrderedMap{
-										"id": map[string]interface{}{
+									Properties: schemas.NewOrderedMapFromPairs(
+										schemas.KV("id", map[string]interface{}{
 											"anyOf": []interface{}{
 												map[string]interface{}{"type": "string"},
 												map[string]interface{}{"type": "integer"},
 											},
 											"description": "ID that can be string or integer",
-										},
-									},
+										}),
+									),
 									Required: []string{"id"},
 								},
 							},
@@ -674,10 +674,10 @@ func TestBifrostToGeminiToolConversion(t *testing.T) {
 								Description: schemas.Ptr("Process a list of items"),
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "array",
-									Items: &schemas.OrderedMap{
-										"type":        "string",
-										"description": "Item in the list",
-									},
+									Items: schemas.NewOrderedMapFromPairs(
+										schemas.KV("type", "string"),
+										schemas.KV("description", "Item in the list"),
+									),
 									MinItems: schemas.Ptr(int64(1)),
 									MaxItems: schemas.Ptr(int64(10)),
 								},
@@ -722,18 +722,18 @@ func TestBifrostToGeminiToolConversion(t *testing.T) {
 								Parameters: &schemas.ToolFunctionParameters{
 									Type:  "object",
 									Title: schemas.Ptr("ConfigParameters"),
-									Properties: &schemas.OrderedMap{
-										"enabled": map[string]interface{}{
+									Properties: schemas.NewOrderedMapFromPairs(
+										schemas.KV("enabled", map[string]interface{}{
 											"type":     "boolean",
 											"default":  true,
 											"nullable": true,
 											"title":    "Enabled Flag",
-										},
-										"format_type": map[string]interface{}{
+										}),
+										schemas.KV("format_type", map[string]interface{}{
 											"type":   "string",
 											"format": "email",
-										},
-									},
+										}),
+									),
 								},
 							},
 						},
@@ -1700,20 +1700,20 @@ func TestBifrostResponsesToGeminiToolConversion(t *testing.T) {
 							ResponsesToolFunction: &schemas.ResponsesToolFunction{
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "object",
-									Properties: &schemas.OrderedMap{
-										"filters": map[string]interface{}{
+									Properties: schemas.NewOrderedMapFromPairs(
+										schemas.KV("filters", map[string]interface{}{
 											"type":        "array",
 											"description": "List of filters",
 											"items": map[string]interface{}{
 												"type":        "string",
 												"description": "Filter criterion",
 											},
-										},
-										"sort_order": map[string]interface{}{
+										}),
+										schemas.KV("sort_order", map[string]interface{}{
 											"type": "string",
 											"enum": []interface{}{"asc", "desc"},
-										},
-									},
+										}),
+									),
 									Required: []string{"filters"},
 								},
 							},
@@ -1763,8 +1763,8 @@ func TestBifrostResponsesToGeminiToolConversion(t *testing.T) {
 							ResponsesToolFunction: &schemas.ResponsesToolFunction{
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "object",
-									Properties: &schemas.OrderedMap{
-										"updates": map[string]interface{}{
+									Properties: schemas.NewOrderedMapFromPairs(
+										schemas.KV("updates", map[string]interface{}{
 											"type": "array",
 											"items": map[string]interface{}{
 												"type": "object",
@@ -1787,8 +1787,8 @@ func TestBifrostResponsesToGeminiToolConversion(t *testing.T) {
 												},
 												"required": []string{"id", "fields"},
 											},
-										},
-									},
+										}),
+									),
 									Required: []string{"updates"},
 								},
 							},
@@ -1843,12 +1843,12 @@ func TestBifrostResponsesToGeminiToolConversion(t *testing.T) {
 							ResponsesToolFunction: &schemas.ResponsesToolFunction{
 								Parameters: &schemas.ToolFunctionParameters{
 									Type: "object",
-									Properties: &schemas.OrderedMap{
-										"any_array": map[string]interface{}{
+									Properties: schemas.NewOrderedMapFromPairs(
+										schemas.KV("any_array", map[string]interface{}{
 											"type":  "array",
 											"items": map[string]interface{}{}, // Empty items
-										},
-									},
+										}),
+									),
 								},
 							},
 						},

@@ -382,7 +382,7 @@ func TestConcurrent_ToolRegistration(t *testing.T) {
 					Description: schemas.Ptr(fmt.Sprintf("Test tool %d", id)),
 					Parameters: &schemas.ToolFunctionParameters{
 						Type:       "object",
-						Properties: &schemas.OrderedMap{},
+						Properties: schemas.NewOrderedMap(),
 					},
 				},
 			}

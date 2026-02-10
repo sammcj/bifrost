@@ -397,28 +397,28 @@ func convertJSONSchemaToToolParameters(schema *schemas.ResponsesTextConfigFormat
 	// Convert map[string]any to OrderedMap for Properties
 	if schema.Properties != nil {
 		if orderedMap, ok := schemas.SafeExtractOrderedMap(*schema.Properties); ok {
-			params.Properties = &orderedMap
+			params.Properties = orderedMap
 		}
 	}
 
 	// Convert map[string]any to OrderedMap for Defs
 	if schema.Defs != nil {
 		if orderedMap, ok := schemas.SafeExtractOrderedMap(*schema.Defs); ok {
-			params.Defs = &orderedMap
+			params.Defs = orderedMap
 		}
 	}
 
 	// Convert map[string]any to OrderedMap for Definitions
 	if schema.Definitions != nil {
 		if orderedMap, ok := schemas.SafeExtractOrderedMap(*schema.Definitions); ok {
-			params.Definitions = &orderedMap
+			params.Definitions = orderedMap
 		}
 	}
 
 	// Convert map[string]any to OrderedMap for Items
 	if schema.Items != nil {
 		if orderedMap, ok := schemas.SafeExtractOrderedMap(*schema.Items); ok {
-			params.Items = &orderedMap
+			params.Items = orderedMap
 		}
 	}
 
@@ -427,7 +427,7 @@ func convertJSONSchemaToToolParameters(schema *schemas.ResponsesTextConfigFormat
 		params.AnyOf = make([]schemas.OrderedMap, 0, len(schema.AnyOf))
 		for _, item := range schema.AnyOf {
 			if orderedMap, ok := schemas.SafeExtractOrderedMap(item); ok {
-				params.AnyOf = append(params.AnyOf, orderedMap)
+				params.AnyOf = append(params.AnyOf, *orderedMap)
 			}
 		}
 	}
@@ -436,7 +436,7 @@ func convertJSONSchemaToToolParameters(schema *schemas.ResponsesTextConfigFormat
 		params.OneOf = make([]schemas.OrderedMap, 0, len(schema.OneOf))
 		for _, item := range schema.OneOf {
 			if orderedMap, ok := schemas.SafeExtractOrderedMap(item); ok {
-				params.OneOf = append(params.OneOf, orderedMap)
+				params.OneOf = append(params.OneOf, *orderedMap)
 			}
 		}
 	}
@@ -445,7 +445,7 @@ func convertJSONSchemaToToolParameters(schema *schemas.ResponsesTextConfigFormat
 		params.AllOf = make([]schemas.OrderedMap, 0, len(schema.AllOf))
 		for _, item := range schema.AllOf {
 			if orderedMap, ok := schemas.SafeExtractOrderedMap(item); ok {
-				params.AllOf = append(params.AllOf, orderedMap)
+				params.AllOf = append(params.AllOf, *orderedMap)
 			}
 		}
 	}
@@ -464,7 +464,7 @@ func convertMapToToolFunctionParameters(m map[string]interface{}) *schemas.ToolF
 		params.Description = &desc
 	}
 	if props, ok := schemas.SafeExtractOrderedMap(m["properties"]); ok {
-		params.Properties = &props
+		params.Properties = props
 	}
 	if req, ok := m["required"].([]interface{}); ok {
 		required := make([]string, 0, len(req))
@@ -482,21 +482,21 @@ func convertMapToToolFunctionParameters(m map[string]interface{}) *schemas.ToolF
 			}
 		} else if addPropsMap, ok := schemas.SafeExtractOrderedMap(addProps); ok {
 			params.AdditionalProperties = &schemas.AdditionalPropertiesStruct{
-				AdditionalPropertiesMap: &addPropsMap,
+				AdditionalPropertiesMap: addPropsMap,
 			}
 		}
 	}
 	if defs, ok := schemas.SafeExtractOrderedMap(m["$defs"]); ok {
-		params.Defs = &defs
+		params.Defs = defs
 	}
 	if definitions, ok := schemas.SafeExtractOrderedMap(m["definitions"]); ok {
-		params.Definitions = &definitions
+		params.Definitions = definitions
 	}
 	if ref, ok := m["$ref"].(string); ok {
 		params.Ref = &ref
 	}
 	if items, ok := schemas.SafeExtractOrderedMap(m["items"]); ok {
-		params.Items = &items
+		params.Items = items
 	}
 	if minItems, ok := anthropicExtractInt64(m["minItems"]); ok {
 		params.MinItems = schemas.Ptr(minItems)
@@ -508,7 +508,7 @@ func convertMapToToolFunctionParameters(m map[string]interface{}) *schemas.ToolF
 		anyOfMaps := make([]schemas.OrderedMap, 0, len(anyOf))
 		for _, item := range anyOf {
 			if orderedMap, ok := schemas.SafeExtractOrderedMap(item); ok {
-				anyOfMaps = append(anyOfMaps, orderedMap)
+				anyOfMaps = append(anyOfMaps, *orderedMap)
 			}
 		}
 		if len(anyOfMaps) > 0 {
@@ -519,7 +519,7 @@ func convertMapToToolFunctionParameters(m map[string]interface{}) *schemas.ToolF
 		oneOfMaps := make([]schemas.OrderedMap, 0, len(oneOf))
 		for _, item := range oneOf {
 			if orderedMap, ok := schemas.SafeExtractOrderedMap(item); ok {
-				oneOfMaps = append(oneOfMaps, orderedMap)
+				oneOfMaps = append(oneOfMaps, *orderedMap)
 			}
 		}
 		if len(oneOfMaps) > 0 {
@@ -530,7 +530,7 @@ func convertMapToToolFunctionParameters(m map[string]interface{}) *schemas.ToolF
 		allOfMaps := make([]schemas.OrderedMap, 0, len(allOf))
 		for _, item := range allOf {
 			if orderedMap, ok := schemas.SafeExtractOrderedMap(item); ok {
-				allOfMaps = append(allOfMaps, orderedMap)
+				allOfMaps = append(allOfMaps, *orderedMap)
 			}
 		}
 		if len(allOfMaps) > 0 {
@@ -1297,7 +1297,7 @@ func convertAnthropicOutputFormatToResponsesTextConfig(outputFormat interface{})
 
 		if additionalProps, ok := schemas.SafeExtractOrderedMap(schemaMap["additionalProperties"]); ok {
 			jsonSchema.AdditionalProperties = &schemas.AdditionalPropertiesStruct{
-				AdditionalPropertiesMap: &additionalProps,
+				AdditionalPropertiesMap: additionalProps,
 			}
 		}
 

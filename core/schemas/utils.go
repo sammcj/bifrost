@@ -607,29 +607,34 @@ func SafeExtractStringMap(value interface{}) (map[string]string, bool) {
 	}
 }
 
-func SafeExtractOrderedMap(value interface{}) (OrderedMap, bool) {
+func SafeExtractOrderedMap(value interface{}) (*OrderedMap, bool) {
 	if value == nil {
-		return OrderedMap{}, false
+		return nil, false
 	}
 	switch v := value.(type) {
 	case map[string]interface{}:
-		orderedMap := OrderedMap(v)
-		return orderedMap, true
+		mapped := OrderedMapFromMap(v)
+		if mapped != nil {
+			return mapped, true
+		}
+		return nil, false
 	case *map[string]interface{}:
 		if v != nil {
-			orderedMap := OrderedMap(*v)
-			return orderedMap, true
+			mapped := OrderedMapFromMap(*v)
+			if mapped != nil {
+				return mapped, true
+			}
 		}
-		return OrderedMap{}, false
-	case OrderedMap:
-		return v, true
+		return nil, false
 	case *OrderedMap:
 		if v != nil {
-			return *v, true
+			return v, true
 		}
-		return OrderedMap{}, false
+		return nil, false
+	case OrderedMap:
+		return &v, true
 	}
-	return OrderedMap{}, false
+	return nil, false
 }
 
 // GET DEEP COPY UNTIL
@@ -844,13 +849,13 @@ func DeepCopyChatTool(original ChatTool) ChatTool {
 			}
 
 			if original.Function.Parameters.Properties != nil {
-				// Deep copy the map
-				copyProps := make(map[string]interface{}, len(*original.Function.Parameters.Properties))
-				for k, v := range *original.Function.Parameters.Properties {
-					copyProps[k] = DeepCopy(v)
-				}
-				orderedProps := OrderedMap(copyProps)
-				copyParams.Properties = &orderedProps
+				// Deep copy preserving insertion order
+				copyProps := NewOrderedMapWithCapacity(original.Function.Parameters.Properties.Len())
+				original.Function.Parameters.Properties.Range(func(k string, v interface{}) bool {
+					copyProps.Set(k, DeepCopy(v))
+					return true
+				})
+				copyParams.Properties = copyProps
 			}
 
 			if original.Function.Parameters.Enum != nil {

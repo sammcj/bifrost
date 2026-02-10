@@ -16,16 +16,16 @@ import (
 // This tool provides detailed documentation for a specific tool when the compact
 // signatures from readToolFile are not sufficient to understand how to use it.
 func (s *StarlarkCodeMode) createGetToolDocsTool() schemas.ChatTool {
-	getToolDocsProps := schemas.OrderedMap{
-		"server": map[string]interface{}{
+	getToolDocsProps := schemas.NewOrderedMapFromPairs(
+		schemas.KV("server", map[string]interface{}{
 			"type":        "string",
 			"description": "The server name (e.g., 'calculator'). Use listToolFiles to see available servers.",
-		},
-		"tool": map[string]interface{}{
+		}),
+		schemas.KV("tool", map[string]interface{}{
 			"type":        "string",
 			"description": "The tool name (e.g., 'add'). Use readToolFile to see available tools for a server.",
-		},
-	}
+		}),
+	)
 	return schemas.ChatTool{
 		Type: schemas.ChatToolTypeFunction,
 		Function: &schemas.ChatToolFunction{
@@ -38,7 +38,7 @@ func (s *StarlarkCodeMode) createGetToolDocsTool() schemas.ChatTool {
 			),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type:       "object",
-				Properties: &getToolDocsProps,
+				Properties: getToolDocsProps,
 				Required:   []string{"server", "tool"},
 			},
 		},
@@ -208,7 +208,7 @@ func generateTypeDefinitions(clientName string, tools []schemas.ChatTool, isTool
 
 		// Args section
 		if tool.Function.Parameters != nil && tool.Function.Parameters.Properties != nil {
-			props := *tool.Function.Parameters.Properties
+			props := tool.Function.Parameters.Properties
 			required := make(map[string]bool)
 			if tool.Function.Parameters.Required != nil {
 				for _, req := range tool.Function.Parameters.Required {
@@ -216,14 +216,15 @@ func generateTypeDefinitions(clientName string, tools []schemas.ChatTool, isTool
 				}
 			}
 
-			if len(props) > 0 {
+			if props.Len() > 0 {
 				sb.WriteString("    Args:\n")
 
 				// Sort properties for consistent output
-				propNames := make([]string, 0, len(props))
-				for name := range props {
+				propNames := make([]string, 0, props.Len())
+				props.Range(func(name string, _ interface{}) bool {
 					propNames = append(propNames, name)
-				}
+					return true
+				})
 				for i := 0; i < len(propNames)-1; i++ {
 					for j := i + 1; j < len(propNames); j++ {
 						if propNames[i] > propNames[j] {
@@ -233,7 +234,7 @@ func generateTypeDefinitions(clientName string, tools []schemas.ChatTool, isTool
 				}
 
 				for _, propName := range propNames {
-					prop := props[propName]
+					prop, _ := props.Get(propName)
 					propMap, ok := prop.(map[string]interface{})
 					if !ok {
 						continue
@@ -280,11 +281,10 @@ func generateTypeDefinitions(clientName string, tools []schemas.ChatTool, isTool
 
 // getExampleParams generates example parameter usage for a function.
 func getExampleParams(params *schemas.ToolFunctionParameters) string {
-	if params == nil || params.Properties == nil || len(*params.Properties) == 0 {
+	if params == nil || params.Properties == nil || params.Properties.Len() == 0 {
 		return ""
 	}
 
-	props := *params.Properties
 	required := make(map[string]bool)
 	if params.Required != nil {
 		for _, req := range params.Required {
@@ -292,16 +292,18 @@ func getExampleParams(params *schemas.ToolFunctionParameters) string {
 		}
 	}
 
+	keys := params.Properties.Keys()
+
 	// Get first required param as example
-	for name := range props {
+	for _, name := range keys {
 		if required[name] {
 			return fmt.Sprintf("%s=\"...\"", name)
 		}
 	}
 
 	// If no required, get first param
-	for name := range props {
-		return fmt.Sprintf("%s=\"...\"", name)
+	if len(keys) > 0 {
+		return fmt.Sprintf("%s=\"...\"", keys[0])
 	}
 
 	return ""

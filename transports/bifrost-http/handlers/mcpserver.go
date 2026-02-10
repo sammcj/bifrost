@@ -281,9 +281,10 @@ func (h *MCPServerHandler) syncServer(server *server.MCPServer, availableTools [
 			if tool.Function.Parameters.Properties != nil {
 				// Convert *map[string]interface{} to map[string]any
 				props := make(map[string]any)
-				for k, v := range *tool.Function.Parameters.Properties {
-					props[k] = v
-				}
+				tool.Function.Parameters.Properties.Range(func(key string, value interface{}) bool {
+					props[key] = value
+					return true
+				})
 				inputSchema.Properties = props
 			}
 			if tool.Function.Parameters.Required != nil {

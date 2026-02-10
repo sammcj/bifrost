@@ -42,20 +42,20 @@ func (s *StarlarkCodeMode) createReadToolFileTool() schemas.ChatTool {
 			"do NOT call this tool again with startLine/endLine - you already have the complete file."
 	}
 
-	readToolFileProps := schemas.OrderedMap{
-		"fileName": map[string]interface{}{
+	readToolFileProps := schemas.NewOrderedMapFromPairs(
+		schemas.KV("fileName", map[string]interface{}{
 			"type":        "string",
 			"description": fileNameDescription,
-		},
-		"startLine": map[string]interface{}{
+		}),
+		schemas.KV("startLine", map[string]interface{}{
 			"type":        "number",
 			"description": "Optional 1-based starting line number for partial file read. Usually not needed - omit to read the entire file. Files are typically small (under 50 lines).",
-		},
-		"endLine": map[string]interface{}{
+		}),
+		schemas.KV("endLine", map[string]interface{}{
 			"type":        "number",
 			"description": "Optional 1-based ending line number for partial file read. Usually not needed - omit to read the entire file. Will be clamped to actual file size if too large.",
-		},
-	}
+		}),
+	)
 	return schemas.ChatTool{
 		Type: schemas.ChatToolTypeFunction,
 		Function: &schemas.ChatToolFunction{
@@ -63,7 +63,7 @@ func (s *StarlarkCodeMode) createReadToolFileTool() schemas.ChatTool {
 			Description: schemas.Ptr(toolDescription),
 			Parameters: &schemas.ToolFunctionParameters{
 				Type:       "object",
-				Properties: &readToolFileProps,
+				Properties: readToolFileProps,
 				Required:   []string{"fileName"},
 			},
 		},
@@ -342,11 +342,11 @@ func generateCompactSignatures(clientName string, tools []schemas.ChatTool, isTo
 
 // formatPythonParams formats tool parameters as Python function parameters.
 func formatPythonParams(params *schemas.ToolFunctionParameters) string {
-	if params == nil || params.Properties == nil || len(*params.Properties) == 0 {
+	if params == nil || params.Properties == nil || params.Properties.Len() == 0 {
 		return ""
 	}
 
-	props := *params.Properties
+	props := params.Properties
 	required := make(map[string]bool)
 	if params.Required != nil {
 		for _, req := range params.Required {
@@ -357,13 +357,14 @@ func formatPythonParams(params *schemas.ToolFunctionParameters) string {
 	// Sort properties: required first, then optional, alphabetically within each group
 	requiredNames := make([]string, 0)
 	optionalNames := make([]string, 0)
-	for name := range props {
+	props.Range(func(name string, _ interface{}) bool {
 		if required[name] {
 			requiredNames = append(requiredNames, name)
 		} else {
 			optionalNames = append(optionalNames, name)
 		}
-	}
+		return true
+	})
 	// Simple alphabetical sort for each group
 	for i := 0; i < len(requiredNames)-1; i++ {
 		for j := i + 1; j < len(requiredNames); j++ {
@@ -380,11 +381,11 @@ func formatPythonParams(params *schemas.ToolFunctionParameters) string {
 		}
 	}
 
-	parts := make([]string, 0, len(props))
+	parts := make([]string, 0, props.Len())
 
 	// Add required params first
 	for _, propName := range requiredNames {
-		prop := props[propName]
+		prop, _ := props.Get(propName)
 		propMap, ok := prop.(map[string]interface{})
 		if !ok {
 			continue
@@ -395,7 +396,7 @@ func formatPythonParams(params *schemas.ToolFunctionParameters) string {
 
 	// Add optional params with default None
 	for _, propName := range optionalNames {
-		prop := props[propName]
+		prop, _ := props.Get(propName)
 		propMap, ok := prop.(map[string]interface{})
 		if !ok {
 			continue
