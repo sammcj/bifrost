@@ -376,6 +376,8 @@ jobs:
           fi
 
       - name: Run E2E UI tests
+        env:
+          MCP_SSE_HEADERS: ${{ secrets.MCP_SSE_HEADERS }}
         run: ./.github/workflows/scripts/test-e2e-ui.sh
 
       - name: Upload Playwright artifacts
