@@ -331,9 +331,10 @@ type BedrockToolChoiceTool struct {
 
 // BedrockGuardrailConfig represents guardrail configuration
 type BedrockGuardrailConfig struct {
-	GuardrailIdentifier string  `json:"guardrailIdentifier"` // Required: Guardrail identifier
-	GuardrailVersion    string  `json:"guardrailVersion"`    // Required: Guardrail version
-	Trace               *string `json:"trace,omitempty"`     // Optional: Trace level ("enabled" or "disabled")
+	GuardrailIdentifier  string  `json:"guardrailIdentifier"`            // Required: Guardrail identifier
+	GuardrailVersion     string  `json:"guardrailVersion"`               // Required: Guardrail version
+	Trace                *string `json:"trace,omitempty"`                // Optional: Trace level ("enabled" or "disabled")
+	StreamProcessingMode *string `json:"streamProcessingMode,omitempty"` // Optional: Stream processing mode ("sync" or "async")
 }
 
 // BedrockPerformanceConfig represents performance configuration
