@@ -1590,12 +1590,18 @@ func anthropicExtractFloat64(v interface{}) (float64, bool) {
 	}
 }
 
+// IsClaudeCodeMaxMode checks if the request is a Claude Code max mode request.
+// In the max mode - we don't need to forward the key
+func IsClaudeCodeMaxMode(ctx *schemas.BifrostContext) bool {
+	userAgent, _ := ctx.Value(schemas.BifrostContextKeyUserAgent).(string)
+	skipKeySelection, _ := ctx.Value(schemas.BifrostContextKeySkipKeySelection).(bool)
+	return strings.Contains(strings.ToLower(userAgent), "claude-cli") && skipKeySelection
+}
+
 // IsClaudeCodeRequest checks if the request is a Claude Code request.
 func IsClaudeCodeRequest(ctx *schemas.BifrostContext) bool {
 	if userAgent, ok := ctx.Value(schemas.BifrostContextKeyUserAgent).(string); ok {
-		if strings.Contains(strings.ToLower(userAgent), "claude-cli") {
-			return true
-		}
+		return strings.Contains(strings.ToLower(userAgent), "claude-cli")
 	}
 	return false
 }

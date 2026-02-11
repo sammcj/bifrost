@@ -92,39 +92,39 @@ func createAnthropicMessagesRouteConfig(pathPrefix string) []RouteConfig {
 				return anthropic.ToAnthropicChatCompletionError(err)
 			},
 			StreamConfig: &StreamConfig{
-			ResponsesStreamResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostResponsesStreamResponse) (string, interface{}, error) {
-				if shouldUsePassthrough(ctx, resp.ExtraFields.Provider, resp.ExtraFields.ModelRequested, resp.ExtraFields.ModelDeployment) {
-					if resp.ExtraFields.RawResponse != nil {
-						raw, ok := resp.ExtraFields.RawResponse.(string)
-						if !ok {
-							return "", nil, fmt.Errorf("expected RawResponse string, got %T", resp.ExtraFields.RawResponse)
+				ResponsesStreamResponseConverter: func(ctx *schemas.BifrostContext, resp *schemas.BifrostResponsesStreamResponse) (string, interface{}, error) {
+					if shouldUsePassthrough(ctx, resp.ExtraFields.Provider, resp.ExtraFields.ModelRequested, resp.ExtraFields.ModelDeployment) {
+						if resp.ExtraFields.RawResponse != nil {
+							raw, ok := resp.ExtraFields.RawResponse.(string)
+							if !ok {
+								return "", nil, fmt.Errorf("expected RawResponse string, got %T", resp.ExtraFields.RawResponse)
+							}
+							var rawResponseJSON anthropic.AnthropicStreamEvent
+							if err := sonic.Unmarshal([]byte(raw), &rawResponseJSON); err == nil {
+								return string(rawResponseJSON.Type), raw, nil
+							}
 						}
-						var rawResponseJSON anthropic.AnthropicStreamEvent
-						if err := sonic.Unmarshal([]byte(raw), &rawResponseJSON); err == nil {
-							return string(rawResponseJSON.Type), raw, nil
-						}
+						// Fallback: if RawResponse is not available, use bifrost-to-anthropic conversion
+						// instead of silently dropping all events
 					}
-					// Fallback: if RawResponse is not available, use bifrost-to-anthropic conversion
-					// instead of silently dropping all events
-				}
-				anthropicResponse := anthropic.ToAnthropicResponsesStreamResponse(ctx, resp)
-				// Can happen for openai lifecycle events
-				if len(anthropicResponse) == 0 {
-					return "", nil, nil
-				}
-				if len(anthropicResponse) > 1 {
-					combinedContent := ""
-					for _, event := range anthropicResponse {
-						responseJSON, err := sonic.Marshal(event)
-						if err != nil {
-							continue
-						}
-						combinedContent += fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, responseJSON)
+					anthropicResponse := anthropic.ToAnthropicResponsesStreamResponse(ctx, resp)
+					// Can happen for openai lifecycle events
+					if len(anthropicResponse) == 0 {
+						return "", nil, nil
 					}
-					return "", combinedContent, nil
-				}
-				return string(anthropicResponse[0].Type), anthropicResponse[0], nil
-			},
+					if len(anthropicResponse) > 1 {
+						combinedContent := ""
+						for _, event := range anthropicResponse {
+							responseJSON, err := sonic.Marshal(event)
+							if err != nil {
+								continue
+							}
+							combinedContent += fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, responseJSON)
+						}
+						return "", combinedContent, nil
+					}
+					return string(anthropicResponse[0].Type), anthropicResponse[0], nil
+				},
 				ErrorConverter: func(ctx *schemas.BifrostContext, err *schemas.BifrostError) interface{} {
 					return anthropic.ToAnthropicResponsesStreamError(err)
 				},
@@ -303,6 +303,8 @@ func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.Bif
 			}
 			bifrostCtx.SetValue(schemas.BifrostContextKeyExtraHeaders, headers)
 			bifrostCtx.SetValue(schemas.BifrostContextKeyURLPath, url)
+			// This key is also used in IsClaudeCodeMaxMode
+			// So if you are changing the behaviour of this key, make sure to change IsClaudeCodeMaxMode as well
 			bifrostCtx.SetValue(schemas.BifrostContextKeySkipKeySelection, true)
 		} else {
 			// API key flow: pass only whitelisted safe headers (like anthropic-beta for feature detection)
@@ -319,6 +321,7 @@ func checkAnthropicPassthrough(ctx *fasthttp.RequestCtx, bifrostCtx *schemas.Bif
 	return nil
 }
 
+// shouldUsePassthrough checks if the request should be sent to the passthrough endpoint.
 func shouldUsePassthrough(ctx *schemas.BifrostContext, provider schemas.ModelProvider, model string, deployment string) bool {
 	return anthropic.IsClaudeCodeRequest(ctx) && isClaudeModel(model, deployment, string(provider))
 }
