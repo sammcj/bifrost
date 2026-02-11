@@ -146,7 +146,7 @@ func (provider *AnthropicProvider) completeRequest(ctx *schemas.BifrostContext, 
 
 	// Can be empty in case of passthrough or keyless custom provider
 	// Here we can avoid this - in case of passthrough completely
-	if key != "" && !IsClaudeCodeRequest(ctx) {
+	if key != "" && !IsClaudeCodeMaxMode(ctx) {
 		req.Header.Set("x-api-key", key)
 	}
 	req.Header.Set("anthropic-version", provider.apiVersion)
@@ -420,7 +420,7 @@ func (provider *AnthropicProvider) ChatCompletionStream(ctx *schemas.BifrostCont
 		"Cache-Control":     "no-cache",
 	}
 
-	if key.Value.GetValue() != "" && !IsClaudeCodeRequest(ctx) {
+	if key.Value.GetValue() != "" && !IsClaudeCodeMaxMode(ctx) {
 		headers["x-api-key"] = key.Value.GetValue()
 	}
 
@@ -862,8 +862,8 @@ func (provider *AnthropicProvider) ResponsesStream(ctx *schemas.BifrostContext, 
 		"Accept":            "text/event-stream",
 		"Cache-Control":     "no-cache",
 	}
-	
-	if key.Value.GetValue() != "" && !IsClaudeCodeRequest(ctx) {
+
+	if key.Value.GetValue() != "" && !IsClaudeCodeMaxMode(ctx) {
 		headers["x-api-key"] = key.Value.GetValue()
 	}
 
