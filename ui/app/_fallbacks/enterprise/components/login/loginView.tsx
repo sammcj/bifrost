@@ -158,7 +158,7 @@ export default function LoginView() {
 							/>
 						</div>
 
-						<Button type="submit" className="w-full text-sm" isLoading={isLoading} disabled={isLoading}>
+						<Button type="submit" className="h-9 w-full text-sm" isLoading={isLoading} disabled={isLoading}>
 							{isLoading || isLoggingIn ? "Signing in..." : "Sign in"}
 						</Button>
 					</form>
