@@ -16,7 +16,26 @@ import (
 var (
 	invalidCharRegex = regexp.MustCompile(`[^a-zA-Z0-9\s\-\(\)\[\]]`)
 	multiSpaceRegex  = regexp.MustCompile(`\s{2,}`)
+
+	// bedrockFinishReasonToBifrost maps Bedrock Converse API stop reasons to Bifrost format.
+	// Bedrock has additional stop reasons beyond Anthropic (guardrail_intervened, content_filtered).
+	bedrockFinishReasonToBifrost = map[string]string{
+		"end_turn":             "stop",
+		"max_tokens":           "length",
+		"stop_sequence":        "stop",
+		"tool_use":             "tool_calls",
+		"guardrail_intervened": "content_filter",
+		"content_filtered":     "content_filter",
+	}
 )
+
+// convertBedrockStopReason converts a Bedrock stop reason to Bifrost format.
+func convertBedrockStopReason(stopReason string) string {
+	if reason, ok := bedrockFinishReasonToBifrost[stopReason]; ok {
+		return reason
+	}
+	return "stop"
+}
 
 // normalizeBedrockFilename normalizes a filename to meet Bedrock's requirements:
 // - Only alphanumeric characters, whitespace, hyphens, parentheses, and square brackets
@@ -164,10 +183,12 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 				bedrockReq.AdditionalModelRequestFields.Set("reasoningConfig", config)
 			} else if schemas.IsAnthropicModel(bifrostReq.Model) {
 				if anthropic.SupportsAdaptiveThinking(bifrostReq.Model) {
-					// Opus 4.6+: adaptive thinking
+					// Opus 4.6+: adaptive thinking + output_config.effort
 					effort := anthropic.MapBifrostEffortToAnthropic(*bifrostReq.Params.Reasoning.Effort)
 					bedrockReq.AdditionalModelRequestFields.Set("thinking", map[string]any{
-						"type":   "adaptive",
+						"type": "adaptive",
+					})
+					bedrockReq.AdditionalModelRequestFields.Set("output_config", map[string]any{
 						"effort": effort,
 					})
 				} else {
@@ -234,6 +255,9 @@ func convertChatParameters(ctx *schemas.BifrostContext, bifrostReq *schemas.Bifr
 				}
 				if trace, ok := gc["trace"].(string); ok {
 					config.Trace = &trace
+				}
+				if mode, ok := gc["streamProcessingMode"].(string); ok {
+					config.StreamProcessingMode = &mode
 				}
 				delete(bedrockReq.ExtraParams, "guardrailConfig")
 				bedrockReq.GuardrailConfig = config
@@ -389,7 +413,13 @@ func convertSystemMessages(msg schemas.ChatMessage) ([]BedrockSystemMessage, err
 		})
 	} else if msg.Content.ContentBlocks != nil {
 		for _, block := range msg.Content.ContentBlocks {
-			if block.Type == schemas.ChatContentBlockTypeText && block.Text != nil {
+			// Handle Bedrock native format where type may be empty but text is set directly
+			blockType := block.Type
+			if blockType == "" && block.Text != nil {
+				blockType = schemas.ChatContentBlockTypeText
+			}
+
+			if blockType == schemas.ChatContentBlockTypeText && block.Text != nil {
 				systemMsgs = append(systemMsgs, BedrockSystemMessage{
 					Text: block.Text,
 				})
@@ -400,6 +430,13 @@ func convertSystemMessages(msg schemas.ChatMessage) ([]BedrockSystemMessage, err
 						},
 					})
 				}
+			} else if block.CachePoint != nil {
+				// Handle standalone cache point blocks
+				systemMsgs = append(systemMsgs, BedrockSystemMessage{
+					CachePoint: &BedrockCachePoint{
+						Type: BedrockCachePointTypeDefault,
+					},
+				})
 			}
 		}
 	}
@@ -428,6 +465,22 @@ func convertMessage(msg schemas.ChatMessage) (BedrockMessage, error) {
 		for _, toolCall := range msg.ChatAssistantMessage.ToolCalls {
 			toolUseBlock := convertToolCallToContentBlock(toolCall)
 			contentBlocks = append(contentBlocks, toolUseBlock)
+		}
+	}
+
+	// Add reasoning content if present (for multi-turn conversations with thinking)
+	if msg.ChatAssistantMessage != nil && len(msg.ChatAssistantMessage.ReasoningDetails) > 0 {
+		for _, detail := range msg.ChatAssistantMessage.ReasoningDetails {
+			if detail.Type == schemas.BifrostReasoningDetailsTypeText {
+				contentBlocks = append(contentBlocks, BedrockContentBlock{
+					ReasoningContent: &BedrockReasoningContent{
+						ReasoningText: &BedrockReasoningContentText{
+							Text:      detail.Text,
+							Signature: detail.Signature,
+						},
+					},
+				})
+			}
 		}
 	}
 
@@ -566,6 +619,13 @@ func convertContent(content schemas.ChatMessageContent) ([]BedrockContentBlock, 
 
 // convertContentBlock converts a Bifrost content block to Bedrock format
 func convertContentBlock(block schemas.ChatContentBlock) ([]BedrockContentBlock, error) {
+	// Handle Bedrock native format where type may be empty but text is set directly
+	// This occurs when requests are sent in Bedrock's native format (e.g., from Claude Code)
+	// In Bedrock format: {"text": "hello"} vs OpenAI format: {"type": "text", "text": "hello"}
+	if block.Type == "" && block.Text != nil {
+		block.Type = schemas.ChatContentBlockTypeText
+	}
+
 	switch block.Type {
 	case schemas.ChatContentBlockTypeText:
 		// NOTE: we are doing this because LiteLLM does this for empty text blocks.
@@ -631,14 +691,32 @@ func convertContentBlock(block schemas.ChatContentBlock) ([]BedrockContentBlock,
 			documentSource.Name = normalizeBedrockFilename(*block.File.Filename)
 		}
 
-		// Convert MIME type to Bedrock format (pdf or txt)
+		// Convert MIME type to Bedrock format
 		isText := false
 		if block.File.FileType != nil {
 			fileType := *block.File.FileType
-			if fileType == "text/plain" || fileType == "txt" {
+			switch {
+			case fileType == "text/plain" || fileType == "txt":
 				documentSource.Format = "txt"
 				isText = true
-			} else if strings.Contains(fileType, "pdf") || fileType == "pdf" {
+			case fileType == "text/markdown" || fileType == "md":
+				documentSource.Format = "md"
+				isText = true
+			case fileType == "text/html" || fileType == "html":
+				documentSource.Format = "html"
+				isText = true
+			case fileType == "text/csv" || fileType == "csv":
+				documentSource.Format = "csv"
+				isText = true
+			case fileType == "application/msword" || fileType == "doc":
+				documentSource.Format = "doc"
+			case strings.Contains(fileType, "wordprocessingml") || fileType == "docx":
+				documentSource.Format = "docx"
+			case fileType == "application/vnd.ms-excel" || fileType == "xls":
+				documentSource.Format = "xls"
+			case strings.Contains(fileType, "spreadsheetml") || fileType == "xlsx":
+				documentSource.Format = "xlsx"
+			case strings.Contains(fileType, "pdf") || fileType == "pdf":
 				documentSource.Format = "pdf"
 			}
 		}
@@ -680,6 +758,16 @@ func convertContentBlock(block schemas.ChatContentBlock) ([]BedrockContentBlock,
 		return nil, fmt.Errorf("audio input not supported in Bedrock Converse API")
 
 	default:
+		// Handle cache-point-only blocks (Type is empty but CachePoint is set)
+		if block.Type == "" && block.CachePoint != nil {
+			return []BedrockContentBlock{
+				{
+					CachePoint: &BedrockCachePoint{
+						Type: BedrockCachePointTypeDefault,
+					},
+				},
+			}, nil
+		}
 		return nil, fmt.Errorf("unsupported content block type: %s", block.Type)
 	}
 }
@@ -997,6 +1085,9 @@ func convertToolChoice(toolChoice schemas.ChatToolChoice) *BedrockToolChoice {
 	// String variant
 	if toolChoice.ChatToolChoiceStr != nil {
 		switch schemas.ChatToolChoiceType(*toolChoice.ChatToolChoiceStr) {
+		case schemas.ChatToolChoiceTypeAuto:
+			// Auto is Bedrock's default behavior - omit ToolChoice
+			return nil
 		case schemas.ChatToolChoiceTypeAny, schemas.ChatToolChoiceTypeRequired:
 			return &BedrockToolChoice{Any: &BedrockToolChoiceAny{}}
 		case schemas.ChatToolChoiceTypeNone:

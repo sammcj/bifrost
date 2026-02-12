@@ -412,6 +412,164 @@ func validateChatCompletionReasoning(t *testing.T, response *schemas.BifrostChat
 	return detected
 }
 
+// RunMultiTurnReasoningTest tests multi-turn conversations with reasoning content passthrough.
+// It verifies that reasoning details (text + signature) from assistant messages are correctly
+// passed back to the model in follow-up turns via the Chat Completions API.
+func RunMultiTurnReasoningTest(t *testing.T, client *bifrost.Bifrost, ctx context.Context, testConfig ComprehensiveTestConfig) {
+	if !testConfig.Scenarios.Reasoning {
+		t.Logf("⏭️ Reasoning not supported for provider %s", testConfig.Provider)
+		return
+	}
+
+	if testConfig.ReasoningModel == "" {
+		t.Logf("⏭️ No reasoning model configured for provider %s", testConfig.Provider)
+		return
+	}
+
+	t.Run("MultiTurnReasoning", func(t *testing.T) {
+		if os.Getenv("SKIP_PARALLEL_TESTS") != "true" {
+			t.Parallel()
+		}
+
+		if testConfig.Provider == schemas.OpenAI {
+			t.Skip("Skipping MultiTurnReasoning test for OpenAI")
+			return
+		}
+
+		// Step 1: Send initial reasoning request
+		initialPrompt := "What is 15 * 17? Think step by step."
+		chatMessages := []schemas.ChatMessage{
+			CreateBasicChatMessage(initialPrompt),
+		}
+
+		chatReq := &schemas.BifrostChatRequest{
+			Provider: testConfig.Provider,
+			Model:    testConfig.ReasoningModel,
+			Input:    chatMessages,
+			Params: &schemas.ChatParameters{
+				MaxCompletionTokens: bifrost.Ptr(4000),
+				Reasoning: &schemas.ChatReasoning{
+					Effort: bifrost.Ptr("low"),
+				},
+			},
+			Fallbacks: testConfig.Fallbacks,
+		}
+
+		retryConfig := GetTestRetryConfigForScenario("Reasoning", testConfig)
+		retryContext := TestRetryContext{
+			ScenarioName: "MultiTurnReasoning_Step1",
+			ExpectedBehavior: map[string]interface{}{
+				"should_show_reasoning": true,
+				"multi_turn":            true,
+			},
+			TestMetadata: map[string]interface{}{
+				"provider": testConfig.Provider,
+				"model":    testConfig.ReasoningModel,
+				"step":     "initial",
+			},
+		}
+		chatRetryConfig := ChatRetryConfig{
+			MaxAttempts: retryConfig.MaxAttempts,
+			BaseDelay:   retryConfig.BaseDelay,
+			MaxDelay:    retryConfig.MaxDelay,
+			Conditions:  []ChatRetryCondition{},
+			OnRetry:     retryConfig.OnRetry,
+			OnFinalFail: retryConfig.OnFinalFail,
+		}
+		expectations := GetExpectationsForScenario("Reasoning", testConfig, map[string]interface{}{
+			"requires_reasoning": true,
+		})
+		expectations = ModifyExpectationsForProvider(expectations, testConfig.Provider)
+
+		firstResponse, chatError := WithChatTestRetry(t, chatRetryConfig, retryContext, expectations, "MultiTurnReasoning_Step1", func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			return client.ChatCompletionRequest(bfCtx, chatReq)
+		})
+
+		if chatError != nil {
+			t.Fatalf("Step 1 failed: %v", GetErrorMessage(chatError))
+		}
+
+		firstContent := GetChatContent(firstResponse)
+		if firstContent == "" {
+			t.Fatal("Step 1: Expected non-empty response content")
+		}
+		t.Logf("Step 1 response: %s", truncateString(firstContent, 200))
+
+		// Extract reasoning details from first response
+		var reasoningDetails []schemas.ChatReasoningDetails
+		if len(firstResponse.Choices) > 0 {
+			choice := firstResponse.Choices[0]
+			if choice.ChatNonStreamResponseChoice != nil &&
+				choice.ChatNonStreamResponseChoice.Message != nil &&
+				choice.ChatNonStreamResponseChoice.Message.ChatAssistantMessage != nil {
+				reasoningDetails = choice.ChatNonStreamResponseChoice.Message.ChatAssistantMessage.ReasoningDetails
+			}
+		}
+
+		t.Logf("Step 1: Found %d reasoning detail entries", len(reasoningDetails))
+
+		// Step 2: Build multi-turn conversation with reasoning details passed back
+		multiTurnMessages := []schemas.ChatMessage{
+			CreateBasicChatMessage(initialPrompt),
+			{
+				Role: schemas.ChatMessageRoleAssistant,
+				Content: &schemas.ChatMessageContent{
+					ContentStr: &firstContent,
+				},
+				ChatAssistantMessage: &schemas.ChatAssistantMessage{
+					ReasoningDetails: reasoningDetails,
+				},
+			},
+			CreateBasicChatMessage("Now multiply that result by 2."),
+		}
+
+		multiTurnReq := &schemas.BifrostChatRequest{
+			Provider: testConfig.Provider,
+			Model:    testConfig.ReasoningModel,
+			Input:    multiTurnMessages,
+			Params: &schemas.ChatParameters{
+				MaxCompletionTokens: bifrost.Ptr(4000),
+				Reasoning: &schemas.ChatReasoning{
+					Effort: bifrost.Ptr("low"),
+				},
+			},
+			Fallbacks: testConfig.Fallbacks,
+		}
+
+		retryContext2 := TestRetryContext{
+			ScenarioName: "MultiTurnReasoning_Step2",
+			ExpectedBehavior: map[string]interface{}{
+				"multi_turn":            true,
+				"reasoning_passthrough": true,
+			},
+			TestMetadata: map[string]interface{}{
+				"provider": testConfig.Provider,
+				"model":    testConfig.ReasoningModel,
+				"step":     "follow_up",
+			},
+		}
+
+		secondResponse, chatError2 := WithChatTestRetry(t, chatRetryConfig, retryContext2, expectations, "MultiTurnReasoning_Step2", func() (*schemas.BifrostChatResponse, *schemas.BifrostError) {
+			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			return client.ChatCompletionRequest(bfCtx, multiTurnReq)
+		})
+
+		if chatError2 != nil {
+			t.Fatalf("Step 2 (multi-turn with reasoning passthrough) failed: %v", GetErrorMessage(chatError2))
+		}
+
+		secondContent := GetChatContent(secondResponse)
+		if secondContent == "" {
+			t.Error("Step 2: Expected non-empty response content")
+		} else {
+			t.Logf("Step 2 response: %s", truncateString(secondContent, 200))
+		}
+
+		t.Log("Multi-turn reasoning passthrough test passed!")
+	})
+}
+
 // min returns the smaller of two integers
 func min(a, b int) int {
 	if a < b {

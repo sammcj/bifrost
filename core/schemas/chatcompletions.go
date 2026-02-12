@@ -468,6 +468,7 @@ type ChatToolChoiceType string
 // ChatToolChoiceType values
 const (
 	ChatToolChoiceTypeNone     ChatToolChoiceType = "none"
+	ChatToolChoiceTypeAuto     ChatToolChoiceType = "auto"
 	ChatToolChoiceTypeAny      ChatToolChoiceType = "any"
 	ChatToolChoiceTypeRequired ChatToolChoiceType = "required"
 	// ChatToolChoiceTypeFunction means a specific tool must be called
@@ -699,6 +700,15 @@ type ChatContentBlock struct {
 	// Not in OpenAI's schemas, but sent by a few providers (Anthropic, Bedrock are some of them)
 	CacheControl *CacheControl `json:"cache_control,omitempty"`
 	Citations    *Citations    `json:"citations,omitempty"`
+
+	// CachePoint is a Bedrock-specific field for standalone cache point blocks
+	// When present without other content, this indicates a cache point marker
+	CachePoint *CachePoint `json:"cachePoint,omitempty"`
+}
+
+// CachePoint represents a cache point marker (Bedrock-specific)
+type CachePoint struct {
+	Type string `json:"type"` // "default"
 }
 
 type CacheControlType string

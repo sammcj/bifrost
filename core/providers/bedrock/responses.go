@@ -1721,14 +1721,16 @@ func ToBedrockResponsesRequest(ctx *schemas.BifrostContext, bifrostReq *schemas.
 
 						bedrockReq.AdditionalModelRequestFields.Set("reasoningConfig", config)
 					} else if schemas.IsAnthropicModel(bifrostReq.Model) {
-						if anthropic.SupportsAdaptiveThinking(bifrostReq.Model) {
-							// Opus 4.6+: adaptive thinking
-							effort := anthropic.MapBifrostEffortToAnthropic(*bifrostReq.Params.Reasoning.Effort)
-							bedrockReq.AdditionalModelRequestFields.Set("thinking", map[string]any{
-								"type":   "adaptive",
-								"effort": effort,
-							})
-						} else {
+					if anthropic.SupportsAdaptiveThinking(bifrostReq.Model) {
+						// Opus 4.6+: adaptive thinking + output_config.effort
+						effort := anthropic.MapBifrostEffortToAnthropic(*bifrostReq.Params.Reasoning.Effort)
+						bedrockReq.AdditionalModelRequestFields.Set("thinking", map[string]any{
+							"type": "adaptive",
+						})
+						bedrockReq.AdditionalModelRequestFields.Set("output_config", map[string]any{
+							"effort": effort,
+						})
+					} else {
 							// Opus 4.5 and older Anthropic models: budget_tokens thinking
 							defaultMaxTokens := DefaultCompletionMaxTokens
 							if inferenceConfig.MaxTokens != nil {
