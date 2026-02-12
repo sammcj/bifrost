@@ -4,8 +4,8 @@ go 1.25.5
 
 require (
 	github.com/bytedance/sonic v1.14.2
-	github.com/maximhq/bifrost/core v1.4.1
-	github.com/maximhq/bifrost/framework v1.2.19
+	github.com/maximhq/bifrost/core v1.4.2
+	github.com/maximhq/bifrost/framework v1.2.20
 )
 
 require (
@@ -107,8 +107,6 @@ require (
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.40.0 // indirect
 	go.opentelemetry.io/otel/metric v1.40.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.40.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.40.0 // indirect
 	go.opentelemetry.io/otel/trace v1.40.0 // indirect
 	go.starlark.net v0.0.0-20260102030733-3fee463870c9 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
