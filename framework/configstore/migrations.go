@@ -247,6 +247,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddReplicateDeploymentsJSONColumn(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddRateLimitToTeamsAndCustomers(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -3354,6 +3357,55 @@ func migrationAddReplicateDeploymentsJSONColumn(ctx context.Context, db *gorm.DB
 	err := m.Migrate()
 	if err != nil {
 		return fmt.Errorf("error while running replicate deployments JSON migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddRateLimitToTeamsAndCustomers adds rate_limit_id column to governance_teams and governance_customers tables
+func migrationAddRateLimitToTeamsAndCustomers(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_rate_limit_to_teams_and_customers",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			// Add rate_limit_id to governance_teams table
+			if !migrator.HasColumn(&tables.TableTeam{}, "rate_limit_id") {
+				if err := migrator.AddColumn(&tables.TableTeam{}, "rate_limit_id"); err != nil {
+					return fmt.Errorf("failed to add rate_limit_id column to teams: %w", err)
+				}
+			}
+
+			// Add rate_limit_id to governance_customers table
+			if !migrator.HasColumn(&tables.TableCustomer{}, "rate_limit_id") {
+				if err := migrator.AddColumn(&tables.TableCustomer{}, "rate_limit_id"); err != nil {
+					return fmt.Errorf("failed to add rate_limit_id column to customers: %w", err)
+				}
+			}
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			if migrator.HasColumn(&tables.TableTeam{}, "rate_limit_id") {
+				if err := migrator.DropColumn(&tables.TableTeam{}, "rate_limit_id"); err != nil {
+					return fmt.Errorf("failed to drop rate_limit_id column from teams: %w", err)
+				}
+			}
+
+			if migrator.HasColumn(&tables.TableCustomer{}, "rate_limit_id") {
+				if err := migrator.DropColumn(&tables.TableCustomer{}, "rate_limit_id"); err != nil {
+					return fmt.Errorf("failed to drop rate_limit_id column from customers: %w", err)
+				}
+			}
+
+			return nil
+		},
+	}})
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error running rate limit migration for teams and customers: %s", err.Error())
 	}
 	return nil
 }
