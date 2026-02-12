@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -30,7 +31,7 @@ func createAnthropicCompleteRouteConfig(pathPrefix string) RouteConfig {
 		GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 			return schemas.TextCompletionRequest
 		},
-		GetRequestTypeInstance: func() interface{} {
+		GetRequestTypeInstance: func(ctx context.Context) interface{} {
 			return &anthropic.AnthropicTextRequest{}
 		},
 		RequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*schemas.BifrostRequest, error) {
@@ -69,7 +70,7 @@ func createAnthropicMessagesRouteConfig(pathPrefix string) []RouteConfig {
 			GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 				return schemas.ResponsesRequest
 			},
-			GetRequestTypeInstance: func() interface{} {
+			GetRequestTypeInstance: func(ctx context.Context) interface{} {
 				return &anthropic.AnthropicMessageRequest{}
 			},
 			RequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*schemas.BifrostRequest, error) {
@@ -229,7 +230,7 @@ func CreateAnthropicListModelsRouteConfigs(pathPrefix string, handlerStore lib.H
 			GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 				return schemas.ListModelsRequest
 			},
-			GetRequestTypeInstance: func() interface{} {
+			GetRequestTypeInstance: func(ctx context.Context) interface{} {
 				return &schemas.BifrostListModelsRequest{}
 			},
 			RequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*schemas.BifrostRequest, error) {
@@ -377,7 +378,7 @@ func CreateAnthropicCountTokensRouteConfigs(pathPrefix string, handlerStore lib.
 			GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 				return schemas.CountTokensRequest
 			},
-			GetRequestTypeInstance: func() interface{} {
+			GetRequestTypeInstance: func(ctx context.Context) interface{} {
 				return &anthropic.AnthropicMessageRequest{}
 			},
 			RequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*schemas.BifrostRequest, error) {
@@ -409,7 +410,7 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 			return schemas.BatchCreateRequest
 		},
-		GetRequestTypeInstance: func() any {
+		GetRequestTypeInstance: func(ctx context.Context) interface{} {
 			return &anthropic.AnthropicBatchCreateRequest{}
 		},
 		BatchRequestConverter: func(ctx *schemas.BifrostContext, req any) (*BatchRequest, error) {
@@ -487,7 +488,7 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 			return schemas.BatchListRequest
 		},
-		GetRequestTypeInstance: func() interface{} {
+		GetRequestTypeInstance: func(ctx context.Context) interface{} {
 			return &anthropic.AnthropicBatchListRequest{}
 		},
 		BatchRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*BatchRequest, error) {
@@ -532,7 +533,7 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 			return schemas.BatchRetrieveRequest
 		},
-		GetRequestTypeInstance: func() interface{} {
+		GetRequestTypeInstance: func(ctx context.Context) interface{} {
 			return &anthropic.AnthropicBatchRetrieveRequest{}
 		},
 		BatchRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*BatchRequest, error) {
@@ -571,7 +572,7 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 			return schemas.BatchCancelRequest
 		},
-		GetRequestTypeInstance: func() any {
+		GetRequestTypeInstance: func(ctx context.Context) interface{} {
 			return &anthropic.AnthropicBatchCancelRequest{}
 		},
 		BatchRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*BatchRequest, error) {
@@ -610,7 +611,7 @@ func CreateAnthropicBatchRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 			return schemas.BatchResultsRequest
 		},
-		GetRequestTypeInstance: func() interface{} {
+		GetRequestTypeInstance: func(ctx context.Context) interface{} {
 			return &anthropic.AnthropicBatchResultsRequest{}
 		},
 		BatchRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*BatchRequest, error) {
@@ -793,7 +794,7 @@ func CreateAnthropicFilesRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 			return schemas.FileUploadRequest
 		},
-		GetRequestTypeInstance: func() interface{} {
+		GetRequestTypeInstance: func(ctx context.Context) interface{} {
 			return &anthropic.AnthropicFileUploadRequest{}
 		},
 		RequestParser: func(ctx *fasthttp.RequestCtx, req interface{}) error {
@@ -885,7 +886,7 @@ func CreateAnthropicFilesRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 			return schemas.FileListRequest
 		},
-		GetRequestTypeInstance: func() interface{} {
+		GetRequestTypeInstance: func(ctx context.Context) interface{} {
 			return &anthropic.AnthropicFileListRequest{}
 		},
 		FileRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*FileRequest, error) {
@@ -929,7 +930,7 @@ func CreateAnthropicFilesRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 			return schemas.FileContentRequest
 		},
-		GetRequestTypeInstance: func() interface{} {
+		GetRequestTypeInstance: func(ctx context.Context) interface{} {
 			return &anthropic.AnthropicFileRetrieveRequest{}
 		},
 		FileRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*FileRequest, error) {
@@ -969,7 +970,7 @@ func CreateAnthropicFilesRouteConfigs(pathPrefix string, handlerStore lib.Handle
 		GetHTTPRequestType: func(ctx *fasthttp.RequestCtx) schemas.RequestType {
 			return schemas.FileDeleteRequest
 		},
-		GetRequestTypeInstance: func() interface{} {
+		GetRequestTypeInstance: func(ctx context.Context) interface{} {
 			return &anthropic.AnthropicFileDeleteRequest{}
 		},
 		FileRequestConverter: func(ctx *schemas.BifrostContext, req interface{}) (*FileRequest, error) {
