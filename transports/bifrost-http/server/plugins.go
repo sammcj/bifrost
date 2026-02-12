@@ -50,9 +50,17 @@ func InstantiatePlugin(ctx context.Context, name string, path *string, pluginCon
 func loadBuiltinPlugin(ctx context.Context, name string, pluginConfig any, bifrostConfig *lib.Config) (schemas.BasePlugin, error) {
 	switch name {
 	case telemetry.PluginName:
-		return telemetry.Init(&telemetry.Config{
+		telConfig := &telemetry.Config{
 			CustomLabels: bifrostConfig.ClientConfig.PrometheusLabels,
-		}, bifrostConfig.ModelCatalog, logger)
+		}
+		// Merge push gateway config if provided (e.g., from config file or UI update)
+		if pluginConfig != nil {
+			extraConfig, err := MarshalPluginConfig[telemetry.Config](pluginConfig)
+			if err == nil && extraConfig != nil && extraConfig.PushGateway != nil {
+				telConfig.PushGateway = extraConfig.PushGateway
+			}
+		}
+		return telemetry.Init(telConfig, bifrostConfig.ModelCatalog, logger)
 
 	case logging.PluginName:
 		loggingConfig, err := MarshalPluginConfig[logging.Config](pluginConfig)
