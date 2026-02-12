@@ -495,7 +495,7 @@ func (s *BifrostHTTPServer) ReloadProvider(ctx context.Context, provider schemas
 		return nil, fmt.Errorf("failed to update provider model catalog: failed to get keys by provider: %s", err)
 	}
 	modelsInKeys := make([]schemas.Model, 0)
-	for _, key := range providerKeys {		
+	for _, key := range providerKeys {
 		for _, model := range key.Models {
 			modelsInKeys = append(modelsInKeys, schemas.Model{
 				ID: string(provider) + "/" + model,
@@ -854,10 +854,16 @@ func (s *BifrostHTTPServer) RegisterInferenceRoutes(ctx context.Context, middlew
 	inferenceHandler := handlers.NewInferenceHandler(s.Client, s.Config)
 	integrationHandler := handlers.NewIntegrationHandler(s.Client, s.Config)
 	mcpInferenceHandler := handlers.NewMCPInferenceHandler(s.Client, s.Config)
+	mcpServerHandler, err := handlers.NewMCPServerHandler(ctx, s.Config, s)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mcp server handler: %v", err)
+	}
+	s.MCPServerHandler = mcpServerHandler
 
 	integrationHandler.RegisterRoutes(s.Router, middlewares...)
 	inferenceHandler.RegisterRoutes(s.Router, middlewares...)
 	mcpInferenceHandler.RegisterRoutes(s.Router, middlewares...)
+	s.MCPServerHandler.RegisterRoutes(s.Router, middlewares...)
 	return nil
 }
 
@@ -910,11 +916,6 @@ func (s *BifrostHTTPServer) RegisterAPIRoutes(ctx context.Context, callbacks Ser
 	providerHandler := handlers.NewProviderHandler(callbacks, s.Config, s.Client)
 	oauthHandler := handlers.NewOAuthHandler(s.Config.OAuthProvider, s.Client, s.Config)
 	mcpHandler := handlers.NewMCPHandler(callbacks, s.Client, s.Config, oauthHandler)
-	mcpServerHandler, err := handlers.NewMCPServerHandler(ctx, s.Config, s)
-	if err != nil {
-		return fmt.Errorf("failed to initialize mcp server handler: %v", err)
-	}
-	s.MCPServerHandler = mcpServerHandler
 	configHandler := handlers.NewConfigHandler(callbacks, s.Config)
 	pluginsHandler := handlers.NewPluginsHandler(callbacks, s.Config.ConfigStore)
 	sessionHandler := handlers.NewSessionHandler(s.Config.ConfigStore)
@@ -922,7 +923,6 @@ func (s *BifrostHTTPServer) RegisterAPIRoutes(ctx context.Context, callbacks Ser
 	healthHandler.RegisterRoutes(s.Router, middlewares...)
 	providerHandler.RegisterRoutes(s.Router, middlewares...)
 	mcpHandler.RegisterRoutes(s.Router, middlewares...)
-	mcpServerHandler.RegisterRoutes(s.Router, middlewares...)
 	configHandler.RegisterRoutes(s.Router, middlewares...)
 	oauthHandler.RegisterRoutes(s.Router, middlewares...)
 	if pluginsHandler != nil {

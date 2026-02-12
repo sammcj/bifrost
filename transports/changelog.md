@@ -1,2 +1,3 @@
-feat: added support for replicate provider
-fix: fix embedContent in genai integration
+- fix: added mcp server handler to the inference routes registration
+- feat: added support for replicate provider
+- fix: fixed support for `:embedContent` in genai integration
