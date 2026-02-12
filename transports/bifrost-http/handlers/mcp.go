@@ -676,6 +676,14 @@ func (h *MCPHandler) completeMCPClientOAuth(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	// Creating MCP client config in config store
+	if h.store.ConfigStore != nil {
+		if err := h.store.ConfigStore.CreateMCPClientConfig(ctx, mcpClientConfig); err != nil {
+			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to create MCP config: %v", err))
+			return
+		}
+	}
+
 	// Add MCP client to Bifrost (this will save to database and connect)
 	if err := h.mcpManager.AddMCPClient(ctx, mcpClientConfig); err != nil {
 		logger.Error(fmt.Sprintf("[OAuth Complete] Failed to connect MCP client: %v", err))
