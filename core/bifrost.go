@@ -4087,6 +4087,36 @@ func executeRequestWithRetries[T any](
 			tracer.SetAttribute(handle, "retry.count", attempts)
 		}
 
+		// Add context-related attributes (selected key, virtual key, team, customer, etc.)
+		if selectedKeyID, ok := ctx.Value(schemas.BifrostContextKeySelectedKeyID).(string); ok && selectedKeyID != "" {
+			tracer.SetAttribute(handle, schemas.AttrSelectedKeyID, selectedKeyID)
+		}
+		if selectedKeyName, ok := ctx.Value(schemas.BifrostContextKeySelectedKeyName).(string); ok && selectedKeyName != "" {
+			tracer.SetAttribute(handle, schemas.AttrSelectedKeyName, selectedKeyName)
+		}
+		if virtualKeyID, ok := ctx.Value(schemas.BifrostContextKeyGovernanceVirtualKeyID).(string); ok && virtualKeyID != "" {
+			tracer.SetAttribute(handle, schemas.AttrVirtualKeyID, virtualKeyID)
+		}
+		if virtualKeyName, ok := ctx.Value(schemas.BifrostContextKeyGovernanceVirtualKeyName).(string); ok && virtualKeyName != "" {
+			tracer.SetAttribute(handle, schemas.AttrVirtualKeyName, virtualKeyName)
+		}
+		if teamID, ok := ctx.Value(schemas.BifrostContextKeyGovernanceTeamID).(string); ok && teamID != "" {
+			tracer.SetAttribute(handle, schemas.AttrTeamID, teamID)
+		}
+		if teamName, ok := ctx.Value(schemas.BifrostContextKeyGovernanceTeamName).(string); ok && teamName != "" {
+			tracer.SetAttribute(handle, schemas.AttrTeamName, teamName)
+		}
+		if customerID, ok := ctx.Value(schemas.BifrostContextKeyGovernanceCustomerID).(string); ok && customerID != "" {
+			tracer.SetAttribute(handle, schemas.AttrCustomerID, customerID)
+		}
+		if customerName, ok := ctx.Value(schemas.BifrostContextKeyGovernanceCustomerName).(string); ok && customerName != "" {
+			tracer.SetAttribute(handle, schemas.AttrCustomerName, customerName)
+		}
+		if fallbackIndex, ok := ctx.Value(schemas.BifrostContextKeyFallbackIndex).(int); ok {
+			tracer.SetAttribute(handle, schemas.AttrFallbackIndex, fallbackIndex)
+		}
+		tracer.SetAttribute(handle, schemas.AttrNumberOfRetries, attempts)
+
 		// Populate LLM request attributes (messages, parameters, etc.)
 		if req != nil {
 			tracer.PopulateLLMRequestAttributes(handle, req)

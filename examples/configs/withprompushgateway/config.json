@@ -179,7 +179,7 @@
       "enabled": true,
       "type": "sqlite",
       "config":{
-        "path": "./config.db"
+        "path": "../../examples/configs/withprompushgateway/config.db"
       }
     },
     "plugins": [
