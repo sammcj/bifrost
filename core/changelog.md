@@ -8,3 +8,4 @@
 - fix: **Bedrock: Stop reason conversion** - Created dedicated Bedrock stop reason converter instead of reusing Anthropic's, properly handling Bedrock-specific reasons like `guardrail_intervened` and `content_filtered`
 - fix: **Bedrock: ToolChoice auto handling** - Return `nil` for `auto` tool choice (Bedrock's default) instead of failing
 - fix: **Bedrock: Stop reason mapping** - Now uses own `bedrockFinishReasonToBifrost` map with Bedrock-specific stop reasons (`guardrail_intervened` -> `content_filter`, `content_filtered` -> `content_filter`)
+feat: added support for replicate provider
