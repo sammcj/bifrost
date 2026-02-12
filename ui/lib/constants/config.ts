@@ -145,6 +145,18 @@ export const PROVIDER_SUPPORTED_REQUESTS: Record<BaseProvider, string[]> = {
 		"image_edit",
 		"image_variation",
 	],
+	replicate: [
+		"list_models",
+		"text_completion",
+		"chat_completion",
+		"chat_completion_stream",
+		"responses",
+		"responses_stream",
+		"image_generation",
+		"image_generation_stream",
+		"image_edit",
+		"image_edit_stream",
+	],
 };
 
 export const IS_ENTERPRISE = process.env.NEXT_PUBLIC_IS_ENTERPRISE === "true";
