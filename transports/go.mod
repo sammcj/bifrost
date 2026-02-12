@@ -10,15 +10,15 @@ require (
 	github.com/google/pprof v0.0.0-20251213031049-b05bdaca462f
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.43.2
-	github.com/maximhq/bifrost/core v1.4.1
-	github.com/maximhq/bifrost/framework v1.2.19
-	github.com/maximhq/bifrost/plugins/governance v1.4.20
-	github.com/maximhq/bifrost/plugins/litellmcompat v0.0.9
-	github.com/maximhq/bifrost/plugins/logging v1.4.19
-	github.com/maximhq/bifrost/plugins/maxim v1.5.18
-	github.com/maximhq/bifrost/plugins/otel v1.1.19
-	github.com/maximhq/bifrost/plugins/semanticcache v1.4.18
-	github.com/maximhq/bifrost/plugins/telemetry v1.4.20
+	github.com/maximhq/bifrost/core v1.4.2
+	github.com/maximhq/bifrost/framework v1.2.20
+	github.com/maximhq/bifrost/plugins/governance v1.4.21
+	github.com/maximhq/bifrost/plugins/litellmcompat v0.0.10
+	github.com/maximhq/bifrost/plugins/logging v1.4.20
+	github.com/maximhq/bifrost/plugins/maxim v1.5.19
+	github.com/maximhq/bifrost/plugins/otel v1.1.20
+	github.com/maximhq/bifrost/plugins/semanticcache v1.4.19
+	github.com/maximhq/bifrost/plugins/telemetry v1.4.21
 	github.com/prometheus/client_golang v1.23.2
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/stretchr/testify v1.11.1
@@ -61,6 +61,7 @@ require (
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic/loader v0.4.0 // indirect
+	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -108,7 +109,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-sqlite3 v1.14.32 // indirect
-	github.com/maximhq/bifrost/plugins/mocker v1.4.19 // indirect
+	github.com/maximhq/bifrost/plugins/mocker v1.4.20 // indirect
 	github.com/maximhq/maxim-go v0.1.14 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oapi-codegen/runtime v1.1.1 // indirect
@@ -135,6 +136,8 @@ require (
 	go.mongodb.org/mongo-driver v1.17.6 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.40.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.40.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.40.0 // indirect
 	go.opentelemetry.io/otel/metric v1.40.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.40.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.40.0 // indirect
