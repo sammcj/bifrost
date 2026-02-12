@@ -141,6 +141,16 @@ func (s *BifrostHTTPServer) LoadPlugins(ctx context.Context) error {
 	return nil
 }
 
+// getPluginConfig retrieves a plugin's config from PluginConfigs by name
+func (s *BifrostHTTPServer) getPluginConfig(name string) *schemas.PluginConfig {
+	for _, cfg := range s.Config.PluginConfigs {
+		if cfg.Name == name {
+			return cfg
+		}
+	}
+	return nil
+}
+
 // loadBuiltinPlugins loads required built-in plugins in specific order
 func (s *BifrostHTTPServer) loadBuiltinPlugins(ctx context.Context) error {
 	// 1. Telemetry (always first - tracks everything)
@@ -166,6 +176,14 @@ func (s *BifrostHTTPServer) loadBuiltinPlugins(ctx context.Context) error {
 		s.registerPluginWithStatus(ctx, governance.PluginName, nil, config, false)
 	} else {
 		s.markPluginDisabled(governance.PluginName)
+	}
+
+	// 4. OTEL (if configured in PluginConfigs)
+	otelConfig := s.getPluginConfig(otel.PluginName)
+	if otelConfig != nil && otelConfig.Enabled {
+		s.registerPluginWithStatus(ctx, otel.PluginName, nil, otelConfig.Config, false)
+	} else {
+		s.markPluginDisabled(otel.PluginName)
 	}
 
 	return nil

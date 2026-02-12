@@ -765,14 +765,13 @@ func (s *BifrostHTTPServer) GetPluginStatus(ctx context.Context) map[string]sche
 }
 
 // Helper to update error status
-func (s *BifrostHTTPServer) updatePluginErrorStatus(name, step string, err error) error {
-	if err := s.Config.UpdatePluginStatus(name, schemas.PluginStatusError); err != nil {
-		return err
-	}
-	if err := s.Config.AppendPluginStateLogs(name, []string{fmt.Sprintf("error %s plugin %s: %v", step, name, err)}); err != nil {
-		return err
-	}
-	return err
+// Uses UpdatePluginOverallStatus to create the status entry if it doesn't exist,
+// ensuring plugins that were never loaded can still have their error status tracked.
+// Always returns the original error so the actual failure reason is surfaced to the user.
+func (s *BifrostHTTPServer) updatePluginErrorStatus(name, step string, originalErr error) error {
+	logs := []string{fmt.Sprintf("error %s plugin %s: %v", step, name, originalErr)}
+	s.Config.UpdatePluginOverallStatus(name, name, schemas.PluginStatusError, logs, []schemas.PluginType{})
+	return originalErr
 }
 
 // SyncLoadedPlugin syncs a loaded plugin to the Bifrost client and updates the plugin status
