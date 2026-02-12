@@ -1,0 +1,1 @@
+- chore: upgrades core to 1.4.2

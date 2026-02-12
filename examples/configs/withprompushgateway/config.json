@@ -182,6 +182,13 @@
         "path": "../../examples/configs/withprompushgateway/config.db"
       }
     },
+    "logs_store": {
+        "enabled": true,
+        "type": "sqlite",
+        "config": {
+            "path": "../../examples/configs/withprompushgateway/logs.db"
+        }
+    },
     "plugins": [
         {
             "name": "telemetry",
