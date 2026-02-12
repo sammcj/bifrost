@@ -296,6 +296,10 @@
               "budget_id": {
                 "type": "string",
                 "description": "Associated budget ID"
+              },
+              "rate_limit_id": {
+                "type": "string",
+                "description": "Associated rate limit ID"
               }
             },
             "required": [
@@ -326,6 +330,10 @@
               "budget_id": {
                 "type": "string",
                 "description": "Associated budget ID"
+              },
+              "rate_limit_id": {
+                "type": "string",
+                "description": "Associated rate limit ID"
               },
               "profile": {
                 "type": "object",
