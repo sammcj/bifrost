@@ -1,0 +1,2 @@
+- feat: adds metrics push support for otel config
+- chore: upgrades core to 1.4.2 and framework to 1.2.20
