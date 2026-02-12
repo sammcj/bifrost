@@ -700,8 +700,10 @@ append_dynamic_columns_postgres() {
   echo "-- Dynamic column coverage for newer columns (generated based on schema)" >> "$output_file"
 
   # config_keys.azure_scopes (added in v1.4.5)
+  # Set to NULL for coverage - config sync resets this column on startup so non-null values
+  # would cause a snapshot comparison diff
   if column_exists_postgres "config_keys" "azure_scopes"; then
-    echo "UPDATE config_keys SET azure_scopes = '[\"https://cognitiveservices.azure.com/.default\"]' WHERE name = 'migration-test-key-anthropic';" >> "$output_file"
+    echo "UPDATE config_keys SET azure_scopes = NULL WHERE name = 'migration-test-key-anthropic';" >> "$output_file"
   fi
 
   # governance_model_pricing.base_model (added in v1.4.5)
@@ -728,8 +730,9 @@ append_dynamic_columns_sqlite() {
 
   if [ -f "$config_db" ]; then
     # config_keys.azure_scopes (added in v1.4.5)
+    # Set to NULL for coverage - config sync resets this column on startup
     if column_exists_sqlite "$config_db" "config_keys" "azure_scopes"; then
-      echo "UPDATE config_keys SET azure_scopes = '[\"https://cognitiveservices.azure.com/.default\"]' WHERE name = 'migration-test-key-anthropic';" >> "$output_file"
+      echo "UPDATE config_keys SET azure_scopes = NULL WHERE name = 'migration-test-key-anthropic';" >> "$output_file"
     fi
 
     # governance_model_pricing.base_model (added in v1.4.5)
