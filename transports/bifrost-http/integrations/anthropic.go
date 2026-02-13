@@ -57,7 +57,7 @@ func createAnthropicCompleteRouteConfig(pathPrefix string) RouteConfig {
 }
 
 // createAnthropicMessagesRouteConfig creates a route configuration for the `/v1/messages` endpoint.
-func createAnthropicMessagesRouteConfig(pathPrefix string) []RouteConfig {
+func createAnthropicMessagesRouteConfig(pathPrefix string, logger schemas.Logger) []RouteConfig {
 	var routes []RouteConfig
 	for _, path := range []string{
 		"/v1/messages",
@@ -114,15 +114,16 @@ func createAnthropicMessagesRouteConfig(pathPrefix string) []RouteConfig {
 						return "", nil, nil
 					}
 					if len(anthropicResponse) > 1 {
-						combinedContent := ""
+						var combinedContent strings.Builder
 						for _, event := range anthropicResponse {
 							responseJSON, err := sonic.Marshal(event)
 							if err != nil {
+								logger.Error("failed to marshal anthropic streaming message: %v", err)
 								continue
 							}
-							combinedContent += fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, responseJSON)
+							fmt.Fprintf(&combinedContent, "event: %s\ndata: %s\n\n", event.Type, responseJSON)
 						}
-						return "", combinedContent, nil
+						return "", combinedContent.String(), nil
 					}
 					return string(anthropicResponse[0].Type), anthropicResponse[0], nil
 				},
@@ -137,10 +138,10 @@ func createAnthropicMessagesRouteConfig(pathPrefix string) []RouteConfig {
 }
 
 // CreateAnthropicRouteConfigs creates route configurations for Anthropic endpoints.
-func CreateAnthropicRouteConfigs(pathPrefix string) []RouteConfig {
+func CreateAnthropicRouteConfigs(pathPrefix string, logger schemas.Logger) []RouteConfig {
 	return append([]RouteConfig{
 		createAnthropicCompleteRouteConfig(pathPrefix),
-	}, createAnthropicMessagesRouteConfig(pathPrefix)...)
+	}, createAnthropicMessagesRouteConfig(pathPrefix, logger)...)
 }
 
 // passthroughSafeHeaders is a whitelist of headers that are safe to pass through
@@ -1006,7 +1007,7 @@ func CreateAnthropicFilesRouteConfigs(pathPrefix string, handlerStore lib.Handle
 
 // NewAnthropicRouter creates a new AnthropicRouter with the given bifrost client.
 func NewAnthropicRouter(client *bifrost.Bifrost, handlerStore lib.HandlerStore, logger schemas.Logger) *AnthropicRouter {
-	routes := CreateAnthropicRouteConfigs("/anthropic")
+	routes := CreateAnthropicRouteConfigs("/anthropic", logger)
 	routes = append(routes, CreateAnthropicListModelsRouteConfigs("/anthropic", handlerStore)...)
 	routes = append(routes, CreateAnthropicCountTokensRouteConfigs("/anthropic", handlerStore)...)
 	routes = append(routes, CreateAnthropicBatchRouteConfigs("/anthropic", handlerStore)...)
