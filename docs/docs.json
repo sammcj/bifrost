@@ -49,6 +49,13 @@
         "icon": "book-open-cover",
         "groups": [
           {
+            "group": "Overview",
+            "icon": "book-open-cover",
+            "pages": [
+              "overview"
+            ]
+          },
+          {
             "group": "Quick Start",
             "icon": "rocket",
             "pages": [
