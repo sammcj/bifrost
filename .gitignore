@@ -103,3 +103,10 @@ npm-debug.log*
 
 # Playwright
 playwright/.cache/
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+!*.tfvars.example
