@@ -1,6 +1,6 @@
 module github.com/maximhq/bifrost/examples/plugins/mcp-only
 
-go 1.25.5
+go 1.26
 
 replace github.com/maximhq/bifrost/core => ../../../core
 
