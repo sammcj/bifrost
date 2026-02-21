@@ -133,6 +133,7 @@ const (
 	ContainerFileRetrieveRequest RequestType = "container_file_retrieve"
 	ContainerFileContentRequest  RequestType = "container_file_content"
 	ContainerFileDeleteRequest   RequestType = "container_file_delete"
+	RerankRequest                RequestType = "rerank"
 	CountTokensRequest           RequestType = "count_tokens"
 	MCPToolExecutionRequest      RequestType = "mcp_tool_execution"
 	UnknownRequest               RequestType = "unknown"
@@ -231,6 +232,7 @@ type Fallback struct {
 // - ResponsesRequest
 // - CountTokensRequest
 // - EmbeddingRequest
+// - RerankRequest
 // - SpeechRequest
 // - TranscriptionRequest
 // - ImageGenerationRequest
@@ -244,6 +246,7 @@ type BifrostRequest struct {
 	ResponsesRequest             *BifrostResponsesRequest
 	CountTokensRequest           *BifrostResponsesRequest
 	EmbeddingRequest             *BifrostEmbeddingRequest
+	RerankRequest                *BifrostRerankRequest
 	SpeechRequest                *BifrostSpeechRequest
 	TranscriptionRequest         *BifrostTranscriptionRequest
 	ImageGenerationRequest       *BifrostImageGenerationRequest
@@ -285,6 +288,8 @@ func (br *BifrostRequest) GetRequestFields() (provider ModelProvider, model stri
 		return br.CountTokensRequest.Provider, br.CountTokensRequest.Model, br.CountTokensRequest.Fallbacks
 	case br.EmbeddingRequest != nil:
 		return br.EmbeddingRequest.Provider, br.EmbeddingRequest.Model, br.EmbeddingRequest.Fallbacks
+	case br.RerankRequest != nil:
+		return br.RerankRequest.Provider, br.RerankRequest.Model, br.RerankRequest.Fallbacks
 	case br.SpeechRequest != nil:
 		return br.SpeechRequest.Provider, br.SpeechRequest.Model, br.SpeechRequest.Fallbacks
 	case br.TranscriptionRequest != nil:
@@ -381,6 +386,8 @@ func (br *BifrostRequest) SetProvider(provider ModelProvider) {
 		br.CountTokensRequest.Provider = provider
 	case br.EmbeddingRequest != nil:
 		br.EmbeddingRequest.Provider = provider
+	case br.RerankRequest != nil:
+		br.RerankRequest.Provider = provider
 	case br.SpeechRequest != nil:
 		br.SpeechRequest.Provider = provider
 	case br.TranscriptionRequest != nil:
@@ -406,6 +413,8 @@ func (br *BifrostRequest) SetModel(model string) {
 		br.CountTokensRequest.Model = model
 	case br.EmbeddingRequest != nil:
 		br.EmbeddingRequest.Model = model
+	case br.RerankRequest != nil:
+		br.RerankRequest.Model = model
 	case br.SpeechRequest != nil:
 		br.SpeechRequest.Model = model
 	case br.TranscriptionRequest != nil:
@@ -431,6 +440,8 @@ func (br *BifrostRequest) SetFallbacks(fallbacks []Fallback) {
 		br.CountTokensRequest.Fallbacks = fallbacks
 	case br.EmbeddingRequest != nil:
 		br.EmbeddingRequest.Fallbacks = fallbacks
+	case br.RerankRequest != nil:
+		br.RerankRequest.Fallbacks = fallbacks
 	case br.SpeechRequest != nil:
 		br.SpeechRequest.Fallbacks = fallbacks
 	case br.TranscriptionRequest != nil:
@@ -456,6 +467,8 @@ func (br *BifrostRequest) SetRawRequestBody(rawRequestBody []byte) {
 		br.CountTokensRequest.RawRequestBody = rawRequestBody
 	case br.EmbeddingRequest != nil:
 		br.EmbeddingRequest.RawRequestBody = rawRequestBody
+	case br.RerankRequest != nil:
+		br.RerankRequest.RawRequestBody = rawRequestBody
 	case br.SpeechRequest != nil:
 		br.SpeechRequest.RawRequestBody = rawRequestBody
 	case br.TranscriptionRequest != nil:
@@ -522,6 +535,7 @@ type BifrostResponse struct {
 	ResponsesStreamResponse       *BifrostResponsesStreamResponse
 	CountTokensResponse           *BifrostCountTokensResponse
 	EmbeddingResponse             *BifrostEmbeddingResponse
+	RerankResponse                *BifrostRerankResponse
 	SpeechResponse                *BifrostSpeechResponse
 	SpeechStreamResponse          *BifrostSpeechStreamResponse
 	TranscriptionResponse         *BifrostTranscriptionResponse
@@ -565,6 +579,8 @@ func (r *BifrostResponse) GetExtraFields() *BifrostResponseExtraFields {
 		return &r.CountTokensResponse.ExtraFields
 	case r.EmbeddingResponse != nil:
 		return &r.EmbeddingResponse.ExtraFields
+	case r.RerankResponse != nil:
+		return &r.RerankResponse.ExtraFields
 	case r.SpeechResponse != nil:
 		return &r.SpeechResponse.ExtraFields
 	case r.SpeechStreamResponse != nil:

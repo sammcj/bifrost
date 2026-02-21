@@ -1408,6 +1408,131 @@ func (provider *VertexProvider) Speech(ctx *schemas.BifrostContext, key schemas.
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.SpeechRequest, provider.GetProviderKey())
 }
 
+// Rerank performs a rerank request using Vertex Discovery Engine ranking API.
+func (provider *VertexProvider) Rerank(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostRerankRequest) (*schemas.BifrostRerankResponse, *schemas.BifrostError) {
+	providerName := provider.GetProviderKey()
+
+	if key.VertexKeyConfig == nil {
+		return nil, providerUtils.NewConfigurationError("vertex key config is not set", providerName)
+	}
+
+	projectID := strings.TrimSpace(key.VertexKeyConfig.ProjectID.GetValue())
+	if projectID == "" {
+		return nil, providerUtils.NewConfigurationError("project ID is not set", providerName)
+	}
+
+	options, err := getVertexRerankOptions(projectID, request.Params)
+	if err != nil {
+		return nil, providerUtils.NewConfigurationError(err.Error(), providerName)
+	}
+
+	modelDeployment := provider.getModelDeployment(key, request.Model)
+	jsonBody, bifrostErr := providerUtils.CheckContextAndGetRequestBody(
+		ctx,
+		request,
+		func() (providerUtils.RequestBodyWithExtraParams, error) {
+			return ToVertexRankRequest(request, modelDeployment, options)
+		},
+		providerName)
+	if bifrostErr != nil {
+		return nil, bifrostErr
+	}
+
+	completeURL := fmt.Sprintf("https://discoveryengine.googleapis.com/v1/%s:rank", options.RankingConfig)
+
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	req.Header.SetMethod(http.MethodPost)
+	req.SetRequestURI(completeURL)
+	req.Header.SetContentType("application/json")
+	req.Header.Set("X-Goog-User-Project", projectID)
+
+	providerUtils.SetExtraHeaders(ctx, req, provider.networkConfig.ExtraHeaders, nil)
+
+	tokenSource, err := getAuthTokenSource(key)
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError("error creating auth token source", err, providerName)
+	}
+	token, err := tokenSource.Token()
+	if err != nil {
+		return nil, providerUtils.NewBifrostOperationError("error getting token", err, providerName)
+	}
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+
+	req.SetBody(jsonBody)
+
+	latency, bifrostErr := providerUtils.MakeRequestWithContext(ctx, provider.client, req, resp)
+	if bifrostErr != nil {
+		return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonBody, nil, provider.sendBackRawRequest, provider.sendBackRawResponse)
+	}
+
+	if resp.StatusCode() != fasthttp.StatusOK {
+		if resp.StatusCode() == fasthttp.StatusUnauthorized || resp.StatusCode() == fasthttp.StatusForbidden {
+			removeVertexClient(key.VertexKeyConfig.AuthCredentials.GetValue())
+		}
+
+		errorMessage := parseDiscoveryEngineErrorMessage(resp.Body())
+		parsedError := parseVertexError(resp, &providerUtils.RequestMetadata{
+			Provider:    providerName,
+			Model:       request.Model,
+			RequestType: schemas.RerankRequest,
+		})
+
+		if strings.TrimSpace(errorMessage) != "" {
+			shouldOverride := parsedError == nil ||
+				parsedError.Error == nil ||
+				strings.TrimSpace(parsedError.Error.Message) == "" ||
+				parsedError.Error.Message == "Unknown error" ||
+				parsedError.Error.Message == schemas.ErrProviderResponseUnmarshal
+
+			if shouldOverride {
+				parsedError = providerUtils.NewProviderAPIError(errorMessage, nil, resp.StatusCode(), providerName, nil, nil)
+				parsedError.ExtraFields = schemas.BifrostErrorExtraFields{
+					Provider:       providerName,
+					ModelRequested: request.Model,
+					RequestType:    schemas.RerankRequest,
+				}
+			}
+		}
+
+		return nil, providerUtils.EnrichError(ctx, parsedError, jsonBody, resp.Body(), provider.sendBackRawRequest, provider.sendBackRawResponse)
+	}
+
+	vertexResponse := &VertexRankResponse{}
+	rawRequest, rawResponse, bifrostErr := providerUtils.HandleProviderResponse(resp.Body(), vertexResponse, jsonBody, providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest), providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse))
+	if bifrostErr != nil {
+		return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonBody, resp.Body(), provider.sendBackRawRequest, provider.sendBackRawResponse)
+	}
+
+	returnDocuments := request.Params != nil && request.Params.ReturnDocuments != nil && *request.Params.ReturnDocuments
+	bifrostResponse, err := vertexResponse.ToBifrostRerankResponse(request.Documents, returnDocuments)
+	if err != nil {
+		return nil, providerUtils.EnrichError(ctx, providerUtils.NewBifrostOperationError("error converting rerank response", err, providerName), jsonBody, resp.Body(), provider.sendBackRawRequest, provider.sendBackRawResponse)
+	}
+
+	bifrostResponse.Model = request.Model
+	bifrostResponse.ExtraFields.Provider = providerName
+	bifrostResponse.ExtraFields.ModelRequested = request.Model
+	if request.Model != modelDeployment {
+		bifrostResponse.ExtraFields.ModelDeployment = modelDeployment
+	}
+	bifrostResponse.ExtraFields.RequestType = schemas.RerankRequest
+	bifrostResponse.ExtraFields.Latency = latency.Milliseconds()
+
+	if providerUtils.ShouldSendBackRawRequest(ctx, provider.sendBackRawRequest) {
+		bifrostResponse.ExtraFields.RawRequest = rawRequest
+	}
+
+	if providerUtils.ShouldSendBackRawResponse(ctx, provider.sendBackRawResponse) {
+		bifrostResponse.ExtraFields.RawResponse = rawResponse
+	}
+
+	return bifrostResponse, nil
+}
+
 // SpeechStream is not supported by the Vertex provider.
 func (provider *VertexProvider) SpeechStream(ctx *schemas.BifrostContext, postHookRunner schemas.PostHookRunner, key schemas.Key, request *schemas.BifrostSpeechRequest) (chan *schemas.BifrostStreamChunk, *schemas.BifrostError) {
 	return nil, providerUtils.NewUnsupportedOperationError(schemas.SpeechStreamRequest, provider.GetProviderKey())
@@ -1655,10 +1780,6 @@ func (provider *VertexProvider) ImageGenerationStream(ctx *schemas.BifrostContex
 // Returns a BifrostResponse containing the images and any error that occurred.
 func (provider *VertexProvider) ImageEdit(ctx *schemas.BifrostContext, key schemas.Key, request *schemas.BifrostImageEditRequest) (*schemas.BifrostImageGenerationResponse, *schemas.BifrostError) {
 	providerName := provider.GetProviderKey()
-
-	if err := providerUtils.CheckOperationAllowed(schemas.Vertex, nil, schemas.ImageEditRequest); err != nil {
-		return nil, err
-	}
 
 	if key.VertexKeyConfig == nil {
 		return nil, providerUtils.NewConfigurationError("vertex key config is not set", providerName)
