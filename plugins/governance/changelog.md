@@ -1,3 +1,0 @@
-- fix: routing rules now support case-insensitive header matching
-- feat: added required headers validation — requests missing configured headers are rejected with a 400 error
-- chore: bump core version to 1.4.4 and framework to 1.2.22
