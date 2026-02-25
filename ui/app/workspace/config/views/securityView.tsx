@@ -103,7 +103,7 @@ export default function SecurityView() {
 		const serverHeaders = config.allowed_headers?.slice().sort().join(",");
 		const headersChanged = localHeaders !== serverHeaders;
 
-		const enforceAuthOnInferenceChanged = localConfig.enforce_auth_on_inference !== config.enforce_auth_on_inference;
+		const enforceAuthOnInferenceChanged = localConfig.enforce_auth_on_inference !== config.enforce_auth_on_inference && IS_ENTERPRISE;
 
 		return originsChanged || headersChanged || enforceAuthOnInferenceChanged;
 	}, [config, localConfig]);
@@ -164,14 +164,9 @@ export default function SecurityView() {
 
 	return (
 		<div className="mx-auto w-full max-w-4xl space-y-4">
-			<div className="flex items-center justify-between">
-				<div>
-					<h2 className="text-lg font-semibold tracking-tight">Security Settings</h2>
-					<p className="text-muted-foreground text-sm">Configure security and access control settings.</p>
-				</div>
-				<Button onClick={handleSave} disabled={!hasChanges || isLoading || !hasSettingsUpdateAccess}>
-					{isLoading ? "Saving..." : "Save Changes"}
-				</Button>
+			<div>
+				<h2 className="text-lg font-semibold tracking-tight">Security Settings</h2>
+				<p className="text-muted-foreground text-sm">Configure security and access control settings.</p>
 			</div>
 
 			<div className="space-y-4">
@@ -256,35 +251,36 @@ export default function SecurityView() {
 					</div>
 				)}
 				{/* Enable Auth on Inference */}
-				{(IS_ENTERPRISE || localConfig.enable_governance) && (
-					<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
-						<div className="space-y-0.5">
-							<label htmlFor="enforce-auth-on-inference" className="text-sm font-medium">
-								Enable Auth on Inference
-							</label>
-							<p className="text-muted-foreground text-sm">
-								{IS_ENTERPRISE
-									? "Require authentication (virtual key, API key, or user token) for all inference endpoints."
-									: "Require a virtual key for all inference requests."}{" "}
-								See{" "}
-								<Link
-									href="https://docs.getbifrost.ai/features/governance/virtual-keys"
-									target="_blank"
-									rel="noopener noreferrer"
-									className="text-primary underline"
-								>
-									documentation
-								</Link>{" "}
-								for details.
-							</p>
-						</div>
-						<Switch
-							id="enforce-auth-on-inference"
-							checked={localConfig.enforce_auth_on_inference}
-							onCheckedChange={(checked) => handleConfigChange("enforce_auth_on_inference", checked)}
-						/>
+				<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+					<div className="space-y-0.5">
+						<label htmlFor="enforce-auth-on-inference" className="text-sm font-medium">
+							Enable Auth on Inference
+						</label>
+						<p className="text-muted-foreground text-sm">
+							{IS_ENTERPRISE
+								? "Require authentication (virtual key, API key, or user token) for all inference endpoints."
+								: "Require a virtual key for all inference requests."}{" "}
+							See{" "}
+							<Link
+								href="https://docs.getbifrost.ai/features/governance/virtual-keys"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="text-primary underline"
+							>
+								documentation
+							</Link>{" "}
+							for details.
+						</p>
 					</div>
-				)}
+					<Switch
+						id="enforce-auth-on-inference"
+						data-testid="enforce-auth-on-inference-switch"
+						checked={localConfig.enforce_auth_on_inference}
+						onCheckedChange={(checked) => handleConfigChange("enforce_auth_on_inference", checked)}
+					/>
+				</div>
+				{/* Allowed Origins */}
+				{needsRestart && <RestartWarning />}
 				{/* Allow Direct API Keys */}
 				<div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
 					<div className="space-y-0.5">
@@ -302,8 +298,6 @@ export default function SecurityView() {
 						onCheckedChange={(checked) => handleConfigChange("allow_direct_keys", checked)}
 					/>
 				</div>
-				{/* Allowed Origins */}
-				{needsRestart && <RestartWarning />}
 				<div>
 					<div className="space-y-2 rounded-lg border p-4">
 						<div className="space-y-0.5">
@@ -367,6 +361,11 @@ export default function SecurityView() {
 						</div>
 					</div>
 				)}
+			</div>
+			<div className="flex justify-end pt-2">
+				<Button onClick={handleSave} disabled={!hasChanges || isLoading || !hasSettingsUpdateAccess}>
+					{isLoading ? "Saving..." : "Save Changes"}
+				</Button>
 			</div>
 		</div>
 	);

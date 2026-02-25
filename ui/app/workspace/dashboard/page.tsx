@@ -1,5 +1,6 @@
 "use client";
 
+import { FilterPopover } from "@/components/filters/filterPopover";
 import { Badge } from "@/components/ui/badge";
 import { DateTimePickerWithRange } from "@/components/ui/datePickerWithRange";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -20,7 +21,6 @@ import { dateUtils } from "@/lib/types/logs";
 import { parseAsInteger, parseAsString, useQueryStates } from "nuqs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChartCard } from "./components/chartCard";
-import { FilterPopover } from "@/components/filters/filterPopover";
 import { type ChartType, ChartTypeToggle } from "./components/chartTypeToggle";
 import { CostChart } from "./components/costChart";
 import { LogVolumeChart } from "./components/logVolumeChart";
@@ -100,6 +100,7 @@ export default function DashboardPage() {
 			status: parseAsString.withDefault(""),
 			routing_rule_ids: parseAsString.withDefault(""),
 			routing_engine_used: parseAsString.withDefault(""),
+			missing_cost_only: parseAsString.withDefault("false"),
 			volume_chart: parseAsString.withDefault("bar"),
 			token_chart: parseAsString.withDefault("bar"),
 			cost_chart: parseAsString.withDefault("bar"),
@@ -125,6 +126,7 @@ export default function DashboardPage() {
 	const selectedStatuses = useMemo(() => parseCsvParam(urlState.status), [urlState.status]);
 	const selectedRoutingRuleIds = useMemo(() => parseCsvParam(urlState.routing_rule_ids), [urlState.routing_rule_ids]);
 	const selectedRoutingEngines = useMemo(() => parseCsvParam(urlState.routing_engine_used), [urlState.routing_engine_used]);
+	const missingCostOnly = useMemo(() => urlState.missing_cost_only === "true", [urlState.missing_cost_only]);
 
 	// Derived filter for API calls
 	const filters: LogFilters = useMemo(
@@ -139,8 +141,21 @@ export default function DashboardPage() {
 			...(selectedStatuses.length > 0 && { status: selectedStatuses }),
 			...(selectedRoutingRuleIds.length > 0 && { routing_rule_ids: selectedRoutingRuleIds }),
 			...(selectedRoutingEngines.length > 0 && { routing_engine_used: selectedRoutingEngines }),
+			...(missingCostOnly && { missing_cost_only: true }),
 		}),
-		[urlState.start_time, urlState.end_time, selectedProviders, selectedModels, selectedKeyIds, selectedVirtualKeyIds, selectedTypes, selectedStatuses, selectedRoutingRuleIds, selectedRoutingEngines],
+		[
+			urlState.start_time,
+			urlState.end_time,
+			selectedProviders,
+			selectedModels,
+			selectedKeyIds,
+			selectedVirtualKeyIds,
+			selectedTypes,
+			selectedStatuses,
+			selectedRoutingRuleIds,
+			selectedRoutingEngines,
+			missingCostOnly,
+		],
 	);
 
 	// Date range for picker
@@ -154,7 +169,8 @@ export default function DashboardPage() {
 
 	// Available models for dropdowns
 	const availableModels = useMemo(() => {
-		return costData?.models || modelData?.models || [];
+		if (costData?.models?.length) return costData.models;
+		return modelData?.models ?? [];
 	}, [costData?.models, modelData?.models]);
 
 	// Fetch all data
@@ -275,12 +291,12 @@ export default function DashboardPage() {
 				<div className="flex items-center gap-2">
 					<FilterPopover filters={filters} onFilterChange={handleFilterChange} />
 					<DateTimePickerWithRange
-						triggerTestId="filter-date-range"
 						dateTime={dateRange}
 						onDateTimeUpdate={handleDateRangeChange}
 						preDefinedPeriods={TIME_PERIODS}
 						predefinedPeriod={urlState.period || undefined}
 						onPredefinedPeriodChange={handlePeriodChange}
+						triggerTestId="dashboard-filter-daterange"
 						popupAlignment="end"
 					/>
 				</div>
@@ -305,7 +321,11 @@ export default function DashboardPage() {
 									<span className="text-muted-foreground">Error</span>
 								</span>
 							</div>
-							<ChartTypeToggle chartType={toChartType(urlState.volume_chart)} onToggle={handleVolumeChartToggle} />
+							<ChartTypeToggle
+								chartType={toChartType(urlState.volume_chart)}
+								onToggle={handleVolumeChartToggle}
+								data-testid="dashboard-volume-chart-toggle"
+							/>
 						</div>
 					}
 				>
@@ -334,7 +354,11 @@ export default function DashboardPage() {
 									<span className="text-muted-foreground">Output</span>
 								</span>
 							</div>
-							<ChartTypeToggle chartType={toChartType(urlState.token_chart)} onToggle={handleTokenChartToggle} />
+							<ChartTypeToggle
+								chartType={toChartType(urlState.token_chart)}
+								onToggle={handleTokenChartToggle}
+								data-testid="dashboard-token-chart-toggle"
+							/>
 						</div>
 					}
 				>
@@ -350,7 +374,7 @@ export default function DashboardPage() {
 				<ChartCard
 					title="Cost"
 					loading={loadingCost}
-					testId="chart-cost"
+					testId="chart-cost-total"
 					headerActions={
 						<div className="flex items-center gap-3">
 							<div className="flex items-center gap-2 text-xs">
@@ -400,8 +424,17 @@ export default function DashboardPage() {
 									</Tooltip>
 								)}
 							</div>
-							<ModelFilterSelect models={availableModels} selectedModel={urlState.cost_model} onModelChange={handleCostModelChange} />
-							<ChartTypeToggle chartType={toChartType(urlState.cost_chart)} onToggle={handleCostChartToggle} />
+							<ModelFilterSelect
+								models={availableModels}
+								selectedModel={urlState.cost_model}
+								onModelChange={handleCostModelChange}
+								data-testid="dashboard-cost-model-filter"
+							/>
+							<ChartTypeToggle
+								chartType={toChartType(urlState.cost_chart)}
+								onToggle={handleCostChartToggle}
+								data-testid="dashboard-cost-chart-toggle"
+							/>
 						</div>
 					}
 				>
@@ -466,8 +499,17 @@ export default function DashboardPage() {
 									</>
 								)}
 							</div>
-							<ModelFilterSelect models={availableModels} selectedModel={urlState.usage_model} onModelChange={handleUsageModelChange} />
-							<ChartTypeToggle chartType={toChartType(urlState.model_chart)} onToggle={handleModelChartToggle} />
+							<ModelFilterSelect
+								models={availableModels}
+								selectedModel={urlState.usage_model}
+								onModelChange={handleUsageModelChange}
+								data-testid="dashboard-usage-model-filter"
+							/>
+							<ChartTypeToggle
+								chartType={toChartType(urlState.model_chart)}
+								onToggle={handleModelChartToggle}
+								data-testid="dashboard-usage-chart-toggle"
+							/>
 						</div>
 					}
 				>

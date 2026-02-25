@@ -98,16 +98,23 @@ type Log struct {
 	OutputMessage         string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.ChatMessage
 	ResponsesOutput       string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.ResponsesMessage
 	EmbeddingOutput       string    `gorm:"type:text" json:"-"` // JSON serialized [][]float32
+	RerankOutput          string    `gorm:"type:text" json:"-"` // JSON serialized []schemas.RerankResult
 	Params                string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.ModelParameters
 	Tools                 string    `gorm:"type:text" json:"-"` // JSON serialized []schemas.Tool
 	ToolCalls             string    `gorm:"type:text" json:"-"` // JSON serialized []schemas.ToolCall (For backward compatibility, tool calls are now in the content)
 	SpeechInput           string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.SpeechInput
 	TranscriptionInput    string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.TranscriptionInput
 	ImageGenerationInput  string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.ImageGenerationInput
+	VideoGenerationInput  string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.VideoGenerationInput
 	SpeechOutput          string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostSpeech
 	TranscriptionOutput   string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostTranscribe
 	ImageGenerationOutput string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostImageGenerationResponse
 	ListModelsOutput      string    `gorm:"type:text" json:"-"` // JSON serialized []schemas.Model
+	VideoGenerationOutput string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostVideoGenerationResponse
+	VideoRetrieveOutput   string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostVideoRetrieveResponse
+	VideoDownloadOutput   string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostVideoDownloadResponse
+	VideoListOutput       string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostVideoListResponse
+	VideoDeleteOutput     string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostVideoDeleteResponse
 	CacheDebug            string    `gorm:"type:text" json:"-"` // JSON serialized *schemas.BifrostCacheDebug
 	Latency               *float64  `gorm:"index:idx_logs_latency" json:"latency,omitempty"`
 	TokenUsage            string    `gorm:"type:text" json:"-"`                            // JSON serialized *schemas.LLMUsage
@@ -135,6 +142,7 @@ type Log struct {
 	OutputMessageParsed         *schemas.ChatMessage                    `gorm:"-" json:"output_message,omitempty"`
 	ResponsesOutputParsed       []schemas.ResponsesMessage              `gorm:"-" json:"responses_output,omitempty"`
 	EmbeddingOutputParsed       []schemas.EmbeddingData                 `gorm:"-" json:"embedding_output,omitempty"`
+	RerankOutputParsed          []schemas.RerankResult                  `gorm:"-" json:"rerank_output,omitempty"`
 	ParamsParsed                interface{}                             `gorm:"-" json:"params,omitempty"`
 	ToolsParsed                 []schemas.ChatTool                      `gorm:"-" json:"tools,omitempty"`
 	ToolCallsParsed             []schemas.ChatAssistantMessageToolCall  `gorm:"-" json:"tool_calls,omitempty"` // For backward compatibility, tool calls are now in the content
@@ -149,6 +157,12 @@ type Log struct {
 	CacheDebugParsed            *schemas.BifrostCacheDebug              `gorm:"-" json:"cache_debug,omitempty"`
 	ListModelsOutputParsed      []schemas.Model                         `gorm:"-" json:"list_models_output,omitempty"`
 	MetadataParsed              map[string]interface{}                  `gorm:"-" json:"metadata,omitempty"`
+	VideoGenerationInputParsed  *schemas.VideoGenerationInput           `gorm:"-" json:"video_generation_input,omitempty"`
+	VideoGenerationOutputParsed *schemas.BifrostVideoGenerationResponse `gorm:"-" json:"video_generation_output,omitempty"`
+	VideoRetrieveOutputParsed   *schemas.BifrostVideoGenerationResponse `gorm:"-" json:"video_retrieve_output,omitempty"`
+	VideoDownloadOutputParsed   *schemas.BifrostVideoDownloadResponse   `gorm:"-" json:"video_download_output,omitempty"`
+	VideoListOutputParsed       *schemas.BifrostVideoListResponse       `gorm:"-" json:"video_list_output,omitempty"`
+	VideoDeleteOutputParsed     *schemas.BifrostVideoDeleteResponse     `gorm:"-" json:"video_delete_output,omitempty"`
 	// Populated in handlers after find using the virtual key id and key id
 	VirtualKey  *tables.TableVirtualKey  `gorm:"-" json:"virtual_key,omitempty"`  // redacted
 	SelectedKey *schemas.Key             `gorm:"-" json:"selected_key,omitempty"` // redacted
@@ -242,6 +256,14 @@ func (l *Log) SerializeFields() error {
 		}
 	}
 
+	if l.RerankOutputParsed != nil {
+		if data, err := json.Marshal(l.RerankOutputParsed); err != nil {
+			return err
+		} else {
+			l.RerankOutput = string(data)
+		}
+	}
+
 	if l.SpeechInputParsed != nil {
 		if data, err := json.Marshal(l.SpeechInputParsed); err != nil {
 			return err
@@ -266,6 +288,14 @@ func (l *Log) SerializeFields() error {
 		}
 	}
 
+	if l.VideoGenerationInputParsed != nil {
+		if data, err := json.Marshal(l.VideoGenerationInputParsed); err != nil {
+			return err
+		} else {
+			l.VideoGenerationInput = string(data)
+		}
+	}
+
 	if l.SpeechOutputParsed != nil {
 		if data, err := json.Marshal(l.SpeechOutputParsed); err != nil {
 			return err
@@ -287,6 +317,46 @@ func (l *Log) SerializeFields() error {
 			return err
 		} else {
 			l.ImageGenerationOutput = string(data)
+		}
+	}
+
+	if l.VideoGenerationOutputParsed != nil {
+		if data, err := json.Marshal(l.VideoGenerationOutputParsed); err != nil {
+			return err
+		} else {
+			l.VideoGenerationOutput = string(data)
+		}
+	}
+
+	if l.VideoRetrieveOutputParsed != nil {
+		if data, err := json.Marshal(l.VideoRetrieveOutputParsed); err != nil {
+			return err
+		} else {
+			l.VideoRetrieveOutput = string(data)
+		}
+	}
+
+	if l.VideoDownloadOutputParsed != nil {
+		if data, err := json.Marshal(l.VideoDownloadOutputParsed); err != nil {
+			return err
+		} else {
+			l.VideoDownloadOutput = string(data)
+		}
+	}
+
+	if l.VideoListOutputParsed != nil {
+		if data, err := json.Marshal(l.VideoListOutputParsed); err != nil {
+			return err
+		} else {
+			l.VideoListOutput = string(data)
+		}
+	}
+
+	if l.VideoDeleteOutputParsed != nil {
+		if data, err := json.Marshal(l.VideoDeleteOutputParsed); err != nil {
+			return err
+		} else {
+			l.VideoDeleteOutput = string(data)
 		}
 	}
 
@@ -401,6 +471,13 @@ func (l *Log) DeserializeFields() error {
 		}
 	}
 
+	if l.RerankOutput != "" {
+		if err := json.Unmarshal([]byte(l.RerankOutput), &l.RerankOutputParsed); err != nil {
+			// Log error but don't fail the operation - initialize as nil
+			l.RerankOutputParsed = nil
+		}
+	}
+
 	if l.Params != "" {
 		if err := json.Unmarshal([]byte(l.Params), &l.ParamsParsed); err != nil {
 			// Log error but don't fail the operation - initialize as nil
@@ -433,6 +510,48 @@ func (l *Log) DeserializeFields() error {
 		if err := json.Unmarshal([]byte(l.ErrorDetails), &l.ErrorDetailsParsed); err != nil {
 			// Log error but don't fail the operation - initialize as nil
 			l.ErrorDetailsParsed = nil
+		}
+	}
+
+	if l.VideoGenerationOutput != "" {
+		if err := json.Unmarshal([]byte(l.VideoGenerationOutput), &l.VideoGenerationOutputParsed); err != nil {
+			// Log error but don't fail the operation - initialize as nil
+			l.VideoGenerationOutputParsed = nil
+		}
+	}
+
+	if l.VideoRetrieveOutput != "" {
+		if err := json.Unmarshal([]byte(l.VideoRetrieveOutput), &l.VideoRetrieveOutputParsed); err != nil {
+			// Log error but don't fail the operation - initialize as nil
+			l.VideoRetrieveOutputParsed = nil
+		}
+	}
+
+	if l.VideoDownloadOutput != "" {
+		if err := json.Unmarshal([]byte(l.VideoDownloadOutput), &l.VideoDownloadOutputParsed); err != nil {
+			// Log error but don't fail the operation - initialize as nil
+			l.VideoDownloadOutputParsed = nil
+		}
+	}
+
+	if l.VideoListOutput != "" {
+		if err := json.Unmarshal([]byte(l.VideoListOutput), &l.VideoListOutputParsed); err != nil {
+			// Log error but don't fail the operation - initialize as nil
+			l.VideoListOutputParsed = nil
+		}
+	}
+
+	if l.VideoDeleteOutput != "" {
+		if err := json.Unmarshal([]byte(l.VideoDeleteOutput), &l.VideoDeleteOutputParsed); err != nil {
+			// Log error but don't fail the operation - initialize as nil
+			l.VideoDeleteOutputParsed = nil
+		}
+	}
+
+	if l.VideoGenerationInput != "" {
+		if err := json.Unmarshal([]byte(l.VideoGenerationInput), &l.VideoGenerationInputParsed); err != nil {
+			// Log error but don't fail the operation - initialize as nil
+			l.VideoGenerationInputParsed = nil
 		}
 	}
 
@@ -525,7 +644,7 @@ type MCPToolLog struct {
 	Latency        *float64  `gorm:"index:idx_mcp_logs_latency" json:"latency,omitempty"`               // Execution time in milliseconds
 	Cost           *float64  `gorm:"index:idx_mcp_logs_cost" json:"cost,omitempty"`                     // Cost in dollars (per execution cost)
 	Status         string    `gorm:"type:varchar(50);index:idx_mcp_logs_status;not null" json:"status"` // "processing", "success", or "error"
-	Metadata       string    `gorm:"type:text" json:"-"`                                               // JSON serialized map[string]interface{}
+	Metadata       string    `gorm:"type:text" json:"-"`                                                // JSON serialized map[string]interface{}
 	CreatedAt      time.Time `gorm:"index;not null" json:"created_at"`
 
 	// Virtual fields for JSON output - populated when needed
@@ -855,6 +974,15 @@ func (l *Log) BuildContentSummary() string {
 		}
 	}
 
+	// Add rerank output content
+	if l.RerankOutputParsed != nil {
+		for _, result := range l.RerankOutputParsed {
+			if result.Document != nil && result.Document.Text != "" {
+				parts = append(parts, result.Document.Text)
+			}
+		}
+	}
+
 	// Add speech input content
 	if l.SpeechInputParsed != nil && l.SpeechInputParsed.Input != "" {
 		parts = append(parts, l.SpeechInputParsed.Input)
@@ -870,12 +998,23 @@ func (l *Log) BuildContentSummary() string {
 		parts = append(parts, l.ImageGenerationInputParsed.Prompt)
 	}
 
+	// Add video generation input prompt
+	if l.VideoGenerationInputParsed != nil && l.VideoGenerationInputParsed.Prompt != "" {
+		parts = append(parts, l.VideoGenerationInputParsed.Prompt)
+	}
+
 	// Add error details
 	if l.ErrorDetailsParsed != nil && l.ErrorDetailsParsed.Error.Message != "" {
 		parts = append(parts, l.ErrorDetailsParsed.Error.Message)
 	}
 
 	return strings.Join(parts, " ")
+}
+
+// KeyPairResult represents an ID-Name pair returned from DISTINCT queries
+type KeyPairResult struct {
+	ID   string `gorm:"column:id"`
+	Name string `gorm:"column:name"`
 }
 
 // HistogramBucket represents a single time bucket in the histogram

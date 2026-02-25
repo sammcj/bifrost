@@ -6,18 +6,17 @@ import {
 	Boxes,
 	BoxIcon,
 	BugIcon,
+	Building,
 	ChartColumnBig,
 	ChevronsLeftRightEllipsis,
 	CircleDollarSign,
-	Cog,
 	Construction,
+	DatabaseZap,
 	FlaskConical,
 	FolderGit,
-	Gauge,
 	Globe,
 	KeyRound,
 	Landmark,
-	Layers,
 	LayoutGrid,
 	LogOut,
 	Logs,
@@ -26,17 +25,20 @@ import {
 	Puzzle,
 	ScrollText,
 	Search,
+	SearchCheck,
 	Settings,
 	Settings2Icon,
-	Shield,
+	ShieldCheck,
 	ShieldUser,
 	Shuffle,
 	Telescope,
 	ToolCase,
+	TrendingUp,
 	User,
 	UserRoundCheck,
 	Users,
-	Zap,
+	Wallet,
+	WalletCards
 } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -166,7 +168,6 @@ interface SidebarItem {
 const SidebarItemView = ({
 	item,
 	isActive,
-	isAllowed,
 	isExternal,
 	isWebSocketConnected,
 	isExpanded,
@@ -174,13 +175,11 @@ const SidebarItemView = ({
 	pathname,
 	router,
 	isSidebarCollapsed,
-	expandSidebar,
-	isGovernanceEnabled,
+	expandSidebar,	
 	highlightedUrl,
 }: {
 	item: SidebarItem;
 	isActive: boolean;
-	isAllowed: boolean;
 	isExternal?: boolean;
 	isWebSocketConnected: boolean;
 	isExpanded?: boolean;
@@ -188,8 +187,7 @@ const SidebarItemView = ({
 	pathname: string;
 	router: ReturnType<typeof useRouter>;
 	isSidebarCollapsed: boolean;
-	expandSidebar: () => void;
-	isGovernanceEnabled: boolean;
+	expandSidebar: () => void;	
 	highlightedUrl?: string;
 }) => {
 	const hasSubItems = "subItems" in item && item.subItems && item.subItems.length > 0;
@@ -220,7 +218,6 @@ const SidebarItemView = ({
 	};
 
 	const handleNavigation = (url: string, e?: React.MouseEvent) => {
-		if (!isAllowed) return;
 		if (isExternal || e?.metaKey || e?.ctrlKey) {
 			openInNewTab(url);
 			return;
@@ -249,7 +246,7 @@ const SidebarItemView = ({
 						? "bg-sidebar-accent text-accent-foreground border-primary/20"
 						: isActive || isAnySubItemActive
 							? "bg-sidebar-accent text-primary border-primary/20"
-							: isAllowed && item.hasAccess
+							: item.hasAccess
 								? "hover:bg-sidebar-accent hover:text-accent-foreground border-transparent text-slate-500 dark:text-zinc-400"
 								: "hover:bg-destructive/5 hover:text-muted-foreground text-muted-foreground cursor-not-allowed border-transparent"
 				} `}
@@ -283,9 +280,6 @@ const SidebarItemView = ({
 			{hasSubItems && isExpanded && (
 				<SidebarMenuSub className="border-sidebar-border mt-1 ml-4 space-y-0.5 border-l pl-2">
 					{item.subItems?.map((subItem: SidebarItem) => {
-						// Hide governance-dependent subitems when governance is disabled
-						if ((subItem.url === "/workspace/model-limits" || subItem.url === "/workspace/routing-rules") && !isGovernanceEnabled)
-							return null;
 						// For query param based subitems, check if tab matches
 						const isSubItemActive = subItem.queryParam ? pathname === subItem.url : pathname.startsWith(subItem.url);
 						const isSubItemHighlighted = highlightedUrl === subItem.url;
@@ -379,6 +373,7 @@ export default function AppSidebar() {
 	const hasModelProvidersAccess = useRbac(RbacResource.ModelProvider, RbacOperation.View);
 	const hasMCPGatewayAccess = useRbac(RbacResource.MCPGateway, RbacOperation.View);
 	const hasPluginsAccess = useRbac(RbacResource.Plugins, RbacOperation.View);
+	const hasUsersAccess = useRbac(RbacResource.Users, RbacOperation.View);
 	const hasUserProvisioningAccess = useRbac(RbacResource.UserProvisioning, RbacOperation.View);
 	const hasAuditLogsAccess = useRbac(RbacResource.AuditLogs, RbacOperation.View);
 	const hasCustomersAccess = useRbac(RbacResource.Customers, RbacOperation.View);
@@ -430,33 +425,33 @@ export default function AppSidebar() {
 						description: "Log connectors",
 						hasAccess: hasObservabilityAccess,
 					},
+					{
+						title: "Logs Settings",
+						url: "/workspace/config/logging",
+						icon: Settings,
+						description: "Logs configuration",
+						hasAccess: hasSettingsAccess,
+					},
 				],
 			},
 			{
-				title: "Prompt Repository",
-				url: "/workspace/prompt-repo",
-				icon: FolderGit,
-				description: "Prompt repository",
-				hasAccess: true,
-			},
-			{
-				title: "Model Providers",
+				title: "Models",
 				url: "/workspace/providers",
 				icon: BoxIcon,
 				description: "Configure models",
-				hasAccess: hasModelProvidersAccess || hasRoutingRulesAccess || hasGovernanceAccess,
+				hasAccess: true,
 				subItems: [
 					{
-						title: "Configurations",
+						title: "Model Providers",
 						url: "/workspace/providers",
-						icon: Cog,
+						icon: Boxes,
 						description: "Configure models",
 						hasAccess: hasModelProvidersAccess,
 					},
 					{
 						title: "Budgets & Limits",
 						url: "/workspace/model-limits",
-						icon: Gauge,
+						icon: Wallet,
 						description: "Model limits",
 						hasAccess: hasGovernanceAccess,
 					},
@@ -466,6 +461,13 @@ export default function AppSidebar() {
 						icon: Network,
 						description: "Intelligent routing rules",
 						hasAccess: hasRoutingRulesAccess,
+					},
+					{
+						title: "Pricing config",
+						url: "/workspace/custom-pricing",
+						icon: CircleDollarSign,
+						description: "Pricing configuration",
+						hasAccess: hasSettingsAccess,
 					},
 				],
 			},
@@ -497,6 +499,13 @@ export default function AppSidebar() {
 						description: "MCP auth config",
 						hasAccess: hasMCPGatewayAccess,
 					},
+					{
+						title: "MCP Settings",
+						url: "/workspace/mcp-settings",
+						icon: Settings,
+						description: "MCP configuration",
+						hasAccess: hasMCPGatewayAccess,
+					},
 				],
 			},
 			{
@@ -511,29 +520,36 @@ export default function AppSidebar() {
 				title: "Governance",
 				url: "/workspace/governance",
 				icon: Landmark,
-				description: "Govern access",
-				hasAccess:
-					hasGovernanceAccess ||
-					hasVirtualKeysAccess ||
-					hasCustomersAccess ||
-					hasTeamsAccess ||
-					hasUserProvisioningAccess ||
-					hasRbacAccess ||
-					hasAuditLogsAccess,
+				description: "Virtual keys, users, teams, customers & roles",
+				hasAccess: hasGovernanceAccess,
 				subItems: [
 					{
 						title: "Virtual Keys",
-						url: "/workspace/virtual-keys",
+						url: "/workspace/governance/virtual-keys",
 						icon: KeyRound,
 						description: "Manage virtual keys & access",
 						hasAccess: hasVirtualKeysAccess,
 					},
 					{
-						title: "Users & Groups",
-						url: "/workspace/user-groups",
+						title: "Users",
+						url: "/workspace/governance/users",
 						icon: Users,
-						description: "Manage users & groups",
-						hasAccess: hasCustomersAccess || hasTeamsAccess,
+						description: "Manage users",
+						hasAccess: hasUsersAccess,
+					},
+					{
+						title: "Teams",
+						url: "/workspace/governance/teams",
+						icon: Building,
+						description: "Manage teams",
+						hasAccess: hasTeamsAccess,
+					},
+					{
+						title: "Customers",
+						url: "/workspace/governance/customers",
+						icon: WalletCards,
+						description: "Manage customers",
+						hasAccess: hasCustomersAccess,
 					},
 					{
 						title: "User Provisioning",
@@ -544,7 +560,7 @@ export default function AppSidebar() {
 					},
 					{
 						title: "Roles & Permissions",
-						url: "/workspace/rbac",
+						url: "/workspace/governance/rbac",
 						icon: UserRoundCheck,
 						description: "User roles and permissions",
 						hasAccess: hasRbacAccess,
@@ -566,10 +582,10 @@ export default function AppSidebar() {
 				hasAccess: hasGuardrailsConfigAccess || hasGuardrailsProvidersAccess,
 				subItems: [
 					{
-						title: "Configuration",
+						title: "Rules",
 						url: "/workspace/guardrails/configuration",
-						icon: Cog,
-						description: "Guardrail configuration",
+						icon: SearchCheck,
+						description: "Guardrail rules",
 						hasAccess: hasGuardrailsConfigAccess,
 					},
 					{
@@ -582,17 +598,9 @@ export default function AppSidebar() {
 				],
 			},
 			{
-				title: "Evals",
-				url: "https://www.getmaxim.ai",
-				icon: FlaskConical,
-				isExternal: true,
-				description: "Evaluations",
-				hasAccess: true,
-			},
-			{
 				title: "Cluster Config",
 				url: "/workspace/cluster",
-				icon: Layers,
+				icon: Network,
 				description: "Manage Bifrost cluster",
 				hasAccess: hasClusterConfigAccess,
 			},
@@ -604,11 +612,27 @@ export default function AppSidebar() {
 				hasAccess: isAdaptiveRoutingAllowed,
 			},
 			{
-				title: "Config",
+				title: "Prompt Repository",
+				url: "/workspace/prompt-repo",
+				icon: FolderGit,
+				description: "Prompt repository",
+				// Public access intentional — feature is "coming soon" with no sensitive data; RBAC will be added at GA
+				hasAccess: true,
+			},
+			{
+				title: "Evals",
+				url: "https://www.getmaxim.ai",
+				icon: FlaskConical,
+				isExternal: true,
+				description: "Evaluations",
+				hasAccess: true,
+			},
+			{
+				title: "Settings",
 				url: "/workspace/config",
 				icon: Settings2Icon,
 				description: "Bifrost settings",
-				hasAccess: hasSettingsAccess,
+				hasAccess: hasSettingsAccess || hasAuditLogsAccess || hasUserProvisioningAccess,
 				subItems: [
 					{
 						title: "Client Settings",
@@ -618,51 +642,16 @@ export default function AppSidebar() {
 						hasAccess: hasSettingsAccess,
 					},
 					{
-						title: "MCP Gateway",
-						url: "/workspace/config/mcp-gateway",
-						icon: MCPIcon,
-						description: "MCP gateway configuration",
-						hasAccess: hasMCPGatewayAccess,
-					},
-					{
-						title: "Pricing Config",
-						url: "/workspace/config/pricing-config",
-						icon: CircleDollarSign,
-						description: "Pricing configuration",
-						hasAccess: hasSettingsAccess,
-					},
-					{
-						title: "Logging",
-						url: "/workspace/config/logging",
-						icon: Logs,
-						description: "Logging configuration",
-						hasAccess: hasSettingsAccess,
-					},
-					{
-						title: "Governance",
-						url: "/workspace/config/governance",
-						icon: Landmark,
-						description: "Governance settings",
-						hasAccess: hasSettingsAccess,
-					},
-					{
 						title: "Caching",
 						url: "/workspace/config/caching",
-						icon: Zap,
+						icon: DatabaseZap,
 						description: "Caching configuration",
-						hasAccess: hasSettingsAccess,
-					},
-					{
-						title: "Observability",
-						url: "/workspace/config/observability",
-						icon: Gauge,
-						description: "Observability settings",
 						hasAccess: hasSettingsAccess,
 					},
 					{
 						title: "Security",
 						url: "/workspace/config/security",
-						icon: Shield,
+						icon: ShieldCheck,
 						description: "Security settings",
 						hasAccess: hasSettingsAccess,
 					},
@@ -687,7 +676,7 @@ export default function AppSidebar() {
 					{
 						title: "Performance Tuning",
 						url: "/workspace/config/performance-tuning",
-						icon: Zap,
+						icon: TrendingUp,
 						description: "Performance tuning settings",
 						hasAccess: hasSettingsAccess,
 					},
@@ -700,6 +689,7 @@ export default function AppSidebar() {
 			hasModelProvidersAccess,
 			hasMCPGatewayAccess,
 			hasPluginsAccess,
+			hasUsersAccess,
 			hasUserProvisioningAccess,
 			hasAuditLogsAccess,
 			hasCustomersAccess,
@@ -759,7 +749,6 @@ export default function AppSidebar() {
 	}, [latestRelease, version]);
 	// Get governance config from RTK Query
 	const { data: coreConfig } = useGetCoreConfigQuery({});
-	const isGovernanceEnabled = coreConfig?.client_config.enable_governance || false;
 	const isAuthEnabled = coreConfig?.auth_config?.is_enabled || false;
 
 	useEffect(() => {
@@ -828,11 +817,10 @@ export default function AppSidebar() {
 				if (searchQuery.trim() || expandedItems.has(item.title)) {
 					for (const sub of item.subItems!) {
 						if (sub.hasAccess === false) continue;
-						if ((sub.url === "/workspace/model-limits" || sub.url === "/workspace/routing-rules") && !isGovernanceEnabled) continue;
 						result.push({ title: sub.title, url: sub.url, queryParam: sub.queryParam });
 					}
 				} else {
-					// Parent is collapsed — include parent as a toggle target
+					// Parent is collapsed - include parent as a toggle target
 					if (item.hasAccess) result.push({ title: item.title, url: item.url });
 				}
 			} else {
@@ -840,7 +828,7 @@ export default function AppSidebar() {
 			}
 		}
 		return result;
-	}, [filteredItems, expandedItems, searchQuery, isGovernanceEnabled]);
+	}, [filteredItems, expandedItems, searchQuery]);
 
 	const handleSearchKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -894,9 +882,16 @@ export default function AppSidebar() {
 		});
 	};
 
+	const configExceptions = ["/workspace/config/logging"];
+
 	const isActiveRoute = (url: string) => {
 		if (url === "/" && pathname === "/") return true;
-		if (url !== "/" && pathname.startsWith(url)) return true;
+		if (url !== "/" && pathname.startsWith(url)) {
+			if (url === "/workspace/config" && configExceptions.some((e) => pathname.startsWith(e))) {
+				return false;
+			}
+			return true;
+		}
 		return false;
 	};
 
@@ -1055,14 +1050,13 @@ export default function AppSidebar() {
 						<SidebarMenu className="space-y-0.5">
 							{filteredItems.map((item) => {
 								const isActive = isActiveRoute(item.url);
-								const isAllowed = item.title === "Governance" ? isGovernanceEnabled : true;
+
 								const highlightedUrl = focusedIndex >= 0 ? navigableItems[focusedIndex]?.url : undefined;
 								return (
 									<SidebarItemView
 										key={item.title}
 										item={item}
 										isActive={isActive}
-										isAllowed={isAllowed}
 										isExternal={item.isExternal ?? false}
 										isWebSocketConnected={isWebSocketConnected}
 										isExpanded={expandedItems.has(item.title)}
@@ -1071,7 +1065,6 @@ export default function AppSidebar() {
 										router={router}
 										isSidebarCollapsed={sidebarState === "collapsed"}
 										expandSidebar={() => toggleSidebar()}
-										isGovernanceEnabled={isGovernanceEnabled}
 										highlightedUrl={highlightedUrl}
 									/>
 								);

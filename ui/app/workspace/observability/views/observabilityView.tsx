@@ -131,6 +131,7 @@ export default function ObservabilityView() {
 									type="button"
 									key={tab.id}
 									disabled={!!tab.disabled}
+									data-testid={`observability-provider-btn-${tab.id}`}
 									aria-disabled={tab.disabled ? true : undefined}
 									aria-current={selectedPluginId === tab.id ? "page" : undefined}
 									className={cn(

@@ -33,7 +33,12 @@ import (
 	plugins "github.com/maximhq/bifrost/framework/plugins"
 	"github.com/maximhq/bifrost/framework/vectorstore"
 	"github.com/maximhq/bifrost/plugins/governance"
+	"github.com/maximhq/bifrost/plugins/litellmcompat"
+	"github.com/maximhq/bifrost/plugins/logging"
+	"github.com/maximhq/bifrost/plugins/maxim"
+	"github.com/maximhq/bifrost/plugins/otel"
 	"github.com/maximhq/bifrost/plugins/semanticcache"
+	"github.com/maximhq/bifrost/plugins/telemetry"
 	"gorm.io/gorm"
 )
 
@@ -86,12 +91,23 @@ func getWeight(w *float64) float64 {
 	return *w
 }
 
+// IsBuiltinPlugin checks if a plugin is a built-in plugin
+func IsBuiltinPlugin(name string) bool {
+	return name == telemetry.PluginName ||
+		name == logging.PluginName ||
+		name == governance.PluginName ||
+		name == litellmcompat.PluginName ||
+		name == maxim.PluginName ||
+		name == semanticcache.PluginName ||
+		name == otel.PluginName
+}
+
 // ConfigData represents the configuration data for the Bifrost HTTP transport.
 // It contains the client configuration, provider configurations, MCP configuration,
 // vector store configuration, config store configuration, and logs store configuration.
 type ConfigData struct {
 	Client        *configstore.ClientConfig `json:"client"`
-	EncryptionKey string                    `json:"encryption_key"`
+	EncryptionKey *schemas.EnvVar           `json:"encryption_key"`
 	// Deprecated: Use GovernanceConfig.AuthConfig instead
 	AuthConfig        *configstore.AuthConfig               `json:"auth_config,omitempty"`
 	Providers         map[string]configstore.ProviderConfig `json:"providers"`
@@ -112,7 +128,7 @@ func (cd *ConfigData) UnmarshalJSON(data []byte) error {
 	type TempConfigData struct {
 		FrameworkConfig   json.RawMessage                       `json:"framework,omitempty"`
 		Client            *configstore.ClientConfig             `json:"client"`
-		EncryptionKey     string                                `json:"encryption_key"`
+		EncryptionKey     *schemas.EnvVar                       `json:"encryption_key"`
 		AuthConfig        *configstore.AuthConfig               `json:"auth_config,omitempty"`
 		Providers         map[string]configstore.ProviderConfig `json:"providers"`
 		MCP               *schemas.MCPConfig                    `json:"mcp,omitempty"`
@@ -295,8 +311,7 @@ var DefaultClientConfig = configstore.ClientConfig{
 	InitialPoolSize:         schemas.DefaultInitialPoolSize,
 	EnableLogging:           true,
 	DisableContentLogging:   false,
-	EnableGovernance:       true,
-	EnforceAuthOnInference: false,
+	EnforceAuthOnInference:  false,
 	AllowDirectKeys:         false,
 	AllowedOrigins:          []string{"*"},
 	AllowedHeaders:          []string{},
@@ -305,29 +320,6 @@ var DefaultClientConfig = configstore.ClientConfig{
 	MCPToolExecutionTimeout: 30,
 	MCPCodeModeBindingLevel: string(schemas.CodeModeBindingLevelServer),
 	EnableLiteLLMFallbacks:  false,
-}
-
-// initializeEncryption initializes the encryption key
-func (c *Config) initializeEncryption(configKey string) error {
-	encryptionKey := ""
-	if configKey != "" {
-		if strings.HasPrefix(configKey, "env.") {
-			var err error
-			if encryptionKey, _, err = c.processEnvValue(configKey); err != nil {
-				return fmt.Errorf("failed to process encryption key: %w", err)
-			}
-		} else {
-			logger.Warn("encryption_key should reference an environment variable (env.VAR_NAME) rather than storing the key directly in the config file")
-			encryptionKey = configKey
-		}
-	}
-	if encryptionKey == "" {
-		if os.Getenv("BIFROST_ENCRYPTION_KEY") != "" {
-			encryptionKey = os.Getenv("BIFROST_ENCRYPTION_KEY")
-		}
-	}
-	encrypt.Init(encryptionKey, logger)
-	return nil
 }
 
 // LoadConfig loads initial configuration from a JSON config file into memory
@@ -437,6 +429,10 @@ func loadConfigFromFile(ctx context.Context, config *Config, data []byte) (*Conf
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 	var err error
+	// Initialize encryption before stores so BeforeSave hooks and EncryptPlaintextRows work correctly
+	if err = initEncryptionFromFile(&configData); err != nil {
+		return nil, err
+	}
 	// Initialize stores from config file
 	if err = initStoresFromFile(ctx, config, &configData); err != nil {
 		return nil, err
@@ -460,10 +456,8 @@ func loadConfigFromFile(ctx context.Context, config *Config, data []byte) (*Conf
 	loadPluginsFromFile(ctx, config, &configData)
 	// Initialize framework config and pricing manager
 	initFrameworkConfigFromFile(ctx, config, &configData)
-	// Initialize encryption
-	if err = initEncryptionFromFile(config, &configData); err != nil {
-		return nil, err
-	}
+	// Sync encryption: encrypt any plaintext rows written during config loading
+	syncEncryption(ctx, config)
 	return config, nil
 }
 
@@ -1491,7 +1485,7 @@ func preserveEnvVar(source *schemas.EnvVar, value string) *schemas.EnvVar {
 // loadAuthConfigFromFile loads auth config from file.
 // File config (configData) always takes precedence over DB config.
 func loadAuthConfigFromFile(ctx context.Context, config *Config, configData *ConfigData) {
-	hasFileConfig := configData != nil && configData.AuthConfig != nil
+	hasFileConfig := configData != nil && (configData.AuthConfig != nil || (configData.Governance != nil && configData.Governance.AuthConfig != nil))
 	if !hasFileConfig && (config.GovernanceConfig == nil || config.GovernanceConfig.AuthConfig == nil) {
 		return
 	}
@@ -1519,19 +1513,34 @@ func loadAuthConfigFromFile(ctx context.Context, config *Config, configData *Con
 		}
 		return
 	}
+	var authConfig *configstore.AuthConfig
+	if configData.Governance != nil && configData.Governance.AuthConfig != nil {
+		authConfig = configData.Governance.AuthConfig
+	} else if configData.AuthConfig != nil {
+		authConfig = configData.AuthConfig
+	}
+	if authConfig == nil {
+		return
+	}
 	// File config present: validate env vars
-	if configData.AuthConfig.AdminUserName != nil && configData.AuthConfig.AdminUserName.GetValue() == "" && configData.AuthConfig.AdminUserName.IsFromEnv() {
-		logger.Fatal("username set with env var but value is empty: %s", configData.AuthConfig.AdminUserName.EnvVar)
+	if authConfig.AdminUserName != nil && authConfig.AdminUserName.GetValue() == "" && authConfig.AdminUserName.IsFromEnv() {
+		logger.Warn("username set with env var but value is empty: %s", authConfig.AdminUserName.EnvVar)
+		return
 	}
-	if configData.AuthConfig.AdminPassword != nil && configData.AuthConfig.AdminPassword.GetValue() == "" && configData.AuthConfig.AdminPassword.IsFromEnv() {
-		logger.Fatal("password set with env var but value is empty: %s", configData.AuthConfig.AdminPassword.EnvVar)
+	if authConfig.AdminPassword != nil && authConfig.AdminPassword.GetValue() == "" && authConfig.AdminPassword.IsFromEnv() {
+		logger.Warn("password set with env var but value is empty: %s", authConfig.AdminPassword.EnvVar)
+		return
 	}
-	filePassword := configData.AuthConfig.AdminPassword.GetValue()
+	if authConfig.AdminPassword == nil || authConfig.AdminUserName == nil {
+		logger.Warn("auth config is missing admin_username or admin_password, skipping auth config processing")
+		return
+	}
+	filePassword := authConfig.AdminPassword.GetValue()
 	// If DB already matches file config, skip hashing and DB write
 	if dbAuthConfig != nil {
-		usernameMatch := dbAuthConfig.AdminUserName.GetValue() == configData.AuthConfig.AdminUserName.GetValue()
-		boolsMatch := dbAuthConfig.IsEnabled == configData.AuthConfig.IsEnabled &&
-			dbAuthConfig.DisableAuthOnInference == configData.AuthConfig.DisableAuthOnInference
+		usernameMatch := dbAuthConfig.AdminUserName.GetValue() == authConfig.AdminUserName.GetValue()
+		boolsMatch := dbAuthConfig.IsEnabled == authConfig.IsEnabled &&
+			dbAuthConfig.DisableAuthOnInference == authConfig.DisableAuthOnInference
 		var passwordMatch bool
 		if filePassword == "" {
 			passwordMatch = dbAuthConfig.AdminPassword.GetValue() == ""
@@ -1543,10 +1552,10 @@ func loadAuthConfigFromFile(ctx context.Context, config *Config, configData *Con
 		if usernameMatch && passwordMatch && boolsMatch {
 			// DB matches file -- use DB hash but preserve file env var references
 			config.GovernanceConfig.AuthConfig = &configstore.AuthConfig{
-				AdminUserName:          configData.AuthConfig.AdminUserName,
-				AdminPassword:          preserveEnvVar(configData.AuthConfig.AdminPassword, dbAuthConfig.AdminPassword.GetValue()),
-				IsEnabled:              configData.AuthConfig.IsEnabled,
-				DisableAuthOnInference: configData.AuthConfig.DisableAuthOnInference,
+				AdminUserName:          authConfig.AdminUserName,
+				AdminPassword:          preserveEnvVar(authConfig.AdminPassword, dbAuthConfig.AdminPassword.GetValue()),
+				IsEnabled:              authConfig.IsEnabled,
+				DisableAuthOnInference: authConfig.DisableAuthOnInference,
 			}
 			return
 		}
@@ -1573,10 +1582,10 @@ func loadAuthConfigFromFile(ctx context.Context, config *Config, configData *Con
 	}
 	// Build auth config with hashed password but preserve env var references
 	config.GovernanceConfig.AuthConfig = &configstore.AuthConfig{
-		AdminUserName:          configData.AuthConfig.AdminUserName,
-		AdminPassword:          preserveEnvVar(configData.AuthConfig.AdminPassword, hashedPassword),
-		IsEnabled:              configData.AuthConfig.IsEnabled,
-		DisableAuthOnInference: configData.AuthConfig.DisableAuthOnInference,
+		AdminUserName:          authConfig.AdminUserName,
+		AdminPassword:          preserveEnvVar(authConfig.AdminPassword, hashedPassword),
+		IsEnabled:              authConfig.IsEnabled,
+		DisableAuthOnInference: authConfig.DisableAuthOnInference,
 	}
 	// Persist to config store
 	if err := config.ConfigStore.UpdateAuthConfig(ctx, config.GovernanceConfig.AuthConfig); err != nil {
@@ -1804,6 +1813,7 @@ func initFrameworkConfigFromFile(ctx context.Context, config *Config, configData
 		logger.Error("failed to initialize pricing manager: %v", err)
 	} else {
 		config.ModelCatalog = pricingManager
+		applyProviderPricingOverrides(config.ModelCatalog, config.Providers)
 	}
 
 	// Initialize MCP catalog
@@ -1817,35 +1827,40 @@ func initFrameworkConfigFromFile(ctx context.Context, config *Config, configData
 }
 
 // initEncryptionFromFile initializes encryption from config file
-func initEncryptionFromFile(config *Config, configData *ConfigData) error {
-	var encryptionKey string
-	var err error
-
-	if configData.EncryptionKey != "" {
-		if strings.HasPrefix(configData.EncryptionKey, "env.") {
-			if encryptionKey, _, err = config.processEnvValue(configData.EncryptionKey); err != nil {
-				return fmt.Errorf("failed to process encryption key: %w", err)
-			}
-		} else {
-			logger.Warn("encryption_key should reference an environment variable (env.VAR_NAME) rather than storing the key directly in the config file")
-			encryptionKey = configData.EncryptionKey
-		}
-	}
-	if encryptionKey == "" {
+func initEncryptionFromFile(configData *ConfigData) error {
+	if configData.EncryptionKey == nil || configData.EncryptionKey.GetValue() == "" {
+		// Checking if BIFROST_ENCRYPTION_KEY environment variable is set
 		if os.Getenv("BIFROST_ENCRYPTION_KEY") != "" {
-			encryptionKey = os.Getenv("BIFROST_ENCRYPTION_KEY")
+			configData.EncryptionKey = schemas.NewEnvVar("env.BIFROST_ENCRYPTION_KEY")
 		}
 	}
-	if err = config.initializeEncryption(encryptionKey); err != nil {
-		return fmt.Errorf("failed to initialize encryption: %w", err)
+	// Checking if encryption key is set
+	if configData.EncryptionKey != nil && configData.EncryptionKey.GetValue() != "" {
+		encrypt.Init(configData.EncryptionKey.GetValue(), logger)
 	}
 	return nil
+}
+
+// syncEncryption encrypts all plaintext rows in the config store if encryption is enabled.
+// Called during bootup after encryption key is initialized and all config data has been loaded.
+func syncEncryption(ctx context.Context, config *Config) {
+	if !encrypt.IsEnabled() || config.ConfigStore == nil {
+		return
+	}
+	if err := config.ConfigStore.EncryptPlaintextRows(ctx); err != nil {
+		logger.Error("failed to sync encryption for plaintext rows: %v", err)
+	}
 }
 
 // loadConfigFromDefaults initializes configuration when no config file exists.
 // It creates a default SQLite config store and loads/creates default configurations.
 func loadConfigFromDefaults(ctx context.Context, config *Config, configDBPath, logsDBPath string) (*Config, error) {
 	var err error
+	// Initialize encryption before stores so BeforeSave hooks and EncryptPlaintextRows work correctly
+	encryptionKey := schemas.NewEnvVar("env.BIFROST_ENCRYPTION_KEY")
+	if encryptionKey != nil && encryptionKey.GetValue() != "" {
+		encrypt.Init(encryptionKey.GetValue(), logger)
+	}
 	// Initialize default config store
 	if err = initDefaultConfigStore(ctx, config, configDBPath); err != nil {
 		return nil, err
@@ -1880,11 +1895,8 @@ func loadConfigFromDefaults(ctx context.Context, config *Config, configDBPath, l
 	if err = initDefaultFrameworkConfig(ctx, config); err != nil {
 		return nil, err
 	}
-	// Initialize encryption
-	encryptionKey := os.Getenv("BIFROST_ENCRYPTION_KEY")
-	if err = config.initializeEncryption(encryptionKey); err != nil {
-		return nil, fmt.Errorf("failed to initialize encryption: %w", err)
-	}
+	// Sync encryption: encrypt any plaintext rows written during config loading
+	syncEncryption(ctx, config)
 	return config, nil
 }
 
@@ -1997,20 +2009,20 @@ func loadDefaultProviders(ctx context.Context, config *Config) error {
 			keys := make([]schemas.Key, len(dbProvider.Keys))
 			for i, dbKey := range dbProvider.Keys {
 				keys[i] = schemas.Key{
-					ID:               dbKey.ID,
-					Name:             dbKey.Name,
-					Value:            dbKey.Value,
-					Models:           dbKey.Models,
-					Weight:           dbKey.Weight,
-					Enabled:          dbKey.Enabled,
-					UseForBatchAPI:   dbKey.UseForBatchAPI,
-					AzureKeyConfig:   dbKey.AzureKeyConfig,
-					VertexKeyConfig:  dbKey.VertexKeyConfig,
-					BedrockKeyConfig: dbKey.BedrockKeyConfig,
+					ID:                 dbKey.ID,
+					Name:               dbKey.Name,
+					Value:              dbKey.Value,
+					Models:             dbKey.Models,
+					Weight:             dbKey.Weight,
+					Enabled:            dbKey.Enabled,
+					UseForBatchAPI:     dbKey.UseForBatchAPI,
+					AzureKeyConfig:     dbKey.AzureKeyConfig,
+					VertexKeyConfig:    dbKey.VertexKeyConfig,
+					BedrockKeyConfig:   dbKey.BedrockKeyConfig,
 					ReplicateKeyConfig: dbKey.ReplicateKeyConfig,
-					ConfigHash:       dbKey.ConfigHash,
-					Status:           dbKey.Status,
-					Description:      dbKey.Description,
+					ConfigHash:         dbKey.ConfigHash,
+					Status:             dbKey.Status,
+					Description:        dbKey.Description,
 				}
 			}
 			providerConfig := configstore.ProviderConfig{
@@ -2021,6 +2033,7 @@ func loadDefaultProviders(ctx context.Context, config *Config) error {
 				SendBackRawRequest:       dbProvider.SendBackRawRequest,
 				SendBackRawResponse:      dbProvider.SendBackRawResponse,
 				CustomProviderConfig:     dbProvider.CustomProviderConfig,
+				PricingOverrides:         dbProvider.PricingOverrides,
 				ConfigHash:               dbProvider.ConfigHash,
 			}
 			if err := ValidateCustomProvider(providerConfig, provider); err != nil {
@@ -2166,6 +2179,7 @@ func initDefaultFrameworkConfig(ctx context.Context, config *Config) error {
 		logger.Error("failed to initialize model catalog: %v", err)
 	} else {
 		config.ModelCatalog = modelCatalog
+		applyProviderPricingOverrides(config.ModelCatalog, config.Providers)
 	}
 
 	// Initialize MCP catalog
@@ -2552,7 +2566,7 @@ func (c *Config) IsPluginLoaded(name string) bool {
 	return false
 }
 
-// UpdatePluginStatus updates the status of a plugin
+// UpdatePluginOverallStatus updates the overall status of a plugin
 func (c *Config) UpdatePluginOverallStatus(name string, displayName string, status string, logs []string, types []schemas.PluginType) {
 	c.pluginStatusMu.Lock()
 	defer c.pluginStatusMu.Unlock()
@@ -3480,4 +3494,15 @@ func DeepCopy[T any](in T) (T, error) {
 	}
 	err = sonic.Unmarshal(b, &out)
 	return out, err
+}
+
+func applyProviderPricingOverrides(catalog *modelcatalog.ModelCatalog, providers map[schemas.ModelProvider]configstore.ProviderConfig) {
+	if catalog == nil {
+		return
+	}
+	for provider, providerConfig := range providers {
+		if err := catalog.SetProviderPricingOverrides(provider, providerConfig.PricingOverrides); err != nil {
+			logger.Warn("failed to load pricing overrides for provider %s: %v", provider, err)
+		}
+	}
 }

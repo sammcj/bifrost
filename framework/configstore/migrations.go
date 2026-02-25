@@ -271,6 +271,19 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddEnforceAuthOnInferenceColumn(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddProviderPricingOverridesColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := migrationAddEncryptionColumns(ctx, db); err != nil {
+		return err
+	}
+	if err := migrationAddOutputCostPerVideoPerSecond(ctx, db); err != nil {
+
+		return err
+	}
+	if err := migrationDropEnableGovernanceColumn(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1990,7 +2003,6 @@ func migrationAddAdditionalConfigHashColumns(ctx context.Context, db *gorm.DB) e
 							EnableLogging:           cc.EnableLogging,
 							DisableContentLogging:   cc.DisableContentLogging,
 							LogRetentionDays:        cc.LogRetentionDays,
-							EnableGovernance:        cc.EnableGovernance,
 							EnforceGovernanceHeader: cc.EnforceGovernanceHeader,
 							AllowDirectKeys:         cc.AllowDirectKeys,
 							AllowedOrigins:          cc.AllowedOrigins,
@@ -3607,6 +3619,52 @@ func migrationAddRequiredHeadersJSONColumn(ctx context.Context, db *gorm.DB) err
 	return nil
 }
 
+// migrationAddOutputCostPerVideoPerSecond adds output_cost_per_video_per_second column to governance_model_pricing table
+func migrationAddOutputCostPerVideoPerSecond(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_output_cost_per_video_per_second_and_output_cost_per_second_columns",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			if !migrator.HasColumn(&tables.TableModelPricing{}, "output_cost_per_video_per_second") {
+				if err := migrator.AddColumn(&tables.TableModelPricing{}, "output_cost_per_video_per_second"); err != nil {
+					return fmt.Errorf("failed to add output_cost_per_video_per_second column: %w", err)
+				}
+			}
+			if !migrator.HasColumn(&tables.TableModelPricing{}, "output_cost_per_second") {
+				if err := migrator.AddColumn(&tables.TableModelPricing{}, "output_cost_per_second"); err != nil {
+					return fmt.Errorf("failed to add output_cost_per_second column: %w", err)
+				}
+			}
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+
+			if migrator.HasColumn(&tables.TableModelPricing{}, "output_cost_per_video_per_second") {
+				if err := migrator.DropColumn(&tables.TableModelPricing{}, "output_cost_per_video_per_second"); err != nil {
+					return fmt.Errorf("failed to drop output_cost_per_video_per_second column: %w", err)
+				}
+			}
+
+			if migrator.HasColumn(&tables.TableModelPricing{}, "output_cost_per_second") {
+				if err := migrator.DropColumn(&tables.TableModelPricing{}, "output_cost_per_second"); err != nil {
+					return fmt.Errorf("failed to drop output_cost_per_second column: %w", err)
+				}
+			}
+
+			return nil
+		},
+	}})
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error running output_cost_per_video_per_second migration: %s", err.Error())
+	}
+	return nil
+}
+
 // migrationAddLoggingHeadersJSONColumn adds the logging_headers_json column to the config_client table
 func migrationAddLoggingHeadersJSONColumn(ctx context.Context, db *gorm.DB) error {
 	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
@@ -3673,6 +3731,7 @@ func migrationAddEnforceSCIMAuthColumn(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
+// migrationAddEnforceAuthOnInferenceColumn adds the enforce_auth_on_inference column to the config_client table
 func migrationAddEnforceAuthOnInferenceColumn(ctx context.Context, db *gorm.DB) error {
 	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
 		ID: "add_enforce_auth_on_inference_column",
@@ -3703,6 +3762,176 @@ func migrationAddEnforceAuthOnInferenceColumn(ctx context.Context, db *gorm.DB) 
 	}})
 	if err := m.Migrate(); err != nil {
 		return fmt.Errorf("error running enforce auth on inference column migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddProviderPricingOverridesColumn adds the pricing_overrides_json column to the config_provider table
+func migrationAddProviderPricingOverridesColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_provider_pricing_overrides_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if !migrator.HasColumn(&tables.TableProvider{}, "pricing_overrides_json") {
+				if err := migrator.AddColumn(&tables.TableProvider{}, "PricingOverridesJSON"); err != nil {
+					return fmt.Errorf("failed to add pricing_overrides_json column: %w", err)
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if migrator.HasColumn(&tables.TableProvider{}, "pricing_overrides_json") {
+				if err := migrator.DropColumn(&tables.TableProvider{}, "pricing_overrides_json"); err != nil {
+					return fmt.Errorf("failed to drop pricing_overrides_json column: %w", err)
+				}
+			}
+			return nil
+		},
+	}})
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error running provider pricing overrides column migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddEncryptionColumns adds the encryption_status column to the config_keys, governance_virtual_keys, sessions, oauth_configs, oauth_tokens, config_mcp_clients, config_providers, config_vector_store, and config_plugins tables
+func migrationAddEncryptionColumns(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_encryption_columns",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			mgr := tx.Migrator()
+
+			type encryptionTable struct {
+				table   interface{}
+				columns []string
+			}
+
+			targets := []encryptionTable{
+				{&tables.TableKey{}, []string{"encryption_status"}},
+				{&tables.TableVirtualKey{}, []string{"encryption_status", "value_hash"}},
+				{&tables.SessionsTable{}, []string{"encryption_status", "token_hash"}},
+				{&tables.TableOauthConfig{}, []string{"encryption_status"}},
+				{&tables.TableOauthToken{}, []string{"encryption_status"}},
+				{&tables.TableMCPClient{}, []string{"encryption_status"}},
+				{&tables.TableProvider{}, []string{"encryption_status"}},
+				{&tables.TableVectorStoreConfig{}, []string{"encryption_status"}},
+				{&tables.TablePlugin{}, []string{"encryption_status"}},
+			}
+
+			for _, t := range targets {
+				for _, col := range t.columns {
+					if !mgr.HasColumn(t.table, col) {
+						if err := mgr.AddColumn(t.table, col); err != nil {
+							return fmt.Errorf("failed to add column %s: %w", col, err)
+						}
+					}
+				}
+			}
+
+			// Backfill encryption_status for all tables that have the column
+			backfillTables := []string{
+				"config_keys",
+				"governance_virtual_keys",
+				"sessions",
+				"oauth_configs",
+				"oauth_tokens",
+				"config_mcp_clients",
+				"config_providers",
+				"config_vector_store",
+				"config_plugins",
+			}
+			for _, table := range backfillTables {
+				if err := tx.Exec(fmt.Sprintf(
+					"UPDATE %s SET encryption_status = 'plain_text' WHERE encryption_status IS NULL OR encryption_status = ''",
+					table,
+				)).Error; err != nil {
+					return fmt.Errorf("failed to backfill encryption_status in %s: %w", table, err)
+				}
+			}
+
+			// Backfill value_hash for existing virtual keys
+			// Use NULL instead of '' to avoid unique constraint violations
+			// (multiple rows with '' would violate the unique index, but NULLs are excluded)
+			if err := tx.Exec(`
+				UPDATE governance_virtual_keys
+				SET value_hash = NULL
+				WHERE value_hash IS NULL OR value_hash = ''
+			`).Error; err != nil {
+				return fmt.Errorf("failed to initialize value_hash: %w", err)
+			}
+
+			// Backfill token_hash for existing sessions
+			// Use NULL instead of '' to avoid unique constraint violations
+			if err := tx.Exec(`
+				UPDATE sessions
+				SET token_hash = NULL
+				WHERE token_hash IS NULL OR token_hash = ''
+			`).Error; err != nil {
+				return fmt.Errorf("failed to initialize token_hash: %w", err)
+			}
+
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			mgr := tx.Migrator()
+
+			type dropInfo struct {
+				table   interface{}
+				columns []string
+			}
+
+			drops := []dropInfo{
+				{&tables.TableKey{}, []string{"encryption_status"}},
+				{&tables.TableVirtualKey{}, []string{"encryption_status", "value_hash"}},
+				{&tables.SessionsTable{}, []string{"encryption_status", "token_hash"}},
+				{&tables.TableOauthConfig{}, []string{"encryption_status"}},
+				{&tables.TableOauthToken{}, []string{"encryption_status"}},
+				{&tables.TableMCPClient{}, []string{"encryption_status"}},
+				{&tables.TableProvider{}, []string{"encryption_status"}},
+				{&tables.TableVectorStoreConfig{}, []string{"encryption_status"}},
+				{&tables.TablePlugin{}, []string{"encryption_status"}},
+			}
+
+			for _, d := range drops {
+				for _, col := range d.columns {
+					if mgr.HasColumn(d.table, col) {
+						if err := mgr.DropColumn(d.table, col); err != nil {
+							return err
+						}
+					}
+				}
+			}
+			return nil
+		},
+	}})
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error running encryption columns migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationDropEnableGovernanceColumn drops the enable_governance column from the config_client table
+func migrationDropEnableGovernanceColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "drop_enable_governance_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			migrator := tx.Migrator()
+			if migrator.HasColumn(&tables.TableClientConfig{}, "enable_governance") {
+				if err := migrator.DropColumn(&tables.TableClientConfig{}, "enable_governance"); err != nil {
+					return fmt.Errorf("failed to drop enable_governance column: %w", err)
+				}
+			}
+			return nil
+		},
+	}})
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error running drop enable governance column rollback: %s", err.Error())
 	}
 	return nil
 }

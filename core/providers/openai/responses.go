@@ -8,19 +8,28 @@ import (
 )
 
 // ToBifrostResponsesRequest converts an OpenAI responses request to Bifrost format
-func (request *OpenAIResponsesRequest) ToBifrostResponsesRequest(ctx *schemas.BifrostContext) *schemas.BifrostResponsesRequest {
-	if request == nil {
+func (resp *OpenAIResponsesRequest) ToBifrostResponsesRequest(ctx *schemas.BifrostContext) *schemas.BifrostResponsesRequest {
+	if resp == nil {
 		return nil
 	}
 
-	provider, model := schemas.ParseModelString(request.Model, utils.CheckAndSetDefaultProvider(ctx, schemas.OpenAI))
+	defaultProvider := schemas.OpenAI
 
-	input := request.Input.OpenAIResponsesRequestInputArray
+	// for requests coming from azure sdk without provider prefix, we need to set the default provider to azure
+	if ctx != nil {
+		if isAzureUser, ok := ctx.Value(schemas.BifrostContextKeyIsAzureUserAgent).(bool); ok && isAzureUser {
+			defaultProvider = schemas.Azure
+		}
+	}
+
+	provider, model := schemas.ParseModelString(resp.Model, utils.CheckAndSetDefaultProvider(ctx, defaultProvider))
+
+	input := resp.Input.OpenAIResponsesRequestInputArray
 	if len(input) == 0 {
 		input = []schemas.ResponsesMessage{
 			{
 				Role:    schemas.Ptr(schemas.ResponsesInputMessageRoleUser),
-				Content: &schemas.ResponsesMessageContent{ContentStr: request.Input.OpenAIResponsesRequestInputStr},
+				Content: &schemas.ResponsesMessageContent{ContentStr: resp.Input.OpenAIResponsesRequestInputStr},
 			},
 		}
 	}
@@ -29,8 +38,8 @@ func (request *OpenAIResponsesRequest) ToBifrostResponsesRequest(ctx *schemas.Bi
 		Provider:  provider,
 		Model:     model,
 		Input:     input,
-		Params:    &request.ResponsesParameters,
-		Fallbacks: schemas.ParseFallbacks(request.Fallbacks),
+		Params:    &resp.ResponsesParameters,
+		Fallbacks: schemas.ParseFallbacks(resp.Fallbacks),
 	}
 }
 
@@ -54,12 +63,12 @@ func ToOpenAIResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *Open
 					break
 				}
 			}
-			
+
 			if hasCompaction {
 				// Create a new message with converted content blocks
 				newMessage := message
 				newContentBlocks := make([]schemas.ResponsesMessageContentBlock, 0, len(message.Content.ContentBlocks))
-				
+
 				for _, block := range message.Content.ContentBlocks {
 					if block.Type == schemas.ResponsesOutputMessageContentTypeCompaction {
 						// Convert compaction block to text block
@@ -75,7 +84,7 @@ func ToOpenAIResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *Open
 						newContentBlocks = append(newContentBlocks, block)
 					}
 				}
-				
+
 				// Only update if we have blocks remaining after conversion
 				if len(newContentBlocks) > 0 {
 					newMessage.Content = &schemas.ResponsesMessageContent{
@@ -88,7 +97,7 @@ func ToOpenAIResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *Open
 				}
 			}
 		}
-		
+
 		if message.ResponsesReasoning != nil {
 			// According to OpenAI's Responses API format specification, for non-gpt-oss models, a message
 			// with ResponsesReasoning != nil and non-empty Content.ContentBlocks but empty Summary and
@@ -219,8 +228,8 @@ func ToOpenAIResponsesRequest(bifrostReq *schemas.BifrostResponsesRequest) *Open
 }
 
 // filterUnsupportedTools removes tool types that OpenAI doesn't support
-func (req *OpenAIResponsesRequest) filterUnsupportedTools() {
-	if len(req.Tools) == 0 {
+func (resp *OpenAIResponsesRequest) filterUnsupportedTools() {
+	if len(resp.Tools) == 0 {
 		return
 	}
 
@@ -239,8 +248,8 @@ func (req *OpenAIResponsesRequest) filterUnsupportedTools() {
 	}
 
 	// Filter tools to only include supported types
-	filteredTools := make([]schemas.ResponsesTool, 0, len(req.Tools))
-	for _, tool := range req.Tools {
+	filteredTools := make([]schemas.ResponsesTool, 0, len(resp.Tools))
+	for _, tool := range resp.Tools {
 		if supportedTypes[tool.Type] {
 			// check for computer use preview
 			if tool.Type == schemas.ResponsesToolTypeComputerUsePreview && tool.ResponsesToolComputerUsePreview != nil && tool.ResponsesToolComputerUsePreview.EnableZoom != nil {
@@ -289,5 +298,5 @@ func (req *OpenAIResponsesRequest) filterUnsupportedTools() {
 			}
 		}
 	}
-	req.Tools = filteredTools
+	resp.Tools = filteredTools
 }

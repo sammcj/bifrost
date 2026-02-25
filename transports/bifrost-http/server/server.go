@@ -74,6 +74,7 @@ type ServerCallbacks interface {
 	RemoveVirtualKey(ctx context.Context, id string) error
 	// Provider related callbacks
 	GetModelsForProvider(provider schemas.ModelProvider) []string
+	GetUnfilteredModelsForProvider(provider schemas.ModelProvider) []string
 	ReloadModelConfig(ctx context.Context, id string) (*tables.TableModelConfig, error)
 	RemoveModelConfig(ctx context.Context, id string) error
 	ReloadProvider(ctx context.Context, provider schemas.ModelProvider) (*tables.TableProvider, error)
@@ -437,6 +438,16 @@ func (s *BifrostHTTPServer) RemoveModelConfig(ctx context.Context, id string) er
 }
 
 func (s *BifrostHTTPServer) ReloadProvider(ctx context.Context, provider schemas.ModelProvider) (*tables.TableProvider, error) {
+	if s.Config == nil || s.Config.ConfigStore == nil {
+		return nil, fmt.Errorf("config store not found")
+	}
+	if s.Config.ModelCatalog == nil {
+		return nil, fmt.Errorf("pricing manager not found")
+	}
+	if s.Client == nil {
+		return nil, fmt.Errorf("bifrost client not found")
+	}
+
 	// Load provider from DB
 	providerInfo, err := s.Config.ConfigStore.GetProvider(ctx, provider)
 	if err != nil {
@@ -480,14 +491,11 @@ func (s *BifrostHTTPServer) ReloadProvider(ctx context.Context, provider schemas
 	}
 
 	// Syncing models (this part always runs regardless of governance)
-	if s.Config == nil || s.Config.ModelCatalog == nil {
-		return nil, fmt.Errorf("pricing manager not found")
-	}
-	if s.Client == nil {
-		return nil, fmt.Errorf("bifrost client not found")
+	if err := s.Config.ModelCatalog.SetProviderPricingOverrides(provider, providerInfo.PricingOverrides); err != nil {
+		logger.Warn("failed to refresh pricing overrides for provider %s: %v", provider, err)
 	}
 
-	bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+	bfCtx := schemas.NewBifrostContext(ctx, time.Now().Add(15*time.Second))
 	bfCtx.SetValue(schemas.BifrostContextKeySkipPluginPipeline, true)
 	defer bfCtx.Cancel()
 
@@ -522,6 +530,15 @@ func (s *BifrostHTTPServer) ReloadProvider(ctx context.Context, provider schemas
 		}
 	}
 	s.Config.ModelCatalog.UpsertModelDataForProvider(provider, allModels, modelsInKeys)
+	unfilteredModelData, listModelsErr := s.Client.ListModelsRequest(bfCtx, &schemas.BifrostListModelsRequest{
+		Provider:   provider,
+		Unfiltered: true,
+	})
+	if listModelsErr != nil {
+		logger.Error("failed to list unfiltered models for provider %s: %v: falling back onto the static datasheet", provider, bifrost.GetErrorMessage(listModelsErr))
+	} else {
+		s.Config.ModelCatalog.UpsertUnfilteredModelDataForProvider(provider, unfilteredModelData)
+	}
 	return updatedProvider, nil
 }
 
@@ -546,6 +563,7 @@ func (s *BifrostHTTPServer) RemoveProvider(ctx context.Context, provider schemas
 		return fmt.Errorf("pricing manager not found")
 	}
 	s.Config.ModelCatalog.DeleteModelDataForProvider(provider)
+	s.Config.ModelCatalog.DeleteProviderPricingOverrides(provider)
 
 	return nil
 }
@@ -713,6 +731,11 @@ func (s *BifrostHTTPServer) ForceReloadPricing(ctx context.Context) error {
 			return fmt.Errorf("failed to initialize new model catalog: %w", err)
 		}
 		s.Config.ModelCatalog = modelCatalog
+		for provider, providerConfig := range s.Config.Providers {
+			if err := s.Config.ModelCatalog.SetProviderPricingOverrides(provider, providerConfig.PricingOverrides); err != nil {
+				logger.Warn("failed to seed pricing overrides for provider %s: %v", provider, err)
+			}
+		}
 	} else {
 		if err := s.Config.ModelCatalog.ForceReloadPricing(ctx); err != nil {
 			return fmt.Errorf("failed to force reload pricing: %w", err)
@@ -720,7 +743,7 @@ func (s *BifrostHTTPServer) ForceReloadPricing(ctx context.Context) error {
 		// Fetching keys for all providers and allowed models first
 		// Based on allowed models we will set the data in the model catalog
 		for provider, providerConfig := range s.Config.Providers {
-			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			bfCtx := schemas.NewBifrostContext(ctx, time.Now().Add(15*time.Second))
 			bfCtx.SetValue(schemas.BifrostContextKeySkipPluginPipeline, true)
 			modelData, listModelsErr := s.Client.ListModelsRequest(bfCtx, &schemas.BifrostListModelsRequest{
 				Provider: provider,
@@ -737,6 +760,15 @@ func (s *BifrostHTTPServer) ForceReloadPricing(ctx context.Context) error {
 				}
 			}
 			s.Config.ModelCatalog.UpsertModelDataForProvider(provider, modelData, allowedModels)
+			unfilteredModelData, listModelsErr := s.Client.ListModelsRequest(bfCtx, &schemas.BifrostListModelsRequest{
+				Provider:   provider,
+				Unfiltered: true,
+			})
+			if listModelsErr != nil {
+				logger.Error("failed to list unfiltered models for provider %s: %v: falling back onto the static datasheet", provider, bifrost.GetErrorMessage(listModelsErr))
+			} else {
+				s.Config.ModelCatalog.UpsertUnfilteredModelDataForProvider(provider, unfilteredModelData)
+			}
 			bfCtx.Cancel()
 		}
 	}
@@ -777,6 +809,14 @@ func (s *BifrostHTTPServer) GetModelsForProvider(provider schemas.ModelProvider)
 		return []string{}
 	}
 	return s.Config.ModelCatalog.GetModelsForProvider(provider)
+}
+
+// GetUnfilteredModelsForProvider returns all unfiltered models for a specific provider from the model catalog
+func (s *BifrostHTTPServer) GetUnfilteredModelsForProvider(provider schemas.ModelProvider) []string {
+	if s.Config == nil || s.Config.ModelCatalog == nil {
+		return []string{}
+	}
+	return s.Config.ModelCatalog.GetUnfilteredModelsForProvider(provider)
 }
 
 // GetPluginStatus returns the status of all plugins
@@ -1163,7 +1203,7 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 		// Fetching keys for all providers and allowed models first
 		// Based on allowed models we will set the data in the model catalog
 		for provider, providerConfig := range s.Config.Providers {
-			bfCtx := schemas.NewBifrostContext(ctx, schemas.NoDeadline)
+			bfCtx := schemas.NewBifrostContext(ctx, time.Now().Add(15*time.Second))
 			bfCtx.SetValue(schemas.BifrostContextKeySkipPluginPipeline, true)
 
 			modelData, listModelsErr := s.Client.ListModelsRequest(bfCtx, &schemas.BifrostListModelsRequest{
@@ -1187,6 +1227,15 @@ func (s *BifrostHTTPServer) Bootstrap(ctx context.Context) error {
 				}
 			}
 			s.Config.ModelCatalog.UpsertModelDataForProvider(provider, modelData, allowedModels)
+			unfilteredModelData, listModelsErr := s.Client.ListModelsRequest(bfCtx, &schemas.BifrostListModelsRequest{
+				Provider:   provider,
+				Unfiltered: true,
+			})
+			if listModelsErr != nil {
+				logger.Error("failed to list unfiltered models for provider %s: %v: falling back onto the static datasheet", provider, bifrost.GetErrorMessage(listModelsErr))
+			} else {
+				s.Config.ModelCatalog.UpsertUnfilteredModelDataForProvider(provider, unfilteredModelData)
+			}
 			bfCtx.Cancel()
 		}
 	}

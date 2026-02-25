@@ -394,8 +394,9 @@ func NewMockConfigStore() *MockConfigStore {
 }
 
 // Implement ConfigStore interface methods
-func (m *MockConfigStore) Ping(ctx context.Context) error  { return nil }
-func (m *MockConfigStore) Close(ctx context.Context) error { return nil }
+func (m *MockConfigStore) Ping(ctx context.Context) error                 { return nil }
+func (m *MockConfigStore) EncryptPlaintextRows(ctx context.Context) error { return nil }
+func (m *MockConfigStore) Close(ctx context.Context) error                { return nil }
 func (m *MockConfigStore) DB() *gorm.DB                    { return nil }
 func (m *MockConfigStore) ExecuteTransaction(ctx context.Context, fn func(tx *gorm.DB) error) error {
 	return fn(nil)
@@ -1166,7 +1167,6 @@ func makeConfigDataWithVirtualKeysAndDir(providers map[string]configstore.Provid
 		Client: &configstore.ClientConfig{
 			InitialPoolSize:      10,
 			EnableLogging:        true,
-			EnableGovernance:     true,
 			MaxRequestBodySizeMB: 100,
 			AllowedOrigins:       []string{"*"},
 		},
@@ -1195,7 +1195,6 @@ func makeConfigDataFullWithDir(client *configstore.ClientConfig, providers map[s
 		client = &configstore.ClientConfig{
 			InitialPoolSize:      10,
 			EnableLogging:        true,
-			EnableGovernance:     true,
 			MaxRequestBodySizeMB: 100,
 			AllowedOrigins:       []string{"*"},
 		}
@@ -1350,7 +1349,6 @@ func TestLoadConfig_ClientConfig_Merge(t *testing.T) {
 	fileClientConfig := &configstore.ClientConfig{
 		InitialPoolSize:       20,
 		EnableLogging:         true,
-		EnableGovernance:      true,
 		PrometheusLabels:      []string{"file-label"},
 		AllowedOrigins:        []string{"http://file-origin.com"},
 		MaxRequestBodySizeMB:  15,
@@ -1367,7 +1365,6 @@ func TestLoadConfig_ClientConfig_Merge(t *testing.T) {
 	mockStore.clientConfig = &configstore.ClientConfig{
 		InitialPoolSize:      10,
 		EnableLogging:        false,
-		EnableGovernance:     false,
 		PrometheusLabels:     []string{"db-label"},
 		MaxRequestBodySizeMB: 5,
 		// AllowedOrigins is empty in DB
@@ -1406,9 +1403,6 @@ func TestLoadConfig_ClientConfig_Merge(t *testing.T) {
 	if !mergedConfig.EnableLogging && fileClientConfig.EnableLogging {
 		mergedConfig.EnableLogging = fileClientConfig.EnableLogging
 	}
-	if !mergedConfig.EnableGovernance && fileClientConfig.EnableGovernance {
-		mergedConfig.EnableGovernance = fileClientConfig.EnableGovernance
-	}
 	if !mergedConfig.DisableContentLogging && fileClientConfig.DisableContentLogging {
 		mergedConfig.DisableContentLogging = fileClientConfig.DisableContentLogging
 	}
@@ -1432,10 +1426,6 @@ func TestLoadConfig_ClientConfig_Merge(t *testing.T) {
 
 	if !mergedConfig.EnableLogging {
 		t.Error("Expected EnableLogging to be true (file true overrides DB false)")
-	}
-
-	if !mergedConfig.EnableGovernance {
-		t.Error("Expected EnableGovernance to be true (file true overrides DB false)")
 	}
 
 	if !mergedConfig.DisableContentLogging {
@@ -11854,7 +11844,6 @@ func TestGenerateClientConfigHash(t *testing.T) {
 		EnableLogging:           true,
 		DisableContentLogging:   false,
 		LogRetentionDays:        30,
-		EnableGovernance:        true,
 		EnforceAuthOnInference: false,
 		AllowDirectKeys:        true,
 		AllowedOrigins:          []string{"http://localhost:3000"},
@@ -11922,14 +11911,6 @@ func TestGenerateClientConfigHash(t *testing.T) {
 	hash7, _ := cc7.GenerateClientConfigHash()
 	if hash1 == hash7 {
 		t.Error("Different LogRetentionDays should produce different hash")
-	}
-
-	// Different EnableGovernance should produce different hash
-	cc8 := cc1
-	cc8.EnableGovernance = false
-	hash8, _ := cc8.GenerateClientConfigHash()
-	if hash1 == hash8 {
-		t.Error("Different EnableGovernance should produce different hash")
 	}
 
 	// Different EnforceAuthOnInference should produce different hash
@@ -12912,7 +12893,6 @@ func TestGenerateClientConfigHash_RuntimeVsMigrationParity(t *testing.T) {
 			EnableLogging:           true,
 			DisableContentLogging:   false,
 			LogRetentionDays:        30,
-			EnableGovernance:        true,
 			EnforceAuthOnInference: false,
 			AllowDirectKeys:         true,
 			MaxRequestBodySizeMB:    100,
@@ -12927,7 +12907,6 @@ func TestGenerateClientConfigHash_RuntimeVsMigrationParity(t *testing.T) {
 			EnableLogging:           ccToSave.EnableLogging,
 			DisableContentLogging:   ccToSave.DisableContentLogging,
 			LogRetentionDays:        ccToSave.LogRetentionDays,
-			EnableGovernance:        ccToSave.EnableGovernance,
 			EnforceAuthOnInference: ccToSave.EnforceAuthOnInference,
 			AllowDirectKeys:         ccToSave.AllowDirectKeys,
 			MaxRequestBodySizeMB:    ccToSave.MaxRequestBodySizeMB,
@@ -12947,7 +12926,6 @@ func TestGenerateClientConfigHash_RuntimeVsMigrationParity(t *testing.T) {
 			EnableLogging:           ccFromDB.EnableLogging,
 			DisableContentLogging:   ccFromDB.DisableContentLogging,
 			LogRetentionDays:        ccFromDB.LogRetentionDays,
-			EnableGovernance:        ccFromDB.EnableGovernance,
 			EnforceAuthOnInference: ccFromDB.EnforceAuthOnInference,
 			AllowDirectKeys:         ccFromDB.AllowDirectKeys,
 			MaxRequestBodySizeMB:    ccFromDB.MaxRequestBodySizeMB,

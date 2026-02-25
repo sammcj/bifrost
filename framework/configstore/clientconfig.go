@@ -43,7 +43,6 @@ type ClientConfig struct {
 	DisableContentLogging   bool                             `json:"disable_content_logging"` // Disable logging of content
 	DisableDBPingsInHealth  bool                             `json:"disable_db_pings_in_health"`
 	LogRetentionDays        int                              `json:"log_retention_days" validate:"min=1"` // Number of days to retain logs (minimum 1 day)
-	EnableGovernance        bool                             `json:"enable_governance"`                   // Enable governance on all requests
 	EnforceAuthOnInference  bool                             `json:"enforce_auth_on_inference"`            // Require auth (VK, API key, or user token) on inference endpoints
 	EnforceGovernanceHeader bool                             `json:"enforce_governance_header,omitempty"` // Deprecated: use EnforceAuthOnInference
 	EnforceSCIMAuth         bool                             `json:"enforce_scim_auth,omitempty"`         // Deprecated: use EnforceAuthOnInference
@@ -91,12 +90,6 @@ func (c *ClientConfig) GenerateClientConfigHash() (string, error) {
 		hash.Write([]byte("disableDBPingsInHealth:true"))
 	} else {
 		hash.Write([]byte("disableDBPingsInHealth:false"))
-	}
-
-	if c.EnableGovernance {
-		hash.Write([]byte("enableGovernance:true"))
-	} else {
-		hash.Write([]byte("enableGovernance:false"))
 	}
 
 	if c.EnforceAuthOnInference {
@@ -256,6 +249,7 @@ type ProviderConfig struct {
 	SendBackRawRequest       bool                              `json:"send_back_raw_request"`                 // Include raw request in BifrostResponse
 	SendBackRawResponse      bool                              `json:"send_back_raw_response"`                // Include raw response in BifrostResponse
 	CustomProviderConfig     *schemas.CustomProviderConfig     `json:"custom_provider_config,omitempty"`      // Custom provider configuration
+	PricingOverrides         []schemas.ProviderPricingOverride `json:"pricing_overrides,omitempty"`           // Provider-level pricing overrides
 	ConfigHash               string                            `json:"config_hash,omitempty"`                 // Hash of config.json version, used for change detection
 	Status                   string                            `json:"status,omitempty"`                      // Model discovery status for keyless providers
 	Description              string                            `json:"description,omitempty"`                 // Model discovery error message for keyless providers
@@ -270,6 +264,7 @@ func (p *ProviderConfig) Redacted() *ProviderConfig {
 		SendBackRawRequest:       p.SendBackRawRequest,
 		SendBackRawResponse:      p.SendBackRawResponse,
 		CustomProviderConfig:     p.CustomProviderConfig,
+		PricingOverrides:         p.PricingOverrides,
 		ConfigHash:               p.ConfigHash,
 		Status:                   p.Status,
 		Description:              p.Description,
@@ -415,6 +410,15 @@ func (p *ProviderConfig) GenerateConfigHash(providerName string) (string, error)
 	// Hash CustomProviderConfig
 	if p.CustomProviderConfig != nil {
 		data, err := sonic.Marshal(p.CustomProviderConfig)
+		if err != nil {
+			return "", err
+		}
+		hash.Write(data)
+	}
+
+	// Hash PricingOverrides
+	if p.PricingOverrides != nil {
+		data, err := sonic.Marshal(p.PricingOverrides)
 		if err != nil {
 			return "", err
 		}

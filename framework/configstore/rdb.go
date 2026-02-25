@@ -44,7 +44,6 @@ func (s *RDBConfigStore) UpdateClientConfig(ctx context.Context, config *ClientC
 		DisableContentLogging:   config.DisableContentLogging,
 		DisableDBPingsInHealth:  config.DisableDBPingsInHealth,
 		LogRetentionDays:        config.LogRetentionDays,
-		EnableGovernance:        config.EnableGovernance,
 		EnforceAuthOnInference:  config.EnforceAuthOnInference,
 		EnforceGovernanceHeader: config.EnforceGovernanceHeader,
 		EnforceSCIMAuth:         config.EnforceSCIMAuth,
@@ -211,7 +210,6 @@ func (s *RDBConfigStore) GetClientConfig(ctx context.Context) (*ClientConfig, er
 		DisableContentLogging:   dbConfig.DisableContentLogging,
 		DisableDBPingsInHealth:  dbConfig.DisableDBPingsInHealth,
 		LogRetentionDays:        dbConfig.LogRetentionDays,
-		EnableGovernance:        dbConfig.EnableGovernance,
 		EnforceAuthOnInference:  dbConfig.EnforceAuthOnInference,
 		EnforceGovernanceHeader: dbConfig.EnforceGovernanceHeader,
 		EnforceSCIMAuth:         dbConfig.EnforceSCIMAuth,
@@ -249,6 +247,7 @@ func (s *RDBConfigStore) UpdateProvidersConfig(ctx context.Context, providers ma
 			SendBackRawRequest:       providerConfig.SendBackRawRequest,
 			SendBackRawResponse:      providerConfig.SendBackRawResponse,
 			CustomProviderConfig:     providerConfig.CustomProviderConfig,
+			PricingOverrides:         providerConfig.PricingOverrides,
 			ConfigHash:               providerConfig.ConfigHash,
 			Status:                   providerConfig.Status,
 			Description:              providerConfig.Description,
@@ -412,6 +411,7 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 	dbProvider.SendBackRawRequest = configCopy.SendBackRawRequest
 	dbProvider.SendBackRawResponse = configCopy.SendBackRawResponse
 	dbProvider.CustomProviderConfig = configCopy.CustomProviderConfig
+	dbProvider.PricingOverrides = configCopy.PricingOverrides
 	dbProvider.ConfigHash = configCopy.ConfigHash
 
 	// Save the updated provider
@@ -492,9 +492,6 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 
 		// Check if this key already exists
 		if existingKey, exists := existingKeysMap[key.ID]; exists {
-			// Update existing key - preserve the database ID and ConfigHash
-			// ConfigHash should only be set during initial sync from config.json,
-			// not when updating via UI (so DB updates aren't overwritten on restart)
 			dbKey.ID = existingKey.ID
 			dbKey.ConfigHash = existingKey.ConfigHash
 			dbKey.Status = existingKey.Status
@@ -502,10 +499,8 @@ func (s *RDBConfigStore) UpdateProvider(ctx context.Context, provider schemas.Mo
 			if err := txDB.WithContext(ctx).Save(&dbKey).Error; err != nil {
 				return s.parseGormError(err)
 			}
-			// Remove from map to track which keys are still in use
 			delete(existingKeysMap, key.ID)
 		} else {
-			// Create new key - ConfigHash is set from the generated hash above
 			if err := txDB.WithContext(ctx).Create(&dbKey).Error; err != nil {
 				return s.parseGormError(err)
 			}
@@ -549,6 +544,7 @@ func (s *RDBConfigStore) AddProvider(ctx context.Context, provider schemas.Model
 		SendBackRawRequest:       configCopy.SendBackRawRequest,
 		SendBackRawResponse:      configCopy.SendBackRawResponse,
 		CustomProviderConfig:     configCopy.CustomProviderConfig,
+		PricingOverrides:         configCopy.PricingOverrides,
 		ConfigHash:               configCopy.ConfigHash,
 	}
 	// Create the provider
@@ -700,6 +696,7 @@ func (s *RDBConfigStore) GetProvidersConfig(ctx context.Context) (map[schemas.Mo
 			SendBackRawRequest:       dbProvider.SendBackRawRequest,
 			SendBackRawResponse:      dbProvider.SendBackRawResponse,
 			CustomProviderConfig:     dbProvider.CustomProviderConfig,
+			PricingOverrides:         dbProvider.PricingOverrides,
 			ConfigHash:               dbProvider.ConfigHash,
 			Status:                   dbProvider.Status,
 			Description:              dbProvider.Description,
@@ -746,6 +743,7 @@ func (s *RDBConfigStore) GetProviderConfig(ctx context.Context, provider schemas
 		SendBackRawRequest:       dbProvider.SendBackRawRequest,
 		SendBackRawResponse:      dbProvider.SendBackRawResponse,
 		CustomProviderConfig:     dbProvider.CustomProviderConfig,
+		PricingOverrides:         dbProvider.PricingOverrides,
 		ConfigHash:               dbProvider.ConfigHash,
 		Status:                   dbProvider.Status,
 		Description:              dbProvider.Description,
@@ -1030,6 +1028,15 @@ func (s *RDBConfigStore) UpdateMCPClientConfig(ctx context.Context, id string, c
 			return fmt.Errorf("failed to marshal tool_pricing: %w", err)
 		}
 
+		headersJSONStr := string(headersJSON)
+		if encrypt.IsEnabled() && headersJSONStr != "" && headersJSONStr != "{}" {
+			encrypted, encErr := encrypt.Encrypt(headersJSONStr)
+			if encErr != nil {
+				return fmt.Errorf("failed to encrypt mcp headers: %w", encErr)
+			}
+			headersJSONStr = encrypted
+		}
+
 		// Update only editable fields using a map to avoid updating connection info
 		// Connection info (ConnectionType, ConnectionString, StdioConfig) is read-only and should not be modified via API
 		updates := map[string]interface{}{
@@ -1037,10 +1044,13 @@ func (s *RDBConfigStore) UpdateMCPClientConfig(ctx context.Context, id string, c
 			"is_code_mode_client":        clientConfigCopy.IsCodeModeClient,
 			"tools_to_execute_json":      string(toolsToExecuteJSON),
 			"tools_to_auto_execute_json": string(toolsToAutoExecuteJSON),
-			"headers_json":               string(headersJSON),
+			"headers_json":               headersJSONStr,
 			"tool_pricing_json":          string(toolPricingJSON),
 			"tool_sync_interval":         clientConfigCopy.ToolSyncInterval,
 			"updated_at":                 time.Now(),
+		}
+		if encrypt.IsEnabled() {
+			updates["encryption_status"] = encryptionStatusEncrypted
 		}
 
 		// Only update is_ping_available if explicitly provided (non-nil)
@@ -1400,7 +1410,6 @@ func (s *RDBConfigStore) GetVirtualKeys(ctx context.Context) ([]tables.TableVirt
 		Find(&virtualKeys).Error; err != nil {
 		return nil, err
 	}
-
 	return virtualKeys, nil
 }
 
@@ -1430,10 +1439,11 @@ func (s *RDBConfigStore) GetVirtualKey(ctx context.Context, id string) (*tables.
 	return &virtualKey, nil
 }
 
-// GetVirtualKeyByValue retrieves a virtual key by its value
+// GetVirtualKeyByValue retrieves a virtual key by its value using hash-based lookup.
 func (s *RDBConfigStore) GetVirtualKeyByValue(ctx context.Context, value string) (*tables.TableVirtualKey, error) {
+	valueHash := encrypt.HashSHA256(value)
 	var virtualKey tables.TableVirtualKey
-	if err := s.db.WithContext(ctx).
+	query := s.db.WithContext(ctx).
 		Preload("Team").
 		Preload("Team.Customer").
 		Preload("Customer").
@@ -1446,12 +1456,21 @@ func (s *RDBConfigStore) GetVirtualKeyByValue(ctx context.Context, value string)
 			return db.Select("id, name, key_id, models_json, provider")
 		}).
 		Preload("MCPConfigs").
-		Preload("MCPConfigs.MCPClient").
-		First(&virtualKey, "value = ?", value).Error; err != nil {
+		Preload("MCPConfigs.MCPClient")
+
+	// Use hash-based lookup if hash column is populated, fall back to plaintext for backward compat
+	if err := query.Where("value_hash = ?", valueHash).First(&virtualKey).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotFound
+			// Fallback: try plaintext lookup for rows not yet migrated
+			if err := query.Where("value = ?", value).First(&virtualKey).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil, ErrNotFound
+				}
+				return nil, err
+			}
+		} else {
+			return nil, err
 		}
-		return nil, err
 	}
 	return &virtualKey, nil
 }
@@ -1463,7 +1482,6 @@ func (s *RDBConfigStore) CreateVirtualKey(ctx context.Context, virtualKey *table
 	} else {
 		txDB = s.db
 	}
-	// Create virtual key
 	if err := txDB.WithContext(ctx).Create(virtualKey).Error; err != nil {
 		return s.parseGormError(err)
 	}
@@ -1489,17 +1507,13 @@ func (s *RDBConfigStore) UpdateVirtualKey(ctx context.Context, virtualKey *table
 	}
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		// Create new record
 		if err := txDB.WithContext(ctx).Create(virtualKey).Error; err != nil {
 			return s.parseGormError(err)
 		}
 	} else {
-		// Update existing record (use existing.ID to ensure we update the found record)
 		virtualKey.ID = existing.ID
-		// Use Select() to explicitly update all fields, including nil pointer fields
-		// This ensures TeamID gets set to NULL when switching from team to customer association
 		if err := txDB.WithContext(ctx).
-			Select("name", "description", "value", "is_active", "team_id", "customer_id", "budget_id", "rate_limit_id", "config_hash", "updated_at").
+			Select("name", "description", "value", "is_active", "team_id", "customer_id", "budget_id", "rate_limit_id", "config_hash", "updated_at", "encryption_status", "value_hash").
 			Updates(virtualKey).Error; err != nil {
 			return s.parseGormError(err)
 		}
@@ -2829,11 +2843,20 @@ func (s *RDBConfigStore) ClearRestartRequiredConfig(ctx context.Context) error {
 // GetSession retrieves a session from the database.
 func (s *RDBConfigStore) GetSession(ctx context.Context, token string) (*tables.SessionsTable, error) {
 	var session tables.SessionsTable
-	if err := s.db.WithContext(ctx).First(&session, "token = ?", token).Error; err != nil {
+	tokenHash := encrypt.HashSHA256(token)
+	err := s.db.WithContext(ctx).First(&session, "token_hash = ?", tokenHash).Error
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
+			// Fall back to plaintext lookup for backward compatibility
+			if err := s.db.WithContext(ctx).First(&session, "token = ?", token).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil, nil
+				}
+				return nil, err
+			}
+		} else {
+			return nil, err
 		}
-		return nil, err
 	}
 	return &session, nil
 }
@@ -2845,7 +2868,16 @@ func (s *RDBConfigStore) CreateSession(ctx context.Context, session *tables.Sess
 
 // DeleteSession deletes a session from the database.
 func (s *RDBConfigStore) DeleteSession(ctx context.Context, token string) error {
-	return s.db.WithContext(ctx).Delete(&tables.SessionsTable{}, "token = ?", token).Error
+	tokenHash := encrypt.HashSHA256(token)
+	result := s.db.WithContext(ctx).Delete(&tables.SessionsTable{}, "token_hash = ?", tokenHash)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		// Fall back to plaintext lookup for backward compatibility
+		return s.db.WithContext(ctx).Delete(&tables.SessionsTable{}, "token = ?", token).Error
+	}
+	return nil
 }
 
 // FlushSessions flushes all sessions from the database.

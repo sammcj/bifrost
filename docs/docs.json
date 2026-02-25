@@ -125,6 +125,7 @@
                   "providers/supported-providers/parasail",
                   "providers/supported-providers/perplexity",
                   "providers/supported-providers/replicate",
+                  "providers/supported-providers/runway",
                   "providers/supported-providers/sgl",
                   "providers/supported-providers/vertex",
                   "providers/supported-providers/vllm",
@@ -308,6 +309,8 @@
             "icon": "code",
             "pages": [
               "contributing/setting-up-repo",
+              "contributing/raising-a-pr",
+              "contributing/code-conventions",
               "contributing/adding-a-provider",
               "contributing/adding-a-configstore",
               "contributing/adding-a-logstore",

@@ -42,6 +42,7 @@ func (p *LoggerPlugin) insertInitialLogEntry(
 		ImageGenerationInputParsed:  data.ImageGenerationInput,
 		RoutingEnginesUsed:          routingEnginesUsed,
 		MetadataParsed:              data.Metadata,
+		VideoGenerationInputParsed:  data.VideoGenerationInput,
 	}
 	if parentRequestID != "" {
 		entry.ParentRequestID = &parentRequestID
@@ -130,6 +131,16 @@ func (p *LoggerPlugin) updateLogEntry(
 			}
 		}
 
+		if data.RerankOutput != nil {
+			tempEntry.RerankOutputParsed = data.RerankOutput
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize rerank output: %v", err)
+			} else {
+				updates["rerank_output"] = tempEntry.RerankOutput
+				updates["content_summary"] = tempEntry.ContentSummary
+			}
+		}
+
 		if data.SpeechOutput != nil {
 			tempEntry.SpeechOutputParsed = data.SpeechOutput
 			if err := tempEntry.SerializeFields(); err != nil {
@@ -154,6 +165,51 @@ func (p *LoggerPlugin) updateLogEntry(
 				p.logger.Error("failed to serialize image generation output: %v", err)
 			} else {
 				updates["image_generation_output"] = tempEntry.ImageGenerationOutput
+			}
+		}
+
+		if data.VideoGenerationOutput != nil {
+			tempEntry.VideoGenerationOutputParsed = data.VideoGenerationOutput
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize video generation output: %v", err)
+			} else {
+				updates["video_generation_output"] = tempEntry.VideoGenerationOutput
+			}
+		}
+
+		if data.VideoRetrieveOutput != nil {
+			tempEntry.VideoRetrieveOutputParsed = data.VideoRetrieveOutput
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize video retrieve output: %v", err)
+			} else {
+				updates["video_retrieve_output"] = tempEntry.VideoRetrieveOutput
+			}
+		}
+
+		if data.VideoDownloadOutput != nil {
+			tempEntry.VideoDownloadOutputParsed = data.VideoDownloadOutput
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize video download output: %v", err)
+			} else {
+				updates["video_download_output"] = tempEntry.VideoDownloadOutput
+			}
+		}
+
+		if data.VideoListOutput != nil {
+			tempEntry.VideoListOutputParsed = data.VideoListOutput
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize video list output: %v", err)
+			} else {
+				updates["video_list_output"] = tempEntry.VideoListOutput
+			}
+		}
+
+		if data.VideoDeleteOutput != nil {
+			tempEntry.VideoDeleteOutputParsed = data.VideoDeleteOutput
+			if err := tempEntry.SerializeFields(); err != nil {
+				p.logger.Error("failed to serialize video delete output: %v", err)
+			} else {
+				updates["video_delete_output"] = tempEntry.VideoDeleteOutput
 			}
 		}
 
@@ -430,84 +486,58 @@ func (p *LoggerPlugin) GetModelHistogram(ctx context.Context, filters logstore.S
 
 // GetAvailableModels returns all unique models from logs
 func (p *LoggerPlugin) GetAvailableModels(ctx context.Context) []string {
-	result, err := p.store.FindAll(ctx, "model IS NOT NULL AND model != ''", "model")
+	models, err := p.store.GetDistinctModels(ctx)
 	if err != nil {
-		p.logger.Error("failed to get available models: %w", err)
+		p.logger.Error("failed to get available models: %v", err)
 		return []string{}
 	}
-	return p.extractUniqueStrings(result, func(log *logstore.Log) string { return log.Model })
+	return models
 }
 
 func (p *LoggerPlugin) GetAvailableSelectedKeys(ctx context.Context) []KeyPair {
-	result, err := p.store.FindAll(ctx, "selected_key_id IS NOT NULL AND selected_key_id != '' AND selected_key_name IS NOT NULL AND selected_key_name != ''", "selected_key_id, selected_key_name")
+	results, err := p.store.GetDistinctKeyPairs(ctx, "selected_key_id", "selected_key_name")
 	if err != nil {
-		p.logger.Error("failed to get available selected keys: %w", err)
+		p.logger.Error("failed to get available selected keys: %v", err)
 		return []KeyPair{}
 	}
-	return p.extractUniqueKeyPairs(result, func(log *logstore.Log) KeyPair {
-		return KeyPair{
-			ID:   log.SelectedKeyID,
-			Name: log.SelectedKeyName,
-		}
-	})
+	return keyPairResultsToKeyPairs(results)
 }
 
 func (p *LoggerPlugin) GetAvailableVirtualKeys(ctx context.Context) []KeyPair {
-	result, err := p.store.FindAll(ctx, "virtual_key_id IS NOT NULL AND virtual_key_id != '' AND virtual_key_name IS NOT NULL AND virtual_key_name != ''", "virtual_key_id, virtual_key_name")
+	results, err := p.store.GetDistinctKeyPairs(ctx, "virtual_key_id", "virtual_key_name")
 	if err != nil {
-		p.logger.Error("failed to get available virtual keys: %w", err)
+		p.logger.Error("failed to get available virtual keys: %v", err)
 		return []KeyPair{}
 	}
-	return p.extractUniqueKeyPairs(result, func(log *logstore.Log) KeyPair {
-		if log.VirtualKeyID != nil && log.VirtualKeyName != nil {
-			return KeyPair{
-				ID:   *log.VirtualKeyID,
-				Name: *log.VirtualKeyName,
-			}
-		}
-		return KeyPair{}
-	})
+	return keyPairResultsToKeyPairs(results)
 }
 
 func (p *LoggerPlugin) GetAvailableRoutingRules(ctx context.Context) []KeyPair {
-	result, err := p.store.FindAll(ctx, "routing_rule_id IS NOT NULL AND routing_rule_id != '' AND routing_rule_name IS NOT NULL AND routing_rule_name != ''", "routing_rule_id, routing_rule_name")
+	results, err := p.store.GetDistinctKeyPairs(ctx, "routing_rule_id", "routing_rule_name")
 	if err != nil {
-		p.logger.Error("failed to get available routing rules: %w", err)
+		p.logger.Error("failed to get available routing rules: %v", err)
 		return []KeyPair{}
 	}
-	return p.extractUniqueKeyPairs(result, func(log *logstore.Log) KeyPair {
-		if log.RoutingRuleID != nil && log.RoutingRuleName != nil {
-			return KeyPair{
-				ID:   *log.RoutingRuleID,
-				Name: *log.RoutingRuleName,
-			}
-		}
-		return KeyPair{}
-	})
+	return keyPairResultsToKeyPairs(results)
 }
 
 // GetAvailableRoutingEngines returns all unique routing engine types used in logs
 func (p *LoggerPlugin) GetAvailableRoutingEngines(ctx context.Context) []string {
-	result, err := p.store.FindAll(ctx, "routing_engines_used IS NOT NULL", "routing_engines_used")
+	engines, err := p.store.GetDistinctRoutingEngines(ctx)
 	if err != nil {
-		p.logger.Error("failed to get available routing engines: %w", err)
+		p.logger.Error("failed to get available routing engines: %v", err)
 		return []string{}
 	}
-
-	uniqueEngines := make(map[string]bool)
-	for _, log := range result {
-		for _, engine := range log.RoutingEnginesUsed {
-			if engine != "" {
-				uniqueEngines[engine] = true
-			}
-		}
-	}
-
-	engines := make([]string, 0, len(uniqueEngines))
-	for engine := range uniqueEngines {
-		engines = append(engines, engine)
-	}
 	return engines
+}
+
+// keyPairResultsToKeyPairs converts logstore.KeyPairResult slice to KeyPair slice
+func keyPairResultsToKeyPairs(results []logstore.KeyPairResult) []KeyPair {
+	pairs := make([]KeyPair, len(results))
+	for i, r := range results {
+		pairs[i] = KeyPair{ID: r.ID, Name: r.Name}
+	}
+	return pairs
 }
 
 // GetAvailableMCPVirtualKeys returns all unique virtual key ID-Name pairs from MCP tool logs
@@ -541,38 +571,6 @@ func (p *LoggerPlugin) extractUniqueMCPKeyPairs(logs []logstore.MCPToolLog, extr
 	result := make([]KeyPair, 0, len(uniqueSet))
 	for _, pair := range uniqueSet {
 		result = append(result, pair)
-	}
-	return result
-}
-
-// extractUniqueKeyPairs extracts unique non-empty key pairs from logs using the provided extractor function
-func (p *LoggerPlugin) extractUniqueKeyPairs(logs []*logstore.Log, extractor func(*logstore.Log) KeyPair) []KeyPair {
-	uniqueSet := make(map[string]KeyPair)
-	for _, log := range logs {
-		pair := extractor(log)
-		if pair.ID != "" && pair.Name != "" {
-			uniqueSet[pair.ID] = pair
-		}
-	}
-
-	result := make([]KeyPair, 0, len(uniqueSet))
-	for _, pair := range uniqueSet {
-		result = append(result, pair)
-	}
-	return result
-}
-
-// extractUniqueStrings extracts unique non-empty string values from logs using the provided extractor function
-func (p *LoggerPlugin) extractUniqueStrings(logs []*logstore.Log, extractor func(*logstore.Log) string) []string {
-	uniqueSet := make(map[string]bool)
-	for _, log := range logs {
-		if value := extractor(log); value != "" {
-			uniqueSet[value] = true
-		}
-	}
-	result := make([]string, 0, len(uniqueSet))
-	for value := range uniqueSet {
-		result = append(result, value)
 	}
 	return result
 }
@@ -683,6 +681,7 @@ func (p *LoggerPlugin) calculateCostForLog(logEntry *logstore.Log) (float64, err
 		nil,
 		nil,
 		nil,
+		nil,
 	)
 
 	// For cache misses, combine base cost with embedding cost if available
@@ -724,6 +723,7 @@ func (p *LoggerPlugin) calculateCacheEmbeddingCost(cacheDebug *schemas.BifrostCa
 		},
 		schemas.EmbeddingRequest,
 		false,
+		nil,
 		nil,
 		nil,
 		nil,

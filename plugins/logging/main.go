@@ -44,10 +44,16 @@ type UpdateLogData struct {
 	ChatOutput            *schemas.ChatMessage
 	ResponsesOutput       []schemas.ResponsesMessage
 	EmbeddingOutput       []schemas.EmbeddingData
+	RerankOutput          []schemas.RerankResult
 	ErrorDetails          *schemas.BifrostError
 	SpeechOutput          *schemas.BifrostSpeechResponse          // For non-streaming speech responses
 	TranscriptionOutput   *schemas.BifrostTranscriptionResponse   // For non-streaming transcription responses
 	ImageGenerationOutput *schemas.BifrostImageGenerationResponse // For non-streaming image generation responses
+	VideoGenerationOutput *schemas.BifrostVideoGenerationResponse // For non-streaming video generation responses
+	VideoRetrieveOutput   *schemas.BifrostVideoGenerationResponse // For non-streaming video retrieve responses
+	VideoDownloadOutput   *schemas.BifrostVideoDownloadResponse   // For non-streaming video download responses
+	VideoListOutput       *schemas.BifrostVideoListResponse       // For non-streaming video list responses
+	VideoDeleteOutput     *schemas.BifrostVideoDeleteResponse     // For non-streaming video delete responses
 	RawRequest            interface{}
 	RawResponse           interface{}
 }
@@ -94,6 +100,7 @@ type InitialLogData struct {
 	SpeechInput           *schemas.SpeechInput
 	TranscriptionInput    *schemas.TranscriptionInput
 	ImageGenerationInput  *schemas.ImageGenerationInput
+	VideoGenerationInput  *schemas.VideoGenerationInput
 	Tools                 []schemas.ChatTool
 	Metadata              map[string]interface{}
 }
@@ -337,6 +344,8 @@ func (p *LoggerPlugin) PreLLMHook(ctx *schemas.BifrostContext, req *schemas.Bifr
 			initialData.Tools = tools
 		case schemas.EmbeddingRequest:
 			initialData.Params = req.EmbeddingRequest.Params
+		case schemas.RerankRequest:
+			initialData.Params = req.RerankRequest.Params
 		case schemas.SpeechRequest, schemas.SpeechStreamRequest:
 			initialData.Params = req.SpeechRequest.Params
 			initialData.SpeechInput = req.SpeechRequest.Input
@@ -346,6 +355,18 @@ func (p *LoggerPlugin) PreLLMHook(ctx *schemas.BifrostContext, req *schemas.Bifr
 		case schemas.ImageGenerationRequest, schemas.ImageGenerationStreamRequest:
 			initialData.Params = req.ImageGenerationRequest.Params
 			initialData.ImageGenerationInput = req.ImageGenerationRequest.Input
+		case schemas.VideoGenerationRequest:
+			initialData.Params = req.VideoGenerationRequest.Params
+			initialData.VideoGenerationInput = req.VideoGenerationRequest.Input
+		case schemas.VideoRemixRequest:
+			initialData.Params = &schemas.VideoLogParams{
+				VideoID: req.VideoRemixRequest.ID,
+			}
+			initialData.VideoGenerationInput = req.VideoRemixRequest.Input
+		case schemas.VideoRetrieveRequest, schemas.VideoDownloadRequest, schemas.VideoDeleteRequest:
+			initialData.Params = &schemas.VideoLogParams{
+				VideoID: req.VideoRetrieveRequest.ID,
+			}
 		}
 	}
 
@@ -417,6 +438,7 @@ func (p *LoggerPlugin) PreLLMHook(ctx *schemas.BifrostContext, req *schemas.Bifr
 					ParamsParsed:                msg.InitialData.Params,
 					ToolsParsed:                 msg.InitialData.Tools,
 					MetadataParsed:              msg.InitialData.Metadata,
+					VideoGenerationInputParsed:  msg.InitialData.VideoGenerationInput,
 					Status:                      "processing",
 					Stream:                      false, // Initially false, will be updated if streaming
 					CreatedAt:                   msg.Timestamp,
@@ -638,6 +660,8 @@ func (p *LoggerPlugin) PostLLMHook(ctx *schemas.BifrostContext, result *schemas.
 					usage = result.ResponsesResponse.Usage.ToBifrostLLMUsage()
 				case result.EmbeddingResponse != nil && result.EmbeddingResponse.Usage != nil:
 					usage = result.EmbeddingResponse.Usage
+				case result.RerankResponse != nil && result.RerankResponse.Usage != nil:
+					usage = result.RerankResponse.Usage
 				case result.TranscriptionResponse != nil && result.TranscriptionResponse.Usage != nil:
 					usage = &schemas.BifrostLLMUsage{}
 					if result.TranscriptionResponse.Usage.InputTokens != nil {
@@ -703,6 +727,9 @@ func (p *LoggerPlugin) PostLLMHook(ctx *schemas.BifrostContext, result *schemas.
 					if result.EmbeddingResponse != nil && len(result.EmbeddingResponse.Data) > 0 {
 						updateData.EmbeddingOutput = result.EmbeddingResponse.Data
 					}
+					if result.RerankResponse != nil {
+						updateData.RerankOutput = result.RerankResponse.Results
+					}
 					// Handle speech and transcription outputs for NON-streaming responses
 					if result.SpeechResponse != nil {
 						updateData.SpeechOutput = result.SpeechResponse
@@ -712,6 +739,25 @@ func (p *LoggerPlugin) PostLLMHook(ctx *schemas.BifrostContext, result *schemas.
 					}
 					if result.ImageGenerationResponse != nil {
 						updateData.ImageGenerationOutput = result.ImageGenerationResponse
+					}
+					if result.VideoGenerationResponse != nil {
+						switch requestType {
+						case schemas.VideoGenerationRequest:
+							updateData.VideoGenerationOutput = result.VideoGenerationResponse
+						case schemas.VideoRetrieveRequest:
+							updateData.VideoRetrieveOutput = result.VideoGenerationResponse
+						case schemas.VideoRemixRequest:
+							updateData.VideoGenerationOutput = result.VideoGenerationResponse
+						}
+					}
+					if result.VideoDownloadResponse != nil {
+						updateData.VideoDownloadOutput = result.VideoDownloadResponse
+					}
+					if result.VideoListResponse != nil {
+						updateData.VideoListOutput = result.VideoListResponse
+					}
+					if result.VideoDeleteResponse != nil {
+						updateData.VideoDeleteOutput = result.VideoDeleteResponse
 					}
 				}
 			}
