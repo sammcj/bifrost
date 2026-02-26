@@ -81,6 +81,7 @@ type AnthropicMessageRequest struct {
 	Messages          []AnthropicMessage     `json:"messages"`
 	Metadata          *AnthropicMetaData     `json:"metadata,omitempty"`
 	System            *AnthropicContent      `json:"system,omitempty"`
+	CacheControl      *schemas.CacheControl  `json:"cache_control,omitempty"`
 	Temperature       *float64               `json:"temperature,omitempty"`
 	TopP              *float64               `json:"top_p,omitempty"`
 	TopK              *int                   `json:"top_k,omitempty"`
@@ -354,6 +355,7 @@ var anthropicMessageRequestKnownFields = map[string]bool{
 	"messages":           true,
 	"metadata":           true,
 	"system":             true,
+	"cache_control":      true,
 	"temperature":        true,
 	"top_p":              true,
 	"top_k":              true,
@@ -431,6 +433,13 @@ func (req *AnthropicMessageRequest) MarshalJSON() ([]byte, error) {
 	if req.stripCacheControlScope {
 		reqCopy := *req
 		reqCopy.stripCacheControlScope = false
+
+		// Strip scope from top-level cache_control
+		if reqCopy.CacheControl != nil && reqCopy.CacheControl.Scope != nil {
+			cc := *reqCopy.CacheControl
+			cc.Scope = nil
+			reqCopy.CacheControl = &cc
+		}
 
 		// Strip scope from tools
 		if len(reqCopy.Tools) > 0 {
