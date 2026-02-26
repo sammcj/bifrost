@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/maximhq/bifrost/core v1.4.4
-	github.com/maximhq/bifrost/framework v1.2.22
+	github.com/maximhq/bifrost/framework v1.2.23
 )
 
 require (
