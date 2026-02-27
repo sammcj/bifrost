@@ -1,0 +1,1 @@
+- feat: add count tokens support for bedrock
