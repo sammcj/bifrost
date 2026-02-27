@@ -1,5 +1,6 @@
 (function () {
   var PYLON_APP_ID = "ae3ae6af-96e5-4240-aaa5-4ad62d5c062b";
+  var IDENTITY_API = "https://getbifrost.ai/api/pylon/identity";
   var DISCORD_URL = "https://getmax.im/bifrost-discord";
   var STORAGE_KEY = "bifrost_support_email";
   var STYLE_ID = "bifrost-support-widget-styles";
@@ -37,26 +38,26 @@
     return /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value);
   }
 
-  function nameFromEmail(email) {
-    var handle = email.split("@")[0] || "User";
-    var cleaned = handle.replace(/[._-]+/g, " ").trim();
-    if (!cleaned) {
-      return "User";
-    }
-    return cleaned
-      .split(" ")
-      .map(function (part) {
-        return part.charAt(0).toUpperCase() + part.slice(1);
-      })
-      .join(" ");
-  }
-
-  function getAppId() {
-    return PYLON_APP_ID;
-  }
-
   function isPlaceholderAppId(appId) {
     return !appId || appId === "YOUR_PYLON_APP_ID";
+  }
+
+  function fetchIdentity() {
+    return fetch(IDENTITY_API, { credentials: "include" })
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (json) {
+        var email = json && json.data && json.data.email;
+        var emailHash = json && json.data && json.data.emailHash;
+        if (email && emailHash) {
+          return { email: email, emailHash: emailHash };
+        }
+        return null;
+      })
+      .catch(function () {
+        return null;
+      });
   }
 
   function loadPylonScript(appId) {
@@ -96,8 +97,8 @@
     })();
   }
 
-  function setPylonUser(email) {
-    var appId = getAppId();
+  function setPylonUser(identity, displayName) {
+    var appId = PYLON_APP_ID;
     if (isPlaceholderAppId(appId)) {
       var errorEl = document.getElementById(ERROR_ID);
       if (errorEl) {
@@ -108,11 +109,12 @@
     }
 
     window.pylon = window.pylon || {};
-    window.pylon.chat_settings = Object.assign({}, window.pylon.chat_settings || {}, {
+    window.pylon.chat_settings = {
       app_id: appId,
-      email: email,
-      name: nameFromEmail(email),
-    });
+      email: identity.email,
+      email_hash: identity.emailHash,
+      name: displayName,
+    };
 
     loadPylonScript(appId);
     return true;
@@ -300,20 +302,32 @@
     var form = document.createElement("form");
     form.addEventListener("submit", function (event) {
       event.preventDefault();
-      var email = input.value.trim();
-      if (!isValidEmail(email)) {
+      var userEmail = input.value.trim();
+      if (!isValidEmail(userEmail)) {
         error.textContent = "Please enter a valid email address.";
         error.dataset.visible = "true";
         return;
       }
       error.dataset.visible = "false";
-      var ok = setPylonUser(email);
-      if (ok) {
-        safeSetItem(STORAGE_KEY, email);
-        openChatWhenReady();
-        closeModal();
-        removeTrigger();
-      }
+      primary.disabled = true;
+      primary.textContent = "Connecting...";
+
+      fetchIdentity().then(function (identity) {
+        primary.disabled = false;
+        primary.textContent = "Start chat";
+        if (!identity) {
+          error.textContent = "Could not connect. Please try again or join Discord.";
+          error.dataset.visible = "true";
+          return;
+        }
+        var ok = setPylonUser(identity, userEmail);
+        if (ok) {
+          safeSetItem(STORAGE_KEY, userEmail);
+          openChatWhenReady();
+          closeModal();
+          removeTrigger();
+        }
+      });
     });
 
     input.addEventListener("input", function () {
@@ -375,14 +389,23 @@
   function boot() {
     injectStyles();
 
-    var appId = getAppId();
     var storedEmail = safeGetItem(STORAGE_KEY);
 
-    if (!isPlaceholderAppId(appId) && isValidEmail(storedEmail)) {
-      setPylonUser(storedEmail);
+    if (isValidEmail(storedEmail)) {
+      // Returning user — fetch identity and auto-load Pylon
+      fetchIdentity().then(function (identity) {
+        if (identity) {
+          setPylonUser(identity, storedEmail);
+        } else {
+          // Identity failed — show trigger so user can retry
+          buildTrigger();
+          buildModal();
+        }
+      });
       return;
     }
 
+    // New user — show trigger + modal
     buildTrigger();
     buildModal();
   }
