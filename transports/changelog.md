@@ -1,1 +1,2 @@
 - feat: add count tokens support for bedrock
+- feat: add async rerank support
