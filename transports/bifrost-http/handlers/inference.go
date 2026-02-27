@@ -1102,41 +1102,35 @@ func (h *CompletionHandler) embeddings(ctx *fasthttp.RequestCtx) {
 	SendJSON(ctx, resp)
 }
 
-// rerank handles POST /v1/rerank - Process rerank requests
-func (h *CompletionHandler) rerank(ctx *fasthttp.RequestCtx) {
+// prepareRerankRequest prepares a BifrostRerankRequest from the HTTP request body
+func prepareRerankRequest(ctx *fasthttp.RequestCtx) (*RerankRequest, *schemas.BifrostRerankRequest, error) {
 	var req RerankRequest
 	if err := sonic.Unmarshal(ctx.PostBody(), &req); err != nil {
-		SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("Invalid request format: %v", err))
-		return
+		return nil, nil, fmt.Errorf("invalid request format: %v", err)
 	}
 
 	// Parse model
 	provider, modelName := schemas.ParseModelString(req.Model, "")
 	if provider == "" || modelName == "" {
-		SendError(ctx, fasthttp.StatusBadRequest, "model should be in provider/model format")
-		return
+		return nil, nil, fmt.Errorf("model should be in provider/model format")
 	}
 
 	// Parse fallbacks
 	fallbacks, err := parseFallbacks(req.Fallbacks)
 	if err != nil {
-		SendError(ctx, fasthttp.StatusBadRequest, err.Error())
-		return
+		return nil, nil, fmt.Errorf("failed to parse fallbacks: %v", err)
 	}
 
 	if strings.TrimSpace(req.Query) == "" {
-		SendError(ctx, fasthttp.StatusBadRequest, "query is required for rerank")
-		return
+		return nil, nil, fmt.Errorf("query is required for rerank")
 	}
 
 	if len(req.Documents) == 0 {
-		SendError(ctx, fasthttp.StatusBadRequest, "documents are required for rerank")
-		return
+		return nil, nil, fmt.Errorf("documents are required for rerank")
 	}
 	for i, doc := range req.Documents {
 		if strings.TrimSpace(doc.Text) == "" {
-			SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("document text is required for rerank at index %d", i))
-			return
+			return nil, nil, fmt.Errorf("document text is required for rerank at index %d", i)
 		}
 	}
 
@@ -1145,8 +1139,7 @@ func (h *CompletionHandler) rerank(ctx *fasthttp.RequestCtx) {
 		req.RerankParameters = &schemas.RerankParameters{}
 	}
 	if req.RerankParameters.TopN != nil && *req.RerankParameters.TopN < 1 {
-		SendError(ctx, fasthttp.StatusBadRequest, "top_n must be at least 1")
-		return
+		return nil, nil, fmt.Errorf("top_n must be at least 1")
 	}
 
 	extraParams, err := extractExtraParams(ctx.PostBody(), rerankParamsKnownFields)
@@ -1164,6 +1157,17 @@ func (h *CompletionHandler) rerank(ctx *fasthttp.RequestCtx) {
 		Documents: req.Documents,
 		Params:    req.RerankParameters,
 		Fallbacks: fallbacks,
+	}
+
+	return &req, bifrostRerankReq, nil
+}
+
+// rerank handles POST /v1/rerank - Process rerank requests
+func (h *CompletionHandler) rerank(ctx *fasthttp.RequestCtx) {
+	_, bifrostRerankReq, err := prepareRerankRequest(ctx)
+	if err != nil {
+		SendError(ctx, fasthttp.StatusBadRequest, err.Error())
+		return
 	}
 
 	// Convert context
@@ -1186,7 +1190,6 @@ func (h *CompletionHandler) rerank(ctx *fasthttp.RequestCtx) {
 
 // prepareSpeechRequest prepares a BifrostSpeechRequest from the HTTP request body
 func prepareSpeechRequest(ctx *fasthttp.RequestCtx) (*SpeechRequest, *schemas.BifrostSpeechRequest, error) {
-
 	var req SpeechRequest
 	if err := sonic.Unmarshal(ctx.PostBody(), &req); err != nil {
 		return nil, nil, fmt.Errorf("invalid request format: %v", err)
