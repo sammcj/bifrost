@@ -153,6 +153,9 @@ func ListModelsByKey(
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -176,6 +179,7 @@ func ListModelsByKey(
 	response.ExtraFields.Provider = providerName
 	response.ExtraFields.RequestType = schemas.ListModelsRequest
 	response.ExtraFields.Latency = latency.Milliseconds()
+	response.ExtraFields.ProviderResponseHeaders = providerResponseHeaders
 
 	// Set raw request if enabled
 	if providerUtils.ShouldSendBackRawRequest(ctx, sendBackRawRequest) {
@@ -288,6 +292,9 @@ func HandleOpenAITextCompletionRequest(
 	if bifrostErr != nil {
 		return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonData, nil, sendBackRawRequest, sendBackRawResponse)
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -320,6 +327,7 @@ func HandleOpenAITextCompletionRequest(
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.TextCompletionRequest
 	response.ExtraFields.Latency = latency.Milliseconds()
+	response.ExtraFields.ProviderResponseHeaders = providerResponseHeaders
 
 	// Set raw request if enabled
 	if providerUtils.ShouldSendBackRawRequest(ctx, sendBackRawRequest) {
@@ -450,6 +458,9 @@ func HandleOpenAITextCompletionStreaming(
 		return nil, providerUtils.EnrichError(ctx, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName), jsonBody, nil, sendBackRawRequest, sendBackRawResponse)
 	}
 
+	// Store provider response headers in context before status check so error responses also forward them
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerUtils.ExtractProviderResponseHeaders(resp))
+
 	// Check for HTTP errors
 	if resp.StatusCode() != fasthttp.StatusOK {
 		defer providerUtils.ReleaseStreamingResponse(resp)
@@ -482,9 +493,7 @@ func HandleOpenAITextCompletionStreaming(
 		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), logger)
 		defer stopCancellation()
 
-		scanner := bufio.NewScanner(reader)
-		buf := make([]byte, 0, 1024*1024)
-		scanner.Buffer(buf, 10*1024*1024)
+		scanner := providerUtils.NewSSEScanner(reader)
 
 		chunkIndex := -1
 		usage := &schemas.BifrostLLMUsage{}
@@ -525,11 +534,11 @@ func HandleOpenAITextCompletionStreaming(
 			if strings.TrimSpace(jsonData) == "" {
 				continue
 			}
-
 			var response schemas.BifrostTextCompletionResponse
 			if customResponseHandler != nil {
 				rawRequest, rawResponse, handlerErr := customResponseHandler([]byte(jsonData), &response, nil, sendBackRawRequest, sendBackRawResponse)
 				if handlerErr != nil {
+					// TODO fix this
 					handlerErr.ExtraFields = schemas.BifrostErrorExtraFields{
 						Provider:       providerName,
 						ModelRequested: request.Model,
@@ -545,23 +554,28 @@ func HandleOpenAITextCompletionStreaming(
 					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, handlerErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
 					return
 				}
-			} else { // First, check if this is an error response
-				var bifrostErr schemas.BifrostError
-				if err := sonic.Unmarshal([]byte(jsonData), &bifrostErr); err == nil {
-					if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
-						bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
-							Provider:       providerName,
-							ModelRequested: request.Model,
-							RequestType:    schemas.TextCompletionStreamRequest,
+			} else {
+
+				// Quick check for error field (allocation-free using sonic.GetFromString)
+				if errorNode, _ := sonic.GetFromString(jsonData, "error"); errorNode.Exists() {
+					// Only unmarshal when we know there's an error
+					var bifrostErr schemas.BifrostError
+					if err := sonic.UnmarshalString(jsonData, &bifrostErr); err == nil {
+						if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
+							bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+								Provider:       providerName,
+								ModelRequested: request.Model,
+								RequestType:    schemas.TextCompletionStreamRequest,
+							}
+							ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+							providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, &bifrostErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
+							return
 						}
-						ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-						providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, &bifrostErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
-						return
 					}
 				}
 
 				// Parse into bifrost response
-				if err := sonic.Unmarshal([]byte(jsonData), &response); err != nil {
+				if err := sonic.UnmarshalString(jsonData, &response); err != nil {
 					logger.Warn("Failed to parse stream response: %v", err)
 					continue
 				}
@@ -756,6 +770,9 @@ func HandleOpenAIChatCompletionRequest(
 	if bifrostErr != nil {
 		return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonData, nil, sendBackRawRequest, sendBackRawResponse)
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -770,8 +787,8 @@ func HandleOpenAIChatCompletionRequest(
 	if err != nil {
 		return nil, providerUtils.EnrichError(ctx, providerUtils.NewBifrostOperationError(schemas.ErrProviderResponseDecode, err, providerName), jsonData, nil, sendBackRawRequest, sendBackRawResponse)
 	}
-
 	response := &schemas.BifrostChatResponse{}
+	response.ExtraFields.ProviderResponseHeaders = providerResponseHeaders
 
 	var rawRequest, rawResponse interface{}
 
@@ -943,6 +960,9 @@ func HandleOpenAIChatCompletionStreaming(
 		return nil, providerUtils.EnrichError(ctx, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName), jsonBody, nil, sendBackRawRequest, sendBackRawResponse)
 	}
 
+	// Store provider response headers in context before status check so error responses also forward them
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerUtils.ExtractProviderResponseHeaders(resp))
+
 	// Check for HTTP errors
 	if resp.StatusCode() != fasthttp.StatusOK {
 		defer providerUtils.ReleaseStreamingResponse(resp)
@@ -983,9 +1003,7 @@ func HandleOpenAIChatCompletionStreaming(
 		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), logger)
 		defer stopCancellation()
 
-		scanner := bufio.NewScanner(reader)
-		buf := make([]byte, 0, 1024*1024)
-		scanner.Buffer(buf, 10*1024*1024)
+		scanner := providerUtils.NewSSEScanner(reader)
 
 		chunkIndex := -1
 		usage := &schemas.BifrostLLMUsage{}
@@ -1028,23 +1046,27 @@ func HandleOpenAIChatCompletionStreaming(
 				continue
 			}
 
-			// First, check if this is an error response
-			var bifrostErr schemas.BifrostError
-			if err := sonic.Unmarshal([]byte(jsonData), &bifrostErr); err == nil {
-				if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
-					bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
-						Provider:       providerName,
-						ModelRequested: request.Model,
-						RequestType:    streamRequestType,
+			// Quick check for error field (allocation-free using sonic.GetFromString)
+			if errorNode, _ := sonic.GetFromString(jsonData, "error"); errorNode.Exists() {
+				// Only unmarshal when we know there's an error
+				var bifrostErr schemas.BifrostError
+				if err := sonic.UnmarshalString(jsonData, &bifrostErr); err == nil {
+					if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
+						bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+							Provider:       providerName,
+							ModelRequested: request.Model,
+							RequestType:    streamRequestType,
+						}
+						ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+						providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, &bifrostErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
+						return
 					}
-					ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, &bifrostErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
-					return
 				}
 			}
 
 			// Parse into bifrost response
 			var response schemas.BifrostChatResponse
+			// TODO fix this
 			if customResponseHandler != nil {
 				rawRequest, rawResponse, handlerErr := customResponseHandler([]byte(jsonData), &response, nil, sendBackRawRequest, sendBackRawResponse)
 				if handlerErr != nil {
@@ -1064,7 +1086,7 @@ func HandleOpenAIChatCompletionStreaming(
 					return
 				}
 			} else {
-				if err := sonic.Unmarshal([]byte(jsonData), &response); err != nil {
+				if err := sonic.UnmarshalString(jsonData, &response); err != nil {
 					logger.Warn("Failed to parse stream response: %v", err)
 					continue
 				}
@@ -1322,6 +1344,9 @@ func HandleOpenAIResponsesRequest(
 	if bifrostErr != nil {
 		return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonData, nil, sendBackRawRequest, sendBackRawResponse)
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -1355,6 +1380,7 @@ func HandleOpenAIResponsesRequest(
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.ResponsesRequest
 	response.ExtraFields.Latency = latency.Milliseconds()
+	response.ExtraFields.ProviderResponseHeaders = providerResponseHeaders
 
 	// Set raw request if enabled
 	if providerUtils.ShouldSendBackRawRequest(ctx, sendBackRawRequest) {
@@ -1488,6 +1514,9 @@ func HandleOpenAIResponsesStreaming(
 		return nil, providerUtils.EnrichError(ctx, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName), jsonBody, nil, sendBackRawRequest, sendBackRawResponse)
 	}
 
+	// Store provider response headers in context before status check so error responses also forward them
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerUtils.ExtractProviderResponseHeaders(resp))
+
 	// Check for HTTP errors
 	if resp.StatusCode() != fasthttp.StatusOK {
 		defer providerUtils.ReleaseStreamingResponse(resp)
@@ -1520,9 +1549,7 @@ func HandleOpenAIResponsesStreaming(
 		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), logger)
 		defer stopCancellation()
 
-		scanner := bufio.NewScanner(reader)
-		buf := make([]byte, 0, 1024*1024)
-		scanner.Buffer(buf, 10*1024*1024)
+		scanner := providerUtils.NewSSEScanner(reader)
 
 		startTime := time.Now()
 		lastChunkTime := startTime
@@ -1564,6 +1591,7 @@ func HandleOpenAIResponsesStreaming(
 
 			// Parse into bifrost response
 			var response schemas.BifrostResponsesStreamResponse
+			// TODO fix this
 			if customResponseHandler != nil {
 				rawRequest, rawResponse, bifrostErr := customResponseHandler([]byte(jsonData), &response, nil, false, false)
 				if bifrostErr != nil {
@@ -1583,73 +1611,74 @@ func HandleOpenAIResponsesStreaming(
 					return
 				}
 			} else {
-				if err := sonic.Unmarshal([]byte(jsonData), &response); err != nil {
+				if err := sonic.UnmarshalString(jsonData, &response); err != nil {
 					logger.Warn("Failed to parse stream response: %v", err)
 					continue
 				}
-			}
 
-			if postResponseConverter != nil {
-				if converted := postResponseConverter(&response); converted != nil {
-					response = *converted
-				} else {
-					logger.Warn("postResponseConverter returned nil; leaving chunk unmodified")
-				}
-			}
-
-			if sendBackRawResponse {
-				response.ExtraFields.RawResponse = jsonData
-			}
-
-			if response.Type == schemas.ResponsesStreamResponseTypeError {
-				bifrostErr := &schemas.BifrostError{
-					Type:           schemas.Ptr(string(schemas.ResponsesStreamResponseTypeError)),
-					IsBifrostError: false,
-					Error:          &schemas.ErrorField{},
-					ExtraFields: schemas.BifrostErrorExtraFields{
-						RequestType:    schemas.ResponsesStreamRequest,
-						Provider:       providerName,
-						ModelRequested: request.Model,
-					},
+				if postResponseConverter != nil {
+					if converted := postResponseConverter(&response); converted != nil {
+						response = *converted
+					} else {
+						logger.Warn("postResponseConverter returned nil; leaving chunk unmodified")
+					}
 				}
 
-				if response.Message != nil {
-					bifrostErr.Error.Message = *response.Message
-				}
-				if response.Param != nil {
-					bifrostErr.Error.Param = *response.Param
-				}
-				if response.Code != nil {
-					bifrostErr.Error.Code = response.Code
+				if sendBackRawResponse {
+					response.ExtraFields.RawResponse = jsonData
 				}
 
-				ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-				providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, bifrostErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
-				return
-			}
+				if response.Type == schemas.ResponsesStreamResponseTypeError {
+					bifrostErr := &schemas.BifrostError{
+						Type:           schemas.Ptr(string(schemas.ResponsesStreamResponseTypeError)),
+						IsBifrostError: false,
+						Error:          &schemas.ErrorField{},
+						ExtraFields: schemas.BifrostErrorExtraFields{
+							RequestType:    schemas.ResponsesStreamRequest,
+							Provider:       providerName,
+							ModelRequested: request.Model,
+						},
+					}
 
-			response.ExtraFields.RequestType = schemas.ResponsesStreamRequest
-			response.ExtraFields.Provider = providerName
-			response.ExtraFields.ModelRequested = request.Model
-			response.ExtraFields.ChunkIndex = response.SequenceNumber
+					if response.Message != nil {
+						bifrostErr.Error.Message = *response.Message
+					}
+					if response.Param != nil {
+						bifrostErr.Error.Param = *response.Param
+					}
+					if response.Code != nil {
+						bifrostErr.Error.Code = response.Code
+					}
 
-			if response.Type == schemas.ResponsesStreamResponseTypeCompleted || response.Type == schemas.ResponsesStreamResponseTypeIncomplete {
-				// Set raw request if enabled
-				if sendBackRawRequest {
-					providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
+					ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, bifrostErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
+					return
 				}
-				response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
-				ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+
+				response.ExtraFields.RequestType = schemas.ResponsesStreamRequest
+				response.ExtraFields.Provider = providerName
+				response.ExtraFields.ModelRequested = request.Model
+				response.ExtraFields.ChunkIndex = response.SequenceNumber
+
+				if response.Type == schemas.ResponsesStreamResponseTypeCompleted || response.Type == schemas.ResponsesStreamResponseTypeIncomplete {
+					// Set raw request if enabled
+					if sendBackRawRequest {
+						providerUtils.ParseAndSetRawRequest(&response.ExtraFields, jsonBody)
+					}
+					response.ExtraFields.Latency = time.Since(startTime).Milliseconds()
+					ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+					providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, &response, nil, nil, nil), responseChan)
+					return
+				}
+
+				response.ExtraFields.Latency = time.Since(lastChunkTime).Milliseconds()
+				lastChunkTime = time.Now()
+
 				providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, &response, nil, nil, nil), responseChan)
-				return
 			}
-
-			response.ExtraFields.Latency = time.Since(lastChunkTime).Milliseconds()
-			lastChunkTime = time.Now()
-
-			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, &response, nil, nil, nil), responseChan)
 		}
-		// Handle scanner errors first
+
+		// Handle scanner errors after loop exits
 		if err := scanner.Err(); err != nil {
 			// If context was cancelled/timed out, let defer handle it
 			if ctx.Err() != nil {
@@ -1740,6 +1769,9 @@ func HandleOpenAIEmbeddingRequest(
 	if bifrostErr != nil {
 		return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonData, nil, sendBackRawRequest, sendBackRawResponse)
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -1770,6 +1802,7 @@ func HandleOpenAIEmbeddingRequest(
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.EmbeddingRequest
 	response.ExtraFields.Latency = latency.Milliseconds()
+	response.ExtraFields.ProviderResponseHeaders = providerResponseHeaders
 
 	// Set raw request if enabled
 	if sendBackRawRequest {
@@ -1859,6 +1892,9 @@ func HandleOpenAISpeechRequest(
 	if bifrostErr != nil {
 		return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonData, nil, sendBackRawRequest, sendBackRawResponse)
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -1878,10 +1914,11 @@ func HandleOpenAISpeechRequest(
 	bifrostResponse := &schemas.BifrostSpeechResponse{
 		Audio: body,
 		ExtraFields: schemas.BifrostResponseExtraFields{
-			RequestType:    schemas.SpeechRequest,
-			Provider:       providerName,
-			ModelRequested: request.Model,
-			Latency:        latency.Milliseconds(),
+			RequestType:             schemas.SpeechRequest,
+			Provider:                providerName,
+			ModelRequested:          request.Model,
+			Latency:                 latency.Milliseconds(),
+			ProviderResponseHeaders: providerResponseHeaders,
 		},
 	}
 
@@ -2015,6 +2052,9 @@ func HandleOpenAISpeechStreamRequest(
 		return nil, providerUtils.EnrichError(ctx, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName), jsonBody, nil, sendBackRawRequest, sendBackRawResponse)
 	}
 
+	// Store provider response headers in context before status check so error responses also forward them
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerUtils.ExtractProviderResponseHeaders(resp))
+
 	// Check for HTTP errors
 	if resp.StatusCode() != fasthttp.StatusOK {
 		defer providerUtils.ReleaseStreamingResponse(resp)
@@ -2083,24 +2123,27 @@ func HandleOpenAISpeechStreamRequest(
 				continue
 			}
 
-			// First, check if this is an error response
-			var bifrostErr schemas.BifrostError
-			if err := sonic.Unmarshal([]byte(jsonData), &bifrostErr); err == nil {
-				if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
-					bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
-						Provider:       providerName,
-						ModelRequested: request.Model,
-						RequestType:    schemas.SpeechStreamRequest,
+			// Quick check for error field (allocation-free using sonic.GetFromString)
+			if errorNode, _ := sonic.GetFromString(jsonData, "error"); errorNode.Exists() {
+				// Only unmarshal when we know there's an error
+				var bifrostErr schemas.BifrostError
+				if err := sonic.UnmarshalString(jsonData, &bifrostErr); err == nil {
+					if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
+						bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+							Provider:       providerName,
+							ModelRequested: request.Model,
+							RequestType:    schemas.SpeechStreamRequest,
+						}
+						ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+						providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, &bifrostErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
+						return
 					}
-					ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, &bifrostErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
-					return
 				}
 			}
 
 			// Parse into bifrost response
 			var response schemas.BifrostSpeechStreamResponse
-			if err := sonic.Unmarshal([]byte(jsonData), &response); err != nil {
+			if err := sonic.UnmarshalString(jsonData, &response); err != nil {
 				logger.Warn("Failed to parse stream response: %v", err)
 				continue
 			}
@@ -2226,6 +2269,9 @@ func HandleOpenAITranscriptionRequest(
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -2286,10 +2332,11 @@ func HandleOpenAITranscriptionRequest(
 	}
 
 	response.ExtraFields = schemas.BifrostResponseExtraFields{
-		RequestType:    schemas.TranscriptionRequest,
-		Provider:       providerName,
-		ModelRequested: request.Model,
-		Latency:        latency.Milliseconds(),
+		RequestType:             schemas.TranscriptionRequest,
+		Provider:                providerName,
+		ModelRequested:          request.Model,
+		Latency:                 latency.Milliseconds(),
+		ProviderResponseHeaders: providerResponseHeaders,
 	}
 
 	if sendBackRawResponse {
@@ -2415,6 +2462,9 @@ func HandleOpenAITranscriptionStreamRequest(
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
 	}
 
+	// Store provider response headers in context before status check so error responses also forward them
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerUtils.ExtractProviderResponseHeaders(resp))
+
 	// Check for HTTP errors
 	if resp.StatusCode() != fasthttp.StatusOK {
 		defer providerUtils.ReleaseStreamingResponse(resp)
@@ -2482,12 +2532,11 @@ func HandleOpenAITranscriptionStreamRequest(
 			if strings.TrimSpace(jsonData) == "" {
 				continue
 			}
-
-			var response schemas.BifrostTranscriptionStreamResponse
+			// TODo fix this
+			response := &schemas.BifrostTranscriptionStreamResponse{}
 			var bifrostErr *schemas.BifrostError
-
 			if customResponseHandler != nil {
-				_, _, bifrostErr = customResponseHandler([]byte(jsonData), &response, nil, false, false)
+				_, _, bifrostErr = customResponseHandler([]byte(jsonData), response, nil, false, false)
 				if bifrostErr != nil {
 					bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
 						Provider:       providerName,
@@ -2502,31 +2551,34 @@ func HandleOpenAITranscriptionStreamRequest(
 					return
 				}
 			} else {
-				// First, check if this is an error response
-				var bifrostErr schemas.BifrostError
-				if err := sonic.Unmarshal([]byte(jsonData), &bifrostErr); err == nil {
-					if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
-						bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
-							Provider:       providerName,
-							ModelRequested: request.Model,
-							RequestType:    schemas.TranscriptionStreamRequest,
+				// Quick check for error field (allocation-free using sonic.GetFromString)
+				if errorNode, _ := sonic.GetFromString(jsonData, "error"); errorNode.Exists() {
+					// Only unmarshal when we know there's an error
+					var bifrostErrVal schemas.BifrostError
+					if err := sonic.UnmarshalString(jsonData, &bifrostErrVal); err == nil {
+						if bifrostErrVal.Error != nil && bifrostErrVal.Error.Message != "" {
+							bifrostErrVal.ExtraFields = schemas.BifrostErrorExtraFields{
+								Provider:       providerName,
+								ModelRequested: request.Model,
+								RequestType:    schemas.TranscriptionStreamRequest,
+							}
+							ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+							providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, &bifrostErrVal, nil, nil, false, sendBackRawResponse), responseChan, logger)
+							return
 						}
-						ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-						providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, &bifrostErr, responseChan, logger)
-						return
 					}
 				}
 
-				if err := sonic.Unmarshal([]byte(jsonData), &response); err != nil {
+				if err := sonic.UnmarshalString(jsonData, response); err != nil {
 					logger.Warn("Failed to parse stream response: %v", err)
 					continue
-				}
 
+				}
 			}
 
 			if postResponseConverter != nil {
-				if converted := postResponseConverter(&response); converted != nil {
-					response = *converted
+				if converted := postResponseConverter(response); converted != nil {
+					response = converted
 				} else {
 					logger.Warn("postResponseConverter returned nil; leaving chunk unmodified")
 				}
@@ -2555,11 +2607,11 @@ func HandleOpenAITranscriptionStreamRequest(
 					response.Text = fullTranscriptionText
 				}
 
-				providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, nil, &response, nil), responseChan)
+				providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, nil, response, nil), responseChan)
 				return
 			}
 
-			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, nil, &response, nil), responseChan)
+			providerUtils.ProcessAndSendResponse(ctx, postHookRunner, providerUtils.GetBifrostResponseForStreamResponse(nil, nil, nil, nil, response, nil), responseChan)
 		}
 
 		// Handle scanner errors
@@ -2652,6 +2704,9 @@ func HandleOpenAIImageGenerationRequest(
 	if bifrostErr != nil {
 		return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonData, nil, sendBackRawRequest, sendBackRawResponse)
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -2676,6 +2731,7 @@ func HandleOpenAIImageGenerationRequest(
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.ImageGenerationRequest
 	response.ExtraFields.Latency = latency.Milliseconds()
+	response.ExtraFields.ProviderResponseHeaders = providerResponseHeaders
 
 	// Set raw request if enabled
 	if sendBackRawRequest {
@@ -2826,6 +2882,9 @@ func HandleOpenAIImageGenerationStreaming(
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
 	}
 
+	// Store provider response headers in context before status check so error responses also forward them
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerUtils.ExtractProviderResponseHeaders(resp))
+
 	// Check for HTTP errors
 	if resp.StatusCode() != fasthttp.StatusOK {
 		defer providerUtils.ReleaseStreamingResponse(resp)
@@ -2855,9 +2914,7 @@ func HandleOpenAIImageGenerationStreaming(
 		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), logger)
 		defer stopCancellation()
 
-		scanner := bufio.NewScanner(reader)
-		buf := make([]byte, 0, 1024*1024)
-		scanner.Buffer(buf, 10*1024*1024)
+		scanner := providerUtils.NewSSEScanner(reader)
 
 		lastChunkTime := startTime
 		var collectedUsage *schemas.ImageUsage
@@ -2897,23 +2954,27 @@ func HandleOpenAIImageGenerationStreaming(
 				continue
 			}
 
-			var bifrostErr schemas.BifrostError
-			if err := sonic.Unmarshal([]byte(jsonData), &bifrostErr); err == nil {
-				if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
-					bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
-						Provider:       providerName,
-						ModelRequested: request.Model,
-						RequestType:    schemas.ImageGenerationStreamRequest,
+			// Quick check for error field (allocation-free using sonic.GetFromString)
+			if errorNode, _ := sonic.GetFromString(jsonData, "error"); errorNode.Exists() {
+				// Only unmarshal when we know there's an error
+				var bifrostErr schemas.BifrostError
+				if err := sonic.UnmarshalString(jsonData, &bifrostErr); err == nil {
+					if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
+						bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+							Provider:       providerName,
+							ModelRequested: request.Model,
+							RequestType:    schemas.ImageGenerationStreamRequest,
+						}
+						ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+						providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, &bifrostErr, jsonBody, nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
+						return
 					}
-					ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, &bifrostErr, responseChan, logger)
-					return
 				}
 			}
 
 			// Parse minimally to extract usage and check for errors
 			var response OpenAIImageStreamResponse
-			if err := sonic.Unmarshal([]byte(jsonData), &response); err != nil {
+			if err := sonic.UnmarshalString(jsonData, &response); err != nil {
 				logger.Warn("Failed to parse stream response: %v", err)
 				continue
 			}
@@ -3192,6 +3253,9 @@ func (provider *OpenAIProvider) VideoDownload(ctx *schemas.BifrostContext, key s
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -3219,9 +3283,10 @@ func (provider *OpenAIProvider) VideoDownload(ctx *schemas.BifrostContext, key s
 		Content:     content,
 		ContentType: contentType,
 		ExtraFields: schemas.BifrostResponseExtraFields{
-			RequestType: schemas.VideoDownloadRequest,
-			Provider:    providerName,
-			Latency:     latency.Milliseconds(),
+			RequestType:             schemas.VideoDownloadRequest,
+			Provider:                providerName,
+			Latency:                 latency.Milliseconds(),
+			ProviderResponseHeaders: providerResponseHeaders,
 		},
 	}, nil
 }
@@ -3326,6 +3391,9 @@ func HandleOpenAIVideoGenerationRequest(
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -3361,10 +3429,11 @@ func HandleOpenAIVideoGenerationRequest(
 	}
 
 	response.ExtraFields = schemas.BifrostResponseExtraFields{
-		RequestType:    schemas.VideoGenerationRequest,
-		Provider:       providerName,
-		ModelRequested: request.Model,
-		Latency:        latency.Milliseconds(),
+		RequestType:             schemas.VideoGenerationRequest,
+		Provider:                providerName,
+		ModelRequested:          request.Model,
+		Latency:                 latency.Milliseconds(),
+		ProviderResponseHeaders: providerResponseHeaders,
 	}
 
 	if sendBackRawResponse {
@@ -3420,6 +3489,9 @@ func HandleOpenAIVideoRetrieveRequest(
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	if resp.StatusCode() != fasthttp.StatusOK {
 		logger.Debug("error from %s provider: %s", providerName, string(resp.Body()))
@@ -3470,9 +3542,10 @@ func HandleOpenAIVideoRetrieveRequest(
 	}
 
 	response.ExtraFields = schemas.BifrostResponseExtraFields{
-		RequestType: schemas.VideoRetrieveRequest,
-		Provider:    providerName,
-		Latency:     latency.Milliseconds(),
+		RequestType:             schemas.VideoRetrieveRequest,
+		Provider:                providerName,
+		Latency:                 latency.Milliseconds(),
+		ProviderResponseHeaders: providerResponseHeaders,
 	}
 	if sendBackRawResponse {
 		response.ExtraFields.RawResponse = rawResponse
@@ -3514,6 +3587,9 @@ func HandleOpenAIVideoDeleteRequest(
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -3537,9 +3613,10 @@ func HandleOpenAIVideoDeleteRequest(
 	}
 
 	response.ExtraFields = schemas.BifrostResponseExtraFields{
-		RequestType: schemas.VideoDeleteRequest,
-		Provider:    providerName,
-		Latency:     latency.Milliseconds(),
+		RequestType:             schemas.VideoDeleteRequest,
+		Provider:                providerName,
+		Latency:                 latency.Milliseconds(),
+		ProviderResponseHeaders: providerResponseHeaders,
 	}
 
 	if sendBackRawResponse {
@@ -3602,6 +3679,9 @@ func HandleOpenAIVideoListRequest(
 	if bifrostErr != nil {
 		return nil, bifrostErr
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -3638,9 +3718,10 @@ func HandleOpenAIVideoListRequest(
 	}
 
 	response.ExtraFields = schemas.BifrostResponseExtraFields{
-		RequestType: schemas.VideoListRequest,
-		Provider:    providerName,
-		Latency:     latency.Milliseconds(),
+		RequestType:             schemas.VideoListRequest,
+		Provider:                providerName,
+		Latency:                 latency.Milliseconds(),
+		ProviderResponseHeaders: providerResponseHeaders,
 	}
 
 	if sendBackRawResponse {
@@ -3719,6 +3800,9 @@ func HandleOpenAICountTokensRequest(
 	if bifrostErr != nil {
 		return nil, providerUtils.EnrichError(ctx, bifrostErr, jsonData, nil, sendBackRawRequest, sendBackRawResponse)
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	// Handle error response
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -3744,6 +3828,7 @@ func HandleOpenAICountTokensRequest(
 	response.ExtraFields.RequestType = schemas.CountTokensRequest
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.Latency = latency.Milliseconds()
+	response.ExtraFields.ProviderResponseHeaders = providerResponseHeaders
 
 	if providerUtils.ShouldSendBackRawRequest(ctx, sendBackRawRequest) {
 		response.ExtraFields.RawRequest = rawRequest
@@ -3824,6 +3909,9 @@ func HandleOpenAIImageEditRequest(
 	if bifrostErr != nil {
 		return nil, providerUtils.EnrichError(ctx, bifrostErr, bodyData, nil, sendBackRawRequest, sendBackRawResponse)
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	if resp.StatusCode() != fasthttp.StatusOK {
 		return nil, providerUtils.EnrichError(ctx, ParseOpenAIError(resp, schemas.ImageEditRequest, providerName, request.Model), bodyData, nil, sendBackRawRequest, sendBackRawResponse)
@@ -3843,6 +3931,7 @@ func HandleOpenAIImageEditRequest(
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.ImageEditRequest
 	response.ExtraFields.Latency = latency.Milliseconds()
+	response.ExtraFields.ProviderResponseHeaders = providerResponseHeaders
 
 	// Set raw request if enabled
 	if sendBackRawRequest {
@@ -3969,6 +4058,9 @@ func HandleOpenAIImageEditStreamRequest(
 		}
 		return nil, providerUtils.NewBifrostOperationError(schemas.ErrProviderDoRequest, err, providerName)
 	}
+	// Store provider response headers in context before status check so error responses also forward them
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerUtils.ExtractProviderResponseHeaders(resp))
+
 	// Check for HTTP errors
 	if resp.StatusCode() != fasthttp.StatusOK {
 		defer providerUtils.ReleaseStreamingResponse(resp)
@@ -3998,9 +4090,7 @@ func HandleOpenAIImageEditStreamRequest(
 		stopCancellation := providerUtils.SetupStreamCancellation(ctx, resp.BodyStream(), logger)
 		defer stopCancellation()
 
-		scanner := bufio.NewScanner(reader)
-		buf := make([]byte, 0, 1024*1024)
-		scanner.Buffer(buf, 10*1024*1024)
+		scanner := providerUtils.NewSSEScanner(reader)
 
 		lastChunkTime := time.Now()
 		var collectedUsage *schemas.ImageUsage
@@ -4040,23 +4130,27 @@ func HandleOpenAIImageEditStreamRequest(
 				continue
 			}
 
-			var bifrostErr schemas.BifrostError
-			if err := sonic.Unmarshal([]byte(jsonData), &bifrostErr); err == nil {
-				if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
-					bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
-						Provider:       providerName,
-						ModelRequested: request.Model,
-						RequestType:    schemas.ImageEditStreamRequest,
+			// Quick check for error field (allocation-free using sonic.GetFromString)
+			if errorNode, _ := sonic.GetFromString(jsonData, "error"); errorNode.Exists() {
+				// Only unmarshal when we know there's an error
+				var bifrostErr schemas.BifrostError
+				if err := sonic.UnmarshalString(jsonData, &bifrostErr); err == nil {
+					if bifrostErr.Error != nil && bifrostErr.Error.Message != "" {
+						bifrostErr.ExtraFields = schemas.BifrostErrorExtraFields{
+							Provider:       providerName,
+							ModelRequested: request.Model,
+							RequestType:    schemas.ImageEditStreamRequest,
+						}
+						ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
+						providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, providerUtils.EnrichError(ctx, &bifrostErr, body.Bytes(), nil, sendBackRawRequest, sendBackRawResponse), responseChan, logger)
+						return
 					}
-					ctx.SetValue(schemas.BifrostContextKeyStreamEndIndicator, true)
-					providerUtils.ProcessAndSendBifrostError(ctx, postHookRunner, &bifrostErr, responseChan, logger)
-					return
 				}
 			}
 
 			// Parse minimally to extract usage and check for errors
 			var response OpenAIImageStreamResponse
-			if err := sonic.Unmarshal([]byte(jsonData), &response); err != nil {
+			if err := sonic.UnmarshalString(jsonData, &response); err != nil {
 				logger.Warn("Failed to parse stream response: %v", err)
 				continue
 			}
@@ -4310,6 +4404,9 @@ func HandleOpenAIImageVariationRequest(
 	if bifrostErr != nil {
 		return nil, providerUtils.EnrichError(ctx, bifrostErr, bodyData, nil, sendBackRawRequest, sendBackRawResponse)
 	}
+	// Extract provider response headers early so they're available on error paths too
+	providerResponseHeaders := providerUtils.ExtractProviderResponseHeaders(resp)
+	ctx.SetValue(schemas.BifrostContextKeyProviderResponseHeaders, providerResponseHeaders)
 
 	if resp.StatusCode() != fasthttp.StatusOK {
 		return nil, providerUtils.EnrichError(ctx, ParseOpenAIError(resp, schemas.ImageVariationRequest, providerName, request.Model), bodyData, nil, sendBackRawRequest, sendBackRawResponse)
@@ -4329,6 +4426,7 @@ func HandleOpenAIImageVariationRequest(
 	response.ExtraFields.ModelRequested = request.Model
 	response.ExtraFields.RequestType = schemas.ImageVariationRequest
 	response.ExtraFields.Latency = latency.Milliseconds()
+	response.ExtraFields.ProviderResponseHeaders = providerResponseHeaders
 
 	// Set raw response if enabled
 	if sendBackRawResponse {
@@ -4432,7 +4530,9 @@ func (provider *OpenAIProvider) FileUpload(ctx *schemas.BifrostContext, key sche
 		return nil, bifrostErr
 	}
 
-	return openAIResp.ToBifrostFileUploadResponse(providerName, latency, sendBackRawRequest, sendBackRawResponse, rawRequest, rawResponse), nil
+	fileResponse := openAIResp.ToBifrostFileUploadResponse(providerName, latency, sendBackRawRequest, sendBackRawResponse, rawRequest, rawResponse)
+	fileResponse.ExtraFields.ProviderResponseHeaders = providerUtils.ExtractProviderResponseHeaders(resp)
+	return fileResponse, nil
 }
 
 // FileList lists files using serial pagination across keys.
@@ -4553,9 +4653,10 @@ func (provider *OpenAIProvider) FileList(ctx *schemas.BifrostContext, keys []sch
 		Data:    files,
 		HasMore: hasMore,
 		ExtraFields: schemas.BifrostResponseExtraFields{
-			RequestType: schemas.FileListRequest,
-			Provider:    providerName,
-			Latency:     latency.Milliseconds(),
+			RequestType:             schemas.FileListRequest,
+			Provider:                providerName,
+			Latency:                 latency.Milliseconds(),
+			ProviderResponseHeaders: providerUtils.ExtractProviderResponseHeaders(resp),
 		},
 	}
 	if nextCursor != "" {
