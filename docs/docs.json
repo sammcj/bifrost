@@ -356,7 +356,7 @@
         ]
       },
       {
-        "tab": "API Reference", 
+        "tab": "API Reference",
         "icon": "code",
         "groups": [
           {
@@ -408,6 +408,7 @@
         "icon": "bolt",
         "pages": [
           "changelogs/v1.5.0",
+          "changelogs/v1.4.10",
           {
             "group": "February 2026",
             "pages": [
