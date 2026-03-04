@@ -84,6 +84,40 @@ func CorsMiddleware(config *lib.Config) schemas.BifrostHTTPMiddleware {
 	}
 }
 
+// RequestDecompressionMiddleware transparently decompresses compressed request bodies.
+// fasthttp supports gzip/deflate/br/zstd via BodyUncompressed().
+func RequestDecompressionMiddleware(config *lib.Config) schemas.BifrostHTTPMiddleware {
+	return func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+		return func(ctx *fasthttp.RequestCtx) {
+			if len(ctx.Request.Header.ContentEncoding()) > 0 {
+				maxRequestBodyBytes := 0
+				if config != nil && config.ClientConfig.MaxRequestBodySizeMB > 0 {
+					maxRequestBodyBytes = config.ClientConfig.MaxRequestBodySizeMB * 1024 * 1024
+				}
+
+				body, err := ctx.Request.BodyUncompressed()
+				if err != nil {
+					SendError(ctx, fasthttp.StatusBadRequest, fmt.Sprintf("invalid compressed request body: %v", err))
+					return
+				}
+				if maxRequestBodyBytes > 0 && len(body) > maxRequestBodyBytes {
+					SendError(
+						ctx,
+						fasthttp.StatusRequestEntityTooLarge,
+						fmt.Sprintf("decompressed request body exceeds max allowed size of %d bytes", maxRequestBodyBytes),
+					)
+					return
+				}
+
+				ctx.Request.SetBodyRaw(body)
+				ctx.Request.Header.Del(fasthttp.HeaderContentEncoding)
+				ctx.Request.Header.Del(fasthttp.HeaderContentLength)
+			}
+			next(ctx)
+		}
+	}
+}
+
 // TransportInterceptorMiddleware runs all plugin HTTP transport interceptors.
 // It converts the fasthttp request to a serializable HTTPRequest, runs all plugin interceptors,
 // and applies any modifications back to the fasthttp context.
