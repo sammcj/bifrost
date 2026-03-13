@@ -1591,9 +1591,12 @@ type RequestMetadata struct {
 	RequestType schemas.RequestType
 }
 
-// ShouldSendBackRawRequest checks if the raw request should be sent back.
+// ShouldSendBackRawRequest checks if the raw request should be captured.
 // Context overrides are intentionally restricted to asymmetric behavior: a context value can only
 // promote false→true and will not override a true config to false, avoiding accidental suppression.
+// Both full send-back mode and logging-only mode (store_raw_request_response) set
+// BifrostContextKeySendBackRawRequest=true in the request context so a single flag is checked here.
+// In logging-only mode the payload is stripped before the response reaches the client.
 func ShouldSendBackRawRequest(ctx context.Context, defaultSendBackRawRequest bool) bool {
 	if sendBackRawRequest, ok := ctx.Value(schemas.BifrostContextKeySendBackRawRequest).(bool); ok && sendBackRawRequest {
 		return sendBackRawRequest
@@ -1601,7 +1604,12 @@ func ShouldSendBackRawRequest(ctx context.Context, defaultSendBackRawRequest boo
 	return defaultSendBackRawRequest
 }
 
-// ShouldSendBackRawResponse checks if the raw response should be sent back, and returns it if it exists.
+// ShouldSendBackRawResponse checks if the raw response should be captured.
+// Context overrides are intentionally restricted to asymmetric behavior: a context value can only
+// promote false→true and will not override a true config to false, avoiding accidental suppression.
+// Both full send-back mode and logging-only mode (store_raw_request_response) set
+// BifrostContextKeySendBackRawResponse=true in the request context so a single flag is checked here.
+// In logging-only mode the payload is stripped before the response reaches the client.
 func ShouldSendBackRawResponse(ctx context.Context, defaultSendBackRawResponse bool) bool {
 	if sendBackRawResponse, ok := ctx.Value(schemas.BifrostContextKeySendBackRawResponse).(bool); ok && sendBackRawResponse {
 		return sendBackRawResponse
@@ -1651,6 +1659,77 @@ func SendInProgressEventResponsesChunk(ctx *schemas.BifrostContext, postHookRunn
 	ProcessAndSendResponse(ctx, postHookRunner, bifrostResponse, responseChan)
 }
 
+// BuildClientStreamChunk constructs a BifrostStreamChunk from post-hook results.
+// It never mutates the shared processedResponse or processedError objects — when in
+// logging-only mode (BifrostContextKeyRawRequestResponseForLogging) it shallow-copies
+// each inner response struct and the BifrostError, nils only the raw fields on those
+// copies, and returns them as the outgoing chunk. This is safe for concurrent PostLLMHook
+// goroutines that still hold references to the originals.
+func BuildClientStreamChunk(ctx context.Context, processedResponse *schemas.BifrostResponse, processedError *schemas.BifrostError) *schemas.BifrostStreamChunk {
+	dropRaw, _ := ctx.Value(schemas.BifrostContextKeyRawRequestResponseForLogging).(bool)
+	streamResponse := &schemas.BifrostStreamChunk{}
+	if processedResponse != nil {
+		streamResponse.BifrostTextCompletionResponse = processedResponse.TextCompletionResponse
+		streamResponse.BifrostChatResponse = processedResponse.ChatResponse
+		streamResponse.BifrostResponsesStreamResponse = processedResponse.ResponsesStreamResponse
+		streamResponse.BifrostSpeechStreamResponse = processedResponse.SpeechStreamResponse
+		streamResponse.BifrostTranscriptionStreamResponse = processedResponse.TranscriptionStreamResponse
+		streamResponse.BifrostImageGenerationStreamResponse = processedResponse.ImageGenerationStreamResponse
+		// Strip raw fields from client-facing copies without mutating the shared objects
+		// that PostLLMHook goroutines may still be reading.
+		if dropRaw {
+			if streamResponse.BifrostTextCompletionResponse != nil {
+				cp := *streamResponse.BifrostTextCompletionResponse
+				cp.ExtraFields.RawRequest = nil
+				cp.ExtraFields.RawResponse = nil
+				streamResponse.BifrostTextCompletionResponse = &cp
+			}
+			if streamResponse.BifrostChatResponse != nil {
+				cp := *streamResponse.BifrostChatResponse
+				cp.ExtraFields.RawRequest = nil
+				cp.ExtraFields.RawResponse = nil
+				streamResponse.BifrostChatResponse = &cp
+			}
+			if streamResponse.BifrostResponsesStreamResponse != nil {
+				cp := *streamResponse.BifrostResponsesStreamResponse
+				cp.ExtraFields.RawRequest = nil
+				cp.ExtraFields.RawResponse = nil
+				streamResponse.BifrostResponsesStreamResponse = &cp
+			}
+			if streamResponse.BifrostSpeechStreamResponse != nil {
+				cp := *streamResponse.BifrostSpeechStreamResponse
+				cp.ExtraFields.RawRequest = nil
+				cp.ExtraFields.RawResponse = nil
+				streamResponse.BifrostSpeechStreamResponse = &cp
+			}
+			if streamResponse.BifrostTranscriptionStreamResponse != nil {
+				cp := *streamResponse.BifrostTranscriptionStreamResponse
+				cp.ExtraFields.RawRequest = nil
+				cp.ExtraFields.RawResponse = nil
+				streamResponse.BifrostTranscriptionStreamResponse = &cp
+			}
+			if streamResponse.BifrostImageGenerationStreamResponse != nil {
+				cp := *streamResponse.BifrostImageGenerationStreamResponse
+				cp.ExtraFields.RawRequest = nil
+				cp.ExtraFields.RawResponse = nil
+				streamResponse.BifrostImageGenerationStreamResponse = &cp
+			}
+		}
+	}
+	if processedError != nil {
+		if dropRaw {
+			// Strip raw fields from a client-facing copy without mutating the shared error object.
+			errCopy := *processedError
+			errCopy.ExtraFields.RawRequest = nil
+			errCopy.ExtraFields.RawResponse = nil
+			streamResponse.BifrostError = &errCopy
+		} else {
+			streamResponse.BifrostError = processedError
+		}
+	}
+	return streamResponse
+}
+
 // ProcessAndSendResponse handles post-hook processing and sends the response to the channel.
 // This utility reduces code duplication across streaming implementations by encapsulating
 // the common pattern of running post hooks, handling errors, and sending responses with
@@ -1682,18 +1761,7 @@ func ProcessAndSendResponse(
 		return
 	}
 
-	streamResponse := &schemas.BifrostStreamChunk{}
-	if processedResponse != nil {
-		streamResponse.BifrostTextCompletionResponse = processedResponse.TextCompletionResponse
-		streamResponse.BifrostChatResponse = processedResponse.ChatResponse
-		streamResponse.BifrostResponsesStreamResponse = processedResponse.ResponsesStreamResponse
-		streamResponse.BifrostSpeechStreamResponse = processedResponse.SpeechStreamResponse
-		streamResponse.BifrostTranscriptionStreamResponse = processedResponse.TranscriptionStreamResponse
-		streamResponse.BifrostImageGenerationStreamResponse = processedResponse.ImageGenerationStreamResponse
-	}
-	if processedError != nil {
-		streamResponse.BifrostError = processedError
-	}
+	streamResponse := BuildClientStreamChunk(ctx, processedResponse, processedError)
 
 	select {
 	case responseChan <- streamResponse:
@@ -1734,17 +1802,7 @@ func ProcessAndSendBifrostError(
 		return
 	}
 
-	streamResponse := &schemas.BifrostStreamChunk{}
-	if processedResponse != nil {
-		streamResponse.BifrostTextCompletionResponse = processedResponse.TextCompletionResponse
-		streamResponse.BifrostChatResponse = processedResponse.ChatResponse
-		streamResponse.BifrostResponsesStreamResponse = processedResponse.ResponsesStreamResponse
-		streamResponse.BifrostSpeechStreamResponse = processedResponse.SpeechStreamResponse
-		streamResponse.BifrostTranscriptionStreamResponse = processedResponse.TranscriptionStreamResponse
-	}
-	if processedError != nil {
-		streamResponse.BifrostError = processedError
-	}
+	streamResponse := BuildClientStreamChunk(ctx, processedResponse, processedError)
 
 	select {
 	case responseChan <- streamResponse:

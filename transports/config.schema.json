@@ -554,6 +554,10 @@
               "send_back_raw_response": {
                 "type": "boolean",
                 "description": "Include raw response in BifrostResponse"
+              },
+              "store_raw_request_response": {
+                "type": "boolean",
+                "description": "Capture raw request/response for internal logging only; strip from API responses returned to clients (default: false)"
               }
             },
             "required": ["name"]
@@ -2245,6 +2249,10 @@
           "type": "boolean",
           "description": "Include raw response in BifrostResponse (default: false)"
         },
+        "store_raw_request_response": {
+          "type": "boolean",
+          "description": "Capture raw request/response for internal logging only; strip from API responses returned to clients (default: false)"
+        },
         "custom_provider_config": {
           "$ref": "#/$defs/custom_provider_config"
         },
@@ -2288,6 +2296,10 @@
         "send_back_raw_response": {
           "type": "boolean",
           "description": "Include raw response in BifrostResponse (default: false)"
+        },
+        "store_raw_request_response": {
+          "type": "boolean",
+          "description": "Capture raw request/response for internal logging only; strip from API responses returned to clients (default: false)"
         },
         "custom_provider_config": {
           "$ref": "#/$defs/custom_provider_config"
@@ -2333,6 +2345,10 @@
           "type": "boolean",
           "description": "Include raw response in BifrostResponse (default: false)"
         },
+        "store_raw_request_response": {
+          "type": "boolean",
+          "description": "Capture raw request/response for internal logging only; strip from API responses returned to clients (default: false)"
+        },
         "custom_provider_config": {
           "$ref": "#/$defs/custom_provider_config"
         },
@@ -2377,6 +2393,10 @@
           "type": "boolean",
           "description": "Include raw response in BifrostResponse (default: false)"
         },
+        "store_raw_request_response": {
+          "type": "boolean",
+          "description": "Capture raw request/response for internal logging only; strip from API responses returned to clients (default: false)"
+        },
         "custom_provider_config": {
           "$ref": "#/$defs/custom_provider_config"
         },
@@ -2420,6 +2440,10 @@
         "send_back_raw_response": {
           "type": "boolean",
           "description": "Include raw response in BifrostResponse (default: false)"
+        },
+        "store_raw_request_response": {
+          "type": "boolean",
+          "description": "Capture raw request/response for internal logging only; strip from API responses returned to clients (default: false)"
         },
         "custom_provider_config": {
           "$ref": "#/$defs/custom_provider_config"

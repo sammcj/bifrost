@@ -4497,18 +4497,10 @@ func (bifrost *Bifrost) tryStreamRequest(ctx *schemas.BifrostContext, req *schem
 					// Run post hooks on the stream message
 					processedResponse, processedError := pipelinePostHookRunner(ctx, bifrostResponse, streamMsg.BifrostError)
 
-					streamResponse := &schemas.BifrostStreamChunk{}
-					if processedResponse != nil {
-						streamResponse.BifrostTextCompletionResponse = processedResponse.TextCompletionResponse
-						streamResponse.BifrostChatResponse = processedResponse.ChatResponse
-						streamResponse.BifrostResponsesStreamResponse = processedResponse.ResponsesStreamResponse
-						streamResponse.BifrostSpeechStreamResponse = processedResponse.SpeechStreamResponse
-						streamResponse.BifrostTranscriptionStreamResponse = processedResponse.TranscriptionStreamResponse
-						streamResponse.BifrostImageGenerationStreamResponse = processedResponse.ImageGenerationStreamResponse
-					}
-					if processedError != nil {
-						streamResponse.BifrostError = processedError
-					}
+					// Build the client-facing chunk via the shared helper, which strips raw
+					// request/response fields when in logging-only mode without mutating the
+					// shared processedResponse or processedError objects.
+					streamResponse := providerUtils.BuildClientStreamChunk(ctx, processedResponse, processedError)
 
 					// Send the processed message to the output stream
 					outputStream <- streamResponse
@@ -4851,6 +4843,28 @@ func (bifrost *Bifrost) requestWorker(provider schemas.Provider, config *schemas
 			baseProvider = cfg.BaseProviderType
 		}
 		req.Context.SetValue(schemas.BifrostContextKeyIsCustomProvider, !IsStandardProvider(baseProvider))
+
+		// Determine whether this provider attempt should capture raw payloads.
+		// logging-only mode (store_raw_request_response=true, send_back_raw_*=false):
+		//   sets BifrostContextKeySendBackRaw* = true so providers capture via the unified
+		//   ShouldSendBackRaw* path, and sets BifrostContextKeyRawRequestResponseForLogging
+		//   so the payload is stripped before the response reaches the client.
+		// full send-back mode (send_back_raw_request/response=true):
+		//   BifrostContextKeySendBackRaw* are set as before; stripping flag stays false.
+		// Always set both flags explicitly so stale values from a previous provider
+		// attempt (e.g. first attempt was logging-only, fallback is full send-back)
+		// cannot leak into the new attempt on a reused context.
+		existingSendBackReq, _ := req.Context.Value(schemas.BifrostContextKeySendBackRawRequest).(bool)
+		existingSendBackResp, _ := req.Context.Value(schemas.BifrostContextKeySendBackRawResponse).(bool)
+		loggingOnly := config.StoreRawRequestResponse &&
+			!config.SendBackRawRequest && !existingSendBackReq &&
+			!config.SendBackRawResponse && !existingSendBackResp
+		req.Context.SetValue(schemas.BifrostContextKeyRawRequestResponseForLogging, loggingOnly)
+		if loggingOnly {
+			// Enable capture via the standard flags so ShouldSendBackRaw* needs only one check.
+			req.Context.SetValue(schemas.BifrostContextKeySendBackRawRequest, true)
+			req.Context.SetValue(schemas.BifrostContextKeySendBackRawResponse, true)
+		}
 
 		key := schemas.Key{}
 		var keys []schemas.Key

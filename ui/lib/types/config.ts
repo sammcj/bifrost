@@ -307,6 +307,7 @@ export interface ModelProviderConfig {
 	proxy_config?: ProxyConfig;
 	send_back_raw_request?: boolean;
 	send_back_raw_response?: boolean;
+	store_raw_request_response?: boolean;
 	custom_provider_config?: CustomProviderConfig;
 	pricing_overrides?: ProviderPricingOverride[];
 	status?: "unknown" | "success" | "list_models_failed";
@@ -335,6 +336,7 @@ export interface AddProviderRequest {
 	proxy_config?: ProxyConfig;
 	send_back_raw_request?: boolean;
 	send_back_raw_response?: boolean;
+	store_raw_request_response?: boolean;
 	custom_provider_config?: CustomProviderConfig;
 	pricing_overrides?: ProviderPricingOverride[];
 }
@@ -347,6 +349,7 @@ export interface UpdateProviderRequest {
 	proxy_config: ProxyConfig;
 	send_back_raw_request?: boolean;
 	send_back_raw_response?: boolean;
+	store_raw_request_response?: boolean;
 	custom_provider_config?: CustomProviderConfig;
 	pricing_overrides?: ProviderPricingOverride[];
 }
