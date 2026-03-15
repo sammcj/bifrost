@@ -1,3 +1,0 @@
-- feat: pricing engine integration with unified cost calculation
-- feat: large payload awareness
-- chore: upgraded core to v1.4.8 and framework to v1.2.27
