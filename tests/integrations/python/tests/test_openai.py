@@ -2126,6 +2126,7 @@ class TestOpenAIIntegration:
         3. Thinking continuity is maintained via encrypted_content passed between turns
         """
         client = get_provider_openai_client(provider, vk_enabled=vk_enabled)
+        client = client.with_options(timeout=300)
         model_to_use = format_provider_model(provider, model)
 
         try:
