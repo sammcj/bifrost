@@ -1,1 +1,0 @@
-- hotfix: normalized versioned Responses API tool types to canonical types (e.g. web_search_20250305 → web_search)
