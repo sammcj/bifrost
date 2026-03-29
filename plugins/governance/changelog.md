@@ -1,2 +1,0 @@
-- feat: snap LastReset to calendar boundary for calendar-aligned budgets
-- feat: added calendar alignment support for budget periods

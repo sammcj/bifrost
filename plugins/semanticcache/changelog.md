@@ -1,3 +1,0 @@
-- fix: hardened direct-only config handling and aligned UI types
-- fix: preserved provider precision in embedding responses
-- fix: skip unsupported count_tokens requests

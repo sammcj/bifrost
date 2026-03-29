@@ -1,4 +1,0 @@
-- feat: added CalendarAligned budget field, GetCalendarPeriodStart and IsCalendarAlignableDuration helpers
-- fix: pick max tokens for Anthropic from model params cache (model catalog)
-- fix: preserved provider precision in embedding responses (log store)
-- fix: added migration for calendar_aligned field
